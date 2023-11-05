@@ -17,7 +17,7 @@ import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
-import { isBrsFile, isClassStatement, isConstStatement, isEnumStatement, isFunctionStatement, isXmlFile, isEnumMemberStatement, isNamespaceStatement, isNamespaceType, isReferenceType, isCallableType } from './astUtils/reflection';
+import { isBrsFile, isXmlFile, isEnumMemberStatement, isNamespaceStatement, isNamespaceType, isReferenceType, isCallableType } from './astUtils/reflection';
 import { SymbolTable, SymbolTypeFlag } from './SymbolTable';
 import type { File } from './files/File';
 import type { BscType } from './types/BscType';
@@ -581,114 +581,36 @@ export class Scope {
         return result;
     }
 
-    static oldNamespaceLookup = false;
-
     /**
      * Builds a tree of namespace objects
      */
     public buildNamespaceLookup() {
         let namespaceLookup = new Map<string, NamespaceContainer>();
-        //DEBUG console.log('* buildNamespaceLookup (scope)', this.name);
         this.enumerateBrsFiles((file) => {
-            if (Scope.oldNamespaceLookup) {
-                //DEBUG console.log('** buildNamespaceLookup (file)', file.srcPath);
 
-                for (let namespaceStatement of file.parser.references.namespaceStatements) {
-                    //DEBUG console.log('*** buildNamespaceLookup (ns)', namespaceStatement.getName(ParseMode.BrighterScript));
-                    let nameParts = namespaceStatement.getNameParts();
+            const fileNamespaceLookup = file.getNamespaceLookupObject();
 
-                    let loopName: string = null;
-                    let lowerLoopName: string = null;
-                    let parentNameLower: string = null;
+            for (const [lowerNamespaceName, nsContainer] of fileNamespaceLookup) {
+                if (!namespaceLookup.has(lowerNamespaceName)) {
+                    const clonedNsContainer = {
+                        ...nsContainer,
+                        namespaceStatements: [...nsContainer.namespaceStatements],
+                        symbolTable: new SymbolTable(`Namespace Aggregate: '${nsContainer.fullName}'`)
+                    };
 
-                    //ensure each namespace section is represented in the results
-                    //(so if the namespace name is A.B.C, this will make an entry for "A", an entry for "A.B", and an entry for "A.B.C"
-                    for (let i = 0; i < nameParts.length; i++) {
-
-                        let part = nameParts[i];
-                        let lowerPartName = part.text.toLowerCase();
-
-                        if (i === 0) {
-                            loopName = part.text;
-                            lowerLoopName = lowerPartName;
-                        } else {
-                            parentNameLower = lowerLoopName;
-                            loopName += '.' + part.text;
-                            lowerLoopName += '.' + lowerPartName;
-                        }
-                        //DEBUG console.log('**** buildNamespaceLookup (ns name)', lowerLoopName);
-                        if (!namespaceLookup.has(lowerLoopName)) {
-                            namespaceLookup.set(lowerLoopName, {
-                                isTopLevel: i === 0,
-                                file: file,
-                                fullName: loopName,
-                                fullNameLower: lowerLoopName,
-                                parentNameLower: parentNameLower,
-                                nameParts: nameParts.slice(0, i),
-                                nameRange: namespaceStatement.nameExpression.range,
-                                lastPartName: part.text,
-                                lastPartNameLower: lowerPartName,
-                                namespaces: new Map(),
-                                classStatements: new Map(),
-                                functionStatements: new Map(),
-                                enumStatements: new Map(),
-                                constStatements: new Map(),
-                                statements: [],
-                                // the aggregate symbol table should have no parent. It should include just the symbols of the namespace.
-                                symbolTable: new SymbolTable(`Namespace Aggregate: '${loopName}'`)
-                            });
-                        }
-                    }
-                    let ns = namespaceLookup.get(lowerLoopName);
-                    ns.statements.push(...namespaceStatement.body.statements);
-                    for (let statement of namespaceStatement.body.statements) {
-                        if (isClassStatement(statement) && statement.name) {
-                            ns.classStatements.set(statement.name.text.toLowerCase(), statement);
-                        } else if (isFunctionStatement(statement) && statement.name) {
-                            ns.functionStatements.set(statement.name.text.toLowerCase(), statement);
-                        } else if (isEnumStatement(statement) && statement.fullName) {
-                            ns.enumStatements.set(statement.fullName.toLowerCase(), statement);
-                        } else if (isConstStatement(statement) && statement.fullName) {
-                            ns.constStatements.set(statement.fullName.toLowerCase(), statement);
-                        }
-                    }
-                    // Merges all the symbol tables of the namespace statements into the new symbol table created above.
-                    // Set those symbol tables to have this new merged table as a parent
-                    ns.symbolTable.mergeSymbolTable(namespaceStatement.body.getSymbolTable());
-                }
-                //associate child namespaces with their parents
-                for (let [, ns] of namespaceLookup) {
-                    if (ns.parentNameLower) {
-                        const parent = namespaceLookup.get(ns.parentNameLower);
-                        parent.namespaces.set(ns.lastPartNameLower, ns);
-                    }
-                }
-            } else {
-                const fileNamespaceLookup = file.getNamespaceLookupObject();
-
-                for (const [lowerNamespaceName, nsContainer] of fileNamespaceLookup) {
-                    if (!namespaceLookup.has(lowerNamespaceName)) {
-                        const clonedNsContainer = {
-                            ...nsContainer,
-                            namespaceStatements: [...nsContainer.namespaceStatements],
-                            symbolTable: new SymbolTable(`Namespace Aggregate: '${nsContainer.fullName}'`)
-                        };
-
-                        clonedNsContainer.symbolTable.mergeSymbolTable(nsContainer.symbolTable);
-                        namespaceLookup.set(lowerNamespaceName, clonedNsContainer);
-                    } else {
-                        const existingContainer = namespaceLookup.get(lowerNamespaceName);
-                        existingContainer.classStatements = new Map([...existingContainer.classStatements, ...nsContainer.classStatements]);
-                        existingContainer.constStatements = new Map([...existingContainer.constStatements, ...nsContainer.constStatements]);
-                        existingContainer.enumStatements = new Map([...existingContainer.enumStatements, ...nsContainer.enumStatements]);
-                        existingContainer.functionStatements = new Map([...existingContainer.functionStatements, ...nsContainer.functionStatements]);
-                        existingContainer.namespaces = new Map([...existingContainer.namespaces, ...nsContainer.namespaces]);
-                        existingContainer.namespaceStatements.push(...nsContainer.namespaceStatements);
-                        existingContainer.symbolTable.mergeSymbolTable(nsContainer.symbolTable);
-                    }
+                    clonedNsContainer.symbolTable.mergeSymbolTable(nsContainer.symbolTable);
+                    namespaceLookup.set(lowerNamespaceName, clonedNsContainer);
+                } else {
+                    const existingContainer = namespaceLookup.get(lowerNamespaceName);
+                    existingContainer.classStatements = new Map([...existingContainer.classStatements, ...nsContainer.classStatements]);
+                    existingContainer.constStatements = new Map([...existingContainer.constStatements, ...nsContainer.constStatements]);
+                    existingContainer.enumStatements = new Map([...existingContainer.enumStatements, ...nsContainer.enumStatements]);
+                    existingContainer.functionStatements = new Map([...existingContainer.functionStatements, ...nsContainer.functionStatements]);
+                    existingContainer.namespaces = new Map([...existingContainer.namespaces, ...nsContainer.namespaces]);
+                    existingContainer.namespaceStatements.push(...nsContainer.namespaceStatements);
+                    existingContainer.symbolTable.mergeSymbolTable(nsContainer.symbolTable);
                 }
             }
-
         });
         return namespaceLookup;
     }
@@ -753,21 +675,14 @@ export class Scope {
             let callableContainerMap = util.getCallableContainersByLowerName(callables);
 
             //Since statements from files are shared across multiple scopes, we need to link those statements to the current scope
-            //const t0 = performance.now();
             this.linkSymbolTable();
-            //const t1 = performance.now();
-            //console.log('onScopeValidate() - linkSymbolTable', this.name, t1 - t0);
             const scopeValidateEvent = {
                 program: this.program,
                 scope: this
             };
             this.program.plugins.emit('beforeScopeValidate', scopeValidateEvent);
             this.program.plugins.emit('onScopeValidate', scopeValidateEvent);
-            //const t2 = performance.now();
-            //console.log('onScopeValidate() - scopeValidateEvent', this.name, t2 - t1);
             this._validate(callableContainerMap);
-            //const t3 = performance.now();
-            //console.log('onScopeValidate() - _validate', this.name, t3 - t2);
             this.program.plugins.emit('afterScopeValidate', scopeValidateEvent);
             //unlink all symbol tables from this scope (so they don't accidentally stick around)
             this.unlinkSymbolTable();
@@ -844,135 +759,64 @@ export class Scope {
      */
     public linkSymbolTable() {
         SymbolTable.cacheVerifier.generateToken();
-        const allNamespaces: NamespaceStatement[] = [];
         for (const file of this.getAllFiles()) {
             if (isBrsFile(file)) {
-                //DEBUG console.log('* linkSymbolTable (file)', file.srcPath);
                 this.linkSymbolTableDisposables.push(
                     file.parser.symbolTable.pushParentProvider(() => this.symbolTable)
                 );
-                if (Scope.oldNamespaceLookup) {
-                    allNamespaces.push(...file.parser.references.namespaceStatements);
-                }
             }
         }
         //Add namespace aggregates to namespace member tables
-        if (Scope.oldNamespaceLookup) {
-            const aggregatesAdded = new Set<string>();
-            for (const namespace of allNamespaces) {
-                //DEBUG console.log('* linkSymbolTable (ns)', namespace.getName(ParseMode.BrighterScript));
-                //link each NamespaceType member table with the aggregate NamespaceLookup SymbolTable
-                let namespaceParts = namespace.getNameParts();
-                let fullNamespaceName = namespaceParts[0].text;
-                for (let i = 1; i < namespaceParts.length; i++) {
-                    fullNamespaceName += '.' + namespaceParts[i].text;
+        const namespaceTypesKnown = new Map<string, BscType>();
+
+        // eslint-disable-next-line no-bitwise
+        let getTypeOptions = { flags: SymbolTypeFlag.runtime | SymbolTypeFlag.typetime };
+
+        for (const [nsName, nsContainer] of this.namespaceLookup) {
+            let currentNSType: BscType = null;
+            let parentNSType: BscType = null;
+            const existingNsStmt = nsContainer.namespaceStatements?.[0];
+
+            if (!nsContainer.isTopLevel) {
+                parentNSType = namespaceTypesKnown.get(nsContainer.parentNameLower);
+                if (!parentNSType) {
+                    // we don't know about the parent namespace... uh, oh!
+                    break;
                 }
-                // eslint-disable-next-line no-bitwise
-                let getTypeOptions = { flags: SymbolTypeFlag.runtime | SymbolTypeFlag.typetime };
-                let currentNSType: BscType = null;
-                let nameSoFar = '';
-
-                const symbolTable = this.symbolTable;
-                for (const nsNamePartToken of namespaceParts) {
-                    // for each section of the namespace name, add it as either a top level symbol (if it is the first part)
-                    // or as a member to the containing namespace.
-                    let previousNSType = currentNSType;
-                    const nsNamePart = nsNamePartToken.text;
-
-                    currentNSType = currentNSType === null
-                        ? symbolTable.getSymbolType(nsNamePart, getTypeOptions)
-                        : currentNSType.getMemberType(nsNamePart, getTypeOptions);
-
-                    nameSoFar = nameSoFar === '' ? nsNamePart : `${nameSoFar}.${nsNamePart}`;
-                    //DEBUG console.log('** linkSymbolTable (ns name)', nameSoFar);
-                    let isFinalNamespace = nameSoFar.toLowerCase() === fullNamespaceName.toLowerCase();
-                    if (!isNamespaceType(currentNSType)) {
-                        if (!currentNSType || isReferenceType(currentNSType)) {
-                            currentNSType = isFinalNamespace
-                                ? namespace.getType(getTypeOptions)
-                                : new NamespaceType(nameSoFar);
-                            if (previousNSType) {
-                                // adding as a member of existing NS
-                                previousNSType.addMember(nsNamePart, { definingNode: namespace }, currentNSType, getTypeOptions.flags);
-                            } else {
-                                symbolTable.addSymbol(nsNamePart, { definingNode: namespace }, currentNSType, getTypeOptions.flags);
-                            }
-                        } else {
-                            break;
-                        }
+                currentNSType = parentNSType.getMemberType(nsContainer.fullNameLower, getTypeOptions);
+            } else {
+                currentNSType = this.symbolTable.getSymbolType(nsContainer.fullNameLower, getTypeOptions);
+            }
+            if (!isNamespaceType(currentNSType)) {
+                if (!currentNSType || isReferenceType(currentNSType)) {
+                    currentNSType = existingNsStmt
+                        ? existingNsStmt.getType(getTypeOptions)
+                        : new NamespaceType(nsName);
+                    if (parentNSType) {
+                        // adding as a member of existing NS
+                        parentNSType.addMember(nsContainer.lastPartName, { definingNode: existingNsStmt }, currentNSType, getTypeOptions.flags);
+                        this.symbolsAddedDuringLinking.push({ symbolTable: parentNSType.getMemberTable(), name: nsContainer.lastPartName, flags: getTypeOptions.flags });
+                    } else {
+                        this.symbolTable.addSymbol(nsContainer.lastPartName, { definingNode: existingNsStmt }, currentNSType, getTypeOptions.flags);
+                        this.symbolsAddedDuringLinking.push({ symbolTable: this.symbolTable, name: nsContainer.lastPartName, flags: getTypeOptions.flags });
                     }
-
-                    // Now that the namespace type is built, add the aggregate as a sibling
-                    const lowerNameSpace = nameSoFar.toLowerCase();
-                    let aggregateNSSymbolTable = this.namespaceLookup.get(nameSoFar.toLowerCase()).symbolTable;
-
-                    if (!aggregatesAdded.has(lowerNameSpace)) {
-                        this.linkSymbolTableDisposables.push(
-                            currentNSType.memberTable.addSibling(aggregateNSSymbolTable)
-                        );
-                        aggregatesAdded.add(lowerNameSpace);
-                    }
-                    if (isFinalNamespace) {
-                        this.linkSymbolTableDisposables.push(
-                            namespace.getSymbolTable().addSibling(aggregateNSSymbolTable)
-                        );
-                    }
+                } else {
+                    break;
                 }
             }
-        } else {
-            const namespaceTypesKnown = new Map<string, BscType>();
+            if (!namespaceTypesKnown.has(nsName)) {
+                namespaceTypesKnown.set(nsName, currentNSType);
+            }
 
-            // eslint-disable-next-line no-bitwise
-            let getTypeOptions = { flags: SymbolTypeFlag.runtime | SymbolTypeFlag.typetime };
-
-            for (const [nsName, nsContainer] of this.namespaceLookup) {
-                //console.log(`linkSymbolTable loop of this.namespaceLookup `, nsName);
-
-                let currentNSType: BscType = null;
-                let parentNSType: BscType = null;
-                const existingNsStmt = nsContainer.namespaceStatements?.[0];
-
-                if (!nsContainer.isTopLevel) {
-                    parentNSType = namespaceTypesKnown.get(nsContainer.parentNameLower);
-                    if (!parentNSType) {
-                        // we don't know about the parent namespace... uh, oh!
-                        break;
-                    }
-                    currentNSType = parentNSType.getMemberType(nsContainer.fullNameLower, getTypeOptions);
-                } else {
-                    currentNSType = this.symbolTable.getSymbolType(nsContainer.fullNameLower, getTypeOptions);
-                }
-                if (!isNamespaceType(currentNSType)) {
-                    if (!currentNSType || isReferenceType(currentNSType)) {
-                        currentNSType = existingNsStmt
-                            ? existingNsStmt.getType(getTypeOptions)
-                            : new NamespaceType(nsName);
-                        if (parentNSType) {
-                            // adding as a member of existing NS
-                            parentNSType.addMember(nsContainer.lastPartName, { definingNode: existingNsStmt }, currentNSType, getTypeOptions.flags);
-                            this.symbolsAddedDuringLinking.push({ symbolTable: parentNSType.getMemberTable(), name: nsContainer.lastPartName, flags: getTypeOptions.flags });
-                        } else {
-                            this.symbolTable.addSymbol(nsContainer.lastPartName, { definingNode: existingNsStmt }, currentNSType, getTypeOptions.flags);
-                            this.symbolsAddedDuringLinking.push({ symbolTable: this.symbolTable, name: nsContainer.lastPartName, flags: getTypeOptions.flags });
-                        }
-                    } else {
-                        break;
-                    }
-                }
-                if (!namespaceTypesKnown.has(nsName)) {
-                    namespaceTypesKnown.set(nsName, currentNSType);
-                }
-
-                for (let nsStmt of nsContainer.namespaceStatements) {
-                    this.linkSymbolTableDisposables.push(
-                        nsStmt?.getSymbolTable().addSibling(nsContainer.symbolTable)
-                    );
-                }
-
+            for (let nsStmt of nsContainer.namespaceStatements) {
                 this.linkSymbolTableDisposables.push(
-                    currentNSType.memberTable.addSibling(nsContainer.symbolTable)
+                    nsStmt?.getSymbolTable().addSibling(nsContainer.symbolTable)
                 );
             }
+
+            this.linkSymbolTableDisposables.push(
+                currentNSType.memberTable.addSibling(nsContainer.symbolTable)
+            );
         }
     }
 
@@ -985,7 +829,6 @@ export class Scope {
             dispose();
         }
         this.linkSymbolTableDisposables = [];
-        //TypeCache.cacheVerifier.activeScope = undefined;
     }
 
     private detectVariableNamespaceCollisions(file: BrsFile) {
