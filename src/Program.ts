@@ -1388,7 +1388,7 @@ export class Program {
             parsedManifest.set('bs_const', constString);
 
             this._manifest = parsedManifest;
-        } finally {
+        } catch (e) {
             if (!this._manifest) {
                 this._manifest = new Map();
             }
