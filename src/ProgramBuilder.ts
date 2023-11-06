@@ -483,7 +483,7 @@ export class ProgramBuilder {
                 } else if (acceptableSourceExtensions.includes(path.extname(srcLower))) {
                     sourceFiles.push(file);
                 } else {
-                    if (file.dest.toLowerCase() === 'manifest') { // todo: evaluate if this is acceptable.
+                    if (file.dest.toLowerCase() === 'manifest') {
                         manifestFile = file;
                     }
                 }

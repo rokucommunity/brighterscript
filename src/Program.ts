@@ -1352,6 +1352,34 @@ export class Program {
     private _manifest: Map<string, string>;
 
     /**
+     * Modify a parsed manifest map by reading `bs_const` and injecting values from `options.manifest.bs_const`
+     * @param parsedManifest The manifest map to read from and modify
+     */
+    private buildBsConstsIntoParsedManifest(parsedManifest: Map<string, string>) {
+        // Lift the bs_consts defined in the manifest
+        let bsConsts = getBsConst(parsedManifest, false);
+
+        // Override or delete any bs_consts defined in the bs config
+        for (const key in this.options?.manifest?.bs_const) {
+            const value = this.options.manifest.bs_const[key];
+            if (value === null) {
+                bsConsts.delete(key);
+            } else {
+                bsConsts.set(key, value);
+            }
+        }
+
+        // convert the new list of bs consts back into a string for the rest of the down stream systems to use
+        let constString = '';
+        for (const [key, value] of bsConsts) {
+            constString += `${constString !== '' ? ';' : ''}${key}=${value.toString()}`;
+        }
+
+        // Set the updated bs_const value
+        parsedManifest.set('bs_const', constString);
+    }
+
+    /**
      * Try to find and load the manifest into memory
      * @param manifestFileObj A pointer to a potential manifest file object found during loading
      */
@@ -1364,34 +1392,10 @@ export class Program {
             // we only load this manifest once, so do it sync to improve speed downstream
             const contents = fsExtra.readFileSync(manifestPath, 'utf-8');
             const parsedManifest = parseManifest(contents);
-
-            // Lift the bs_consts defined in the manifest
-            let bsConsts = getBsConst(parsedManifest, false);
-
-            // Override or delete any bs_consts defined in the bs config
-            for (const key in this.options?.manifest?.bs_const) {
-                const value = this.options.manifest.bs_const[key];
-                if (value === null) {
-                    bsConsts.delete(key);
-                } else {
-                    bsConsts.set(key, value);
-                }
-            }
-
-            // convert the new list of bs consts back into a string for the rest of the down stream systems to use
-            let constString = '';
-            for (const [key, value] of bsConsts) {
-                constString += `${constString !== '' ? ';' : ''}${key}=${value.toString()}`;
-            }
-
-            // Set the updated bs_const value
-            parsedManifest.set('bs_const', constString);
-
+            this.buildBsConstsIntoParsedManifest(parsedManifest);
             this._manifest = parsedManifest;
         } catch (e) {
-            if (!this._manifest) {
-                this._manifest = new Map();
-            }
+            this._manifest = new Map();
         }
     }
 
