@@ -252,9 +252,6 @@ export class SymbolTable implements SymbolTypeGetter {
         let symbols: BscSymbol[] = [].concat(...this.symbolMap.values());
         // eslint-disable-next-line no-bitwise
         symbols = symbols.filter(symbol => symbol.flags & bitFlags);
-        if (this.parent) {
-            symbols = symbols.concat(this.parent.getOwnSymbols(bitFlags));
-        }
         return symbols;
     }
 

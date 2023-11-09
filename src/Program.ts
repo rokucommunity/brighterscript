@@ -5,7 +5,7 @@ import type { CodeAction, Position, Range, SignatureInformation, Location } from
 import type { BsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { BrsFile } from './files/BrsFile';
+import type { BrsFile, ProvidedSymbolInfo } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
 import type { BsDiagnostic, FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, BeforeFileAddEvent, BeforeFileRemoveEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj } from './interfaces';
 import type { File } from './files/File';
@@ -48,6 +48,7 @@ import { nodes, components, interfaces, events } from './roku-types';
 import { ComponentType } from './types/ComponentType';
 import { InterfaceType } from './types';
 import { BuiltInInterfaceAdder } from './types/BuiltInInterfaceAdder';
+import type { UnresolvedSymbol } from './AstValidationSegmenter';
 
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
@@ -211,6 +212,17 @@ export class Program {
      * Should only be set from `this.validate()`
      */
     private diagnostics = [] as BsDiagnostic[];
+
+
+    public fileSymbolInformation = new Map<string, { provides: ProvidedSymbolInfo; requires: UnresolvedSymbol[] }>();
+
+    public addFileSymbolInfo(file: BrsFile) {
+        this.fileSymbolInformation.set(file.pkgPath, {
+            provides: file.providedSymbols,
+            requires: file.requiredSymbols
+        });
+    }
+
 
     /**
      * The path to bslib.brs (the BrightScript runtime for certain BrighterScript features)
@@ -537,7 +549,7 @@ export class Program {
         let file = this.logger.time(LogLevel.debug, ['Program.setFile()', chalk.green(srcPath)], () => {
             //if the file is already loaded, remove it
             if (this.hasFile(srcPath)) {
-                this.removeFile(srcPath);
+                this.removeFile(srcPath, true, true);
             }
 
             const data = new LazyFileData(fileData);
@@ -740,7 +752,7 @@ export class Program {
      * @param filePath can be a srcPath, a destPath, or a destPath with leading `pkg:/`
      * @param normalizePath should this function repair and standardize the path? Passing false should have a performance boost if you can guarantee your path is already sanitized
      */
-    public removeFile(filePath: string, normalizePath = true) {
+    public removeFile(filePath: string, normalizePath = true, keepSymbolInformation = false) {
         this.logger.debug('Program.removeFile()', filePath);
         const paths = this.getPaths(filePath, this.options.rootDir);
 
@@ -779,6 +791,9 @@ export class Program {
             //if this is a pkg:/source file, notify the `source` scope that it has changed
             if (this.isSourceBrsFile(file)) {
                 this.dependencyGraph.removeDependency('scope:source', file.dependencyGraphKey);
+                if (!keepSymbolInformation) {
+                    this.fileSymbolInformation.delete(file.pkgPath);
+                }
             }
 
             //if this is a component, remove it from our components map

@@ -1,6 +1,6 @@
-import type { GetTypeOptions } from '../interfaces';
+import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
 import { isInheritableType } from '../astUtils/reflection';
-import type { SymbolTypeFlag } from '../SymbolTable';
+import { SymbolTypeFlag } from '../SymbolTable';
 import { BscType } from './BscType';
 
 export abstract class InheritableType extends BscType {
@@ -22,10 +22,6 @@ export abstract class InheritableType extends BscType {
 
     public toTypeString(): string {
         return 'dynamic';
-    }
-
-    isResolvable(): boolean {
-        return this.parentType ? this.parentType.isResolvable() : true;
     }
 
     protected getAncestorTypeList(): InheritableType[] {
@@ -87,6 +83,24 @@ export abstract class InheritableType extends BscType {
             result += ' ';
         }
         return result + '}';
+    }
+
+    isEqual(targetType: BscType, data: TypeCompatibilityData = {}): boolean {
+        if (!isInheritableType(targetType)) {
+            return false;
+        }
+        return this.name.toLowerCase() === targetType.name?.toLowerCase() &&
+            this.isParentTypeEqual(targetType, data) &&
+            this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlag.runtime, data) &&
+            targetType.checkCompatibilityBasedOnMembers(this, SymbolTypeFlag.runtime, data);
+    }
+
+
+    protected isParentTypeEqual(targetType: BscType, data?: TypeCompatibilityData): boolean {
+        if (isInheritableType(targetType)) {
+            return this.parentType ? this.parentType.isEqual(targetType.parentType, data) : !targetType.parentType;
+        }
+        return false;
     }
 }
 

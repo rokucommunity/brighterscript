@@ -67,7 +67,7 @@ export abstract class BscType {
         throw new Error('Method not implemented.');
     }
 
-    isEqual(targetType: BscType): boolean {
+    isEqual(targetType: BscType, data: TypeCompatibilityData = {}): boolean {
         throw new Error('Method not implemented.');
     }
 

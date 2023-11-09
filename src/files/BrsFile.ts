@@ -21,7 +21,7 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isImportStatement, isFieldStatement, isFunctionExpression, isBrsFile, isEnumStatement, isConstStatement } from '../astUtils/reflection';
+import { isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isImportStatement, isFieldStatement, isFunctionExpression, isBrsFile, isEnumStatement, isConstStatement, isAnyReferenceType } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
@@ -31,7 +31,19 @@ import { type Expression } from '../parser/AstNode';
 import { SymbolTable, SymbolTypeFlag } from '../SymbolTable';
 import type { File } from './File';
 import { Editor } from '../astUtils/Editor';
+import type { UnresolvedSymbol } from '../AstValidationSegmenter';
 import { AstValidationSegmenter } from '../AstValidationSegmenter';
+import type { BscType } from '../types';
+
+
+export type ProvidedSymbolMap = Map<SymbolTypeFlag, Map<string, BscType>>;
+export type ChangedSymbolMap = Map<SymbolTypeFlag, Set<string>>;
+
+export interface ProvidedSymbolInfo {
+    symbolMap: ProvidedSymbolMap;
+    changes: ChangedSymbolMap;
+}
+
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -1324,22 +1336,111 @@ export class BrsFile implements File {
         }
     }
 
-    static reduceReValidation = true;
-
     public validationSegmenter = new AstValidationSegmenter();
 
-    public findUnresolvedSubTrees() {
-        if (BrsFile.reduceReValidation) {
-            this.validationSegmenter.processTree(this.ast);
-        }
+    public processSymbolInformation() {
+        this.validationSegmenter.processTree(this.ast);
+        this.program.addFileSymbolInfo(this);
     }
 
     public getValidationSegments() {
-        if (BrsFile.reduceReValidation) {
-            const segments = this.validationSegmenter.getSegments();
-            return segments;
-        }
-        return [this.ast];
+        const segments = this.validationSegmenter.getSegments();
+        return segments;
+    }
+
+
+    public get requiredSymbols() {
+        return this.cache.getOrAdd(`requiredSymbols`, () => {
+            const allNeededSymbolSets = this.validationSegmenter.unresolvedSegmentsSymbols.values();
+
+            const requiredSymbols: UnresolvedSymbol[] = [];
+            const addedSymbols = new Map<SymbolTypeFlag, Set<string>>();
+            addedSymbols.set(SymbolTypeFlag.runtime, new Set());
+            addedSymbols.set(SymbolTypeFlag.typetime, new Set());
+            for (const setOfSymbols of allNeededSymbolSets) {
+                for (const symbol of setOfSymbols) {
+                    const fullSymbolkey = symbol.typeChain.map(tce => tce.name).join('.').toLowerCase();
+                    if (!addedSymbols.get(symbol.flags).has(fullSymbolkey)) {
+                        requiredSymbols.push(symbol);
+                        addedSymbols.get(symbol.flags).add(fullSymbolkey);
+                    }
+                }
+            }
+            return requiredSymbols;
+        });
+    }
+
+    public get providedSymbols() {
+        return this.cache.getOrAdd(`providedSymbols`, () => {
+            const symbolMap = new Map<SymbolTypeFlag, Map<string, BscType>>();
+            const runTimeSymbolMap = new Map<string, BscType>();
+            const typeTimeSymbolMap = new Map<string, BscType>();
+
+            const tablesToGetSymbolsFrom: Array<{ table: SymbolTable; namePrefixLower?: string }> = [{
+                table: this.parser.symbolTable
+            }];
+
+            for (const namespaceStatement of this.parser.references.namespaceStatements) {
+                tablesToGetSymbolsFrom.push({
+                    table: namespaceStatement.body.getSymbolTable(),
+                    namePrefixLower: namespaceStatement.getName(ParseMode.BrighterScript).toLowerCase()
+                });
+            }
+
+            for (const symbolTable of tablesToGetSymbolsFrom) {
+                const runTimeSymbols = symbolTable.table.getOwnSymbols(SymbolTypeFlag.runtime);
+                const typeTimeSymbols = symbolTable.table.getOwnSymbols(SymbolTypeFlag.typetime);
+
+                for (const symbol of runTimeSymbols) {
+                    if (!isAnyReferenceType(symbol.type)) {
+                        const symbolNameLower = symbolTable.namePrefixLower ? `${symbolTable.namePrefixLower}.${symbol.name.toLowerCase()}` : symbol.name.toLowerCase();
+                        runTimeSymbolMap.set(symbolNameLower, symbol.type);
+                    }
+                }
+
+                for (const symbol of typeTimeSymbols) {
+                    if (!isAnyReferenceType(symbol.type)) {
+                        const symbolNameLower = symbolTable.namePrefixLower ? `${symbolTable.namePrefixLower}.${symbol.name.toLowerCase()}` : symbol.name.toLowerCase();
+                        typeTimeSymbolMap.set(symbolNameLower, symbol.type);
+                    }
+                }
+            }
+
+            symbolMap.set(SymbolTypeFlag.runtime, runTimeSymbolMap);
+            symbolMap.set(SymbolTypeFlag.typetime, typeTimeSymbolMap);
+
+            const changes = new Map<SymbolTypeFlag, Set<string>>();
+            changes.set(SymbolTypeFlag.runtime, new Set<string>());
+            changes.set(SymbolTypeFlag.typetime, new Set<string>());
+            const previouslyProvidedSymbols = this.program.fileSymbolInformation?.get(this.pkgPath)?.provides.symbolMap;
+            for (const flag of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
+                const newSymbolMapForFlag = symbolMap.get(flag);
+                const oldSymbolMapForFlag = previouslyProvidedSymbols?.get(flag);
+                const changesForFlag = changes.get(flag);
+                if (!oldSymbolMapForFlag) {
+                    for (const key of newSymbolMapForFlag.keys()) {
+                        changesForFlag.add(key);
+                    }
+                    continue;
+
+                }
+                for (const [symbolKey, symbolType] of newSymbolMapForFlag) {
+                    const previousType = oldSymbolMapForFlag?.get(symbolKey);
+                    if (!previousType) {
+                        changesForFlag.add(symbolKey);
+                        continue;
+                    }
+                    if (!symbolType.isTypeCompatible(previousType) || !previousType.isTypeCompatible(symbolType)) {
+                        // the new type is not exactly the same - add it to the changes
+                        changesForFlag.add(symbolKey);
+                    }
+                }
+            }
+            return {
+                symbolMap: symbolMap,
+                changes: changes
+            };
+        });
     }
 
     public markSegmentAsValidated(node: AstNode) {

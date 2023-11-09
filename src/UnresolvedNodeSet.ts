@@ -1,4 +1,4 @@
-import type { GetSymbolTypeOptions } from './SymbolTable';
+import type { GetSymbolTypeOptions, SymbolTypeFlag } from './SymbolTable';
 import type { AstNode } from './parser/AstNode';
 import type { BscType } from './types/BscType';
 
@@ -9,7 +9,7 @@ export class UnresolvedNodeSet {
 
     constructor(public root: AstNode) { }
 
-    private data = new Map<AstNode, Map<number, BscType[]>>();
+    private data = new Map<AstNode, Map<SymbolTypeFlag, BscType[]>>();
 
     reset() {
         this.data.clear();
@@ -22,7 +22,7 @@ export class UnresolvedNodeSet {
 
     private getMap(node: AstNode) {
         if (!this.data.has(node)) {
-            this.data.set(node, new Map<number, BscType[]>());
+            this.data.set(node, new Map<SymbolTypeFlag, BscType[]>());
         }
         return this.data.get(node);
     }

@@ -20,8 +20,8 @@ export class InterfaceType extends InheritableType {
         if (isDynamicType(targetType) || isObjectType(targetType) || isUnionTypeCompatible(this, targetType, data)) {
             return true;
         }
-        if (this.isEqual(targetType)) {
-            return true;
+        if (isInterfaceType(targetType)) {
+            return this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlag.runtime, data);
         }
         const ancestorTypes = this.getAncestorTypeList();
         if (ancestorTypes?.find(ancestorType => ancestorType.isEqual(targetType))) {
@@ -33,7 +33,7 @@ export class InterfaceType extends InheritableType {
     /**
      *  Is this the exact same interface as the target?
      */
-    isEqual(targetType: BscType): boolean {
-        return isInterfaceType(targetType) && this.name.toLowerCase() === targetType.name.toLowerCase();
+    isEqual(targetType: BscType, data?: TypeCompatibilityData): boolean {
+        return isInterfaceType(targetType) && super.isEqual(targetType, data);
     }
 }

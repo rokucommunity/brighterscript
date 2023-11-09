@@ -28,8 +28,8 @@ export class ClassType extends InheritableType {
         return false;
     }
 
-    isEqual(targetType: BscType): boolean {
-        return isClassType(targetType) && this.name.toLowerCase() === targetType.name.toLowerCase();
+    isEqual(targetType: BscType, data?: TypeCompatibilityData): boolean {
+        return isClassType(targetType) && super.isEqual(targetType, data);
     }
 
     private builtInMemberTable: SymbolTable;

@@ -1925,7 +1925,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.itemCannotBeUsedAsType('iFace.name').message
+                    DiagnosticMessages.cannotFindName('name').message
                 ]);
             });
 
