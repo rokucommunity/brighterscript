@@ -9,7 +9,7 @@ import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZer
 import { Logger } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
-import type { OnScopeValidateEvent } from './interfaces';
+import { DiagnosticOrigin, type OnScopeValidateEvent } from './interfaces';
 import { SymbolTypeFlag } from './SymbolTable';
 import { EnumMemberType, EnumType } from './types/EnumType';
 import { ClassType } from './types/ClassType';
@@ -25,7 +25,7 @@ import { UnionType } from './types/UnionType';
 import { isFunctionStatement, isNamespaceStatement } from './astUtils/reflection';
 import { ArrayType } from './types/ArrayType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
-import { InterfaceType } from '.';
+import { InterfaceType } from './types/InterfaceType';
 import { ComponentType } from './types/ComponentType';
 
 describe('Scope', () => {
@@ -171,7 +171,8 @@ describe('Scope', () => {
         const expected = [{
             message: 'message',
             file: undefined,
-            range: undefined
+            range: undefined,
+            origin: DiagnosticOrigin.Scope
         }];
         source.addDiagnostics(expected);
         expectDiagnostics(source, expected);

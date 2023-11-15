@@ -30,6 +30,18 @@ export interface BsDiagnostic extends Diagnostic {
     data?: any;
 }
 
+export enum DiagnosticOrigin {
+    Program = 'Program',
+    Scope = 'Scope',
+    File = 'File',
+    ASTSegment = 'AstSegment'
+}
+
+export interface BsDiagnosticWithOrigin extends BsDiagnostic {
+    origin: DiagnosticOrigin;
+    astSegment?: AstNode;
+}
+
 export interface Callable {
     file: File;
     name: string;
