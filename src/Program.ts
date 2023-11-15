@@ -46,6 +46,7 @@ import { rokuDeploy } from 'roku-deploy';
 import type { SGNodeData, BRSComponentData, BRSEventData, BRSInterfaceData } from './roku-types';
 import { nodes, components, interfaces, events } from './roku-types';
 import { ComponentType } from './types/ComponentType';
+import type { BscType } from './types';
 import { InterfaceType } from './types';
 import { BuiltInInterfaceAdder } from './types/BuiltInInterfaceAdder';
 import type { UnresolvedSymbol } from './AstValidationSegmenter';
@@ -214,7 +215,7 @@ export class Program {
     private diagnostics = [] as BsDiagnostic[];
 
 
-    public fileSymbolInformation = new Map<string, { provides: ProvidedSymbolInfo; requires: UnresolvedSymbol[] }>();
+    private fileSymbolInformation = new Map<string, { provides: ProvidedSymbolInfo; requires: UnresolvedSymbol[] }>();
 
     public addFileSymbolInfo(file: BrsFile) {
         this.fileSymbolInformation.set(file.pkgPath, {
@@ -223,6 +224,9 @@ export class Program {
         });
     }
 
+    public getFileSymbolInfo(file: BrsFile) {
+        return this.fileSymbolInformation.get(file.pkgPath);
+    }
 
     /**
      * The path to bslib.brs (the BrightScript runtime for certain BrighterScript features)
@@ -811,6 +815,14 @@ export class Program {
         }
     }
 
+
+    public lastValidationInfo = new Map<string, {
+        symbolsNotDefinedInEveryScope: { symbol: UnresolvedSymbol; scope: Scope }[];
+        duplicateSymbolsInSameScope: { symbol: UnresolvedSymbol; scope: Scope }[];
+        symbolsNotConsistentAcrossScopes: { symbol: UnresolvedSymbol; scopes: Scope[] }[];
+    }>();
+
+
     /**
      * Traverse the entire project, and validate all scopes
      */
@@ -824,6 +836,7 @@ export class Program {
             this.plugins.emit('onProgramValidate', programValidateEvent);
 
             //validate every file
+            const brsFilesValidated: BrsFile[] = [];
             for (const file of Object.values(this.files)) {
                 //for every unvalidated file, validate it
                 if (!file.isValidated) {
@@ -835,9 +848,83 @@ export class Program {
                     //emit an event to allow plugins to contribute to the file validation process
                     this.plugins.emit('onFileValidate', validateFileEvent);
                     file.isValidated = true;
+                    if (isBrsFile(file)) {
+                        brsFilesValidated.push(file);
+                    }
                     this.plugins.emit('afterFileValidate', validateFileEvent);
                 }
             }
+
+            // build list of all changed symbols in each file that changed
+            this.lastValidationInfo.clear();
+            for (const file of brsFilesValidated) {
+
+                const fileInfo: {
+                    symbolsNotDefinedInEveryScope: { symbol: UnresolvedSymbol; scope: Scope }[];
+                    duplicateSymbolsInSameScope: { symbol: UnresolvedSymbol; scope: Scope }[];
+                    symbolsNotConsistentAcrossScopes: { symbol: UnresolvedSymbol; scopes: Scope[] }[];
+                } = {
+                    symbolsNotDefinedInEveryScope: [],
+                    duplicateSymbolsInSameScope: [],
+                    symbolsNotConsistentAcrossScopes: []
+                };
+                const scopesToCheckForConsistency = this.getScopesForFile(file);
+                for (const symbol of file.requiredSymbols) {
+                    let providedSymbolType: BscType;
+                    let scopesDefiningSymbol: Scope[] = [];
+                    let scopesAreInconsistant = false;
+
+                    for (const scope of scopesToCheckForConsistency) {
+                        let symbolFoundInScope = false;
+                        for (const scopeFile of scope.getAllFiles()) {
+                            if (!isBrsFile(scopeFile) || scopeFile.isTypedef || scopeFile.hasTypedef) {
+                                continue;
+                            }
+                            const lowerFirstSymbolName = symbol.typeChain?.[0]?.name.toLowerCase();
+                            let symbolInThisScope = scopeFile.providedSymbols.symbolMap?.get(symbol.flags)?.get(lowerFirstSymbolName);
+                            if (!symbolInThisScope && symbol.containingNamespaces?.length > 0) {
+                                const fullNameWithNamespaces = (symbol.containingNamespaces.join('.') + '.' + lowerFirstSymbolName).toLowerCase();
+                                symbolInThisScope = scopeFile.providedSymbols.symbolMap?.get(symbol.flags)?.get(fullNameWithNamespaces);
+                            }
+                            if (symbolInThisScope) {
+                                if (symbolFoundInScope) {
+                                    // this is duplicately defined!
+                                    fileInfo.duplicateSymbolsInSameScope.push({ symbol: symbol, scope: scope });
+                                } else {
+                                    symbolFoundInScope = true;
+                                    scopesDefiningSymbol.push(scope);
+                                    //check for consistency across scopes
+                                    if (!providedSymbolType) {
+                                        providedSymbolType = symbolInThisScope;
+                                    } else {
+                                        //get more general type
+                                        if (providedSymbolType.isEqual(symbolInThisScope)) {
+                                            //type in this scope is the same as one we're already checking
+                                        } else if (providedSymbolType.isTypeCompatible(symbolInThisScope)) {
+                                            //type in this scope is compatible with one we're storing. use most generic
+                                            providedSymbolType = symbolInThisScope;
+                                        } else if (symbolInThisScope.isTypeCompatible(providedSymbolType)) {
+                                            // type we're storing is more generic that the type in this scope
+                                        } else {
+                                            // type in this scope is not compatible with other types for this symbol
+                                            scopesAreInconsistant = true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if (!symbolFoundInScope) {
+                            fileInfo.symbolsNotDefinedInEveryScope.push({ symbol: symbol, scope: scope });
+                        }
+                    }
+                    if (scopesAreInconsistant) {
+                        fileInfo.symbolsNotConsistentAcrossScopes.push({ symbol: symbol, scopes: scopesDefiningSymbol });
+                    }
+                }
+                this.lastValidationInfo.set(file.srcPath.toLowerCase(), fileInfo);
+            }
+
+            this.detectIncompatibleSymbolsAcrossScopes();
 
             // Build component types for any component that changes
             this.logger.time(LogLevel.info, ['Build component types'], () => {
@@ -847,10 +934,25 @@ export class Program {
                 this.componentSymbolsToUpdate.clear();
             });
 
+
+            const changedSymbolsMapArr = brsFilesValidated?.map(f => {
+                if (isBrsFile(f)) {
+                    return f.providedSymbols.changes;
+                }
+                return null;
+            }).filter(x => x);
+
+            const changedSymbols = new Map<SymbolTypeFlag, Set<string>>();
+            for (const flag of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
+
+                const changedSymbolsSetArr = changedSymbolsMapArr.map(symMap => symMap.get(flag));
+                changedSymbols.set(flag, new Set(...changedSymbolsSetArr));
+            }
+
             this.logger.time(LogLevel.info, ['Validate all scopes'], () => {
                 for (let scopeName in this.scopes) {
                     let scope = this.scopes[scopeName];
-                    scope.validate();
+                    scope.validate({ changedFiles: brsFilesValidated, changedSymbols: changedSymbols });
                 }
             });
 
@@ -858,6 +960,22 @@ export class Program {
 
             this.plugins.emit('afterProgramValidate', programValidateEvent);
         });
+    }
+
+
+    private detectIncompatibleSymbolsAcrossScopes() {
+        for (const [lowerFilePath, fileInfo] of this.lastValidationInfo.entries()) {
+            const file = this.files[lowerFilePath];
+            for (const symbolAndScopes of fileInfo.symbolsNotConsistentAcrossScopes) {
+                const typeChainResult = util.processTypeChain(symbolAndScopes.symbol.typeChain);
+                const scopeListName = symbolAndScopes.scopes.map(s => s.name).join(', ');
+                this.diagnostics.push({
+                    ...DiagnosticMessages.incompatibleSymbolDefinition(typeChainResult.fullNameOfItem, scopeListName),
+                    file: file,
+                    range: typeChainResult.range
+                });
+            }
+        }
     }
 
     /**

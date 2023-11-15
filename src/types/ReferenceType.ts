@@ -1,4 +1,4 @@
-import type { GetTypeOptions, TypeChainEntry } from '../interfaces';
+import type { GetTypeOptions, TypeChainEntry, TypeCompatibilityData } from '../interfaces';
 import type { GetSymbolTypeOptions, SymbolTypeGetterProvider } from '../SymbolTable';
 import type { SymbolTypeFlag } from '../SymbolTable';
 import { isAnyReferenceType, isComponentType, isDynamicType, isReferenceType } from '../astUtils/reflection';
@@ -57,15 +57,38 @@ export class ReferenceType extends BscType {
                 if (propName === 'isEqual') {
                     //Need to be able to check equality without resolution, because resolution need to check equality
                     //To see if you need to make a UnionType
-                    return (targetType: BscType) => {
+                    return (targetType: BscType, data?: TypeCompatibilityData) => {
+                        if (!targetType) {
+                            return false;
+                        }
                         const resolvedType = this.resolve();
                         if (resolvedType && !isReferenceType(resolvedType)) {
-                            return resolvedType.isEqual(targetType);
+                            return resolvedType.isEqual(targetType, data);
                         } else if (isReferenceType(targetType)) {
                             return this.fullName.toLowerCase() === targetType.fullName.toLowerCase() &&
                                 this.tableProvider === targetType.tableProvider;
                         }
-                        return targetType.isEqual(this);
+                        return targetType.isEqual(this, data);
+                    };
+                }
+                if (propName === 'isTypeCompatible') {
+                    //Need to be able to check equality without resolution, because resolution need to check equality
+                    //To see if you need to make a UnionType
+                    return (targetType: BscType, data?: TypeCompatibilityData) => {
+                        if (!targetType) {
+                            return false;
+                        }
+                        if (isDynamicType(targetType)) {
+                            return true;
+                        }
+                        const resolvedType = this.resolve();
+                        if (resolvedType && !isReferenceType(resolvedType)) {
+                            return resolvedType.isTypeCompatible(targetType, data);
+                        } else if (isReferenceType(targetType)) {
+                            return this.fullName.toLowerCase() === targetType.fullName.toLowerCase() &&
+                                this.tableProvider === targetType.tableProvider;
+                        }
+                        return targetType.isTypeCompatible(this, data);
                     };
                 }
 

@@ -75,8 +75,15 @@ export abstract class BscType {
         let isSuperSet = true;
         data.missingFields ||= [];
         data.fieldMismatches ||= [];
+        data.depth = data.depth ? data.depth + 1 : 1;
+        //data.chain ||= [];
         this.addBuiltInInterfaces();
         targetType.addBuiltInInterfaces();
+
+        if (data.depth > 10) {
+            // some sort of circular reference
+            return false;
+        }
 
         const mySymbols = this.getMemberTable()?.getAllSymbols(flags);
         for (const memberSymbol of mySymbols) {
@@ -92,7 +99,8 @@ export abstract class BscType {
                         if (!acc) {
                             return acc;
                         }
-                        const myMemberAllowsTargetType = memberSymbol.type.isTypeCompatible(typeOfTargetSymbol);
+
+                        const myMemberAllowsTargetType = memberSymbol.type.isTypeCompatible(typeOfTargetSymbol, { depth: data.depth });
                         if (!myMemberAllowsTargetType) {
                             data.fieldMismatches.push({ name: memberSymbol.name, expectedType: memberSymbol.type, actualType: targetType.getMemberType(memberSymbol.name, { flags: flags }) });
                         }

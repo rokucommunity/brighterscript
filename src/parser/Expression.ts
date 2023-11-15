@@ -341,7 +341,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         if (funcName) {
             resultType.setName(funcName);
         }
-        options.typeChain?.push(new TypeChainEntry(funcName, resultType, this.range));
+        options.typeChain?.push(new TypeChainEntry(funcName, resultType, options.flags, this.range));
         return resultType;
     }
 }
@@ -363,7 +363,7 @@ export class FunctionParameterExpression extends Expression {
         const paramType = this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime, typeChain: undefined }) ??
             this.defaultValue?.getType({ ...options, flags: SymbolTypeFlag.runtime, typeChain: undefined }) ??
             DynamicType.instance;
-        options.typeChain?.push(new TypeChainEntry(this.name.text, paramType, this.range));
+        options.typeChain?.push(new TypeChainEntry(this.name.text, paramType, options.flags, this.range));
         return paramType;
     }
 
@@ -466,7 +466,7 @@ export class DottedGetExpression extends Expression {
     getType(options: GetTypeOptions) {
         const objType = this.obj?.getType(options);
         const result = objType?.getMemberType(this.name?.text, options);
-        options.typeChain?.push(new TypeChainEntry(this.name?.text, result, this.name?.range ?? this.range));
+        options.typeChain?.push(new TypeChainEntry(this.name?.text, result, options.flags, this.name?.range ?? this.range));
         if (result || options.flags & SymbolTypeFlag.typetime) {
             // All types should be known at typetime
             return result;
@@ -954,7 +954,7 @@ export class VariableExpression extends Expression {
             const symbolTable = this.getSymbolTable();
             resultType = symbolTable?.getSymbolType(nameKey, { ...options, fullName: nameKey, tableProvider: () => this.getSymbolTable() });
         }
-        options.typeChain?.push(new TypeChainEntry(nameKey, resultType, this.range));
+        options.typeChain?.push(new TypeChainEntry(nameKey, resultType, options.flags, this.range));
         return resultType;
     }
 }
@@ -1167,7 +1167,7 @@ export class CallfuncExpression extends Expression {
         const calleeType = this.callee.getType({ ...options, flags: SymbolTypeFlag.runtime });
         if (isComponentType(calleeType) || isReferenceType(calleeType)) {
             const funcType = (calleeType as ComponentType).getCallFuncType(this.methodName.text, options);
-            options.typeChain?.push(new TypeChainEntry(this.methodName.text, funcType, this.methodName.range, createToken(TokenKind.Callfunc)));
+            options.typeChain?.push(new TypeChainEntry(this.methodName.text, funcType, options.flags, this.methodName.range, createToken(TokenKind.Callfunc)));
             if (options.ignoreCall) {
                 result = funcType;
             }

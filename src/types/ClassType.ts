@@ -16,7 +16,7 @@ export class ClassType extends InheritableType {
     public readonly kind = BscTypeKind.ClassType;
 
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
-        if (this.isEqual(targetType)) {
+        if (this.isEqual(targetType, data)) {
             return true;
         } else if (isDynamicType(targetType) ||
             isObjectType(targetType) ||

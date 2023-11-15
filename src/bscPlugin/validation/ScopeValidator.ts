@@ -54,10 +54,23 @@ export class ScopeValidator {
 
     private walkFiles() {
 
-        //function signatures incompatible cross scopes
-
         this.event.scope.enumerateOwnFiles((file) => {
             if (isBrsFile(file)) {
+                const hasChangeInfo = this.event.changedFiles && this.event.changedSymbols;
+
+                let thisFileRequiresChangedSymbol = false;
+                for (let requiredSymbol of file.requiredSymbols) {
+                    const changeSymbolSetForFlag = this.event.changedSymbols.get(requiredSymbol.flags);
+                    if (util.setContainsUnresolvedSymbol(changeSymbolSetForFlag, requiredSymbol)) {
+                        thisFileRequiresChangedSymbol = true;
+                    }
+                }
+                const thisFileHasChanges = this.event.changedFiles.includes(file);
+                if (hasChangeInfo && !thisFileRequiresChangedSymbol && !thisFileHasChanges) {
+                    // this file does not require a symbol that has changed, and this file has not changed
+                    return;
+                }
+
                 const validationVisitor = createVisitor({
                     VariableExpression: (varExpr) => {
                         this.validateVariableAndDottedGetExpressions(file, varExpr);
@@ -82,8 +95,9 @@ export class ScopeValidator {
                         this.validateUnaryExpression(file, unaryExpr);
                     }
                 });
-
-                const segmentsToWalkForValidation = file.getValidationSegments();
+                const segmentsToWalkForValidation = (thisFileHasChanges || !hasChangeInfo)
+                    ? file.validationSegmenter.segmentsForValidation // validate everything in the file
+                    : file.getValidationSegments(this.event.changedSymbols); // validate only what's needed in the file
                 for (const segment of segmentsToWalkForValidation) {
                     segment.walk(validationVisitor, {
                         walkMode: InsideSegmentWalkMode
@@ -530,18 +544,20 @@ export class ScopeValidator {
         } else if (isDynamicType(exprType) && isEnumType(parentTypeInfo?.type) && isDottedGetExpression(expression)) {
             const enumFileLink = this.event.scope.getEnumFileLink(util.getAllDottedGetPartsAsString(expression.obj));
             const typeChainScanForParent = util.processTypeChain(typeChain.slice(0, -1));
-            this.addMultiScopeDiagnostic({
-                file: file,
-                ...DiagnosticMessages.unknownEnumValue(lastTypeInfo?.name, typeChainScanForParent.fullChainName),
-                range: lastTypeInfo?.range,
-                relatedInformation: [{
-                    message: 'Enum declared here',
-                    location: util.createLocation(
-                        URI.file(enumFileLink?.file.srcPath).toString(),
-                        enumFileLink?.item?.tokens.name.range
-                    )
-                }]
-            });
+            if (enumFileLink) {
+                this.addMultiScopeDiagnostic({
+                    file: file,
+                    ...DiagnosticMessages.unknownEnumValue(lastTypeInfo?.name, typeChainScanForParent.fullChainName),
+                    range: lastTypeInfo?.range,
+                    relatedInformation: [{
+                        message: 'Enum declared here',
+                        location: util.createLocation(
+                            URI.file(enumFileLink?.file.srcPath).toString(),
+                            enumFileLink?.item?.tokens.name.range
+                        )
+                    }]
+                });
+            }
         }
     }
 

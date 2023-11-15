@@ -1,5 +1,5 @@
 import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
-import { isInheritableType } from '../astUtils/reflection';
+import { isInheritableType, isReferenceType } from '../astUtils/reflection';
 import { SymbolTypeFlag } from '../SymbolTable';
 import { BscType } from './BscType';
 
@@ -89,16 +89,38 @@ export abstract class InheritableType extends BscType {
         if (!isInheritableType(targetType)) {
             return false;
         }
+        if (!targetType) {
+            return false;
+        }
+        if (this === targetType) {
+            return true;
+        }
+        if (isReferenceType(targetType)) {
+            if (targetType.isResolvable()) {
+                if (this === (targetType as any).getTarget()) {
+                    return true;
+                }
+            } else {
+                return this.name.toLowerCase() === targetType.memberKey.toLowerCase();
+            }
+        }
         return this.name.toLowerCase() === targetType.name?.toLowerCase() &&
             this.isParentTypeEqual(targetType, data) &&
             this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlag.runtime, data) &&
             targetType.checkCompatibilityBasedOnMembers(this, SymbolTypeFlag.runtime, data);
     }
 
-
     protected isParentTypeEqual(targetType: BscType, data?: TypeCompatibilityData): boolean {
         if (isInheritableType(targetType)) {
-            return this.parentType ? this.parentType.isEqual(targetType.parentType, data) : !targetType.parentType;
+            if (this.parentType && !targetType.parentType) {
+                return false;
+            } else if (!this.parentType && !targetType.parentType) {
+                return true;
+            } else if (!this.parentType && targetType.parentType) {
+                return false;
+            }
+
+            return this.parentType.isEqual(targetType.parentType, data);
         }
         return false;
     }

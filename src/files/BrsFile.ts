@@ -1343,8 +1343,8 @@ export class BrsFile implements File {
         this.program.addFileSymbolInfo(this);
     }
 
-    public getValidationSegments() {
-        const segments = this.validationSegmenter.getSegments();
+    public getValidationSegments(changedSymbols: Map<SymbolTypeFlag, Set<string>>) {
+        const segments = this.validationSegmenter.getSegments(changedSymbols);
         return segments;
     }
 
@@ -1359,7 +1359,12 @@ export class BrsFile implements File {
             addedSymbols.set(SymbolTypeFlag.typetime, new Set());
             for (const setOfSymbols of allNeededSymbolSets) {
                 for (const symbol of setOfSymbols) {
+
                     const fullSymbolkey = symbol.typeChain.map(tce => tce.name).join('.').toLowerCase();
+                    if (this.providedSymbols.symbolMap.get(symbol.flags)?.has(fullSymbolkey)) {
+                        // this catches namespaced things
+                        continue;
+                    }
                     if (!addedSymbols.get(symbol.flags).has(fullSymbolkey)) {
                         requiredSymbols.push(symbol);
                         addedSymbols.get(symbol.flags).add(fullSymbolkey);
@@ -1371,76 +1376,94 @@ export class BrsFile implements File {
     }
 
     public get providedSymbols() {
-        return this.cache.getOrAdd(`providedSymbols`, () => {
-            const symbolMap = new Map<SymbolTypeFlag, Map<string, BscType>>();
-            const runTimeSymbolMap = new Map<string, BscType>();
-            const typeTimeSymbolMap = new Map<string, BscType>();
-
-            const tablesToGetSymbolsFrom: Array<{ table: SymbolTable; namePrefixLower?: string }> = [{
-                table: this.parser.symbolTable
-            }];
-
-            for (const namespaceStatement of this.parser.references.namespaceStatements) {
-                tablesToGetSymbolsFrom.push({
-                    table: namespaceStatement.body.getSymbolTable(),
-                    namePrefixLower: namespaceStatement.getName(ParseMode.BrighterScript).toLowerCase()
-                });
-            }
-
-            for (const symbolTable of tablesToGetSymbolsFrom) {
-                const runTimeSymbols = symbolTable.table.getOwnSymbols(SymbolTypeFlag.runtime);
-                const typeTimeSymbols = symbolTable.table.getOwnSymbols(SymbolTypeFlag.typetime);
-
-                for (const symbol of runTimeSymbols) {
-                    if (!isAnyReferenceType(symbol.type)) {
-                        const symbolNameLower = symbolTable.namePrefixLower ? `${symbolTable.namePrefixLower}.${symbol.name.toLowerCase()}` : symbol.name.toLowerCase();
-                        runTimeSymbolMap.set(symbolNameLower, symbol.type);
-                    }
-                }
-
-                for (const symbol of typeTimeSymbols) {
-                    if (!isAnyReferenceType(symbol.type)) {
-                        const symbolNameLower = symbolTable.namePrefixLower ? `${symbolTable.namePrefixLower}.${symbol.name.toLowerCase()}` : symbol.name.toLowerCase();
-                        typeTimeSymbolMap.set(symbolNameLower, symbol.type);
-                    }
-                }
-            }
-
-            symbolMap.set(SymbolTypeFlag.runtime, runTimeSymbolMap);
-            symbolMap.set(SymbolTypeFlag.typetime, typeTimeSymbolMap);
-
-            const changes = new Map<SymbolTypeFlag, Set<string>>();
-            changes.set(SymbolTypeFlag.runtime, new Set<string>());
-            changes.set(SymbolTypeFlag.typetime, new Set<string>());
-            const previouslyProvidedSymbols = this.program.fileSymbolInformation?.get(this.pkgPath)?.provides.symbolMap;
-            for (const flag of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
-                const newSymbolMapForFlag = symbolMap.get(flag);
-                const oldSymbolMapForFlag = previouslyProvidedSymbols?.get(flag);
-                const changesForFlag = changes.get(flag);
-                if (!oldSymbolMapForFlag) {
-                    for (const key of newSymbolMapForFlag.keys()) {
-                        changesForFlag.add(key);
-                    }
-                    continue;
-
-                }
-                for (const [symbolKey, symbolType] of newSymbolMapForFlag) {
-                    const previousType = oldSymbolMapForFlag?.get(symbolKey);
-                    if (!previousType) {
-                        changesForFlag.add(symbolKey);
-                        continue;
-                    }
-                    if (!symbolType.isTypeCompatible(previousType) || !previousType.isTypeCompatible(symbolType)) {
-                        // the new type is not exactly the same - add it to the changes
-                        changesForFlag.add(symbolKey);
-                    }
-                }
-            }
-            return {
-                symbolMap: symbolMap,
-                changes: changes
-            };
+        return this.cache?.getOrAdd(`providedSymbols`, () => {
+            return this.getProvidedSymbols();
         });
+    }
+
+    private getProvidedSymbols() {
+        const symbolMap = new Map<SymbolTypeFlag, Map<string, BscType>>();
+        const runTimeSymbolMap = new Map<string, BscType>();
+        const typeTimeSymbolMap = new Map<string, BscType>();
+
+        const tablesToGetSymbolsFrom: Array<{ table: SymbolTable; namePrefixLower?: string }> = [{
+            table: this.parser.symbolTable
+        }];
+
+        for (const namespaceStatement of this.parser.references.namespaceStatements) {
+            tablesToGetSymbolsFrom.push({
+                table: namespaceStatement.body.getSymbolTable(),
+                namePrefixLower: namespaceStatement.getName(ParseMode.BrighterScript).toLowerCase()
+            });
+        }
+
+        for (const symbolTable of tablesToGetSymbolsFrom) {
+            const runTimeSymbols = symbolTable.table.getOwnSymbols(SymbolTypeFlag.runtime);
+            const typeTimeSymbols = symbolTable.table.getOwnSymbols(SymbolTypeFlag.typetime);
+
+            for (const symbol of runTimeSymbols) {
+                if (!isAnyReferenceType(symbol.type)) {
+                    const symbolNameLower = symbolTable.namePrefixLower ? `${symbolTable.namePrefixLower}.${symbol.name.toLowerCase()}` : symbol.name.toLowerCase();
+                    runTimeSymbolMap.set(symbolNameLower, symbol.type);
+                }
+            }
+
+            for (const symbol of typeTimeSymbols) {
+                if (!isAnyReferenceType(symbol.type)) {
+                    const symbolNameLower = symbolTable.namePrefixLower ? `${symbolTable.namePrefixLower}.${symbol.name.toLowerCase()}` : symbol.name.toLowerCase();
+                    typeTimeSymbolMap.set(symbolNameLower, symbol.type);
+                }
+            }
+        }
+
+        symbolMap.set(SymbolTypeFlag.runtime, runTimeSymbolMap);
+        symbolMap.set(SymbolTypeFlag.typetime, typeTimeSymbolMap);
+
+        const changes = new Map<SymbolTypeFlag, Set<string>>();
+        changes.set(SymbolTypeFlag.runtime, new Set<string>());
+        changes.set(SymbolTypeFlag.typetime, new Set<string>());
+        const previouslyProvidedSymbols = this.program.getFileSymbolInfo(this)?.provides.symbolMap;
+        const previousSymbolsChecked = new Map<SymbolTypeFlag, Set<string>>();
+        previousSymbolsChecked.set(SymbolTypeFlag.runtime, new Set<string>());
+        previousSymbolsChecked.set(SymbolTypeFlag.typetime, new Set<string>());
+        for (const flag of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
+            const newSymbolMapForFlag = symbolMap.get(flag);
+            const oldSymbolMapForFlag = previouslyProvidedSymbols?.get(flag);
+            const previousSymbolsCheckedForFlag = previousSymbolsChecked.get(flag);
+            const changesForFlag = changes.get(flag);
+            if (!oldSymbolMapForFlag) {
+                for (const key of newSymbolMapForFlag.keys()) {
+                    changesForFlag.add(key);
+                }
+                continue;
+
+            }
+            for (const [symbolKey, symbolType] of newSymbolMapForFlag) {
+                const previousType = oldSymbolMapForFlag?.get(symbolKey);
+                previousSymbolsCheckedForFlag.add(symbolKey);
+                if (!previousType) {
+                    changesForFlag.add(symbolKey);
+                    continue;
+                }
+                const data = {};
+                if (!symbolType.isTypeCompatible(previousType, data)) {
+                    // the new type is not exactly the same - add it to the changes
+                    changesForFlag.add(symbolKey);
+                } else if (!previousType.isTypeCompatible(symbolType, data)) {
+                    // the new type is not exactly the same - add it to the changes
+                    changesForFlag.add(symbolKey);
+                }
+            }
+            for (const [symbolKey] of previouslyProvidedSymbols.get(flag)) {
+                if (!previousSymbolsCheckedForFlag.has(symbolKey)) {
+                    changesForFlag.add(symbolKey);
+                }
+            }
+        }
+        return {
+            symbolMap: symbolMap,
+            changes: changes
+        };
     }
 
     public markSegmentAsValidated(node: AstNode) {

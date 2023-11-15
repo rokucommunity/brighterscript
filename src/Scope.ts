@@ -4,7 +4,7 @@ import * as path from 'path';
 import chalk from 'chalk';
 import type { DiagnosticInfo } from './DiagnosticMessages';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, FileLink, Callable, NamespaceContainer } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, FileLink, Callable, NamespaceContainer, ScopeValidationOptions } from './interfaces';
 import type { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
 import type { NamespaceStatement, ClassStatement, EnumStatement, InterfaceStatement, EnumMemberStatement, ConstStatement } from './parser/Statement';
@@ -628,9 +628,9 @@ export class Scope {
     }
     private _debugLogComponentName: string;
 
-    public validate(force = false) {
+    public validate(validationOptions: ScopeValidationOptions = { force: false }) {
         //if this scope is already validated, no need to revalidate
-        if (this.isValidated === true && !force) {
+        if (this.isValidated === true && !validationOptions.force) {
             this.logDebug('validate(): already validated');
             return;
         }
@@ -642,7 +642,7 @@ export class Scope {
             //validate our parent before we validate ourself
             if (parentScope && parentScope.isValidated === false) {
                 this.logDebug('validate(): validating parent first');
-                parentScope.validate(force);
+                parentScope.validate(validationOptions);
             }
             //clear the scope's errors list (we will populate them from this method)
             this.diagnostics = [];
@@ -678,7 +678,9 @@ export class Scope {
             this.linkSymbolTable();
             const scopeValidateEvent = {
                 program: this.program,
-                scope: this
+                scope: this,
+                changedFiles: validationOptions?.changedFiles,
+                changedSymbols: validationOptions?.changedSymbols
             };
             this.program.plugins.emit('beforeScopeValidate', scopeValidateEvent);
             this.program.plugins.emit('onScopeValidate', scopeValidateEvent);

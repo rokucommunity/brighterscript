@@ -46,7 +46,7 @@ export class TypedFunctionType extends BaseFunctionType {
         return this;
     }
 
-    public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
+    public isTypeCompatible(targetType: BscType, data: TypeCompatibilityData = {}) {
         if (
             isDynamicType(targetType) ||
             isObjectType(targetType) ||
@@ -55,7 +55,7 @@ export class TypedFunctionType extends BaseFunctionType {
             return true;
         }
         if (isTypedFunctionType(targetType)) {
-            return this.checkParamsAndReturnValue(targetType, true, (t1, t2) => t1.isTypeCompatible(t2));
+            return this.checkParamsAndReturnValue(targetType, true, (t1, t2, d) => t1.isTypeCompatible(t2, d), data);
         }
         return false;
     }
@@ -86,7 +86,7 @@ export class TypedFunctionType extends BaseFunctionType {
         return false;
     }
 
-    private checkParamsAndReturnValue(targetType: TypedFunctionType, allowOptionalParamDifferences: boolean, predicate: (type1: BscType, type2: BscType) => boolean) {
+    private checkParamsAndReturnValue(targetType: TypedFunctionType, allowOptionalParamDifferences: boolean, predicate: (type1: BscType, type2: BscType, data: TypeCompatibilityData) => boolean, data?: TypeCompatibilityData) {
         //compare all parameters
         let len = Math.max(this.params.length, targetType.params.length);
         for (let i = 0; i < len; i++) {
@@ -97,7 +97,7 @@ export class TypedFunctionType extends BaseFunctionType {
                 break;
             }
 
-            if (!myParam || !targetParam || !predicate(targetParam.type, myParam.type)) {
+            if (!myParam || !targetParam || !predicate(targetParam.type, myParam.type, data)) {
                 return false;
             }
             if (!allowOptionalParamDifferences && myParam.isOptional !== targetParam.isOptional) {
@@ -107,7 +107,7 @@ export class TypedFunctionType extends BaseFunctionType {
             }
         }
         //compare return type
-        if (!this.returnType || !targetType.returnType || !predicate(this.returnType, targetType.returnType)) {
+        if (!this.returnType || !targetType.returnType || !predicate(this.returnType, targetType.returnType, data)) {
             return false;
         }
         if (this.isVariadic !== targetType.isVariadic) {

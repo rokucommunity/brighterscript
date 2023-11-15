@@ -21,6 +21,8 @@ export class BrsFileValidator {
     }
 
     public process() {
+        const unlinkGlobalSymbolTable = this.event.file.parser.symbolTable.pushParentProvider(() => this.event.program.globalScope.symbolTable);
+
         util.validateTooDeepFile(this.event.file);
         this.walk();
         this.flagTopLevelStatements();
@@ -28,13 +30,10 @@ export class BrsFileValidator {
         if (!this.event.file.hasTypedef) {
             this.validateImportStatements();
         }
-
         if (isBrsFile(this.event.file)) {
-            const unlinkGlobalSymbolTable = this.event.file.parser.symbolTable.pushParentProvider(() => this.event.program.globalScope.symbolTable);
             this.event.file.processSymbolInformation();
-            unlinkGlobalSymbolTable();
         }
-
+        unlinkGlobalSymbolTable();
     }
 
     /**

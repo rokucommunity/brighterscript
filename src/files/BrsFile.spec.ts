@@ -3317,7 +3317,6 @@ describe('BrsFile', () => {
 
         it('includes namespace details', () => {
             const mainFile: BrsFile = program.setFile('source/main.bs', `
-
                 namespace Alpha.Beta
                     sub printConstVal()
                         print CONST_VALUE
@@ -3347,6 +3346,33 @@ describe('BrsFile', () => {
             ]);
             expect(mainFile.requiredSymbols[0].containingNamespaces).to.have.same.members(['Alpha', 'Beta']);
             expect(mainFile.requiredSymbols[1].containingNamespaces).to.have.same.members(['Delta', 'Gamma', 'Eta']);
+        });
+        it('does not include namespaces that are defined in the file', () => {
+            const mainFile: BrsFile = program.setFile('source/main.bs', `
+                namespace name1
+                    const PI = 3.14
+
+                    namespace name2
+                        function getPi() as float
+                            return name1.PI
+                        end function
+                    end namespace
+                end namespace
+            `);
+            program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+            expect(mainFile.requiredSymbols.length).to.eq(0);
+        });
+
+
+        it('should put types from typecasts as typetime required', () => {
+            const mainFile: BrsFile = program.setFile('source/main.bs', `
+                function takesIface(z) as string
+                    return (z as MyInterface).name
+                end function
+            `);
+            program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+            expect(mainFile.requiredSymbols.length).to.eq(1);
+            expect(mainFile.requiredSymbols[0].flags).to.eq(SymbolTypeFlag.typetime);
         });
     });
 
@@ -3490,7 +3516,34 @@ describe('BrsFile', () => {
                 expect(runtimeChanges.has('somefunc2')).to.be.true;
             });
 
-            it('new symbols in a a namespace are added to the changes set', () => {
+            it('removed symbols are added to the changes set', () => {
+                let mainFile: BrsFile = program.setFile('source/main.bs', `
+                    sub someFunc()
+                        print 1
+                    end sub
+
+                    sub someFunc2()
+                        print 2
+                    end sub
+                `);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                let runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                expect(runtimeSymbols.size).to.eq(2);
+
+                mainFile = program.setFile('source/main.bs', `
+                    sub someFunc()
+                        print 1
+                    end sub
+                `);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                expect(runtimeSymbols.size).to.eq(1);
+                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                expect(runtimeChanges.size).to.eq(1);
+                expect(runtimeChanges.has('somefunc2')).to.be.true;
+            });
+
+            it('new symbols in a namespace are added to the changes set', () => {
                 let mainFile: BrsFile = program.setFile('source/main.bs', `
                     namespace Alpha
                     end namespace
@@ -3767,6 +3820,42 @@ describe('BrsFile', () => {
                 let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
                 expect(runtimeChanges.size).to.eq(1);
                 expect(runtimeChanges.has('alpha.beta.pi'));
+            });
+
+            it('should not include changes inside a function if the param types are known', () => {
+                let mainFile: BrsFile = program.setFile('source/main.bs', `
+                    function func1(p as string) as integer
+                        return len(p)
+                    end function
+
+                    sub displayModelTypeInLabel(myLabel as roSgNodeLabel)
+                        print myLabel.text
+                        di = createObject("roDeviceInfo")' as roDeviceInfo
+                        myLabel.text = di.GetFriendlyName()
+                        print myLabel.getChildren(0, -1)
+                    end sub
+                `);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                let runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                expect(runtimeSymbols.size).to.eq(2);
+
+                mainFile = program.setFile('source/main.bs', `
+                    function func1(p as string) as integer
+                        return len(p)+1
+                    end function
+
+                    sub displayModelTypeInLabel(myLabel as roSgNodeLabel)
+                        print myLabel.text
+                        di = createObject("roDeviceInfo") as roDeviceInfo
+                        myLabel.text = di.GetFriendlyName()
+                        print myLabel.getChildren(0, -1)
+                    end sub
+                `);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                expect(runtimeSymbols.size).to.eq(2);
+                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                expect(runtimeChanges.size).to.eq(0);
             });
 
         });
