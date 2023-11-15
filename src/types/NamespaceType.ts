@@ -1,5 +1,5 @@
 import { isNamespaceType } from '../astUtils/reflection';
-import type { GetTypeOptions } from '../interfaces';
+import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 
@@ -14,6 +14,11 @@ export class NamespaceType extends BscType {
     public toString() {
         return this.name;
     }
+
+    public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
+        return this.isEqual(targetType);
+    }
+
 
     getMemberType(name: string, options: GetTypeOptions) {
         const fullName = this.toString() + '.' + name;

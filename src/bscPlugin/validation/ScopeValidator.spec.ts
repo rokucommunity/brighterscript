@@ -6,6 +6,7 @@ import { expect } from 'chai';
 import type { TypeCompatibilityData } from '../../interfaces';
 import { IntegerType } from '../../types/IntegerType';
 import { StringType } from '../../types/StringType';
+import type { BrsFile } from '../../files/BrsFile';
 
 describe('ScopeValidator', () => {
 
@@ -1775,6 +1776,140 @@ describe('ScopeValidator', () => {
             program.validate();
             //should have no errors
             expectZeroDiagnostics(program);
+        });
+
+    });
+
+    describe('revalidation reduction', () => {
+
+        it('validates only parts of files that need revalidation on scope validation', () => {
+
+            function validateFile(file: BrsFile) {
+                const validateFileEvent = {
+                    program: program,
+                    file: file
+                };
+                program.plugins.emit('beforeFileValidate', validateFileEvent);
+
+                //emit an event to allow plugins to contribute to the file validation process
+                program.plugins.emit('onFileValidate', validateFileEvent);
+                file.isValidated = true;
+
+                program.plugins.emit('afterFileValidate', validateFileEvent);
+            }
+
+            const commonContents = `
+                sub noValidationForEachScope()
+                    k = new KlassInSameFile()
+                    print k.value
+                end sub
+
+                class KlassInSameFile
+                    value = 1
+                end class
+            `;
+
+            let commonBs: BrsFile = program.setFile('source/common.bs', commonContents);
+            validateFile(commonBs);
+            expect(commonBs.validationSegmenter.segmentsForValidation.length).to.eq(2); // 1 func,  1 classField
+            expect(commonBs.validationSegmenter.unresolvedSegments.size).to.eq(0);
+            commonBs.validationSegmenter.validatedSegments.forEach(x => expect(x).to.be.false);
+            expect(commonBs.validationSegmenter.singleValidationSegments.size).to.eq(2); // no references needed to other files
+
+            let common2Bs: BrsFile = program.setFile('source/common2.bs', `
+                sub doesValidationForEachScope()
+                    k = new KlassInDiffFile()
+                    print k.value
+                end sub
+
+                function alsoNoValidationForEachScope() as integer
+                    return 1
+                end function
+            `);
+            validateFile(common2Bs);
+            expect(common2Bs.validationSegmenter.segmentsForValidation.length).to.eq(2); // 2 func
+            expect(common2Bs.validationSegmenter.unresolvedSegments.size).to.eq(1);
+            commonBs.validationSegmenter.validatedSegments.forEach(x => expect(x).to.be.false);
+            expect(common2Bs.validationSegmenter.singleValidationSegments.size).to.eq(1); // alsoNoValidationForEachScope() does not reference other files
+
+            let klassBs: BrsFile = program.setFile('source/klass.bs', `
+                class KlassInDiffFile
+                    value = 2
+                end class
+            `);
+            validateFile(klassBs);
+            expect(klassBs.validationSegmenter.segmentsForValidation.length).to.eq(1); //  1 classField
+            expect(klassBs.validationSegmenter.unresolvedSegments.size).to.eq(0);
+            klassBs.validationSegmenter.validatedSegments.forEach(x => expect(x).to.be.false);
+            expect(klassBs.validationSegmenter.singleValidationSegments.size).to.eq(1); // does not reference other files
+
+
+            const widgetFileContents = `
+                sub init()
+                    noValidationForEachScope()
+                    doesValidationForEachScope()
+                end sub
+
+                sub anotherFunction()
+                    print "hello"
+                end sub
+            `;
+            let widgetBs: BrsFile = program.setFile('components/Widget.bs', widgetFileContents);
+
+            validateFile(widgetBs);
+            expect(widgetBs.validationSegmenter.segmentsForValidation.length).to.eq(2); // 2 funcs
+            expect(widgetBs.validationSegmenter.unresolvedSegments.size).to.eq(1); // 1 func (init)
+            widgetBs.validationSegmenter.validatedSegments.forEach(x => expect(x).to.be.false);
+            expect(widgetBs.validationSegmenter.singleValidationSegments.size).to.eq(1); // 1 func (anotherFunction)
+
+            const diffKlassContent = `
+                class KlassInDiffFile
+                    value = 3
+                end class
+            `;
+            let diffKlassBs: BrsFile = program.setFile('components/diffKlass.bs', diffKlassContent);
+            validateFile(diffKlassBs);
+            expect(diffKlassBs.validationSegmenter.segmentsForValidation.length).to.eq(1); //  1 classField
+            expect(diffKlassBs.validationSegmenter.unresolvedSegments.size).to.eq(0);
+            diffKlassBs.validationSegmenter.validatedSegments.forEach(x => expect(x).to.be.false);
+            expect(diffKlassBs.validationSegmenter.singleValidationSegments.size).to.eq(1);
+
+
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <script uri="pkg:/source/common.bs"/>
+                    <script uri="pkg:/source/common2.bs"/>
+                    <script uri="diffKlass.bs"/>
+                </component>
+            `);
+            console.log('****** base validation');
+            program.validate();
+            // all segments should be validated
+            [commonBs, common2Bs, klassBs, widgetBs, diffKlassBs].forEach(file => {
+                expect(file.validationSegmenter.validatedSegments.size).to.gte(file.validationSegmenter.segmentsForValidation.length);
+                file.validationSegmenter.validatedSegments.forEach(x => expect(x).to.be.true);
+            });
+
+            expectZeroDiagnostics(program);
+            program.setFile('components/Widget.bs', widgetFileContents);
+            program.validate();
+            // Widget.bs has changed. it needs to totally re-validated
+            // and other files in the scope need to revalidate only the unresolved segments - should be source/common2.bs
+            // TODO: how to test this?
+            program.validate();
+            program.setFile('components/diffKlass.bs', diffKlassContent);
+            // diffKlass.bs has changed. it needs to totally re-validated
+            // no other files in scope reference it .. no other files need revalidation
+            // TODO: how to test this?
+            program.validate();
+            program.setFile('source/common.bs', commonContents);
+            // common.bs has changed. it needs to totally re-validated
+            // in source scope, common2.bs still has unresolves, it needs revalidation
+            // in widget scope, widget.bs references it
+            // TODO: how to test this?
+            program.validate();
         });
 
     });

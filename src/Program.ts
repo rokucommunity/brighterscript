@@ -817,11 +817,9 @@ export class Program {
                         file: file
                     };
                     this.plugins.emit('beforeFileValidate', validateFileEvent);
-
                     //emit an event to allow plugins to contribute to the file validation process
                     this.plugins.emit('onFileValidate', validateFileEvent);
                     file.isValidated = true;
-
                     this.plugins.emit('afterFileValidate', validateFileEvent);
                 }
             }

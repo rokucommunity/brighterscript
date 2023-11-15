@@ -118,6 +118,10 @@ export function getUniqueType(types: BscType[], unionTypeFactory: (types: BscTyp
     if (!types || types.length === 0) {
         return undefined;
     }
+    const dynType = types.find((x) => !isAnyReferenceType(x) && isDynamicType(x));
+    if (dynType) {
+        return dynType;
+    }
     types = types?.map(type => {
         if (!isAnyReferenceType(type) && isUnionType(type)) {
             return type.types;

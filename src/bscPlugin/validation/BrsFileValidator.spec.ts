@@ -223,7 +223,7 @@ describe('BrsFileValidator', () => {
         expectZeroDiagnostics(program);
     });
 
-    it('flags classes in wrong locations', () => {
+    it('flags namespaces in wrong locations', () => {
         program.setFile('source/main.bs', `
             function test()
                 namespace Alpha

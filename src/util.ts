@@ -24,7 +24,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { Logger, LogLevel } from './Logger';
 import type { Identifier, Locatable, Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBooleanType, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLongIntegerType, isNumberType, isStringType, isTypeExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLongIntegerType, isNumberType, isStringType, isTypeExpression, isTypedArrayExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import * as requireRelative from 'require-relative';
@@ -36,12 +36,13 @@ import { createIdentifier, createToken } from './astUtils/creators';
 import type { BscType } from './types/BscType';
 import type { AssignmentStatement } from './parser/Statement';
 import { FunctionType } from './types/FunctionType';
-import { ArrayType, BinaryOperatorReferenceType } from './types';
+import { ArrayType } from './types/ArrayType';
 import type { SymbolTable } from './SymbolTable';
 import { SymbolTypeFlag } from './SymbolTable';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { ComponentType } from './types/ComponentType';
 import { MAX_RELATED_INFOS_COUNT } from './diagnosticUtils';
+import { BinaryOperatorReferenceType } from './types/ReferenceType';
 
 export class Util {
     public clearConsole() {
@@ -1852,6 +1853,25 @@ export class Util {
             range: errorRange,
             containsDynamic: containsDynamic
         };
+    }
+
+
+    public isInTypeExpression(expression: AstNode): boolean {
+        //TODO: this is much faster than node.findAncestor(), but may need to be updated for "complicated" type expressions
+        if (isTypeExpression(expression) ||
+            isTypeExpression(expression.parent) ||
+            isTypedArrayExpression(expression) ||
+            isTypedArrayExpression(expression.parent)) {
+            return true;
+        }
+        if (isBinaryExpression(expression.parent)) {
+            let currentExpr: AstNode = expression.parent;
+            while (isBinaryExpression(currentExpr) && currentExpr.operator.kind === TokenKind.Or) {
+                currentExpr = currentExpr.parent;
+            }
+            return isTypeExpression(currentExpr) || isTypedArrayExpression(currentExpr);
+        }
+        return false;
     }
 
     public truncate<T>(options: {

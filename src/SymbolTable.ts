@@ -204,7 +204,7 @@ export class SymbolTable implements SymbolTypeGetter {
     getSymbolType(name: string, options: GetSymbolTypeOptions): BscType {
         const cacheEntry = this.getCachedType(name, options);
         let resolvedType = cacheEntry?.type;
-        const doSetCache = !resolvedType;
+        let doSetCache = !resolvedType;
         const originalIsReferenceType = isAnyReferenceType(resolvedType);
         let data = {} as ExtraSymbolData;
         if (!resolvedType || originalIsReferenceType) {
@@ -215,7 +215,9 @@ export class SymbolTable implements SymbolTypeGetter {
         if (!resolvedType && options.fullName && options.tableProvider) {
             resolvedType = SymbolTable.referenceTypeFactory(name, options.fullName, options.flags, options.tableProvider);
         }
+        const resolvedTypeIsReference = isAnyReferenceType(resolvedType);
         const newNonReferenceType = originalIsReferenceType && !isAnyReferenceType(resolvedType);
+        doSetCache = doSetCache && (options.onlyCacheResolvedTypes ? !resolvedTypeIsReference : true);
         if (doSetCache || newNonReferenceType) {
             this.setCachedType(name, { type: resolvedType, data: data }, options);
         }

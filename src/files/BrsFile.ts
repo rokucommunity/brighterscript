@@ -7,7 +7,7 @@ import chalk from 'chalk';
 import * as path from 'path';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
-import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference, FileLink, SerializedCodeFile } from '../interfaces';
+import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference, FileLink, SerializedCodeFile, NamespaceContainer } from '../interfaces';
 import type { Token } from '../lexer/Token';
 import { Lexer } from '../lexer/Lexer';
 import { TokenKind, AllowedLocalIdentifiers } from '../lexer/TokenKind';
@@ -21,15 +21,17 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isImportStatement, isFieldStatement, isFunctionExpression, isBrsFile } from '../astUtils/reflection';
+import { isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isImportStatement, isFieldStatement, isFunctionExpression, isBrsFile, isEnumStatement, isConstStatement } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import { URI } from 'vscode-uri';
-import { type AstNode, type Expression, type Statement } from '../parser/AstNode';
-import { SymbolTypeFlag } from '../SymbolTable';
+import type { Statement, AstNode } from '../parser/AstNode';
+import { type Expression } from '../parser/AstNode';
+import { SymbolTable, SymbolTypeFlag } from '../SymbolTable';
 import type { File } from './File';
 import { Editor } from '../astUtils/Editor';
+import { AstValidationSegmenter } from '../AstValidationSegmenter';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -118,6 +120,7 @@ export class BrsFile implements File {
      */
     public extension: string;
 
+
     /**
      * A collection of diagnostics related to this file
      */
@@ -202,7 +205,7 @@ export class BrsFile implements File {
      * The AST for this file
      */
     public get ast() {
-        return this.parser.ast;
+        return this.parser?.ast;
     }
 
     private documentSymbols: DocumentSymbol[];
@@ -1319,6 +1322,113 @@ export class BrsFile implements File {
                 map: undefined
             };
         }
+    }
+
+    static reduceReValidation = true;
+
+    public validationSegmenter = new AstValidationSegmenter();
+
+    public findUnresolvedSubTrees() {
+        if (BrsFile.reduceReValidation) {
+            this.validationSegmenter.processTree(this.ast);
+        }
+    }
+
+    public getValidationSegments() {
+        // return this.cache.getOrAdd(`validationSegments`, () => {
+        if (BrsFile.reduceReValidation) {
+            //const t0 = performance.now();
+            const segments = this.validationSegmenter.getSegments();
+            //const t1 = performance.now();
+            // console.log('validationSegmenter.getSegments()', this.pkgPath, t1 - t0);
+            return segments;
+        }
+        return [this.ast];
+        // });
+    }
+
+    public markSegmentAsValidated(node: AstNode) {
+        this.validationSegmenter.markSegmentAsValidated(node);
+    }
+
+    public getNamespaceLookupObject() {
+        return this.cache.getOrAdd(`namespaceLookup`, () => {
+            //const t0 = performance.now();
+            const nsLookup = this.buildNamespaceLookup();
+            // const t1 = performance.now();
+            //console.log('buildNamespaceLookup()', this.pkgPath, t1 - t0);
+            return nsLookup;
+        });
+    }
+
+    private buildNamespaceLookup() {
+        const namespaceLookup = new Map<string, NamespaceContainer>();
+        for (let namespaceStatement of this.parser.references.namespaceStatements) {
+            let nameParts = namespaceStatement.getNameParts();
+
+            let loopName: string = null;
+            let lowerLoopName: string = null;
+            let parentNameLower: string = null;
+
+            //ensure each namespace section is represented in the results
+            //(so if the namespace name is A.B.C, this will make an entry for "A", an entry for "A.B", and an entry for "A.B.C"
+            for (let i = 0; i < nameParts.length; i++) {
+
+                let part = nameParts[i];
+                let lowerPartName = part.text.toLowerCase();
+
+                if (i === 0) {
+                    loopName = part.text;
+                    lowerLoopName = lowerPartName;
+                } else {
+                    parentNameLower = lowerLoopName;
+                    loopName += '.' + part.text;
+                    lowerLoopName += '.' + lowerPartName;
+                }
+                if (!namespaceLookup.has(lowerLoopName)) {
+                    namespaceLookup.set(lowerLoopName, {
+                        isTopLevel: i === 0,
+                        file: this,
+                        fullName: loopName,
+                        fullNameLower: lowerLoopName,
+                        parentNameLower: parentNameLower,
+                        nameParts: nameParts.slice(0, i),
+                        nameRange: namespaceStatement.nameExpression.range,
+                        lastPartName: part.text,
+                        lastPartNameLower: lowerPartName,
+                        functionStatements: new Map(),
+                        namespaceStatements: [],
+                        namespaces: new Map(),
+                        classStatements: new Map(),
+                        enumStatements: new Map(),
+                        constStatements: new Map(),
+                        statements: [],
+                        // the aggregate symbol table should have no parent. It should include just the symbols of the namespace.
+                        symbolTable: new SymbolTable(`Namespace Aggregate: '${loopName}'`)
+                    });
+                } else {
+
+                }
+            }
+            let ns = namespaceLookup.get(lowerLoopName);
+            ns.namespaceStatements.push(namespaceStatement);
+            //ns.statements.push(...namespaceStatement.body.statements);
+            for (let statement of namespaceStatement.body.statements) {
+                if (isClassStatement(statement) && statement.name) {
+                    ns.classStatements.set(statement.name.text.toLowerCase(), statement);
+                } else if (isFunctionStatement(statement) && statement.name) {
+                    ns.functionStatements.set(statement.name.text.toLowerCase(), statement);
+                } else if (isEnumStatement(statement) && statement.fullName) {
+                    ns.enumStatements.set(statement.fullName.toLowerCase(), statement);
+                } else if (isConstStatement(statement) && statement.fullName) {
+                    ns.constStatements.set(statement.fullName.toLowerCase(), statement);
+                }
+            }
+            // Merges all the symbol tables of the namespace statements into the new symbol table created above.
+            // Set those symbol tables to have this new merged table as a parent
+            ns.symbolTable.mergeSymbolTable(namespaceStatement.body.getSymbolTable());
+        }
+        return namespaceLookup;
     }
 
     public getTypedef() {

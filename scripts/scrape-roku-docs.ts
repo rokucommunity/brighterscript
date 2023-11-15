@@ -793,6 +793,9 @@ class Runner {
         // fix ifSGNodeField overloads
         fixOverloadedMethod(this.result.interfaces.ifsgnodefield, 'observeField');
         fixOverloadedMethod(this.result.interfaces.ifsgnodefield, 'observeFieldScoped');
+
+        // fix ifdraw2d overloads
+        fixOverloadedMethod(this.result.interfaces.ifdraw2d, 'drawScaledObject');
     }
 }
 

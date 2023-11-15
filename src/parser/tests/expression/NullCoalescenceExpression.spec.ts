@@ -191,11 +191,11 @@ describe('NullCoalescingExpression', () => {
         it('uses the proper prefix when aliased package is installed', async () => {
             program.setFile('source/roku_modules/rokucommunity_bslib/bslib.brs', '');
             await testTranspile(`
-                sub main()
+                sub main(user)
                     a = user ?? false
                 end sub
             `, `
-                sub main()
+                sub main(user)
                     a = rokucommunity_bslib_coalesce(user, false)
                 end sub
             `);
@@ -203,11 +203,11 @@ describe('NullCoalescingExpression', () => {
 
         it('properly transpiles null coalesence assignments - simple', async () => {
             await testTranspile(`
-                sub main()
+                sub main(user)
                     a = user ?? {"id": "default"}
                 end sub
             `, `
-                sub main()
+                sub main(user)
                     a = bslib_coalesce(user, {
                         "id": "default"
                     })
@@ -240,11 +240,11 @@ describe('NullCoalescingExpression', () => {
 
         it('transpiles null coalesence assignment for variable alternate- complex consequent', async () => {
             await testTranspile(`
-                sub main()
+                sub main(obj)
                     a = obj.link ?? false
                 end sub
             `, `
-                sub main()
+                sub main(obj)
                     a = (function(obj)
                             __bsConsequent = obj.link
                             if __bsConsequent <> invalid then

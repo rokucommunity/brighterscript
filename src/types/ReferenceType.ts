@@ -41,7 +41,7 @@ export class ReferenceType extends BscType {
                     return () => {
                         let resultSoFar = this.resolve();
                         while (resultSoFar && isReferenceType(resultSoFar)) {
-                            resultSoFar = (resultSoFar as any).getTarget();
+                            resultSoFar = (resultSoFar as any).getTarget?.();
                         }
                         return !!resultSoFar;
                     };
@@ -197,7 +197,7 @@ export class ReferenceType extends BscType {
             return;
         }
         // Look for circular references
-        let resolvedType = symbolTable.getSymbolType(this.memberKey, { flags: this.flags });
+        let resolvedType = symbolTable.getSymbolType(this.memberKey, { flags: this.flags, onlyCacheResolvedTypes: true });
         if (!resolvedType) {
             // could not find this member
             return;
@@ -215,7 +215,7 @@ export class ReferenceType extends BscType {
                     return;
                 }
                 this.referenceChain.add(resolvedType);
-                resolvedType = (resolvedType as any).getTarget();
+                resolvedType = (resolvedType as any).getTarget?.();
             }
             this.tableProvider().setCachedType(this.memberKey, { type: resolvedType }, { flags: this.flags });
         }
