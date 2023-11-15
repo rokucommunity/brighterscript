@@ -416,7 +416,7 @@ export class FunctionStatement extends Statement implements TypedefProvider {
 
     getType(options: GetTypeOptions) {
         const funcExprType = this.func.getType(options);
-        funcExprType.setName(this.name.text);
+        funcExprType.setName(this.name?.text);
         return funcExprType;
     }
 }

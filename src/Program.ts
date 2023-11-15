@@ -872,7 +872,7 @@ export class Program {
                 for (const symbol of file.requiredSymbols) {
                     let providedSymbolType: BscType;
                     let scopesDefiningSymbol: Scope[] = [];
-                    let scopesAreInconsistant = false;
+                    let scopesAreInconsistent = false;
 
                     for (const scope of scopesToCheckForConsistency) {
                         let symbolFoundInScope = false;
@@ -907,7 +907,7 @@ export class Program {
                                             // type we're storing is more generic that the type in this scope
                                         } else {
                                             // type in this scope is not compatible with other types for this symbol
-                                            scopesAreInconsistant = true;
+                                            scopesAreInconsistent = true;
                                         }
                                     }
                                 }
@@ -917,7 +917,7 @@ export class Program {
                             fileInfo.symbolsNotDefinedInEveryScope.push({ symbol: symbol, scope: scope });
                         }
                     }
-                    if (scopesAreInconsistant) {
+                    if (scopesAreInconsistent) {
                         fileInfo.symbolsNotConsistentAcrossScopes.push({ symbol: symbol, scopes: scopesDefiningSymbol });
                     }
                 }
@@ -947,6 +947,19 @@ export class Program {
 
                 const changedSymbolsSetArr = changedSymbolsMapArr.map(symMap => symMap.get(flag));
                 changedSymbols.set(flag, new Set(...changedSymbolsSetArr));
+            }
+
+            console.log('changedFiles', brsFilesValidated.map(file => file.pkgPath));
+            console.log('changedSymbols (runtime)', new Array(...changedSymbols.get(SymbolTypeFlag.runtime).values()));
+            console.log('changedSymbols (typetime)', new Array(...changedSymbols.get(SymbolTypeFlag.typetime).values()));
+            for (const symbol of changedSymbols.get(SymbolTypeFlag.runtime)) {
+                for (const f of brsFilesValidated) {
+                    const lastSymInChain = symbol.split('.').reverse()[0];
+                    const provided = f.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime).get(lastSymInChain.toLowerCase());
+                    if (provided) {
+                        console.log(provided?.toString());
+                    }
+                }
             }
 
             this.logger.time(LogLevel.info, ['Validate all scopes'], () => {

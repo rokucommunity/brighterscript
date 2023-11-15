@@ -9,7 +9,8 @@ import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZer
 import { Logger } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
-import { DiagnosticOrigin, type OnScopeValidateEvent } from './interfaces';
+import type { CompilerPlugin, OnScopeValidateEvent } from './interfaces';
+import { DiagnosticOrigin } from './interfaces';
 import { SymbolTypeFlag } from './SymbolTable';
 import { EnumMemberType, EnumType } from './types/EnumType';
 import { ClassType } from './types/ClassType';
@@ -3384,6 +3385,40 @@ describe('Scope', () => {
             expect(file2.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime).size).to.eq(1);
             const file2TypeProvides = file2.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime);
             expectTypeToBe(file2TypeProvides.get('alpha.beta.charlie.someenum'), EnumType);
+        });
+
+        it('classes that extend classes in other files show change properly', () => {
+            program.setFile<BrsFile>('source/class.bs', `
+                class TestClass
+                    name as string
+                end class
+            `);
+
+            program.setFile<BrsFile>('source/subclass.bs', `
+                class SubTestClass extends TestClass
+                    length as float
+                end class
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            program.setFile<BrsFile>('source/subclass.bs', `
+                class SubTestClass extends TestClass
+                    ' added a comment
+                    length as float
+                end class
+            `);
+
+            class TestScopeValidator implements CompilerPlugin {
+                name = 'TestScopeValidator';
+                public onScopeValidate(event: OnScopeValidateEvent) {
+                    expect(event.changedSymbols.get(SymbolTypeFlag.runtime).size).to.equal(0);
+                }
+            }
+
+            program.plugins.add(new TestScopeValidator());
+            program.validate();
+            expectZeroDiagnostics(program);
         });
     });
 

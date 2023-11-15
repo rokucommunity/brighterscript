@@ -3,6 +3,7 @@ import type { SymbolTypeFlag } from '../SymbolTable';
 import { SymbolTable } from '../SymbolTable';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import type { ExtraSymbolData, TypeCompatibilityData } from '../interfaces';
+import { isReferenceType } from '../astUtils/reflection';
 
 export abstract class BscType {
 
@@ -80,11 +81,15 @@ export abstract class BscType {
         this.addBuiltInInterfaces();
         targetType.addBuiltInInterfaces();
 
+        if (isReferenceType(targetType) && !targetType.isResolvable()) {
+            // we can't resolve the other type. Assume it does not fail on member checks
+            return true;
+        }
+
         if (data.depth > 10) {
             // some sort of circular reference
             return false;
         }
-
         const mySymbols = this.getMemberTable()?.getAllSymbols(flags);
         for (const memberSymbol of mySymbols) {
             const targetTypesOfSymbol = targetType.getMemberTable()

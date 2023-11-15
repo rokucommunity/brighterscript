@@ -74,7 +74,7 @@ export class BrsFileValidator {
                 const nodeType = node.getType({ flags: SymbolTypeFlag.typetime });
                 node.getSymbolTable().addSymbol('m', undefined, nodeType, SymbolTypeFlag.runtime);
                 // eslint-disable-next-line no-bitwise
-                node.parent.getSymbolTable()?.addSymbol(node.name.text, { definingNode: node }, nodeType, SymbolTypeFlag.typetime | SymbolTypeFlag.runtime);
+                node.parent.getSymbolTable()?.addSymbol(node.name?.text, { definingNode: node }, nodeType, SymbolTypeFlag.typetime | SymbolTypeFlag.runtime);
             },
             AssignmentStatement: (node) => {
                 //register this variable

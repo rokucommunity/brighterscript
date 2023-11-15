@@ -2,10 +2,11 @@ import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
 import { isInheritableType, isReferenceType } from '../astUtils/reflection';
 import { SymbolTypeFlag } from '../SymbolTable';
 import { BscType } from './BscType';
+import type { ReferenceType } from './ReferenceType';
 
 export abstract class InheritableType extends BscType {
 
-    constructor(public name: string, public readonly parentType?: BscType) {
+    constructor(public name: string, public readonly parentType?: InheritableType | ReferenceType) {
         super(name);
         if (parentType) {
             this.memberTable.pushParentProvider(() => this.parentType.memberTable);
@@ -104,6 +105,10 @@ export abstract class InheritableType extends BscType {
                 return this.name.toLowerCase() === targetType.memberKey.toLowerCase();
             }
         }
+        if (this.isAncestorUnresolvedReferenceType() || targetType.isAncestorUnresolvedReferenceType()) {
+            return this.name.toLowerCase() === targetType.name?.toLowerCase() &&
+                this.isParentTypeEqual(targetType, data);
+        }
         return this.name.toLowerCase() === targetType.name?.toLowerCase() &&
             this.isParentTypeEqual(targetType, data) &&
             this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlag.runtime, data) &&
@@ -112,15 +117,27 @@ export abstract class InheritableType extends BscType {
 
     protected isParentTypeEqual(targetType: BscType, data?: TypeCompatibilityData): boolean {
         if (isInheritableType(targetType)) {
-            if (this.parentType && !targetType.parentType) {
+            const targetParent = targetType.parentType;
+            if (this.parentType && !targetParent) {
                 return false;
-            } else if (!this.parentType && !targetType.parentType) {
+            } else if (!this.parentType && !targetParent) {
                 return true;
-            } else if (!this.parentType && targetType.parentType) {
+            } else if (!this.parentType && targetParent) {
                 return false;
             }
-
             return this.parentType.isEqual(targetType.parentType, data);
+        }
+        return false;
+    }
+
+    protected isAncestorUnresolvedReferenceType() {
+        let p = this as InheritableType;
+        while (p) {
+            if (isReferenceType(p) && !p.isResolvable()) {
+                return true;
+            }
+            p = (p as any).parentType;
+
         }
         return false;
     }

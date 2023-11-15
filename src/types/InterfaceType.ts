@@ -5,11 +5,12 @@ import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { InheritableType } from './InheritableType';
 import { isUnionTypeCompatible } from './helpers';
+import type { ReferenceType } from './ReferenceType';
 
 export class InterfaceType extends InheritableType {
     public constructor(
         public name: string,
-        public readonly superInterface?: BscType
+        public readonly superInterface?: InterfaceType | ReferenceType
     ) {
         super(name, superInterface);
     }

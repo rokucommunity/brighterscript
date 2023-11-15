@@ -66,7 +66,8 @@ export class ReferenceType extends BscType {
                             return resolvedType.isEqual(targetType, data);
                         } else if (isReferenceType(targetType)) {
                             return this.fullName.toLowerCase() === targetType.fullName.toLowerCase() &&
-                                this.tableProvider === targetType.tableProvider;
+                                (this.tableProvider === targetType.tableProvider ||
+                                    this.tableProvider().name === targetType.tableProvider().name);
                         }
                         return targetType.isEqual(this, data);
                     };
@@ -268,6 +269,7 @@ export class ReferenceType extends BscType {
 
     private futureMemberTableProvider = () => {
         return {
+            name: `FutureMemberTableProvider: '${this.__identifier}'`,
             getSymbolType: (innerName: string, innerOptions: GetTypeOptions) => {
                 const resolvedType = this.resolve();
                 if (resolvedType) {
@@ -285,6 +287,7 @@ export class ReferenceType extends BscType {
 
     private futureCallFuncMemberTableProvider = () => {
         return {
+            name: `FutureCallFuncMemberTableProvider: '${this.__identifier}'`,
             getSymbolType: (innerName: string, innerOptions: GetTypeOptions) => {
                 const resolvedType = this.resolve();
                 if (isComponentType(resolvedType)) {
@@ -332,6 +335,7 @@ export class TypePropertyReferenceType extends BscType {
                             const fullMemberName = this.outerType.toString() + '.' + memberName;
                             return new ReferenceType(memberName, fullMemberName, options.flags, () => {
                                 return {
+                                    name: `TypePropertyReferenceType : '${fullMemberName}'`,
                                     getSymbolType: (innerName: string, innerOptions: GetTypeOptions) => {
                                         return this.outerType?.[this.propertyName]?.getMemberType(innerName, innerOptions);
                                     },

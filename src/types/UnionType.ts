@@ -45,6 +45,7 @@ export class UnionType extends BscType {
             // so instead, create reference type that will
             return new ReferenceType(name, name, options.flags, () => {
                 return {
+                    name: `UnionType MemberTable: '${this.__identifier}'`,
                     getSymbolType: (innerName: string, innerOptions: GetTypeOptions) => {
                         return getUniqueType(findTypeUnion(this.getMemberTypeFromInnerTypes(name, options)), unionTypeFactory);
                     },
