@@ -24,16 +24,25 @@ jobs:
       - name: Compute variables
         run: |
           CURRENT_VERSION=$(grep -o '\"version\": *\"[^\"]*\"' package.json | awk -F'\"' '{print $4}')
+          echo "CURRENT_VERSION=$CURRENT_VERSION"
 
-          BUILD_VERSION="$CURRENT_VERSION-alpha.$(date +%Y%m%d%H%M%S)"
-          echo "BUILD_VERSION=$BUILD_VERSION" >> $GITHUB_ENV
+          SANITIZED_BRANCH_NAME=$(git branch --show-current | sed 's/[^0-9a-zA-Z-]/-/g')
+          echo "SANITIZED_BRANCH_NAME=$SANITIZED_BRANCH_NAME"
+
+          BUILD_VERSION="$CURRENT_VERSION-$SANITIZED_BRANCH_NAME.$(date +%Y%m%d%H%M%S)"
+          echo "BUILD_VERSION=$BUILD_VERSION"
 
           NPM_PACKAGE_NAME=$(grep -o '\"name\": *\"[^\"]*\"' package.json | awk -F'\"' '{print $4}')
+          echo "NPM_PACKAGE_NAME=$NPM_PACKAGE_NAME"
 
           ARTIFACT_NAME=$(echo "$NPM_PACKAGE_NAME-$BUILD_VERSION.tgz" | tr '/' '-')
+          echo "ARTIFACT_NAME=$ARTIFACT_NAME"
 
           ARTIFACT_URL="${{ github.server_url }}/${{ github.repository }}/releases/download/v0.0.0-packages/${ARTIFACT_NAME}"
+          echo "ARTIFACT_URL=$ARTIFACT_URL"
+
           echo "ARTIFACT_URL=$ARTIFACT_URL" >> $GITHUB_ENV
+          echo "BUILD_VERSION=$BUILD_VERSION" >> $GITHUB_ENV
 
       - run: npm ci
       - run: npm version "$BUILD_VERSION" --no-git-tag-version
