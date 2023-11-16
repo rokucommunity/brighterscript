@@ -1,4 +1,4 @@
-import { expectZeroDiagnostics, getTestGetTypedef, getTestTranspile } from '../../../testHelpers.spec';
+import { expectCompletionsIncludes, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile } from '../../../testHelpers.spec';
 import { util } from '../../../util';
 import { Program } from '../../../Program';
 import { createSandbox } from 'sinon';
@@ -8,6 +8,7 @@ import type { ConstStatement } from '../../Statement';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { LiteralExpression } from '../../Expression';
 import { rootDir } from '../../../testHelpers.spec';
+import { CompletionItemKind } from 'vscode-languageserver';
 
 const sinon = createSandbox();
 
@@ -189,4 +190,71 @@ describe('ConstStatement', () => {
         });
     });
 
+    describe('completions', () => {
+        it('shows up in standard completions', () => {
+            program.setFile('source/main.bs', `
+                const API_KEY = "123"
+                sub log(message)
+                    log()
+                end sub
+            `);
+
+            expectCompletionsIncludes(
+                // log(|)
+                program.getCompletions('source/main.bs', util.createPosition(3, 24)),
+                [{
+                    label: 'API_KEY',
+                    kind: CompletionItemKind.Constant
+                }]
+            );
+        });
+
+        it('transpiles simple const in a unary expression', async () => {
+            await testTranspile(`
+                const foo = 1
+                sub main()
+                    bar = -foo
+                end sub
+            `, `
+                sub main()
+                    bar = -1
+                end sub
+            `, undefined, 'source/main.bs');
+        });
+
+        it('transpiles complex const in a unary expression', async () => {
+            await testTranspile(`
+                namespace some.consts
+                    const foo = 1
+                end namespace
+                sub main()
+                    bar = -some.consts.foo
+                end sub
+            `, `
+                sub main()
+                    bar = - 1
+                end sub
+            `, undefined, 'source/main.bs');
+        });
+
+        it('shows up in namespace completions', () => {
+            program.setFile('source/main.bs', `
+                namespace constants
+                    const API_KEY = "123"
+                end namespace
+                sub log(message)
+                    log(constants.)
+                end sub
+            `);
+
+            expectCompletionsIncludes(
+                // log(|)
+                program.getCompletions('source/main.bs', util.createPosition(5, 34)),
+                [{
+                    label: 'API_KEY',
+                    kind: CompletionItemKind.Constant
+                }]
+            );
+        });
+    });
 });
