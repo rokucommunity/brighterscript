@@ -47,7 +47,7 @@ jobs:
       - name: Fetch build artifact
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ env.TOKEN }}
           script: |
               return github.rest.issues.createComment({
                 issue_number: context.issue.number,
