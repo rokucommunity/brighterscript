@@ -28,6 +28,7 @@ import { ArrayType } from './types/ArrayType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { InterfaceType } from './types/InterfaceType';
 import { ComponentType } from './types/ComponentType';
+import * as path from 'path';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -3335,7 +3336,7 @@ describe('Scope', () => {
             `);
             program.validate();
             expectDiagnosticsIncludes(program, [
-                DiagnosticMessages.incompatibleSymbolDefinition('otherFunc', 'source, components/Widget.xml').message
+                DiagnosticMessages.incompatibleSymbolDefinition('otherFunc', `source, components${path.sep}Widget.xml`).message
             ]);
         });
 
