@@ -34,7 +34,8 @@ jobs:
           echo "ARTIFACT_URL=$ARTIFACT_URL" >> $GITHUB_ENV
 
       - run: npm ci
-      - run: npm version "$BUILD_VERSION" --no-git-tag-version
+      - run: npm run build
+      - run: npm version "$BUILD_VERSION" --no-git-tag-version --no-commit-hooks
       - run: npm pack
 
       # create the release if not exist
