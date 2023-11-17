@@ -81,12 +81,16 @@ export abstract class BscType {
         this.addBuiltInInterfaces();
         targetType.addBuiltInInterfaces();
 
+        if (this === targetType) {
+            return true;
+        }
+
         if (isReferenceType(targetType) && !targetType.isResolvable()) {
             // we can't resolve the other type. Assume it does not fail on member checks
             return true;
         }
 
-        if (data.depth > 10) {
+        if (data.depth > 16) {
             // some sort of circular reference
             return false;
         }
@@ -114,6 +118,7 @@ export abstract class BscType {
             }
 
         }
+        data.depth = 0;
         return isSuperSet;
     }
 

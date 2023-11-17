@@ -66,6 +66,21 @@ export class Scope {
      * "namea", "namea.nameb", "namea.nameb.namec"
      */
     public get namespaceLookup() {
+        let allFilesValidated = true;
+        for (const file of this.getAllFiles()) {
+            if (isBrsFile(file) && !file.hasTypedef) {
+                allFilesValidated = allFilesValidated && file.isValidated;
+                if (!allFilesValidated) {
+                    break;
+                }
+            }
+        }
+        if (!allFilesValidated) {
+            // This is not fit to cache
+            // Since the files have not been validated, all namespace info might not have been available
+            return this.buildNamespaceLookup();
+        }
+
         return this.cache.getOrAdd('namespaceLookup', () => this.buildNamespaceLookup());
     }
 
@@ -585,10 +600,11 @@ export class Scope {
     /**
      * Builds a tree of namespace objects
      */
-    public buildNamespaceLookup() {
+    public buildNamespaceLookup(options: { okToCache?: boolean } = { okToCache: true }) {
         let namespaceLookup = new Map<string, NamespaceContainer>();
+        options.okToCache = true;
         this.enumerateBrsFiles((file) => {
-
+            options.okToCache = options.okToCache && file.isValidated;
             const fileNamespaceLookup = file.getNamespaceLookupObject();
 
             for (const [lowerNamespaceName, nsContainer] of fileNamespaceLookup) {
@@ -674,7 +690,6 @@ export class Scope {
 
             //get a list of all callables, indexed by their lower case names
             let callableContainerMap = util.getCallableContainersByLowerName(callables);
-
             //Since statements from files are shared across multiple scopes, we need to link those statements to the current scope
             this.linkSymbolTable();
             const scopeValidateEvent = {
@@ -819,6 +834,8 @@ export class Scope {
                 } else {
                     break;
                 }
+            } else {
+                // Existing known namespace
             }
             if (!namespaceTypesKnown.has(nsName)) {
                 namespaceTypesKnown.set(nsName, currentNSType);

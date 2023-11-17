@@ -30,6 +30,9 @@ export class ClassType extends InheritableType {
     }
 
     isEqual(targetType: BscType, data?: TypeCompatibilityData): boolean {
+        if (targetType === this) {
+            return true;
+        }
         return isClassType(targetType) && super.isEqual(targetType, data);
     }
 

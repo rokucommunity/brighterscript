@@ -3076,6 +3076,20 @@ describe('Scope', () => {
                 sourceScope.unlinkSymbolTable();
             });
         });
+
+        it('classes in namespaces that reference themselves without namespace work', () => {
+            program.setFile<BrsFile>('source/class.bs', `
+                namespace Alpha
+                    class TestClass
+                        function getCopy() as TestClass
+                            return new TestClass()
+                        end function
+                    end class
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('unlinkSymbolTable', () => {
@@ -3409,17 +3423,20 @@ describe('Scope', () => {
                 end class
             `);
 
+            let changedSymbolsSize = -1;
             class TestScopeValidator implements CompilerPlugin {
                 name = 'TestScopeValidator';
                 public onScopeValidate(event: OnScopeValidateEvent) {
-                    expect(event.changedSymbols.get(SymbolTypeFlag.runtime).size).to.equal(0);
+                    changedSymbolsSize = event.changedSymbols.get(SymbolTypeFlag.runtime).size;
                 }
             }
 
             program.plugins.add(new TestScopeValidator());
             program.validate();
             expectZeroDiagnostics(program);
+            expect(changedSymbolsSize).to.equal(0);
         });
+
     });
 
     describe('performance', () => {

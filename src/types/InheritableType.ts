@@ -87,6 +87,21 @@ export abstract class InheritableType extends BscType {
     }
 
     isEqual(targetType: BscType, data: TypeCompatibilityData = {}): boolean {
+        if (this === targetType) {
+            return true;
+        }
+        if (isReferenceType(targetType)) {
+            const lowerTargetName = (targetType.memberKey ?? targetType.fullName).toLowerCase();
+            const myLowerName = this.name.toLowerCase();
+
+            if (myLowerName === lowerTargetName) {
+                return true;
+            }
+            //check non-namespaced version
+            if (myLowerName.split('.').reverse()[0] === lowerTargetName) {
+                return true;
+            }
+        }
         if (!isInheritableType(targetType)) {
             return false;
         }
@@ -95,15 +110,6 @@ export abstract class InheritableType extends BscType {
         }
         if (this === targetType) {
             return true;
-        }
-        if (isReferenceType(targetType)) {
-            if (targetType.isResolvable()) {
-                if (this === (targetType as any).getTarget()) {
-                    return true;
-                }
-            } else {
-                return this.name.toLowerCase() === targetType.memberKey.toLowerCase();
-            }
         }
         if (this.isAncestorUnresolvedReferenceType() || targetType.isAncestorUnresolvedReferenceType()) {
             return this.name.toLowerCase() === targetType.name?.toLowerCase() &&
@@ -125,7 +131,12 @@ export abstract class InheritableType extends BscType {
             } else if (!this.parentType && targetParent) {
                 return false;
             }
-            return this.parentType.isEqual(targetType.parentType, data);
+            if (isReferenceType(targetParent) || isReferenceType(this.parentType)) {
+                let thisParentName = isReferenceType(this.parentType) ? this.parentType.memberKey ?? this.parentType.fullName : this.parentType.name;
+                let targetParentName = isReferenceType(targetParent) ? targetParent.memberKey ?? targetParent.fullName : targetParent.name;
+                return thisParentName.toLowerCase() === targetParentName.toLowerCase();
+            }
+            return this.parentType.isEqual(targetParent, data);
         }
         return false;
     }

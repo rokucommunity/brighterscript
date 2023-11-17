@@ -62,14 +62,17 @@ export class ReferenceType extends BscType {
                             return false;
                         }
                         const resolvedType = this.resolve();
+                        let equal = false;
                         if (resolvedType && !isReferenceType(resolvedType)) {
-                            return resolvedType.isEqual(targetType, data);
+                            equal = resolvedType.isEqual(targetType, data);
                         } else if (isReferenceType(targetType)) {
-                            return this.fullName.toLowerCase() === targetType.fullName.toLowerCase() &&
+                            equal = this.fullName.toLowerCase() === targetType.fullName.toLowerCase() &&
                                 (this.tableProvider === targetType.tableProvider ||
                                     this.tableProvider().name === targetType.tableProvider().name);
+                        } else {
+                            equal = targetType.isEqual(this, data);
                         }
-                        return targetType.isEqual(this, data);
+                        return equal;
                     };
                 }
                 if (propName === 'isTypeCompatible') {

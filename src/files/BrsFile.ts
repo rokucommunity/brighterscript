@@ -1446,11 +1446,7 @@ export class BrsFile implements File {
                     continue;
                 }
                 const data = {};
-                if (!symbolType.isTypeCompatible(previousType, data)) {
-                    // the new type is not exactly the same - add it to the changes
-                    changesForFlag.add(symbolKey);
-                } else if (!previousType.isTypeCompatible(symbolType, data)) {
-                    // the new type is not exactly the same - add it to the changes
+                if (!symbolType.isEqual(previousType, data)) {
                     changesForFlag.add(symbolKey);
                 }
             }
@@ -1471,6 +1467,9 @@ export class BrsFile implements File {
     }
 
     public getNamespaceLookupObject() {
+        if (!this.isValidated) {
+            return this.buildNamespaceLookup();
+        }
         return this.cache.getOrAdd(`namespaceLookup`, () => {
             const nsLookup = this.buildNamespaceLookup();
             return nsLookup;

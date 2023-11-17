@@ -3858,6 +3858,78 @@ describe('BrsFile', () => {
                 expect(runtimeChanges.size).to.eq(0);
             });
 
+            it('classes that override AA built-in methods show change properly', () => {
+                const classFileContent = `
+                    class AAOverRide
+                        sub count(num as integer) as void
+                            print num
+                        end sub
+                    end class
+                `;
+
+                let mainFile: BrsFile = program.setFile<BrsFile>('source/class.bs', classFileContent);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                // No changes!
+                mainFile = program.setFile<BrsFile>('source/class.bs', classFileContent);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                expect(runtimeChanges.size).to.eq(0);
+            });
+
+
+            it('functions in a namespace that return classes show change properly', () => {
+                const fileContent = `
+                    namespace Alpha.Beta
+
+                        class SomeKlass
+                            name as string
+                            function combineName(klass as SomeKlass)
+                                m.name = m.name+klass.name
+                            end function
+                        end class
+
+                        function getSomeKlass(name as string) as SomeKlass
+                            k = new SomeKlass()
+                            k.name = name
+                            return k
+                        end function
+                    end namespace
+                `;
+
+                let mainFile: BrsFile = program.setFile<BrsFile>('source/class.bs', fileContent);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                // No changes!
+                mainFile = program.setFile<BrsFile>('source/class.bs', fileContent);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                expect(runtimeChanges.size).to.eq(0);
+            });
+
+            it('functions in a namespace that have class params show change properly', () => {
+                const fileContent = `
+                    namespace Alpha.Beta
+
+                        class SomeKlass
+                            name as string
+                            function combineName(klass as SomeKlass)
+                                m.name = m.name+klass.name
+                            end function
+                        end class
+
+                        function combineKlass(klass1 as SomeKlass, klass2 as SomeKlass) as SomeKlass
+                            klass1.combineName(klass2)
+                            return klass1
+                        end function
+                    end namespace
+                `;
+                let mainFile: BrsFile = program.setFile<BrsFile>('source/class.bs', fileContent);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                // No changes!
+                mainFile = program.setFile<BrsFile>('source/class.bs', fileContent);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                expect(runtimeChanges.size).to.eq(0);
+            });
         });
     });
 });

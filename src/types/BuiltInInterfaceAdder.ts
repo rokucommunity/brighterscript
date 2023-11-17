@@ -28,13 +28,15 @@ export class BuiltInInterfaceAdder {
     static getLookupTable: () => SymbolTable;
 
     static addBuiltInInterfacesToType(thisType: BscType, overrides?: Map<string, BuiltInInterfaceOverride>) {
-        const memberTable = thisType.getBuiltInMemberTable();
-        if (!memberTable) {
+        const builtInMemberTable = thisType.getBuiltInMemberTable();
+        if (!builtInMemberTable) {
             // no memberTable to add to
             // this could be because it's a class that has a parent
             // the original ancestor should get the built ins
             return;
         }
+        //const realMemberTable = thisType.getMemberTable();
+        //const checkForExistingMembers = realMemberTable && realMemberTable !== builtInMemberTable;
         const builtInComponent = this.getMatchingRokuComponent(thisType);
         if (!builtInComponent) {
             // TODO: Perhaps have error here, but docs have some references to unknown types
@@ -51,11 +53,11 @@ export class BuiltInInterfaceAdder {
             const ifaceData = (interfaces[lowerIfaceName] ?? events[lowerIfaceName]) as BRSInterfaceData;
             for (const method of ifaceData.methods ?? []) {
                 const methodFuncType = this.buildMethodFromDocData(method, overrides);
-                memberTable.addSymbol(method.name, { description: method.description, completionPriority: 1 }, methodFuncType, SymbolTypeFlag.runtime);
+                builtInMemberTable.addSymbol(method.name, { description: method.description, completionPriority: 1 }, methodFuncType, SymbolTypeFlag.runtime);
             }
             for (const property of ifaceData.properties ?? []) {
                 const override = overrides?.get(property.name.toLowerCase());
-                memberTable.addSymbol(property.name, { description: property.description, completionPriority: 1 }, override?.type ?? this.getPrimitiveType(property.type), SymbolTypeFlag.runtime);
+                builtInMemberTable.addSymbol(property.name, { description: property.description, completionPriority: 1 }, override?.type ?? this.getPrimitiveType(property.type), SymbolTypeFlag.runtime);
             }
         }
     }

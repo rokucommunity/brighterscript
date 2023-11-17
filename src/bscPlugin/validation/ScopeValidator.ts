@@ -103,6 +103,7 @@ export class ScopeValidator {
                 const segmentsToWalkForValidation = (thisFileHasChanges || !hasChangeInfo)
                     ? file.validationSegmenter.segmentsForValidation // validate everything in the file
                     : file.getValidationSegments(this.event.changedSymbols); // validate only what's needed in the file
+
                 for (const segment of segmentsToWalkForValidation) {
                     this.currentSegmentBeingValidated = segment;
                     this.event.scope.clearAstSegmentDiagnostics(segment);

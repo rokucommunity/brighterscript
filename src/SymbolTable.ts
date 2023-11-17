@@ -259,7 +259,7 @@ export class SymbolTable implements SymbolTypeGetter {
      * Get list of all symbols declared in this SymbolTable (includes parent SymbolTable).
      */
     public getAllSymbols(bitFlags: SymbolTypeFlag): BscSymbol[] {
-        let symbols = [].concat(...this.symbolMap.values());
+        let symbols: BscSymbol[] = [].concat(...this.symbolMap.values());
         //look through any sibling maps next
         for (let sibling of this.siblings) {
             symbols = symbols.concat(sibling.getAllSymbols(bitFlags));
@@ -268,7 +268,17 @@ export class SymbolTable implements SymbolTypeGetter {
             symbols = symbols.concat(this.parent.getAllSymbols(bitFlags));
         }
         // eslint-disable-next-line no-bitwise
-        return symbols.filter(symbol => symbol.flags & bitFlags);
+        symbols = symbols.filter(symbol => symbol.flags & bitFlags);
+
+        //remove duplicate symbols
+        const symbolsMap = new Map<string, BscSymbol>();
+        for (const symbol of symbols) {
+            const lowerSymbolName = symbol.name.toLowerCase();
+            if (!symbolsMap.has(lowerSymbolName)) {
+                symbolsMap.set(lowerSymbolName, symbol);
+            }
+        }
+        return [...symbolsMap.values()];
     }
 
     private resetTypeCache() {

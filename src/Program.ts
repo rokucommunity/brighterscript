@@ -106,6 +106,7 @@ export class Program {
 
         //hardcode the files list for global scope to only contain the global file
         this.globalScope.getAllFiles = () => [globalFile];
+        globalFile.isValidated = true;
         this.globalScope.validate();
         //for now, disable validation of global scope because the global files have some duplicate method declarations
         this.globalScope.getDiagnostics = () => [];
@@ -553,6 +554,13 @@ export class Program {
         let file = this.logger.time(LogLevel.debug, ['Program.setFile()', chalk.green(srcPath)], () => {
             //if the file is already loaded, remove it
             if (this.hasFile(srcPath)) {
+                const existingFile = this.files[srcPath.toLowerCase()];
+                if (isBrsFile(existingFile)) {
+                    if (existingFile.fileContents === fileData.toString()) {
+                        // return;
+                    } else {
+                    }
+                }
                 this.removeFile(srcPath, true, true);
             }
 
@@ -944,22 +952,8 @@ export class Program {
 
             const changedSymbols = new Map<SymbolTypeFlag, Set<string>>();
             for (const flag of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
-
                 const changedSymbolsSetArr = changedSymbolsMapArr.map(symMap => symMap.get(flag));
                 changedSymbols.set(flag, new Set(...changedSymbolsSetArr));
-            }
-
-            console.log('changedFiles', brsFilesValidated.map(file => file.pkgPath));
-            console.log('changedSymbols (runtime)', new Array(...changedSymbols.get(SymbolTypeFlag.runtime).values()));
-            console.log('changedSymbols (typetime)', new Array(...changedSymbols.get(SymbolTypeFlag.typetime).values()));
-            for (const symbol of changedSymbols.get(SymbolTypeFlag.runtime)) {
-                for (const f of brsFilesValidated) {
-                    const lastSymInChain = symbol.split('.').reverse()[0];
-                    const provided = f.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime).get(lastSymInChain.toLowerCase());
-                    if (provided) {
-                        console.log(provided?.toString());
-                    }
-                }
             }
 
             this.logger.time(LogLevel.info, ['Validate all scopes'], () => {
