@@ -1,5 +1,4 @@
 import { expectCompletionsIncludes, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile } from '../../../testHelpers.spec';
-import { CompletionItemKind } from 'vscode-languageserver';
 import { util } from '../../../util';
 import { Program } from '../../../Program';
 import { createSandbox } from 'sinon';
@@ -9,6 +8,7 @@ import type { ConstStatement } from '../../Statement';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { LiteralExpression } from '../../Expression';
 import { rootDir } from '../../../testHelpers.spec';
+import { CompletionItemKind } from 'vscode-languageserver';
 
 const sinon = createSandbox();
 
