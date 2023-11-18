@@ -554,13 +554,6 @@ export class Program {
         let file = this.logger.time(LogLevel.debug, ['Program.setFile()', chalk.green(srcPath)], () => {
             //if the file is already loaded, remove it
             if (this.hasFile(srcPath)) {
-                const existingFile = this.files[srcPath.toLowerCase()];
-                if (isBrsFile(existingFile)) {
-                    if (existingFile.fileContents === fileData.toString()) {
-                        // return;
-                    } else {
-                    }
-                }
                 this.removeFile(srcPath, true, true);
             }
 

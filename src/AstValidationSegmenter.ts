@@ -36,7 +36,6 @@ export class AstValidationSegmenter {
         this.reset();
 
         ast?.walk((segment) => {
-            //console.log(segment.kind, segment.range.start.line, '-', segment.range.end.line);
             this.checkSegmentWalk(segment);
         }, {
             walkMode: WalkMode.visitStatements
