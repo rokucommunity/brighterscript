@@ -1518,11 +1518,13 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         const resultType = new InterfaceType(this.getName(ParseMode.BrighterScript), superIface);
         for (const statement of this.methods) {
             const memberType = statement?.getType({ ...options, typeChain: undefined }); // no typechain info needed
-            resultType.addMember(statement?.tokens.name?.text, { definingNode: statement }, memberType, SymbolTypeFlag.runtime);
+            const flag = statement.isOptional ? SymbolTypeFlag.runtime | SymbolTypeFlag.optional : SymbolTypeFlag.runtime;
+            resultType.addMember(statement?.tokens.name?.text, { definingNode: statement }, memberType, flag);
         }
         for (const statement of this.fields) {
             const memberType = statement?.getType({ ...options, typeChain: undefined }); // no typechain info needed
-            resultType.addMember(statement?.tokens.name?.text, { definingNode: statement }, memberType, SymbolTypeFlag.runtime);
+            const flag = statement.isOptional ? SymbolTypeFlag.runtime | SymbolTypeFlag.optional : SymbolTypeFlag.runtime;
+            resultType.addMember(statement?.tokens.name?.text, { definingNode: statement }, memberType, flag);
         }
         options.typeChain?.push(new TypeChainEntry(this.getName(ParseMode.BrighterScript), resultType, this.range));
         return resultType;
@@ -1535,14 +1537,17 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
     }
     constructor(
         nameToken: Identifier,
+        optionalToken: Token,
         asToken: Token,
         public typeExpression?: TypeExpression
     ) {
         super();
         this.tokens.name = nameToken;
+        this.tokens.optional = optionalToken;
         this.tokens.as = asToken;
         this.range = util.createBoundingRange(
             this.tokens.name,
+            this.tokens.optional,
             this.tokens.as,
             this.typeExpression
         );
@@ -1554,6 +1559,7 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
 
     public tokens = {} as {
         name: Identifier;
+        optional: Token;
         as: Token;
     };
 
@@ -1563,6 +1569,10 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
 
     public get name() {
         return this.tokens.name.text;
+    }
+
+    public get isOptional() {
+        return this.tokens.optional?.kind === TokenKind.Question;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -1584,6 +1594,9 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
         result.push(
             this.tokens.name.text
         );
+        if (this.tokens.optional) {
+            result.push(this.tokens.optional.text);
+        }
         if (this.typeExpression) {
             result.push(
                 ' as ',
@@ -1650,6 +1663,10 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         as: Token;
     };
 
+    public get isOptional() {
+        return this.tokens.leftParen?.kind === TokenKind.QuestionLeftParen;
+    }
+
     public getLeadingTrivia(): Token[] {
         return util.concatAnnotationLeadingTrivia(this, this.tokens.functionType.leadingTrivia);
     }
@@ -1674,7 +1691,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
             this.tokens.functionType.text,
             ' ',
             this.tokens.name.text,
-            '('
+            this.tokens.leftParen.text
         );
         const params = this.params ?? [];
         for (let i = 0; i < params.length; i++) {
@@ -1691,7 +1708,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
             }
         }
         result.push(
-            ')'
+            this.tokens.rightParen.text
         );
         if (this.returnTypeExpression) {
             result.push(

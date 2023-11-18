@@ -396,8 +396,13 @@ export class Parser {
      */
     private interfaceFieldStatement() {
         const name = this.identifier(...AllowedProperties);
-        const [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
-        return new InterfaceFieldStatement(name, asToken, typeExpression);
+        const optionalToken = this.consumeTokenIf(TokenKind.Question);
+        let asToken;
+        let typeExpression;
+        if (this.check(TokenKind.As)) {
+            [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
+        }
+        return new InterfaceFieldStatement(name, optionalToken, asToken, typeExpression);
     }
 
     private consumeAsTokenAndTypeExpression(): [Token, TypeExpression] {
@@ -430,7 +435,7 @@ export class Parser {
     private interfaceMethodStatement() {
         const functionType = this.advance();
         const name = this.identifier(...AllowedProperties);
-        const leftParen = this.consumeToken(TokenKind.LeftParen);
+        const leftParen = this.consume(DiagnosticMessages.expectedToken(TokenKind.LeftParen), TokenKind.LeftParen, TokenKind.QuestionLeftParen);
 
         let params = [] as FunctionParameterExpression[];
         if (!this.check(TokenKind.RightParen)) {
@@ -503,11 +508,11 @@ export class Parser {
                 }
 
                 //fields
-                if (this.checkAny(TokenKind.Identifier, ...AllowedProperties) && this.checkNext(TokenKind.As)) {
+                if (this.checkAny(TokenKind.Identifier, ...AllowedProperties) && this.checkAnyNext(TokenKind.As, TokenKind.Question, TokenKind.Newline, TokenKind.Comment)) {
                     decl = this.interfaceFieldStatement();
 
                     //methods (function/sub keyword followed by opening paren)
-                } else if (this.checkAny(TokenKind.Function, TokenKind.Sub) && this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
+                } else if (this.checkAny(TokenKind.Function, TokenKind.Sub) && this.checkAnyNext(TokenKind.Identifier, ...AllowedProperties)) {
                     decl = this.interfaceMethodStatement();
 
                     //comments

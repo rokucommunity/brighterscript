@@ -8,7 +8,8 @@ import { isAnyReferenceType, isReferenceType } from './astUtils/reflection';
 
 export enum SymbolTypeFlag {
     runtime = 1,
-    typetime = 2
+    typetime = 2,
+    optional = 4
 }
 
 /**
