@@ -198,7 +198,7 @@ describe('ConstStatement', () => {
                     log()
                 end sub
             `);
-
+            program.validate();
             expectCompletionsIncludes(
                 // log(|)
                 program.getCompletions('source/main.bs', util.createPosition(3, 24)),
@@ -246,7 +246,7 @@ describe('ConstStatement', () => {
                     log(constants.)
                 end sub
             `);
-
+            program.validate();
             expectCompletionsIncludes(
                 // log(|)
                 program.getCompletions('source/main.bs', util.createPosition(5, 34)),

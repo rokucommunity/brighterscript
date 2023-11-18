@@ -1631,7 +1631,7 @@ describe('parser', () => {
 
     });
 
-    describe.only('interfaces', () => {
+    describe('interfaces', () => {
 
         it('allows fields and methods', () => {
             let { statements, diagnostics } = parse(`
