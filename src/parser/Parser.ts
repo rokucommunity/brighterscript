@@ -758,8 +758,6 @@ export class Parser {
 
         let optionalKeyword = this.consumeTokenIf(TokenKind.Optional);
 
-        let name: Identifier;
-
         if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
             if (this.check(TokenKind.As)) {
                 if (this.checkAnyNext(TokenKind.Comment, TokenKind.Newline)) {
@@ -776,18 +774,17 @@ export class Parser {
                     this.current--;
                 }
             }
-
-            name = this.consume(
-                DiagnosticMessages.expectedClassFieldIdentifier(),
-                TokenKind.Identifier,
-                ...AllowedProperties
-            ) as Identifier;
         } else {
             // no name after `optional` ... optional is the name
-            name = optionalKeyword as Identifier;
             optionalKeyword = null;
+            this.current--;
         }
 
+        let name = this.consume(
+            DiagnosticMessages.expectedClassFieldIdentifier(),
+            TokenKind.Identifier,
+            ...AllowedProperties
+        ) as Identifier;
 
         let asToken: Token;
         let fieldTypeExpression: TypeExpression;
