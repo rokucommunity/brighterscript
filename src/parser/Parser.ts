@@ -776,6 +776,7 @@ export class Parser {
             }
         } else {
             // no name after `optional` ... optional is the name
+            // rewind current token
             optionalKeyword = null;
             this.current--;
         }
