@@ -1133,7 +1133,6 @@ export class LanguageServer {
             await this.synchronizeStandaloneProjects();
 
             let projects = this.getProjects();
-
             //validate all programs
             await Promise.all(
                 projects.map((project) => {
@@ -1141,6 +1140,7 @@ export class LanguageServer {
                     return project;
                 })
             );
+
         } catch (e: any) {
             this.connection.console.error(e);
             this.sendCriticalFailure(`Critical error validating project: ${e.message}${e.stack ?? ''}`);
@@ -1267,6 +1267,8 @@ export class LanguageServer {
         await this.waitAllProjectFirstRuns();
         //wait for the file to settle (in case there are multiple file changes in quick succession)
         await this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true);
+        // make sure validation is complete
+        await this.validateAllThrottled();
         //wait for the validation cycle to settle
         await this.onValidateSettled();
 

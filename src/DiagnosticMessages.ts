@@ -753,6 +753,11 @@ export let DiagnosticMessages = {
         message: `Operator '${operatorString}' cannot be applied to type${secondType ? 's' : ''} '${firstType}'${secondType ? ` and '${secondType}'` : ''}`,
         code: 1144,
         severity: DiagnosticSeverity.Error
+    }),
+    incompatibleSymbolDefinition: (symbol: string, scopeName: string) => ({
+        message: `'${symbol}' is incompatible across scope group (${scopeName})`, // TODO: Add scopes where it was defined
+        code: 1145,
+        severity: DiagnosticSeverity.Error
     })
 };
 export const defaultMaximumTruncationLength = 160;

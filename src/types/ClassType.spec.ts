@@ -49,17 +49,18 @@ describe('ClassType', () => {
         const myTable = new SymbolTable('test');
         const futureSuperKlass = new ReferenceType('SuperKlass', 'SuperKlass', SymbolTypeFlag.typetime, () => myTable);
         const subKlass = new ClassType('SubKlass', futureSuperKlass);
-        expect(subKlass.isResolvable()).to.be.false;
+        expect(subKlass.isResolvable()).to.be.true;
+        expect(subKlass.parentType?.isResolvable()).to.be.false;
         const superKlass = new ClassType('SuperKlass');
         myTable.addSymbol('SuperKlass', null, superKlass, SymbolTypeFlag.typetime);
-        expect(subKlass.isResolvable()).to.be.true;
+        expect(subKlass.parentType.isResolvable()).to.be.true;
     });
 
     it('allows members of future super classes to be resolved', () => {
         const myTable = new SymbolTable('test');
         const futureSuperKlass = new ReferenceType('SuperKlass', 'SuperKlass', SymbolTypeFlag.typetime, () => myTable);
         const subKlass = new ClassType('SubKlass', futureSuperKlass);
-        expect(subKlass.isResolvable()).to.be.false;
+        expect(subKlass.parentType.isResolvable()).to.be.false;
         const futureTitleType = subKlass.getMemberType('title', { flags: SymbolTypeFlag.runtime });
         expect(isReferenceType(futureTitleType)).to.be.true;
         expect(futureTitleType.isResolvable()).to.be.false;

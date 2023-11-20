@@ -30,6 +30,18 @@ export interface BsDiagnostic extends Diagnostic {
     data?: any;
 }
 
+export enum DiagnosticOrigin {
+    Program = 'Program',
+    Scope = 'Scope',
+    File = 'File',
+    ASTSegment = 'AstSegment'
+}
+
+export interface BsDiagnosticWithOrigin extends BsDiagnostic {
+    origin: DiagnosticOrigin;
+    astSegment?: AstNode;
+}
+
 export interface Callable {
     file: File;
     name: string;
@@ -536,9 +548,17 @@ export interface TranspileEntry {
     outputPath: string;
 }
 
+export interface ScopeValidationOptions {
+    changedFiles?: File[];
+    changedSymbols?: Map<SymbolTypeFlag, Set<string>>;
+    force?: boolean;
+}
+
 export interface OnScopeValidateEvent {
     program: Program;
     scope: Scope;
+    changedFiles?: File[];
+    changedSymbols?: Map<SymbolTypeFlag, Set<string>>;
 }
 
 export interface AfterFileTranspileEvent<TFile extends File = File> {
@@ -765,7 +785,7 @@ export interface GetTypeOptions {
 }
 
 export class TypeChainEntry {
-    constructor(public name: string, public type: BscType, public range: Range, public separatorToken: Token = createToken(TokenKind.Dot)) {
+    constructor(public name: string, public type: BscType, public flags: SymbolTypeFlag, public range: Range, public separatorToken: Token = createToken(TokenKind.Dot)) {
     }
     get isResolved() {
         return this.type?.isResolvable();
@@ -784,6 +804,7 @@ export interface TypeChainProcessResult {
 export interface TypeCompatibilityData {
     missingFields?: { name: string; expectedType: BscType }[];
     fieldMismatches?: { name: string; expectedType: BscType; actualType: BscType }[];
+    depth?: number;
 }
 
 export interface NamespaceContainer {

@@ -21,6 +21,8 @@ export class BrsFileValidator {
     }
 
     public process() {
+        const unlinkGlobalSymbolTable = this.event.file.parser.symbolTable.pushParentProvider(() => this.event.program.globalScope.symbolTable);
+
         util.validateTooDeepFile(this.event.file);
         this.walk();
         this.flagTopLevelStatements();
@@ -28,13 +30,10 @@ export class BrsFileValidator {
         if (!this.event.file.hasTypedef) {
             this.validateImportStatements();
         }
-
         if (isBrsFile(this.event.file)) {
-            const unlinkGlobalSymbolTable = this.event.file.parser.symbolTable.pushParentProvider(() => this.event.program.globalScope.symbolTable);
-            this.event.file.findUnresolvedSubTrees();
-            unlinkGlobalSymbolTable();
+            this.event.file.processSymbolInformation();
         }
-
+        unlinkGlobalSymbolTable();
     }
 
     /**
@@ -75,7 +74,7 @@ export class BrsFileValidator {
                 const nodeType = node.getType({ flags: SymbolTypeFlag.typetime });
                 node.getSymbolTable().addSymbol('m', undefined, nodeType, SymbolTypeFlag.runtime);
                 // eslint-disable-next-line no-bitwise
-                node.parent.getSymbolTable()?.addSymbol(node.name.text, { definingNode: node }, nodeType, SymbolTypeFlag.typetime | SymbolTypeFlag.runtime);
+                node.parent.getSymbolTable()?.addSymbol(node.name?.text, { definingNode: node }, nodeType, SymbolTypeFlag.typetime | SymbolTypeFlag.runtime);
             },
             AssignmentStatement: (node) => {
                 //register this variable
@@ -147,7 +146,7 @@ export class BrsFileValidator {
 
                 const nodeType = node.getType({ flags: SymbolTypeFlag.typetime });
                 // eslint-disable-next-line no-bitwise
-                node.parent.getSymbolTable().addSymbol(node.tokens.name.text, { definingNode: node }, nodeType, SymbolTypeFlag.runtime | SymbolTypeFlag.typetime);
+                node.parent.getSymbolTable().addSymbol(node.tokens.name.text, { definingNode: node }, nodeType, SymbolTypeFlag.typetime);
             },
             ConstStatement: (node) => {
                 this.validateDeclarationLocations(node, 'const', () => util.createBoundingRange(node.tokens.const, node.tokens.name));

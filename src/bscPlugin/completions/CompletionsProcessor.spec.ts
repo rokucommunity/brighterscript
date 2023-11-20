@@ -1130,9 +1130,10 @@ describe('CompletionsProcessor', () => {
                 end sub
             `);
             program.validate();
+            const completions = program.getCompletions('source/main.bs', util.createPosition(3, 24));
             expectCompletionsIncludes(
                 // log(|)
-                program.getCompletions('source/main.bs', util.createPosition(3, 24)),
+                completions,
                 [{
                     label: 'API_KEY',
                     kind: CompletionItemKind.Constant

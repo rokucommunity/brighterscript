@@ -34,6 +34,8 @@ jobs:
           echo "ARTIFACT_URL=$ARTIFACT_URL" >> $GITHUB_ENV
 
       - run: npm ci
+      - run: npm config set ignore-scripts true
+      - run: npm run build
       - run: npm version "$BUILD_VERSION" --no-git-tag-version
       - run: npm pack
 

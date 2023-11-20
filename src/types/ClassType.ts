@@ -5,18 +5,19 @@ import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import { InheritableType } from './InheritableType';
+import type { ReferenceType } from './ReferenceType';
 import { isUnionTypeCompatible } from './helpers';
 
 export class ClassType extends InheritableType {
 
-    constructor(public name: string, public readonly superClass?: BscType) {
+    constructor(public name: string, public readonly superClass?: ClassType | ReferenceType) {
         super(name, superClass);
     }
 
     public readonly kind = BscTypeKind.ClassType;
 
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
-        if (this.isEqual(targetType)) {
+        if (this.isEqual(targetType, data)) {
             return true;
         } else if (isDynamicType(targetType) ||
             isObjectType(targetType) ||
@@ -28,8 +29,11 @@ export class ClassType extends InheritableType {
         return false;
     }
 
-    isEqual(targetType: BscType): boolean {
-        return isClassType(targetType) && this.name.toLowerCase() === targetType.name.toLowerCase();
+    isEqual(targetType: BscType, data?: TypeCompatibilityData): boolean {
+        if (targetType === this) {
+            return true;
+        }
+        return isClassType(targetType) && super.isEqual(targetType, data);
     }
 
     private builtInMemberTable: SymbolTable;

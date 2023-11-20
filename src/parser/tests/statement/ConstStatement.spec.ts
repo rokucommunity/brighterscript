@@ -199,9 +199,12 @@ describe('ConstStatement', () => {
                 end sub
             `);
             program.validate();
+<<<<<<< HEAD
+=======
+            // log(|)
+>>>>>>> release-0.66.0
             expectCompletionsIncludes(
-                // log(|)
-                program.getCompletions('source/main.bs', util.createPosition(3, 24)),
+                program.getCompletions('source/main.bs', util.createPosition(3, 34)),
                 [{
                     label: 'API_KEY',
                     kind: CompletionItemKind.Constant

@@ -408,7 +408,7 @@ describe('util', () => {
         });
 
         it('sets default value for bslibDestinationDir', () => {
-            expect(util.normalizeConfig(<any>{ }).bslibDestinationDir).to.equal('source');
+            expect(util.normalizeConfig(<any>{}).bslibDestinationDir).to.equal('source');
         });
 
         it('strips leading and/or trailing slashes from bslibDestinationDir', () => {
@@ -916,9 +916,9 @@ describe('util', () => {
     describe('processTypeChain', () => {
         it('should  find the correct details in a list of type resolutions', () => {
             const chain = [
-                new TypeChainEntry('AlphaNamespace', new NamespaceType('Alpha'), util.createRange(1, 1, 2, 2)),
-                new TypeChainEntry('BetaProp', new ClassType('Beta'), util.createRange(2, 2, 3, 3)),
-                new TypeChainEntry('CharlieProp', new ReferenceType('Charlie', 'Alpha.Beta.CharlieProp', SymbolTypeFlag.runtime, () => null), util.createRange(3, 3, 4, 4))
+                new TypeChainEntry('AlphaNamespace', new NamespaceType('Alpha'), SymbolTypeFlag.runtime, util.createRange(1, 1, 2, 2)),
+                new TypeChainEntry('BetaProp', new ClassType('Beta'), SymbolTypeFlag.runtime, util.createRange(2, 2, 3, 3)),
+                new TypeChainEntry('CharlieProp', new ReferenceType('Charlie', 'Alpha.Beta.CharlieProp', SymbolTypeFlag.runtime, () => null), SymbolTypeFlag.runtime, util.createRange(3, 3, 4, 4))
             ];
 
             const result = util.processTypeChain(chain);
@@ -931,8 +931,8 @@ describe('util', () => {
 
         it('respects the separatorToken', () => {
             const chain = [
-                new TypeChainEntry('roSGNodeCustom', new ComponentType('Custom'), util.createRange(1, 1, 2, 2)),
-                new TypeChainEntry('someCallFunc', new TypedFunctionType(VoidType.instance), util.createRange(2, 2, 3, 3), createToken(TokenKind.Callfunc))
+                new TypeChainEntry('roSGNodeCustom', new ComponentType('Custom'), SymbolTypeFlag.runtime, util.createRange(1, 1, 2, 2)),
+                new TypeChainEntry('someCallFunc', new TypedFunctionType(VoidType.instance), SymbolTypeFlag.runtime, util.createRange(2, 2, 3, 3), createToken(TokenKind.Callfunc))
             ];
 
             const result = util.processTypeChain(chain);

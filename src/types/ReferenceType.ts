@@ -1,4 +1,4 @@
-import type { GetTypeOptions, TypeChainEntry } from '../interfaces';
+import type { GetTypeOptions, TypeChainEntry, TypeCompatibilityData } from '../interfaces';
 import type { GetSymbolTypeOptions, SymbolTypeGetterProvider } from '../SymbolTable';
 import type { SymbolTypeFlag } from '../SymbolTable';
 import { isAnyReferenceType, isComponentType, isDynamicType, isReferenceType } from '../astUtils/reflection';
@@ -57,15 +57,42 @@ export class ReferenceType extends BscType {
                 if (propName === 'isEqual') {
                     //Need to be able to check equality without resolution, because resolution need to check equality
                     //To see if you need to make a UnionType
-                    return (targetType: BscType) => {
+                    return (targetType: BscType, data?: TypeCompatibilityData) => {
+                        if (!targetType) {
+                            return false;
+                        }
+                        const resolvedType = this.resolve();
+                        let equal = false;
+                        if (resolvedType && !isReferenceType(resolvedType)) {
+                            equal = resolvedType.isEqual(targetType, data);
+                        } else if (isReferenceType(targetType)) {
+                            equal = this.fullName.toLowerCase() === targetType.fullName.toLowerCase() &&
+                                (this.tableProvider === targetType.tableProvider ||
+                                    this.tableProvider().name === targetType.tableProvider().name);
+                        } else {
+                            equal = targetType.isEqual(this, data);
+                        }
+                        return equal;
+                    };
+                }
+                if (propName === 'isTypeCompatible') {
+                    //Need to be able to check equality without resolution, because resolution need to check equality
+                    //To see if you need to make a UnionType
+                    return (targetType: BscType, data?: TypeCompatibilityData) => {
+                        if (!targetType) {
+                            return false;
+                        }
+                        if (isDynamicType(targetType)) {
+                            return true;
+                        }
                         const resolvedType = this.resolve();
                         if (resolvedType && !isReferenceType(resolvedType)) {
-                            return resolvedType.isEqual(targetType);
+                            return resolvedType.isTypeCompatible(targetType, data);
                         } else if (isReferenceType(targetType)) {
                             return this.fullName.toLowerCase() === targetType.fullName.toLowerCase() &&
                                 this.tableProvider === targetType.tableProvider;
                         }
-                        return targetType.isEqual(this);
+                        return targetType.isTypeCompatible(this, data);
                     };
                 }
 
@@ -245,6 +272,7 @@ export class ReferenceType extends BscType {
 
     private futureMemberTableProvider = () => {
         return {
+            name: `FutureMemberTableProvider: '${this.__identifier}'`,
             getSymbolType: (innerName: string, innerOptions: GetTypeOptions) => {
                 const resolvedType = this.resolve();
                 if (resolvedType) {
@@ -262,6 +290,7 @@ export class ReferenceType extends BscType {
 
     private futureCallFuncMemberTableProvider = () => {
         return {
+            name: `FutureCallFuncMemberTableProvider: '${this.__identifier}'`,
             getSymbolType: (innerName: string, innerOptions: GetTypeOptions) => {
                 const resolvedType = this.resolve();
                 if (isComponentType(resolvedType)) {
@@ -309,6 +338,7 @@ export class TypePropertyReferenceType extends BscType {
                             const fullMemberName = this.outerType.toString() + '.' + memberName;
                             return new ReferenceType(memberName, fullMemberName, options.flags, () => {
                                 return {
+                                    name: `TypePropertyReferenceType : '${fullMemberName}'`,
                                     getSymbolType: (innerName: string, innerOptions: GetTypeOptions) => {
                                         return this.outerType?.[this.propertyName]?.getMemberType(innerName, innerOptions);
                                     },

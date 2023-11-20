@@ -43,6 +43,7 @@ import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { ComponentType } from './types/ComponentType';
 import { MAX_RELATED_INFOS_COUNT } from './diagnosticUtils';
 import { BinaryOperatorReferenceType } from './types/ReferenceType';
+import type { UnresolvedSymbol } from './AstValidationSegmenter';
 
 export class Util {
     public clearConsole() {
@@ -1870,6 +1871,33 @@ export class Util {
                 currentExpr = currentExpr.parent;
             }
             return isTypeExpression(currentExpr) || isTypedArrayExpression(currentExpr);
+        }
+        return false;
+    }
+
+    public setContainsUnresolvedSymbol(symbolLowerNameSet: Set<string>, symbol: UnresolvedSymbol) {
+
+        const possibleOriginalSymbolNamesLower = [];
+        let nameSoFar = '';
+        for (const tce of symbol.typeChain) {
+            if (nameSoFar.length > 0) {
+                nameSoFar += '.';
+            }
+            nameSoFar += tce.name.toLowerCase();
+            possibleOriginalSymbolNamesLower.push(nameSoFar);
+        }
+        const possibleNamespace = symbol.containingNamespaces?.join('.') ?? '';
+
+        for (const possibleNameLower of possibleOriginalSymbolNamesLower) {
+            if (symbolLowerNameSet.has(possibleNameLower)) {
+                return true;
+            }
+            if (possibleNamespace) {
+                const fullName = possibleNamespace + '.' + possibleNameLower;
+                if (symbolLowerNameSet.has(fullName.toLowerCase())) {
+                    return true;
+                }
+            }
         }
         return false;
     }

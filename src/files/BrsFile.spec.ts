@@ -22,6 +22,8 @@ import * as fsExtra from 'fs-extra';
 import { URI } from 'vscode-uri';
 import undent from 'undent';
 import { tempDir, rootDir } from '../testHelpers.spec';
+import { SymbolTypeFlag } from '../SymbolTable';
+import { ClassType, EnumType, FloatType, InterfaceType } from '../types';
 
 let sinon = sinonImport.createSandbox();
 
@@ -3085,5 +3087,849 @@ describe('BrsFile', () => {
             ...DiagnosticMessages.mismatchedEndCallableKeyword('sub', 'function'),
             range: util.createRange(4, 12, 4, 24)
         }]);
+    });
+
+    describe('requiredSymbols', () => {
+        it('should be empty for a simple file', () => {
+            const mainFile: BrsFile = program.setFile('source/main.bs', `
+                function someFunc() as integer
+                    return 1
+                end function
+            `);
+            const validateFileEvent = {
+                program: program,
+                file: mainFile
+            };
+            program.plugins.emit('onFileValidate', validateFileEvent);
+
+            expect(mainFile.requiredSymbols.length).to.eq(0);
+        });
+
+        it('should be empty if the file needs no external symbols', () => {
+            const mainFile: BrsFile = program.setFile('source/main.bs', `
+                function someFunc() as integer
+                    return 1
+                end function
+
+                sub useKlass()
+                    k = new Klass()
+                    k.addTwo()
+                end sub
+
+                class Klass
+                    sub addTwo()
+                        print someFunc() + someFunc()
+                    end sub
+                end class
+            `);
+            const validateFileEvent = {
+                program: program,
+                file: mainFile
+            };
+            program.plugins.emit('onFileValidate', validateFileEvent);
+
+            expect(mainFile.requiredSymbols.length).to.eq(0);
+        });
+
+        it('should not include global callables or types', () => {
+            const mainFile: BrsFile = program.setFile('source/main.bs', `
+                function printLower(s as string) as integer
+                    print lcase(s.trim())
+                end function
+
+                sub setLabelText( label as roSGNodeLabel, text as string)
+                    label.text = text
+                end sub
+            `);
+            const validateFileEvent = {
+                program: program,
+                file: mainFile
+            };
+            program.plugins.emit('onFileValidate', validateFileEvent);
+
+            expect(mainFile.requiredSymbols.length).to.eq(0);
+        });
+
+        it('should include unknown param and return types', () => {
+            const mainFile: BrsFile = program.setFile('source/main.bs', `
+                function someFunc(arg as OneType) as TwoType
+                    return arg.getTwo()
+                end function
+            `);
+            const validateFileEvent = {
+                program: program,
+                file: mainFile
+            };
+            program.plugins.emit('onFileValidate', validateFileEvent);
+
+            expect(mainFile.requiredSymbols.length).to.eq(2);
+            expect(mainFile.requiredSymbols.map(x => x.typeChain[0].name)).to.have.same.members([
+                'TwoType', 'OneType']);
+        });
+
+        it('should include unknown param and return types on class methods', () => {
+            const mainFile: BrsFile = program.setFile('source/main.bs', `
+                class Klass
+                    function someFunc(arg as OneType) as TwoType
+                        return arg.getTwo()
+                    end function
+                end class
+            `);
+            const validateFileEvent = {
+                program: program,
+                file: mainFile
+            };
+            program.plugins.emit('onFileValidate', validateFileEvent);
+
+            expect(mainFile.requiredSymbols.length).to.eq(2);
+            expect(mainFile.requiredSymbols.map(x => x.typeChain[0].name)).to.have.same.members([
+                'TwoType', 'OneType']);
+        });
+
+        it('should not include assigned symbols', () => {
+            const mainFile: BrsFile = program.setFile('source/main.bs', `
+                sub someFunc(arg as SomeOtherType)
+                    x = arg.member
+                    print x+1
+                end sub
+            `);
+            const validateFileEvent = {
+                program: program,
+                file: mainFile
+            };
+            program.plugins.emit('onFileValidate', validateFileEvent);
+
+            expect(mainFile.requiredSymbols.length).to.eq(1);
+            // x and arg are assigned.. they are not included in the required symbols
+            expect(mainFile.requiredSymbols[0].typeChain[0].name).to.equal('SomeOtherType');
+        });
+
+        it('should include functions called that are not in the file', () => {
+            const mainFile: BrsFile = program.setFile('source/main.bs', `
+                sub someFunc()
+                    x = otherFileFunc1()
+                    print x+1
+                end sub
+
+                function deepFunctionCall(i as integer)
+                    x = 2*i and otherFileFunc2()
+                    y = sin(x+fix(78.2)*log(otherFileFunc3()))
+                    ' this is a comment otherFileFunc5()
+                    return y-otherFileFunc4()
+                end function
+            `);
+            const validateFileEvent = {
+                program: program,
+                file: mainFile
+            };
+            program.plugins.emit('onFileValidate', validateFileEvent);
+
+            expect(mainFile.requiredSymbols.length).to.eq(4);
+            expect(mainFile.requiredSymbols.map(x => x.typeChain[0].name)).to.have.same.members([
+                'otherFileFunc1', 'otherFileFunc2', 'otherFileFunc3', 'otherFileFunc4'
+            ]);
+        });
+
+        it('should include classes called that are not in the file', () => {
+            const mainFile: BrsFile = program.setFile('source/main.bs', `
+                function someFunc(other as OtherKlass) as NS1.Thing
+                    x = new AnotherClass()
+                    return other.getThing(x)
+                end function
+            `);
+            const validateFileEvent = {
+                program: program,
+                file: mainFile
+            };
+            program.plugins.emit('onFileValidate', validateFileEvent);
+
+            expect(mainFile.requiredSymbols.length).to.eq(3);
+            const requiredTypeChains = mainFile.requiredSymbols.map(x => x.typeChain.map(tc => tc.name).join('.'));
+            expect(requiredTypeChains).to.have.same.members([
+                'OtherKlass', 'NS1.Thing', 'AnotherClass'
+            ]);
+            const requiredSymbolsFlags = mainFile.requiredSymbols.map(x => x.flags);
+            expect(requiredSymbolsFlags).to.have.same.members([
+                SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.runtime
+            ]);
+        });
+
+        it('should include enums and consts that are not in the file', () => {
+            const mainFile: BrsFile = program.setFile('source/main.bs', `
+                sub someFunc(myEnum as SomeEnum)
+                    if myEnum = SomeEnum.value1
+                        print 1
+                    else if myEnum = SomeEnum.value2
+                        print 2
+                    else if myEnum = SomeConstValue
+                        print 3
+                    end if
+                end sub
+            `);
+            const validateFileEvent = {
+                program: program,
+                file: mainFile
+            };
+            program.plugins.emit('onFileValidate', validateFileEvent);
+
+            expect(mainFile.requiredSymbols.length).to.eq(4);
+            const requiredTypeChains = mainFile.requiredSymbols.map(x => x.typeChain.map(tc => tc.name).join('.'));
+            expect(requiredTypeChains).to.have.same.members([
+                'SomeEnum', 'SomeEnum.value1', 'SomeEnum.value2', 'SomeConstValue'
+            ]);
+            const requiredSymbolsFlags = mainFile.requiredSymbols.map(x => x.flags);
+            expect(requiredSymbolsFlags).to.have.same.members([
+                SymbolTypeFlag.typetime, SymbolTypeFlag.runtime, SymbolTypeFlag.runtime, SymbolTypeFlag.runtime
+            ]);
+        });
+
+        it('should include types not defined in the file', () => {
+            const mainFile: BrsFile = program.setFile('source/main.bs', `
+                interface Data
+                    kind as DataKind
+                    getObj as DataObject
+                    subData as SubData
+                end interface
+
+                class DataObject extends BaseData
+                    kind as DataKind
+                    function process(dataProcess as DataProcessor) as ProcessedData
+                        return dataProcess.work(m)
+                    end function
+                end class
+            `);
+            const validateFileEvent = {
+                program: program,
+                file: mainFile
+            };
+            program.plugins.emit('onFileValidate', validateFileEvent);
+
+            expect(mainFile.requiredSymbols.length).to.eq(5);
+            const requiredTypeChains = mainFile.requiredSymbols.map(x => x.typeChain.map(tc => tc.name).join('.'));
+            expect(requiredTypeChains).to.have.same.members([
+                'DataKind', 'SubData', 'BaseData', 'DataProcessor', 'ProcessedData'
+            ]);
+            const requiredSymbolsFlags = mainFile.requiredSymbols.map(x => x.flags);
+            expect(requiredSymbolsFlags).to.have.same.members([
+                SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime
+            ]);
+        });
+
+        it('includes namespace details', () => {
+            const mainFile: BrsFile = program.setFile('source/main.bs', `
+                namespace Alpha.Beta
+                    sub printConstVal()
+                        print CONST_VALUE
+                    end sub
+                end namespace
+
+                namespace Delta
+                    namespace Gamma
+                        namespace Eta
+                            sub doStuff(x as OtherType)
+                                x.something()
+                            end sub
+                        end namespace
+                    end namespace
+                end namespace
+            `);
+            const validateFileEvent = {
+                program: program,
+                file: mainFile
+            };
+            program.plugins.emit('onFileValidate', validateFileEvent);
+
+            expect(mainFile.requiredSymbols.length).to.eq(2);
+            const requiredTypeChains = mainFile.requiredSymbols.map(x => x.typeChain.map(tc => tc.name).join('.'));
+            expect(requiredTypeChains).to.have.same.members([
+                'CONST_VALUE', 'OtherType'
+            ]);
+            expect(mainFile.requiredSymbols[0].containingNamespaces).to.have.same.members(['Alpha', 'Beta']);
+            expect(mainFile.requiredSymbols[1].containingNamespaces).to.have.same.members(['Delta', 'Gamma', 'Eta']);
+        });
+        it('does not include namespaces that are defined in the file', () => {
+            const mainFile: BrsFile = program.setFile('source/main.bs', `
+                namespace name1
+                    const PI = 3.14
+
+                    namespace name2
+                        function getPi() as float
+                            return name1.PI
+                        end function
+                    end namespace
+                end namespace
+            `);
+            program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+            expect(mainFile.requiredSymbols.length).to.eq(0);
+        });
+
+
+        it('should put types from typecasts as typetime required', () => {
+            const mainFile: BrsFile = program.setFile('source/main.bs', `
+                function takesIface(z) as string
+                    return (z as MyInterface).name
+                end function
+            `);
+            program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+            expect(mainFile.requiredSymbols.length).to.eq(1);
+            expect(mainFile.requiredSymbols[0].flags).to.eq(SymbolTypeFlag.typetime);
+        });
+    });
+
+    describe('providedSymbols', () => {
+
+        it('includes functions defined in the file', () => {
+            const mainFile: BrsFile = program.setFile('source/main.bs', `
+                function someFunc() as integer
+                    return 1
+                end function
+
+                function someFunc2() as float
+                    return 2.3
+                end function
+            `);
+            const validateFileEvent = {
+                program: program,
+                file: mainFile
+            };
+            program.plugins.emit('onFileValidate', validateFileEvent);
+            const runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+            expect(runtimeSymbols.size).to.eq(2);
+            const someFuncType = runtimeSymbols.get('somefunc');
+            expectTypeToBe(someFuncType, TypedFunctionType);
+            const someFunc2Type = runtimeSymbols.get('somefunc2');
+            expectTypeToBe(someFunc2Type, TypedFunctionType);
+        });
+
+        it('includes functions with unresolved params/return types', () => {
+            const mainFile: BrsFile = program.setFile('source/main.bs', `
+                function someFunc() as OtherFileType
+                    return new OtherFileType()
+                end function
+            `);
+            const validateFileEvent = {
+                program: program,
+                file: mainFile
+            };
+            program.plugins.emit('onFileValidate', validateFileEvent);
+            const runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+            expect(runtimeSymbols.size).to.eq(1);
+            const someFuncType = runtimeSymbols.get('somefunc');
+            expectTypeToBe(someFuncType, TypedFunctionType);
+            const requiredSymbols = mainFile.requiredSymbols.map(x => x.typeChain[0].name);
+            expect(requiredSymbols).to.have.same.members(['OtherFileType', 'OtherFileType']);
+            const requiredSymbolTypes = mainFile.requiredSymbols.map(x => x.flags);
+            expect(requiredSymbolTypes).to.have.same.members([SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]);
+        });
+
+        it('includes classes defined in the file', () => {
+            const mainFile: BrsFile = program.setFile('source/main.bs', `
+                class Klass
+                    name as string
+                end class
+
+                class Klass2 extends Klass
+                    age as integer
+
+                    function getId() as string
+                        return m.name + " " + m.age.toStr()
+                    end function
+                end class
+
+                class Klass3
+                    propClass = new Klass2()
+                end class
+            `);
+            const validateFileEvent = {
+                program: program,
+                file: mainFile
+            };
+            program.plugins.emit('onFileValidate', validateFileEvent);
+            const runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+            expect(runtimeSymbols.size).to.eq(3);
+            expectTypeToBe(runtimeSymbols.get('klass'), ClassType);
+            expectTypeToBe(runtimeSymbols.get('klass2'), ClassType);
+            expectTypeToBe(runtimeSymbols.get('klass3'), ClassType);
+            const typetimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime);
+            expect(typetimeSymbols.size).to.eq(3);
+            expectTypeToBe(runtimeSymbols.get('klass'), ClassType);
+            expectTypeToBe(runtimeSymbols.get('klass2'), ClassType);
+            expectTypeToBe(runtimeSymbols.get('klass3'), ClassType);
+        });
+
+        it('includes other types defined in the file', () => {
+            const mainFile: BrsFile = program.setFile('source/main.bs', `
+                interface MyInterface
+                    name as string
+                end interface
+
+                enum MyEnum
+                    val1
+                    val2
+                end enum
+
+                namespace MyNamespace
+                    const MyConst = 3.14
+                end namespace
+            `);
+            const validateFileEvent = {
+                program: program,
+                file: mainFile
+            };
+            program.plugins.emit('onFileValidate', validateFileEvent);
+            const runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+            expect(runtimeSymbols.size).to.eq(2);
+            expectTypeToBe(runtimeSymbols.get('myenum'), EnumType);
+            expectTypeToBe(runtimeSymbols.get('mynamespace.myconst'), FloatType);
+            const typetimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime);
+            expect(typetimeSymbols.size).to.eq(2);
+            expectTypeToBe(typetimeSymbols.get('myinterface'), InterfaceType);
+            expectTypeToBe(runtimeSymbols.get('myenum'), EnumType);
+        });
+
+        describe('changes', () => {
+
+            it('new symbols are added to the changes set', () => {
+                let mainFile: BrsFile = program.setFile('source/main.bs', `
+                    sub someFunc()
+                        print 1
+                    end sub
+                `);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                let runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                expect(runtimeSymbols.size).to.eq(1);
+
+                mainFile = program.setFile('source/main.bs', `
+                    sub someFunc()
+                        print 1
+                    end sub
+
+                    sub someFunc2()
+                        print 2
+                    end sub
+                `);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                expect(runtimeSymbols.size).to.eq(2);
+                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                expect(runtimeChanges.size).to.eq(1);
+                expect(runtimeChanges.has('somefunc2')).to.be.true;
+            });
+
+            it('removed symbols are added to the changes set', () => {
+                let mainFile: BrsFile = program.setFile('source/main.bs', `
+                    sub someFunc()
+                        print 1
+                    end sub
+
+                    sub someFunc2()
+                        print 2
+                    end sub
+                `);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                let runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                expect(runtimeSymbols.size).to.eq(2);
+
+                mainFile = program.setFile('source/main.bs', `
+                    sub someFunc()
+                        print 1
+                    end sub
+                `);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                expect(runtimeSymbols.size).to.eq(1);
+                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                expect(runtimeChanges.size).to.eq(1);
+                expect(runtimeChanges.has('somefunc2')).to.be.true;
+            });
+
+            it('new symbols in a namespace are added to the changes set', () => {
+                let mainFile: BrsFile = program.setFile('source/main.bs', `
+                    namespace Alpha
+                    end namespace
+                `);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                let runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                expect(runtimeSymbols.size).to.eq(0);
+
+                mainFile = program.setFile('source/main.bs', `
+                    namespace Alpha
+                        const ABC = "abc"
+                    end namespace
+                `);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                expect(runtimeSymbols.size).to.eq(1);
+                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                expect(runtimeChanges.size).to.eq(1);
+                expect(runtimeChanges.has('alpha.abc')).to.be.true;
+            });
+
+            it('should be empty if no changes in actual provided symbols', () => {
+                let mainFile: BrsFile = program.setFile('source/main.bs', `
+                    sub printSomething()
+                        print "Something"
+                    end sub
+
+                    namespace alpha.beta
+                        const PI = 3.14
+                    end namespace
+                `);
+
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                let runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                expect(runtimeSymbols.size).to.eq(2);
+
+                mainFile = program.setFile('source/main.bs', `
+                    sub printSomething()
+                        print "Something Else"
+                    end sub
+
+                    namespace alpha.beta
+                        const PI = 3.14159
+                    end namespace
+                `);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                expect(runtimeSymbols.size).to.eq(2);
+                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                expect(runtimeChanges.size).to.eq(0);
+            });
+
+            it('should include changes in function signatures', () => {
+                let mainFile: BrsFile = program.setFile('source/main.bs', `
+                    function someFunc(x)
+                        return x
+                    end function
+                `);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                let runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                expect(runtimeSymbols.size).to.eq(1);
+
+                mainFile = program.setFile('source/main.bs', `
+                    function someFunc(x, y)
+                        return x+y
+                    end function
+                `);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                expect(runtimeSymbols.size).to.eq(1);
+                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                expect(runtimeChanges.size).to.eq(1);
+                expect(runtimeChanges.has('somefunc'));
+            });
+
+            it('should include changes in classes', () => {
+                let mainFile: BrsFile = program.setFile('source/main.bs', `
+                    class MyKlass
+                        name as string
+                        function getValue() as float
+                            return 3.14
+                        end function
+                    end class
+                `);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                let runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                expect(runtimeSymbols.size).to.eq(1);
+
+                mainFile = program.setFile('source/main.bs', `
+                    class MyKlass
+                        name as string
+                        function getValue() as string
+                            return "hello"
+                        end function
+                    end class
+                `);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                expect(runtimeSymbols.size).to.eq(1);
+                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                expect(runtimeChanges.size).to.eq(1);
+                expect(runtimeChanges.has('myklass'));
+                let typeTimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.typetime);
+                expect(typeTimeChanges.size).to.eq(1);
+                expect(typeTimeChanges.has('myklass'));
+            });
+
+
+            it('should include changes in interfaces', () => {
+                let mainFile: BrsFile = program.setFile('source/main.bs', `
+                    interface Iface1
+                        name as string
+                        function doStuff() as float
+                    end interface
+                `);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                let typetimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime);
+                expect(typetimeSymbols.size).to.eq(1);
+                let runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                expect(runtimeSymbols.size).to.eq(0);
+
+                mainFile = program.setFile('source/main.bs', `
+                    interface Iface1
+                        name as string
+                        age as integer
+                        function doStuff() as float
+                    end interface
+                `);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                typetimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime);
+                expect(typetimeSymbols.size).to.eq(1);
+                let typeTimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.typetime);
+                expect(typeTimeChanges.size).to.eq(1);
+                expect(typeTimeChanges.has('iface1'));
+                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                expect(runtimeChanges.size).to.eq(0);
+            });
+
+            it('should not include changes in enum values, if inner type is the same', () => {
+                let mainFile: BrsFile = program.setFile('source/main.bs', `
+                    enum MyEnum
+                        north = 4
+                        east = 3
+                        south = 2
+                        west = 1
+                    end enum
+                `);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                let runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                expect(runtimeSymbols.size).to.eq(1);
+
+                mainFile = program.setFile('source/main.bs', `
+                    enum MyEnum
+                        north = 1
+                        east = 2
+                        south = 3
+                        west = 4
+                    end enum
+                `);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                expect(runtimeSymbols.size).to.eq(1);
+                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                expect(runtimeChanges.size).to.eq(0);
+
+                let typetimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime);
+                expect(typetimeSymbols.size).to.eq(1);
+                let typetimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.typetime);
+                expect(typetimeChanges.size).to.eq(0);
+            });
+
+            it('should include changes in enum, if different number of members', () => {
+                let mainFile: BrsFile = program.setFile('source/main.bs', `
+                    enum Direction
+                        north = 1
+                        east = 2
+                        south = 3
+                        west = 4
+                    end enum
+
+                    enum Weather
+                        rainy
+                        sunny
+                    end enum
+
+                    enum Colors
+                        blue
+                        red
+                        green
+                        purple
+                    end enum
+                `);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                let runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                expect(runtimeSymbols.size).to.eq(3);
+
+                mainFile = program.setFile('source/main.bs', `
+                    enum Direction ' same
+                        north = 1
+                        east = 2
+                        south = 3
+                        west = 4
+                    end enum
+
+                    enum Weather 'added member
+                        rainy
+                        sunny
+                        snowy
+                    end enum
+
+                    enum Colors 'removed member
+                        blue
+                        red
+                        green
+                    end enum
+                `);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                expect(runtimeSymbols.size).to.eq(3);
+                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                expect(runtimeChanges.size).to.eq(2);
+                expect(runtimeChanges.has('weather'));
+                expect(runtimeChanges.has('colors'));
+
+            });
+
+            it('should include changes in enum, if different underlying type', () => {
+                let mainFile: BrsFile = program.setFile('source/main.bs', `
+                    enum Direction
+                        north = 1
+                        east = 2
+                        south = 3
+                        west = 4
+                    end enum
+                `);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                let runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                expect(runtimeSymbols.size).to.eq(1);
+
+                mainFile = program.setFile('source/main.bs', `
+                    enum Direction ' now is a string
+                        north = "N"
+                        east = "E"
+                        south = "S"
+                        west = "W"
+                    end enum
+                `);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                expect(runtimeSymbols.size).to.eq(1);
+                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                expect(runtimeChanges.size).to.eq(1);
+                expect(runtimeChanges.has('direction'));
+            });
+
+            it('should include changes in const, if different underlying type', () => {
+                let mainFile: BrsFile = program.setFile('source/main.bs', `
+                    namespace alpha.beta
+                        const PI = 3.14
+                    end namespace
+                `);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                let runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                expect(runtimeSymbols.size).to.eq(1);
+
+                mainFile = program.setFile('source/main.bs', `
+                    namespace alpha.beta
+                        const PI = "lemon chiffon"
+                    end namespace
+                `);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                expect(runtimeSymbols.size).to.eq(1);
+                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                expect(runtimeChanges.size).to.eq(1);
+                expect(runtimeChanges.has('alpha.beta.pi'));
+            });
+
+            it('should not include changes inside a function if the param types are known', () => {
+                let mainFile: BrsFile = program.setFile('source/main.bs', `
+                    function func1(p as string) as integer
+                        return len(p)
+                    end function
+
+                    sub displayModelTypeInLabel(myLabel as roSgNodeLabel)
+                        print myLabel.text
+                        di = createObject("roDeviceInfo")' as roDeviceInfo
+                        myLabel.text = di.GetFriendlyName()
+                        print myLabel.getChildren(0, -1)
+                    end sub
+                `);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                let runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                expect(runtimeSymbols.size).to.eq(2);
+
+                mainFile = program.setFile('source/main.bs', `
+                    function func1(p as string) as integer
+                        return len(p)+1
+                    end function
+
+                    sub displayModelTypeInLabel(myLabel as roSgNodeLabel)
+                        print myLabel.text
+                        di = createObject("roDeviceInfo") as roDeviceInfo
+                        myLabel.text = di.GetFriendlyName()
+                        print myLabel.getChildren(0, -1)
+                    end sub
+                `);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                expect(runtimeSymbols.size).to.eq(2);
+                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                expect(runtimeChanges.size).to.eq(0);
+            });
+
+            it('classes that override AA built-in methods show change properly', () => {
+                const classFileContent = `
+                    class AAOverRide
+                        sub count(num as integer) as void
+                            print num
+                        end sub
+                    end class
+                `;
+
+                let mainFile: BrsFile = program.setFile<BrsFile>('source/class.bs', classFileContent);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                // No changes!
+                mainFile = program.setFile<BrsFile>('source/class.bs', classFileContent);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                expect(runtimeChanges.size).to.eq(0);
+            });
+
+
+            it('functions in a namespace that return classes show change properly', () => {
+                const fileContent = `
+                    namespace Alpha.Beta
+
+                        class SomeKlass
+                            name as string
+                            function combineName(klass as SomeKlass)
+                                m.name = m.name+klass.name
+                            end function
+                        end class
+
+                        function getSomeKlass(name as string) as SomeKlass
+                            k = new SomeKlass()
+                            k.name = name
+                            return k
+                        end function
+                    end namespace
+                `;
+
+                let mainFile: BrsFile = program.setFile<BrsFile>('source/class.bs', fileContent);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                // No changes!
+                mainFile = program.setFile<BrsFile>('source/class.bs', fileContent);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                expect(runtimeChanges.size).to.eq(0);
+            });
+
+            it('functions in a namespace that have class params show change properly', () => {
+                const fileContent = `
+                    namespace Alpha.Beta
+
+                        class SomeKlass
+                            name as string
+                            function combineName(klass as SomeKlass)
+                                m.name = m.name+klass.name
+                            end function
+                        end class
+
+                        function combineKlass(klass1 as SomeKlass, klass2 as SomeKlass) as SomeKlass
+                            klass1.combineName(klass2)
+                            return klass1
+                        end function
+                    end namespace
+                `;
+                let mainFile: BrsFile = program.setFile<BrsFile>('source/class.bs', fileContent);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                // No changes!
+                mainFile = program.setFile<BrsFile>('source/class.bs', fileContent);
+                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                expect(runtimeChanges.size).to.eq(0);
+            });
+        });
     });
 });

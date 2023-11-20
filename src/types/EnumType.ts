@@ -1,3 +1,4 @@
+import { SymbolTypeFlag } from '../SymbolTable';
 import { isDynamicType, isEnumMemberType, isEnumType, isObjectType } from '../astUtils/reflection';
 import type { TypeCompatibilityData } from '../interfaces';
 import { BscType } from './BscType';
@@ -36,8 +37,12 @@ export class EnumType extends BscType {
         return 'dynamic';
     }
 
-    public isEqual(targetType: BscType): boolean {
-        return isEnumType(targetType) && targetType?.name.toLowerCase() === this.name.toLowerCase();
+    public isEqual(targetType: BscType, data?: TypeCompatibilityData): boolean {
+        return isEnumType(targetType) &&
+            targetType?.name.toLowerCase() === this.name.toLowerCase() &&
+            this.underlyingType.isEqual(targetType.underlyingType, data) &&
+            this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlag.runtime, data) &&
+            targetType.checkCompatibilityBasedOnMembers(this, SymbolTypeFlag.runtime, data);
     }
 
     public get defaultMemberType() {

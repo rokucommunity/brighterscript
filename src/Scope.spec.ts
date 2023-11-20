@@ -9,9 +9,10 @@ import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZer
 import { Logger } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
-import type { OnScopeValidateEvent } from './interfaces';
+import type { CompilerPlugin, OnScopeValidateEvent } from './interfaces';
+import { DiagnosticOrigin } from './interfaces';
 import { SymbolTypeFlag } from './SymbolTable';
-import { EnumMemberType } from './types/EnumType';
+import { EnumMemberType, EnumType } from './types/EnumType';
 import { ClassType } from './types/ClassType';
 import { BooleanType } from './types/BooleanType';
 import { StringType } from './types/StringType';
@@ -25,8 +26,9 @@ import { UnionType } from './types/UnionType';
 import { isFunctionStatement, isNamespaceStatement } from './astUtils/reflection';
 import { ArrayType } from './types/ArrayType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
-import { InterfaceType } from '.';
+import { InterfaceType } from './types/InterfaceType';
 import { ComponentType } from './types/ComponentType';
+import * as path from 'path';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -171,7 +173,8 @@ describe('Scope', () => {
         const expected = [{
             message: 'message',
             file: undefined,
-            range: undefined
+            range: undefined,
+            origin: DiagnosticOrigin.Scope
         }];
         source.addDiagnostics(expected);
         expectDiagnostics(source, expected);
@@ -1925,7 +1928,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.itemCannotBeUsedAsType('iFace.name').message
+                    DiagnosticMessages.cannotFindName('name').message
                 ]);
             });
 
@@ -3074,6 +3077,20 @@ describe('Scope', () => {
                 sourceScope.unlinkSymbolTable();
             });
         });
+
+        it('classes in namespaces that reference themselves without namespace work', () => {
+            program.setFile<BrsFile>('source/class.bs', `
+                namespace Alpha
+                    class TestClass
+                        function getCopy() as TestClass
+                            return new TestClass()
+                        end function
+                    end class
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('unlinkSymbolTable', () => {
@@ -3122,6 +3139,305 @@ describe('Scope', () => {
             symbolTables.forEach(x => expect(x['siblings'].size).to.eql(0, `${x.name} has wrong number of siblings`));
 
         });
+    });
+
+    describe('provides & requires', () => {
+
+        it('finds a required symbol in another file', () => {
+            let file1 = program.setFile<BrsFile>('source/file1.bs', `
+                sub callOutsideFunc()
+                    outsideFunc()
+                end sub
+            `);
+            let file2 = program.setFile<BrsFile>('source/file2.bs', `
+                sub outsideFunc()
+                    print "hello"
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(file1.requiredSymbols.length).to.eq(1);
+            expect(file2.requiredSymbols.length).to.eq(0);
+            let file1Info = program.lastValidationInfo.get(file1.srcPath.toLowerCase());
+            expect(file1Info.symbolsNotDefinedInEveryScope.length).to.eq(0);
+            expect(file1Info.symbolsNotConsistentAcrossScopes.length).to.eq(0);
+        });
+
+        it('finds a required symbol in another file for each scope', () => {
+            let file1 = program.setFile<BrsFile>('source/file1.bs', `
+                sub callOutsideFunc()
+                    outsideFunc()
+                end sub
+            `);
+            let file2 = program.setFile<BrsFile>('source/file2.bs', `
+                sub outsideFunc()
+                    print "hello from source"
+                end sub
+            `);
+
+            program.setFile<BrsFile>('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <script uri="pkg:/source/file1.bs"/>
+                </component>
+            `);
+            let widgetBs = program.setFile<BrsFile>('components/Widget.bs', `
+                sub init()
+                    callOutsideFunc()
+                end sub
+
+                sub outsideFunc()
+                    print "hello from widget"
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(file1.requiredSymbols.length).to.eq(1);
+            expect(file2.requiredSymbols.length).to.eq(0);
+            expect(widgetBs.requiredSymbols.length).to.eq(1);
+            let file1Info = program.lastValidationInfo.get(file1.srcPath.toLowerCase());
+            expect(file1Info.symbolsNotDefinedInEveryScope.length).to.eq(0);
+            expect(file1Info.symbolsNotConsistentAcrossScopes.length).to.eq(0);
+        });
+
+        it('finds a required symbol in a namespace in another file', () => {
+            let file1 = program.setFile<BrsFile>('source/file1.bs', `
+                namespace alpha
+                    sub callOutsideFunc()
+                        outsideFunc()
+                    end sub
+                end namespace
+            `);
+            let file2 = program.setFile<BrsFile>('source/file2.bs', `
+                namespace alpha
+                    sub outsideFunc()
+                        print "hello from source"
+                    end sub
+                end namespace
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(file1.requiredSymbols.length).to.eq(1);
+            expect(file2.requiredSymbols.length).to.eq(0);
+            let file1Info = program.lastValidationInfo.get(file1.srcPath.toLowerCase());
+            expect(file1Info.symbolsNotDefinedInEveryScope.length).to.eq(0);
+            expect(file1Info.symbolsNotConsistentAcrossScopes.length).to.eq(0);
+        });
+
+
+        it('finds a if a required symbol is defined different in different scopes', () => {
+            let file1 = program.setFile<BrsFile>('source/file1.bs', `
+                sub callOutsideFunc()
+                    print outsideFunc()
+                end sub
+            `);
+            let file2 = program.setFile<BrsFile>('source/file2.bs', `
+                function outsideFunc() as string
+                    return "hello from source"
+                end function
+            `);
+
+            program.setFile<BrsFile>('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <script uri="pkg:/source/file1.bs"/>
+                </component>
+            `);
+            let widgetBs = program.setFile<BrsFile>('components/Widget.bs', `
+                sub init()
+                    print callOutsideFunc()
+                end sub
+
+                function outsideFunc() as integer
+                    return 123
+                end function
+            `);
+            program.validate();
+            //expectZeroDiagnostics(program);
+            expect(file1.requiredSymbols.length).to.eq(1);
+            expect(file2.requiredSymbols.length).to.eq(0);
+            expect(widgetBs.requiredSymbols.length).to.eq(1);
+            let file1Info = program.lastValidationInfo.get(file1.srcPath.toLowerCase());
+            expect(file1Info.symbolsNotDefinedInEveryScope.length).to.eq(0);
+            expect(file1Info.symbolsNotConsistentAcrossScopes.length).to.eq(1);
+            expect(file1Info.symbolsNotConsistentAcrossScopes[0].symbol.typeChain[0].name).to.eq('outsideFunc');
+        });
+
+        it('finds types defined in different file', () => {
+            let file1 = program.setFile<BrsFile>('source/file1.bs', `
+                function takesIface(z as MyInterface) as string
+                    return z.name
+                end function
+            `);
+            program.setFile<BrsFile>('source/file2.bs', `
+                interface MyInterface
+                    name as string
+                end interface
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(file1.requiredSymbols.length).to.eq(1);
+            expect(file1.requiredSymbols[0].flags).to.eq(SymbolTypeFlag.typetime);
+            expect(file1.requiredSymbols[0].typeChain[0].name).to.eq('MyInterface');
+            let file1Info = program.lastValidationInfo.get(file1.srcPath.toLowerCase());
+            expect(file1Info.symbolsNotDefinedInEveryScope.length).to.eq(0);
+        });
+
+        it('finds members of typecasts of types defined in different file', () => {
+            let file1 = program.setFile<BrsFile>('source/file1.bs', `
+                function takesIface(z) as string
+                    return (z as MyInterface).name
+                end function
+            `);
+            program.setFile<BrsFile>('source/file2.bs', `
+                interface MyInterface
+                    name as string
+                end interface
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(file1.requiredSymbols.length).to.eq(1);
+            expect(file1.requiredSymbols[0].flags).to.eq(SymbolTypeFlag.typetime);
+            expect(file1.requiredSymbols[0].typeChain[0].name).to.eq('MyInterface');
+            let file1Info = program.lastValidationInfo.get(file1.srcPath.toLowerCase());
+            expect(file1Info.symbolsNotDefinedInEveryScope.length).to.eq(0);
+        });
+
+        it('finds symbols inconsistent across scopes', () => {
+            program.setFile<BrsFile>('source/file1.bs', `
+                function callsOther() as string
+                    return otherFunc()
+                end function
+            `);
+            program.setFile<BrsFile>('source/file2.bs', `
+                function otherFunc() as string
+                    return "hello"
+                end function
+            `);
+
+            program.setFile<BrsFile>('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <script uri="pkg:/source/file1.bs"/>
+                </component>
+            `);
+            program.setFile<BrsFile>('components/Widget.bs', `
+                sub init()
+                    callsOther()
+                end sub
+
+                function otherFunc() as integer
+                    return 42
+                end function
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.incompatibleSymbolDefinition('otherFunc', `source, components${path.sep}Widget.xml`).message
+            ]);
+        });
+
+        it('a class can reference itself', () => {
+            program.setFile<BrsFile>('source/klass.bs', `
+                class Klass
+                    function copy(otherKlass as Klass) as Klass
+                        return otherKlass
+                    end function
+                end class
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('classes can reference each other across files', () => {
+            program.setFile<BrsFile>('source/klass.bs', `
+                class Klass
+                    function copy(otherKlass as Klass2) as Klass
+                        return otherKlass.getKlass()
+                    end function
+                end class
+            `);
+
+            program.setFile<BrsFile>('source/klass2.bs', `
+                class Klass2
+                    function getKlass() as Klass
+                        return new Klass()
+                    end function
+                end class
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('requires a enum defined in a different namespace', () => {
+            let file1 = program.setFile<BrsFile>('source/file1.bs', `
+                namespace Alpha
+                    function printEnum(enumVal as Alpha.Beta.Charlie.SomeEnum) as string
+                        return enumVal.toStr()
+                    end function
+                end namespace
+            `);
+
+            let file2 = program.setFile<BrsFile>('source/file2.bs', `
+                namespace Alpha.Beta.Charlie
+                    enum SomeEnum
+                        val1 = 1
+                        val2 = 2
+                    end enum
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(file1.requiredSymbols.length).to.eq(1);
+            expect(file1.requiredSymbols[0].containingNamespaces).to.have.members(['Alpha']);
+            expect(file1.requiredSymbols[0].flags).to.eq(SymbolTypeFlag.typetime);
+            expect(file1.requiredSymbols[0].typeChain.length).to.eq(4);
+            expect(file1.requiredSymbols[0].typeChain.map(x => x.name)).to.have.members(['Alpha', 'Beta', 'Charlie', 'SomeEnum']);
+            expect(file2.requiredSymbols.length).to.eq(0);
+            expect(file2.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime).size).to.eq(1);
+            const file2TypeProvides = file2.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime);
+            expectTypeToBe(file2TypeProvides.get('alpha.beta.charlie.someenum'), EnumType);
+        });
+
+        it('classes that extend classes in other files show change properly', () => {
+            program.setFile<BrsFile>('source/class.bs', `
+                class TestClass
+                    name as string
+                end class
+            `);
+
+            program.setFile<BrsFile>('source/subclass.bs', `
+                class SubTestClass extends TestClass
+                    length as float
+                end class
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            program.setFile<BrsFile>('source/subclass.bs', `
+                class SubTestClass extends TestClass
+                    ' added a comment
+                    length as float
+                end class
+            `);
+
+            let changedSymbolsSize = -1;
+            class TestScopeValidator implements CompilerPlugin {
+                name = 'TestScopeValidator';
+                public onScopeValidate(event: OnScopeValidateEvent) {
+                    changedSymbolsSize = event.changedSymbols.get(SymbolTypeFlag.runtime).size;
+                }
+            }
+
+            program.plugins.add(new TestScopeValidator());
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(changedSymbolsSize).to.equal(0);
+        });
+
     });
 
     describe('performance', () => {
