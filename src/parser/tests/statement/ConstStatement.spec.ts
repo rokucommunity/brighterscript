@@ -199,10 +199,7 @@ describe('ConstStatement', () => {
                 end sub
             `);
             program.validate();
-<<<<<<< HEAD
-=======
             // log(|)
->>>>>>> release-0.66.0
             expectCompletionsIncludes(
                 program.getCompletions('source/main.bs', util.createPosition(3, 34)),
                 [{
