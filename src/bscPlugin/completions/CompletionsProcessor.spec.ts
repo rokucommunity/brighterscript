@@ -1705,7 +1705,7 @@ describe('CompletionsProcessor', () => {
                 interface SomeInterface
                     optional name as string
                     optional data
-                    function doStuff?()
+                    optional function doStuff()
                 end interface
             `);
             program.validate();
