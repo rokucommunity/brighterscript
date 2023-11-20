@@ -1564,7 +1564,7 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
     };
 
     public getLeadingTrivia(): Token[] {
-        return util.concatAnnotationLeadingTrivia(this, this.tokens.name.leadingTrivia);
+        return util.concatAnnotationLeadingTrivia(this, this.tokens.optional?.leadingTrivia ?? this.tokens.name.leadingTrivia);
     }
 
     public get name() {
@@ -1678,7 +1678,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
     }
 
     public getLeadingTrivia(): Token[] {
-        return util.concatAnnotationLeadingTrivia(this, this.tokens.functionType.leadingTrivia);
+        return util.concatAnnotationLeadingTrivia(this, this.tokens.optional?.leadingTrivia ?? this.tokens.functionType.leadingTrivia);
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -2396,7 +2396,7 @@ export class FieldStatement extends Statement implements TypedefProvider {
     public readonly range: Range;
 
     public getLeadingTrivia(): Token[] {
-        return util.concatAnnotationLeadingTrivia(this, this.accessModifier?.leadingTrivia ?? this.name?.leadingTrivia ?? []);
+        return util.concatAnnotationLeadingTrivia(this, this.accessModifier?.leadingTrivia ?? this.optional?.leadingTrivia ?? this.name?.leadingTrivia ?? []);
     }
 
     public get isOptional() {

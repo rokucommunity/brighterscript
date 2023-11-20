@@ -166,9 +166,13 @@ export class HoverProcessor {
                     }
                     hoverContent = fence(`${variableName}${exprType.toString()}`);
                 }
+                const modifiers = [];
                 // eslint-disable-next-line no-bitwise
                 if (extraData?.flags && extraData?.flags & SymbolTypeFlag.optional) {
-                    hoverContent += ' *(optional)*';
+                    modifiers.push(TokenKind.Optional);
+                }
+                if (modifiers.length > 0) {
+                    hoverContent += `\n*(${modifiers.join(', ').toLowerCase()})*`;
                 }
 
                 if (extraData.description) {
