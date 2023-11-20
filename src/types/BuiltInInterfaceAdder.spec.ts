@@ -100,6 +100,14 @@ describe('BuiltInInterfaceAdder', () => {
         expectTypeToBe(myType.getMemberType('clear', { flags: SymbolTypeFlag.runtime }), BooleanType);
     });
 
+    it('should not include members that have already been overridded', () => {
+        const myType = new ClassType('Klass');
+        myType.addMember('clear', null, new BooleanType(), SymbolTypeFlag.runtime);
+        BuiltInInterfaceAdder.addBuiltInInterfacesToType(myType);
+        const myMembers = myType.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime);
+        expect(myMembers.filter(member => member.name.toLowerCase() === 'clear').length).to.eq(1);
+    });
+
     it('should only add built ins to original ancestor', () => {
         const sup = new ClassType('SuperKlass');
         const sub = new ClassType('Klass', sup);

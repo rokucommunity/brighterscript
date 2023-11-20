@@ -4,7 +4,7 @@ import * as path from 'path';
 import chalk from 'chalk';
 import type { DiagnosticInfo } from './DiagnosticMessages';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, FileLink, Callable, NamespaceContainer } from './interfaces';
+import { type CallableContainer, type BsDiagnosticWithOrigin, type FileReference, type CallableContainerMap, type FileLink, type Callable, type NamespaceContainer, type ScopeValidationOptions, type BsDiagnostic, DiagnosticOrigin } from './interfaces';
 import type { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
 import type { NamespaceStatement, ClassStatement, EnumStatement, InterfaceStatement, EnumMemberStatement, ConstStatement } from './parser/Statement';
@@ -25,6 +25,7 @@ import { NamespaceType } from './types/NamespaceType';
 import { referenceTypeFactory } from './types/ReferenceType';
 import { unionTypeFactory } from './types/UnionType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
+import type { AstNode } from './parser/AstNode';
 
 /**
  * Assign some few factories to the SymbolTable to prevent cyclical imports. This file seems like the most intuitive place to do the linking
@@ -65,6 +66,21 @@ export class Scope {
      * "namea", "namea.nameb", "namea.nameb.namec"
      */
     public get namespaceLookup() {
+        let allFilesValidated = true;
+        for (const file of this.getAllFiles()) {
+            if (isBrsFile(file) && !file.hasTypedef) {
+                allFilesValidated = allFilesValidated && file.isValidated;
+                if (!allFilesValidated) {
+                    break;
+                }
+            }
+        }
+        if (!allFilesValidated) {
+            // This is not fit to cache
+            // Since the files have not been validated, all namespace info might not have been available
+            return this.buildNamespaceLookup();
+        }
+
         return this.cache.getOrAdd('namespaceLookup', () => this.buildNamespaceLookup());
     }
 
@@ -344,7 +360,7 @@ export class Scope {
     /**
      * The list of diagnostics found specifically for this scope. Individual file diagnostics are stored on the files themselves.
      */
-    protected diagnostics = [] as BsDiagnostic[];
+    protected diagnostics = [] as BsDiagnosticWithOrigin[];
 
     protected onDependenciesChanged(event: DependencyChangedEvent) {
         this.logDebug('invalidated because dependency graph said [', event.sourceKey, '] changed');
@@ -483,14 +499,14 @@ export class Scope {
             //get diagnostics from all files
             ...this.getOwnFiles().map(x => x.diagnostics ?? []).flat()
         ]
-            //exclude diangostics that match any of the comment flags
+            //exclude diagnostics that match any of the comment flags
             .filter((x) => {
                 return !util.diagnosticIsSuppressed(x);
             });
         return diagnostics;
     }
 
-    public addDiagnostics(diagnostics: BsDiagnostic[]) {
+    public addDiagnostics(diagnostics: BsDiagnosticWithOrigin[]) {
         this.diagnostics.push(...diagnostics);
     }
 
@@ -584,10 +600,11 @@ export class Scope {
     /**
      * Builds a tree of namespace objects
      */
-    public buildNamespaceLookup() {
+    public buildNamespaceLookup(options: { okToCache?: boolean } = { okToCache: true }) {
         let namespaceLookup = new Map<string, NamespaceContainer>();
+        options.okToCache = true;
         this.enumerateBrsFiles((file) => {
-
+            options.okToCache = options.okToCache && file.isValidated;
             const fileNamespaceLookup = file.getNamespaceLookupObject();
 
             for (const [lowerNamespaceName, nsContainer] of fileNamespaceLookup) {
@@ -628,9 +645,9 @@ export class Scope {
     }
     private _debugLogComponentName: string;
 
-    public validate(force = false) {
+    public validate(validationOptions: ScopeValidationOptions = { force: false }) {
         //if this scope is already validated, no need to revalidate
-        if (this.isValidated === true && !force) {
+        if (this.isValidated === true && !validationOptions.force) {
             this.logDebug('validate(): already validated');
             return;
         }
@@ -642,10 +659,10 @@ export class Scope {
             //validate our parent before we validate ourself
             if (parentScope && parentScope.isValidated === false) {
                 this.logDebug('validate(): validating parent first');
-                parentScope.validate(force);
+                parentScope.validate(validationOptions);
             }
             //clear the scope's errors list (we will populate them from this method)
-            this.diagnostics = [];
+            this.clearScopeLevelDiagnostics();
 
             let callables = this.getAllCallables();
 
@@ -673,12 +690,13 @@ export class Scope {
 
             //get a list of all callables, indexed by their lower case names
             let callableContainerMap = util.getCallableContainersByLowerName(callables);
-
             //Since statements from files are shared across multiple scopes, we need to link those statements to the current scope
             this.linkSymbolTable();
             const scopeValidateEvent = {
                 program: this.program,
-                scope: this
+                scope: this,
+                changedFiles: validationOptions?.changedFiles,
+                changedSymbols: validationOptions?.changedSymbols
             };
             this.program.plugins.emit('beforeScopeValidate', scopeValidateEvent);
             this.program.plugins.emit('onScopeValidate', scopeValidateEvent);
@@ -707,6 +725,19 @@ export class Scope {
             this.diagnosticDetectFunctionCollisions(file);
             this.detectVariableNamespaceCollisions(file);
         });
+    }
+
+    clearAstSegmentDiagnostics(astSegment: AstNode) {
+        this.diagnostics = this.diagnostics.filter(diag => !(diag.origin === DiagnosticOrigin.ASTSegment && diag.astSegment === astSegment));
+    }
+
+    clearAstSegmentDiagnosticsByFile(file: File) {
+        const lowerSrcPath = file.srcPath.toLowerCase();
+        this.diagnostics = this.diagnostics.filter(diag => !(diag.origin === DiagnosticOrigin.ASTSegment && diag.file.srcPath.toLowerCase() === lowerSrcPath));
+    }
+
+    clearScopeLevelDiagnostics() {
+        this.diagnostics = this.diagnostics.filter(diag => diag.origin !== DiagnosticOrigin.Scope);
     }
 
     /**
@@ -803,6 +834,8 @@ export class Scope {
                 } else {
                     break;
                 }
+            } else {
+                // Existing known namespace
             }
             if (!namespaceTypesKnown.has(nsName)) {
                 namespaceTypesKnown.set(nsName, currentNSType);
@@ -840,6 +873,7 @@ export class Scope {
                 //see if the param matches any starting namespace part
                 if (namespace) {
                     this.diagnostics.push({
+                        origin: DiagnosticOrigin.Scope,
                         file: file,
                         ...DiagnosticMessages.parameterMayNotHaveSameNameAsNamespace(param.name.text),
                         range: param.name.range,
@@ -861,6 +895,7 @@ export class Scope {
             //see if the param matches any starting namespace part
             if (namespace) {
                 this.diagnostics.push({
+                    origin: DiagnosticOrigin.Scope,
                     file: file,
                     ...DiagnosticMessages.variableMayNotHaveSameNameAsNamespace(assignment.name.text),
                     range: assignment.name.range,
@@ -890,7 +925,9 @@ export class Scope {
                     this.diagnostics.push({
                         ...DiagnosticMessages.scopeFunctionShadowedByBuiltInFunction(),
                         range: func.nameRange,
-                        file: file
+                        file: file,
+                        origin: DiagnosticOrigin.Scope
+
                     });
                 }
 
@@ -899,7 +936,8 @@ export class Scope {
                     this.diagnostics.push({
                         ...DiagnosticMessages.functionCannotHaveSameNameAsClass(funcName),
                         range: func.nameRange,
-                        file: file
+                        file: file,
+                        origin: DiagnosticOrigin.Scope
                     });
                 }
             }
@@ -922,7 +960,9 @@ export class Scope {
     private validateClasses() {
         let validator = new BsClassValidator();
         validator.validate(this);
-        this.diagnostics.push(...validator.diagnostics);
+        this.diagnostics.push(...validator.diagnostics.map(diag => {
+            return { ...diag, origin: DiagnosticOrigin.Scope };
+        }));
     }
 
     /**
@@ -950,7 +990,8 @@ export class Scope {
                         this.diagnostics.push({
                             ...DiagnosticMessages.localVarFunctionShadowsParentFunction('stdlib'),
                             range: varDeclaration.nameRange,
-                            file: file
+                            file: file,
+                            origin: DiagnosticOrigin.Scope
                         });
                     }
                 } else if (callableContainerMap.has(lowerVarName)) {
@@ -959,13 +1000,15 @@ export class Scope {
                         this.diagnostics.push({
                             ...DiagnosticMessages.localVarFunctionShadowsParentFunction('scope'),
                             range: varDeclaration.nameRange,
-                            file: file
+                            file: file,
+                            origin: DiagnosticOrigin.Scope
                         });
                     } else {
                         this.diagnostics.push({
                             ...DiagnosticMessages.localVarShadowedByScopedFunction(),
                             range: varDeclaration.nameRange,
-                            file: file
+                            file: file,
+                            origin: DiagnosticOrigin.Scope
                         });
                     }
                     //has the same name as an in-scope class
@@ -973,7 +1016,8 @@ export class Scope {
                     this.diagnostics.push({
                         ...DiagnosticMessages.localVarSameNameAsClass(classMap.get(lowerVarName)?.item.getName(ParseMode.BrighterScript)),
                         range: varDeclaration.nameRange,
-                        file: file
+                        file: file,
+                        origin: DiagnosticOrigin.Scope
                     });
                 }
             }
@@ -1024,7 +1068,8 @@ export class Scope {
                                 shadowedCallable.scope.name
                             ),
                             range: container.callable.nameRange,
-                            file: container.callable.file
+                            file: container.callable.file,
+                            origin: DiagnosticOrigin.Scope
                         });
                     }
                 }
@@ -1044,7 +1089,8 @@ export class Scope {
                             callable.nameRange.start.line,
                             callable.nameRange.end.character
                         ),
-                        file: callable.file
+                        file: callable.file,
+                        origin: DiagnosticOrigin.Scope
                     });
                 }
             }
@@ -1090,14 +1136,16 @@ export class Scope {
                 this.diagnostics.push({
                     ...dInfo,
                     range: scriptImport.filePathRange,
-                    file: scriptImport.sourceFile
+                    file: scriptImport.sourceFile,
+                    origin: DiagnosticOrigin.Scope
                 });
                 //if the character casing of the script import path does not match that of the actual path
             } else if (scriptImport.destPath !== referencedFile.destPath) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.scriptImportCaseMismatch(referencedFile.destPath),
                     range: scriptImport.filePathRange,
-                    file: scriptImport.sourceFile
+                    file: scriptImport.sourceFile,
+                    origin: DiagnosticOrigin.Scope
                 });
             }
         }

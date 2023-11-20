@@ -3,13 +3,15 @@ import { isAssignmentStatement, isBrsFile, isClassType, isDottedGetExpression, i
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
-import type { BsDiagnostic, OnScopeValidateEvent, TypeChainEntry, TypeCompatibilityData } from '../../interfaces';
+import { DiagnosticOrigin } from '../../interfaces';
+import type { BsDiagnostic, BsDiagnosticWithOrigin, OnScopeValidateEvent, TypeChainEntry, TypeCompatibilityData } from '../../interfaces';
 import { SymbolTypeFlag } from '../../SymbolTable';
 import type { AssignmentStatement, DottedSetStatement, EnumStatement, ReturnStatement } from '../../parser/Statement';
 import util from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
 import type { Token } from '../../lexer/Token';
+import type { AstNode } from '../../parser/AstNode';
 import { type Expression } from '../../parser/AstNode';
 import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression } from '../../parser/Expression';
 import { CallExpression } from '../../parser/Expression';
@@ -54,10 +56,26 @@ export class ScopeValidator {
 
     private walkFiles() {
 
-        //function signatures incompatible cross scopes
-
         this.event.scope.enumerateOwnFiles((file) => {
             if (isBrsFile(file)) {
+                const hasChangeInfo = this.event.changedFiles && this.event.changedSymbols;
+
+                let thisFileRequiresChangedSymbol = false;
+                for (let requiredSymbol of file.requiredSymbols) {
+                    const changeSymbolSetForFlag = this.event.changedSymbols.get(requiredSymbol.flags);
+                    if (util.setContainsUnresolvedSymbol(changeSymbolSetForFlag, requiredSymbol)) {
+                        thisFileRequiresChangedSymbol = true;
+                    }
+                }
+                const thisFileHasChanges = this.event.changedFiles.includes(file);
+                if (hasChangeInfo && !thisFileRequiresChangedSymbol && !thisFileHasChanges) {
+                    // this file does not require a symbol that has changed, and this file has not changed
+                    return;
+                }
+                if (thisFileHasChanges) {
+                    this.event.scope.clearAstSegmentDiagnosticsByFile(file);
+                }
+
                 const validationVisitor = createVisitor({
                     VariableExpression: (varExpr) => {
                         this.validateVariableAndDottedGetExpressions(file, varExpr);
@@ -82,9 +100,13 @@ export class ScopeValidator {
                         this.validateUnaryExpression(file, unaryExpr);
                     }
                 });
+                const segmentsToWalkForValidation = (thisFileHasChanges || !hasChangeInfo)
+                    ? file.validationSegmenter.segmentsForValidation // validate everything in the file
+                    : file.getValidationSegments(this.event.changedSymbols); // validate only what's needed in the file
 
-                const segmentsToWalkForValidation = file.getValidationSegments();
                 for (const segment of segmentsToWalkForValidation) {
+                    this.currentSegmentBeingValidated = segment;
+                    this.event.scope.clearAstSegmentDiagnostics(segment);
                     segment.walk(validationVisitor, {
                         walkMode: InsideSegmentWalkMode
                     });
@@ -93,6 +115,8 @@ export class ScopeValidator {
             }
         });
     }
+
+    private currentSegmentBeingValidated: AstNode;
 
 
     private isTypeKnown(exprType: BscType) {
@@ -115,7 +139,7 @@ export class ScopeValidator {
      * Flag duplicate enums
      */
     private detectDuplicateEnums() {
-        const diagnostics: BsDiagnostic[] = [];
+        const diagnostics: BsDiagnosticWithOrigin[] = [];
         const enumLocationsByName = new Cache<string, Array<{ file: BrsFile; statement: EnumStatement }>>();
         this.event.scope.enumerateBrsFiles((file) => {
             for (const enumStatement of file.parser.references.enumStatements) {
@@ -156,7 +180,8 @@ export class ScopeValidator {
                             URI.file(primaryEnum.file.srcPath).toString(),
                             primaryEnum.statement.tokens.name.range
                         )
-                    }]
+                    }],
+                    origin: DiagnosticOrigin.Scope
                 });
             }
         }
@@ -530,18 +555,20 @@ export class ScopeValidator {
         } else if (isDynamicType(exprType) && isEnumType(parentTypeInfo?.type) && isDottedGetExpression(expression)) {
             const enumFileLink = this.event.scope.getEnumFileLink(util.getAllDottedGetPartsAsString(expression.obj));
             const typeChainScanForParent = util.processTypeChain(typeChain.slice(0, -1));
-            this.addMultiScopeDiagnostic({
-                file: file,
-                ...DiagnosticMessages.unknownEnumValue(lastTypeInfo?.name, typeChainScanForParent.fullChainName),
-                range: lastTypeInfo?.range,
-                relatedInformation: [{
-                    message: 'Enum declared here',
-                    location: util.createLocation(
-                        URI.file(enumFileLink?.file.srcPath).toString(),
-                        enumFileLink?.item?.tokens.name.range
-                    )
-                }]
-            });
+            if (enumFileLink) {
+                this.addMultiScopeDiagnostic({
+                    file: file,
+                    ...DiagnosticMessages.unknownEnumValue(lastTypeInfo?.name, typeChainScanForParent.fullChainName),
+                    range: lastTypeInfo?.range,
+                    relatedInformation: [{
+                        message: 'Enum declared here',
+                        location: util.createLocation(
+                            URI.file(enumFileLink?.file.srcPath).toString(),
+                            enumFileLink?.item?.tokens.name.range
+                        )
+                    }]
+                });
+            }
         }
     }
 
@@ -551,14 +578,30 @@ export class ScopeValidator {
      */
     private addDiagnosticOnce(diagnostic: BsDiagnostic) {
         this.onceCache.getOrAdd(`${diagnostic.code}-${diagnostic.message}-${util.rangeToString(diagnostic.range)}`, () => {
-            this.event.scope.addDiagnostics([diagnostic]);
+            const diagnosticWithOrigin = { ...diagnostic } as BsDiagnosticWithOrigin;
+            if (!diagnosticWithOrigin.origin) {
+                // diagnostic does not have origin.
+                // set the origin to the current astSegment
+                diagnosticWithOrigin.origin = DiagnosticOrigin.ASTSegment;
+                diagnosticWithOrigin.astSegment = this.currentSegmentBeingValidated;
+            }
+
+            this.event.scope.addDiagnostics([diagnosticWithOrigin]);
             return true;
         });
     }
     private onceCache = new Cache<string, boolean>();
 
     private addDiagnostic(diagnostic: BsDiagnostic) {
-        this.event.scope.addDiagnostics([diagnostic]);
+        const diagnosticWithOrigin = { ...diagnostic } as BsDiagnosticWithOrigin;
+        if (!diagnosticWithOrigin.origin) {
+            // diagnostic does not have origin.
+            // set the origin to the current astSegment
+            diagnosticWithOrigin.origin = DiagnosticOrigin.ASTSegment;
+            diagnosticWithOrigin.astSegment = this.currentSegmentBeingValidated;
+        }
+
+        this.event.scope.addDiagnostics([diagnosticWithOrigin]);
     }
 
     /**
@@ -566,11 +609,21 @@ export class ScopeValidator {
      */
     private addMultiScopeDiagnostic(diagnostic: BsDiagnostic) {
         diagnostic = this.multiScopeCache.getOrAdd(`${diagnostic.file?.srcPath}-${diagnostic.code}-${diagnostic.message}-${util.rangeToString(diagnostic.range)}`, () => {
+
             if (!diagnostic.relatedInformation) {
                 diagnostic.relatedInformation = [];
             }
-            this.addDiagnostic(diagnostic);
-            return diagnostic;
+
+            const diagnosticWithOrigin = { ...diagnostic } as BsDiagnosticWithOrigin;
+            if (!diagnosticWithOrigin.origin) {
+                // diagnostic does not have origin.
+                // set the origin to the current astSegment
+                diagnosticWithOrigin.origin = DiagnosticOrigin.ASTSegment;
+                diagnosticWithOrigin.astSegment = this.currentSegmentBeingValidated;
+            }
+
+            this.addDiagnostic(diagnosticWithOrigin);
+            return diagnosticWithOrigin;
         });
         if (isXmlScope(this.event.scope) && this.event.scope.xmlFile?.srcPath) {
             diagnostic.relatedInformation.push({
@@ -591,5 +644,5 @@ export class ScopeValidator {
         }
     }
 
-    private multiScopeCache = new Cache<string, BsDiagnostic>();
+    private multiScopeCache = new Cache<string, BsDiagnosticWithOrigin>();
 }

@@ -168,7 +168,7 @@ export class AssignmentStatement extends Statement {
         // Note: compound assignments (eg. +=) are internally dealt with via the RHS being a BinaryExpression
         // so this.value will be a BinaryExpression, and BinaryExpressions can figure out their own types
         const rhs = this.value.getType({ ...options, typeChain: undefined });
-        options.typeChain?.push(new TypeChainEntry(this.name.text, rhs, this.name.range));
+        options.typeChain?.push(new TypeChainEntry(this.name.text, rhs, options.flags, this.name.range));
         return rhs;
     }
 }
@@ -416,7 +416,7 @@ export class FunctionStatement extends Statement implements TypedefProvider {
 
     getType(options: GetTypeOptions) {
         const funcExprType = this.func.getType(options);
-        funcExprType.setName(this.name.text);
+        funcExprType.setName(this.name?.text);
         return funcExprType;
     }
 }
@@ -1524,7 +1524,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
             const memberType = statement?.getType({ ...options, typeChain: undefined }); // no typechain info needed
             resultType.addMember(statement?.tokens.name?.text, { definingNode: statement }, memberType, SymbolTypeFlag.runtime);
         }
-        options.typeChain?.push(new TypeChainEntry(this.getName(ParseMode.BrighterScript), resultType, this.range));
+        options.typeChain?.push(new TypeChainEntry(this.getName(ParseMode.BrighterScript), resultType, options.flags, this.range));
         return resultType;
     }
 }
@@ -1722,7 +1722,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         }
         let funcName = this.getName(ParseMode.BrighterScript);
         resultType.setName(funcName);
-        options.typeChain?.push(new TypeChainEntry(resultType.name, resultType, this.range));
+        options.typeChain?.push(new TypeChainEntry(resultType.name, resultType, options.flags, this.range));
         return resultType;
     }
 }
@@ -2126,7 +2126,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
             const fieldType = statement.getType({ ...options, typeChain: undefined }); //no typechain needed
             resultType.addMember(statement?.name?.text, { definingNode: statement }, fieldType, SymbolTypeFlag.runtime);
         }
-        options.typeChain?.push(new TypeChainEntry(resultType.name, resultType, this.range));
+        options.typeChain?.push(new TypeChainEntry(resultType.name, resultType, options.flags, this.range));
         return resultType;
     }
 }

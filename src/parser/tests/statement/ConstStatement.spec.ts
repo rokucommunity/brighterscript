@@ -198,10 +198,10 @@ describe('ConstStatement', () => {
                     log()
                 end sub
             `);
-
+            program.validate();
+            // log(|)
             expectCompletionsIncludes(
-                // log(|)
-                program.getCompletions('source/main.bs', util.createPosition(3, 24)),
+                program.getCompletions('source/main.bs', util.createPosition(3, 34)),
                 [{
                     label: 'API_KEY',
                     kind: CompletionItemKind.Constant
@@ -246,6 +246,7 @@ describe('ConstStatement', () => {
                     log(constants.)
                 end sub
             `);
+            program.validate();
 
             expectCompletionsIncludes(
                 // log(|)

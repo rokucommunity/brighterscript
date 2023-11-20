@@ -3,6 +3,7 @@ import type { SymbolTypeFlag } from '../SymbolTable';
 import { SymbolTable } from '../SymbolTable';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import type { ExtraSymbolData, TypeCompatibilityData } from '../interfaces';
+import { isReferenceType } from '../astUtils/reflection';
 
 export abstract class BscType {
 
@@ -67,7 +68,7 @@ export abstract class BscType {
         throw new Error('Method not implemented.');
     }
 
-    isEqual(targetType: BscType): boolean {
+    isEqual(targetType: BscType, data: TypeCompatibilityData = {}): boolean {
         throw new Error('Method not implemented.');
     }
 
@@ -75,9 +76,24 @@ export abstract class BscType {
         let isSuperSet = true;
         data.missingFields ||= [];
         data.fieldMismatches ||= [];
+        data.depth = data.depth ? data.depth + 1 : 1;
+        //data.chain ||= [];
         this.addBuiltInInterfaces();
         targetType.addBuiltInInterfaces();
 
+        if (this === targetType) {
+            return true;
+        }
+
+        if (isReferenceType(targetType) && !targetType.isResolvable()) {
+            // we can't resolve the other type. Assume it does not fail on member checks
+            return true;
+        }
+
+        if (data.depth > 16) {
+            // some sort of circular reference
+            return false;
+        }
         const mySymbols = this.getMemberTable()?.getAllSymbols(flags);
         for (const memberSymbol of mySymbols) {
             const targetTypesOfSymbol = targetType.getMemberTable()
@@ -92,7 +108,8 @@ export abstract class BscType {
                         if (!acc) {
                             return acc;
                         }
-                        const myMemberAllowsTargetType = memberSymbol.type.isTypeCompatible(typeOfTargetSymbol);
+
+                        const myMemberAllowsTargetType = memberSymbol.type.isTypeCompatible(typeOfTargetSymbol, { depth: data.depth });
                         if (!myMemberAllowsTargetType) {
                             data.fieldMismatches.push({ name: memberSymbol.name, expectedType: memberSymbol.type, actualType: targetType.getMemberType(memberSymbol.name, { flags: flags }) });
                         }
@@ -101,6 +118,7 @@ export abstract class BscType {
             }
 
         }
+        data.depth = 0;
         return isSuperSet;
     }
 

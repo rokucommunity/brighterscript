@@ -2,7 +2,7 @@ import type { Location, Position } from 'vscode-languageserver';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { XmlFile } from './files/XmlFile';
-import type { CallableContainerMap, FileReference } from './interfaces';
+import { DiagnosticOrigin, type CallableContainerMap, type FileReference } from './interfaces';
 import type { Program } from './Program';
 import util from './util';
 import { isXmlFile } from './astUtils/reflection';
@@ -108,7 +108,8 @@ export class XmlScope extends Scope {
                 this.diagnostics.push({
                     ...DiagnosticMessages.xmlFunctionNotFound(name),
                     range: func.getAttribute('name').tokens.value.range,
-                    file: this.xmlFile
+                    file: this.xmlFile,
+                    origin: DiagnosticOrigin.Scope
                 });
             }
         }
@@ -126,7 +127,8 @@ export class XmlScope extends Scope {
                 this.diagnostics.push({
                     ...DiagnosticMessages.xmlInvalidFieldType(type),
                     range: field.getAttribute('type').tokens.value.range,
-                    file: this.xmlFile
+                    file: this.xmlFile,
+                    origin: DiagnosticOrigin.Scope
                 });
             }
         }
@@ -136,7 +138,8 @@ export class XmlScope extends Scope {
         this.diagnostics.push({
             ...DiagnosticMessages.xmlTagMissingAttribute(tag.tokens.startTagName.text, name),
             range: tag.tokens.startTagName.range,
-            file: this.xmlFile
+            file: this.xmlFile,
+            origin: DiagnosticOrigin.Scope
         });
     }
 
@@ -164,7 +167,8 @@ export class XmlScope extends Scope {
                     this.diagnostics.push({
                         file: this.xmlFile,
                         range: scriptImport.filePathRange,
-                        ...DiagnosticMessages.unnecessaryScriptImportInChildFromParent(ancestorComponentName)
+                        ...DiagnosticMessages.unnecessaryScriptImportInChildFromParent(ancestorComponentName),
+                        origin: DiagnosticOrigin.Scope
                     });
                 }
             }

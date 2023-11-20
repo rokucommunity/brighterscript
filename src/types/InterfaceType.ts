@@ -5,11 +5,12 @@ import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { InheritableType } from './InheritableType';
 import { isUnionTypeCompatible } from './helpers';
+import type { ReferenceType } from './ReferenceType';
 
 export class InterfaceType extends InheritableType {
     public constructor(
         public name: string,
-        public readonly superInterface?: BscType
+        public readonly superInterface?: InterfaceType | ReferenceType
     ) {
         super(name, superInterface);
     }
@@ -20,8 +21,8 @@ export class InterfaceType extends InheritableType {
         if (isDynamicType(targetType) || isObjectType(targetType) || isUnionTypeCompatible(this, targetType, data)) {
             return true;
         }
-        if (this.isEqual(targetType)) {
-            return true;
+        if (isInterfaceType(targetType)) {
+            return this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlag.runtime, data);
         }
         const ancestorTypes = this.getAncestorTypeList();
         if (ancestorTypes?.find(ancestorType => ancestorType.isEqual(targetType))) {
@@ -33,7 +34,7 @@ export class InterfaceType extends InheritableType {
     /**
      *  Is this the exact same interface as the target?
      */
-    isEqual(targetType: BscType): boolean {
-        return isInterfaceType(targetType) && this.name.toLowerCase() === targetType.name.toLowerCase();
+    isEqual(targetType: BscType, data?: TypeCompatibilityData): boolean {
+        return isInterfaceType(targetType) && super.isEqual(targetType, data);
     }
 }
