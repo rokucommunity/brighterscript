@@ -434,7 +434,7 @@ export class Parser {
     private interfaceMethodStatement(optionalKeyword?: Token) {
         const functionType = this.advance();
         const name = this.identifier(...AllowedProperties);
-        const leftParen = this.consume(DiagnosticMessages.expectedToken(TokenKind.LeftParen), TokenKind.LeftParen, TokenKind.QuestionLeftParen);
+        const leftParen = this.consume(DiagnosticMessages.expectedToken(TokenKind.LeftParen), TokenKind.LeftParen);
 
         let params = [] as FunctionParameterExpression[];
         if (!this.check(TokenKind.RightParen)) {
