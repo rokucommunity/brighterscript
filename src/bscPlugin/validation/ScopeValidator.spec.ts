@@ -1277,8 +1277,8 @@ describe('ScopeValidator', () => {
                     end sub
 
                     interface MyIFace
-                        name? as string
-                        data?
+                        optional name as string
+                        optional data
                     end interface
                 `);
                 program.validate();
@@ -1301,8 +1301,8 @@ describe('ScopeValidator', () => {
                     end sub
 
                     interface MyIFace
-                        name? as string
-                        data?
+                        optional name as string
+                        optional data
                     end interface
                 `);
                 program.validate();
@@ -1325,8 +1325,8 @@ describe('ScopeValidator', () => {
                     end sub
 
                     interface MyIFace
-                        name? as string
-                        data?
+                        optional name as string
+                        optional data
                     end interface
                 `);
                 program.validate();
@@ -1354,8 +1354,8 @@ describe('ScopeValidator', () => {
                     end sub
 
                     interface MyIFace
-                        name? as string
-                        data?
+                        optional name as string
+                        optional data
                     end interface
 
                     class MyKlass
@@ -1389,8 +1389,8 @@ describe('ScopeValidator', () => {
                     end sub
 
                     interface MyIFace
-                        name? as string
-                        data?
+                        optional name as string
+                        optional data
                     end interface
 
                     class MyKlass

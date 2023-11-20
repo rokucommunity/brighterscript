@@ -16,6 +16,7 @@ import type { BscType } from '../../types';
 
 const fence = (code: string) => util.mdFence(code, 'brightscript');
 
+
 export class HoverProcessor {
     public constructor(
         public event: ProvideHoverEvent
@@ -165,7 +166,10 @@ export class HoverProcessor {
                     }
                     hoverContent = fence(`${variableName}${exprType.toString()}`);
                 }
-
+                // eslint-disable-next-line no-bitwise
+                if (extraData?.flags && extraData?.flags & SymbolTypeFlag.optional) {
+                    hoverContent += ' *(optional)*';
+                }
 
                 if (extraData.description) {
                     hoverContent = this.buildContentsWithDocsFromDescription(hoverContent, extraData.description);

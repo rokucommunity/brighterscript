@@ -753,6 +753,7 @@ export interface ExtraSymbolData {
     definingNode?: AstNode;
     description?: string;
     completionPriority?: number; // the higher the number, the lower the priority
+    flags?: SymbolTypeFlag;
 }
 
 export interface GetTypeOptions {

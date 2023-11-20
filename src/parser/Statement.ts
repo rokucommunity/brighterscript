@@ -1536,8 +1536,8 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
         throw new Error('Method not implemented.');
     }
     constructor(
-        nameToken: Identifier,
         optionalToken: Token,
+        nameToken: Identifier,
         asToken: Token,
         public typeExpression?: TypeExpression
     ) {
@@ -1546,8 +1546,8 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
         this.tokens.optional = optionalToken;
         this.tokens.as = asToken;
         this.range = util.createBoundingRange(
-            this.tokens.name,
             this.tokens.optional,
+            this.tokens.name,
             this.tokens.as,
             this.typeExpression
         );
@@ -1558,8 +1558,8 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
     public range: Range;
 
     public tokens = {} as {
-        name: Identifier;
         optional: Token;
+        name: Identifier;
         as: Token;
     };
 
@@ -1572,7 +1572,7 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
     }
 
     public get isOptional() {
-        return this.tokens.optional?.kind === TokenKind.Question;
+        return !!this.tokens.optional;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -1588,6 +1588,12 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
                 ...annotation.getTypedef(state),
                 state.newline,
                 state.indent()
+            );
+        }
+        if (this.isOptional) {
+            result.push(
+                this.tokens.optional.text,
+                ' '
             );
         }
 
@@ -1619,6 +1625,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         throw new Error('Method not implemented.');
     }
     constructor(
+        optionalToken: Token,
         functionTypeToken: Token,
         nameToken: Identifier,
         leftParen: Token,
@@ -1628,6 +1635,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         public returnTypeExpression?: TypeExpression
     ) {
         super();
+        this.tokens.optional = optionalToken;
         this.tokens.functionType = functionTypeToken;
         this.tokens.name = nameToken;
         this.tokens.leftParen = leftParen;
@@ -1639,6 +1647,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
 
     public get range() {
         return util.createBoundingRange(
+            this.tokens.optional,
             this.tokens.functionType,
             this.tokens.name,
             this.tokens.leftParen,
@@ -1656,6 +1665,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
     }
 
     public tokens = {} as {
+        optional: Token;
         functionType: Token;
         name: Identifier;
         leftParen: Token;
@@ -1664,7 +1674,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
     };
 
     public get isOptional() {
-        return this.tokens.leftParen?.kind === TokenKind.QuestionLeftParen;
+        return !!this.tokens.optional;
     }
 
     public getLeadingTrivia(): Token[] {
@@ -1686,7 +1696,12 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
                 state.indent()
             );
         }
-
+        if (this.isOptional) {
+            result.push(
+                this.tokens.optional.text,
+                ' '
+            );
+        }
         result.push(
             this.tokens.functionType.text,
             ' ',
@@ -2137,11 +2152,13 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
         for (const statement of this.methods) {
             const funcType = statement?.func.getType({ ...options, typeChain: undefined }); //no typechain needed
-            resultType.addMember(statement?.name?.text, { definingNode: statement }, funcType, SymbolTypeFlag.runtime);
+            const flag = SymbolTypeFlag.runtime;
+            resultType.addMember(statement?.name?.text, { definingNode: statement }, funcType, flag);
         }
         for (const statement of this.fields) {
             const fieldType = statement.getType({ ...options, typeChain: undefined }); //no typechain needed
-            resultType.addMember(statement?.name?.text, { definingNode: statement }, fieldType, SymbolTypeFlag.runtime);
+            const flag = statement.isOptional ? SymbolTypeFlag.runtime | SymbolTypeFlag.optional : SymbolTypeFlag.runtime;
+            resultType.addMember(statement?.name?.text, { definingNode: statement }, fieldType, flag);
         }
         options.typeChain?.push(new TypeChainEntry(resultType.name, resultType, this.range));
         return resultType;
@@ -2347,6 +2364,7 @@ export class MethodStatement extends FunctionStatement {
 export class FieldStatement extends Statement implements TypedefProvider {
     constructor(
         readonly accessModifier?: Token,
+        readonly optional?: Token,
         readonly name?: Identifier,
         readonly as?: Token,
         readonly typeExpression?: TypeExpression,
@@ -2381,6 +2399,10 @@ export class FieldStatement extends Statement implements TypedefProvider {
         return util.concatAnnotationLeadingTrivia(this, this.accessModifier?.leadingTrivia ?? this.name?.leadingTrivia ?? []);
     }
 
+    public get isOptional() {
+        return !!this.optional;
+    }
+
     transpile(state: BrsTranspileState): TranspileResult {
         throw new Error('transpile not implemented for ' + Object.getPrototypeOf(this).constructor.name);
     }
@@ -2403,8 +2425,12 @@ export class FieldStatement extends Statement implements TypedefProvider {
 
             result.push(
                 this.accessModifier?.text ?? 'public',
-                ' ',
-                this.name?.text,
+                ' '
+            );
+            if (this.isOptional) {
+                result.push(this.optional.text, ' ');
+            }
+            result.push(this.name?.text,
                 ' as ',
                 type.toTypeString()
             );

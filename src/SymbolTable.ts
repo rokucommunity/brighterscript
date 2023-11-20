@@ -199,7 +199,7 @@ export class SymbolTable implements SymbolTypeGetter {
         if (!symbolArray) {
             return undefined;
         }
-        return symbolArray?.map(symbol => ({ type: symbol.type, data: symbol.data }));
+        return symbolArray?.map(symbol => ({ type: symbol.type, data: symbol.data, flags: symbol.flags }));
     }
 
     getSymbolType(name: string, options: GetSymbolTypeOptions): BscType {
@@ -208,9 +208,11 @@ export class SymbolTable implements SymbolTypeGetter {
         let doSetCache = !resolvedType;
         const originalIsReferenceType = isAnyReferenceType(resolvedType);
         let data = {} as ExtraSymbolData;
+        let foundFlags: SymbolTypeFlag;
         if (!resolvedType || originalIsReferenceType) {
             const symbolTypes = this.getSymbolTypes(name, options);
             data = symbolTypes?.[0]?.data;
+            foundFlags = symbolTypes?.[0].flags;
             resolvedType = getUniqueType(symbolTypes?.map(symbol => symbol.type), SymbolTable.unionTypeFactory);
         }
         if (!resolvedType && options.fullName && options.tableProvider) {
@@ -220,11 +222,12 @@ export class SymbolTable implements SymbolTypeGetter {
         const newNonReferenceType = originalIsReferenceType && !isAnyReferenceType(resolvedType);
         doSetCache = doSetCache && (options.onlyCacheResolvedTypes ? !resolvedTypeIsReference : true);
         if (doSetCache || newNonReferenceType) {
-            this.setCachedType(name, { type: resolvedType, data: data }, options);
+            this.setCachedType(name, { type: resolvedType, data: data, flags: foundFlags }, options);
         }
         if (options.data) {
             options.data.definingNode = data?.definingNode;
             options.data.description = data?.description;
+            options.data.flags = foundFlags;
         }
         return resolvedType;
     }
@@ -372,4 +375,5 @@ export interface GetSymbolTypeOptions extends GetTypeOptions {
 export interface TypeCacheEntry {
     type: BscType;
     data?: ExtraSymbolData;
+    flags?: SymbolTypeFlag;
 }

@@ -7,8 +7,10 @@ import type { FunctionStatement, AssignmentStatement, FieldStatement } from './S
 import { ClassStatement } from './Statement';
 import { NewExpression } from './Expression';
 import { StringType } from '../types/StringType';
-import { expectDiagnosticsIncludes } from '../testHelpers.spec';
+import { expectDiagnosticsIncludes, expectZeroDiagnostics } from '../testHelpers.spec';
 import { SymbolTypeFlag } from '../SymbolTable';
+import { isClassStatement } from '../astUtils/reflection';
+import { parse } from './Parser.spec';
 
 describe('parser class', () => {
     it('throws exception when used in brightscript scope', () => {
@@ -411,6 +413,113 @@ describe('parser class', () => {
             `, { mode: ParseMode.BrightScript });
 
             expect(diagnostics[0]?.message).to.not.exist;
+        });
+    });
+
+    describe('optional members', () => {
+        it('allows optional fields', () => {
+            let { statements, diagnostics } = parse(`
+                class HasOptional
+                    optional name as string
+                    optional height
+                end class
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(statements.length).to.eq(1);
+            expect(isClassStatement(statements[0])).to.be.true;
+            const klass = statements[0] as ClassStatement;
+            klass.fields.forEach(f => expect(f.isOptional).to.be.true);
+            const klassType = klass.getType({ flags: SymbolTypeFlag.typetime });
+            // eslint-disable-next-line no-bitwise
+            klassType.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime).forEach(sym => expect(sym.flags & SymbolTypeFlag.optional).to.eq(SymbolTypeFlag.optional));
+        });
+
+        it('allows fields named optional', () => {
+            let { statements, diagnostics } = parse(`
+                class IsJustOptional
+                    optional
+                    someThingElse
+                end class
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(statements.length).to.eq(1);
+            expect(isClassStatement(statements[0])).to.be.true;
+            const klass = statements[0] as ClassStatement;
+            klass.fields.forEach(f => expect(f.isOptional).to.be.false);
+            const klassType = klass.getType({ flags: SymbolTypeFlag.typetime });
+            const klassMembers = klassType.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime);
+            expect(klassMembers.length).to.eq(2);
+            // eslint-disable-next-line no-bitwise
+            klassMembers.forEach(sym => expect(sym.flags & SymbolTypeFlag.optional).to.eq(0));
+        });
+
+        it('allows typed fields named optional', () => {
+            let { statements, diagnostics } = parse(`
+                class IsJustOptional
+                    optional as string
+                end class
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(statements.length).to.eq(1);
+            expect(isClassStatement(statements[0])).to.be.true;
+            const klass = statements[0] as ClassStatement;
+            klass.fields.forEach(f => expect(f.isOptional).to.be.false);
+            const klassType = klass.getType({ flags: SymbolTypeFlag.typetime });
+            const klassMembers = klassType.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime);
+            expect(klassMembers.length).to.eq(1);
+            // eslint-disable-next-line no-bitwise
+            klassMembers.forEach(sym => expect(sym.flags & SymbolTypeFlag.optional).to.eq(0));
+        });
+
+        it('allows fields named optional that are also optional', () => {
+            let { statements, diagnostics } = parse(`
+                class IsJustOptional
+                    optional optional
+                end class
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(statements.length).to.eq(1);
+            expect(isClassStatement(statements[0])).to.be.true;
+            const klass = statements[0] as ClassStatement;
+            klass.fields.forEach(f => expect(f.isOptional).to.be.true);
+            const klassType = klass.getType({ flags: SymbolTypeFlag.typetime });
+            const klassMembers = klassType.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime);
+            expect(klassMembers.length).to.eq(1);
+            // eslint-disable-next-line no-bitwise
+            klassMembers.forEach(sym => expect(sym.flags & SymbolTypeFlag.optional).to.eq(SymbolTypeFlag.optional));
+        });
+
+        it('disallows optional methods', () => {
+            let { statements, diagnostics } = parse(`
+                class HasOptional
+
+                    optional function getValue() as boolean
+                        return false
+                    end function
+                end class
+            `, ParseMode.BrighterScript);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.expectedNewlineOrColon().message
+            ]);
+            expect(statements.length).to.eq(1);
+        });
+
+        it('allows fields named `as` that are also optional', () => {
+            let { statements, diagnostics } = parse(`
+                class IsJustOptional
+                    optional as
+                end class
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(statements.length).to.eq(1);
+            expect(isClassStatement(statements[0])).to.be.true;
+            const klass = statements[0] as ClassStatement;
+            klass.fields.forEach(f => expect(f.isOptional).to.be.true);
+            const klassType = klass.getType({ flags: SymbolTypeFlag.typetime });
+            const klassMembers = klassType.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime);
+            expect(klassMembers.length).to.eq(1);
+            // eslint-disable-next-line no-bitwise
+            klassMembers.forEach(sym => expect(sym.flags & SymbolTypeFlag.optional).to.eq(SymbolTypeFlag.optional));
         });
     });
 });

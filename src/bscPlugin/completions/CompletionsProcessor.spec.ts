@@ -1702,8 +1702,8 @@ describe('CompletionsProcessor', () => {
 
 
                 interface SomeInterface
-                    name? as string
-                    data?
+                    optional name as string
+                    optional data
                     function doStuff?()
                 end interface
             `);
