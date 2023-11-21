@@ -1080,7 +1080,8 @@ export class BrsFile implements File {
                 );
                 return results;
             }
-            if (isDottedGetExpression(expression)) {
+
+            if (isDottedGetExpression(expression) || isVariableExpression(expression)) {
 
                 const enumLink = scope.getEnumFileLink(fullName, containingNamespace);
                 if (enumLink) {
@@ -1098,6 +1099,28 @@ export class BrsFile implements File {
                         util.createLocation(
                             URI.file(enumMemberLink.file.srcPath).toString(),
                             enumMemberLink.item.tokens.name.range
+                        )
+                    );
+                    return results;
+                }
+
+                const interfaceFileLink = scope.getInterfaceFileLink(fullName, containingNamespace);
+                if (interfaceFileLink) {
+                    results.push(
+                        util.createLocation(
+                            URI.file(interfaceFileLink.file.srcPath).toString(),
+                            interfaceFileLink.item.tokens.name.range
+                        )
+                    );
+                    return results;
+                }
+
+                const classFileLink = scope.getClassFileLink(fullName, containingNamespace);
+                if (classFileLink) {
+                    results.push(
+                        util.createLocation(
+                            URI.file(classFileLink.file.srcPath).toString(),
+                            classFileLink.item.name.range
                         )
                     );
                     return results;

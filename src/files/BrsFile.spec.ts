@@ -3021,6 +3021,7 @@ describe('BrsFile', () => {
                 range: util.createRange(5, 26, 5, 33)
             }]);
         });
+
         it('returns enum locations', () => {
             const file = program.setFile<BrsFile>('source/main.bs', `
                 sub main()
@@ -3037,6 +3038,78 @@ describe('BrsFile', () => {
             expect(program.getDefinition(file.srcPath, Position.create(2, 40))).to.eql([{
                 uri: URI.file(file.srcPath).toString(),
                 range: util.createRange(5, 25, 5, 31)
+            }]);
+        });
+
+        it('returns interface location', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub test(selectedMovie as Movie)
+                    print selectedMovie
+                end sub
+                interface Movie
+                    url as string
+                end interface
+            `);
+            program.validate();
+            // sub test(selectedMovie as Mo|vie)
+            expect(program.getDefinition(file.srcPath, Position.create(1, 44))).to.eql([{
+                uri: URI.file(file.srcPath).toString(),
+                range: util.createRange(4, 26, 4, 31)
+            }]);
+        });
+
+        it('returns namespaced interface location', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub test(selectedMovie as interfaces.Movie)
+                    print selectedMovie
+                end sub
+                namespace interfaces
+                    interface Movie
+                        url as string
+                    end interface
+                end namespace
+            `);
+            program.validate();
+            //sub test(selectedMovie as interfaces.Mo|vie)
+            expect(program.getDefinition(file.srcPath, Position.create(1, 55))).to.eql([{
+                uri: URI.file(file.srcPath).toString(),
+                range: util.createRange(5, 30, 5, 35)
+            }]);
+        });
+
+        it('returns class location', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub test(selectedMovie as Movie)
+                    print selectedMovie
+                end sub
+                class Movie
+                    url as string
+                end class
+            `);
+            program.validate();
+            //sub test(selectedMovie as Mo|vie)
+            expect(program.getDefinition(file.srcPath, Position.create(1, 44))).to.eql([{
+                uri: URI.file(file.srcPath).toString(),
+                range: util.createRange(4, 22, 4, 27)
+            }]);
+        });
+
+        it('returns namespaced class location', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub test(selectedMovie as classes.Movie)
+                    print selectedMovie
+                end sub
+                namespace classes
+                    class Movie
+                        url as string
+                    end class
+                end namespace
+            `);
+            program.validate();
+            //sub test(selectedMovie as classes.Mo|vie)
+            expect(program.getDefinition(file.srcPath, Position.create(1, 52))).to.eql([{
+                uri: URI.file(file.srcPath).toString(),
+                range: util.createRange(5, 26, 5, 31)
             }]);
         });
 
