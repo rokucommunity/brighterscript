@@ -572,7 +572,7 @@ export class Parser {
             TokenKind.Enum
         );
 
-        result.tokens.name = this.tryIdentifier();
+        result.tokens.name = this.tryIdentifier(...this.allowedLocalIdentifiers);
 
         this.consumeStatementSeparators();
         //gather up all members

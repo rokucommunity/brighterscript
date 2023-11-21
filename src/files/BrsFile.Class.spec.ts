@@ -73,6 +73,29 @@ describe('BrsFile BrighterScript classes', () => {
         ]);
     });
 
+    it('allows class named `optional`', () => {
+        program.setFile('source/main.bs', `
+            class optional
+                thing = 1
+            end class
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
+    it('supports optional fields', () => {
+        program.setFile('source/main.bs', `
+            class Movie
+                name as string
+                optional subtitles as string
+                public optional isRepeatEnabled as boolean
+                private optional wasPlayed
+            end class
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
     it('access modifier is option for override', () => {
         let file = program.setFile<BrsFile>({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
             class Animal
