@@ -923,6 +923,79 @@ describe('BrsFile BrighterScript classes', () => {
             `, 'trim', 'source/main.bs');
         });
 
+
+        it('works with enums as values referenced in a namespace directly', () => {
+            testTranspile(`
+                namespace MyNS
+                    class HasEnumKlass
+                        myArray = [true, true]
+                        sub new()
+                            m.myArray[MyEnum.A] = true
+                            m.myArray[MyEnum.B] = false
+                        end sub
+                    end class
+                    enum MyEnum
+                        A = 0
+                        B = 1
+                    end enum
+                end namespace
+            `, `
+                function __MyNS_HasEnumKlass_builder()
+                    instance = {}
+                    instance.new = sub()
+                        m.myArray = [
+                            true
+                            true
+                        ]
+                        m.myArray[0] = true
+                        m.myArray[1] = false
+                    end sub
+                    return instance
+                end function
+                function MyNS_HasEnumKlass()
+                    instance = __MyNS_HasEnumKlass_builder()
+                    instance.new()
+                    return instance
+                end function
+            `, 'trim', 'source/main.bs');
+        });
+
+        it('works with enums as values referenced in a namespace with namespace', () => {
+            testTranspile(`
+                namespace MyNS
+                    class HasEnumKlass
+                        myArray = [true, true]
+                        sub new()
+                            m.myArray[MyNS.MyEnum.A] = true
+                            m.myArray[MyNS.MyEnum.B] = false
+                        end sub
+                    end class
+                    enum MyEnum
+                        A = 0
+                        B = 1
+                    end enum
+                end namespace
+            `, `
+                function __MyNS_HasEnumKlass_builder()
+                    instance = {}
+                    instance.new = sub()
+                        m.myArray = [
+                            true
+                            true
+                        ]
+                        m.myArray[0] = true
+                        m.myArray[1] = false
+                    end sub
+                    return instance
+                end function
+                function MyNS_HasEnumKlass()
+                    instance = __MyNS_HasEnumKlass_builder()
+                    instance.new()
+                    return instance
+                end function
+            `, 'trim', 'source/main.bs');
+        });
+
     });
 
     it('detects using `new` keyword on non-classes', () => {
