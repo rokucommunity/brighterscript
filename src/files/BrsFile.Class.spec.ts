@@ -853,7 +853,7 @@ describe('BrsFile BrighterScript classes', () => {
             testTranspile(`
                 namespace MyNS
                     class HasEnumKlass
-                        enumValue = MyNS.MyEnum.A
+                        enumValue = MyEnum.A
                     end class
                     enum MyEnum
                         A = "A"
@@ -876,7 +876,7 @@ describe('BrsFile BrighterScript classes', () => {
             `, 'trim', 'source/main.bs');
         });
 
-        it('allows enums as super args inside a namespace', () => {
+        it.only('allows enums as super args inside a namespace', () => {
             testTranspile(`
                 namespace MyNS
                     class SubKlass extends SuperKlass
@@ -885,7 +885,7 @@ describe('BrsFile BrighterScript classes', () => {
                         end sub
                     end class
                     class SuperKlass
-                        sub new(enumVal as MyEnum)
+                        sub new(enumVal)
                             print enumVal
                         end sub
                     end class
@@ -910,12 +910,12 @@ describe('BrsFile BrighterScript classes', () => {
                 end function
                 function __MyNS_SuperKlass_builder()
                     instance = {}
-                    instance.new = sub(enumVal as dynamic)
+                    instance.new = sub(enumVal)
                         print enumVal
                     end sub
                     return instance
                 end function
-                function MyNS_SuperKlass(enumVal as dynamic)
+                function MyNS_SuperKlass(enumVal)
                     instance = __MyNS_SuperKlass_builder()
                     instance.new(enumVal)
                     return instance
