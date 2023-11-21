@@ -849,7 +849,7 @@ describe('BrsFile BrighterScript classes', () => {
             `, 'trim', 'source/main.bs');
         });
 
-        it.only('works with enums as field initial values inside a namespace', () => {
+        it('works with enums as field initial values inside a namespace', () => {
             testTranspile(`
                 namespace MyNS
                     class HasEnumKlass
@@ -876,7 +876,7 @@ describe('BrsFile BrighterScript classes', () => {
             `, 'trim', 'source/main.bs');
         });
 
-        it.only('allows enums as super args inside a namespace', () => {
+        it('allows enums as super args inside a namespace', () => {
             testTranspile(`
                 namespace MyNS
                     class SubKlass extends SuperKlass
