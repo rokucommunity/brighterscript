@@ -848,6 +848,81 @@ describe('BrsFile BrighterScript classes', () => {
                 end function
             `, 'trim', 'source/main.bs');
         });
+
+        it('works with enums as field initial values inside a namespace', () => {
+            testTranspile(`
+                namespace MyNS
+                    class HasEnumKlass
+                        enumValue = MyEnum.A
+                    end class
+                    enum MyEnum
+                        A = "A"
+                        B = "B"
+                    end enum
+                end namespace
+            `, `
+                function __MyNS_HasEnumKlass_builder()
+                    instance = {}
+                    instance.new = sub()
+                        m.enumValue = "A"
+                    end sub
+                    return instance
+                end function
+                function MyNS_HasEnumKlass()
+                    instance = __MyNS_HasEnumKlass_builder()
+                    instance.new()
+                    return instance
+                end function
+            `, 'trim', 'source/main.bs');
+        });
+
+        it('allows enums as super args inside a namespace', () => {
+            testTranspile(`
+                namespace MyNS
+                    class SubKlass extends SuperKlass
+                        sub new()
+                            super(MyEnum.B)
+                        end sub
+                    end class
+                    class SuperKlass
+                        sub new(enumVal)
+                            print enumVal
+                        end sub
+                    end class
+                    enum MyEnum
+                        A = "A"
+                        B = "B"
+                    end enum
+                end namespace
+            `, `
+                function __MyNS_SubKlass_builder()
+                    instance = __MyNS_SuperKlass_builder()
+                    instance.super0_new = instance.new
+                    instance.new = sub()
+                        m.super0_new("B")
+                    end sub
+                    return instance
+                end function
+                function MyNS_SubKlass()
+                    instance = __MyNS_SubKlass_builder()
+                    instance.new()
+                    return instance
+                end function
+                function __MyNS_SuperKlass_builder()
+                    instance = {}
+                    instance.new = sub(enumVal)
+                        print enumVal
+                    end sub
+                    return instance
+                end function
+                function MyNS_SuperKlass(enumVal)
+                    instance = __MyNS_SuperKlass_builder()
+                    instance.new(enumVal)
+                    return instance
+                end function
+            `, 'trim', 'source/main.bs');
+        });
+
     });
 
     it('detects using `new` keyword on non-classes', () => {
