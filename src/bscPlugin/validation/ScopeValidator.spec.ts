@@ -1434,6 +1434,22 @@ describe('ScopeValidator', () => {
             ]);
         });
 
+        it('does not have a diagnostic for using a variable the result of an assignment with unresolved value', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff()
+                    myValue = UndeclaredValue
+                    if myValue > 0
+                        print "hello"
+                    end if
+                end sub
+            `);
+            program.validate();
+            //should have only 1 error - cannot find "UndeclaredValue"
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('UndeclaredValue').message
+            ]);
+        });
+
     });
 
     describe('returnTypeMismatch', () => {
