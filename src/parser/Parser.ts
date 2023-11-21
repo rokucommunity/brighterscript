@@ -394,10 +394,14 @@ export class Parser {
     /**
      * Create a new InterfaceMethodStatement. This should only be called from within `interfaceDeclaration`
      */
-    private interfaceFieldStatement() {
+    private interfaceFieldStatement(optionalKeyword?: Token) {
         const name = this.identifier(...AllowedProperties);
-        const [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
-        return new InterfaceFieldStatement(name, asToken, typeExpression);
+        let asToken;
+        let typeExpression;
+        if (this.check(TokenKind.As)) {
+            [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
+        }
+        return new InterfaceFieldStatement(optionalKeyword, name, asToken, typeExpression);
     }
 
     private consumeAsTokenAndTypeExpression(): [Token, TypeExpression] {
@@ -427,10 +431,10 @@ export class Parser {
     /**
      * Create a new InterfaceMethodStatement. This should only be called from within `interfaceDeclaration()`
      */
-    private interfaceMethodStatement() {
+    private interfaceMethodStatement(optionalKeyword?: Token) {
         const functionType = this.advance();
         const name = this.identifier(...AllowedProperties);
-        const leftParen = this.consumeToken(TokenKind.LeftParen);
+        const leftParen = this.consume(DiagnosticMessages.expectedToken(TokenKind.LeftParen), TokenKind.LeftParen);
 
         let params = [] as FunctionParameterExpression[];
         if (!this.check(TokenKind.RightParen)) {
@@ -455,6 +459,7 @@ export class Parser {
         }
 
         return new InterfaceMethodStatement(
+            optionalKeyword,
             functionType,
             name,
             leftParen,
@@ -501,14 +506,19 @@ export class Parser {
                 if (this.check(TokenKind.At)) {
                     this.annotationExpression();
                 }
-
+                const optionalKeyword = this.consumeTokenIf(TokenKind.Optional);
                 //fields
-                if (this.checkAny(TokenKind.Identifier, ...AllowedProperties) && this.checkNext(TokenKind.As)) {
+                if (this.checkAny(TokenKind.Identifier, ...AllowedProperties) && this.checkAnyNext(TokenKind.As, TokenKind.Newline, TokenKind.Comment)) {
+                    decl = this.interfaceFieldStatement(optionalKeyword);
+                    //field with name = 'optional'
+                } else if (optionalKeyword && this.checkAny(TokenKind.As, TokenKind.Newline, TokenKind.Comment)) {
+                    //rewind one place, so that 'optional' is the field name
+                    this.current--;
                     decl = this.interfaceFieldStatement();
 
                     //methods (function/sub keyword followed by opening paren)
-                } else if (this.checkAny(TokenKind.Function, TokenKind.Sub) && this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
-                    decl = this.interfaceMethodStatement();
+                } else if (this.checkAny(TokenKind.Function, TokenKind.Sub) && this.checkAnyNext(TokenKind.Identifier, ...AllowedProperties)) {
+                    decl = this.interfaceMethodStatement(optionalKeyword);
 
                     //comments
                 } else if (this.check(TokenKind.Comment)) {
@@ -562,7 +572,7 @@ export class Parser {
             TokenKind.Enum
         );
 
-        result.tokens.name = this.tryIdentifier();
+        result.tokens.name = this.tryIdentifier(...this.allowedLocalIdentifiers);
 
         this.consumeStatementSeparators();
         //gather up all members
@@ -666,7 +676,6 @@ export class Parser {
                 if (this.peek().text.toLowerCase() === 'override') {
                     overrideKeyword = this.advance();
                 }
-
                 //methods (function/sub keyword OR identifier followed by opening paren)
                 if (this.checkAny(TokenKind.Function, TokenKind.Sub) || (this.checkAny(TokenKind.Identifier, ...AllowedProperties) && this.checkNext(TokenKind.LeftParen))) {
                     const funcDeclaration = this.functionDeclaration(false, false);
@@ -746,11 +755,38 @@ export class Parser {
     }
 
     private fieldDeclaration(accessModifier: Token | null) {
+
+        let optionalKeyword = this.consumeTokenIf(TokenKind.Optional);
+
+        if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
+            if (this.check(TokenKind.As)) {
+                if (this.checkAnyNext(TokenKind.Comment, TokenKind.Newline)) {
+                    // as <EOL>
+                    // `as` is the field name
+                } else if (this.checkNext(TokenKind.As)) {
+                    //  as as ____
+                    // first `as` is the field name
+                } else if (optionalKeyword) {
+                    // optional as ____
+                    // optional is the field name, `as` starts type
+                    // rewind current token
+                    optionalKeyword = null;
+                    this.current--;
+                }
+            }
+        } else {
+            // no name after `optional` ... optional is the name
+            // rewind current token
+            optionalKeyword = null;
+            this.current--;
+        }
+
         let name = this.consume(
             DiagnosticMessages.expectedClassFieldIdentifier(),
             TokenKind.Identifier,
             ...AllowedProperties
         ) as Identifier;
+
         let asToken: Token;
         let fieldTypeExpression: TypeExpression;
         //look for `as SOME_TYPE`
@@ -768,6 +804,7 @@ export class Parser {
 
         return new FieldStatement(
             accessModifier,
+            optionalKeyword,
             name,
             asToken,
             fieldTypeExpression,

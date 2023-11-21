@@ -1,5 +1,5 @@
 import { isBrsFile, isCallableType, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isInterfaceType, isMethodStatement, isNamespaceType, isNativeType, isXmlFile, isXmlScope } from '../../astUtils/reflection';
-import type { ExtraSymbolData, FileReference, ProvideCompletionsEvent } from '../../interfaces';
+import type { FileReference, ProvideCompletionsEvent } from '../../interfaces';
 import type { File } from '../../files/File';
 import { DeclarableTypes, Keywords, TokenKind } from '../../lexer/TokenKind';
 import type { XmlScope } from '../../XmlScope';
@@ -18,6 +18,7 @@ import type { BscType } from '../../types';
 import type { AstNode } from '../../parser/AstNode';
 import type { FunctionStatement } from '../../parser/Statement';
 import type { Token } from '../../lexer/Token';
+import { createIdentifier } from '../../astUtils/creators';
 
 
 export class CompletionsProcessor {
@@ -258,7 +259,7 @@ export class CompletionsProcessor {
             const sortText = symbol.data?.completionPriority ? 'z'.repeat(symbol.data?.completionPriority) + symbol.name : undefined;
             return {
                 label: symbol.name,
-                kind: this.getCompletionKindFromType(symbol.type, symbol.data, areMembers),
+                kind: this.getCompletionKindFromSymbol(symbol, areMembers),
                 detail: symbol?.type?.toString(),
                 documentation: this.getDocumentation(symbol),
                 sortText: sortText
@@ -274,7 +275,9 @@ export class CompletionsProcessor {
     }
 
 
-    private getCompletionKindFromType(type: BscType, extraData?: ExtraSymbolData, areMembers = false) {
+    private getCompletionKindFromSymbol(symbol: BscSymbol, areMembers = false) {
+        const type = symbol?.type;
+        const extraData = symbol?.data;
         if (isConstStatement(extraData?.definingNode)) {
             return CompletionItemKind.Constant;
         } else if (isClassType(type)) {
@@ -289,10 +292,16 @@ export class CompletionsProcessor {
             return CompletionItemKind.EnumMember;
         } else if (isNamespaceType(type)) {
             return CompletionItemKind.Module;
-        } else if (isNativeType(type)) {
-            return CompletionItemKind.Keyword;
         }
-        return areMembers ? CompletionItemKind.Field : CompletionItemKind.Variable;
+        if (areMembers) {
+            return CompletionItemKind.Field;
+        }
+        const tokenIdentifier = util.tokenToBscType(createIdentifier(symbol.name));
+        if (isNativeType(tokenIdentifier)) {
+            return CompletionItemKind.Keyword;
+
+        }
+        return CompletionItemKind.Variable;
     }
 
 

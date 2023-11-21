@@ -1518,11 +1518,13 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         const resultType = new InterfaceType(this.getName(ParseMode.BrighterScript), superIface);
         for (const statement of this.methods) {
             const memberType = statement?.getType({ ...options, typeChain: undefined }); // no typechain info needed
-            resultType.addMember(statement?.tokens.name?.text, { definingNode: statement }, memberType, SymbolTypeFlag.runtime);
+            const flag = statement.isOptional ? SymbolTypeFlag.runtime | SymbolTypeFlag.optional : SymbolTypeFlag.runtime;
+            resultType.addMember(statement?.tokens.name?.text, { definingNode: statement }, memberType, flag);
         }
         for (const statement of this.fields) {
             const memberType = statement?.getType({ ...options, typeChain: undefined }); // no typechain info needed
-            resultType.addMember(statement?.tokens.name?.text, { definingNode: statement }, memberType, SymbolTypeFlag.runtime);
+            const flag = statement.isOptional ? SymbolTypeFlag.runtime | SymbolTypeFlag.optional : SymbolTypeFlag.runtime;
+            resultType.addMember(statement?.tokens.name?.text, { definingNode: statement }, memberType, flag);
         }
         options.typeChain?.push(new TypeChainEntry(this.getName(ParseMode.BrighterScript), resultType, options.flags, this.range));
         return resultType;
@@ -1534,14 +1536,17 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
         throw new Error('Method not implemented.');
     }
     constructor(
+        optionalToken: Token,
         nameToken: Identifier,
         asToken: Token,
         public typeExpression?: TypeExpression
     ) {
         super();
         this.tokens.name = nameToken;
+        this.tokens.optional = optionalToken;
         this.tokens.as = asToken;
         this.range = util.createBoundingRange(
+            this.tokens.optional,
             this.tokens.name,
             this.tokens.as,
             this.typeExpression
@@ -1553,16 +1558,21 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
     public range: Range;
 
     public tokens = {} as {
+        optional: Token;
         name: Identifier;
         as: Token;
     };
 
     public getLeadingTrivia(): Token[] {
-        return util.concatAnnotationLeadingTrivia(this, this.tokens.name.leadingTrivia);
+        return util.concatAnnotationLeadingTrivia(this, this.tokens.optional?.leadingTrivia ?? this.tokens.name.leadingTrivia);
     }
 
     public get name() {
         return this.tokens.name.text;
+    }
+
+    public get isOptional() {
+        return !!this.tokens.optional;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -1580,10 +1590,19 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
                 state.indent()
             );
         }
+        if (this.isOptional) {
+            result.push(
+                this.tokens.optional.text,
+                ' '
+            );
+        }
 
         result.push(
             this.tokens.name.text
         );
+        if (this.tokens.optional) {
+            result.push(this.tokens.optional.text);
+        }
         if (this.typeExpression) {
             result.push(
                 ' as ',
@@ -1606,6 +1625,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         throw new Error('Method not implemented.');
     }
     constructor(
+        optionalToken: Token,
         functionTypeToken: Token,
         nameToken: Identifier,
         leftParen: Token,
@@ -1615,6 +1635,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         public returnTypeExpression?: TypeExpression
     ) {
         super();
+        this.tokens.optional = optionalToken;
         this.tokens.functionType = functionTypeToken;
         this.tokens.name = nameToken;
         this.tokens.leftParen = leftParen;
@@ -1626,6 +1647,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
 
     public get range() {
         return util.createBoundingRange(
+            this.tokens.optional,
             this.tokens.functionType,
             this.tokens.name,
             this.tokens.leftParen,
@@ -1643,6 +1665,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
     }
 
     public tokens = {} as {
+        optional: Token;
         functionType: Token;
         name: Identifier;
         leftParen: Token;
@@ -1650,8 +1673,12 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         as: Token;
     };
 
+    public get isOptional() {
+        return !!this.tokens.optional;
+    }
+
     public getLeadingTrivia(): Token[] {
-        return util.concatAnnotationLeadingTrivia(this, this.tokens.functionType.leadingTrivia);
+        return util.concatAnnotationLeadingTrivia(this, this.tokens.optional?.leadingTrivia ?? this.tokens.functionType.leadingTrivia);
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -1669,12 +1696,17 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
                 state.indent()
             );
         }
-
+        if (this.isOptional) {
+            result.push(
+                this.tokens.optional.text,
+                ' '
+            );
+        }
         result.push(
             this.tokens.functionType.text,
             ' ',
             this.tokens.name.text,
-            '('
+            this.tokens.leftParen.text
         );
         const params = this.params ?? [];
         for (let i = 0; i < params.length; i++) {
@@ -1691,7 +1723,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
             }
         }
         result.push(
-            ')'
+            this.tokens.rightParen.text
         );
         if (this.returnTypeExpression) {
             result.push(
@@ -2120,11 +2152,13 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
         for (const statement of this.methods) {
             const funcType = statement?.func.getType({ ...options, typeChain: undefined }); //no typechain needed
-            resultType.addMember(statement?.name?.text, { definingNode: statement }, funcType, SymbolTypeFlag.runtime);
+            const flag = SymbolTypeFlag.runtime;
+            resultType.addMember(statement?.name?.text, { definingNode: statement }, funcType, flag);
         }
         for (const statement of this.fields) {
             const fieldType = statement.getType({ ...options, typeChain: undefined }); //no typechain needed
-            resultType.addMember(statement?.name?.text, { definingNode: statement }, fieldType, SymbolTypeFlag.runtime);
+            const flag = statement.isOptional ? SymbolTypeFlag.runtime | SymbolTypeFlag.optional : SymbolTypeFlag.runtime;
+            resultType.addMember(statement?.name?.text, { definingNode: statement }, fieldType, flag);
         }
         options.typeChain?.push(new TypeChainEntry(resultType.name, resultType, options.flags, this.range));
         return resultType;
@@ -2330,6 +2364,7 @@ export class MethodStatement extends FunctionStatement {
 export class FieldStatement extends Statement implements TypedefProvider {
     constructor(
         readonly accessModifier?: Token,
+        readonly optional?: Token,
         readonly name?: Identifier,
         readonly as?: Token,
         readonly typeExpression?: TypeExpression,
@@ -2361,7 +2396,11 @@ export class FieldStatement extends Statement implements TypedefProvider {
     public readonly range: Range;
 
     public getLeadingTrivia(): Token[] {
-        return util.concatAnnotationLeadingTrivia(this, this.accessModifier?.leadingTrivia ?? this.name?.leadingTrivia ?? []);
+        return util.concatAnnotationLeadingTrivia(this, this.accessModifier?.leadingTrivia ?? this.optional?.leadingTrivia ?? this.name?.leadingTrivia ?? []);
+    }
+
+    public get isOptional() {
+        return !!this.optional;
     }
 
     transpile(state: BrsTranspileState): TranspileResult {
@@ -2386,8 +2425,12 @@ export class FieldStatement extends Statement implements TypedefProvider {
 
             result.push(
                 this.accessModifier?.text ?? 'public',
-                ' ',
-                this.name?.text,
+                ' '
+            );
+            if (this.isOptional) {
+                result.push(this.optional.text, ' ');
+            }
+            result.push(this.name?.text,
                 ' as ',
                 type.toTypeString()
             );

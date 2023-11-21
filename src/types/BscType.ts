@@ -1,5 +1,5 @@
 import type { GetSymbolTypeOptions, SymbolTableProvider } from '../SymbolTable';
-import type { SymbolTypeFlag } from '../SymbolTable';
+import { SymbolTypeFlag } from '../SymbolTable';
 import { SymbolTable } from '../SymbolTable';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import type { ExtraSymbolData, TypeCompatibilityData } from '../interfaces';
@@ -100,20 +100,24 @@ export abstract class BscType {
                 .getSymbolTypes(memberSymbol.name, { flags: flags })
                 ?.map(symbol => symbol.type);
             if (!targetTypesOfSymbol || targetTypesOfSymbol.length === 0) {
-                data.missingFields.push({ name: memberSymbol.name, expectedType: memberSymbol.type });
-                isSuperSet = false;
+                // eslint-disable-next-line no-bitwise
+                if (!(memberSymbol.flags & SymbolTypeFlag.optional)) {
+                    data.missingFields.push({ name: memberSymbol.name, expectedType: memberSymbol.type });
+                    isSuperSet = false;
+                }
+
             } else {
                 isSuperSet =
-                    (targetTypesOfSymbol ?? []).reduce((acc, typeOfTargetSymbol) => {
-                        if (!acc) {
-                            return acc;
+                    (targetTypesOfSymbol ?? []).reduce((superSetSoFar, typeOfTargetSymbol) => {
+                        if (!superSetSoFar) {
+                            return superSetSoFar;
                         }
 
                         const myMemberAllowsTargetType = memberSymbol.type.isTypeCompatible(typeOfTargetSymbol, { depth: data.depth });
                         if (!myMemberAllowsTargetType) {
                             data.fieldMismatches.push({ name: memberSymbol.name, expectedType: memberSymbol.type, actualType: targetType.getMemberType(memberSymbol.name, { flags: flags }) });
                         }
-                        return acc && myMemberAllowsTargetType;
+                        return superSetSoFar && myMemberAllowsTargetType;
                     }, true) && isSuperSet;
             }
 

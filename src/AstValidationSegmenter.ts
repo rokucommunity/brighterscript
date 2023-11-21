@@ -54,7 +54,7 @@ export class AstValidationSegmenter {
         const options: GetTypeOptions = { flags: flag, onlyCacheResolvedTypes: true, typeChain: typeChain };
 
         const nodeType = expression.getType(options);
-        if (!nodeType.isResolvable()) {
+        if (!nodeType?.isResolvable()) {
             let symbolsSet: Set<UnresolvedSymbol>;
             if (!assignedSymbols?.has(typeChain[0].name.toLowerCase())) {
                 if (!this.unresolvedSegmentsSymbols.has(segment)) {

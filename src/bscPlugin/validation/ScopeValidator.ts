@@ -4,7 +4,7 @@ import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import { DiagnosticOrigin } from '../../interfaces';
-import type { BsDiagnostic, BsDiagnosticWithOrigin, OnScopeValidateEvent, TypeChainEntry, TypeCompatibilityData } from '../../interfaces';
+import type { BsDiagnostic, BsDiagnosticWithOrigin, ExtraSymbolData, OnScopeValidateEvent, TypeChainEntry, TypeCompatibilityData } from '../../interfaces';
 import { SymbolTypeFlag } from '../../SymbolTable';
 import type { AssignmentStatement, DottedSetStatement, EnumStatement, ReturnStatement } from '../../parser/Statement';
 import util from '../../util';
@@ -19,6 +19,7 @@ import { createVisitor } from '../../astUtils/visitors';
 import type { BscType } from '../../types';
 import type { File } from '../../files/File';
 import { InsideSegmentWalkMode } from '../../AstValidationSegmenter';
+import { TokenKind } from '../../lexer/TokenKind';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -127,12 +128,19 @@ export class ScopeValidator {
     /**
      * If this is the lhs of an assignment, we don't need to flag it as unresolved
      */
-    private ignoreUnresolvedAssignmentLHS(expression: Expression, exprType: BscType) {
+    private ignoreUnresolvedAssignmentLHS(expression: Expression, exprType: BscType, definingNode?: AstNode) {
         if (!isVariableExpression(expression)) {
             return false;
         }
-        const assignmentAncestor: AssignmentStatement = expression?.findAncestor(isAssignmentStatement);
-        return assignmentAncestor?.name === expression?.name && isUnionType(exprType); // the left hand side is not a union, which means it was never assigned
+        let assignmentAncestor: AssignmentStatement;
+        if (isAssignmentStatement(definingNode) && definingNode.equals.kind === TokenKind.Equal) {
+            // this symbol was defined in a "normal" assignment (eg. not a compound assignment)
+            assignmentAncestor = definingNode;
+            return assignmentAncestor?.name?.text.toLowerCase() === expression?.name?.text.toLowerCase();
+        } else {
+            assignmentAncestor = expression?.findAncestor(isAssignmentStatement);
+        }
+        return assignmentAncestor?.name === expression?.name && isUnionType(exprType);
     }
 
     /**
@@ -494,12 +502,14 @@ export class ScopeValidator {
         // Do a complete type check on all DottedGet and Variable expressions
         // this will create a diagnostic if an invalid member is accessed
         const typeChain: TypeChainEntry[] = [];
+        const typeData = {} as ExtraSymbolData;
         let exprType = expression.getType({
             flags: symbolType,
-            typeChain: typeChain
+            typeChain: typeChain,
+            data: typeData
         });
 
-        const shouldIgnoreLHS = this.ignoreUnresolvedAssignmentLHS(expression, exprType);
+        const shouldIgnoreLHS = this.ignoreUnresolvedAssignmentLHS(expression, exprType, typeData?.definingNode);
 
         if (!this.isTypeKnown(exprType) && !shouldIgnoreLHS) {
             if (expression.getType({ flags: oppositeSymbolType })?.isResolvable()) {

@@ -1662,4 +1662,70 @@ describe('CompletionsProcessor', () => {
 
     });
 
+    describe('interfaces', () => {
+
+        it('finds members of interfaces', () => {
+            program.setFile('source/main.bs', `
+                sub foo(thing as SomeInterface )
+                    print thing.
+                end sub
+
+
+                interface SomeInterface
+                    name as string
+                    data
+                    function doStuff()
+                end interface
+            `);
+            program.validate();
+            //  print thing.|
+            const completions = program.getCompletions('source/main.bs', util.createPosition(2, 33));
+            expectCompletionsIncludes(completions, [{
+                label: 'name',
+                kind: CompletionItemKind.Field
+            }]);
+            expectCompletionsIncludes(completions, [{
+                label: 'data',
+                kind: CompletionItemKind.Field
+            }]);
+            expectCompletionsIncludes(completions, [{
+                label: 'doStuff',
+                kind: CompletionItemKind.Method
+            }]);
+
+        });
+
+        it('finds optional members of interfaces', () => {
+            program.setFile('source/main.bs', `
+                sub foo(thing as SomeInterface )
+                    print thing.
+                end sub
+
+
+                interface SomeInterface
+                    optional name as string
+                    optional data
+                    optional function doStuff()
+                end interface
+            `);
+            program.validate();
+            //  print thing.|
+            const completions = program.getCompletions('source/main.bs', util.createPosition(2, 33));
+            expectCompletionsIncludes(completions, [{
+                label: 'name',
+                kind: CompletionItemKind.Field
+            }]);
+            expectCompletionsIncludes(completions, [{
+                label: 'data',
+                kind: CompletionItemKind.Field
+            }]);
+            expectCompletionsIncludes(completions, [{
+                label: 'doStuff',
+                kind: CompletionItemKind.Method
+            }]);
+
+        });
+
+    });
+
 });

@@ -7,6 +7,7 @@ import type { TypeCompatibilityData } from '../../interfaces';
 import { IntegerType } from '../../types/IntegerType';
 import { StringType } from '../../types/StringType';
 import type { BrsFile } from '../../files/BrsFile';
+import { FloatType } from '../../types';
 
 describe('ScopeValidator', () => {
 
@@ -1257,6 +1258,153 @@ describe('ScopeValidator', () => {
                 expectZeroDiagnostics(program);
             });
         });
+
+        describe('interface with optional properties', () => {
+
+            it('allows using interfaces with optional props', () => {
+                program.setFile('source/util.bs', `
+                    function takesIFace(iface as MyIFace) as string
+                        if invalid <> iface.name
+                            return iface.name
+                        else if invalid <> iface.data
+                            return FormatJson(iface.data)
+                        end if
+                        return "no"
+                    end function
+
+                    sub doStuff(iface as MyIFace)
+                        print takesIFace(iface)
+                    end sub
+
+                    interface MyIFace
+                        optional name as string
+                        optional data
+                    end interface
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows using passing AAs with missing optional properties', () => {
+                program.setFile('source/util.bs', `
+                    function takesIFace(iface as MyIFace) as string
+                        if invalid <> iface.name
+                            return iface.name
+                        else if invalid <> iface.data
+                            return FormatJson(iface.data)
+                        end if
+                        return "no"
+                    end function
+
+                    sub doStuff(iface as MyIFace)
+                        print takesIFace({name: "Hello"})
+                    end sub
+
+                    interface MyIFace
+                        optional name as string
+                        optional data
+                    end interface
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('disallows using AAs with bad types for optional properties', () => {
+                program.setFile('source/util.bs', `
+                    function takesIFace(iface as MyIFace) as string
+                        if invalid <> iface.name
+                            return iface.name
+                        else if invalid <> iface.data
+                            return FormatJson(iface.data)
+                        end if
+                        return "no"
+                    end function
+
+                    sub doStuff(iface as MyIFace)
+                        print takesIFace({name: 3.14})
+                    end sub
+
+                    interface MyIFace
+                        optional name as string
+                        optional data
+                    end interface
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.argumentTypeMismatch('roAssociativeArray', 'MyIFace', {
+                        fieldMismatches: [{ name: 'name', expectedType: StringType.instance, actualType: FloatType.instance }]
+                    }).message
+                ]);
+            });
+
+            it('disallows passing classes with bad types for optional properties', () => {
+                program.setFile('source/util.bs', `
+                    function takesIFace(iface as MyIFace) as string
+                        if invalid <> iface.name
+                            return iface.name
+                        else if invalid <> iface.data
+                            return FormatJson(iface.data)
+                        end if
+                        return "no"
+                    end function
+
+                    sub doStuff(iface as MyIFace)
+                        k = new MyKlass()
+                        print takesIFace(k)
+                    end sub
+
+                    interface MyIFace
+                        optional name as string
+                        optional data
+                    end interface
+
+                    class MyKlass
+                        name as float
+                    end class
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.argumentTypeMismatch('MyKlass', 'MyIFace', {
+                        fieldMismatches: [{ name: 'name', expectedType: StringType.instance, actualType: FloatType.instance }]
+                    }).message
+                ]);
+            });
+
+            it('allows passing classes as args for interfaces with optional properties', () => {
+                program.setFile('source/util.bs', `
+                    function takesIFace(iface as MyIFace) as string
+                        if invalid <> iface.name
+                            return iface.name
+                        else if invalid <> iface.data
+                            return FormatJson(iface.data)
+                        end if
+                        return "no"
+                    end function
+
+                    sub doStuff(iface as MyIFace)
+                        k = new MyKlass()
+                        k2 = new MyKlass2()
+                        print takesIFace(k)
+                        print takesIFace(k2)
+                    end sub
+
+                    interface MyIFace
+                        optional name as string
+                        optional data
+                    end interface
+
+                    class MyKlass
+                        data = {}
+                    end class
+
+                    class MyKlass2
+                        data = "test"
+                    end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+        });
     });
 
     describe('cannotFindName', () => {
@@ -1285,6 +1433,23 @@ describe('ScopeValidator', () => {
                 DiagnosticMessages.cannotFindName('expected').message
             ]);
         });
+
+        it('does not have a diagnostic for using a variable the result of an assignment with unresolved value', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff()
+                    myValue = UndeclaredValue
+                    if myValue > 0
+                        print "hello"
+                    end if
+                end sub
+            `);
+            program.validate();
+            //should have only 1 error - cannot find "UndeclaredValue"
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('UndeclaredValue').message
+            ]);
+        });
+
     });
 
     describe('returnTypeMismatch', () => {

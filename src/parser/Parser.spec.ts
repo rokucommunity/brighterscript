@@ -4,7 +4,7 @@ import { ReservedWords, TokenKind } from '../lexer/TokenKind';
 import type { AAMemberExpression, BinaryExpression, TypeCastExpression, UnaryExpression } from './Expression';
 import { TernaryExpression, NewExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression, VariableExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
-import type { AssignmentStatement, ClassStatement, ReturnStatement } from './Statement';
+import type { AssignmentStatement, ClassStatement, InterfaceStatement, ReturnStatement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
@@ -1629,6 +1629,161 @@ describe('parser', () => {
             expect(paramType.toString().includes('Array<integer>')).to.be.true;
         });
 
+    });
+
+    describe('interfaces', () => {
+
+        it('allows fields and methods', () => {
+            let { statements, diagnostics } = parse(`
+                interface SomeIFace
+                    name as string
+                    height as integer
+                    function getValue(thing as float) as object
+                    function getMe() as SomeIFace
+                    sub noop()
+                end interface
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(statements.length).to.eq(1);
+            expect(isInterfaceStatement(statements[0])).to.be.true;
+        });
+
+        it('allows untyped fields', () => {
+            let { statements, diagnostics } = parse(`
+                interface HasUntyped
+                    name
+                end interface
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(statements.length).to.eq(1);
+            expect(isInterfaceStatement(statements[0])).to.be.true;
+        });
+
+        it('allows optional fields', () => {
+            let { statements, diagnostics } = parse(`
+                interface HasOptional
+                    optional name as string
+                    optional height
+                end interface
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(statements.length).to.eq(1);
+            expect(isInterfaceStatement(statements[0])).to.be.true;
+            const iface = statements[0] as InterfaceStatement;
+            iface.fields.forEach(f => expect(f.isOptional).to.be.true);
+            const ifaceType = iface.getType({ flags: SymbolTypeFlag.typetime });
+            // eslint-disable-next-line no-bitwise
+            ifaceType.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime).forEach(sym => expect(sym.flags & SymbolTypeFlag.optional).to.eq(SymbolTypeFlag.optional));
+        });
+
+        it('allows fields named optional', () => {
+            let { statements, diagnostics } = parse(`
+                interface IsJustOptional
+                    optional
+                    someThingElse
+                end interface
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(statements.length).to.eq(1);
+            expect(isInterfaceStatement(statements[0])).to.be.true;
+            const iface = statements[0] as InterfaceStatement;
+            iface.fields.forEach(f => expect(f.isOptional).to.be.false);
+            const ifaceType = iface.getType({ flags: SymbolTypeFlag.typetime });
+            const iFaceMembers = ifaceType.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime);
+            expect(iFaceMembers.length).to.eq(2);
+            // eslint-disable-next-line no-bitwise
+            iFaceMembers.forEach(sym => expect(sym.flags & SymbolTypeFlag.optional).to.eq(0));
+        });
+
+        it('allows fields named optional that are also optional', () => {
+            let { statements, diagnostics } = parse(`
+                interface IsJustOptional
+                    optional optional
+                end interface
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(statements.length).to.eq(1);
+            expect(isInterfaceStatement(statements[0])).to.be.true;
+            const iface = statements[0] as InterfaceStatement;
+            iface.fields.forEach(f => expect(f.isOptional).to.be.true);
+            const ifaceType = iface.getType({ flags: SymbolTypeFlag.typetime });
+            const iFaceMembers = ifaceType.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime);
+            expect(iFaceMembers.length).to.eq(1);
+            // eslint-disable-next-line no-bitwise
+            iFaceMembers.forEach(sym => expect(sym.flags & SymbolTypeFlag.optional).to.eq(SymbolTypeFlag.optional));
+        });
+
+        it('allows optional methods', () => {
+            let { statements, diagnostics } = parse(`
+                interface HasOptional
+                    optional function getValue() as boolean
+                    optional sub noop()
+                    optional function process()
+                end interface
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(statements.length).to.eq(1);
+            expect(isInterfaceStatement(statements[0])).to.be.true;
+            const iface = statements[0] as InterfaceStatement;
+            iface.methods.forEach(m => expect(m.isOptional).to.equal(true));
+            const ifaceType = iface.getType({ flags: SymbolTypeFlag.typetime });
+            // eslint-disable-next-line no-bitwise
+            ifaceType.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime).forEach(sym => expect(sym.flags & SymbolTypeFlag.optional).to.eq(SymbolTypeFlag.optional));
+        });
+
+        it('allows fields named `as` that are also optional', () => {
+            let { statements, diagnostics } = parse(`
+                interface IsJustOptional
+                    optional as
+                end interface
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(statements.length).to.eq(1);
+            expect(isInterfaceStatement(statements[0])).to.be.true;
+            const iface = statements[0] as InterfaceStatement;
+            iface.fields.forEach(f => expect(f.isOptional).to.be.true);
+            const ifaceType = iface.getType({ flags: SymbolTypeFlag.typetime });
+            const iFaceMembers = ifaceType.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime);
+            expect(iFaceMembers.length).to.eq(1);
+            // eslint-disable-next-line no-bitwise
+            iFaceMembers.forEach(sym => expect(sym.flags & SymbolTypeFlag.optional).to.eq(SymbolTypeFlag.optional));
+        });
+
+        it('allows fields named `as` that are also typed', () => {
+            let { statements, diagnostics } = parse(`
+                interface IsJustOptional
+                    optional as as string
+                end interface
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(statements.length).to.eq(1);
+            expect(isInterfaceStatement(statements[0])).to.be.true;
+            const iface = statements[0] as InterfaceStatement;
+            iface.fields.forEach(f => expect(f.isOptional).to.be.true);
+            const ifaceType = iface.getType({ flags: SymbolTypeFlag.typetime });
+            const iFaceMembers = ifaceType.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime);
+            expect(iFaceMembers.length).to.eq(1);
+            // eslint-disable-next-line no-bitwise
+            iFaceMembers.forEach(sym => expect(sym.flags & SymbolTypeFlag.optional).to.eq(SymbolTypeFlag.optional));
+        });
+
+        it('allows fields named `optional` that are also typed', () => {
+            let { statements, diagnostics } = parse(`
+                interface IsJustOptional
+                    optional as string
+                end interface
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(statements.length).to.eq(1);
+            expect(isInterfaceStatement(statements[0])).to.be.true;
+            const iface = statements[0] as InterfaceStatement;
+            iface.fields.forEach(f => expect(f.isOptional).to.be.false);
+            const ifaceType = iface.getType({ flags: SymbolTypeFlag.typetime });
+            const iFaceMembers = ifaceType.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime);
+            expect(iFaceMembers.length).to.eq(1);
+            // eslint-disable-next-line no-bitwise
+            iFaceMembers.forEach(sym => expect(sym.flags & SymbolTypeFlag.optional).to.eq(0));
+        });
     });
 
     describe('leadingTrivia', () => {
