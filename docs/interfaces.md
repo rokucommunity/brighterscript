@@ -121,7 +121,7 @@ interface Video
     length as float
     optional subtitleUrl as string
     optional rating as string
-    optional genre as string[]
+    optional genre as string
 end interface
 ```
 
