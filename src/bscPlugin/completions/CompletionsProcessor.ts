@@ -221,7 +221,6 @@ export class CompletionsProcessor {
             return symbolTableToUse;
         }
 
-        //const gotSymbolsFromFile = new Set<string>();
         let gotSymbolsFromThisFile = false;
         let gotSymbolsFromGlobal = false;
         const shouldLookInNamespace: NamespaceStatement = !(shouldLookForMembers || shouldLookForCallFuncMembers) && expression.findAncestor(isNamespaceStatement);
