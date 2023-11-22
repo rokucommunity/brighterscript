@@ -1704,7 +1704,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
             this.tokens.functionType.text,
             ' ',
             this.tokens.name.text,
-            this.tokens.leftParen.text
+            '('
         );
         const params = this.params ?? [];
         for (let i = 0; i < params.length; i++) {
@@ -1721,7 +1721,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
             }
         }
         result.push(
-            this.tokens.rightParen.text
+            ')'
         );
         if (this.returnTypeExpression) {
             result.push(
