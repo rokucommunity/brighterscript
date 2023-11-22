@@ -1205,7 +1205,7 @@ describe('LanguageServer', () => {
             server.run();
             await server['syncProjects']();
             const result = await server['onCompletion']({
-                textDocument: { uri: s`${rootDir}/source/main.bs` },
+                textDocument: { uri: util.pathToUri(s`${rootDir}/source/main.bs`) },
                 position: util.createPosition(2, 26)
             });
             expect(result.filter(compItem => compItem.label === 'buildAwesome')).to.length(1);
