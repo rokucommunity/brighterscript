@@ -1600,9 +1600,7 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
         result.push(
             this.tokens.name.text
         );
-        if (this.tokens.optional) {
-            result.push(this.tokens.optional.text);
-        }
+
         if (this.typeExpression) {
             result.push(
                 ' as ',
