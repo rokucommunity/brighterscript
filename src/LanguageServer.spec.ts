@@ -1164,8 +1164,8 @@ describe('LanguageServer', () => {
         beforeEach(async () => {
             server['connection'] = server['createConnection']();
             await server['createProject'](workspacePath);
-            await server['createProject'](workspacePath + '/alpha');
-            await server['createProject'](workspacePath + '/beta');
+            await server['createProject'](s`${workspacePath}/alpha`);
+            await server['createProject'](s`${workspacePath}/beta`);
             for (const project of server.projects) {
                 const filePath = s`source/file.brs`;
                 const contents = `
