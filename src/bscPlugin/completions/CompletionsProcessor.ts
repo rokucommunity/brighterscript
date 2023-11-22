@@ -36,15 +36,15 @@ export class CompletionsProcessor {
         scopesForFile = scopesForFile.length > 0 ? scopesForFile : [this.event.program.globalScope];
 
         //get the completions from all scopes for this file
+        let completionResults = [];
+        if (isXmlFile(this.event.file)) {
+            completionResults = this.getXmlFileCompletions(this.event.position, this.event.file);
+        } else if (isBrsFile(this.event.file)) {
+            completionResults = this.getBrsFileCompletions(this.event.position, this.event.file);
+        }
+
         let allCompletions = util.flatMap(
-            scopesForFile.map(scope => {
-                if (isXmlFile(this.event.file)) {
-                    return this.getXmlFileCompletions(this.event.position, this.event.file);
-                } else if (isBrsFile(this.event.file)) {
-                    return this.getBrsFileCompletions(this.event.position, this.event.file, scope);
-                }
-                return [];
-            }),
+            completionResults,
             c => c
         );
 
@@ -135,7 +135,7 @@ export class CompletionsProcessor {
     /**
      * Get completions available at the given cursor. This aggregates all values from this file and the current scope.
      */
-    public getBrsFileCompletions(position: Position, file: BrsFile, scope?: Scope): CompletionItem[] {
+    public getBrsFileCompletions(position: Position, file: BrsFile): CompletionItem[] {
         let result = [] as CompletionItem[];
 
         //handle script import completions
@@ -152,8 +152,6 @@ export class CompletionsProcessor {
         const tokenKind = currentToken?.kind;
         if (tokenKind === TokenKind.Comment) {
             return [];
-        } else if (tokenKind === TokenKind.StringLiteral || tokenKind === TokenKind.TemplateStringQuasi) {
-            return this.getStringLiteralCompletions(scope, currentToken);
         }
 
         let expression: AstNode;
@@ -226,6 +224,10 @@ export class CompletionsProcessor {
         const shouldLookInNamespace: NamespaceStatement = !(shouldLookForMembers || shouldLookForCallFuncMembers) && expression.findAncestor(isNamespaceStatement);
 
         for (const scope of this.event.scopes) {
+            if (tokenKind === TokenKind.StringLiteral || tokenKind === TokenKind.TemplateStringQuasi) {
+                result.push(...this.getStringLiteralCompletions(scope, currentToken));
+                continue;
+            }
             scope.linkSymbolTable();
             const symbolTable = getSymbolTableForLookups();
             let currentSymbols: BscSymbol[] = [];
