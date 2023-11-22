@@ -100,6 +100,23 @@ describe('BrsFile', () => {
         }]);
     });
 
+    it('allows namespaces with the name `optional`', () => {
+        program.setFile('source/main.bs', `
+            namespace optional
+                namespace optional
+                end namespace
+            end namespace
+            namespace alpha
+                namespace optional
+                end namespace
+            end namespace
+            namespace alpha.beta.optional
+            end namespace
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
     it('supports the third parameter in CreateObject', () => {
         program.setFile('source/main.brs', `
             sub main()

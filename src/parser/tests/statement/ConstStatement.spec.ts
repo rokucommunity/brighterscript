@@ -64,6 +64,21 @@ describe('ConstStatement', () => {
         `);
     });
 
+    it('allows const with the name `optional`', () => {
+        program.setFile('source/main.bs', `
+            const optional = true
+            namespace alpha
+                const optional = true
+            end namespace
+            sub main()
+                print optional
+                print alpha.optional
+            end sub
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
     describe('transpile', () => {
 
         it('transpiles simple consts', () => {
