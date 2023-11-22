@@ -73,7 +73,6 @@ export class BrsFile implements File {
             if (options.pkgPath) {
                 this.pkgPath = options.pkgPath;
             } else {
-
                 //don't rename .d.bs files to .d.brs
                 if (this.extension === '.d.bs') {
                     this.pkgPath = this.destPath;

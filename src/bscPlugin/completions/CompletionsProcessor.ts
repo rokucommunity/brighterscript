@@ -29,18 +29,26 @@ export class CompletionsProcessor {
     }
 
     public process() {
+        let file = this.event.file;
+
         //find the scopes for this file
-        let scopesForFile = this.event.program.getScopesForFile(this.event.file);
+        let scopesForFile = this.event.program.getScopesForFile(file);
 
         //if there are no scopes, include the global scope so we at least get the built-in functions
         scopesForFile = scopesForFile.length > 0 ? scopesForFile : [this.event.program.globalScope];
 
         //get the completions from all scopes for this file
         let completionResults = [];
-        if (isXmlFile(this.event.file)) {
-            completionResults = this.getXmlFileCompletions(this.event.position, this.event.file);
-        } else if (isBrsFile(this.event.file)) {
-            completionResults = this.getBrsFileCompletions(this.event.position, this.event.file);
+        if (isXmlFile(file)) {
+            completionResults = this.getXmlFileCompletions(this.event.position, file);
+        } else if (isBrsFile(file)) {
+            //handle script import completions
+            let scriptImport = util.getScriptImportAtPosition(file.ownScriptImports, this.event.position);
+            if (scriptImport) {
+                this.event.completions.push(...this.getScriptImportCompletions(file.program, file.pkgPath, scriptImport));
+                return;
+            }
+            completionResults = this.getBrsFileCompletions(this.event.position, file);
         }
 
         let allCompletions = util.flatMap(
@@ -99,7 +107,7 @@ export class CompletionsProcessor {
                 lowerSourcePkgPath !== file.pkgPath.toLowerCase()
             ) {
                 //add the relative path
-                let relativePath = util.getRelativePath(sourcePkgPath, file.pkgPath).replace(/\\/g, '/');
+                let relativePath = util.getRelativePath(sourcePkgPath, file.destPath).replace(/\\/g, '/');
                 let pkgPathStandardized = file.pkgPath.replace(/\\/g, '/');
                 let filePkgPath = `pkg:/${pkgPathStandardized}`;
                 let lowerFilePkgPath = filePkgPath.toLowerCase();
@@ -132,17 +140,12 @@ export class CompletionsProcessor {
         return result;
     }
 
+
     /**
      * Get completions available at the given cursor. This aggregates all values from this file and the current scope.
      */
     public getBrsFileCompletions(position: Position, file: BrsFile): CompletionItem[] {
         let result = [] as CompletionItem[];
-
-        //handle script import completions
-        let scriptImport = util.getScriptImportAtPosition(file.ownScriptImports, position);
-        if (scriptImport) {
-            return this.getScriptImportCompletions(file.program, file.pkgPath, scriptImport);
-        }
 
         const currentToken = file.getTokenAt(position) ?? file.getTokenAt(file.getClosestExpression(position)?.range.start);
         if (!currentToken) {

@@ -1121,6 +1121,33 @@ describe('CompletionsProcessor', () => {
         });
     });
 
+    describe('import completions', () => {
+        it('should show import completions for a single scope', () => {
+            program.setFile('source/common.bs', `
+                import "
+            `);
+            program.setFile('source/common2.bs', `
+                sub SayHello()
+                end sub
+            `);
+            program.setFile('components/widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="widget.bs"/>
+                </component>
+            `);
+            program.setFile('components/widget.bs', `
+                import "pkg:/source/common.bs"
+            `);
+            program.validate();
+            // import "|
+            const completions = program.getCompletions('source/common.bs', util.createPosition(1, 25));
+            expect(completions).to.exist;
+            expect(completions.map(comp => comp.label)).to.include('common2.bs');
+            expect(completions.map(comp => comp.label)).to.include('../components/widget.bs');
+        });
+    });
+
     describe('const completions', () => {
         it('shows up in standard completions', () => {
             program.setFile('source/main.bs', `
