@@ -1536,14 +1536,14 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
         throw new Error('Method not implemented.');
     }
     constructor(
-        optionalToken: Token,
         nameToken: Identifier,
         asToken: Token,
-        public typeExpression?: TypeExpression
+        public typeExpression?: TypeExpression,
+        optionalToken?: Token
     ) {
         super();
-        this.tokens.name = nameToken;
         this.tokens.optional = optionalToken;
+        this.tokens.name = nameToken;
         this.tokens.as = asToken;
         this.range = util.createBoundingRange(
             this.tokens.optional,
@@ -1558,9 +1558,9 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
     public range: Range;
 
     public tokens = {} as {
-        optional: Token;
         name: Identifier;
         as: Token;
+        optional?: Token;
     };
 
     public getLeadingTrivia(): Token[] {
@@ -1625,14 +1625,14 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         throw new Error('Method not implemented.');
     }
     constructor(
-        optionalToken: Token,
         functionTypeToken: Token,
         nameToken: Identifier,
         leftParen: Token,
         public params: FunctionParameterExpression[],
         rightParen: Token,
         asToken?: Token,
-        public returnTypeExpression?: TypeExpression
+        public returnTypeExpression?: TypeExpression,
+        optionalToken?: Token
     ) {
         super();
         this.tokens.optional = optionalToken;
@@ -1665,7 +1665,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
     }
 
     public tokens = {} as {
-        optional: Token;
+        optional?: Token;
         functionType: Token;
         name: Identifier;
         leftParen: Token;
@@ -2364,16 +2364,17 @@ export class MethodStatement extends FunctionStatement {
 export class FieldStatement extends Statement implements TypedefProvider {
     constructor(
         readonly accessModifier?: Token,
-        readonly optional?: Token,
         readonly name?: Identifier,
         readonly as?: Token,
         readonly typeExpression?: TypeExpression,
         readonly equal?: Token,
-        readonly initialValue?: Expression
+        readonly initialValue?: Expression,
+        readonly optional?: Token
     ) {
         super();
         this.range = util.createBoundingRange(
             accessModifier,
+            optional,
             name,
             as,
             typeExpression,
