@@ -1361,7 +1361,66 @@ describe('CompletionsProcessor', () => {
             `);
             program.validate();
             //          dire|ction.down
-            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(3, 33)), [{
+            const completions = program.getCompletions('source/main.bs', util.createPosition(3, 33));
+            expectCompletionsIncludes(completions, [{
+                label: 'Direction',
+                kind: CompletionItemKind.Enum
+            }, {
+                label: 'Logic',
+                kind: CompletionItemKind.Enum
+            }]);
+        });
+
+        it('infers multilevel deep namespace for enum statement completions', () => {
+            program.setFile('source/main.bs', `
+                namespace enums
+                    namespace deep
+                        sub Main()
+                            direction.down
+                        end sub
+                        enum Direction
+                            up
+                            down
+                        end enum
+                    end namespace
+                end namespace
+                enum Logic
+                    yes
+                    no
+                end enum
+            `);
+            program.validate();
+            //          dire|ction.down
+            const completions = program.getCompletions('source/main.bs', util.createPosition(3, 33));
+            expectCompletionsIncludes(completions, [{
+                label: 'Direction',
+                kind: CompletionItemKind.Enum
+            }, {
+                label: 'Logic',
+                kind: CompletionItemKind.Enum
+            }]);
+        });
+
+        it('infers deep namespace for enum statement completions', () => {
+            program.setFile('source/main.bs', `
+                namespace enums.deep.deeper
+                    sub Main()
+                        direction.down
+                    end sub
+                    enum Direction
+                        up
+                        down
+                    end enum
+                end namespace
+                enum Logic
+                    yes
+                    no
+                end enum
+            `);
+            program.validate();
+            //          dire|ction.down
+            const completions = program.getCompletions('source/main.bs', util.createPosition(3, 33));
+            expectCompletionsIncludes(completions, [{
                 label: 'Direction',
                 kind: CompletionItemKind.Enum
             }, {
