@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.65.10](https://github.com/rokucommunity/brighterscript/compare/v0.65.9...v0.65.10) - 2023-11-14
+### Changed
+ - upgrade to [roku-deploy@3.10.5](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3105---2023-11-14). Notable changes since 3.10.4:
+     - Add better device-info docs ([roku-deploy#128](https://github.com/rokucommunity/roku-deploy/pull/128))
+     - Added some more message grabbing logic ([roku-deploy#127](https://github.com/rokucommunity/roku-deploy/pull/127))
+
+
+
+## [0.65.9](https://github.com/rokucommunity/brighterscript/compare/v0.65.8...v0.65.9) - 2023-11-06
+### Changed
+ - upgrade to [roku-deploy@3.10.4](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3104---2023-11-03). Notable changes since 3.10.3:
+     - Enhance getDeviceInfo() method ([roku-deploy#120](https://github.com/rokucommunity/roku-deploy/pull/120))
+### Fixed
+ - issue with unary expression parsing ([#938](https://github.com/rokucommunity/brighterscript/pull/938))
+
+
+
 ## [0.65.8](https://github.com/rokucommunity/brighterscript/compare/v0.65.7...v0.65.8) - 2023-10-06
 ### Added
  - interface parameter support ([#924](https://github.com/rokucommunity/brighterscript/pull/924))

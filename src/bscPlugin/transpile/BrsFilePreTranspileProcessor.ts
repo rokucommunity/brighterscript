@@ -48,8 +48,11 @@ export class BrsFilePreTranspileProcessor {
             };
         }
         //assume we've been given the enum.member syntax, so pop the member and try again
-        const parts = name.split('.');
+        const parts = name.toLowerCase().split('.');
         const memberName = parts.pop();
+        if (containingNamespace && parts[0] !== containingNamespace.toLowerCase()) {
+            parts.unshift(containingNamespace.toLowerCase());
+        }
         result = scope?.getEnumMap().get(parts.join('.'));
         if (result) {
             const value = result.item.getMemberValue(memberName);
