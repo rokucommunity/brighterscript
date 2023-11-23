@@ -1,4 +1,4 @@
-import { isBrsFile, isCallableType, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isInterfaceType, isMethodStatement, isNamespaceType, isNativeType, isXmlFile, isXmlScope } from '../../astUtils/reflection';
+import { isBrsFile, isCallableType, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isInterfaceType, isMethodStatement, isNamespaceStatement, isNamespaceType, isNativeType, isXmlFile, isXmlScope } from '../../astUtils/reflection';
 import type { FileReference, ProvideCompletionsEvent } from '../../interfaces';
 import type { File } from '../../files/File';
 import { DeclarableTypes, Keywords, TokenKind } from '../../lexer/TokenKind';
@@ -16,7 +16,7 @@ import type { BrsFile } from '../../files/BrsFile';
 import type { FunctionScope } from '../../FunctionScope';
 import type { BscType } from '../../types';
 import type { AstNode } from '../../parser/AstNode';
-import type { FunctionStatement } from '../../parser/Statement';
+import type { FunctionStatement, NamespaceStatement } from '../../parser/Statement';
 import type { Token } from '../../lexer/Token';
 import { createIdentifier } from '../../astUtils/creators';
 
@@ -29,22 +29,30 @@ export class CompletionsProcessor {
     }
 
     public process() {
+        let file = this.event.file;
+
         //find the scopes for this file
-        let scopesForFile = this.event.program.getScopesForFile(this.event.file);
+        let scopesForFile = this.event.program.getScopesForFile(file);
 
         //if there are no scopes, include the global scope so we at least get the built-in functions
         scopesForFile = scopesForFile.length > 0 ? scopesForFile : [this.event.program.globalScope];
 
         //get the completions from all scopes for this file
+        let completionResults = [];
+        if (isXmlFile(file)) {
+            completionResults = this.getXmlFileCompletions(this.event.position, file);
+        } else if (isBrsFile(file)) {
+            //handle script import completions
+            let scriptImport = util.getScriptImportAtPosition(file.ownScriptImports, this.event.position);
+            if (scriptImport) {
+                this.event.completions.push(...this.getScriptImportCompletions(file.program, file.pkgPath, scriptImport));
+                return;
+            }
+            completionResults = this.getBrsFileCompletions(this.event.position, file);
+        }
+
         let allCompletions = util.flatMap(
-            scopesForFile.map(scope => {
-                if (isXmlFile(this.event.file)) {
-                    return this.getXmlFileCompletions(this.event.position, this.event.file);
-                } else if (isBrsFile(this.event.file)) {
-                    return this.getBrsFileCompletions(this.event.position, this.event.file, scope);
-                }
-                return [];
-            }),
+            completionResults,
             c => c
         );
 
@@ -99,7 +107,7 @@ export class CompletionsProcessor {
                 lowerSourcePkgPath !== file.pkgPath.toLowerCase()
             ) {
                 //add the relative path
-                let relativePath = util.getRelativePath(sourcePkgPath, file.pkgPath).replace(/\\/g, '/');
+                let relativePath = util.getRelativePath(sourcePkgPath, file.destPath).replace(/\\/g, '/');
                 let pkgPathStandardized = file.pkgPath.replace(/\\/g, '/');
                 let filePkgPath = `pkg:/${pkgPathStandardized}`;
                 let lowerFilePkgPath = filePkgPath.toLowerCase();
@@ -132,17 +140,12 @@ export class CompletionsProcessor {
         return result;
     }
 
+
     /**
      * Get completions available at the given cursor. This aggregates all values from this file and the current scope.
      */
-    public getBrsFileCompletions(position: Position, file: BrsFile, scope?: Scope): CompletionItem[] {
+    public getBrsFileCompletions(position: Position, file: BrsFile): CompletionItem[] {
         let result = [] as CompletionItem[];
-
-        //handle script import completions
-        let scriptImport = util.getScriptImportAtPosition(file.ownScriptImports, position);
-        if (scriptImport) {
-            return this.getScriptImportCompletions(file.program, file.pkgPath, scriptImport);
-        }
 
         const currentToken = file.getTokenAt(position) ?? file.getTokenAt(file.getClosestExpression(position)?.range.start);
         if (!currentToken) {
@@ -152,8 +155,6 @@ export class CompletionsProcessor {
         const tokenKind = currentToken?.kind;
         if (tokenKind === TokenKind.Comment) {
             return [];
-        } else if (tokenKind === TokenKind.StringLiteral || tokenKind === TokenKind.TemplateStringQuasi) {
-            return this.getStringLiteralCompletions(scope, currentToken);
         }
 
         let expression: AstNode;
@@ -221,22 +222,64 @@ export class CompletionsProcessor {
             return symbolTableToUse;
         }
 
+        let gotSymbolsFromThisFile = false;
+        let gotSymbolsFromGlobal = false;
+        const shouldLookInNamespace: NamespaceStatement = !(shouldLookForMembers || shouldLookForCallFuncMembers) && expression.findAncestor(isNamespaceStatement);
+
         for (const scope of this.event.scopes) {
+            if (tokenKind === TokenKind.StringLiteral || tokenKind === TokenKind.TemplateStringQuasi) {
+                result.push(...this.getStringLiteralCompletions(scope, currentToken));
+                continue;
+            }
             scope.linkSymbolTable();
-            let currentSymbols = getSymbolTableForLookups()?.getAllSymbols(symbolTableLookupFlag) ?? [];
+            const symbolTable = getSymbolTableForLookups();
+            let currentSymbols: BscSymbol[] = [];
+
+            if (shouldLookForMembers || shouldLookForCallFuncMembers) {
+                currentSymbols = symbolTable?.getAllSymbols(symbolTableLookupFlag) ?? [];
+                const tokenType = expression.getType({ flags: SymbolTypeFlag.runtime });
+                if (isClassType(tokenType)) {
+                    // don't return the constructor as a property
+                    currentSymbols = currentSymbols.filter((symbol) => symbol.name !== 'new');
+                }
+            } else {
+                // get symbols directly from current symbol table and scope
+                if (!gotSymbolsFromThisFile) {
+                    currentSymbols = symbolTable?.getOwnSymbols(symbolTableLookupFlag) ?? [];
+                    gotSymbolsFromThisFile = true;
+                }
+                if (shouldLookInNamespace) {
+                    const nsNameParts = shouldLookInNamespace.getNameParts();
+                    let nameSpaceTypeSofar: BscType;
+                    let nsNameLookupTable = scope.symbolTable;
+                    for (const namePart of nsNameParts) {
+                        nameSpaceTypeSofar = nsNameLookupTable?.getSymbolType(namePart.text, { flags: symbolTableLookupFlag });
+                        if (isNamespaceType(nameSpaceTypeSofar)) {
+                            nsNameLookupTable = nameSpaceTypeSofar.getMemberTable();
+                        } else {
+                            break;
+                        }
+                    }
+                    if (isNamespaceType(nameSpaceTypeSofar)) {
+                        currentSymbols.push(...nameSpaceTypeSofar.getMemberTable().getAllSymbols(symbolTableLookupFlag));
+                    }
+                }
+
+                // get all scope available symbols
+                currentSymbols.push(...scope.symbolTable.getOwnSymbols(symbolTableLookupFlag));
+
+                // get global symbols
+                if (!gotSymbolsFromGlobal) {
+                    currentSymbols.push(...this.event.program.globalScope.symbolTable.getOwnSymbols(symbolTableLookupFlag));
+                    gotSymbolsFromGlobal = true;
+                }
+            }
             // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
             switch (tokenBefore.kind) {
                 case TokenKind.New:
                     //we are after a new keyword; so we can only be namespaces that have a class or classes at this point
                     currentSymbols = currentSymbols.filter(symbol => isClassType(symbol.type) || this.isNamespaceTypeWithMemberType(symbol.type, isClassType));
                     break;
-            }
-            if (shouldLookForMembers) {
-                const tokenType = expression.getType({ flags: SymbolTypeFlag.runtime });
-                if (isClassType(tokenType)) {
-                    // don't return the constructor as a property
-                    currentSymbols = currentSymbols.filter((symbol) => symbol.name !== 'new');
-                }
             }
 
             result.push(...this.getSymbolsCompletion(currentSymbols, shouldLookForMembers || shouldLookForCallFuncMembers));
@@ -303,7 +346,6 @@ export class CompletionsProcessor {
         }
         return CompletionItemKind.Variable;
     }
-
 
     private isNamespaceTypeWithMemberType(nsType: BscType, predicate: (t: BscType) => boolean): boolean {
         if (!isNamespaceType(nsType)) {

@@ -896,15 +896,15 @@ export class Program {
                                     scopesDefiningSymbol.push(scope);
                                     //check for consistency across scopes
                                     if (!providedSymbolType) {
-                                        providedSymbolType = symbolInThisScope;
+                                        providedSymbolType = symbolInThisScope.type;
                                     } else {
                                         //get more general type
-                                        if (providedSymbolType.isEqual(symbolInThisScope)) {
+                                        if (providedSymbolType.isEqual(symbolInThisScope.type)) {
                                             //type in this scope is the same as one we're already checking
-                                        } else if (providedSymbolType.isTypeCompatible(symbolInThisScope)) {
+                                        } else if (providedSymbolType.isTypeCompatible(symbolInThisScope.type)) {
                                             //type in this scope is compatible with one we're storing. use most generic
-                                            providedSymbolType = symbolInThisScope;
-                                        } else if (symbolInThisScope.isTypeCompatible(providedSymbolType)) {
+                                            providedSymbolType = symbolInThisScope.type;
+                                        } else if (symbolInThisScope.type.isTypeCompatible(providedSymbolType)) {
                                             // type we're storing is more generic that the type in this scope
                                         } else {
                                             // type in this scope is not compatible with other types for this symbol

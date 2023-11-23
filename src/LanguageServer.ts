@@ -689,7 +689,6 @@ export class LanguageServer {
         //ensure programs are initialized
         await this.waitAllProjectFirstRuns();
 
-
         let filePath = util.uriToPath(params.textDocument.uri);
 
         //wait until the file has settled
@@ -703,11 +702,16 @@ export class LanguageServer {
             .getProjects()
             .flatMap(workspace => workspace.builder.program.getCompletions(filePath, params.position));
 
+        //only send one completion if name and type are the same
+        let completionsMap = new Map<string, CompletionItem>();
+
         for (let completion of completions) {
             completion.commitCharacters = ['.'];
+            let key = `${completion.sortText}-${completion.label}-${completion.kind}`;
+            completionsMap.set(key, completion);
         }
 
-        return completions;
+        return [...completionsMap.values()];
     }
 
     /**

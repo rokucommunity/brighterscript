@@ -28,15 +28,15 @@ import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import { URI } from 'vscode-uri';
 import type { Statement, AstNode } from '../parser/AstNode';
 import { type Expression } from '../parser/AstNode';
+import type { BscSymbol } from '../SymbolTable';
 import { SymbolTable, SymbolTypeFlag } from '../SymbolTable';
 import type { File } from './File';
 import { Editor } from '../astUtils/Editor';
 import type { UnresolvedSymbol } from '../AstValidationSegmenter';
 import { AstValidationSegmenter } from '../AstValidationSegmenter';
-import type { BscType } from '../types';
 
 
-export type ProvidedSymbolMap = Map<SymbolTypeFlag, Map<string, BscType>>;
+export type ProvidedSymbolMap = Map<SymbolTypeFlag, Map<string, BscSymbol>>;
 export type ChangedSymbolMap = Map<SymbolTypeFlag, Set<string>>;
 
 export interface ProvidedSymbolInfo {
@@ -73,7 +73,6 @@ export class BrsFile implements File {
             if (options.pkgPath) {
                 this.pkgPath = options.pkgPath;
             } else {
-
                 //don't rename .d.bs files to .d.brs
                 if (this.extension === '.d.bs') {
                     this.pkgPath = this.destPath;
@@ -1383,14 +1382,14 @@ export class BrsFile implements File {
             for (const setOfSymbols of allNeededSymbolSets) {
                 for (const symbol of setOfSymbols) {
 
-                    const fullSymbolkey = symbol.typeChain.map(tce => tce.name).join('.').toLowerCase();
-                    if (this.providedSymbols.symbolMap.get(symbol.flags)?.has(fullSymbolkey)) {
+                    const fullSymbolKey = symbol.typeChain.map(tce => tce.name).join('.').toLowerCase();
+                    if (this.providedSymbols.symbolMap.get(symbol.flags)?.has(fullSymbolKey)) {
                         // this catches namespaced things
                         continue;
                     }
-                    if (!addedSymbols.get(symbol.flags).has(fullSymbolkey)) {
+                    if (!addedSymbols.get(symbol.flags).has(fullSymbolKey)) {
                         requiredSymbols.push(symbol);
-                        addedSymbols.get(symbol.flags).add(fullSymbolkey);
+                        addedSymbols.get(symbol.flags).add(fullSymbolKey);
                     }
                 }
             }
@@ -1405,9 +1404,9 @@ export class BrsFile implements File {
     }
 
     private getProvidedSymbols() {
-        const symbolMap = new Map<SymbolTypeFlag, Map<string, BscType>>();
-        const runTimeSymbolMap = new Map<string, BscType>();
-        const typeTimeSymbolMap = new Map<string, BscType>();
+        const symbolMap = new Map<SymbolTypeFlag, Map<string, BscSymbol>>();
+        const runTimeSymbolMap = new Map<string, BscSymbol>();
+        const typeTimeSymbolMap = new Map<string, BscSymbol>();
 
         const tablesToGetSymbolsFrom: Array<{ table: SymbolTable; namePrefixLower?: string }> = [{
             table: this.parser.symbolTable
@@ -1426,15 +1425,19 @@ export class BrsFile implements File {
 
             for (const symbol of runTimeSymbols) {
                 if (!isAnyReferenceType(symbol.type)) {
-                    const symbolNameLower = symbolTable.namePrefixLower ? `${symbolTable.namePrefixLower}.${symbol.name.toLowerCase()}` : symbol.name.toLowerCase();
-                    runTimeSymbolMap.set(symbolNameLower, symbol.type);
+                    const symbolNameLower = symbolTable.namePrefixLower
+                        ? `${symbolTable.namePrefixLower}.${symbol.name.toLowerCase()}`
+                        : symbol.name.toLowerCase();
+                    runTimeSymbolMap.set(symbolNameLower, symbol);
                 }
             }
 
             for (const symbol of typeTimeSymbols) {
                 if (!isAnyReferenceType(symbol.type)) {
-                    const symbolNameLower = symbolTable.namePrefixLower ? `${symbolTable.namePrefixLower}.${symbol.name.toLowerCase()}` : symbol.name.toLowerCase();
-                    typeTimeSymbolMap.set(symbolNameLower, symbol.type);
+                    const symbolNameLower = symbolTable.namePrefixLower
+                        ? `${symbolTable.namePrefixLower}.${symbol.name.toLowerCase()}`
+                        : symbol.name.toLowerCase();
+                    typeTimeSymbolMap.set(symbolNameLower, symbol);
                 }
             }
         }
@@ -1461,8 +1464,9 @@ export class BrsFile implements File {
                 continue;
 
             }
-            for (const [symbolKey, symbolType] of newSymbolMapForFlag) {
-                const previousType = oldSymbolMapForFlag?.get(symbolKey);
+            for (const [symbolKey, symbol] of newSymbolMapForFlag) {
+                const symbolType = symbol.type;
+                const previousType = oldSymbolMapForFlag?.get(symbolKey)?.type;
                 previousSymbolsCheckedForFlag.add(symbolKey);
                 if (!previousType) {
                     changesForFlag.add(symbolKey);
