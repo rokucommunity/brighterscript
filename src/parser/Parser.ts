@@ -34,8 +34,8 @@ import {
     ExitForStatement,
     ExitWhileStatement,
     ExpressionStatement,
-    FieldStatement,
     ForEachStatement,
+    FieldStatement,
     ForStatement,
     FunctionStatement,
     GotoStatement,
@@ -401,7 +401,7 @@ export class Parser {
         if (this.check(TokenKind.As)) {
             [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
         }
-        return new InterfaceFieldStatement(optionalKeyword, name, asToken, typeExpression);
+        return new InterfaceFieldStatement(name, asToken, typeExpression, optionalKeyword);
     }
 
     private consumeAsTokenAndTypeExpression(): [Token, TypeExpression] {
@@ -459,14 +459,14 @@ export class Parser {
         }
 
         return new InterfaceMethodStatement(
-            optionalKeyword,
             functionType,
             name,
             leftParen,
             params,
             rightParen,
             asToken,
-            returnTypeExpression
+            returnTypeExpression,
+            optionalKeyword
         );
     }
 
@@ -804,12 +804,12 @@ export class Parser {
 
         return new FieldStatement(
             accessModifier,
-            optionalKeyword,
             name,
             asToken,
             fieldTypeExpression,
             equal,
-            initialValue
+            initialValue,
+            optionalKeyword
         );
     }
 

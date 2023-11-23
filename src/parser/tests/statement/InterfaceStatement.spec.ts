@@ -96,4 +96,13 @@ describe('InterfaceStatement', () => {
             end interface
         `, undefined, undefined, undefined, true);
     });
+
+    it('includes "optional" modifier in typedef', async () => {
+        await testGetTypedef(`
+            interface Person
+                name as string
+                optional age as integer
+            end interface
+        `);
+    });
 });
