@@ -150,7 +150,7 @@ export class CallExpression extends Expression {
         if (isNewExpression(this.parent)) {
             return calleeType;
         }
-        if (isCallableType(calleeType) && (!isReferenceType(calleeType.returnType) || calleeType.returnType.isResolvable())) {
+        if (isCallableType(calleeType) && (!isReferenceType(calleeType.returnType) || calleeType.returnType?.isResolvable())) {
             return calleeType.returnType;
         }
         if (!isReferenceType(calleeType) && (calleeType as any).returnType?.isResolvable()) {
@@ -169,7 +169,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         readonly leftParen: Token,
         readonly rightParen: Token,
         readonly asToken?: Token,
-        readonly returnTypeExpression?: TypeExpression
+        public returnTypeExpression?: TypeExpression
     ) {
         super();
 
@@ -244,7 +244,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             state.transpileToken(this.rightParen)
         );
         //as [Type]
-        if (this.asToken && !state.options.removeParameterTypes) {
+        if (this.asToken && !state.options.removeParameterTypes && this.returnTypeExpression) {
             results.push(
                 ' ',
                 //as
