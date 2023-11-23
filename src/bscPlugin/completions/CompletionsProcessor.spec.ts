@@ -752,7 +752,7 @@ describe('CompletionsProcessor', () => {
                 });
                 program.validate();
                 //get the name of all global completions
-                const globalCompletions = program.globalScope.getAllFiles().flatMap(x => completionProcessor.getBrsFileCompletions(position, x as BrsFile, program.globalScope)).map(x => x.label);
+                const globalCompletions = program.globalScope.getAllFiles().flatMap(x => completionProcessor.getBrsFileCompletions(position, x as BrsFile)).map(x => x.label);
                 //filter out completions from global scope
                 completions = completions.filter(x => !globalCompletions.includes(x.label));
                 expect(completions).to.be.empty;
@@ -1121,6 +1121,33 @@ describe('CompletionsProcessor', () => {
         });
     });
 
+    describe('import completions', () => {
+        it('should show import completions for a single scope', () => {
+            program.setFile('source/common.bs', `
+                import "
+            `);
+            program.setFile('source/common2.bs', `
+                sub SayHello()
+                end sub
+            `);
+            program.setFile('components/widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="widget.bs"/>
+                </component>
+            `);
+            program.setFile('components/widget.bs', `
+                import "pkg:/source/common.bs"
+            `);
+            program.validate();
+            // import "|
+            const completions = program.getCompletions('source/common.bs', util.createPosition(1, 25));
+            expect(completions).to.exist;
+            expect(completions.map(comp => comp.label)).to.include('common2.bs');
+            expect(completions.map(comp => comp.label)).to.include('../components/widget.bs');
+        });
+    });
+
     describe('const completions', () => {
         it('shows up in standard completions', () => {
             program.setFile('source/main.bs', `
@@ -1361,7 +1388,66 @@ describe('CompletionsProcessor', () => {
             `);
             program.validate();
             //          dire|ction.down
-            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(3, 33)), [{
+            const completions = program.getCompletions('source/main.bs', util.createPosition(3, 33));
+            expectCompletionsIncludes(completions, [{
+                label: 'Direction',
+                kind: CompletionItemKind.Enum
+            }, {
+                label: 'Logic',
+                kind: CompletionItemKind.Enum
+            }]);
+        });
+
+        it('infers multilevel deep namespace for enum statement completions', () => {
+            program.setFile('source/main.bs', `
+                namespace enums
+                    namespace deep
+                        sub Main()
+                            direction.down
+                        end sub
+                        enum Direction
+                            up
+                            down
+                        end enum
+                    end namespace
+                end namespace
+                enum Logic
+                    yes
+                    no
+                end enum
+            `);
+            program.validate();
+            //          dire|ction.down
+            const completions = program.getCompletions('source/main.bs', util.createPosition(3, 33));
+            expectCompletionsIncludes(completions, [{
+                label: 'Direction',
+                kind: CompletionItemKind.Enum
+            }, {
+                label: 'Logic',
+                kind: CompletionItemKind.Enum
+            }]);
+        });
+
+        it('infers deep namespace for enum statement completions', () => {
+            program.setFile('source/main.bs', `
+                namespace enums.deep.deeper
+                    sub Main()
+                        direction.down
+                    end sub
+                    enum Direction
+                        up
+                        down
+                    end enum
+                end namespace
+                enum Logic
+                    yes
+                    no
+                end enum
+            `);
+            program.validate();
+            //          dire|ction.down
+            const completions = program.getCompletions('source/main.bs', util.createPosition(3, 33));
+            expectCompletionsIncludes(completions, [{
                 label: 'Direction',
                 kind: CompletionItemKind.Enum
             }, {

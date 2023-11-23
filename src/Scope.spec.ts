@@ -3399,7 +3399,7 @@ describe('Scope', () => {
             expect(file2.requiredSymbols.length).to.eq(0);
             expect(file2.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime).size).to.eq(1);
             const file2TypeProvides = file2.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime);
-            expectTypeToBe(file2TypeProvides.get('alpha.beta.charlie.someenum'), EnumType);
+            expectTypeToBe(file2TypeProvides.get('alpha.beta.charlie.someenum').type, EnumType);
         });
 
         it('classes that extend classes in other files show change properly', () => {
