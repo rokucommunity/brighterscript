@@ -778,7 +778,14 @@ class Runner {
                     ]
                 }
             },
-            components: {},
+            components: {
+                roregion: {
+                    interfaces: [{
+                        name: 'ifDraw2D',
+                        url: 'https://developer.roku.com/docs/references/brightscript/interfaces/ifdraw2d.md'
+                    }]
+                }
+            },
             events: {},
             interfaces: {}
         });
