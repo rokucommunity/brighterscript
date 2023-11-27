@@ -923,7 +923,6 @@ describe('BrsFile BrighterScript classes', () => {
                     class HasEnumKlass
                         enumValue = MyEnum.A
                     end class
-
                     enum MyEnum
                         A = "A"
                         B = "B"
@@ -1004,7 +1003,6 @@ describe('BrsFile BrighterScript classes', () => {
                             m.myArray[MyEnum.B] = false
                         end sub
                     end class
-
                     enum MyEnum
                         A = 0
                         B = 1
@@ -1041,7 +1039,6 @@ describe('BrsFile BrighterScript classes', () => {
                             m.myArray[MyNS.MyEnum.B] = false
                         end sub
                     end class
-
                     enum MyEnum
                         A = 0
                         B = 1
