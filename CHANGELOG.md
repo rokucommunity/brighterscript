@@ -6,6 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.66.0-alpha.8](https://github.com/rokucommunity/brighterscript/compare/v0.66.0-alpha.7...v0.66.0-alpha.8) - 2023-11-27
+### Added
+- Interface optional properties ([#946](https://github.com/rokucommunity/brighterscript/pull/946))
+- ifDraw2d to reRegion interface ([#960](https://github.com/rokucommunity/brighterscript/pull/960))
+### Changed
+- cache `range` and `position` to improve performance ([#940](https://github.com/rokucommunity/brighterscript/pull/940))
+- changes to make use with Plugins easier ([#959](https://github.com/rokucommunity/brighterscript/pull/959))
+### Fixed
+- parsing order for `not` keyword ([#932](https://github.com/rokucommunity/brighterscript/pull/932))
+- class fields using constructors not transpiling correctly ([#933](https://github.com/rokucommunity/brighterscript/pull/933))
+- performance fixes ([#936](https://github.com/rokucommunity/brighterscript/pull/936))
+- validation Performance: File level providedSymbols and `requiredSymbols` ([#944](https://github.com/rokucommunity/brighterscript/pull/944))
+- interface & class support for go-to-definition ([#948](https://github.com/rokucommunity/brighterscript/pull/948))
+- fixes using Enums directly in namespaced situations ([#949](https://github.com/rokucommunity/brighterscript/pull/949))
+- completion performance ([#958](https://github.com/rokucommunity/brighterscript/pull/958))
+- param order for AST class constructors for interface/class members ([#954](https://github.com/rokucommunity/brighterscript/pull/954))
+
+
+
 ## [0.66.0-alpha.7](https://github.com/rokucommunity/brighterscript/compare/v0.66.0-alpha.6...v0.66.0-alpha.7) - 2023-10-16
 ### Changed
  - all changes from [v0.65.6](https://github.com/rokucommunity/brighterscript/compare/v0.65.5...v0.65.6) and [v0.65.7](https://github.com/rokucommunity/brighterscript/compare/v0.65.6...v0.65.7)
