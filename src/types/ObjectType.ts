@@ -1,20 +1,23 @@
-import type { BscType } from './BscType';
+import { SymbolTypeFlag } from '../SymbolTable';
+import { isObjectType } from '../astUtils/reflection';
+import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
+import { BscType } from './BscType';
+import { BscTypeKind } from './BscTypeKind';
+import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import { DynamicType } from './DynamicType';
 
-export class ObjectType implements BscType {
+export class ObjectType extends BscType {
     constructor(
         public typeText?: string
-    ) { }
-
-    public isAssignableTo(targetType: BscType) {
-        return (
-            targetType instanceof ObjectType ||
-            targetType instanceof DynamicType
-        );
+    ) {
+        super();
     }
 
-    public isConvertibleTo(targetType: BscType) {
-        return this.isAssignableTo(targetType);
+    public readonly kind = BscTypeKind.ObjectType;
+
+    public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
+        //Brightscript allows anything passed "as object", so as long as a type is provided, this is true
+        return !!targetType;
     }
 
     public toString() {
@@ -24,4 +27,17 @@ export class ObjectType implements BscType {
     public toTypeString(): string {
         return this.toString();
     }
+
+    getMemberType(name: string, options: GetTypeOptions) {
+        // TODO: How should we handle accessing properties of an object?
+        // For example, we could add fields as properties to m.top, but there could be other members added programmatically
+        return super.getMemberType(name, options) ?? DynamicType.instance;
+    }
+
+    isEqual(otherType: BscType) {
+        return isObjectType(otherType) && this.checkCompatibilityBasedOnMembers(otherType, SymbolTypeFlag.runtime);
+    }
 }
+
+
+BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('object', new ObjectType('object'));

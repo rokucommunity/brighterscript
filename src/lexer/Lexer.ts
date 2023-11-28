@@ -1,5 +1,5 @@
 /* eslint-disable func-names */
-import { TokenKind, ReservedWords, Keywords, PreceedingRegexTypes } from './TokenKind';
+import { TokenKind, ReservedWords, Keywords, PreceedingRegexTypes, AllowedTriviaTokens } from './TokenKind';
 import type { Token } from './Token';
 import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Characters';
 import type { Range, Diagnostic } from 'vscode-languageserver';
@@ -63,6 +63,11 @@ export class Lexer {
     private leadingWhitespace = '';
 
     /**
+     * Contains trivia/comments, etc. before this line
+     */
+    private leadingTrivia: Token[] = [];
+
+    /**
      * A convenience function, equivalent to `new Lexer().scan(toScan)`, that converts a string
      * containing BrightScript code to an array of `Token` objects that will later be used to build
      * an abstract syntax tree.
@@ -103,10 +108,18 @@ export class Lexer {
             isReserved: false,
             text: '',
             range: util.createRange(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd + 1),
-            leadingWhitespace: this.leadingWhitespace
+            leadingWhitespace: this.leadingWhitespace,
+            leadingTrivia: this.leadingTrivia
         });
         this.leadingWhitespace = '';
         return this;
+    }
+
+    /**
+     * Pushes a token into the leadingTrivia list
+     */
+    private pushTrivia(token: Token) {
+        this.leadingTrivia.push(token);
     }
 
     /**
@@ -616,7 +629,7 @@ export class Lexer {
                     this.scanToken();
                 }
                 if (this.check('}')) {
-                    this.current++;
+                    this.advance();
                     this.addToken(TokenKind.TemplateStringExpressionEnd);
                 } else {
 
@@ -1032,6 +1045,13 @@ export class Lexer {
     }
 
     /**
+     * Determine if this token is a trivia token
+     */
+    private isTrivia(token: Token) {
+        return AllowedTriviaTokens.includes(token.kind);
+    }
+
+    /**
      * Creates a `Token` and adds it to the `tokens` array.
      * @param kind the type of token to produce.
      */
@@ -1042,8 +1062,15 @@ export class Lexer {
             text: text,
             isReserved: ReservedWords.has(text.toLowerCase()),
             range: this.rangeOf(),
-            leadingWhitespace: this.leadingWhitespace
+            leadingWhitespace: this.leadingWhitespace,
+            leadingTrivia: []
         };
+        if (this.isTrivia(token)) {
+            this.pushTrivia(token);
+        } else {
+            token.leadingTrivia.push(...this.leadingTrivia);
+            this.leadingTrivia = [];
+        }
         this.leadingWhitespace = '';
         this.tokens.push(token);
         this.sync();

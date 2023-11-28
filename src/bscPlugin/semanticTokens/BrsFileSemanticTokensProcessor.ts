@@ -1,13 +1,15 @@
 import type { Range } from 'vscode-languageserver-protocol';
 import { SemanticTokenModifiers } from 'vscode-languageserver-protocol';
 import { SemanticTokenTypes } from 'vscode-languageserver-protocol';
-import { isCallExpression, isCustomType, isNamespaceStatement, isNewExpression } from '../../astUtils/reflection';
+import { isCallExpression, isCallableType, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isInterfaceType, isNamespaceStatement, isNamespaceType, isNativeType, isNewExpression } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
-import type { OnGetSemanticTokensEvent } from '../../interfaces';
+import type { ExtraSymbolData, OnGetSemanticTokensEvent } from '../../interfaces';
 import type { Locatable } from '../../lexer/Token';
 import { ParseMode } from '../../parser/Parser';
 import type { NamespaceStatement } from '../../parser/Statement';
 import util from '../../util';
+import { SymbolTypeFlag } from '../../SymbolTable';
+import type { BscType } from '../../types/BscType';
 
 export class BrsFileSemanticTokensProcessor {
     public constructor(
@@ -19,7 +21,7 @@ export class BrsFileSemanticTokensProcessor {
     public process() {
         this.handleClasses();
         this.handleConstDeclarations();
-        this.iterateExpressions();
+        this.iterateNodes();
     }
 
     private handleConstDeclarations() {
@@ -34,13 +36,13 @@ export class BrsFileSemanticTokensProcessor {
 
         //classes used in function param types
         for (const func of this.event.file.parser.references.functionExpressions) {
-            for (const parm of func.parameters) {
-                if (isCustomType(parm.type)) {
-                    const namespace = parm.findAncestor<NamespaceStatement>(isNamespaceStatement);
+            for (const param of func.parameters) {
+                if (isClassType(param.getType({ flags: SymbolTypeFlag.typetime }))) {
+                    const namespace = param.findAncestor<NamespaceStatement>(isNamespaceStatement);
                     classes.push({
-                        className: parm.typeToken.text,
+                        className: util.getAllDottedGetParts(param.typeExpression.expression).map(x => x.text).join('.'),
                         namespaceName: namespace?.getName(ParseMode.BrighterScript),
-                        range: parm.typeToken.range
+                        range: param.typeExpression.range
                     });
                 }
             }
@@ -84,41 +86,82 @@ export class BrsFileSemanticTokensProcessor {
         });
     }
 
-    private iterateExpressions() {
+    private iterateNodes() {
         const scope = this.event.scopes[0];
 
         //if this file has no scopes, there's nothing else we can do about this
         if (!scope) {
             return;
         }
+        scope.linkSymbolTable();
+        const nodes = [
+            ...this.event.file.parser.references.expressions,
+            //make a new VariableExpression to wrap the name. This is a hack, we could probably do it better
+            ...this.event.file.parser.references.assignmentStatements,
+            ...this.event.file.parser.references.functionExpressions.map(x => x.parameters).flat()
+        ];
 
-        for (let expression of this.event.file.parser.references.expressions) {
+        for (let node of nodes) {
             //lift the callee from call expressions to handle namespaced function calls
-            if (isCallExpression(expression)) {
-                expression = expression.callee;
-            } else if (isNewExpression(expression)) {
-                expression = expression.call.callee;
+            if (isCallExpression(node)) {
+                node = node.callee;
+            } else if (isNewExpression(node)) {
+                node = node.call.callee;
             }
-            const tokens = util.getAllDottedGetParts(expression);
+            const containingNamespaceNameLower = node.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript).toLowerCase();
+            const tokens = util.getAllDottedGetParts(node);
             const processedNames: string[] = [];
             for (const token of tokens ?? []) {
                 processedNames.push(token.text?.toLowerCase());
                 const entityName = processedNames.join('.');
 
-                if (scope.getEnumMemberMap().has(entityName)) {
+                if (scope.getEnumMemberFileLink(entityName, containingNamespaceNameLower)) {
                     this.addToken(token, SemanticTokenTypes.enumMember);
-                } else if (scope.getEnumMap().has(entityName)) {
+                } else if (scope.getEnum(entityName, containingNamespaceNameLower)) {
                     this.addToken(token, SemanticTokenTypes.enum);
-                } else if (scope.getClassMap().has(entityName)) {
+                } else if (scope.getClass(entityName, containingNamespaceNameLower)) {
                     this.addToken(token, SemanticTokenTypes.class);
+                } else if (scope.getInterface(entityName, containingNamespaceNameLower)) {
+                    this.addToken(token, SemanticTokenTypes.interface);
                 } else if (scope.getCallableByName(entityName)) {
                     this.addToken(token, SemanticTokenTypes.function);
-                } else if (scope.namespaceLookup.has(entityName)) {
+                } else if (scope.getNamespace(entityName, containingNamespaceNameLower)) {
                     this.addToken(token, SemanticTokenTypes.namespace);
-                } else if (scope.getConstFileLink(entityName)) {
+                } else if (scope.getConstFileLink(entityName, containingNamespaceNameLower)) {
                     this.addToken(token, SemanticTokenTypes.variable, [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]);
+                } else {
+                    const extraData = {};
+                    const symbolType = scope.symbolTable.getSymbolType(token.text, { flags: SymbolTypeFlag.typetime, data: extraData });
+                    if (symbolType?.isResolvable()) {
+                        this.addToken(token, this.getSemanticTokenTypeFromType(symbolType, extraData, !!containingNamespaceNameLower));
+                    }
                 }
             }
         }
+        scope.unlinkSymbolTable();
+    }
+
+    // TODO: We can use the actual symbol tables to find methods and member fields.
+    private getSemanticTokenTypeFromType(type: BscType, extraData: ExtraSymbolData, areMembers = false) {
+        if (isConstStatement(extraData?.definingNode)) {
+            return SemanticTokenTypes.variable;
+        } else if (isClassType(type)) {
+            return SemanticTokenTypes.class;
+        } else if (isCallableType(type)) {
+            return areMembers ? SemanticTokenTypes.method : SemanticTokenTypes.function;
+        } else if (isInterfaceType(type)) {
+            return SemanticTokenTypes.interface;
+        } else if (isComponentType(type)) {
+            return SemanticTokenTypes.class;
+        } else if (isEnumType(type)) {
+            return SemanticTokenTypes.enum;
+        } else if (isEnumMemberType(type)) {
+            return SemanticTokenTypes.enumMember;
+        } else if (isNamespaceType(type)) {
+            return SemanticTokenTypes.namespace;
+        } else if (isNativeType(type)) {
+            return SemanticTokenTypes.type;
+        }
+        return areMembers ? SemanticTokenTypes.property : SemanticTokenTypes.variable;
     }
 }

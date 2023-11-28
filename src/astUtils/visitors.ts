@@ -1,7 +1,7 @@
 /* eslint-disable no-bitwise */
 import type { CancellationToken } from 'vscode-languageserver';
-import type { Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, ClassMethodStatement, ClassFieldStatement, EnumStatement, EnumMemberStatement, DimStatement, TryCatchStatement, CatchStatement, ThrowStatement, InterfaceStatement, InterfaceFieldStatement, InterfaceMethodStatement, FieldStatement, MethodStatement, ConstStatement, ContinueStatement, ComponentStatement } from '../parser/Statement';
-import type { AALiteralExpression, AAMemberExpression, AnnotationExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, EscapedCharCodeLiteralExpression, FunctionExpression, FunctionParameterExpression, GroupingExpression, IndexedGetExpression, LiteralExpression, NamespacedVariableNameExpression, NewExpression, NullCoalescingExpression, RegexLiteralExpression, SourceLiteralExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, TernaryExpression, UnaryExpression, VariableExpression, XmlAttributeGetExpression } from '../parser/Expression';
+import type { Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, EnumStatement, EnumMemberStatement, DimStatement, TryCatchStatement, CatchStatement, ThrowStatement, InterfaceStatement, InterfaceFieldStatement, InterfaceMethodStatement, FieldStatement, MethodStatement, ConstStatement, ContinueStatement, ComponentStatement } from '../parser/Statement';
+import type { AALiteralExpression, AAMemberExpression, AnnotationExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, EscapedCharCodeLiteralExpression, FunctionExpression, FunctionParameterExpression, GroupingExpression, IndexedGetExpression, LiteralExpression, NewExpression, NullCoalescingExpression, RegexLiteralExpression, SourceLiteralExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, TernaryExpression, TypeCastExpression, TypeExpression, UnaryExpression, VariableExpression, XmlAttributeGetExpression } from '../parser/Expression';
 import { isExpression, isStatement } from './reflection';
 import type { Editor } from './Editor';
 import type { Statement, Expression, AstNode } from '../parser/AstNode';
@@ -59,6 +59,12 @@ export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: W
 
     //stop processing if canceled
     if (options.cancel?.isCancellationRequested) {
+        return;
+    }
+
+    //do not walk children if skipped
+    if (options.skipChildren?.shouldSkipChildren) {
+        options.skipChildren.reset();
         return;
     }
 
@@ -127,14 +133,6 @@ export function createVisitor(
         ComponentStatement?: (statement: ComponentStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
         InterfaceMethodStatement?: (statement: InterfaceMethodStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
         ClassStatement?: (statement: ClassStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
-        /**
-         * @deprecated use `MethodStatement`
-         */
-        ClassMethodStatement?: (statement: ClassMethodStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
-        /**
-         * @deprecated use `FieldStatement`
-         */
-        ClassFieldStatement?: (statement: ClassFieldStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
         ContinueStatement?: (statement: ContinueStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
         MethodStatement?: (statement: MethodStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
         FieldStatement?: (statement: FieldStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
@@ -149,7 +147,6 @@ export function createVisitor(
         CallExpression?: (expression: CallExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
         FunctionExpression?: (expression: FunctionExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
         FunctionParameterExpression?: (expression: FunctionParameterExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
-        NamespacedVariableNameExpression?: (expression: NamespacedVariableNameExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
         DottedGetExpression?: (expression: DottedGetExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
         XmlAttributeGetExpression?: (expression: XmlAttributeGetExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
         IndexedGetExpression?: (expression: IndexedGetExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
@@ -171,15 +168,10 @@ export function createVisitor(
         TernaryExpression?: (expression: TernaryExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
         NullCoalescingExpression?: (expression: NullCoalescingExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
         RegexLiteralExpression?: (expression: RegexLiteralExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        TypeExpression?: (expression: TypeExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        TypeCastExpression?: (expression: TypeCastExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
     }
 ) {
-    //remap some deprecated visitor names TODO remove this in v1
-    if (visitor.ClassFieldStatement) {
-        visitor.FieldStatement = visitor.ClassFieldStatement;
-    }
-    if (visitor.ClassMethodStatement) {
-        visitor.MethodStatement = visitor.ClassMethodStatement;
-    }
     return <WalkVisitor>((statement: Statement, parent?: Statement, owner?: any, key?: any): Statement | void => {
         return visitor[statement.constructor.name]?.(statement, parent, owner, key);
     });
@@ -199,7 +191,29 @@ export interface WalkOptions {
      * If provided, any AST replacements will be done using this Editor instead of directly against the AST itself
      */
     editor?: Editor;
+    /**
+     * A token that can be used to stop the walk from going any deeper in the current node,
+     * but will continue walking sibling nodes
+     */
+    skipChildren?: ChildrenSkipper;
 }
+
+export class ChildrenSkipper {
+    private isSkipped = false;
+
+    public reset() {
+        this.isSkipped = false;
+    }
+
+    public skip() {
+        this.isSkipped = true;
+    }
+
+    get shouldSkipChildren() {
+        return this.isSkipped;
+    }
+}
+
 
 /**
  * An enum used to denote the specific WalkMode options (without

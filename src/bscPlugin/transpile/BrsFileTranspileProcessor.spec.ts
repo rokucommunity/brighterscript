@@ -2,7 +2,7 @@ import { createSandbox } from 'sinon';
 import * as fsExtra from 'fs-extra';
 import { Program } from '../../Program';
 import { standardizePath as s } from '../../util';
-import { tempDir, rootDir, stagingDir } from '../../testHelpers.spec';
+import { tempDir, rootDir } from '../../testHelpers.spec';
 import { expect } from 'chai';
 const sinon = createSandbox();
 
@@ -12,7 +12,7 @@ describe('BrsFileTranspileProcessor', () => {
 
     beforeEach(() => {
         fsExtra.emptyDirSync(tempDir);
-        program = new Program({ rootDir: rootDir, stagingDir: stagingDir, sourceMap: true });
+        program = new Program({ rootDir: rootDir, sourceMap: true });
     });
     afterEach(() => {
         sinon.restore();
@@ -30,6 +30,7 @@ describe('BrsFileTranspileProcessor', () => {
     });
 
     it('properly prefixes functions from bslib', async () => {
+        program.options.stagingDir = s`${tempDir}/staging`;
         program.setFile('source/main.bs', `
             sub main()
                 print true ? true : false
@@ -42,4 +43,3 @@ describe('BrsFileTranspileProcessor', () => {
         ).to.include('bslib_toString');
     });
 });
-

@@ -3,6 +3,9 @@ import chalk from 'chalk';
 import type { BsConfig } from './BsConfig';
 import { DiagnosticSeverity } from 'vscode-languageserver';
 import type { BsDiagnostic } from '.';
+import type { Range } from 'vscode-languageserver';
+
+export const MAX_RELATED_INFOS_COUNT = 3;
 
 /**
  * Prepare print diagnostic formatting options
@@ -57,7 +60,8 @@ export function printDiagnostic(
     severity: DiagnosticSeverity,
     filePath: string,
     lines: string[],
-    diagnostic: BsDiagnostic
+    diagnostic: BsDiagnostic,
+    relatedInformation?: Array<{ range: Range; filePath: string; message: string }>
 ) {
     let { includeDiagnostic, severityTextMap, typeColor } = options;
 
@@ -91,6 +95,31 @@ export function printDiagnostic(
     console.log(
         getDiagnosticLine(diagnostic, diagnosticLine, typeColor[severity])
     );
+
+    //print related information if present (only first few rows)
+    const relatedInfoList = relatedInformation ?? [];
+    let indent = '    ';
+    for (let i = 0; i < relatedInfoList.length; i++) {
+        let relatedInfo = relatedInfoList[i];
+        //only show the first MAX_RELATED_INFOS_COUNT relatedInfo links
+        if (i < MAX_RELATED_INFOS_COUNT) {
+            console.log('');
+            console.log(
+                indent,
+                chalk.cyan(relatedInfo.filePath ?? '<unknown file>') +
+                ':' +
+                chalk.yellow(
+                    relatedInfo.range
+                        ? (relatedInfo.range.start.line + 1) + ':' + (relatedInfo.range.start.character + 1)
+                        : 'line?:col?'
+                )
+            );
+            console.log(indent, relatedInfo.message);
+        } else {
+            console.log('\n', indent, `...and ${relatedInfoList.length - i + 1} more`);
+            break;
+        }
+    }
     console.log('');
 }
 
@@ -100,10 +129,21 @@ export function getDiagnosticLine(diagnostic: BsDiagnostic, diagnosticLine: stri
     //only print the line information if we have some
     if (diagnostic.range && diagnosticLine) {
         const lineNumberText = chalk.bgWhite(' ' + chalk.black((diagnostic.range.start.line + 1).toString()) + ' ') + ' ';
-        const blankLineNumberText = chalk.bgWhite(' ' + chalk.white('_'.repeat((diagnostic.range.start.line + 1).toString().length)) + ' ') + ' ';
-        const squigglyText = getDiagnosticSquigglyText(diagnostic, diagnosticLine);
+        const blankLineNumberText = chalk.bgWhite(' ' + chalk.white(' '.repeat((diagnostic.range.start.line + 1).toString().length)) + ' ') + ' ';
+
+        //remove tabs in favor of spaces to make diagnostic printing more consistent
+        let leadingText = diagnosticLine.slice(0, diagnostic.range.start.character);
+        let leadingTextNormalized = leadingText.replace(/\t/g, '    ');
+        let actualText = diagnosticLine.slice(diagnostic.range.start.character, diagnostic.range.end.character);
+        let actualTextNormalized = actualText.replace(/\t/g, '    ');
+        let startIndex = leadingTextNormalized.length;
+        let endIndex = leadingTextNormalized.length + actualTextNormalized.length;
+
+        let diagnosticLineNormalized = diagnosticLine.replace(/\t/g, '    ');
+
+        const squigglyText = getDiagnosticSquigglyText(diagnosticLineNormalized, startIndex, endIndex);
         result +=
-            lineNumberText + diagnosticLine + '\n' +
+            lineNumberText + diagnosticLineNormalized + '\n' +
             blankLineNumberText + colorFunction(squigglyText);
     }
     return result;
@@ -112,36 +152,36 @@ export function getDiagnosticLine(diagnostic: BsDiagnostic, diagnosticLine: stri
 /**
  * Given a diagnostic, compute the range for the squiggly
  */
-export function getDiagnosticSquigglyText(diagnostic: BsDiagnostic, line: string) {
+export function getDiagnosticSquigglyText(line: string, startCharacter: number, endCharacter: number) {
     let squiggle: string;
     //fill the entire line
     if (
         //there is no range
-        !diagnostic.range ||
+        typeof startCharacter !== 'number' || typeof endCharacter !== 'number' ||
         //there is no line
         !line ||
         //both positions point to same location
-        diagnostic.range.start.character === diagnostic.range.end.character ||
+        startCharacter === endCharacter ||
         //the diagnostic starts after the end of the line
-        diagnostic.range.start.character >= line.length
+        startCharacter >= line.length
     ) {
         squiggle = ''.padStart(line?.length ?? 0, '~');
     } else {
 
-        let endIndex = Math.max(diagnostic.range?.end.character, line.length);
+        let endIndex = Math.max(endCharacter, line.length);
         endIndex = endIndex > 0 ? endIndex : 0;
         if (line?.length < endIndex) {
             endIndex = line.length;
         }
 
-        let leadingWhitespaceLength = diagnostic.range.start.character;
+        let leadingWhitespaceLength = startCharacter;
         let squiggleLength: number;
-        if (diagnostic.range.end.character === Number.MAX_VALUE) {
+        if (endCharacter === Number.MAX_VALUE) {
             squiggleLength = line.length - leadingWhitespaceLength;
         } else {
-            squiggleLength = diagnostic.range.end.character - diagnostic.range.start.character;
+            squiggleLength = endCharacter - startCharacter;
         }
-        let trailingWhitespaceLength = endIndex - diagnostic.range.end.character;
+        let trailingWhitespaceLength = endIndex - endCharacter;
 
         //opening whitespace
         squiggle =

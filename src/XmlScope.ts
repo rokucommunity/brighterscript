@@ -2,13 +2,17 @@ import type { Location, Position } from 'vscode-languageserver';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { XmlFile } from './files/XmlFile';
-import type { CallableContainerMap, FileReference } from './interfaces';
+import { DiagnosticOrigin, type CallableContainerMap, type FileReference } from './interfaces';
 import type { Program } from './Program';
 import util from './util';
 import { isXmlFile } from './astUtils/reflection';
 import { SGFieldTypes } from './parser/SGTypes';
-import type { SGTag } from './parser/SGTypes';
 import type { File } from './files/File';
+import type { SGElement } from './parser/SGTypes';
+import { SymbolTypeFlag } from './SymbolTable';
+import type { BaseFunctionType } from './types/BaseFunctionType';
+import { ComponentType } from './types/ComponentType';
+import { DynamicType } from './types/DynamicType';
 
 export class XmlScope extends Scope {
     constructor(
@@ -41,6 +45,43 @@ export class XmlScope extends Scope {
         });
     }
 
+    public getComponentType() {
+        let componentElement = this.xmlFile.ast.componentElement;
+        if (!componentElement?.name) {
+            return;
+        }
+        const parentComponentType = componentElement?.extends
+            ? this.symbolTable.getSymbolType(util.getSgNodeTypeName(componentElement?.extends), { flags: SymbolTypeFlag.typetime, fullName: componentElement?.extends, tableProvider: () => this.symbolTable })
+            : undefined;
+        const result = new ComponentType(componentElement.name, parentComponentType as ComponentType);
+        result.addBuiltInInterfaces();
+        const iface = componentElement.interfaceElement;
+        if (!iface) {
+            return result;
+        }
+        //add functions
+        for (const func of iface.functions ?? []) {
+            if (func.name) {
+                const componentFuncType = this.symbolTable.getSymbolType(func.name, { flags: SymbolTypeFlag.runtime, fullName: func.name, tableProvider: () => this.symbolTable });
+                // TODO: Get correct function type, and fully resolve all param and return types of function
+                // eg.:
+                // callFuncType = new CallFuncType(componentFuncType) // does something to fully resolve & store all associated types
+
+                //TODO: add documentation - need to get previous comment from XML
+                result.addCallFuncMember(func.name, {}, componentFuncType as BaseFunctionType, SymbolTypeFlag.runtime);
+            }
+        }
+        //add fields
+        for (const field of iface.fields ?? []) {
+            if (field.id) {
+                const actualFieldType = field.type ? util.getNodeFieldType(field.type, this.symbolTable) : DynamicType.instance;
+                //TODO: add documentation - need to get previous comment from XML
+                result.addMember(field.id, {}, actualFieldType, SymbolTypeFlag.runtime);
+            }
+        }
+        return result;
+    }
+
     protected _validate(callableContainerMap: CallableContainerMap) {
         //validate brs files
         super._validate(callableContainerMap);
@@ -53,25 +94,27 @@ export class XmlScope extends Scope {
     }
 
     private diagnosticValidateInterface(callableContainerMap: CallableContainerMap) {
-        if (!this.xmlFile.parser.ast?.component?.api) {
+        if (!this.xmlFile.parser.ast?.componentElement?.interfaceElement) {
             return;
         }
-        const { api } = this.xmlFile.parser.ast.component;
+        const iface = this.xmlFile.parser.ast.componentElement.interfaceElement;
+
         //validate functions
-        for (const fun of api.functions) {
-            const name = fun.name;
+        for (const func of iface.functions) {
+            const name = func.name;
             if (!name) {
-                this.diagnosticMissingAttribute(fun, 'name');
+                this.diagnosticMissingAttribute(func, 'name');
             } else if (!callableContainerMap.has(name.toLowerCase())) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.xmlFunctionNotFound(name),
-                    range: fun.getAttribute('name').value.range,
-                    file: this.xmlFile
+                    range: func.getAttribute('name').tokens.value.range,
+                    file: this.xmlFile,
+                    origin: DiagnosticOrigin.Scope
                 });
             }
         }
         //validate fields
-        for (const field of api.fields) {
+        for (const field of iface.fields) {
             const { id, type } = field;
             if (!id) {
                 this.diagnosticMissingAttribute(field, 'id');
@@ -83,19 +126,20 @@ export class XmlScope extends Scope {
             } else if (!SGFieldTypes.includes(type.toLowerCase())) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.xmlInvalidFieldType(type),
-                    range: field.getAttribute('type').value.range,
-                    file: this.xmlFile
+                    range: field.getAttribute('type').tokens.value.range,
+                    file: this.xmlFile,
+                    origin: DiagnosticOrigin.Scope
                 });
             }
         }
     }
 
-    private diagnosticMissingAttribute(tag: SGTag, name: string) {
-        const { text, range } = tag.tag;
+    private diagnosticMissingAttribute(tag: SGElement, name: string) {
         this.diagnostics.push({
-            ...DiagnosticMessages.xmlTagMissingAttribute(text, name),
-            range: range,
-            file: this.xmlFile
+            ...DiagnosticMessages.xmlTagMissingAttribute(tag.tokens.startTagName.text, name),
+            range: tag.tokens.startTagName.range,
+            file: this.xmlFile,
+            origin: DiagnosticOrigin.Scope
         });
     }
 
@@ -123,7 +167,8 @@ export class XmlScope extends Scope {
                     this.diagnostics.push({
                         file: this.xmlFile,
                         range: scriptImport.filePathRange,
-                        ...DiagnosticMessages.unnecessaryScriptImportInChildFromParent(ancestorComponentName)
+                        ...DiagnosticMessages.unnecessaryScriptImportInChildFromParent(ancestorComponentName),
+                        origin: DiagnosticOrigin.Scope
                     });
                 }
             }

@@ -5,14 +5,18 @@ import { CancellationTokenSource } from 'vscode-languageserver';
 import { InternalWalkMode } from '../astUtils/visitors';
 import type { SymbolTable } from '../SymbolTable';
 import type { BrsTranspileState } from './BrsTranspileState';
-import type { TranspileResult } from '../interfaces';
+import type { GetTypeOptions, TranspileResult } from '../interfaces';
 import type { AnnotationExpression } from './Expression';
 import util from '../util';
+import { DynamicType } from '../types/DynamicType';
+import type { BscType } from '../types/BscType';
+import type { Token } from '../lexer/Token';
 
 /**
  * A BrightScript AST node
  */
 export abstract class AstNode {
+    public abstract kind: AstNodeKind;
     /**
      *  The starting and ending location of the node.
      */
@@ -39,24 +43,36 @@ export abstract class AstNode {
     public symbolTable?: SymbolTable;
 
     /**
-     * Get the closest symbol table for this node. Should be overridden in children that directly contain a symbol table
+     * Get the closest symbol table for this node
      */
     public getSymbolTable(): SymbolTable {
-        if (this.symbolTable) {
-            return this.symbolTable;
-        } else {
-            return this.parent?.getSymbolTable();
+        let node: AstNode = this;
+        while (node) {
+            if (node.symbolTable) {
+                return node.symbolTable;
+            }
+            node = node.parent;
         }
     }
 
     /**
-     * Walk upward and return the first node that results in `true` from the matcher
+     * Walk upward and return the first node that results in `true` from the matcher.
+     * @param matcher a function called for each node. If you return true, this function returns the specified node. If you return a node, that node is returned. all other return values continue the loop
+     *                The function's second parameter is a cancellation token. If you'd like to short-circuit the walk, call `cancellationToken.cancel()`, then this function will return `undefined`
      */
-    public findAncestor<TNode extends AstNode = AstNode>(matcher: (node: AstNode) => boolean | undefined) {
+    public findAncestor<TNode extends AstNode = AstNode>(matcher: (node: AstNode, cancellationToken: CancellationTokenSource) => boolean | AstNode | undefined | void): TNode {
         let node = this.parent;
+
+        const cancel = new CancellationTokenSource();
         while (node) {
-            if (matcher(node)) {
-                return node as TNode;
+            let matcherValue = matcher(node, cancel);
+            if (cancel.token.isCancellationRequested) {
+                return;
+            }
+            if (matcherValue) {
+                cancel.cancel();
+                return (matcherValue === true ? node : matcherValue) as TNode;
+
             }
             node = node.parent;
         }
@@ -66,11 +82,11 @@ export abstract class AstNode {
      * Find the first child where the matcher evaluates to true.
      * @param matcher a function called for each node. If you return true, this function returns the specified node. If you return a node, that node is returned. all other return values continue the loop
      */
-    public findChild<TNodeType extends AstNode = AstNode>(matcher: (node: AstNode) => boolean | AstNode, options?: WalkOptions) {
+    public findChild<TNode extends AstNode = AstNode>(matcher: (node: AstNode, cancellationSource) => boolean | AstNode | undefined | void, options?: WalkOptions) {
         const cancel = new CancellationTokenSource();
         let result: AstNode;
         this.walk((node) => {
-            const matcherValue = matcher(node);
+            const matcherValue = matcher(node, cancel);
             if (matcherValue) {
                 cancel.cancel();
                 result = matcherValue === true ? node : matcherValue;
@@ -80,7 +96,7 @@ export abstract class AstNode {
             ...options ?? {},
             cancel: cancel.token
         });
-        return result as TNodeType;
+        return result as TNode;
     }
 
     /**
@@ -96,6 +112,13 @@ export abstract class AstNode {
     }
 
     /**
+     * Get the BscType of this node.
+     */
+    public getType(options: GetTypeOptions): BscType {
+        return DynamicType.instance;
+    }
+
+    /**
      * Links all child nodes to their parent AstNode, and the same with symbol tables. This performs a full AST walk, so you should use this sparingly
      */
     public link() {
@@ -103,6 +126,24 @@ export abstract class AstNode {
         this.walk(() => { }, {
             walkMode: WalkMode.visitAllRecursive
         });
+    }
+
+    /**
+     * Walk upward and return the root node
+     */
+    public getRoot() {
+        let node = this as AstNode;
+
+        while (node) {
+            if (!node.parent) {
+                return node;
+            }
+            node = node.parent;
+        }
+    }
+
+    public getLeadingTrivia(): Token[] {
+        return [];
     }
 }
 
@@ -124,4 +165,77 @@ export abstract class Expression extends AstNode {
      * When being considered by the walk visitor, this describes what type of element the current class is.
      */
     public visitMode = InternalWalkMode.visitExpressions;
+}
+
+export enum AstNodeKind {
+    Body = 'Body',
+    BinaryExpression = 'BinaryExpression',
+    CallExpression = 'CallExpression',
+    FunctionExpression = 'FunctionExpression',
+    FunctionParameterExpression = 'FunctionParameterExpression',
+    NamespacedVariableNameExpression = 'NamespacedVariableNameExpression',
+    DottedGetExpression = 'DottedGetExpression',
+    XmlAttributeGetExpression = 'XmlAttributeGetExpression',
+    IndexedGetExpression = 'IndexedGetExpression',
+    GroupingExpression = 'GroupingExpression',
+    LiteralExpression = 'LiteralExpression',
+    EscapedCharCodeLiteralExpression = 'EscapedCharCodeLiteralExpression',
+    ArrayLiteralExpression = 'ArrayLiteralExpression',
+    AAMemberExpression = 'AAMemberExpression',
+    AALiteralExpression = 'AALiteralExpression',
+    UnaryExpression = 'UnaryExpression',
+    VariableExpression = 'VariableExpression',
+    SourceLiteralExpression = 'SourceLiteralExpression',
+    NewExpression = 'NewExpression',
+    CallfuncExpression = 'CallfuncExpression',
+    TemplateStringQuasiExpression = 'TemplateStringQuasiExpression',
+    TemplateStringExpression = 'TemplateStringExpression',
+    TaggedTemplateStringExpression = 'TaggedTemplateStringExpression',
+    AnnotationExpression = 'AnnotationExpression',
+    TernaryExpression = 'TernaryExpression',
+    NullCoalescingExpression = 'NullCoalescingExpression',
+    RegexLiteralExpression = 'RegexLiteralExpression',
+    EmptyStatement = 'EmptyStatement',
+    AssignmentStatement = 'AssignmentStatement',
+    ExpressionStatement = 'ExpressionStatement',
+    CommentStatement = 'CommentStatement',
+    ExitForStatement = 'ExitForStatement',
+    ExitWhileStatement = 'ExitWhileStatement',
+    FunctionStatement = 'FunctionStatement',
+    IfStatement = 'IfStatement',
+    IncrementStatement = 'IncrementStatement',
+    PrintStatement = 'PrintStatement',
+    DimStatement = 'DimStatement',
+    GotoStatement = 'GotoStatement',
+    LabelStatement = 'LabelStatement',
+    ReturnStatement = 'ReturnStatement',
+    EndStatement = 'EndStatement',
+    StopStatement = 'StopStatement',
+    ForStatement = 'ForStatement',
+    ForEachStatement = 'ForEachStatement',
+    WhileStatement = 'WhileStatement',
+    DottedSetStatement = 'DottedSetStatement',
+    IndexedSetStatement = 'IndexedSetStatement',
+    LibraryStatement = 'LibraryStatement',
+    NamespaceStatement = 'NamespaceStatement',
+    ImportStatement = 'ImportStatement',
+    InterfaceStatement = 'InterfaceStatement',
+    InterfaceFieldStatement = 'InterfaceFieldStatement',
+    InterfaceMethodStatement = 'InterfaceMethodStatement',
+    ClassStatement = 'ClassStatement',
+    MethodStatement = 'MethodStatement',
+    ClassMethodStatement = 'ClassMethodStatement',
+    FieldStatement = 'FieldStatement',
+    ClassFieldStatement = 'ClassFieldStatement',
+    TryCatchStatement = 'TryCatchStatement',
+    CatchStatement = 'CatchStatement',
+    ThrowStatement = 'ThrowStatement',
+    EnumStatement = 'EnumStatement',
+    EnumMemberStatement = 'EnumMemberStatement',
+    ConstStatement = 'ConstStatement',
+    ContinueStatement = 'ContinueStatement',
+    Block = 'Block',
+    TypeExpression = 'TypeExpression',
+    TypeCastExpression = 'TypeCastExpression',
+    TypedArrayExpression = 'TypedArrayExpression'
 }

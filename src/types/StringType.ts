@@ -1,20 +1,33 @@
-import type { BscType } from './BscType';
-import { DynamicType } from './DynamicType';
+import { isDynamicType, isObjectType, isStringType } from '../astUtils/reflection';
+import { BscType } from './BscType';
+import { BscTypeKind } from './BscTypeKind';
+import { isEnumTypeCompatible, isNativeInterfaceCompatible, isUnionTypeCompatible } from './helpers';
+import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
+import type { TypeCompatibilityData } from '../interfaces';
 
-export class StringType implements BscType {
+export class StringType extends BscType {
     constructor(
         public typeText?: string
-    ) { }
-
-    public isAssignableTo(targetType: BscType) {
-        return (
-            targetType instanceof StringType ||
-            targetType instanceof DynamicType
-        );
+    ) {
+        super();
     }
 
-    public isConvertibleTo(targetType: BscType) {
-        return this.isAssignableTo(targetType);
+    public readonly kind = BscTypeKind.StringType;
+
+    /**
+     * A static instance that can be used to reduce memory and constructor costs, since there's nothing unique about this
+     */
+    public static instance = new StringType('string');
+
+    public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
+        return (
+            isStringType(targetType) ||
+            isDynamicType(targetType) ||
+            isObjectType(targetType) ||
+            isUnionTypeCompatible(this, targetType, data) ||
+            isEnumTypeCompatible(this, targetType, data) ||
+            isNativeInterfaceCompatible(this, targetType, 'rostring', data)
+        );
     }
 
     public toString() {
@@ -24,4 +37,10 @@ export class StringType implements BscType {
     public toTypeString(): string {
         return this.toString();
     }
+
+    public isEqual(targetType: BscType): boolean {
+        return isStringType(targetType);
+    }
 }
+
+BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('string', StringType.instance);

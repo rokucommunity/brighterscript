@@ -1,7 +1,8 @@
 import type { Position } from 'vscode-languageserver';
 import { DiagnosticSeverity } from 'vscode-languageserver';
-import type { BsDiagnostic } from './interfaces';
+import type { BsDiagnostic, TypeCompatibilityData } from './interfaces';
 import type { TokenKind } from './lexer/TokenKind';
+import util from './util';
 
 /**
  * An object that keeps track of all possible error messages.
@@ -206,7 +207,7 @@ export let DiagnosticMessages = {
         code: 1036,
         severity: DiagnosticSeverity.Error
     }),
-    invalidFunctionReturnType: (typeText: string) => ({
+    __unused: (typeText: string) => ({
         message: `Function return type '${typeText}' is invalid`,
         code: 1037,
         severity: DiagnosticSeverity.Error
@@ -241,7 +242,7 @@ export let DiagnosticMessages = {
         code: 1043,
         severity: DiagnosticSeverity.Error
     }),
-    functionParameterTypeIsInvalid: (parameterName: string, typeText: string) => ({
+    __unused2: (parameterName: string, typeText: string) => ({
         message: `Function parameter '${parameterName}' is of invalid type '${typeText}'`,
         code: 1044,
         severity: DiagnosticSeverity.Error
@@ -637,7 +638,7 @@ export let DiagnosticMessages = {
         code: 1122,
         severity: DiagnosticSeverity.Error
     }),
-    cannotFindType: (typeName: string) => ({
+    __unused3: (typeName: string) => ({
         message: `Cannot find type with name '${typeName}'`,
         code: 1123,
         severity: DiagnosticSeverity.Error
@@ -710,8 +711,8 @@ export let DiagnosticMessages = {
         code: 1136,
         severity: DiagnosticSeverity.Error
     }),
-    namespaceCannotBeReferencedDirectly: () => ({
-        message: `Namespace cannot be referenced directly`,
+    itemCannotBeUsedAsVariable: (itemType: string) => ({
+        message: `${itemType} cannot be used as a variable`,
         code: 1137,
         severity: DiagnosticSeverity.Error
     }),
@@ -720,12 +721,74 @@ export let DiagnosticMessages = {
         code: 1138,
         severity: DiagnosticSeverity.Error
     }),
+    noOptionalChainingInLeftHandSideOfAssignment: () => ({
+        message: `Optional chaining may not be used in the left-hand side of an assignment`,
+        code: 1139,
+        severity: DiagnosticSeverity.Error
+    }),
+    itemCannotBeUsedAsType: (typeText: string) => ({
+        message: `'${typeText}' cannot be used as a type`,
+        code: 1140,
+        severity: DiagnosticSeverity.Error
+    }),
+    argumentTypeMismatch: (actualTypeString: string, expectedTypeString: string, data?: TypeCompatibilityData) => ({
+        message: `Argument of type '${actualTypeString}' is not compatible with parameter of type '${expectedTypeString}'${typeCompatibilityMessage(actualTypeString, expectedTypeString, data)}`,
+        data: data,
+        code: 1141,
+        severity: DiagnosticSeverity.Error
+    }),
+    returnTypeMismatch: (actualTypeString: string, expectedTypeString: string, data?: TypeCompatibilityData) => ({
+        message: `Type '${actualTypeString}' is not compatible with declared return type '${expectedTypeString}'${typeCompatibilityMessage(actualTypeString, expectedTypeString, data)}'`,
+        data: data,
+        code: 1142,
+        severity: DiagnosticSeverity.Error
+    }),
+    assignmentTypeMismatch: (actualTypeString: string, expectedTypeString: string, data?: TypeCompatibilityData) => ({
+        message: `Type '${actualTypeString}' is not compatible with type '${expectedTypeString}'${typeCompatibilityMessage(actualTypeString, expectedTypeString, data)}`,
+        data: data,
+        code: 1143,
+        severity: DiagnosticSeverity.Error
+    }),
+    operatorTypeMismatch: (operatorString: string, firstType: string, secondType = '') => ({
+        message: `Operator '${operatorString}' cannot be applied to type${secondType ? 's' : ''} '${firstType}'${secondType ? ` and '${secondType}'` : ''}`,
+        code: 1144,
+        severity: DiagnosticSeverity.Error
+    }),
+    incompatibleSymbolDefinition: (symbol: string, scopeName: string) => ({
+        message: `'${symbol}' is incompatible across scope group (${scopeName})`, // TODO: Add scopes where it was defined
+        code: 1145,
+        severity: DiagnosticSeverity.Error
+    }),
     accessModifierIsRequired: () => ({
         message: `Access modifier is required`,
-        code: 1139,
+        code: 1146,
         severity: DiagnosticSeverity.Error
     })
 };
+export const defaultMaximumTruncationLength = 160;
+
+export function typeCompatibilityMessage(actualTypeString: string, expectedTypeString: string, data: TypeCompatibilityData) {
+    let message = '';
+    if (data?.missingFields?.length > 0) {
+        message = `\n    Type '${actualTypeString}' is missing the following members: ` + util.truncate({
+            leadingText: ``,
+            trailingText: '',
+            itemSeparator: ', ',
+            items: data.missingFields,
+            partBuilder: (x) => x.name,
+            maxLength: defaultMaximumTruncationLength
+        });
+    } else if (data?.fieldMismatches?.length > 0) {
+        message = '. ' + util.truncate({
+            leadingText: `Type '${actualTypeString}' has incompatible members:`,
+            items: data.fieldMismatches,
+            itemSeparator: '',
+            partBuilder: (x) => `\n    member "${x.name}" should be '${x.expectedType}' but is '${x.actualType}'`,
+            maxLength: defaultMaximumTruncationLength
+        });
+    }
+    return message;
+}
 
 export const DiagnosticCodeMap = {} as Record<keyof (typeof DiagnosticMessages), number>;
 export let diagnosticCodes = [] as number[];

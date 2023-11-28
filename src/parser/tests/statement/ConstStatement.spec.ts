@@ -7,8 +7,8 @@ import { expect } from '../../../chai-config.spec';
 import type { ConstStatement } from '../../Statement';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { LiteralExpression } from '../../Expression';
-import { CompletionItemKind } from 'vscode-languageserver-protocol';
 import { rootDir } from '../../../testHelpers.spec';
+import { CompletionItemKind } from 'vscode-languageserver';
 
 const sinon = createSandbox();
 
@@ -33,7 +33,7 @@ describe('ConstStatement', () => {
                 const = {
                     name: "Bob"
                 }
-                print const.name = {}
+                print const.name = "John"
             end sub
         `);
         program.validate();
@@ -62,6 +62,21 @@ describe('ConstStatement', () => {
             const SOME_OBJ = {}
             const SOME_ARR = []
         `);
+    });
+
+    it('allows const with the name `optional`', () => {
+        program.setFile('source/main.bs', `
+            const optional = true
+            namespace alpha
+                const optional = true
+            end namespace
+            sub main()
+                print optional
+                print alpha.optional
+            end sub
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
     });
 
     describe('transpile', () => {
@@ -198,15 +213,43 @@ describe('ConstStatement', () => {
                     log()
                 end sub
             `);
-
+            program.validate();
+            // log(|)
             expectCompletionsIncludes(
-                // log(|)
-                program.getCompletions('source/main.bs', util.createPosition(3, 24)),
+                program.getCompletions('source/main.bs', util.createPosition(3, 34)),
                 [{
                     label: 'API_KEY',
                     kind: CompletionItemKind.Constant
                 }]
             );
+        });
+
+        it('transpiles simple const in a unary expression', async () => {
+            await testTranspile(`
+                const foo = 1
+                sub main()
+                    bar = -foo
+                end sub
+            `, `
+                sub main()
+                    bar = -1
+                end sub
+            `, undefined, 'source/main.bs');
+        });
+
+        it('transpiles complex const in a unary expression', async () => {
+            await testTranspile(`
+                namespace some.consts
+                    const foo = 1
+                end namespace
+                sub main()
+                    bar = -some.consts.foo
+                end sub
+            `, `
+                sub main()
+                    bar = - 1
+                end sub
+            `, undefined, 'source/main.bs');
         });
 
         it('shows up in namespace completions', () => {
@@ -218,7 +261,7 @@ describe('ConstStatement', () => {
                     log(constants.)
                 end sub
             `);
-
+            program.validate();
             expectCompletionsIncludes(
                 // log(|)
                 program.getCompletions('source/main.bs', util.createPosition(5, 34)),

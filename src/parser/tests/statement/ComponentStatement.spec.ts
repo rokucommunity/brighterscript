@@ -6,11 +6,11 @@ import type { BrsFile } from '../../../files/BrsFile';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { createVisitor, WalkMode } from '../../../astUtils/visitors';
 import * as sinon from 'sinon';
-import { NamespacedVariableNameExpression } from '../../Expression';
 import { ParseMode } from '../../Parser';
 import * as fsExtra from 'fs-extra';
+import { TypeExpression } from '../../..';
 
-describe.only('ComponentStatement', () => {
+describe('ComponentStatement', () => {
     const rootDir = s`${process.cwd()}/.tmp/rootDir`;
     let program: Program;
     let testTranspile = getTestTranspile(() => [program, rootDir]);
@@ -49,8 +49,8 @@ describe.only('ComponentStatement', () => {
             end component
         `);
         expectZeroDiagnostics(program);
-        const parentName = file.parser.references.componentStatements[1].parentName as NamespacedVariableNameExpression;
-        expect(parentName).to.be.instanceof(NamespacedVariableNameExpression);
+        const parentName = file.parser.references.componentStatements[1].parentName as TypeExpression;
+        expect(parentName).to.be.instanceof(TypeExpression);
         expect(parentName.getName(ParseMode.BrightScript)).to.eql('CustomButton');
     });
 
@@ -64,8 +64,8 @@ describe.only('ComponentStatement', () => {
             end component
         `);
         expectZeroDiagnostics(program);
-        const parentName = file.parser.references.componentStatements[1].parentName as NamespacedVariableNameExpression;
-        expect(parentName).to.be.instanceof(NamespacedVariableNameExpression);
+        const parentName = file.parser.references.componentStatements[1].parentName as TypeExpression;
+        expect(parentName).to.be.instanceof(TypeExpression);
         expect(parentName.getName(ParseMode.BrighterScript)).to.eql('Buttons.CustomButton');
     });
 

@@ -1,6 +1,4 @@
-/* eslint-disable @typescript-eslint/no-for-in-array */
-/* eslint no-template-curly-in-string: 0 */
-
+/* eslint-disable no-template-curly-in-string */
 import { expect } from '../../../chai-config.spec';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { Lexer } from '../../../lexer/Lexer';
@@ -8,6 +6,7 @@ import { Parser, ParseMode } from '../../Parser';
 import { AssignmentStatement } from '../../Statement';
 import { Program } from '../../../Program';
 import { expectZeroDiagnostics, getTestTranspile } from '../../../testHelpers.spec';
+import { util } from '../../../util';
 
 describe('TemplateStringExpression', () => {
     describe('parser template String', () => {
@@ -18,6 +17,41 @@ describe('TemplateStringExpression', () => {
         });
 
         describe('in assignment', () => {
+            it('generates correct locations for quasis', () => {
+                let { tokens } = Lexer.scan('print `0xAAAAAA${"0xBBBBBB"}0xCCCCCC`');
+                expect(
+                    tokens.filter(x => /"?0x/.test(x.text)).map(x => x.range)
+                ).to.eql([
+                    util.createRange(0, 7, 0, 15), // 0xAAAAAA
+                    util.createRange(0, 17, 0, 27), // "0xBBBBBB"
+                    util.createRange(0, 28, 0, 36) // 0xCCCCCC
+                ]);
+            });
+
+            it('generates correct locations for items', () => {
+                let { tokens } = Lexer.scan('print `${111}${222}${333}`');
+                //throw out the `print` token
+                tokens.shift();
+                expect(
+                    //compute the length of the token char spread
+                    tokens.filter(x => x.text !== '').map(x => [x.range.end.character - x.range.start.character, x.text])
+                ).to.eql([
+                    '`',
+                    '${',
+                    '111',
+                    '}',
+                    '${',
+                    '222',
+                    '}',
+                    '${',
+                    '333',
+                    '}',
+                    '`'
+                ].map(x => [x.length, x])
+                );
+            });
+
+
             it(`simple case`, () => {
                 let { tokens } = Lexer.scan(`a = \`hello      world\``);
                 let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
@@ -82,7 +116,7 @@ describe('TemplateStringExpression', () => {
                 end sub
             `, `
                 sub main()
-                    a = rokucommunity_bslib_toString(LINE_NUM) + "," + rokucommunity_bslib_toString(LINE_NUM)
+                    a = (rokucommunity_bslib_toString(LINE_NUM) + "," + rokucommunity_bslib_toString(LINE_NUM))
                 end sub
             `);
         });
@@ -94,7 +128,7 @@ describe('TemplateStringExpression', () => {
                     end sub
                 `, `
                     sub main()
-                        a = bslib_toString(LINE_NUM) + "," + bslib_toString(LINE_NUM)
+                        a = (bslib_toString(LINE_NUM) + "," + bslib_toString(LINE_NUM))
                     end sub
                 `
             );
@@ -119,7 +153,7 @@ describe('TemplateStringExpression', () => {
                 end sub
             `, `
                 sub main()
-                    a = "hello " + bslib_toString(LINE_NUM.text) + " world " + bslib_toString("template" + "".getChars()) + " test"
+                    a = ("hello " + bslib_toString(LINE_NUM.text) + " world " + bslib_toString("template" + "".getChars()) + " test")
                 end sub
             `);
         });
@@ -191,7 +225,7 @@ describe('TemplateStringExpression', () => {
                 end sub
             `, `
                 sub main()
-                    a = "I am multiline" + chr(10) + bslib_toString(a.isRunning()) + chr(10) + "more"
+                    a = ("I am multiline" + chr(10) + bslib_toString(a.isRunning()) + chr(10) + "more")
                 end sub
             `);
         });
@@ -210,11 +244,11 @@ describe('TemplateStringExpression', () => {
                     a = [
                         "one"
                         "two"
-                        "I am a complex example" + bslib_toString(a.isRunning([
+                        ("I am a complex example" + bslib_toString(a.isRunning([
                             "a"
                             "b"
                             "c"
-                        ]))
+                        ])))
                     ]
                 end sub
             `);
@@ -239,12 +273,12 @@ describe('TemplateStringExpression', () => {
                     a = [
                         "one"
                         "two"
-                        "I am a complex example " + bslib_toString(a.isRunning([
+                        ("I am a complex example " + bslib_toString(a.isRunning([
                             "a"
                             "b"
                             "c"
-                            "d_open " + bslib_toString("inside" + m.items[1]) + " d_close"
-                        ]))
+                            ("d_open " + bslib_toString("inside" + m.items[1]) + " d_close")
+                        ])))
                     ]
                 end sub
             `);
@@ -257,7 +291,7 @@ describe('TemplateStringExpression', () => {
                 end sub
             `, `
                 sub main()
-                    a = "hello" + "world"
+                    a = ("hello" + "world")
                 end sub
             `);
         });
@@ -269,7 +303,7 @@ describe('TemplateStringExpression', () => {
                 end sub
             `, `
                 sub main()
-                    text = "Hello " + "world"
+                    text = ("Hello " + "world")
                 end sub
             `);
         });

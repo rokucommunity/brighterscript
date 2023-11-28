@@ -1,6 +1,8 @@
-const fsExtra = require('fs-extra');
+import type { TargetOptions } from '../target-runner';
+import * as fsExtra from 'fs-extra';
 
-module.exports = (suite, name, brighterscript, projectPath, options) => {
+module.exports = (options: TargetOptions) => {
+    const { suite, name, version, fullName, brighterscript, projectPath, suiteOptions } = options;
     const { ProgramBuilder } = brighterscript;
     const cache = new Map();
     const fileResolver = (filePath) => {
@@ -15,7 +17,7 @@ module.exports = (suite, name, brighterscript, projectPath, options) => {
         }
     };
 
-    suite.add(name, (deferred) => {
+    suite.add(fullName, (deferred) => {
         const builder = new ProgramBuilder();
         //register a file resolver to return the in-memory version of the file for every test
         builder.addFileResolver(fileResolver);
@@ -26,7 +28,8 @@ module.exports = (suite, name, brighterscript, projectPath, options) => {
             copyToStaging: false,
             //disable diagnostic reporting (they still get collected)
             diagnosticFilters: ['**/*'],
-            logLevel: 'error'
+            logLevel: 'error',
+            ...options.additionalConfig
         }).then(() => {
             if (Object.keys(builder.program.files).length === 0) {
                 throw new Error('No files found in program');
@@ -38,7 +41,7 @@ module.exports = (suite, name, brighterscript, projectPath, options) => {
             console.error(error);
         });
     }, {
-        ...options,
+        ...suiteOptions,
         'defer': true
     });
 };

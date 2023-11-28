@@ -1,5 +1,5 @@
 {
-    "generatedDate": "2022-11-02T15:29:46.390Z",
+    "generatedDate": "2023-11-24T19:45:56.208Z",
     "nodes": {
         "animation": {
             "description": "Extends [**AnimationBase**](https://developer.roku.com/docs/references/scenegraph/abstract-nodes/animationbase.md\n\nThe Animation node class provides animations of renderable nodes, by applying interpolator functions to the values in specified renderable node fields. For an animation to take effect, an Animation node definition must include a child field interpolator node ([FloatFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/floatfieldinterpolator.md\"FloatFieldInterpolator\"), [Vector2DFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/vector2dfieldinterpolator.md\"Vector2DFieldInterpolator\"), [ColorFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/colorfieldinterpolator.md\"ColorFieldInterpolator\")) definition for each renderable node field that is animated.\n\nThe Animation node class provides a simple linear interpolator function, where the animation takes place smoothly and simply from beginning to end. The Animation node class also provides several more complex interpolator functions to allow custom animation effects. For example, you can move a graphic image around the screen at differing speeds and curved trajectories at different times in the animation by specifying the appropriate function in the easeFunction field (quadratic and exponential are two examples of functions that can be specified). The interpolator functions are divided into two parts: the beginning of the animation (ease-in), and the end of the animation (ease-out). You can apply a specified interpolator function to either or both ease-in and ease-out, or specify no function for either or both (which is the linear function). You can also change the portion of the animation that is ease-in and ease-out to arbitrary fractional values for a quadratic interpolator function applied to both ease-in and ease-out.",
@@ -443,7 +443,7 @@
                 {
                     "accessPermission": "READ_ONLY",
                     "default": "",
-                    "description": "Contains the format of the currently playing audio.\n\n| Value | Meaning |\n| --- | --- |\n| \"\" | No stream playing |\n| aac | ISO/IEC 14496-3, Advanced Audio Coding |\n| aac\\_adif | ISO/IEC 14496-3, Advanced Audio Coding, ADIF container |\n| aac\\_adts | ISO/IEC 14496-3, Advanced Audio Coding, ADTS container |\n| aac\\_latm | ISO/IEC 14496-3, Advanced Audio Coding, LATM container |\n| ac3 | Dolby Digital |\n| alac | Apple Lossless |\n| dts | DTS Coherent Acoustics |\n| eac3 | Dolby Digital Plus |\n| flac | Free Lossless Audio Codec |\n| mp2 | ISO/IEC 11172-3, MPEG Audio Layer II |\n| mp3 | ISO/IEC 11172-3, MPEG Audio Layer III |\n| none | Stream contains no playable audio |\n| pcm | linear PCM |\n| unknown | Stream contains unknown audio |\n| vorbis | Ogg Vorbis |\n| wma   _deprecated_ | Microsoft Windows Media Audio.      As of Roku OS 10.5, the Roku platform no longer supports this audio format. |\n| wmapro   _deprecated_ | Microsoft Windows Media Pro Audio.      As of Roku OS 10.5, the Roku platform no longer supports this audio format. |",
+                    "description": "Contains the format of the currently playing audio.\n\n| Value | Meaning |\n| --- | --- |\n| \"\" | No stream playing |\n| aac | ISO/IEC 14496-3, Advanced Audio Coding |\n| aac\\_adif | ISO/IEC 14496-3, Advanced Audio Coding, ADIF container |\n| aac\\_adts | ISO/IEC 14496-3, Advanced Audio Coding, ADTS container |\n| aac\\_latm | ISO/IEC 14496-3, Advanced Audio Coding, LATM container |\n| ac3 | Dolby Digital |\n| alac | Apple Lossless |\n| dts | DTS Coherent Acoustics |\n| eac3 | Dolby Digital Plus |\n| flac | Free Lossless Audio Codec |\n| mp2 | ISO/IEC 11172-3, MPEG Audio Layer II |\n| mp3 | ISO/IEC 11172-3, MPEG Audio Layer III |\n| none | Stream contains no playable audio |\n| pcm | linear PCM |\n| unknown | Stream contains unknown audio |\n| vorbis | Ogg Vorbis |\n| wma   _sunset as of Roku OS 12.5_ | Microsoft Windows Media Audio.      As of Roku OS 10.5, the Roku platform no longer supports this audio format. As part of the Roku OS 12.5 release, this format was officially sunset. |\n| wmapro   _sunset as of Roku OS 12.5_ | Microsoft Windows Media Pro Audio.      As of Roku OS 10.5, the Roku platform no longer supports this audio format. As part of the Roku OS 12.5 release, this format was officially sunset. |",
                     "name": "audioFormat",
                     "type": "string"
                 },
@@ -607,7 +607,7 @@
             "url": "https://developer.roku.com/docs/references/scenegraph/media-playback-nodes/audio.md"
         },
         "busyspinner": {
-            "description": "Extends [**Group**](https://developer.roku.com/docs/references/scenegraph/layout-group-nodes/group.md\n\nThe BusySpinner node class is a simple widget that displays a continuously rotating bitmap. Since the BusySpinner node class uses an internal Poster node instance, the busy spinner bitmap can be specified by setting the internal Poster node uri field.\n\n[SimpleBusySpinner.zip](https://github.com/rokudev/samples/tree/master/ux%20components/widgets) is a sample channel that demonstrates usage of the BusySpinner.\n\n> Not all Roku Player hardware versions support arbitrary rotations. In particular, some hardware versions only support 90 degree rotation increments. In those cases, the icon will step through 90 degree, 180 degree, 270 degree and back to 0 degree rotations, rather than spin smoothly.",
+            "description": "Extends [**Group**](https://developer.roku.com/docs/references/scenegraph/layout-group-nodes/group.md\n\nThe BusySpinner node class is a simple widget that displays a continuously rotating bitmap. Since the BusySpinner node class uses an internal Poster node instance, the busy spinner bitmap can be specified by setting the internal Poster node uri field.\n\n[SimpleBusySpinner](https://github.com/rokudev/samples/tree/master/ux%20components/widgets) is a sample channel that demonstrates usage of the BusySpinner.\n\n> Not all Roku Player hardware versions support arbitrary rotations. In particular, some hardware versions only support 90 degree rotation increments. In those cases, the icon will step through 90 degree, 180 degree, 270 degree and back to 0 degree rotations, rather than spin smoothly.",
             "events": [],
             "extends": {
                 "name": "Group",
@@ -1007,7 +1007,7 @@
             "url": "https://developer.roku.com/docs/references/scenegraph/animation-nodes/colorfieldinterpolator.md"
         },
         "componentlibrary": {
-            "description": "Extends [**Node**](https://developer.roku.com/docs/references/scenegraph/node.md\n\nThe ComponentLibrary node class downloads a library of custom SceneGraph components to be used in an application. The ComponentLibrary node should be used in a Scene node, such as Scene or OverhangPanelSetScene. One way to ensure that the library downloads before the SceneGraph application begins to compile the components for the application, is to begin the download in the main.brs file that creates the Scene node, by adding an field to the Scene node that can be used to monitor the download, and starts the application when the download is complete.",
+            "description": "Extends [**Node**](https://developer.roku.com/docs/references/scenegraph/node.md\n\nThe ComponentLibrary node class downloads a library of custom SceneGraph components to be used in an application. The ComponentLibrary node should be used in a Scene node, such as Scene or OverhangPanelSetScene. One way to ensure that the library downloads before the SceneGraph application begins to compile the components for the application, is to begin the download in the main.brs file that creates the Scene node, by adding an / field to the Scene node that can be used to monitor the download, and starts the application when the download is complete.",
             "events": [],
             "extends": {
                 "name": "Node",
@@ -1283,7 +1283,7 @@
         },
         "dynamickeyboardbase": {
             "availableSince": "9.4",
-            "description": "_Available since Roku OS 9.4_\n\nExtends [**Group**](https://developer.roku.com/docs/references/scenegraph/layout-group-nodes/group.md\"**Group**\")\n\n> Channels must use Roku voice keyboards for [email](https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/dynamic-keyboard.md, [PIN](https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/dynamic-pinpad.md, [password](https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/dynamic-keyboard.md entry to pass [certification](/docs/developer-program/certification/certification.md#4-channel-operation).\n\nThe DynamicKeyboardBase is an abstract class that provides the functionality for dynamic voice-enabled keyboards. It combines [**DynamicKeyGrid**](https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/dynamic-key-grid.md and [**VoiceTextEditBox**](https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/voice-text-edit-box.md nodes to provide a single node that supports text entry in multiple languages and voice entry in English.\n\n*   The [**DynamicKeyGrid**](https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/dynamic-key-grid.md provides keyboard functionality. The layout of the keyboard is based on a JSON-formatted Key Definition File.\n    \n    The classes derived from DynamicKeyboardBase (DynamicKeyboard, DynamicPinPad, and DynamicMiniKeyboard) have built-in Key Definition Files. For example, the DynamicKeyboard node uses a Key Definition File that matches the key layout of the [legacy Keyboard node](https://developer.roku.com/docs/references/scenegraph/widget-nodes/keyboard.md.\n    \n    The [**DynamicCustomKeyboard** node](https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/dynamic-custom-keyboard.md enables developers to define a custom Key Definition File in order to configure the key layout. In the Key Definition File, the developer specifies the keys in each section and row of the keyboard. The keys support the characters in the Basic Latin, Latin 1 Supplement, Latin Extended-A, and Latin Extended-B blocks. This provides support for most Western European languages, including English, French, German, Italian, Portuguese, and Spanish.\n    \n\n*   The [**VoiceTextEditBox**](https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/voice-text-edit-box.md displays the text that has been entered or spoken. This node supports multiple voice entry modes for entering email addresses, passwords, street addresses, and PINs. This node currently supports voice entry in English only.\n\n> Developers should upgrade the [legacy keyboards](https://developer.roku.com/docs/references/scenegraph/widget-nodes/keyboard.md in their channels to dynamic voice-enabled keyboards in order to leverage the following benefits:\n> \n> *   **Faster on-device sign-ups and sign-ins.** Enable customers to use voice entry to provide their information when subscribing to channels and logging in.\n>     \n> *   **Localized in-channel search**: Enable customers to search for content in their native language.\n>     \n> *   **Localized customer information entry**: Enable customers to enter their personal information in their native language.\n>",
+            "description": "_Available since Roku OS 9.4_\n\nExtends [**Group**](https://developer.roku.com/docs/references/scenegraph/layout-group-nodes/group.md\"**Group**\")\n\n> Channels must use Roku voice keyboards for [email](https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/dynamic-keyboard.md, [PIN](https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/dynamic-pinpad.md, [password](https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/dynamic-keyboard.md entry to pass [certification](/docs/developer-program/certification/certification.md#4-channel-operation).\n\nThe DynamicKeyboardBase is an abstract class that provides the functionality for dynamic voice-enabled keyboards. It combines [**DynamicKeyGrid**](https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/dynamic-key-grid.md and [**VoiceTextEditBox**](https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/voice-text-edit-box.md nodes to provide a single node that supports text entry in multiple languages and voice entry in English and Spanish.\n\n*   The [**DynamicKeyGrid**](https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/dynamic-key-grid.md provides keyboard functionality. The layout of the keyboard is based on a JSON-formatted Key Definition File.\n    \n    The classes derived from DynamicKeyboardBase (DynamicKeyboard, DynamicPinPad, and DynamicMiniKeyboard) have built-in Key Definition Files. For example, the DynamicKeyboard node uses a Key Definition File that matches the key layout of the [legacy Keyboard node](https://developer.roku.com/docs/references/scenegraph/widget-nodes/keyboard.md.\n    \n    The [**DynamicCustomKeyboard** node](https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/dynamic-custom-keyboard.md enables developers to define a custom Key Definition File in order to configure the key layout. In the Key Definition File, the developer specifies the keys in each section and row of the keyboard. The keys support the characters in the Basic Latin, Latin 1 Supplement, Latin Extended-A, and Latin Extended-B blocks. This provides support for most Western European languages, including English, French, German, Italian, Portuguese, and Spanish.\n    \n\n*   The [**VoiceTextEditBox**](https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/voice-text-edit-box.md displays the text that has been entered or spoken. This node supports multiple voice entry modes for entering email addresses, passwords, street addresses, and PINs. This node currently supports voice entry in English and Spanish.\n\n> Developers should upgrade the [legacy keyboards](https://developer.roku.com/docs/references/scenegraph/widget-nodes/keyboard.md in their channels to dynamic voice-enabled keyboards in order to leverage the following benefits:\n> \n> *   **Faster on-device sign-ups and sign-ins.** Enable customers to use voice entry to provide their information when subscribing to channels and logging in.\n>     \n> *   **Localized in-channel search**: Enable customers to search for content in their native language.\n>     \n> *   **Localized customer information entry**: Enable customers to enter their personal information in their native language.\n>",
             "events": [],
             "extends": {
                 "name": "Group",
@@ -1332,7 +1332,7 @@
         },
         "dynamickeygrid": {
             "availableSince": "9.4",
-            "description": "_Available since Roku OS 9.4_\n\nExtends [**Group**](https://developer.roku.com/docs/references/scenegraph/layout-group-nodes/group.md\"**Group**\")\n\nThe **DynamicKeyGrid** node implements a grid of keys that are defined and organized in a [Key Definition File](https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/key-defintion-file.md. It is typically used in a subclass of the [DynamicKeyboardBase](https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/dynamic-keyboard-base.md node (DynamicKeyboard, DynamicPinPad, and DynamicMiniKeyboard) to display the string of characters entered via text or voice entry. It may also be used as an individual node.",
+            "description": "_Available since Roku OS 9.4_\n\nExtends [**Group**](https://developer.roku.com/docs/references/scenegraph/layout-group-nodes/group.md\"**Group**\")\n\nThe **DynamicKeyGrid** node implements a grid of keys that are defined and organized in a [Key Definition File](https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/key-definition-file.md. It is typically used in a subclass of the [DynamicKeyboardBase](https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/dynamic-keyboard-base.md node (DynamicKeyboard, DynamicPinPad, and DynamicMiniKeyboard) to display the string of characters entered via text or voice entry. It may also be used as an individual node.",
             "events": [],
             "extends": {
                 "name": "Group",
@@ -1377,7 +1377,7 @@
                 {
                     "accessPermission": "READ_WRITE",
                     "default": "\"\"",
-                    "description": "Specifies the \\[Key Definition File\\](https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/key-defintion-file.md to use to define the key layout metadata.",
+                    "description": "Specifies the \\[Key Definition File\\](https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/key-definition-file.md to use to define the key layout metadata.",
                     "name": "keyDefinitionUri",
                     "type": "uri"
                 },
@@ -1405,7 +1405,7 @@
                 {
                     "accessPermission": "READ_WRITE",
                     "default": "not set",
-                    "description": "The RSGPalette node contains the set of color values used by this DynamicKeyGrid node. By default, no RSGPalette is specified; therefore, the RSGPalette colors are inherited from the ancestor nodes in the scene graph. If the DynamicKeyboardBase node is used within a StandardDialog node, the following rules determine the color palette used by the keyboard: \\* If the \\*\\*palette\\*\\* field is set, the key grid uses it. \\* If the \\*\\*palette\\*\\* field is not set, the key grid looks up the scene graph until it finds a \\*\\*PaletteGroup\\*\\* node with its \\*\\*palette\\*\\* field set. This may be found in a \\*\\*DynamicKeyboard\\*\\* node, a \\*\\*StandardDialog\\*\\* node, or the \\*\\*Scene\\*\\* itself. \\* If no node has its \\*\\*palette\\*\\* field set, the key grid uses the default palette (gray background/white text). The RSGPalette color values used by the DynamicKeyboardBase are as follows:\n\n| Palette Color Name | Usages |\n| --- | --- |\n| KeyboardColor | Blend color for key background bitmap. |\n| PrimaryTextColor | Text color used for non-focused keys.   Blend color for the icons of non-focused keys.   Text color for the label of focused key suggestion items. |\n| SecondaryItemColor | Text color for disabled keys.   Blend color for the icons of disabled keys. |\n| FocusColor | Blend color for the focus indicator.   Blend color for the background of key suggestion pop-us. |\n| FocusItemColor | Text color for the label of the focused key.   Blend color for the icons of the focused key and the focus indicator in key suggestion pop-ups.   Text color for the labels of non-focused key suggestion items. |",
+                    "description": "The \\[RSGPalette node\\](https://developer.roku.com/docs/references/scenegraph/scene.md contains the set of color values used by this DynamicKeyGrid node. By default, no RSGPalette is specified; therefore, the RSGPalette colors are inherited from the ancestor nodes in the scene graph. If the DynamicKeyboardBase node is used within a StandardDialog node, the following rules determine the color palette used by the keyboard: \\* If the \\*\\*palette\\*\\* field is set, the key grid uses it. \\* If the \\*\\*palette\\*\\* field is not set, the key grid looks up the scene graph until it finds a \\*\\*PaletteGroup\\*\\* node with its \\*\\*palette\\*\\* field set. This may be found in a \\*\\*DynamicKeyboard\\*\\* node, a \\*\\*StandardDialog\\*\\* node, or the \\*\\*Scene\\*\\* itself. \\* If no node has its \\*\\*palette\\*\\* field set, the key grid uses the default palette (gray background/white text). The RSGPalette color values used by the DynamicKeyboardBase are as follows:\n\n| Palette Color Name | Usages |\n| --- | --- |\n| KeyboardColor | Blend color for key background bitmap. |\n| PrimaryTextColor | Text color used for non-focused keys.   Blend color for the icons of non-focused keys.   Text color for the label of focused key suggestion items. |\n| SecondaryItemColor | Text color for disabled keys.   Blend color for the icons of disabled keys. |\n| FocusColor | Blend color for the focus indicator.   Blend color for the background of key suggestion pop-us. |\n| FocusItemColor | Text color for the label of the focused key.   Blend color for the icons of the focused key and the focus indicator in key suggestion pop-ups.   Text color for the labels of non-focused key suggestion items. |",
                     "name": "palette",
                     "type": "RSGPalette node"
                 },
@@ -1711,13 +1711,13 @@
             "name": "InfoPane",
             "url": "https://developer.roku.com/docs/references/scenegraph/label-nodes/info-pane.md"
         },
-        "key defintion file": {
+        "key definition file": {
             "description": "The Key Definition File is a JSON-formatted file that specifies the layout of a keyboard. The Key Definition Files for the classes derived from **DynamicKeyboardBase** (**DynamicKeyboard**, **DynamicPinPad**, and **DynamicMiniKeyboard**) are built-in and cannot be modified because the keyboard layout for these nodes is fixed. Conversely, the **DynamicCustomKeyboard** node requires developers to create the Key Definition File in order to implement a custom keyboard layout.\n\nThe Key Definition File is a single JSON object with the following six hierarchal objects (listed in order from the top to the bottom of the hierarchy):\n\n1.  [KeyLayout](#keylayout)\n2.  [Section](#section)\n3.  [Grid](#grid)\n4.  [Row](#row)\n5.  [Key](#key)\n6.  [KeySuggestions](#keysuggestions)\n\nProperties can be set at any level of the hierarchy and are used to determine the default values for the subparts at lower levels in the hierarchy. For example, setting the **keyboardHeight** property at the **KeyLayout** level will specify the default height of each **Row** in each **Grid** in each **Section** of the grid used. If a **Grid** specifies a **gridHeight** property, it is set as the default for each **Row** in that **Grid**. In both cases, if any **Row** in the **Grid** specifies a **rowHeight** property, that height will be used as the default for each **Key** in that **Row**.",
             "events": [],
             "fields": [],
             "interfaces": [],
-            "name": "Key Defintion File",
-            "url": "https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/key-defintion-file.md"
+            "name": "Key Definition File",
+            "url": "https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/key-definition-file.md"
         },
         "keyboard": {
             "description": "Extends [**Group**](https://developer.roku.com/docs/references/scenegraph/layout-group-nodes/group.md\"**Group**\")\n\nThe Keyboard node class allows a user to enter a string of alphanumeric characters. The string entered is displayed in a [TextEditBox](https://developer.roku.com/docs/references/scenegraph/widget-nodes/texteditbox.md\"TextEditBox\") node that is part of the Keyboard node.\n\nThe Keyboard node must have the key focus in order to work properly. By default, a Keyboard node toggles between uppercase and lowercase letters when the Options remote key is pressed, to speed the entry of mixed-case strings by the user. It is important not to override this behavior, particularly if a Keyboard node is used as an internal node for a [KeyboardDialog](https://developer.roku.com/docs/references/scenegraph/dialog-nodes/keyboarddialog.md\"KeyboardDialog\") node.\n\nThe default appearance of a Keyboard node is very transparent, allowing the keyboard to pick up most of its color from what is rendered underneath it. The appearance can be customized by changing the keyboardBitmapUri and other fields.",
@@ -1819,13 +1819,6 @@
                 {
                     "accessPermission": "READ_WRITE",
                     "default": "false",
-                    "description": "If the height field value is greater than zero, used to determine whether or not the last line of visible text is displayed if it would be clipped vertically",
-                    "name": "displayPartialLines",
-                    "type": "Boolean"
-                },
-                {
-                    "accessPermission": "READ_WRITE",
-                    "default": "false",
                     "description": "Specifies whether to display the end or beginning of text that overflows its available width: \\* \\*\\*true\\*\\*. The end of the text is shown. For example, \"the quick brown fox jumps over the lazy dog\" would be truncated to \"...jumps over the lazy dog\". \\* \\*\\*false\\*\\*. The start of the text is shown (for example, \"the quick brown fox jumps...\").",
                     "name": "leadingEllipsis      _Available since Roku OS 11.0_",
                     "type": "Boolean"
@@ -1864,6 +1857,13 @@
                     "description": "Specifies the text color",
                     "name": "color",
                     "type": "color"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "false",
+                    "description": "If the height field value is greater than zero, used to determine whether or not the last line of visible text is displayed if it would be clipped vertically.",
+                    "name": "displayPartialLines",
+                    "type": "Boolean"
                 },
                 {
                     "accessPermission": "READ_WRITE",
@@ -2230,7 +2230,7 @@
                 {
                     "accessPermission": "READ_WRITE",
                     "default": "top",
-                    "description": "Specifies the alignment point in the vertical direction. The effect of the value set depends on the whether the layoutDirection field value is set to either horiz or vert\n\n| Value | layoutDirection | Use |\n| --- | --- | --- |\n| top | horiz | Aligns the top edges of each child in the row, and sets the **LayoutGroup** node local y-coordinate origin at the top edge of the children |\n| top | vert | Sets the LayoutGroup node local y-coordinate origin at the top edge of the first child |\n| center | horiz | Aligns the centers of each child in the row, and sets the LayoutGroup node local y-coordinate origin at the center alignment point |\n| vert | vert | Sets the **LayoutGroup** node local y-coordinate origin at the center of the vertical column of children |\n| bottom | horiz | Aligns the bottom edges of each child in the row, and sets the **LayoutGroup** node local y-coordinate origin at the bottom edge of the children |\n| bottom | vert | Sets the LayoutGroup node local y-coordinate origin at the bottom edge of the last child |\n| custom | horiz | Explicitly set the y translation of each child of the LayoutGroup. If the layoutDirection is \"vert\", custom will not be a valid setting. Instead, \"top\" will be used to do the child layout. |",
+                    "description": "Specifies the alignment point in the vertical direction. The effect of the value set depends on the whether the layoutDirection field value is set to either horiz or vert\n\n| Value | layoutDirection | Use |\n| --- | --- | --- |\n| top | horiz | Aligns the top edges of each child in the row, and sets the **LayoutGroup** node local y-coordinate origin at the top edge of the children |\n| top | vert | Sets the LayoutGroup node local y-coordinate origin at the top edge of the first child |\n| center | horiz | Aligns the centers of each child in the row, and sets the LayoutGroup node local y-coordinate origin at the center alignment point |\n| center | vert | Sets the **LayoutGroup** node local y-coordinate origin at the center of the vertical column of children |\n| bottom | horiz | Aligns the bottom edges of each child in the row, and sets the **LayoutGroup** node local y-coordinate origin at the bottom edge of the children |\n| bottom | vert | Sets the LayoutGroup node local y-coordinate origin at the bottom edge of the last child |\n| custom | horiz | Explicitly set the y translation of each child of the LayoutGroup. If the layoutDirection is \"vert\", custom will not be a valid setting. Instead, \"top\" will be used to do the child layout. |",
                     "name": "vertAlignment",
                     "type": "string"
                 }
@@ -2302,7 +2302,7 @@
             "url": "https://developer.roku.com/docs/references/scenegraph/sliding-panels-nodes/listpanel.md"
         },
         "markupgrid": {
-            "description": "Extends [**ArrayGrid**](https://developer.roku.com/docs/references/scenegraph/abstract-nodes/arraygrid.md\n\nThe MarkupGrid node class is a is a generic grid class that can be used to display a set of items arranged into a 2D grid. The contents of each grid item is an instance of an XML component specified by the `itemComponentName` field. An instance of the XML component is used to display the data for each item in the grid data model. The appearance of the grid item as it enters/exits the grid focus position can be customized using scripting. [SimpleMarkupList.zip](https://github.com/rokudev/samples/blob/master/ux%20components/lists%20and%20grids/SimpleMarkupList.zip) is a sample channel containing a MarkupGrid where each item is an instance of an XML component. See the section [MarkupGrid XML component](https://developer.roku.com/docs/references/scenegraph/list-and-grid-nodes/markupgrid.mdmarkupgrid-xml-component) for details.\n\nThe number of columns in the MarkupGrid node is fixed and the number of rows varies as needed to display all of the items in the grid data model. The items in the grid fill each row from left to right, then top to bottom. For example, if the grid data contains 8 items and the number of columns is set to 3, then items 1, 2 and 3 will be in the first row. Items 4, 5 and 6 will be in the second row. The third row will contain items 7 and 8 in the leftmost two columns and blank space in the right column.\n\nThe layout of rows and columns in the grid is very flexible. Possible layouts include:\n\n*   a simple layout with all items in the grid having the same size\n*   a layout with the items in some rows having varying heights and/or the items in some columns having varying widths\n*   a layout with varying width rows and columns and items that occupy one or more rows and columns\n\nThe grid items can be organized into sections that are demarcated by labelled horizontal divider lines between the sections.",
+            "description": "Extends [**ArrayGrid**](https://developer.roku.com/docs/references/scenegraph/abstract-nodes/arraygrid.md\n\nThe MarkupGrid node class is a is a generic grid class that can be used to display a set of items arranged into a 2D grid. The contents of each grid item is an instance of an XML component specified by the `itemComponentName` field. An instance of the XML component is used to display the data for each item in the grid data model. The appearance of the grid item as it enters/exits the grid focus position can be customized using scripting. [SimpleMarkupList](https://github.com/rokudev/samples/blob/master/ux%20components/lists%20and%20grids/SimpleMarkupList) is a sample channel containing a MarkupGrid where each item is an instance of an XML component. See the section [MarkupGrid XML component](https://developer.roku.com/docs/references/scenegraph/list-and-grid-nodes/markupgrid.mdmarkupgrid-xml-component) for details.\n\nThe number of columns in the MarkupGrid node is fixed and the number of rows varies as needed to display all of the items in the grid data model. The items in the grid fill each row from left to right, then top to bottom. For example, if the grid data contains 8 items and the number of columns is set to 3, then items 1, 2 and 3 will be in the first row. Items 4, 5 and 6 will be in the second row. The third row will contain items 7 and 8 in the leftmost two columns and blank space in the right column.\n\nThe layout of rows and columns in the grid is very flexible. Possible layouts include:\n\n*   a simple layout with all items in the grid having the same size\n*   a layout with the items in some rows having varying heights and/or the items in some columns having varying widths\n*   a layout with varying width rows and columns and items that occupy one or more rows and columns\n\nThe grid items can be organized into sections that are demarcated by labelled horizontal divider lines between the sections.",
             "events": [],
             "extends": {
                 "name": "ArrayGrid",
@@ -2532,7 +2532,7 @@
             "url": "https://developer.roku.com/docs/references/scenegraph/list-and-grid-nodes/markupgrid.md"
         },
         "markuplist": {
-            "description": "Extends [**ArrayGrid**](https://developer.roku.com/docs/references/scenegraph/abstract-nodes/arraygrid.md\n\nThe MarkupList node class is a generic list class that can be used to display a list of items.\n\nThe contents of each list item is an instance of an XML component specified by the `itemComponentName` field value. An instance of the XML component is used to display the data for each item in the list data model. The appearance of the list item as it enters/exits the list focus position can be customized using BrightScript.\n\n[SimpleMarkupList.zip](https://github.com/rokudev/samples/tree/master/ux%20components/lists%20and%20grids) is a sample channel containing a MarkupList where each item is an instance of an XML component. See the [MarkupList XML component](#markuplist-xml-component) section for details.\n\n**Example**\n\nThe following example displays the use of the MarkupList node.\n\n![roku815px - markuplist-node](https://image.roku.com/ZHZscHItMTc2/markuplist-node.png \"markuplist-node\")",
+            "description": "Extends [**ArrayGrid**](https://developer.roku.com/docs/references/scenegraph/abstract-nodes/arraygrid.md\n\nThe MarkupList node class is a generic list class that can be used to display a list of items.\n\nThe contents of each list item is an instance of an XML component specified by the `itemComponentName` field value. An instance of the XML component is used to display the data for each item in the list data model. The appearance of the list item as it enters/exits the list focus position can be customized using BrightScript.\n\n[SimpleMarkupList](https://github.com/rokudev/samples/tree/master/ux%20components/lists%20and%20grids) is a sample channel containing a MarkupList where each item is an instance of an XML component. See the [MarkupList XML component](#markuplist-xml-component) section for details.\n\n**Example**\n\nThe following example displays the use of the MarkupList node.\n\n![roku815px - markuplist-node](https://image.roku.com/ZHZscHItMTc2/markuplist-node.png \"markuplist-node\")",
             "events": [],
             "extends": {
                 "name": "ArrayGrid",
@@ -2924,6 +2924,23 @@
                     "url": "https://developer.roku.com/docs/references/brightscript/interfaces/ifsgnodehttpagentaccess.md"
                 }
             ],
+            "methods": [
+                {
+                    "description": "callFunc() is a synchronized interface on roSGNode. It will always execute in the component's owning ScriptEngine and thread (by rendezvous if necessary), and it will always use the m and m.top of the owning component. Any context from the caller can be passed via one or more method parameters, which may be of any type (previously, callFunc() only supported a single associative array parameter).\n\nTo call the function, use the `callFunc` field with the required method signature. A return value, if any, can be an object that is similarly arbitrary. The method being called must determine how to interpret the parameters included in the `callFunc` field.",
+                    "isVariadic": true,
+                    "name": "callFunc",
+                    "params": [
+                        {
+                            "default": null,
+                            "description": "The function name to call.",
+                            "isRequired": true,
+                            "name": "functionName",
+                            "type": "String"
+                        }
+                    ],
+                    "returnType": "Dynamic"
+                }
+            ],
             "name": "Node",
             "url": "https://developer.roku.com/docs/references/scenegraph/node.md"
         },
@@ -3236,7 +3253,7 @@
                 {
                     "accessPermission": "READ_WRITE",
                     "default": "noScale",
-                    "description": "Provides automatic scaling of graphical images after loading. If you intend to load very large graphical images, such as larger than the user interface resolution, you must set one of the scaling options other than noScale, otherwise the image may fail to load. The following are the possible field values:\n\n| Option | Effect |\n| --- | --- |\n| limitSize | Scale the image while loading it into texture memory so that the maximum width and height in either dimension does not exceed the specified loadWidth or loadHeight values. If the image is smaller in both dimensions than the specified values, the image is loaded at its regular size. Aspect ratio is preserved. |\n| noScale | The bitmap will be loaded at the image's original resolution. If the Poster's width and height differ from the bitmap's resolution, it will be scaled to fill the Poster's dimensions. Aspect ratio is not preserved. |\n| scaleToFit | Scale the image to fit into the target screen element area, preserving the aspect ratio but \"letterboxing\" or \"pillarboxing\" the image (background-color bars at the top/bottom or left/right of the image). |\n| scaleToFill | Stretch the image dimensions to fill the target screen element area, distorting the image if the target screen element area has a different aspect ratio than the image. |\n| scaleToZoom | Scale the image to fill the target screen element area, preserving the aspect ratio but not \"letterboxing\" or \"pillarboxing\" the image, with some of the image cropped out. |",
+                    "description": "Provides automatic scaling of graphical images after loading. If you intend to load very large graphical images, such as larger than the user interface resolution, you must set one of the scaling options other than noScale, otherwise the image may fail to load. The following are the possible field values:\n\n| Option | Effect |\n| --- | --- |\n| limitSize | Scale the image while loading it into texture memory so that the maximum width and height in either dimension does not exceed the specified loadWidth or loadHeight values. If the image is smaller in both dimensions than the specified values, the image is loaded at its regular size. Aspect ratio is preserved. |\n| noScale | The bitmap will be loaded at the image's original resolution. If the Poster's width and height differ from the bitmap's resolution, it will be scaled to fill the Poster's dimensions. Aspect ratio is not preserved. |\n| scaleToFit | Scale the image to fit into the target screen element area, preserving the aspect ratio but \"letterboxing\" or \"pillarboxing\" the image (background-color bars at the top/bottom or left/right of the image).    > This field in not supported on Liberty and Littlefield devices for images that are both scaled and rotated. On these devices, scaled and rotated images appear as if the **scaleToFill** property was applied to them.   |\n| scaleToFill | Stretch the image dimensions to fill the target screen element area, distorting the image if the target screen element area has a different aspect ratio than the image. |\n| scaleToZoom | Scale the image to fill the target screen element area, preserving the aspect ratio but not \"letterboxing\" or \"pillarboxing\" the image, with some of the image cropped out. |",
                     "name": "loadDisplayMode",
                     "type": "option string"
                 },
@@ -4094,27 +4111,6 @@
             "name": "RowList",
             "url": "https://developer.roku.com/docs/references/scenegraph/list-and-grid-nodes/rowlist.md"
         },
-        "rsgpalette": {
-            "availableSince": "9.4",
-            "description": "_Available since Roku OS 9.4_\n\nExtends [Node](https://developer.roku.com/docs/references/scenegraph/node.md\n\nThe **RSGPalette** node allows developers to specify a named set of color values that can be shared among nodes that support RSGPalette colors.\n\nNodes that support RSGPalette colors include a **palette** field, which can be set to an **RSGPalette** node to override the default colors used by the node. The specific palette values used by those nodes are defined in each node's documentation.\n\nIf a node that supports a palette does not set its **palette** filed, the RSGPalette is inherited from ancestor nodes in the scene graph. Specifically, the node looks up the scene graph until it finds a **PaletteGroup** node with its **palette** field set. This may be found in the **Scene** itself.\n\nIf no node in the scene graph has its **palette** field set, the keyboard uses the default palette (gray background/white text).\n\nCurrently, the **RSGPalette** node is typically used in channels that customize the colors of the dynamic keyboard nodes. In this case, the channel assigns the RSGPalette node to the **palette** field of the [DynamicKeyboardBase](https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/dynamic-keyboard-base.md\"DynamicKeyboardBase\") node and lets the keyboard's **DynamicKeyGrid** and **VoiceTextEditBox** inherit that RSGPalette.\n\n> The colors in the RSGPalette do not cascade. If a child node overrides its parent's RSGPalette node, that RSGPalette should specify values for all the colors used by the node. Unspecified values will use the system default colors.",
-            "events": [],
-            "extends": {
-                "name": "Node",
-                "url": "https://developer.roku.com/docs/references/scenegraph/node.md"
-            },
-            "fields": [
-                {
-                    "accessPermission": "READ_WRITE",
-                    "default": "not specified",
-                    "description": "Specifies an associative array of color name/color key-value pairs. For example: \\`\\`\\` { PrimaryTextColor: 0x111111FF, FocusColor: 0x0000FFFF } \\`\\`\\` .",
-                    "name": "colors",
-                    "type": "associative array"
-                }
-            ],
-            "interfaces": [],
-            "name": "RSGPalette",
-            "url": "https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/rsg-palette.md"
-        },
         "scene": {
             "description": "Extends [**Group**](https://developer.roku.com/docs/references/scenegraph/layout-group-nodes/group.md\"**Group**\")\n\nThe **Scene** node class serves as the root of a SceneGraph node tree. Every **roSGScreen** object must have a **Scene** node, or a node that derives from the **Scene** node class as its root, including an XML markup component that extends the Scene node class or subclass. That node must be created using the **roSGScreen** createScene() function, with an argument that is a string of the name of the **Scene** node object created. For example:\n\n```\nscreen = CreateObject(\"roSGScreen\")\nscene = screen.CreateScene(\"Scene\")\n```\n\nWhile it is technically possible to have more than one scene per channel, we recommend you only have one **roSGScreen** and one **Scene** node. Child nodes of the scene can be treated as different \"scenes\" where you can then implement transitions between them.",
             "events": [],
@@ -4133,7 +4129,7 @@
                 {
                     "accessPermission": "READ_WRITE",
                     "default": "0x000000FF",
-                    "description": "Specifies a background color for the scene. This color is only used if the backgroundURI field is set to an empty string. For example: scene.backgroundColor=\"0xEB1010FF\" scene.backgroundUri = \"\"",
+                    "description": "Loads an image using the provided background URI as-is and does not apply any scaling whatsoever when \"limitBackgroundToUIResolution\" is false. Specifies a background color for the scene. This color is only used if the backgroundURI field is set to an empty string. For example: scene.backgroundColor=\"0xEB1010FF\" scene.backgroundUri = \"\"",
                     "name": "backgroundColor",
                     "type": "color"
                 },
@@ -4160,9 +4156,16 @@
                 },
                 {
                     "accessPermission": "READ_WRITE",
+                    "default": "true",
+                    "description": "If the scene background URI is overridden with a non-theme value and this field is set to true, the \\*\\*backgroundURI\\*\\* image is limited to the current screen size after being loaded. if this field is set to false, the \\*\\*backgroundURI\\*\\* image is loaded without any scaling applied.",
+                    "name": "limitBackgroundToUIResolution",
+                    "type": "boolean"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
                     "default": "not set",
                     "description": "Defines the default color palette used by those nodes that have a \\*\\*palette\\*\\* field (for example, the \\*\\*Scene\\*\\* node, \\[standard dialogs\\](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/standard-dialog.md, \\[dynamic custom voice keyboards\\](https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/dynamic-keyboard-base.md, and so on). Channels typically set the \\*\\*Scene.palette\\*\\* field to consistently color the standard dialogs and keyboards in the channel. Nodes that include a \\*\\*palette\\*\\* field can be set to an \\*\\*RSGPalette\\*\\* node to override the default colors specified in the \\*\\*Scene\\*\\* node. If a node that supports a palette does not set its \\*\\*palette\\*\\* filed, the node looks up the scene graph until it finds a node with its \\*\\*palette\\*\\* field set. If no ancestor node is found with its palette field set, the default color palette is used (grey with white text). The RSGPalette color values used by the Scene node are as follows:\n\n| Palette Color Name | Usages |\n| --- | --- |\n| PrimaryTextColor | The text color used for the entered text displayed in the VoiceTextEditBox node. |\n| SecondaryTextColor | The text color used for the hints displayed in the VoiceTextEditBox. |\n| InputFieldColor | The blend color applied to the VoiceTextEditBox background |\n| DialogBackgroundColor | Blend color for dialog's background bitmap. |\n| DialogItemColor | Blend color for the following items:    *   [StdDlgProgressItem's](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-progress-item.md spinner bitmap *   [StdDlgDeterminateProgressItem's](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-determinate-progress-item.md graphic   |\n| DialogTextColor | Color for the text in the following items:    *   [StdDlgTextItem](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-text-item.md and [StdDlgGraphicItem](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-graphic-item.md if the **namedTextStyle** field is set to \"normal\" or \"bold\". *   All [content area items](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md, except for [StdDlgTextItem](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-text-item.md and [StdDlgGraphicItem](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-graphic-item.md. *   [Title area](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-title-area.mdfields). Unfocused button.   |\n| DialogFocusColor | Blend color for the following:    *   The [button area](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-button-area.mdfields) focus bitmap. *   The focused scrollbar thumb.   |\n| DialogFocusItemColor | Color for the text of the focused button. |\n| DialogSecondaryTextColor | Color for the text of in the following items:    *   [StdDlgTextItem](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-text-item.md and [StdDlgGraphicItem](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-graphic-item.md if the **namedTextStyle** field is set to \"secondary\". *   Disabled button.   |\n| DialogSecondaryItemColor | Color for the following items:    *   The divider displayed below the title area. *   The unfilled portion of the [StdDlgDeterminateProgressItem's](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-determinate-progress-item.md graphic.   |\n| DialogInputFieldColor | The blend color for the text edit box background bitmap for keyboards used inside dialogs. |\n| DialogKeyboardColor | The blend color for the keyboard background bitmap for keyboards used inside dialogs |\n| DialogFootprintColor | The blend color for the following items:    *   The button focus footprint bitmap that is displayed when the [button area](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-button-area.mdfields) does not have focus. *   Unfocused scrollbar thumb and scrollbar track.   |",
-                    "name": "palete",
+                    "name": "palette",
                     "type": "RSGPalette node"
                 }
             ],
@@ -4453,7 +4456,7 @@
             "url": "https://developer.roku.com/docs/references/scenegraph/renderable-nodes/simplelabel.md"
         },
         "soundeffect": {
-            "description": "Extends [**Node**](https://developer.roku.com/docs/references/scenegraph/node.md\n\nThe SoundEffect node class is used to play audio sound effects that can be triggered from events that occur in the UI. Typically, these sound effects are short audio clips, but there is no inherent limit on their length. Currently, up to four simultaneous sounds can be playing at any time, in addition to audio from streaming content and TextToSpeech audio.\n\nFiles can be installed locally as part of the channel package or dynamically downloaded from the network. All files must be WAV (i.e. PCM) format.\n\nFor local files, the convention is to include the WAV files in a directory named \"sounds\".\n\nFor downloaded files, a least-recently-used (LRU) mechanism is used to keep the most recently downloaded/played sounds in temporary storage on the device. If the limits on the maximum number/size of downloaded sounds is exceeded, the least recently used sounds are removed from temporary storage. They will be automatically reloaded the next time the control field is set to \"play\".\n\nA sample demonstrating how to use the SoundEffect node can be found here: [SimpleSoundEffect](https://github.com/rokudev/samples/blob/master/media/SimpleSoundEffect.zip)",
+            "description": "Extends [**Node**](https://developer.roku.com/docs/references/scenegraph/node.md\n\nThe SoundEffect node class is used to play audio sound effects that can be triggered from events that occur in the UI. Typically, these sound effects are short audio clips, but there is no inherent limit on their length. Currently, up to four simultaneous sounds can be playing at any time, in addition to audio from streaming content and TextToSpeech audio.\n\nFiles can be installed locally as part of the channel package or dynamically downloaded from the network. All files must be WAV (i.e. PCM) format.\n\nFor local files, the convention is to include the WAV files in a directory named \"sounds\".\n\nFor downloaded files, a least-recently-used (LRU) mechanism is used to keep the most recently downloaded/played sounds in temporary storage on the device. If the limits on the maximum number/size of downloaded sounds is exceeded, the least recently used sounds are removed from temporary storage. They will be automatically reloaded the next time the control field is set to \"play\".\n\nA sample demonstrating how to use the SoundEffect node can be found here: [SimpleSoundEffect](https://github.com/rokudev/samples/blob/master/media/SimpleSoundEffect)",
             "events": [],
             "extends": {
                 "name": "Node",
@@ -4578,13 +4581,6 @@
                     "description": "List of buttons to be displayed in the button area at the bottom of the dialog. Each string in the buttons array adds a new button to the button area. > Minimize the number of buttons in the dialog to ensure that all buttons are visible without the user having to scroll up and down.",
                     "name": "buttons",
                     "type": "array of strings"
-                },
-                {
-                    "accessPermission": "Access Permission",
-                    "default": "Default",
-                    "description": "Description",
-                    "name": "Field",
-                    "type": "Type"
                 },
                 {
                     "accessPermission": "READ_WRITE",
@@ -5255,6 +5251,13 @@
             },
             "fields": [
                 {
+                    "accessPermission": "READ_WRITE",
+                    "default": "false",
+                    "description": "Forces the item index to be interpolated in an advanced manner when animating between items. This only has an effect when the \\*\\*wrap\\*\\* field is set to true. For example, when the number of items is 10 and we are interpolating from item 9 to item 0, not enabling this option will result in the following sequence: 9 -> 8 -> 7 -> … -> 0, rather than 9 -> 0.",
+                    "name": "advancing",
+                    "type": "boolean"
+                },
+                {
                     "accessPermission": "WRITE_ONLY",
                     "default": "0",
                     "description": "When set to a valid item index, causes the group to quickly scroll so that the specified index moves into the to the target region specified by the TargetSet's focusIndex",
@@ -5305,6 +5308,13 @@
                 },
                 {
                     "accessPermission": "READ_WRITE",
+                    "default": "inOutCubic",
+                    "description": "Specifies the interpolator used in TargetGroup animations between items.",
+                    "name": "easeFunction",
+                    "type": "string"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
                     "default": "",
                     "description": "Specifies the name of a XML component for the group items. An instance of this component is created on demand for each visible item of the group. The XML component must define a specific interface as detailed in \\[TargetGroup XML Component\\](https://developer.roku.com/docs/references/scenegraph/layout-group-nodes/targetgroup.mdtargetgroup-xml-component \"TargetGroup XML Component\") below",
                     "name": "itemComponentName",
@@ -5337,6 +5347,13 @@
                     "description": "When set to a valid item index, causes the group to immediately update so that the specified index moves to the target region specified by the TargetSet's focusIndex",
                     "name": "jumpToItem",
                     "type": "integer"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "false",
+                    "description": "Force the item index to be interpolated in a reverse manner when animating between items. This only has an effect when the \\*\\*wrap\\*\\* field is set to true. For example, when the number of items is 10 and we are interpolating from item 0 to item 9, not enabling this option will result in the following sequence: 0 -> 1 -> … -> 9 rather than 0 -> 9.",
+                    "name": "reversing",
+                    "type": "boolean"
                 },
                 {
                     "accessPermission": "READ_WRITE",
@@ -5676,6 +5693,13 @@
             },
             "fields": [
                 {
+                    "accessPermission": "WRITE_ONLY",
+                    "default": "{ }",
+                    "description": "The significance and priority order of the attributes and values for the audio tracks available in the video stream. > A language matching any country code does not match a track that specifies the same language but with no country code. Provide the attribute fields from highest to lowest significance (for example, if the \\*\\*language\\*\\* should take precedence over the \\*\\*description\\*\\*, list \\*\\*language\\*\\* first. For the audio track languages, provide the language code values from highest to lowest priority (for example, if English for the United States \\\\\\[\"en-US\"\\\\\\] has precedence over English for the United Kingdom \\\\\\[\"en-UK\"\\\\\\], list the language codes in the following order: \\\\\\[\"en-US\", \"en-UK\"\\\\\\].\n\n| Field | Type | Description |\n| --- | --- | --- |\n| values | roAssociativeArray | Specify values for the following audio track attributes. List the attributes from highest to lowest significance.    <table><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td>language</td><td>array of Strings</td><td>A list of (ISO-639)/country (ISO-3166) codes for the audio track. List the languages in priority order (highest to lowest).</td></tr><tr><td>descriptive</td><td>array of Strings</td><td>A flag indicating whether descriptives exist for the video playing in the stream. This is equivalent to the HLS \"public.accessibility.describes-video\" characteristic.</td></tr></tbody></table>   |\n| overrideSystem | boolean | Specify whether to use the channel's preferences over the system preferences (true) or use the channel's preferences only when the system preferences do not match any of the available tracks (false), which allows the channel to provide additional rules in this case. The default value is false. |\n\n\\*\\*Example\\*\\* \\`\\`\\` video.audioSelectionPreferences = { values: \\[ { language: \\[\"en-US\", \"en-UK\", \"en\", \"en-\\*\"\\] }, { descriptive: \"false\" } \\], overrideSystem: true } \\`\\`\\` \\*\\*Explanation\\*\\* The audio language with the highest priority is \"en-US\". The next highest priority language is \"en-UK\", then \"en\" with no country code, and finally \"en\" with any country code.",
+                    "name": "audioSelectionPreferences      (_Available since Roku OS 12.5_)",
+                    "type": "roAssociativeArray"
+                },
+                {
                     "accessPermission": "READ_WRITE",
                     "default": "NULL",
                     "description": "The ContentNode with the \\[Content Meta-Data\\](/docs/developer-program/getting-started/architecture/content-metadata.md) for the video, or a video playlist (a sequence of videos) to be played. If a video playlist is to be played, the children of this ContentNode comprise the playlist, and each ContentNode child must have all attributes required to play that video. For example, if the videos \"A\" and \"B\" are to be played, three ContentNodes must be created: the parent ContentNode (which is largely ignored), one ContentNode child for \"A,\" and one ContentNode child for \"B.\" The parent node is set into this content field, and when video playback is started, all of its children will be played in sequence. Any changes made to the playlist after playback has started are ignored. See the \\`contentIsPlaylist\\` and \\`contentIndex\\` fields, for more information on playlists.",
@@ -5720,14 +5744,14 @@
                 {
                     "accessPermission": "READ_ONLY",
                     "default": "0",
-                    "description": "The error code associated with the video play error set in the \\`state\\` field. Use the \\*\\*errorStr\\*\\* and and \\*\\*errorInfo\\*\\* fields for more descriptive diagnostic information to help identify and resolve the cause of the error.",
+                    "description": "The error code associated with the video play error set in the \\`state\\` field: \\* 0 no error \\* \\\\-1 network error (server down or unresponsive, server is unreachable, network setup problem on the client). \\* \\\\-2 connection timed out \\* \\\\-3 unknown/unspecified or generic Error \\* \\\\-4 empty list; no streams were specified to play \\* \\\\-5 media error; the media format is unknown or unsupported \\* \\\\-6 DRM error Use the \\*\\*errorStr\\*\\* and and \\*\\*errorInfo\\*\\* fields for more descriptive diagnostic information to help identify and resolve the cause of the error.",
                     "name": "errorCode",
                     "type": "integer"
                 },
                 {
                     "accessPermission": "READ_ONLY",
                     "default": "",
-                    "description": "A diagnostic message to help resolve the video play error set in the \\`state\\` field. The roAssociativeArray contains the following fields:\n\n| Field | Type | Description |\n| --- | --- | --- |\n| clip\\_id | integer | The unique ID for the clip |\n| ignored | integer | Indicates whether the error generated an exception (0) or was ignored resulting in the next item in the content list being played (1). |\n| source | string | The module that generated the error. |\n| category | String | The type of error, which includes: \"http\", \"drm\", \"mediaerror\", or \"mediaplayer\". |\n| error\\_code | integer | The internal Roku code associated with the error. Use the **dbgmsg** field for debugging. |\n| dbgmsg | string | A verbose debug message that can help identify the root cause of the error. |\n| error\\_attributes | string | The error attribute, which includes the clip\\_id (the unique ID of the clip that failed to play). |\n| drmerrcode   _Available since Roku OS 10.5_ | integer | The error code returned by the DRM system, if any, when a video player error occurs |",
+                    "description": "A diagnostic message to help resolve the video play error set in the \\`state\\` field. The roAssociativeArray contains the following fields:\n\n| Field | Type | Description |\n| --- | --- | --- |\n| clipId | integer | The unique ID for the clip |\n| ignored | integer | Indicates whether the error generated an exception (0) or was ignored resulting in the next item in the content list being played (1). |\n| source | string | The module that generated the error. |\n| category | String | The type of error, which includes: \"http\", \"drm\", \"mediaerror\", or \"mediaplayer\". |\n| errcode | integer | The internal Roku code associated with the error. Use the **dbgmsg** field for debugging. |\n| dbgmsg | string | A verbose debug message that can help identify the root cause of the error. |\n| drmerrcode   _Available since Roku OS 10.5_ | integer | The error code returned by the DRM system, if any, when a video player error occurs |",
                     "name": "errorInfo",
                     "type": "roAssociativeArray"
                 },
@@ -5741,7 +5765,7 @@
                 {
                     "accessPermission": "READ_ONLY",
                     "default": "",
-                    "description": "A diagnostic message to help resolve the video play error set in the \\`state\\` field. The format of the errorStr is as follows: category:{category\\\\\\_name}:error:{error\\\\\\_code}:ignored:{0|1}:{source}:{source\\\\\\_name}:{additional catcher comment}:{error\\\\\\_string}:extra:{error\\\\\\_attributes}\n\n| errorStr Field | Type | Description |\n| --- | --- | --- |\n| category\\_name | string | The type of error, which includes: \"http\", \"drm\", \"mediaerror\", or \"mediaplayer\". |\n| error\\_code | integer | The unique code associated with the error. |\n| ignored | integer | Indicates whether the error generated an exception (0) or was ignored resulting in the next item in the content list being played (1). |\n| source | string | The module that generated the error. |\n| source\\_name | string | The module that generated the error. |\n| additional catcher comment | string | Typically, the comment added when the exception is caught. |\n| error\\_string | string | A text message describing the video play error. |\n| error\\_attributes | string | The error attribute, which includes the clip\\_id (the unique ID of the clip that failed to play). |",
+                    "description": "A diagnostic message to help resolve the video play error set in the \\`state\\` field. The format of the errorStr is as follows: category:{category\\\\\\_name}:error:{error\\\\\\_code}:ignored:{0|1}:{source}:{source\\\\\\_name}:{additional catcher comment}:{error\\\\\\_string}:extra:{error\\\\\\_attributes}\n\n| errorStr Field | Type | Description |\n| --- | --- | --- |\n| category\\_name | string | The type of error, which includes: \"http\", \"drm\", \"mediaerror\", or \"mediaplayer\". |\n| error\\_code | integer | The unique code associated with the error. |\n| ignored | integer | Indicates whether the error generated an exception (0) or was ignored resulting in the next item in the content list being played (1). |\n| source | string | The module that generated the error. |\n| source\\_name | string | The module that generated the error. |\n| additional catcher comment | string | Typically, the comment added when the exception is caught. |\n| error\\_string | string | A text message describing the video play error. |\n| error\\_attributes | string | The error attribute, which includes the clipId (the unique ID of the clip that failed to play). |",
                     "name": "errorStr",
                     "type": "string"
                 },
@@ -5790,7 +5814,7 @@
                 {
                     "accessPermission": "READ_WRITE",
                     "default": "[]",
-                    "description": "Component that shows the buttons and other specified UI elements on the pause screen at the start of playback. Each element in the array has following fields:\n\n| Field | Type | Default | Description |\n| --- | --- | --- | --- |\n| text | string | system default | Text for the button label |\n| icon | uri | \"\" | A 9-patch or PNG of the icon to be displayed when the button does not have. |\n| focusIcon | uri | \"\" | A 9-patch or PNG of the icon to be displayed when the button has focus. |\n| buttonIsDisabled | Boolean | false | Controls whether the button is disabled (true) or enabled (false). A disabled button is skipped and does not have focus while the user navigates the different playback action buttons with the directional pad on the Roku remote control. |\n| bottomRowButtons | array of strings | \\[ \\] | List of buttons to be displayed in the the bottom row the pause screen. Each string in the buttons array adds a new button to the bottom row. |\n| bottomRowButtonFocused | int | 0 | Indicates the index of the button that gained focus when the user moved the focus onto a button in the bottom row. |\n| bottomRowButtonSelected | int | 0 | Indicates the index of the selected button when the user selects one of the buttons in the bottom row. |",
+                    "description": "Component that shows the buttons and other specified UI elements on the pause screen at the start of playback. Each element in the array has following fields:\n\n| Field | Type | Default | Description |\n| --- | --- | --- | --- |\n| text | string | system default | Text for the button label |\n| icon | uri | \"\" | A 9-patch or PNG of the icon to be displayed when the button does not have. |\n| focusIcon | uri | \"\" | A 9-patch or PNG of the icon to be displayed when the button has focus. |\n| buttonIsDisabled | Boolean | false | Controls whether the button is disabled (true) or enabled (false). A disabled button is skipped and does not have focus while the user navigates the different playback action buttons with the directional pad on the Roku remote control. |",
                     "name": "playbackActionButtons      (_Available since Roku OS 11.5_)",
                     "type": "roArray of roAssociativeArrays"
                 },
@@ -5828,6 +5852,13 @@
                     "description": "Describes the current video play state, such as if the video play has been paused.\n\n| Value | Meaning |\n| --- | --- |\n| none | No current play state |\n| buffering | Video stream is currently buffering |\n| playing | Video is currently playing |\n| paused | Video is currently paused |\n| stopped | Video is currently stopped |\n| finished | Video has successfully completed playback |\n| error | An error has occurred in the video play. The error code, message, and diagnostics can be found in the `errorCode`, `errorMsg`, and `errorStr` fields respectively. |",
                     "name": "state",
                     "type": "value string"
+                },
+                {
+                    "accessPermission": "WRITE_ONLY",
+                    "default": "{ }",
+                    "description": "The significance and priority order of the attributes and values for the subtitle tracks available in the video stream. Provide the attribute fields from highest to lowest significance (for example, if \\*\\*language\\*\\* should take precedence over all other attributes, list it first). For the subtitle track languages, provide the language codes from highest to lowest priority (for example, if Spanish for Latin America and the Caribbean \\\\\\[\"es-419\"\\\\\\] has precedence over Spanish \\\\\\[\"es\"\\\\\\], list the language codes in the following order: \\\\\\[\"es-419\", \"es\"\\\\\\].\n\n| Field | Type | Description |\n| --- | --- | --- |\n| values | roAssociativeArray | Specify values for the following subtitle track attributes. List the attributes from highest to lowest significance.    <table><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td>language</td><td>array of Strings</td><td>A list of language (ISO-639)/country (ISO-3166) codes for the subtitles. List the language codes in priority order (highest to lowest).</td></tr><tr><td>caption</td><td>array of Strings</td><td>A flag indicating whether captions exist for the video stream. This is equivalent to the HLS \"public.accessibility.transcribes-spoken-dialog\" characteristic.</td></tr><tr><td>descriptive</td><td>array of Strings</td><td>A flag indicating whether descriptives exist for the music and sounds in the video stream. This is equivalent to the HLS \"public.accessibility.describes-music-and-sound\" characteristic.</td></tr><tr><td>easyReader</td><td>array of Strings</td><td>A flag indicating whether subtitles are easy to read.</td></tr></tbody></table>   |\n| overrideSystem | boolean | Specify whether to use the channel's preferences over the system preferences (true) or use the channel's preferences only when the system preferences do not match any of the available tracks (false), which allows the channel to provide additional rules in this case. The default value is false. |\n\n\\*\\*Example\\*\\* \\`\\`\\` video.subtitleSelectionPreferences = { values: \\[ { language: \\[\"es-419\", \"es\", \"es-\\*\", \"fr\", \"en-US\", \"en-UK\", \"en\"\\] }, { caption: \"true\" }, { descriptive: \\[\"false\"\\] }, { easyReader: \"true\" } \\], overrideSystem: true } \\`\\`\\` \\*\\*Explanation\\*\\* The subititle language with the highest priority is \"es\" with a country code of \"419\". The next highest priority language is \"es\" with no country code, and then \"es\" with any country code.",
+                    "name": "subtitleSelectionPreferences      (_Available since Roku OS 12.5_)",
+                    "type": "roAssociativeArray"
                 }
             ],
             "interfaces": [],
@@ -5884,12 +5915,8 @@
             "url": "https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/voice-text-edit-box.md"
         },
         "zoomrowlist": {
-            "description": "Extends [**ArrayGrid**](https://developer.roku.com/docs/references/scenegraph/abstract-nodes/arraygrid.md\n\nThe ZoomRowList node allows a row of the Row-Row Grid to smoothly zoom up to a larger size when that row has focus. Rows in this node are capable of gaining the focus while scrolling, and smoothly zooming up by the specified amount. The amount to zoom can be specified on a per row basis so that some rows can zoom up by a larger amount than others.",
+            "description": "The ZoomRowList node allows a row of the Row-Row Grid to smoothly zoom up to a larger size when that row has focus. Rows in this node are capable of gaining the focus while scrolling, and smoothly zooming up by the specified amount. The amount to zoom can be specified on a per row basis so that some rows can zoom up by a larger amount than others.",
             "events": [],
-            "extends": {
-                "name": "ArrayGrid",
-                "url": "https://developer.roku.com/docs/references/scenegraph/abstract-nodes/arraygrid.md"
-            },
             "fields": [],
             "interfaces": [],
             "name": "ZoomRowList",
@@ -5931,7 +5958,7 @@
         "roappmemorymonitor": {
             "availableSince": "10.5",
             "constructors": [],
-            "description": "_Available since Roku OS 10.5_\n\nThe **roAppMemoryMonitor** component is used to subscribe channels to low-memory notifications. When a channel is subscribed, it receives a [roAppMemoryMonitorEvent](https://developer.roku.com/docs/references/brightscript/events/roappmemorymonitorevent.md when it reaches a specific percentage of the per-channel memory limit (80%).\n\n> To use the roAppMemoryMonitor functions, you must add the **run\\_as\\_process=1** attribute to the [channel manifest](/docs/developer-program/getting-started/architecture/channel-manifest.md).\n> \n> This feature is only supported on [current Roku device models](/docs/specs/hardware.md#current-roku-models).",
+            "description": "_Available since Roku OS 10.5_\n\nThe **roAppMemoryMonitor** component is used to subscribe channels to low-memory notifications. When a channel is subscribed, it receives a [roAppMemoryMonitorEvent](https://developer.roku.com/docs/references/brightscript/events/roappmemorymonitorevent.md when it reaches a specific percentage of the per-channel memory limit (80%).\n\n> The roAppMemoryMonitor functions are supported on all [current and updatable device models](/docs/specs/hardware.md), except for Liberty, Austin, Mustang and Littlefield.",
             "events": [
                 {
                     "name": "roAppMemoryMonitorEvent",
@@ -6058,7 +6085,7 @@
                     "returnType": "roAudioPlayer"
                 }
             ],
-            "description": "The Audio Player object provides the ability to setup the playing of a series of audio streams. The object accepts an array of content meta-data objects, describing the audio and providing URLs for accessing each stream. The component understands the following streamformat values: \"mp3\", \"wma\", \"mp4\", \"hls\", \"es.aac-adts\", \"flac.\"\n\nThis object does not provide an interface to a screen. In order to get events both from the screen you are using and the Audio Player, you should use the same Message Port for both objects.\n\nThis object is created with no parameters:\n\n`CreateObject(\"roAudioPlayer\")`\n\n**Example**\n\n```\nSub Main()\n    audioPlayer = CreateObject(\"roAudioPlayer\")\n    port = CreateObject(\"roMessagePort\")\n    audioPlayer.SetMessagePort(port)\n    song = CreateObject(\"roAssociativeArray\")\n    song.url = \"http://www.theflute.co.uk/media/BachCPE_SonataAmin_1.wma\"\n    audioplayer.addcontent(song)\n    audioplayer.setloop(false)\n    audioPlayer.play()\n    while true\n            msg = wait(0, port)\n            if type(msg) = \"roAudioPlayerEvent\"\n                    if msg.isStatusMessage() then\n                        print \"roAudioPlayerEvent: \"; msg.getmessage()\n                        if msg.getmessage() = \"end of playlist\" return\n                    endif\n            endif\n        end while\nEnd Sub\n```",
+            "description": "The Audio Player object provides the ability to setup the playing of a series of audio streams. The object accepts an array of content meta-data objects, describing the audio and providing URLs for accessing each stream. The component understands the following streamformat values: \"mp3\", \"mp4\", \"hls\", \"es.aac-adts\", \"flac.\"\n\nThis object does not provide an interface to a screen. In order to get events both from the screen you are using and the Audio Player, you should use the same Message Port for both objects.\n\nThis object is created with no parameters:\n\n`CreateObject(\"roAudioPlayer\")`\n\n**Example**\n\n```\nSub Main()\n    audioPlayer = CreateObject(\"roAudioPlayer\")\n    port = CreateObject(\"roMessagePort\")\n    audioPlayer.SetMessagePort(port)\n    song = CreateObject(\"roAssociativeArray\")\n    song.url = \"https://file-examples.com/storage/feb401d325641db2fa1dfe7/2017/11/file_example_MP3_700KB.mp3\"\n    audioplayer.addcontent(song)\n    audioplayer.setloop(false)\n    audioPlayer.play()\n    while true\n            msg = wait(0, port)\n            if type(msg) = \"roAudioPlayerEvent\"\n                    if msg.isStatusMessage() then\n                        print \"roAudioPlayerEvent: \"; msg.getmessage()\n                        if msg.getmessage() = \"end of playlist\" return\n                    endif\n            endif\n        end while\nEnd Sub\n```",
             "events": [
                 {
                     "name": "roAudioPlayerEvent",
@@ -6103,7 +6130,7 @@
                         {
                             "isRequired": true,
                             "name": "param1",
-                            "type": "string"
+                            "type": "dynamic"
                         }
                     ],
                     "returnType": "roAudioResource"
@@ -6140,16 +6167,6 @@
                             "isRequired": true,
                             "name": "filename",
                             "type": "String"
-                        }
-                    ],
-                    "returnType": "roBitmap"
-                },
-                {
-                    "params": [
-                        {
-                            "isRequired": true,
-                            "name": "param1",
-                            "type": "string"
                         }
                     ],
                     "returnType": "roBitmap"
@@ -6564,7 +6581,7 @@
         },
         "rohdmistatus": {
             "constructors": [],
-            "description": "The HDMI status component provides an interface to the current HDMI operational status.\n\nThis component allows you to query the status of the HDMI connection for the device through the ifHdmiStatus interface functions.",
+            "description": "The HDMI status component provides an interface to the current HDMI operational status.\n\nThis component allows you to query the status of the HDMI connection for a Roku streaming player (or set-top box \\[STB\\]) through the ifHdmiStatus interface functions. This node is not applicable for Roku TVs.",
             "events": [],
             "interfaces": [
                 {
@@ -6640,7 +6657,7 @@
                     "returnType": "roInput"
                 }
             ],
-            "description": "An roInput object can be used to receive events sent from a network client using the External Control Protocol (ECP), as described in [External Control API](/docs/developer-program/debugging/external-control-api.md \"External Control API\").\n\n> The [supports\\_input\\_launch manifest flag](/docs/developer-program/getting-started/architecture/channel-manifest.md#launch-requirement-attributes) must be set for channels to accept deep linking parameters when already running. This flag enables deep linking into content without relaunching the channel. See the [Deep Linking sample channel](https://github.com/rokudev/deep-Linking-samples) for how to use roInput to handle deep links into content while the channel is already running.\n\nRefer to [External Control Service Commands](/docs/developer-program/debugging/external-control-api.md#external-control-service-commands \"External Control Service Commands\") for information about the ECP input command.\n\nThis object is created without any arguments:\n\n`CreateObject(\"roInput\")`\n\n**Example**\n\nThe following prints information received from an external device in JSON format. If the external device sends the following input command:\n\n```\ncurl -d '' '<roku_target_device>:8060/input?my_event=My%20Test&x=100&y=200&action=start'\n```\n\nThe following will be printed:\n\n```\n{\"action\":\"start\",\"my_event\":\"My Test\",\"x\":\"100\",\"y\":\"200\"}\n```\n\n**roInput Example**\n\n```\nmsgPort = CreateObject(\"roMessagePort\")\n\ninput = CreateObject(\"roInput\")\ninput.SetMessagePort(msgPort)\n\nprint \"Waiting for messages...\"\nwhile true\n  msg = wait(0, msgPort)\n  if type(msg) = \"roInputEvent\"\n    if msg.IsInput()\n      info = msg.GetInfo()\n      print \"Received input: \"; FormatJSON(info)\n    end if\n  end if\nend while\n```",
+            "description": "An roInput object can be used to receive events sent from a network client using the External Control Protocol (ECP), as described in [External Control API](/docs/developer-program/dev-tools/external-control-api.md \"External Control API\").\n\n> The [supports\\_input\\_launch manifest flag](/docs/developer-program/getting-started/architecture/channel-manifest.md#launch-requirement-attributes) must be set for channels to accept deep linking parameters when already running. This flag enables deep linking into content without relaunching the channel. See the [Deep Linking sample channel](https://github.com/rokudev/deep-Linking-samples) for how to use roInput to handle deep links into content while the channel is already running.\n\nRefer to [External Control Service Commands](/docs/developer-program/dev-tools/external-control-api.md#external-control-service-commands \"External Control Service Commands\") for information about the ECP input command.\n\nThis object is created without any arguments:\n\n`CreateObject(\"roInput\")`\n\n**Example**\n\nThe following prints information received from an external device in JSON format. If the external device sends the following input command:\n\n```\ncurl -d '' '<roku_target_device>:8060/input?my_event=My%20Test&x=100&y=200&action=start'\n```\n\nThe following will be printed:\n\n```\n{\"action\":\"start\",\"my_event\":\"My Test\",\"x\":\"100\",\"y\":\"200\"}\n```\n\n**roInput Example**\n\n```\nmsgPort = CreateObject(\"roMessagePort\")\n\ninput = CreateObject(\"roInput\")\ninput.SetMessagePort(msgPort)\n\nprint \"Waiting for messages...\"\nwhile true\n  msg = wait(0, msgPort)\n  if type(msg) = \"roInputEvent\"\n    if msg.IsInput()\n      info = msg.GetInfo()\n      print \"Received input: \"; FormatJSON(info)\n    end if\n  end if\nend while\n```",
             "events": [
                 {
                     "name": "roInputEvent",
@@ -6819,7 +6836,7 @@
                         {
                             "isRequired": true,
                             "name": "param1",
-                            "type": "string"
+                            "type": "dynamic"
                         }
                     ],
                     "returnType": "roPath"
@@ -6870,12 +6887,12 @@
                         {
                             "isRequired": true,
                             "name": "param1",
-                            "type": "string"
+                            "type": "dynamic"
                         },
                         {
                             "isRequired": true,
                             "name": "param2",
-                            "type": "string"
+                            "type": "dynamic"
                         }
                     ],
                     "returnType": "roRegex"
@@ -6934,6 +6951,10 @@
             "events": [],
             "interfaces": [
                 {
+                    "name": "ifDraw2D",
+                    "url": "https://developer.roku.com/docs/references/brightscript/interfaces/ifdraw2d.md"
+                },
+                {
                     "name": "ifRegion",
                     "url": "https://developer.roku.com/docs/references/brightscript/interfaces/ifregion.md"
                 }
@@ -6948,7 +6969,7 @@
                     "returnType": "roRegistry"
                 }
             ],
-            "description": "The Registry is an area of non-volatile storage where a small number of persistent settings can be stored.\n\nThe Registry provides a means for an application to write and read small amounts of data such as settings, scores, etc. The data persists even if the user exits the application and even if the player is rebooted. Registry data is removed only when the application explicitly removes it, the user uninstalls the application, which remove the registry for the application, or the user performs a factory reset, which removes the registry for all applications.\n\nAccess to the registry is available through the roRegistry object. This object is created with no parameters:\n\n`CreateObject(\"roRegistry\")`\n\nThere is a separate registry for each [developer ID](/docs/developer-program/publishing/packaging-channels.md#step-3-run-the-genkey-utility-to-create-a-signing-key \"developer ID\"). This allows multiple applications to use the registry without being able to read or modify the registry from other applications. If desired, a single registry can be shared across multiple applications by using the same developer ID to package the applications. This is the conventional way that an \"application suite\" with shared preferences and other shared information should work. Each registry is divided into sections which are specified by the developer for organization and grouping of attributes. Methods in ifRegistry are provided to list the sections in the registry and to provide access to the data in each section.\n\n> The maximum size of each zlib-compressed application registry is **16K bytes**. Channels should minimize the amount of data stored in the registry and the frequency in which they update it.\n> \n> Use the **ifRegistry.GetSpaceAvailable()** function to check the number of bytes available in the registry.\n\nThe Registry also supports the use of a special transient registry section. A registry section named \"Transient\" can be used to store attributes that have the lifetime of a single boot. Within a specific boot session, these values will be persistent to the application and stored as any other registry value. Whenever the user reboots the Roku Streaming Player, all \"Transient\" registry sections are removed and the values no longer persist. This technique is useful for caching data to minimize network access, yet still ensuring that this data is always fresh after a system reboot.\n\nThe registry is encrypted, and updates are relatively performance intensive and should be used sparingly. Note that all writes to the registry are delayed, and not committed to non-volatile storage until ifRegistry.Flush() or ifRegistrySection.Flush() is explicitly called. The platform may choose opportune times to flush data on its own, but no application is technically correct unless it explicitly calls Flush() at appropriate times. Flushing the registry is a relatively time-consuming operation, so it should be done as infrequently as possible. The Registry data is stored in a fault tolerant manner by preserving a backup for each write which is automatically rolled-back in the event of a failure.",
+            "description": "The Registry is an area of non-volatile storage where a small number of persistent settings can be stored.\n\nThe Registry provides a means for an application to write and read small amounts of data such as settings, scores, etc. The data persists even if the user exits the application and even if the player is rebooted. Registry data is removed only when the application explicitly removes it, the user uninstalls the application, which remove the registry for the application, or the user performs a factory reset, which removes the registry for all applications.\n\nAccess to the registry is available through the roRegistry object. This object is created with no parameters:\n\n`CreateObject(\"roRegistry\")`\n\nThere is a separate registry for each [developer ID](/docs/developer-program/publishing/packaging-channels.md#step-3-run-the-genkey-utility-to-create-a-signing-key \"developer ID\"). This allows multiple applications to use the registry without being able to read or modify the registry from other applications. If desired, a single registry can be shared across multiple applications by using the same developer ID to package the applications. This is the conventional way that an \"application suite\" with shared preferences and other shared information should work. Each registry is divided into sections which are specified by the developer for organization and grouping of attributes. Methods in ifRegistry are provided to list the sections in the registry and to provide access to the data in each section.\n\n> The maximum size of each zlib-compressed application registry is **32K bytes**. Channels should minimize the amount of data stored in the registry and the frequency in which they update it.\n> \n> Use the **ifRegistry.GetSpaceAvailable()** function to check the number of bytes available in the registry.\n\nThe Registry also supports the use of a special transient registry section. A registry section named \"Transient\" can be used to store attributes that have the lifetime of a single boot. Within a specific boot session, these values will be persistent to the application and stored as any other registry value. Whenever the user reboots the Roku Streaming Player, all \"Transient\" registry sections are removed and the values no longer persist. This technique is useful for caching data to minimize network access, yet still ensuring that this data is always fresh after a system reboot.\n\nThe registry is encrypted, and updates are relatively performance intensive and should be used sparingly. Note that all writes to the registry are delayed, and not committed to non-volatile storage until ifRegistry.Flush() or ifRegistrySection.Flush() is explicitly called. The platform may choose opportune times to flush data on its own, but no application is technically correct unless it explicitly calls Flush() at appropriate times. Flushing the registry is a relatively time-consuming operation, so it should be done as infrequently as possible. The Registry data is stored in a fault tolerant manner by preserving a backup for each write which is automatically rolled-back in the event of a failure.",
             "events": [],
             "interfaces": [
                 {
@@ -6977,7 +6998,7 @@
                         {
                             "isRequired": true,
                             "name": "param1",
-                            "type": "string"
+                            "type": "dynamic"
                         }
                     ],
                     "returnType": "roRegistrySection"
@@ -7037,17 +7058,17 @@
                         {
                             "isRequired": true,
                             "name": "param1",
-                            "type": "boolean"
+                            "type": "dynamic"
                         },
                         {
                             "isRequired": true,
                             "name": "param2",
-                            "type": "integer"
+                            "type": "dynamic"
                         },
                         {
                             "isRequired": true,
                             "name": "param3",
-                            "type": "integer"
+                            "type": "dynamic"
                         }
                     ],
                     "returnType": "roScreen"
@@ -7057,7 +7078,7 @@
                         {
                             "isRequired": true,
                             "name": "param1",
-                            "type": "boolean"
+                            "type": "dynamic"
                         }
                     ],
                     "returnType": "roScreen"
@@ -7067,7 +7088,7 @@
                     "returnType": "roScreen"
                 }
             ],
-            "description": "The roScreen component provides a full screen drawing surface that can be stacked and that you can receive input events from.\n\nYou will need at least one roScreen component in your 2D game application to draw on and get events from. The origin (0,0) is the top left corner of the screen. The pixels are always RGBA 32 bits. Multiple roScreen components stack, and like other screen components only the top screen is viewable and gets events. An roScreen that is not the top most screen can still be drawn to.\n\n> Once an roScreen is created, the display stack enters \"Game Mode\", and other screen components cannot be used. Screensavers will also be disabled and will appear as a black screen in its place. Other screen components cannot be intermixed with roScreens as the roScreen display stack is maintained independently from the main screen component display stack. When the final roScreen component is closed, other screen components can be used again.\n\nWhen the roScreen constructor is called, an optional double buffer flag, and an optional resolution can be passed. If the screen is double buffered, two buffers are fully allocated when CreateObject() succeeds. If the screen is single buffered only one buffer is allocated and the \"front\" and \"back\" buffers in method descriptions below are the same buffer. When a screen is created with a different resolution than the output display, it is scaled automatically to the output display resolution.\n\nTo maintain proper aspect ratio, and take care of the different pixel aspect ratio in HD vs SD; there is a fixed set of bitmap resolutions that are allowed to be created for screens:\n\n**HD mode screensizes**\n\n*   1280x720PAR=1:1 (default for HD)\n*   854x480 PAR=1:1 useful for higher performance HD games, also for 640x480 games\n*   940x480 PAR=1.1:1 used for displaying a RokuSD (720x480) games\n\n**SD mode screensizes**\n\n*   720x480 PAR=1.1:1 (default for SD)\n*   640x480 PAR=1:1 (used for 640x480 games)\n*   854x626 PAR=1:1 (used for 854x480 HD games)\n\nThe screen dimensions correspond to the drawable area that applications see. The dimensions were chosen so that applications do not need to compensate for screen aspect ratio or pixel aspect ratio.\n\nIt's likely that when porting games from other platforms, the active game area may be smaller and correspond to more traditional dimensions. In this case, the application can supply letterbox or pillarbox artwork and use an [roRegion](https://developer.roku.com/docs/references/brightscript/components/roregion.md\"roRegion\") to define the active area. The roRegion will translate and clip graphics to the proper area for the game. Similarly, roRegions are used to describe the left and right pillars for an SD game in HD mode, or the upper and lower letterbox regions for an HD game in SD mode.\n\nGames that require more performance should use smaller dimensions. Games should run in HD and SD mode. The screensizes HD 854x480 paired with SD 854x626 and HD 940x480 paired with SD 720x480 were designed for this purpose.\n\nThe game creates a single active game roRegion to do all graphics operations in. roRegions for pillar or letter boxes are used to fill the rest of the screen area depending on if the app is in HD or SD mode. Please refer to the dfSetupDisplayRegions() function in [v30/bslDefender.brs](https://developer.roku.com/docs/references/brightscript/language/component-architecture.mdv30bslcorebrs \"v30/bslDefender.brs\") for help in setting up the drawable regions in screen scaling.\n\nThere are some useful rules of thumb to be aware of to get the best performance when rendering your games:\n\n*   Alpha enabled regions are expensive to render\n\nIt is a requirement that the destination be alpha enabled in order for non-rectangular sprites to be properly rendered with transparency. However the sprite used for a background would typically have all pixels be fully nontransparent. Since alpha blending is expensive, a quick way to blit the background in this scenario is to first disable alpha on the screen, manually draw the background, and then enable alpha for the screen before drawing the rest of the sprites.\n\n*   Use smaller resolution images wherever possible. Scaling a large image down at run time is expensive with no benefit to the user\n*   Rendering text with DrawText() is expensive\n\nFortunately, many of these calls are redundant and can be eliminated. The static text for a particular level can be drawn on the background once and this newly created background can be used for refreshing the screen. This will eliminate almost all text redraws.\n\nA screen can be created with one of three constructors. If it is created with no parameters, the screen will be single buffered, and its output resolution will match the current display resolution (if the current resolution is specified in the manifest file ui\\_resolutions entry, otherwise the size will be 720p).\n\n`CreateObject(\"roScreen\")`\n\nIf a single parameter is passed, it is a Boolean that indicates if the screen is double buffered or not. See SwapBuffers():\n\n`CreateObject(\"roScreen\", true) ' double buffered screen`\n\nIf four parameters are passed, the last two specify the screen's resolution. The dimensions must be one of the screen sizes specified above:\n\n`CreateObject(\"roScreen\", true, 720, 480) ' db & SD res`\n\n**Example: Display an image**\n\n```\nScreen=CreateObject(\"roScreen\")\ndfDrawImage(screen, \"myphoto.jpg\",0,0)\nScreen.Finish()\n```\n\n**Example: Alpha blending**\n\n```\nwhite=&hFFFFFFFF\nscreen0=CreateObject(\"roScreen\")\nscreen0.SetAlphaEnable(true)\nscreen0.Clear(white)\nscreen0.DrawRect(100,100, screen0.GetWidth()-200, screen0.GetHeight()-200, &h80)\n' &h80 is black with a 50% alpha mix (RGBA)\nscreen0.finish()\n```",
+            "description": "The roScreen component provides a full screen drawing surface that can be stacked and that you can receive input events from.\n\nYou will need at least one roScreen component in your 2D game application to draw on and get events from. The origin (0,0) is the top left corner of the screen. The pixels are always RGBA 32 bits. Multiple roScreen components stack, and like other screen components only the top screen is viewable and gets events. An roScreen that is not the top most screen can still be drawn to.\n\n> Once an roScreen is created, the display stack enters \"Game Mode\", and other screen components cannot be used. Screensavers will also be disabled and will appear as a black screen in its place. Other screen components cannot be intermixed with roScreens as the roScreen display stack is maintained independently from the main screen component display stack. When the final roScreen component is closed, other screen components can be used again.\n\nWhen the roScreen constructor is called, an optional double buffer flag, and an optional resolution can be passed. If the screen is double buffered, two buffers are fully allocated when CreateObject() succeeds. If the screen is single buffered only one buffer is allocated and the \"front\" and \"back\" buffers in method descriptions below are the same buffer. When a screen is created with a different resolution than the output display, it is scaled automatically to the output display resolution.\n\nTo maintain proper aspect ratio, and take care of the different pixel aspect ratio in HD vs SD; there is a fixed set of bitmap resolutions that are allowed to be created for screens:",
             "events": [
                 {
                     "name": "roUniversalControlEvent",
@@ -7102,7 +7123,7 @@
                         {
                             "isRequired": true,
                             "name": "param1",
-                            "type": "string"
+                            "type": "dynamic"
                         }
                     ],
                     "returnType": "roSGNode"
@@ -7273,7 +7294,7 @@
                     "returnType": "roSystemLog"
                 }
             ],
-            "description": "The roSystemLog component enables the application to receive events from the Roku Streaming Player that are intended for reporting errors and trends, rather than trigger a response to a user action.\n\nAll of the log event messages are sent to the roMessagePort that is registered on the [roSystemLogEvent](https://developer.roku.com/docs/references/brightscript/events/rosystemlogevent.md\"roSystemLogEvent\") object. See roSystemLogEvent for details on the messages.\n\nThis object is created with no parameters:\n\n`CreateObject(\"roSystemLog\")`\n\nThe roSystemLog component requires specific Design Patterns in your BrightScript Application. Take care to:\n\n*   Use one roMessagePort throughout the application (instead of creating a new roMessagePort for each screen).\n*   Create one roSystemLog instance at startup that remains for the entire lifetime of the application.\n*   Pass the global roMessagePort referenced in the first bullet point to SetMessagePort() on the roSystemLog component.\n*   Enable the desired log types using EnableType().\n*   Handle the [roSystemLogEvents](https://developer.roku.com/docs/references/brightscript/events/rosystemlogevent.md\"roSystemLogEvents\") in all message loops.",
+            "description": "The roSystemLog component enables the application to receive events from the Roku Streaming Player that are intended for reporting errors and trends, rather than trigger a response to a user action.\n\nAll of the log event messages are sent to the roMessagePort that is registered on the [roSystemLogEvent](https://developer.roku.com/docs/references/brightscript/events/rosystemlogevent.md\"roSystemLogEvent\") object. See roSystemLogEvent for details on the messages.\n\nThis object is created with no parameters:\n\n`CreateObject(\"roSystemLog\")`\n\nThe roSystemLog component requires specific Design Patterns in your BrightScript Application. Take care to:\n\n*   Use one roMessagePort throughout the application (instead of creating a new roMessagePort for each screen).\n*   Create one roSystemLog instance at startup that remains for the entire lifetime of the application.\n*   Create the roSystemLog instance on the main thread (it cannot be created on a task thread).\n*   Pass the global roMessagePort referenced in the first bullet point to SetMessagePort() on the roSystemLog component.\n*   Enable the desired log types using EnableType().\n*   Handle the [roSystemLogEvents](https://developer.roku.com/docs/references/brightscript/events/rosystemlogevent.md\"roSystemLogEvents\") in all message loops.",
             "events": [],
             "interfaces": [
                 {
@@ -7357,7 +7378,7 @@
                         {
                             "isRequired": true,
                             "name": "param1",
-                            "type": "string"
+                            "type": "dynamic"
                         }
                     ],
                     "returnType": "roTextureRequest"
@@ -7730,11 +7751,18 @@
                     "returnType": "Boolean"
                 },
                 {
-                    "description": "Returns the memory limit for the channel.",
+                    "description": "Returns the estimated kilobytes (Kb) of memory available for the channel. This can be used to determine when to release memory when a channel receives low-memory warnings.",
+                    "name": "GetChannelAvailableMemory",
+                    "params": [],
+                    "returnDescription": "An integer indicating the estimated available memory remaining for the channel or the available memory for the device, whichever is lower.",
+                    "returnType": "dynamic"
+                },
+                {
+                    "description": "Returns the usage percentage of memory limit for the channel.",
                     "name": "GetMemoryLimitPercent",
                     "params": [],
-                    "returnDescription": "The memory limit for the channel.",
-                    "returnType": "Int"
+                    "returnDescription": "The usage percentage of memory limit for the channel.",
+                    "returnType": "dynamic"
                 }
             ],
             "name": "ifAppMemoryMonitor",
@@ -8007,7 +8035,7 @@
                         {
                             "default": null,
                             "description": "Items are arbitrarily grouped by comparable type of number or string, and are sorted within the group with a logical comparison.      If \"r\" is included in flags, a reverse sort is performed. If \"i\" is included in flags, a case-insensitive sort is performed. If invalid flags are specified, the sort is not performed.",
-                            "isRequired": true,
+                            "isRequired": false,
                             "name": "flags",
                             "type": "String"
                         }
@@ -8028,7 +8056,7 @@
                         {
                             "default": null,
                             "description": "Items are arbitrarily grouped by comparable type of number or string, and are sorted within the group with a logical comparison.      If \"r\" is included in flags, a reverse sort is performed. If \"i\" is included in flags, a case-insensitive sort is performed. If invalid flags are specified, the sort is not performed.",
-                            "isRequired": true,
+                            "isRequired": false,
                             "name": "flags",
                             "type": "String"
                         }
@@ -8939,6 +8967,12 @@
                     "returnType": "Void"
                 },
                 {
+                    "description": "The **getAllPurchases** function is similar to the [**getPurchases** function](#getpurchases-as-void) except that it requests the historical list of all canceled, expired, and terminated subscriptions over the lifetime of the current user account—in addition to the active subscriptions. You can use this method to leverage purchase history in order to implement subscription renewal flows and more easily determine if subscriptions have expired.",
+                    "name": "GetAllPurchases",
+                    "params": [],
+                    "returnType": "Void"
+                },
+                {
                     "description": "Requests the list of In-Channel products that are linked to the running channel.",
                     "name": "GetCatalog",
                     "params": [],
@@ -9266,6 +9300,21 @@
                     "returnType": "String"
                 },
                 {
+                    "description": "Returns the localized date of the device.",
+                    "name": "asDateStringLoc",
+                    "params": [
+                        {
+                            "default": null,
+                            "description": "Specify the format of the date string to be returned:  *   full *   long *   medium *   short *   custom formatting string using date symbols (for example, \"MMM d, y\")",
+                            "isRequired": true,
+                            "name": "format",
+                            "type": "String"
+                        }
+                    ],
+                    "returnDescription": "A date string corresponding to the specified format:",
+                    "returnType": "String"
+                },
+                {
                     "description": "Returns the date/time in long-date format.",
                     "name": "AsDateStringNoParam",
                     "params": [],
@@ -9278,6 +9327,21 @@
                     "params": [],
                     "returnDescription": "Number of seconds as Integer.",
                     "returnType": "Integer"
+                },
+                {
+                    "description": "Returns the localized time of the device.",
+                    "name": "asTimeStringLoc",
+                    "params": [
+                        {
+                            "default": null,
+                            "description": "Specify the format of the time string to be returned:  *   short *   short-h12 *   short-h24 *   custom formatting string using time symbols (for example, \"h:mm a\")",
+                            "isRequired": true,
+                            "name": "format",
+                            "type": "String"
+                        }
+                    ],
+                    "returnDescription": "A time string corresponding to the specified format:",
+                    "returnType": "String"
                 },
                 {
                     "description": "Sets the date/time using a string in the ISO 8601 format. For example \"YYYY-MM-DD HH:MM:SS\" e.g \"2009-01-01 01:00:00.000\" or \"2009-01-01T01:00:00.000\".",
@@ -9450,7 +9514,7 @@
                         }
                     ],
                     "returnDescription": "An roByteArray containing the decrypted data.",
-                    "returnType": "roByteArray"
+                    "returnType": "dynamic"
                 },
                 {
                     "description": "Encrypts data on a device that is unique per device, channel, or model.",
@@ -9472,7 +9536,7 @@
                         }
                     ],
                     "returnDescription": "An roByteArray containing the encrypted data.",
-                    "returnType": "roByteArray"
+                    "returnType": "dynamic"
                 }
             ],
             "name": "ifDeviceCrypto",
@@ -9494,7 +9558,7 @@
                     "params": [
                         {
                             "default": null,
-                            "description": "An associative array with the audio format to be checked. The general format of the associative arrays for CanDecodeAudio() is similar to the parameter and return associative arrays used in [CanDecodeVideo()](https://developer.roku.com/docs/references/brightscript/interfaces/ifdeviceinfo.mdcandecodevideovideo_format-as-object-as-object):  \n| Key        | Type    | Value                                                                                                                                                                                                                                                                                                                                                                                                                   | Requirement |\n| ---------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |\n| Codec      | string  | Specifies the audio codec: “aac”, “ac3”, “eac3”, \"alac\", \"flac\", “mp2”, “mp3”, “vorbis”, “wma”, “wma pro”, “dts”, \"ac4\"                                                                                                                                                                                                                                                                                                 | Required    |\n| Profile    | string  | Specifies the codec profile:CodecProfile\"h.265/h.265\"\"main\", \"high\", \"main 10\"\"vp9\"\"profile 0\", \"profile 2\"\"AAC codec profiles\"\"mp2 lc\", \"mp4 he\"                                                                                                                                                                                                                                                                       | Optional    |\n| Level      | String  | Specifies the codec level:CodecLevel\"h.265/h.265\"4.1, 4.2, 5.0, 5.1\"vp9\"3.0, 3.1, 4.0, 4.1, 5.0, 5.1                                                                                                                                                                                                                                                                                                                    | Optional    |\n| ChCnt      | integer | Specifies the required number of audio channels                                                                                                                                                                                                                                                                                                                                                                         | Optional    |\n| PassThru   | integer | Specifies whether the bitstream needs to be decoded on the device. By default, this reports the codec properties of both the Roku device and the attached HDMI device.You can filter the values returned by including one of the following options:**0** \\- Reports only codecs that are supported on the Roku device itself.**1** \\- Reports only codecs of the attached HDMI device (for example, an audio receiver). | Optional    |\n| Atmos      | Integer | Specifies whether atmos is required. Include 'atmos=1' if it is.                                                                                                                                                                                                                                                                                                                                                        | Optional    |\n| SampleRate | integer | Specifies the sample rate                                                                                                                                                                                                                                                                                                                                                                                               | Optional    |\n| BitRate    | integer | Specifies the bit rate in Kbit/sec                                                                                                                                                                                                                                                                                                                                                                                      | Optional    |\n| Container  | string  | Specifies the container format                                                                                                                                                                                                                                                                                                                                                                                          | Optional    |\n",
+                            "description": "An associative array with the audio format to be checked. The general format of the associative arrays for CanDecodeAudio() is similar to the parameter and return associative arrays used in [CanDecodeVideo()](https://developer.roku.com/docs/references/brightscript/interfaces/ifdeviceinfo.mdcandecodevideovideo_format-as-object-as-object):  \n| Key        | Type    | Value                                                                                                                                                                                                                                                                                                                                                                                                                   | Requirement |\n| ---------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |\n| Codec      | string  | Specifies the audio codec: “aac”, “ac3”, “eac3”, \"alac\", \"flac\", “mp2”, “mp3”, “vorbis”, “wma” (sunset as of Roku OS 12.5), “wma pro” (sunset as of Roku OS 12.5), “dts”, \"ac4\"                                                                                                                                                                                                                                         | Required    |\n| Profile    | string  | Specifies the codec profile:CodecProfile\"h.265/h.265\"\"main\", \"high\", \"main 10\"\"vp9\"\"profile 0\", \"profile 2\"\"AAC codec profiles\"\"mp2 lc\", \"mp4 he\"                                                                                                                                                                                                                                                                       | Optional    |\n| Level      | String  | Specifies the codec level:CodecLevel\"h.265/h.265\"4.1, 4.2, 5.0, 5.1\"vp9\"3.0, 3.1, 4.0, 4.1, 5.0, 5.1                                                                                                                                                                                                                                                                                                                    | Optional    |\n| ChCnt      | integer | Specifies the required number of audio channels                                                                                                                                                                                                                                                                                                                                                                         | Optional    |\n| PassThru   | integer | Specifies whether the bitstream needs to be decoded on the device. By default, this reports the codec properties of both the Roku device and the attached HDMI device.You can filter the values returned by including one of the following options:**0** \\- Reports only codecs that are supported on the Roku device itself.**1** \\- Reports only codecs of the attached HDMI device (for example, an audio receiver). | Optional    |\n| Atmos      | Integer | Specifies whether atmos is required. Include 'atmos=1' if it is.                                                                                                                                                                                                                                                                                                                                                        | Optional    |\n| SampleRate | integer | Specifies the sample rate                                                                                                                                                                                                                                                                                                                                                                                               | Optional    |\n| BitRate    | integer | Specifies the bit rate in Kbit/sec                                                                                                                                                                                                                                                                                                                                                                                      | Optional    |\n| Container  | string  | Specifies the container format                                                                                                                                                                                                                                                                                                                                                                                          | Optional    |\n",
                             "isRequired": true,
                             "name": "audio_format",
                             "type": "Object"
@@ -9800,7 +9864,7 @@
                     "returnType": "String"
                 },
                 {
-                    "description": "Checks the general memory levels of the channel.",
+                    "description": "Checks the general memory levels of the device.",
                     "name": "GetGeneralMemoryLevel",
                     "params": [],
                     "returnDescription": "Returns the general memory levels of the channel, which may be one of the following values:",
@@ -9870,10 +9934,10 @@
                     "returnType": "Object"
                 },
                 {
-                    "description": "Checks the three-letter ISO 639-2 language terminology code of the preferred caption language set on the Roku device.",
+                    "description": "Checks the two-letter ISO 639-1 language terminology code of the preferred caption language set on the Roku device.",
                     "name": "GetPreferredCaptionLanguage",
                     "params": [],
-                    "returnDescription": "The three-letter ISO 639-2 language terminology code, which may be one of the following values:",
+                    "returnDescription": "The two-letter ISO 639-1 language terminology code, which may be one of the following values:",
                     "returnType": "String"
                 },
                 {
@@ -10286,50 +10350,7 @@
                     "returnType": "Boolean"
                 },
                 {
-                    "description": "Draws the source object, where src is an [roBitmap](https://developer.roku.com/docs/references/brightscript/components/robitmap.md\"roBitmap\") or an [roRegion](https://developer.roku.com/docs/references/brightscript/components/roregion.md\"roRegion\") object, at position x,y, scaled in the x direction by scaleX and in the y direction by scaleY. scaleX and scaleY should each be greater than zero and less than one to reduce the object size, or greater than one to increase the object size",
-                    "name": "DrawScaledObject",
-                    "params": [
-                        {
-                            "default": null,
-                            "description": "The x-coordinate of the source object.",
-                            "isRequired": true,
-                            "name": "x",
-                            "type": "Integer"
-                        },
-                        {
-                            "default": null,
-                            "description": "The y-coordinate of the source object.",
-                            "isRequired": true,
-                            "name": "y",
-                            "type": "Integer"
-                        },
-                        {
-                            "default": null,
-                            "description": "The x direction in which the source object is to be scaled.",
-                            "isRequired": true,
-                            "name": "scaleX",
-                            "type": "Float"
-                        },
-                        {
-                            "default": null,
-                            "description": "The y direction in which the source object is to be scaled.",
-                            "isRequired": true,
-                            "name": "scaleY",
-                            "type": "Float"
-                        },
-                        {
-                            "default": null,
-                            "description": "The [roBitmap](https://developer.roku.com/docs/references/brightscript/components/robitmap.md\"roBitmap\") or an [roRegion](https://developer.roku.com/docs/references/brightscript/components/roregion.md\"roRegion\") object to be drawn.",
-                            "isRequired": true,
-                            "name": "src",
-                            "type": "Object"
-                        }
-                    ],
-                    "returnDescription": "A flag indicating whether the object was successfully drawn.",
-                    "returnType": "Boolean"
-                },
-                {
-                    "description": "Draws the source object, where src is an [roBitmap](https://developer.roku.com/docs/references/brightscript/components/robitmap.md\"roBitmap\") or an [roRegion](https://developer.roku.com/docs/references/brightscript/components/roregion.md\"roRegion\") object, at position x,y, scaled in the x direction by scaleX and in the y direction by scaleY. scaleX and scaleY should each be greater than zero and less than one to reduce the object size, or greater than one to increase the object size.",
+                    "description": "**OVERLOADED METHOD**\n\nDraws the source object, where src is an [roBitmap](https://developer.roku.com/docs/references/brightscript/components/robitmap.md\"roBitmap\") or an [roRegion](https://developer.roku.com/docs/references/brightscript/components/roregion.md\"roRegion\") object, at position x,y, scaled in the x direction by scaleX and in the y direction by scaleY. scaleX and scaleY should each be greater than zero and less than one to reduce the object size, or greater than one to increase the object size\n\n or \n\nDraws the source object, where src is an [roBitmap](https://developer.roku.com/docs/references/brightscript/components/robitmap.md\"roBitmap\") or an [roRegion](https://developer.roku.com/docs/references/brightscript/components/roregion.md\"roRegion\") object, at position x,y, scaled in the x direction by scaleX and in the y direction by scaleY. scaleX and scaleY should each be greater than zero and less than one to reduce the object size, or greater than one to increase the object size.",
                     "name": "DrawScaledObject",
                     "params": [
                         {
@@ -10370,7 +10391,7 @@
                         {
                             "default": null,
                             "description": "The RGBA color of the source object.",
-                            "isRequired": true,
+                            "isRequired": false,
                             "name": "rgba",
                             "type": "Integer"
                         }
@@ -11166,58 +11187,46 @@
                 {
                     "description": "roFont represents a particular font, from a font-family (eg. Arial), with a particular pixel size (e.g 20), and a particular boldness or italicness",
                     "name": "roFont",
-                    "url": "https://developer.roku.com/docs/references/brightscript/components/rofont.md"
+                    "url": "https://developer.roku.com/docs/references/api-index/brightscript/components/rofont.md"
                 }
             ],
             "methods": [
                 {
-                    "description": "Returns the number of pixels of the font ascent.",
                     "name": "GetAscent",
                     "params": [],
-                    "returnDescription": "The number of pixels.",
                     "returnType": "Integer"
                 },
                 {
-                    "description": "Returns the number of pixels of the font descent.",
                     "name": "GetDescent",
                     "params": [],
-                    "returnDescription": "The number of pixels.",
                     "returnType": "Integer"
                 },
                 {
-                    "description": "Returns the font maximum advance width in pixels.",
                     "name": "GetMaxAdvance",
                     "params": [],
-                    "returnDescription": "The number of pixels.",
                     "returnType": "Integer"
                 },
                 {
-                    "description": "Returns the number of pixels from one line to the next when drawing with this font.",
                     "name": "GetOneLineHeight",
                     "params": [],
-                    "returnDescription": "The number of pixels.",
                     "returnType": "Integer"
                 },
                 {
-                    "description": "Returns the number of pixels from one line to the next when drawing with this font. Each glyph and the needed spacing between glyphs is measured.",
                     "name": "GetOneLineWidth",
                     "params": [
                         {
                             "default": null,
-                            "description": "The subject text.",
                             "isRequired": true,
                             "name": "text",
                             "type": "String"
                         },
                         {
                             "default": null,
-                            "description": "Generally, the amount of pixels available for rendering on this line.",
                             "isRequired": true,
                             "name": "MaxWidth",
                             "type": "Integer"
                         }
                     ],
-                    "returnDescription": "The number of pixels. This will be less than provided MaxWidth.",
                     "returnType": "Integer"
                 }
             ],
@@ -11446,7 +11455,7 @@
         "ifhdmistatus": {
             "implementers": [
                 {
-                    "description": "The HDMI status component provides an interface to the current HDMI operational status",
+                    "description": "The HDMI status component provides an interface to the current HDMI operational status of Roku streaming players (or set-top boxes \\[STBs\\]). This interface is not applicable for Roku TVs.",
                     "name": "roHdmiStatus",
                     "url": "https://developer.roku.com/docs/references/brightscript/components/rohdmistatus.md"
                 }
@@ -11611,7 +11620,7 @@
                     "params": [
                         {
                             "default": null,
-                            "description": "An roArray of roAssociativeArrays, where each associative array represents a cookie to be added. Each associative array must contain the following key-value pairs:  \n| Name    | Type       | Description                    |\n| ------- | ---------- | ------------------------------ |\n| Version | Integer    | Cookie version number          |\n| Domain  | String     | Domain to which cookie applies |\n| Path    | String     | Path to which cookie applies   |\n| Name    | String     | Name of the cookie             |\n| Value   | String     | Value of the cookie            |\n| Expires | roDateTime | Cookie expiration date, if any |\n",
+                            "description": "An roArray of roAssociativeArrays, where each associative array represents a cookie to be added. Each associative array must contain the following key-value pairs:  \n| Name                                 | Type       | Description                                                                   |\n| ------------------------------------ | ---------- | ----------------------------------------------------------------------------- |\n| Version                              | Integer    | Cookie version number                                                         |\n| Domain                               | String     | Domain to which cookie applies                                                |\n| Path                                 | String     | Path to which cookie applies                                                  |\n| Name                                 | String     | Name of the cookie                                                            |\n| Value                                | String     | Value of the cookie                                                           |\n| Expires                              | roDateTime | Cookie expiration date, if any                                                |\n| Secure_Available since Roku OS 12.0_ | Boolean    | Indicates whether the cookie is to be sent over HTTPS (true) or HTTP (false). |\n",
                             "isRequired": true,
                             "name": "cookies",
                             "type": "Object"
@@ -12819,7 +12828,7 @@
                     "returnType": "Object"
                 },
                 {
-                    "description": "Returns the number of bytes available in the channel application's device registry (16K minus current file size). This function can be used, for example, to check the remaining space and remove older entries before writing newer ones. The following code demonstrates how to do this:",
+                    "description": "Returns the number of bytes available in the channel application's device registry (32K). This function can be used, for example, to check the remaining space and remove older entries before writing newer ones. The following code demonstrates how to do this:",
                     "name": "GetSpaceAvailable",
                     "params": [],
                     "returnDescription": "An integer representing the the number of bytes available in the device registry.",
@@ -13431,7 +13440,7 @@
                     "name": "getParent",
                     "params": [],
                     "returnDescription": "The parent node; otherwise, \"invalid\".",
-                    "returnType": "roSGNode"
+                    "returnType": "dynamic"
                 },
                 {
                     "description": "Returns an array with every existing node without a parent created by the currently running channel.",
@@ -13451,7 +13460,7 @@
                     "name": "getScene",
                     "params": [],
                     "returnDescription": "The node's root Scene.",
-                    "returnType": "roSGNode"
+                    "returnType": "dynamic"
                 },
                 {
                     "description": "Inserts a previously-created child node at the position index in the subject node list of children, so that this is the position that the new child node is traversed during render.",
@@ -13864,7 +13873,7 @@
                     "returnType": "Boolean"
                 },
                 {
-                    "description": "Calls a function when a field of the subject node changes. The function called must be in the scope of the current component.",
+                    "description": "**OVERLOADED METHOD**\n\nCalls a function when a field of the subject node changes. The function called must be in the scope of the current component.\n\n or \n\nThis overloaded form sends an [roSGNodeEvent](https://developer.roku.com/docs/references/brightscript/components/rosgnode.md\"roSGNodeEvent\") message to the [roMessagePort](https://developer.roku.com/docs/references/brightscript/components/romessageport.md\"roMessagePort\") identified by port when the subject node field identified by fieldName changes value.",
                     "name": "observeField",
                     "params": [
                         {
@@ -13876,10 +13885,10 @@
                         },
                         {
                             "default": null,
-                            "description": "The name of the method to be executed when the value of the field changes.",
+                            "description": "The name of the method to be executed when the value of the field changes. OR The [roMessagePort](https://developer.roku.com/docs/references/brightscript/components/romessageport.md\"roMessagePort\") to receive a [roSGNodeEvent](https://developer.roku.com/docs/references/brightscript/components/rosgnode.md\"roSGNodeEvent\") message when the value of the field changes.",
                             "isRequired": true,
-                            "name": "functionName",
-                            "type": "String"
+                            "name": "functionNameOrPort",
+                            "type": "String or Object"
                         },
                         {
                             "default": null,
@@ -13893,36 +13902,7 @@
                     "returnType": "Boolean"
                 },
                 {
-                    "description": "This overloaded form sends an [roSGNodeEvent](https://developer.roku.com/docs/references/brightscript/components/rosgnode.md\"roSGNodeEvent\") message to the [roMessagePort](https://developer.roku.com/docs/references/brightscript/components/romessageport.md\"roMessagePort\") identified by port when the subject node field identified by fieldName changes value.",
-                    "name": "observeField",
-                    "params": [
-                        {
-                            "default": null,
-                            "description": "The name of the field to be monitored.",
-                            "isRequired": true,
-                            "name": "fieldName",
-                            "type": "String"
-                        },
-                        {
-                            "default": null,
-                            "description": "The [roMessagePort](https://developer.roku.com/docs/references/brightscript/components/romessageport.md\"roMessagePort\") to receive a [roSGNodeEvent](https://developer.roku.com/docs/references/brightscript/components/rosgnode.md\"roSGNodeEvent\") message when the value of the field changes.",
-                            "isRequired": true,
-                            "name": "port",
-                            "type": "Object"
-                        },
-                        {
-                            "default": null,
-                            "description": "Optional. Names of \"context\" field values to be reported via getInfo() when the monitored field changes.",
-                            "isRequired": false,
-                            "name": "infoFields",
-                            "type": "Object"
-                        }
-                    ],
-                    "returnDescription": "A flag indicating whether this operation was successful.",
-                    "returnType": "Boolean"
-                },
-                {
-                    "description": "Sets up a connection between the observed node's field and the current component from which this call is made. This method is similar to the [observeField()](https://developer.roku.com/docs/references/brightscript/interfaces/ifsgnodefield.mdobservefieldfieldname-as-string-functionname-as-string-as-boolean \"observeField(fieldName as String, functionName as String)\") method.",
+                    "description": "**OVERLOADED METHOD**\n\nSets up a connection between the observed node's field and the current component from which this call is made. This method is similar to the [observeField()](https://developer.roku.com/docs/references/brightscript/interfaces/ifsgnodefield.mdobservefieldfieldname-as-string-functionname-as-string-as-boolean \"observeField(fieldName as String, functionName as String)\") method.",
                     "name": "observeFieldScoped",
                     "params": [
                         {
@@ -13934,39 +13914,10 @@
                         },
                         {
                             "default": null,
-                            "description": "The name of the method to be executed when the value of the field changes.",
+                            "description": "The name of the method to be executed when the value of the field changes. OR The [roMessagePort](https://developer.roku.com/docs/references/brightscript/components/romessageport.md\"roMessagePort\") to receive a [roSGNodeEvent](https://developer.roku.com/docs/references/brightscript/components/rosgnode.md\"roSGNodeEvent\") message when the value of the field changes.",
                             "isRequired": true,
-                            "name": "functionName",
-                            "type": "String"
-                        },
-                        {
-                            "default": null,
-                            "description": "Optional. Names of \"context\" field values to be reported via getInfo() when the monitored field changes.",
-                            "isRequired": false,
-                            "name": "infoFields",
-                            "type": "Object"
-                        }
-                    ],
-                    "returnDescription": "A flag indicating whether this operation was successful.",
-                    "returnType": "Boolean"
-                },
-                {
-                    "description": "Sets up a connection between the observed node's field and the current component from which this call is made. This method is similar to the [observeField()](https://developer.roku.com/docs/references/brightscript/interfaces/ifsgnodefield.mdobservefieldfieldname-as-string-functionname-as-string-as-boolean \"observeField(fieldName as String, functionName as String)\") method.",
-                    "name": "observeFieldScoped",
-                    "params": [
-                        {
-                            "default": null,
-                            "description": "The name of the field to be monitored.",
-                            "isRequired": true,
-                            "name": "fieldName",
-                            "type": "String"
-                        },
-                        {
-                            "default": null,
-                            "description": "The [roMessagePort](https://developer.roku.com/docs/references/brightscript/components/romessageport.md\"roMessagePort\") to receive a [roSGNodeEvent](https://developer.roku.com/docs/references/brightscript/components/rosgnode.md\"roSGNodeEvent\") message when the value of the field changes.",
-                            "isRequired": true,
-                            "name": "port",
-                            "type": "Object"
+                            "name": "functionNameOrPort",
+                            "type": "String or Object"
                         },
                         {
                             "default": null,
@@ -14232,21 +14183,21 @@
                     "name": "getGlobalNode",
                     "params": [],
                     "returnDescription": "A global reference object.",
-                    "returnType": "roSGNode"
+                    "returnType": "dynamic"
                 },
                 {
                     "description": "Returns the roMessagePort object for the SceneGraph scene.",
                     "name": "GetMessagePort",
                     "params": [],
                     "returnDescription": "The roMessagePort object.",
-                    "returnType": "roMessagePort"
+                    "returnType": "dynamic"
                 },
                 {
                     "description": "The roSGScene object associated with the screen.",
                     "name": "GetScene",
                     "params": [],
                     "returnDescription": "Typically, the scene created in main.brs by a roSGScreen.CreateScene() call.",
-                    "returnType": "roSGNode"
+                    "returnType": "dynamic"
                 },
                 {
                     "description": "Specifies the roMessagePort object for the roSGScreen object",
@@ -15593,30 +15544,20 @@
                     "returnType": "String"
                 },
                 {
+                    "description": "**OVERLOADED METHOD**\n\n",
                     "name": "EndsWith",
                     "params": [
                         {
                             "default": null,
-                            "isRequired": true,
-                            "name": "matchString",
-                            "type": "String"
-                        }
-                    ],
-                    "returnDescription": "A flag indicating whether a matching substring was found.",
-                    "returnType": "Boolean"
-                },
-                {
-                    "name": "EndsWith",
-                    "params": [
-                        {
-                            "default": null,
+                            "description": "",
                             "isRequired": true,
                             "name": "matchString",
                             "type": "String"
                         },
                         {
                             "default": null,
-                            "isRequired": true,
+                            "description": "",
+                            "isRequired": false,
                             "name": "length",
                             "type": "Integer"
                         }
@@ -15639,40 +15580,25 @@
                     "returnType": "String"
                 },
                 {
-                    "description": "Returns the zero-based index of the first occurrence of substring in the string. If the substring does not occur in the string, this method returns -1",
+                    "description": "**OVERLOADED METHOD**\n\nReturns the zero-based index of the first occurrence of substring in the string. If the substring does not occur in the string, this method returns -1\n\n or \n\nReturns the zero-based index of the first occurrence of substring in the string, starting at the specified zero-based start\\_index. If the substring does not occur in the string after start\\_index, returns -1",
                     "name": "Instr",
                     "params": [
                         {
                             "default": null,
-                            "description": "The substring within the roString object to be returned.",
+                            "description": "The substring within the roString object to be returned. OR The position in the roString object from which to start looking for and returning the **substring**.",
                             "isRequired": true,
-                            "name": "substring",
-                            "type": "String"
-                        }
-                    ],
-                    "returnDescription": "The index of the first instance of the substring within the string.",
-                    "returnType": "Integer"
-                },
-                {
-                    "description": "Returns the zero-based index of the first occurrence of substring in the string, starting at the specified zero-based start\\_index. If the substring does not occur in the string after start\\_index, returns -1",
-                    "name": "Instr",
-                    "params": [
-                        {
-                            "default": null,
-                            "description": "The position in the roString object from which to start looking for and returning the **substring**.",
-                            "isRequired": true,
-                            "name": "start_index",
-                            "type": "Integer"
+                            "name": "substringOrStart_index",
+                            "type": "String or Integer"
                         },
                         {
                             "default": null,
                             "description": "The substring within the roString object to be found.",
-                            "isRequired": true,
+                            "isRequired": false,
                             "name": "substring",
                             "type": "String"
                         }
                     ],
-                    "returnDescription": "The index of the first instance of the substring within the string, based on the specified starting position.",
+                    "returnDescription": "The index of the first instance of the substring within the string.\n\n or \n\nThe index of the first instance of the substring within the string, based on the specified starting position.",
                     "returnType": "Integer"
                 },
                 {
@@ -15698,27 +15624,12 @@
                     "returnType": "Integer"
                 },
                 {
-                    "description": "Returns a string consisting of the last characters of the string, starting at the zero-based start\\_index.",
+                    "description": "**OVERLOADED METHOD**\n\nReturns a string consisting of the last characters of the string, starting at the zero-based start\\_index.\n\n or \n\nReturns a string consisting of num\\_chars characters of the string, starting at the zero-based start\\_index. If there are fewer than num\\_chars in the string after start\\_index, returns the remaining characters in the string.",
                     "name": "Mid",
                     "params": [
                         {
                             "default": null,
-                            "description": "The position in the roString object from which to return the remaining characters.",
-                            "isRequired": true,
-                            "name": "start_index",
-                            "type": "Integer"
-                        }
-                    ],
-                    "returnDescription": "The string generated by the method.",
-                    "returnType": "String"
-                },
-                {
-                    "description": "Returns a string consisting of num\\_chars characters of the string, starting at the zero-based start\\_index. If there are fewer than num\\_chars in the string after start\\_index, returns the remaining characters in the string.",
-                    "name": "Mid",
-                    "params": [
-                        {
-                            "default": null,
-                            "description": "The position in the roString object from which to return the number of characters specified by num\\_chars.",
+                            "description": "The position in the roString object from which to return the remaining characters. OR The position in the roString object from which to return the number of characters specified by num\\_chars.",
                             "isRequired": true,
                             "name": "start_index",
                             "type": "Integer"
@@ -15726,9 +15637,31 @@
                         {
                             "default": null,
                             "description": "The number of characters in the remaining part of the roString object to be retrieved.",
-                            "isRequired": true,
+                            "isRequired": false,
                             "name": "num_chars",
                             "type": "Integer"
+                        }
+                    ],
+                    "returnDescription": "The string generated by the method.\n\n or \n\n",
+                    "returnType": "String"
+                },
+                {
+                    "description": "Returns a copy of the string with all instances of **fromStr** replaced with **toStr**. If **fromStr** is empty the return value is the same as the source string.",
+                    "name": "Replace",
+                    "params": [
+                        {
+                            "default": null,
+                            "description": "The string of characters within the roString object to be replaced.",
+                            "isRequired": true,
+                            "name": "fromStr",
+                            "type": "String"
+                        },
+                        {
+                            "default": null,
+                            "description": "The string of characters that will replace all instances of the **from** string.",
+                            "isRequired": true,
+                            "name": "toStr",
+                            "type": "String"
                         }
                     ],
                     "returnType": "String"
@@ -15785,30 +15718,20 @@
                     "returnType": "Object"
                 },
                 {
+                    "description": "**OVERLOADED METHOD**\n\n",
                     "name": "StartsWith",
                     "params": [
                         {
                             "default": null,
-                            "isRequired": true,
-                            "name": "matchString",
-                            "type": "String"
-                        }
-                    ],
-                    "returnDescription": "A flag indicating whether a matching substring was found.",
-                    "returnType": "Boolean"
-                },
-                {
-                    "name": "StartsWith",
-                    "params": [
-                        {
-                            "default": null,
+                            "description": "",
                             "isRequired": true,
                             "name": "matchString",
                             "type": "String"
                         },
                         {
                             "default": null,
-                            "isRequired": true,
+                            "description": "",
+                            "isRequired": false,
                             "name": "matchPos",
                             "type": "Integer"
                         }
@@ -16543,6 +16466,13 @@
                     "name": "GetUrl",
                     "params": [],
                     "returnDescription": "The URL.",
+                    "returnType": "String"
+                },
+                {
+                    "description": "Returns the user agent of the device, which can then be passed into server-side ad requests.",
+                    "name": "GetUserAgent",
+                    "params": [],
+                    "returnDescription": "The device user agent, which has the following syntax: \"Roku/DVP-major.minor (major.minor.revision.build-plid)\". For example, Roku/DVP‑12.0 (12.0.0.4171‑29).",
                     "returnType": "String"
                 },
                 {
@@ -17389,6 +17319,16 @@
             ],
             "methods": [
                 {
+                    "name": "isDownloadSegmentInfo",
+                    "params": [],
+                    "returnType": "Boolean"
+                },
+                {
+                    "name": "isFormatDetected",
+                    "params": [],
+                    "returnType": "Boolean"
+                },
+                {
                     "name": "isFullResult",
                     "params": [],
                     "returnType": "Boolean"
@@ -17424,7 +17364,17 @@
                     "returnType": "Boolean"
                 },
                 {
+                    "name": "isSegmentDownloadStarted",
+                    "params": [],
+                    "returnType": "Boolean"
+                },
+                {
                     "name": "isStatusMessage",
+                    "params": [],
+                    "returnType": "Boolean"
+                },
+                {
+                    "name": "isStreamSegmentInfo",
                     "params": [],
                     "returnType": "Boolean"
                 },

@@ -11,15 +11,15 @@ describe('PluginInterface', () => {
     });
 
     it('allows adding a plugin', () => {
-        const beforePublish = sinon.spy();
+        const beforeSerializeProgram = sinon.spy();
         const plugin = {
             name: 'allows adding a plugin',
-            beforePublish: beforePublish
+            beforeSerializeProgram: beforeSerializeProgram
         };
-        pluginInterface.emit('beforePublish', undefined, []);
+        pluginInterface.emit('beforeSerializeProgram', {} as any);
         pluginInterface.add(plugin);
-        pluginInterface.emit('beforePublish', undefined, []);
-        expect(beforePublish.callCount).to.equal(1);
+        pluginInterface.emit('beforeSerializeProgram', {} as any);
+        expect(beforeSerializeProgram.callCount).to.equal(1);
     });
 
     it('allows testing whether a plugin is registered', () => {
@@ -32,30 +32,31 @@ describe('PluginInterface', () => {
     });
 
     it('does not allows adding a plugin multiple times', () => {
-        const beforePublish = sinon.spy();
+        const beforeSerializeProgram = sinon.spy();
         const plugin = {
             name: 'does not allows adding a plugin multiple times',
-            beforePublish: beforePublish
+            beforeSerializeProgram: beforeSerializeProgram
         };
         pluginInterface.add(plugin);
         pluginInterface.add(plugin);
-        pluginInterface.emit('beforePublish', undefined, []);
-        expect(beforePublish.callCount).to.equal(1);
+        pluginInterface.emit('beforeSerializeProgram', {} as any);
+
+        expect(beforeSerializeProgram.callCount).to.equal(1);
         pluginInterface.remove(plugin);
         expect(pluginInterface.has(plugin)).to.be.false;
     });
 
     it('allows removing a plugin', () => {
-        const beforePublish = sinon.spy();
+        const beforeSerializeProgram = sinon.spy();
         const plugin = {
             name: 'allows removing a plugin',
-            beforePublish: beforePublish
+            beforeSerializeProgram: beforeSerializeProgram
         };
         pluginInterface.add(plugin);
-        pluginInterface.emit('beforePublish', undefined, []);
-        expect(beforePublish.callCount).to.equal(1);
+        pluginInterface.emit('beforeSerializeProgram', {} as any);
+        expect(beforeSerializeProgram.callCount).to.equal(1);
         pluginInterface.remove(plugin);
-        pluginInterface.emit('beforePublish', undefined, []);
-        expect(beforePublish.callCount).to.equal(1);
+        pluginInterface.emit('beforeSerializeProgram', {} as any);
+        expect(beforeSerializeProgram.callCount).to.equal(1);
     });
 });

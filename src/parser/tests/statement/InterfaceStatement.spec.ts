@@ -87,4 +87,22 @@ describe('InterfaceStatement', () => {
             'this comment was throwing exception during transpile
         `);
     });
+
+    it('allows parameters in interface method signatures', async () => {
+        await testGetTypedef(`
+            interface Person
+                sub someFunc(name as string, age as integer) as string
+                someField as string
+            end interface
+        `, undefined, undefined, undefined, true);
+    });
+
+    it('includes "optional" modifier in typedef', async () => {
+        await testGetTypedef(`
+            interface Person
+                name as string
+                optional age as integer
+            end interface
+        `);
+    });
 });

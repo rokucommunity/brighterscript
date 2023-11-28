@@ -17,8 +17,8 @@ export class BslibManager {
             const file = this.cache.getOrAdd('bslib', () => {
                 const file = new BrsFile({
                     srcPath: bslibSrcPath,
-                    destPath: s`source/bslib.brs`,
-                    pkgPath: s`source/bslib.brs`,
+                    destPath: event.program.bslibPkgPath,
+                    pkgPath: event.program.bslibPkgPath,
                     program: event.program
                 });
                 file.parse(bslibSource);

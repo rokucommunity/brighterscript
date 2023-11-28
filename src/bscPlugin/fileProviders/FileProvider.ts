@@ -1,16 +1,11 @@
-import type { BeforeFileParseEvent, ProvideFileEvent } from '../../interfaces';
+import type { ProvideFileEvent } from '../../interfaces';
 import chalk from 'chalk';
 import { LogLevel } from '../../Logger';
-import { ComponentStatementProvider } from './ComponentStatementProvider';
 
 export class FileProvider {
     constructor(
         private event: ProvideFileEvent
-    ) {
-        this.componentStatementProvider = new ComponentStatementProvider(event);
-    }
-
-    private componentStatementProvider: ComponentStatementProvider;
+    ) { }
 
     public process() {
         //if the event already has a file for this path, assume some other plugin has processed this event already
@@ -37,27 +32,12 @@ export class FileProvider {
         const file = this.event.fileFactory.BrsFile(this.event);
         const text = this.event.data.value.toString();
 
-        let parseEvent: BeforeFileParseEvent = {
-            //TODO remove `pathAbsolute` in v1
-            pathAbsolute: this.event.srcPath,
-            srcPath: this.event.srcPath,
-            source: text
-        };
-        this.event.program.plugins.emit('beforeFileParse', parseEvent);
-
         this.logger.time(LogLevel.debug, ['parse', chalk.green(this.event.srcPath)], () => {
-            file.parse(parseEvent.source);
+            file.parse(text);
         });
 
-        //notify plugins that this file has finished parsing
-        this.event.program.plugins.emit('afterFileParse', file);
-
         this.event.files.push(file);
-
-        //emit virtual files for each component statement
-        this.componentStatementProvider.process(file);
     }
-
 
     private handleXmlFile() {
         //only process files from the components folder (Roku will only parse xml files in the components folder)
@@ -68,20 +48,9 @@ export class FileProvider {
         //add the file to the program
         const file = this.event.fileFactory.XmlFile(this.event);
 
-        let beforeFileParseEvent: BeforeFileParseEvent = {
-            //TODO remove `pathAbsolute` in v1
-            pathAbsolute: this.event.srcPath,
-            srcPath: this.event.srcPath,
-            source: text
-        };
-        this.event.program.plugins.emit('beforeFileParse', beforeFileParseEvent);
-
         this.logger.time(LogLevel.debug, ['parse', chalk.green(this.event.srcPath)], () => {
-            file.parse(beforeFileParseEvent.source);
+            file.parse(text);
         });
-
-        //notify plugins that this file has finished parsing
-        this.event.program.plugins.emit('afterFileParse', file);
 
         this.event.files.push(file);
     }

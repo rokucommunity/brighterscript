@@ -3,20 +3,24 @@ import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
 import type { FunctionScope } from './FunctionScope';
-import type { FunctionType } from './types/FunctionType';
+import type { TypedFunctionType } from './types/TypedFunctionType';
 import type { ParseMode } from './parser/Parser';
 import type { Program } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
-import type { FunctionStatement } from './parser/Statement';
-import type { Expression } from './parser/AstNode';
+import type { ClassStatement, ConstStatement, EnumStatement, FunctionStatement, NamespaceStatement } from './parser/Statement';
+import type { AstNode, Expression, Statement } from './parser/AstNode';
 import type { TranspileState } from './parser/TranspileState';
 import type { SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
 import type { Editor } from './astUtils/Editor';
-import type { Token } from './lexer/Token';
+import type { Identifier, Token } from './lexer/Token';
 import type { File } from './files/File';
 import type { FileFactory } from './files/Factory';
 import type { LazyFileData } from './files/LazyFileData';
+import type { SymbolTable, SymbolTypeFlag } from './SymbolTable';
+import type { CallExpression } from './parser/Expression';
+import { createToken } from './astUtils/creators';
+import { TokenKind } from './lexer/TokenKind';
 
 export interface BsDiagnostic extends Diagnostic {
     file: File;
@@ -26,6 +30,18 @@ export interface BsDiagnostic extends Diagnostic {
     data?: any;
 }
 
+export enum DiagnosticOrigin {
+    Program = 'Program',
+    Scope = 'Scope',
+    File = 'File',
+    ASTSegment = 'AstSegment'
+}
+
+export interface BsDiagnosticWithOrigin extends BsDiagnostic {
+    origin: DiagnosticOrigin;
+    astSegment?: AstNode;
+}
+
 export interface Callable {
     file: File;
     name: string;
@@ -33,7 +49,7 @@ export interface Callable {
      * Is the callable declared as "sub". If falsey, assumed declared as "function"
      */
     isSub: boolean;
-    type: FunctionType;
+    type: TypedFunctionType;
     /**
      * A short description of the callable. Should be a short sentence.
      */
@@ -68,6 +84,7 @@ export interface FunctionCall {
      * The full range of this function call (from the start of the function name to its closing paren)
      */
     range: Range;
+    expression: CallExpression;
     functionScope: FunctionScope;
     file: File;
     name: string;
@@ -128,7 +145,7 @@ export interface FileReference {
 
 export interface VariableDeclaration {
     name: string;
-    type: BscType;
+    getType: () => BscType;
     /**
      * The range for the variable name
      */
@@ -175,8 +192,6 @@ export interface CommentFlag {
     codes: DiagnosticCode[] | null;
 }
 
-type ValidateHandler = (scope: Scope, files: File[], callables: CallableContainerMap) => void;
-
 export type CompilerPluginFactory = () => CompilerPlugin;
 
 export interface CompilerPlugin {
@@ -184,21 +199,11 @@ export interface CompilerPlugin {
     /**
      * Called before a new program is created
      */
-    beforeProgramCreate?: (builder: ProgramBuilder) => void;
+    beforeProgramCreate?: PluginHandler<BeforeProgramCreateEvent>;
     /**
      * Called after a new program is created
      */
-    afterProgramCreate?: (program: Program) => void;
-
-
-    /**
-     * @deprecated use beforePrepareProgram
-     */
-    beforePrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
-    /**
-     * @deprecated use afterProgramBuild
-     */
-    afterPrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+    afterProgramCreate?: PluginHandler<AfterProgramCreateEvent>;
 
 
     /**
@@ -216,33 +221,22 @@ export interface CompilerPlugin {
 
 
     /**
-     * @deprecated use `beforeBuildProgram`
+     * Called before the entire program is validated
      */
-    beforePublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
-    /**
-     * @deprecated use `afterBuildProgram`
-     */
-    afterPublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
-
-
+    beforeProgramValidate?: PluginHandler<BeforeProgramValidateEvent>;
     /**
      * Called before the entire program is validated
      */
-    beforeProgramValidate?: (program: Program) => void;
+    onProgramValidate?: PluginHandler<OnProgramValidateEvent>;
     /**
      * Called after the program has been validated
      */
-    afterProgramValidate?: (program: Program) => void;
+    afterProgramValidate?: PluginHandler<AfterProgramValidateEvent>;
 
     /**
-     * @deprecated use `beforeProgramBuild` instead
+     * Called right before the program is disposed/destroyed
      */
-    beforeProgramTranspile?: (program: Program, entries: TranspileObj[], editor: Editor) => void;
-    /**
-     * @deprecated use `afterProgramBuild` instead
-     */
-    afterProgramTranspile?: (program: Program, entries: TranspileObj[], editor: Editor) => void;
-
+    beforeProgramDispose?: PluginHandler<BeforeProgramDisposeEvent>;
 
     /**
      * Emitted before the program starts collecting completions
@@ -271,15 +265,18 @@ export interface CompilerPlugin {
      */
     afterProvideHover?: PluginHandler<AfterProvideHoverEvent>;
 
+    /**
+     * Called after a scope was created
+     */
+    afterScopeCreate?: PluginHandler<AfterScopeCreateEvent>;
 
-    afterScopeCreate?: (scope: Scope) => void;
+    beforeScopeDispose?: PluginHandler<BeforeScopeDisposeEvent>;
+    onScopeDispose?: PluginHandler<OnScopeDisposeEvent>;
+    afterScopeDispose?: PluginHandler<AfterScopeDisposeEvent>;
 
-    beforeScopeDispose?: (scope: Scope) => void;
-    afterScopeDispose?: (scope: Scope) => void;
-
-    beforeScopeValidate?: ValidateHandler;
+    beforeScopeValidate?: PluginHandler<BeforeScopeValidateEvent>;
     onScopeValidate?: PluginHandler<OnScopeValidateEvent>;
-    afterScopeValidate?: ValidateHandler;
+    afterScopeValidate?: PluginHandler<BeforeScopeValidateEvent>;
 
     onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
     onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
@@ -320,18 +317,6 @@ export interface CompilerPlugin {
      */
     afterFileRemove?: PluginHandler<AfterFileRemoveEvent>;
 
-    /**
-     * Called before parsing a file. This is an opportunity to manipulate or replace the source code before the file is parsed.
-     * NOTE: this only applies to .brs, .bs, .d.bs files, or .xml files located within the pkg:/components folder
-     * @deprecated To override file contents, use the `setData()` method in the `beforeProvideFile` event instead
-     */
-    beforeFileParse?: PluginHandler<BeforeFileParseEvent>;
-    /**
-     * Called after a file has been parsed.
-     * @deprecated use `afterFileAdd` instead
-     */
-    afterFileParse?: (file: File) => void;
-
 
     /**
      * Called before each file is validated
@@ -344,11 +329,7 @@ export interface CompilerPlugin {
     /**
      * Called after each file is validated
      */
-    afterFileValidate?: (file: File) => void;
-
-
-    beforeFileTranspile?: PluginHandler<BeforeFileTranspileEvent>;
-    afterFileTranspile?: PluginHandler<AfterFileTranspileEvent>;
+    afterFileValidate?: PluginHandler<AfterFileValidateEvent>;
 
 
     /**
@@ -379,6 +360,10 @@ export interface CompilerPlugin {
      * Before the program turns all file objects into their final buffers
      */
     beforeSerializeProgram?: PluginHandler<BeforeSerializeProgramEvent>;
+    /**
+     * Emitted right at the start of the program turning all file objects into their final buffers
+     */
+    onSerializeProgram?: PluginHandler<OnSerializeProgramEvent>;
     /**
      * After the program turns all file objects into their final buffers
      */
@@ -422,18 +407,6 @@ export interface CompilerPlugin {
      * Before a file is written to disk. These are raw files that contain the final output. One `File` may produce several of these
      */
     afterWriteFile?: PluginHandler<AfterWriteFileEvent>;
-
-
-    /**
-     * Called before a file is removed from the program.
-     * @deprecated use `beforeFileRemove` instead
-     */
-    beforeFileDispose?: (file: File) => void;
-    /**
-     * Called after a file is removed.
-     * @deprecated use `afterFileRemove` instead
-     */
-    afterFileDispose?: (file: File) => void;
 }
 export type PluginHandler<T, R = void> = (event: T) => R;
 
@@ -445,6 +418,21 @@ export interface OnGetCodeActionsEvent<TFile extends File = File> {
     diagnostics: BsDiagnostic[];
     codeActions: CodeAction[];
 }
+
+export interface BeforeProgramCreateEvent {
+    builder: ProgramBuilder;
+}
+export interface AfterProgramCreateEvent {
+    builder: ProgramBuilder;
+    program: Program;
+}
+
+export interface BeforeProgramValidateEvent {
+    program: Program;
+}
+export type OnProgramValidateEvent = BeforeProgramValidateEvent;
+export type AfterProgramValidateEvent = BeforeProgramValidateEvent;
+
 
 export interface ProvideCompletionsEvent<TFile extends File = File> {
     program: Program;
@@ -488,6 +476,43 @@ export interface Hover {
 export type BeforeProvideHoverEvent = ProvideHoverEvent;
 export type AfterProvideHoverEvent = ProvideHoverEvent;
 
+export interface AfterScopeCreateEvent {
+    program: Program;
+    scope: Scope;
+}
+export interface BeforeScopeDisposeEvent {
+    program: Program;
+    scope: Scope;
+}
+export interface OnScopeDisposeEvent {
+    program: Program;
+    scope: Scope;
+}
+export interface AfterScopeDisposeEvent {
+    program: Program;
+    scope: Scope;
+}
+export interface BeforeScopeValidateEvent {
+    program: Program;
+    scope: Scope;
+}
+export type AfterScopeValidateEvent = BeforeScopeValidateEvent;
+
+export interface BeforeFileParseEvent {
+    program: Program;
+    srcPath: string;
+    source: string;
+}
+export interface OnFileParseEvent {
+    program: Program;
+    srcPath: string;
+    source: string;
+}
+export interface AfterFileParseEvent {
+    program: Program;
+    file: File;
+}
+
 export interface OnGetSemanticTokensEvent<T extends File = File> {
     /**
      * The program this file is from
@@ -507,31 +532,33 @@ export interface OnGetSemanticTokensEvent<T extends File = File> {
     semanticTokens: SemanticToken[];
 }
 
-export interface BeforeFileValidateEvent<T extends File = File> {
+export type BeforeFileValidateEvent = OnFileValidateEvent;
+export interface OnFileValidateEvent<T extends File = File> {
     program: Program;
     file: T;
 }
+export type AfterFileValidateEvent = OnFileValidateEvent;
 
 export interface OnFileValidateEvent<T extends File = File> {
     program: Program;
     file: T;
 }
+export interface TranspileEntry {
+    file: File;
+    outputPath: string;
+}
+
+export interface ScopeValidationOptions {
+    changedFiles?: File[];
+    changedSymbols?: Map<SymbolTypeFlag, Set<string>>;
+    force?: boolean;
+}
 
 export interface OnScopeValidateEvent {
     program: Program;
     scope: Scope;
-}
-
-export interface BeforeFileTranspileEvent<TFile extends File = File> {
-    program: Program;
-    file: TFile;
-    outputPath: string;
-    /**
-     * An editor that can be used to transform properties or arrays. Once the `afterFileTranspile` event has fired, these changes will be reverted,
-     * restoring the objects to their prior state. This is useful for changing code right before a file gets transpiled, but when you don't want
-     * the changes to persist in the in-memory file.
-     */
-    editor: Editor;
+    changedFiles?: File[];
+    changedSymbols?: Map<SymbolTypeFlag, Set<string>>;
 }
 
 export interface AfterFileTranspileEvent<TFile extends File = File> {
@@ -624,6 +651,7 @@ export interface PrepareFileEvent<TFile extends File = File> {
     file: TFile;
     editor: Editor;
 }
+export type OnPrepareFileEvent<TFile extends File = File> = PrepareFileEvent<TFile>;
 export type AfterPrepareFileEvent<TFile extends File = File> = PrepareFileEvent<TFile>;
 
 
@@ -641,6 +669,7 @@ export interface BeforeSerializeProgramEvent {
     files: File[];
     result: Map<File, SerializedFile[]>;
 }
+export type OnSerializeProgramEvent = BeforeSerializeProgramEvent;
 export type AfterSerializeProgramEvent = BeforeSerializeProgramEvent;
 
 /**
@@ -701,17 +730,14 @@ export interface TranspileObj {
     outputPath: string;
 }
 
-export interface BeforeFileParseEvent {
-    srcPath: string;
-    /**
-     * @deprecated use `srcPath` instead
-     */
-    pathAbsolute: string;
-    source: string;
+export interface BeforeFileDisposeEvent {
+    program: Program;
+    file: File;
 }
-
-export type SourceObj = BeforeFileParseEvent;
-
+export type AfterFileDisposeEvent = BeforeFileDisposeEvent;
+export interface BeforeProgramDisposeEvent {
+    program: Program;
+}
 
 export interface SemanticToken {
     range: Range;
@@ -741,4 +767,62 @@ export type DiagnosticCode = number | string;
 export interface FileLink<T> {
     item: T;
     file: BrsFile;
+}
+
+export interface ExtraSymbolData {
+    definingNode?: AstNode;
+    description?: string;
+    completionPriority?: number; // the higher the number, the lower the priority
+    flags?: SymbolTypeFlag;
+}
+
+export interface GetTypeOptions {
+    flags: SymbolTypeFlag;
+    typeChain?: TypeChainEntry[];
+    data?: ExtraSymbolData;
+    ignoreCall?: boolean; // get the type of this expression, NOT it's return type
+    onlyCacheResolvedTypes?: boolean;
+}
+
+export class TypeChainEntry {
+    constructor(public name: string, public type: BscType, public flags: SymbolTypeFlag, public range: Range, public separatorToken: Token = createToken(TokenKind.Dot)) {
+    }
+    get isResolved() {
+        return this.type?.isResolvable();
+    }
+}
+
+export interface TypeChainProcessResult {
+    itemName: string;
+    itemParentTypeName: string;
+    fullNameOfItem: string;
+    fullChainName: string;
+    range: Range;
+    containsDynamic: boolean;
+}
+
+export interface TypeCompatibilityData {
+    missingFields?: { name: string; expectedType: BscType }[];
+    fieldMismatches?: { name: string; expectedType: BscType; actualType: BscType }[];
+    depth?: number;
+}
+
+export interface NamespaceContainer {
+    file: File;
+    fullName: string;
+    fullNameLower: string;
+    parentNameLower: string;
+    nameParts: Identifier[];
+    nameRange: Range;
+    lastPartName: string;
+    lastPartNameLower: string;
+    functionStatements: Map<string, FunctionStatement>;
+    isTopLevel: boolean;
+    namespaceStatements?: NamespaceStatement[];
+    statements?: Statement[];
+    classStatements?: Map<string, ClassStatement>;
+    enumStatements?: Map<string, EnumStatement>;
+    constStatements?: Map<string, ConstStatement>;
+    namespaces?: Map<string, NamespaceContainer>;
+    symbolTable: SymbolTable;
 }

@@ -157,6 +157,7 @@ export enum TokenKind {
     Public = 'Public',
     Protected = 'Protected',
     Private = 'Private',
+    Optional = 'Optional',
     As = 'As',
     New = 'New',
     Override = 'Override',
@@ -303,6 +304,7 @@ export const Keywords: Record<string, TokenKind> = {
     private: TokenKind.Private,
     new: TokenKind.New,
     override: TokenKind.Override,
+    optional: TokenKind.Optional,
     namespace: TokenKind.Namespace,
     endnamespace: TokenKind.EndNamespace,
     'end namespace': TokenKind.EndNamespace,
@@ -433,6 +435,7 @@ export const AllowedProperties = [
     TokenKind.Class,
     TokenKind.New,
     TokenKind.Override,
+    TokenKind.Optional,
     TokenKind.Namespace,
     TokenKind.EndNamespace,
     TokenKind.Component,
@@ -478,6 +481,7 @@ export const AllowedLocalIdentifiers = [
     TokenKind.Class,
     TokenKind.New,
     TokenKind.Override,
+    TokenKind.Optional,
     TokenKind.Namespace,
     TokenKind.EndNamespace,
     TokenKind.Component,
@@ -619,11 +623,16 @@ export const DeclarableTypes = [
     TokenKind.Double,
     TokenKind.String,
     TokenKind.Object,
-    TokenKind.Interface,
     TokenKind.Dynamic,
     TokenKind.Void,
     TokenKind.Function
 ];
+
+/** List of TokenKind that will not break parsing a TypeExpression in Brighterscript*/
+export const AllowedTypeIdentifiers = [
+    ...AllowedProperties
+];
+
 
 /**
  * The tokens that might preceed a regex literal
@@ -668,3 +677,13 @@ export const PreceedingRegexTypes = new Set([
     TokenKind.Colon,
     TokenKind.Semicolon
 ]);
+
+/**
+ * The tokens that may be in leading trivia
+ */
+export const AllowedTriviaTokens: ReadonlyArray<TokenKind> = [
+    TokenKind.Newline,
+    TokenKind.Whitespace,
+    TokenKind.Comment,
+    TokenKind.Colon
+];

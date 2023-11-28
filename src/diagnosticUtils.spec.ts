@@ -5,11 +5,21 @@ import { Range, DiagnosticSeverity } from 'vscode-languageserver';
 import { util } from './util';
 import chalk from 'chalk';
 import { AssetFile } from './files/AssetFile';
+import { createSandbox } from 'sinon';
+import undent from 'undent';
+import type { BsDiagnostic } from './interfaces';
+import { stripConsoleColors } from './testHelpers.spec';
+const sinon = createSandbox();
 
 describe('diagnosticUtils', () => {
     let options: ReturnType<typeof diagnosticUtils.getPrintDiagnosticOptions>;
     beforeEach(() => {
+        sinon.restore();
         options = diagnosticUtils.getPrintDiagnosticOptions({});
+    });
+
+    afterEach(() => {
+        sinon.restore();
     });
 
     describe('printDiagnostic', () => {
@@ -35,9 +45,72 @@ describe('diagnosticUtils', () => {
             //print a diagnostic that doesn't have a range...it should not explode
             diagnosticUtils.printDiagnostic(options, DiagnosticSeverity.Error, undefined, [], {
                 message: 'Bad thing happened',
-                range: Range.create(0, 0, 2, 2), //important...this needs to be null for the test to pass,
+                range: Range.create(0, 0, 2, 2),
                 code: 1234
             } as any);
+        });
+
+        function testPrintDiagnostic(diagnostic: BsDiagnostic, code: string, expected: string) {
+            let logOutput = '';
+            sinon.stub(console, 'log').callsFake((...args: any[]) => {
+                if (logOutput.length > 0) {
+                    logOutput += '\n';
+                }
+                logOutput += stripConsoleColors(args.join(' '));
+            });
+            //print a diagnostic that doesn't have a range...it should not explode
+            diagnosticUtils.printDiagnostic(options, DiagnosticSeverity.Error, undefined, code.split(/\r?\n/g), diagnostic);
+
+            //remove leading and trailing newlines
+            logOutput = logOutput.replace(/^[\r\n]*/g, '').replace(/[\r\n]*$/g, '');
+            expected = undent(logOutput).replace(/^[\r\n]*/g, '').replace(/[\r\n]*$/g, '');
+
+            expect(logOutput).to.eql(expected);
+        }
+
+        it('handles mixed tabs and spaces', () => {
+            testPrintDiagnostic(
+                {
+                    message: 'Bad thing happened',
+                    range: Range.create(0, 5, 0, 18),
+                    code: 1234
+                } as any,
+                `\t  \t print "hello"`,
+                `
+                <unknown file>:1:6 - error BS1234: Bad thing happened
+                 1             print "hello"
+                 _             ~~~~~~~~~~~~~
+            `);
+        });
+
+        it('handles only tabs', () => {
+            testPrintDiagnostic(
+                {
+                    message: 'Bad thing happened',
+                    range: Range.create(0, 5, 0, 18),
+                    code: 1234
+                } as any,
+                `\tprint "hello"`,
+                `
+                <unknown file>:1:6 - error BS1234: Bad thing happened
+                 1      print "hello"
+                 _      ~~~~~~~~~~~~~
+            `);
+        });
+
+        it('handles only spaces', () => {
+            testPrintDiagnostic(
+                {
+                    message: 'Bad thing happened',
+                    range: Range.create(0, 5, 0, 18),
+                    code: 1234
+                } as any,
+                `   print "hello"`,
+                `
+                <unknown file>:1:6 - error BS1234: Bad thing happened
+                 1     print "hello"
+                 _     ~~~~~~~~~~~~~
+            `);
         });
     });
 
@@ -102,76 +175,75 @@ describe('diagnosticUtils', () => {
 
     describe('getDiagnosticSquiggly', () => {
         it('works for normal cases', () => {
-            expect(diagnosticUtils.getDiagnosticSquigglyText(<any>{
-                range: Range.create(0, 0, 0, 4)
-            }, 'asdf')).to.equal('~~~~');
+            expect(
+                diagnosticUtils.getDiagnosticSquigglyText('asdf', 0, 4)
+            ).to.equal('~~~~');
         });
 
         it('highlights whole line if no range', () => {
-            expect(diagnosticUtils.getDiagnosticSquigglyText(<any>{
-            }, ' asdf ')).to.equal('~~~~~~');
+            expect(
+                diagnosticUtils.getDiagnosticSquigglyText(' asdf ', undefined, undefined)
+            ).to.equal('~~~~~~');
         });
 
         it('returns empty string when no line is found', () => {
-            expect(diagnosticUtils.getDiagnosticSquigglyText(<any>{
-                range: Range.create(0, 0, 0, 10)
-            }, '')).to.equal('');
+            expect(diagnosticUtils.getDiagnosticSquigglyText('', 0, 10)).to.equal('');
 
-            expect(diagnosticUtils.getDiagnosticSquigglyText(<any>{
-                range: Range.create(0, 0, 0, 10)
-            }, undefined)).to.equal('');
+            expect(
+                diagnosticUtils.getDiagnosticSquigglyText(undefined, 0, 10)
+            ).to.equal('');
         });
 
         it('supports diagnostic not at start of line', () => {
-            expect(diagnosticUtils.getDiagnosticSquigglyText(<any>{
-                range: Range.create(0, 2, 0, 6)
-            }, '  asdf')).to.equal('  ~~~~');
+            expect(
+                diagnosticUtils.getDiagnosticSquigglyText('  asdf', 2, 6)
+            ).to.equal('  ~~~~');
         });
 
         it('supports diagnostic that does not finish at end of line', () => {
-            expect(diagnosticUtils.getDiagnosticSquigglyText(<any>{
-                range: Range.create(0, 0, 0, 4)
-            }, 'asdf  ')).to.equal('~~~~  ');
+            expect(
+                diagnosticUtils.getDiagnosticSquigglyText('asdf  ', 0, 4)
+            ).to.equal('~~~~  ');
         });
 
         it('supports diagnostic with space on both sides', () => {
-            expect(diagnosticUtils.getDiagnosticSquigglyText(<any>{
-                range: Range.create(0, 2, 0, 6)
-            }, '  asdf  ')).to.equal('  ~~~~  ');
+            expect(
+                diagnosticUtils.getDiagnosticSquigglyText('  asdf  ', 2, 6)
+            ).to.equal('  ~~~~  ');
         });
 
         it('handles diagnostic that starts and stops on the same position', () => {
-            expect(diagnosticUtils.getDiagnosticSquigglyText(<any>{
-                range: Range.create(0, 2, 0, 2)
-            }, 'abcde')).to.equal('~~~~~');
+            expect(
+                diagnosticUtils.getDiagnosticSquigglyText('abcde', 2, 2)
+            ).to.equal('~~~~~');
         });
 
         it('handles single-character diagnostic', () => {
-            expect(diagnosticUtils.getDiagnosticSquigglyText(<any>{
-                range: Range.create(0, 2, 0, 3)
-            }, 'abcde')).to.equal('  ~  ');
+            expect(
+                diagnosticUtils.getDiagnosticSquigglyText('abcde', 2, 3)
+            ).to.equal('  ~  ');
         });
 
         it('handles diagnostics that are longer than the line', () => {
-            expect(diagnosticUtils.getDiagnosticSquigglyText(<any>{
-                range: Range.create(0, 0, 0, 10)
-            }, 'abcde')).to.equal('~~~~~');
+            expect(
+                diagnosticUtils.getDiagnosticSquigglyText('abcde', 0, 10)
+            ).to.equal('~~~~~');
 
-            expect(diagnosticUtils.getDiagnosticSquigglyText(<any>{
-                range: Range.create(0, 2, 0, 10)
-            }, 'abcde')).to.equal('  ~~~');
+            expect(
+                diagnosticUtils.getDiagnosticSquigglyText('abcde', 2, 10)
+            ).to.equal('  ~~~');
         });
 
         it('handles Number.MAX_VALUE for end character', () => {
-            expect(diagnosticUtils.getDiagnosticSquigglyText(<any>{
-                range: util.createRange(0, 0, 0, Number.MAX_VALUE)
-            }, 'abcde')).to.equal('~~~~~');
+            expect(
+                diagnosticUtils.getDiagnosticSquigglyText('abcde', 0, Number.MAX_VALUE)
+            ).to.equal('~~~~~');
         });
 
         it.skip('handles edge cases', () => {
-            expect(diagnosticUtils.getDiagnosticSquigglyText(<any>{
-                range: Range.create(5, 16, 5, 18)
-            }, 'end functionasdf')).to.equal('            ~~~~');
+            expect(
+                diagnosticUtils.getDiagnosticSquigglyText('end functionasdf', 16, 18)
+            ).to.equal('            ~~~~');
         });
     });
 
@@ -183,7 +255,7 @@ describe('diagnosticUtils', () => {
                 diagnosticUtils.getDiagnosticLine({ range: range } as any, '1'.repeat(lineLength), color)
             ).to.eql([
                 chalk.bgWhite(' ' + chalk.black((range.start.line + 1).toString()) + ' ') + ' ' + '1'.repeat(lineLength),
-                chalk.bgWhite(' ' + chalk.white('_'.repeat((range.start.line + 1).toString().length)) + ' ') + ' ' + squigglyText.padEnd(lineLength, ' ')
+                chalk.bgWhite(' ' + chalk.white(' '.repeat((range.start.line + 1).toString().length)) + ' ') + ' ' + squigglyText.padEnd(lineLength, ' ')
             ].join('\n'));
         }
 

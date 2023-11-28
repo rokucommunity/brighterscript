@@ -1,22 +1,21 @@
 /* eslint-disable no-multi-spaces */
 import { expect } from '../chai-config.spec';
 import { PrintStatement, Block, Body, AssignmentStatement, CommentStatement, ExitForStatement, ExitWhileStatement, ExpressionStatement, FunctionStatement, IfStatement, IncrementStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, EmptyStatement, TryCatchStatement, CatchStatement, ThrowStatement } from '../parser/Statement';
-import { FunctionExpression, NamespacedVariableNameExpression, BinaryExpression, CallExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, XmlAttributeGetExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression } from '../parser/Expression';
+import { FunctionExpression, BinaryExpression, CallExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, XmlAttributeGetExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression } from '../parser/Expression';
 import type { Token } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
-import { isPrintStatement, isIfStatement, isBody, isAssignmentStatement, isBlock, isExpressionStatement, isCommentStatement, isExitForStatement, isExitWhileStatement, isFunctionStatement, isIncrementStatement, isGotoStatement, isLabelStatement, isReturnStatement, isEndStatement, isStopStatement, isForStatement, isForEachStatement, isWhileStatement, isDottedSetStatement, isIndexedSetStatement, isLibraryStatement, isNamespaceStatement, isImportStatement, isExpression, isBinaryExpression, isCallExpression, isFunctionExpression, isNamespacedVariableNameExpression, isDottedGetExpression, isXmlAttributeGetExpression, isIndexedGetExpression, isGroupingExpression, isLiteralExpression, isEscapedCharCodeLiteralExpression, isArrayLiteralExpression, isAALiteralExpression, isUnaryExpression, isVariableExpression, isSourceLiteralExpression, isNewExpression, isCallfuncExpression, isTemplateStringQuasiExpression, isTemplateStringExpression, isTaggedTemplateStringExpression, isBrsFile, isXmlFile, isClassStatement, isStatement, isAnnotationExpression, isTryCatchStatement, isCatchStatement, isThrowStatement } from './reflection';
-import { createToken, createStringLiteral, interpolatedRange as range } from './creators';
+import { isPrintStatement, isIfStatement, isBody, isAssignmentStatement, isBlock, isExpressionStatement, isCommentStatement, isExitForStatement, isExitWhileStatement, isFunctionStatement, isIncrementStatement, isGotoStatement, isLabelStatement, isReturnStatement, isEndStatement, isStopStatement, isForStatement, isForEachStatement, isWhileStatement, isDottedSetStatement, isIndexedSetStatement, isLibraryStatement, isNamespaceStatement, isImportStatement, isExpression, isBinaryExpression, isCallExpression, isFunctionExpression, isDottedGetExpression, isXmlAttributeGetExpression, isIndexedGetExpression, isGroupingExpression, isLiteralExpression, isEscapedCharCodeLiteralExpression, isArrayLiteralExpression, isAALiteralExpression, isUnaryExpression, isVariableExpression, isSourceLiteralExpression, isNewExpression, isCallfuncExpression, isTemplateStringQuasiExpression, isTemplateStringExpression, isTaggedTemplateStringExpression, isBrsFile, isXmlFile, isClassStatement, isStatement, isAnnotationExpression, isTryCatchStatement, isCatchStatement, isThrowStatement, isLiteralInvalid, isLiteralBoolean, isLiteralNumber, isLiteralInteger, isLiteralLongInteger, isLiteralFloat, isLiteralDouble } from './reflection';
+import { createToken, createStringLiteral, interpolatedRange as range, createInvalidLiteral, createBooleanLiteral, createIntegerLiteral, createVariableExpression, createFloatLiteral, createDoubleLiteral, createLongIntegerLiteral } from './creators';
 import { Program } from '../Program';
 import { BrsFile } from '../files/BrsFile';
 import { XmlFile } from '../files/XmlFile';
-import { createVariableExpression } from '..';
 
 describe('reflection', () => {
     describe('Files', () => {
         it('recognizes files', () => {
             const program = new Program({});
-            const file = new BrsFile('path/to/source/file.brs', 'pkg:/source/file.brs', program);
-            const comp = new XmlFile('path/to/components/file.xml', 'pkg:/components/file.brs', program);
+            const file = new BrsFile({ srcPath: 'path/to/source/file.brs', destPath: 'source/file.brs', program: program });
+            const comp = new XmlFile({ srcPath: 'path/to/components/file.xml', destPath: 'components/file.brs', program: program });
             expect(isBrsFile(file)).to.be.true;
             expect(isXmlFile(file)).to.be.false;
             expect(isBrsFile(comp)).to.be.false;
@@ -50,7 +49,7 @@ describe('reflection', () => {
         const dottedSet = new DottedSetStatement(expr, ident, expr);
         const indexedSet = new IndexedSetStatement(expr, expr, expr, token, token);
         const library = new LibraryStatement({ library: token, filePath: token });
-        const namespace = new NamespaceStatement(token, new NamespacedVariableNameExpression(createVariableExpression('a', range)), body, token);
+        const namespace = new NamespaceStatement(token, createVariableExpression('a', range), body, token);
         const cls = new ClassStatement(token, ident, [], token);
         const imports = new ImportStatement(token, token);
         const catchStmt = new CatchStatement({ catch: token }, ident, block);
@@ -193,9 +192,10 @@ describe('reflection', () => {
             range: range,
             isReserved: false,
             charCode: 0,
-            leadingWhitespace: ''
+            leadingWhitespace: '',
+            leadingTrivia: []
         };
-        const nsVar = new NamespacedVariableNameExpression(createVariableExpression('a', range));
+
         const binary = new BinaryExpression(expr, token, expr);
         const call = new CallExpression(expr, token, token, []);
         const fun = new FunctionExpression([], block, token, token, token, token);
@@ -233,10 +233,7 @@ describe('reflection', () => {
             expect(isFunctionExpression(fun)).to.be.true;
             expect(isFunctionExpression(call)).to.be.false;
         });
-        it('isNamespacedVariableNameExpression', () => {
-            expect(isNamespacedVariableNameExpression(nsVar)).to.be.true;
-            expect(isNamespacedVariableNameExpression(fun)).to.be.false;
-        });
+
         it('isDottedGetExpression', () => {
             expect(isDottedGetExpression(dottedGet)).to.be.true;
             expect(isDottedGetExpression(fun)).to.be.false;
@@ -312,6 +309,95 @@ describe('reflection', () => {
             //doesn't fail for invalid param types
             expect(isExpression(undefined)).to.be.false;
             expect(isExpression(1 as any)).to.be.false;
+        });
+    });
+
+    describe('isLiteralInvalid', () => {
+        it('handles true cases', () => {
+            expect(isLiteralInvalid(createInvalidLiteral('invalid'))).to.be.true;
+            expect(isLiteralInvalid(createInvalidLiteral('Invalid'))).to.be.true;
+            expect(isLiteralInvalid(createInvalidLiteral('INVALID'))).to.be.true;
+        });
+        it('handles false cases', () => {
+            expect(isLiteralInvalid(createBooleanLiteral('true'))).to.be.false;
+            expect(isLiteralInvalid(createIntegerLiteral('1'))).to.be.false;
+            expect(isLiteralInvalid(createVariableExpression('cat'))).to.be.false;
+        });
+    });
+
+    describe('isLiteralBoolean', () => {
+        it('handles true cases', () => {
+            expect(isLiteralBoolean(createBooleanLiteral('true'))).to.be.true;
+            expect(isLiteralBoolean(createBooleanLiteral('TRUE'))).to.be.true;
+            expect(isLiteralBoolean(createBooleanLiteral('false'))).to.be.true;
+            expect(isLiteralBoolean(createBooleanLiteral('FALSE'))).to.be.true;
+        });
+        it('handles false cases', () => {
+            expect(isLiteralBoolean(createInvalidLiteral('invalid'))).to.be.false;
+            expect(isLiteralBoolean(createIntegerLiteral('1'))).to.be.false;
+            expect(isLiteralBoolean(createVariableExpression('cat'))).to.be.false;
+        });
+    });
+
+    describe('isLiteralNumber', () => {
+        it('handles true cases', () => {
+            expect(isLiteralNumber(createIntegerLiteral('1'))).to.be.true;
+            expect(isLiteralNumber(createLongIntegerLiteral('1'))).to.be.true;
+            expect(isLiteralNumber(createFloatLiteral('1.2'))).to.be.true;
+            expect(isLiteralNumber(createDoubleLiteral('2.3'))).to.be.true;
+        });
+        it('handles false cases', () => {
+            expect(isLiteralNumber(createInvalidLiteral('invalid'))).to.be.false;
+            expect(isLiteralNumber(createBooleanLiteral('true'))).to.be.false;
+            expect(isLiteralNumber(createVariableExpression('cat'))).to.be.false;
+        });
+    });
+
+    describe('isLiteralInteger', () => {
+        it('handles true cases', () => {
+            expect(isLiteralInteger(createIntegerLiteral('1'))).to.be.true;
+            expect(isLiteralInteger(createIntegerLiteral('100'))).to.be.true;
+        });
+        it('handles false cases', () => {
+            expect(isLiteralInteger(createInvalidLiteral('invalid'))).to.be.false;
+            expect(isLiteralInteger(createBooleanLiteral('true'))).to.be.false;
+            expect(isLiteralInteger(createVariableExpression('cat'))).to.be.false;
+        });
+    });
+
+    describe('isLiteralLongInteger', () => {
+        it('handles true cases', () => {
+            expect(isLiteralLongInteger(createLongIntegerLiteral('1'))).to.be.true;
+            expect(isLiteralLongInteger(createLongIntegerLiteral('100'))).to.be.true;
+        });
+        it('handles false cases', () => {
+            expect(isLiteralLongInteger(createInvalidLiteral('invalid'))).to.be.false;
+            expect(isLiteralLongInteger(createBooleanLiteral('true'))).to.be.false;
+            expect(isLiteralLongInteger(createVariableExpression('cat'))).to.be.false;
+        });
+    });
+
+    describe('isLiteralFloat', () => {
+        it('handles true cases', () => {
+            expect(isLiteralFloat(createFloatLiteral('1.2'))).to.be.true;
+            expect(isLiteralFloat(createFloatLiteral('1.234'))).to.be.true;
+        });
+        it('handles false cases', () => {
+            expect(isLiteralFloat(createInvalidLiteral('invalid'))).to.be.false;
+            expect(isLiteralFloat(createBooleanLiteral('true'))).to.be.false;
+            expect(isLiteralFloat(createVariableExpression('cat'))).to.be.false;
+        });
+    });
+
+    describe('isLiteralDouble', () => {
+        it('handles true cases', () => {
+            expect(isLiteralDouble(createDoubleLiteral('1.2'))).to.be.true;
+            expect(isLiteralDouble(createDoubleLiteral('1.234'))).to.be.true;
+        });
+        it('handles false cases', () => {
+            expect(isLiteralDouble(createInvalidLiteral('invalid'))).to.be.false;
+            expect(isLiteralDouble(createBooleanLiteral('true'))).to.be.false;
+            expect(isLiteralDouble(createVariableExpression('cat'))).to.be.false;
         });
     });
 });

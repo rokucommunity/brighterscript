@@ -51,7 +51,7 @@ describe('parser return statements', () => {
             token(TokenKind.Newline, '\\n'),
             token(TokenKind.Return, 'return'),
             identifier('RebootSystem'),
-            { kind: TokenKind.LeftParen, text: '(', range: null },
+            { kind: TokenKind.LeftParen, text: '(', range: null, leadingTrivia: [] },
             token(TokenKind.RightParen, ')'),
             token(TokenKind.Newline, '\\n'),
             token(TokenKind.EndFunction, 'end function'),
@@ -81,13 +81,15 @@ describe('parser return statements', () => {
                 kind: TokenKind.Return,
                 text: 'return',
                 isReserved: true,
-                range: Range.create(1, 2, 1, 8)
+                range: Range.create(1, 2, 1, 8),
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '5',
                 isReserved: false,
-                range: Range.create(1, 9, 1, 10)
+                range: Range.create(1, 9, 1, 10),
+                leadingTrivia: []
             },
             token(TokenKind.Newline, '\\n'),
             token(TokenKind.EndFunction, 'end function'),

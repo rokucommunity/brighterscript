@@ -1,9 +1,9 @@
 import { createToken } from '../../astUtils/creators';
 import type { Editor } from '../../astUtils/Editor';
-import { isDottedGetExpression, isLiteralExpression, isVariableExpression } from '../../astUtils/reflection';
+import { isDottedGetExpression, isLiteralExpression, isVariableExpression, isUnaryExpression } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BrsFile } from '../../files/BrsFile';
-import type { AfterPrepareFileEvent } from '../../interfaces';
+import type { OnPrepareFileEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { Expression } from '../../parser/AstNode';
 import { LiteralExpression } from '../../parser/Expression';
@@ -14,7 +14,7 @@ import { BslibManager } from '../serialize/BslibManager';
 
 export class BrsFilePreTranspileProcessor {
     public constructor(
-        private event: AfterPrepareFileEvent<BrsFile>
+        private event: OnPrepareFileEvent<BrsFile>
     ) {
     }
 
@@ -43,7 +43,11 @@ export class BrsFilePreTranspileProcessor {
         const scope = this.event.program.getFirstScopeForFile(this.event.file);
         for (let expression of this.event.file.parser.references.expressions) {
             if (expression) {
-                this.processExpression(expression, scope);
+                if (isUnaryExpression(expression)) {
+                    this.processExpression(expression.right, scope);
+                } else {
+                    this.processExpression(expression, scope);
+                }
             }
         }
     }
@@ -62,8 +66,11 @@ export class BrsFilePreTranspileProcessor {
             };
         }
         //assume we've been given the enum.member syntax, so pop the member and try again
-        const parts = name.split('.');
+        const parts = name.toLowerCase().split('.');
         const memberName = parts.pop();
+        if (containingNamespace && parts[0] !== containingNamespace.toLowerCase()) {
+            parts.unshift(containingNamespace.toLowerCase());
+        }
         result = scope?.getEnumMap().get(parts.join('.'));
         if (result) {
             const value = result.item.getMemberValue(memberName);
@@ -71,7 +78,7 @@ export class BrsFilePreTranspileProcessor {
                 enum: result.item,
                 value: new LiteralExpression(createToken(
                     //just use float literal for now...it will transpile properly with any literal value
-                    value.startsWith('"') ? TokenKind.StringLiteral : TokenKind.FloatLiteral,
+                    value?.startsWith('"') ? TokenKind.StringLiteral : TokenKind.FloatLiteral,
                     value
                 ))
             };

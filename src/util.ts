@@ -4,37 +4,46 @@ import type { ParseError } from 'jsonc-parser';
 import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 import * as path from 'path';
 import { rokuDeploy, DefaultFiles, standardizePath as rokuDeployStandardizePath } from 'roku-deploy';
-import type { Diagnostic, Position, Range, Location } from 'vscode-languageserver';
+import { type Diagnostic, type Position, type Range, type Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, TypeChainEntry, TypeChainProcessResult } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
 import { FloatType } from './types/FloatType';
-import { FunctionType } from './types/FunctionType';
 import { IntegerType } from './types/IntegerType';
-import { InvalidType } from './types/InvalidType';
 import { LongIntegerType } from './types/LongIntegerType';
 import { ObjectType } from './types/ObjectType';
 import { StringType } from './types/StringType';
 import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
-import type { DottedGetExpression, VariableExpression } from './parser/Expression';
+import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionParameterExpression, IndexedGetExpression, LiteralExpression, NewExpression, TypeExpression, VariableExpression, XmlAttributeGetExpression } from './parser/Expression';
 import { Logger, LogLevel } from './Logger';
 import type { Identifier, Locatable, Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isExpression, isIndexedGetExpression, isNamespacedVariableNameExpression, isNewExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLongIntegerType, isNumberType, isStringType, isTypeExpression, isTypedArrayExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
-import { CustomType } from './types/CustomType';
 import { SourceNode } from 'source-map';
-import type { SGAttribute } from './parser/SGTypes';
 import * as requireRelative from 'require-relative';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
-import type { Expression } from './parser/AstNode';
+import type { AstNode } from './parser/AstNode';
+import { AstNodeKind, type Expression, type Statement } from './parser/AstNode';
+import { createIdentifier, createToken } from './astUtils/creators';
+import type { BscType } from './types/BscType';
+import type { AssignmentStatement } from './parser/Statement';
+import { FunctionType } from './types/FunctionType';
+import { ArrayType } from './types/ArrayType';
+import type { SymbolTable } from './SymbolTable';
+import { SymbolTypeFlag } from './SymbolTable';
+import { AssociativeArrayType } from './types/AssociativeArrayType';
+import { ComponentType } from './types/ComponentType';
+import { MAX_RELATED_INFOS_COUNT } from './diagnosticUtils';
+import { BinaryOperatorReferenceType } from './types/ReferenceType';
+import type { UnresolvedSymbol } from './AstValidationSegmenter';
 
 export class Util {
     public clearConsole() {
@@ -295,6 +304,10 @@ export class Util {
     public normalizeAndResolveConfig(config: BsConfig) {
         let result = this.normalizeConfig({});
 
+        if (config?.noProject) {
+            return result;
+        }
+
         //if no options were provided, try to find a bsconfig.json file
         if (!config || !config.project) {
             result.project = this.getConfigFilePath(config?.cwd);
@@ -306,10 +319,8 @@ export class Util {
             let configFile = this.loadConfigFile(result.project, null, config?.cwd);
             result = Object.assign(result, configFile);
         }
-
         //override the defaults with the specified options
         result = Object.assign(result, config);
-
         return result;
     }
 
@@ -330,10 +341,10 @@ export class Util {
         config.username = config.username ?? 'rokudev';
         config.watch = config.watch === true ? true : false;
         config.emitFullPaths = config.emitFullPaths === true ? true : false;
-        config.retainStagingDir = (config.retainStagingDir ?? config.retainStagingFolder) === true ? true : false;
-        config.retainStagingFolder = config.retainStagingDir;
+        config.retainStagingDir = config.retainStagingDir ?? false;
         config.copyToStaging = config.copyToStaging === false ? false : true;
         config.ignoreErrorCodes = config.ignoreErrorCodes ?? [];
+        config.diagnosticSeverityOverrides = config.diagnosticSeverityOverrides ?? {};
         config.diagnosticFilters = config.diagnosticFilters ?? [];
         config.plugins = config.plugins ?? [];
         config.autoImportComponentScript = config.autoImportComponentScript === true ? true : false;
@@ -346,6 +357,11 @@ export class Util {
             config.logLevel = LogLevel[(config.logLevel as string).toLowerCase()];
         }
         config.logLevel = config.logLevel ?? LogLevel.log;
+        config.bslibDestinationDir = config.bslibDestinationDir ?? 'source';
+        if (config.bslibDestinationDir !== 'source') {
+            // strip leading and trailing slashes
+            config.bslibDestinationDir = config.bslibDestinationDir.replace(/^(\/*)(.*?)(\/*)$/, '$2');
+        }
         return config;
     }
 
@@ -501,6 +517,11 @@ export class Util {
      * ```
      */
     public rangesIntersect(a: Range, b: Range) {
+        //stop if the either range is misisng
+        if (!a || !b) {
+            return false;
+        }
+
         // Check if `a` is before `b`
         if (a.end.line < b.start.line || (a.end.line === b.start.line && a.end.character <= b.start.character)) {
             return false;
@@ -525,6 +546,10 @@ export class Util {
      * ```
      */
     public rangesIntersectOrTouch(a: Range, b: Range) {
+        //stop if the either range is misisng
+        if (!a || !b) {
+            return false;
+        }
         // Check if `a` is before `b`
         if (a.end.line < b.start.line || (a.end.line === b.start.line && a.end.character < b.start.character)) {
             return false;
@@ -548,6 +573,11 @@ export class Util {
     }
 
     public comparePositionToRange(position: Position, range: Range) {
+        //stop if the either range is misisng
+        if (!position || !range) {
+            return 0;
+        }
+
         if (position.line < range.start.line || (position.line === range.start.line && position.character < range.start.character)) {
             return -1;
         }
@@ -555,6 +585,67 @@ export class Util {
             return 1;
         }
         return 0;
+    }
+
+    /**
+     * Combine all the documentation found before a token (i.e. comment tokens)
+     */
+    public getTokenDocumentation(tokens: Token[], token?: Token) {
+        const comments = [] as Token[];
+        const idx = tokens?.indexOf(token);
+        if (!idx || idx === -1) {
+            return undefined;
+        }
+        for (let i = idx - 1; i >= 0; i--) {
+            const token = tokens[i];
+            //skip whitespace and newline chars
+            if (token.kind === TokenKind.Comment) {
+                comments.push(token);
+            } else if (token.kind === TokenKind.Newline || token.kind === TokenKind.Whitespace) {
+                //skip these tokens
+                continue;
+
+                //any other token means there are no more comments
+            } else {
+                break;
+            }
+        }
+        if (comments.length > 0) {
+            return comments.reverse().map(x => x.text.replace(/^('|rem)/i, '').trim()).map(line => {
+                if (line.startsWith('@')) {
+                    // Handle jsdoc/brightscriptdoc tags specially
+                    // make sure they are on their own markdown line, and add italics
+                    const firstSpaceIndex = line.indexOf(' ');
+                    if (firstSpaceIndex === -1) {
+                        return `\n_${line}_`;
+                    }
+                    const firstWord = line.substring(0, firstSpaceIndex);
+                    return `\n_${firstWord}_ ${line.substring(firstSpaceIndex + 1)}`;
+                }
+                return line;
+            }).join('\n');
+        }
+    }
+
+    /**
+     * Combine all the documentation for a node - uses the AstNode's leadingTrivia property
+     */
+    public getNodeDocumentation(node: AstNode) {
+        if (!node) {
+            return;
+        }
+        const leadingTrivia = node.getLeadingTrivia();
+        return this.getTokenDocumentation(leadingTrivia, leadingTrivia[leadingTrivia.length - 1]);
+    }
+
+    /**
+     * Prefixes a component name so it can be used as type in the symbol table, without polluting available symbols
+     *
+     * @param sgNodeName the Name of the component
+     * @returns the node name, prefixed with `roSGNode`
+     */
+    public getSgNodeTypeName(sgNodeName: string) {
+        return 'roSGNode' + sgNodeName;
     }
 
     /**
@@ -589,6 +680,7 @@ export class Util {
         }
         return subject;
     }
+
 
     /**
      * Given a URI, convert that to a regular fs path
@@ -706,7 +798,7 @@ export class Util {
         const diagnosticCode = typeof diagnostic.code === 'string' ? diagnostic.code.toLowerCase() : diagnostic.code;
         for (let flag of diagnostic.file?.commentFlags ?? []) {
             //this diagnostic is affected by this flag
-            if (this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
+            if (diagnostic.range && this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
                 //if the flag acts upon this diagnostic's code
                 if (flag.codes === null || flag.codes.includes(diagnosticCode)) {
                     return true;
@@ -909,35 +1001,34 @@ export class Util {
     }
 
     /**
+     * A cache of `Range` objects. The key is a 52bit integer created from the 4 range integers and leveraging bitshifting.
+     * The whole point of this cache is to reduce garbage collection churn, so we didn't want to use string concatenation for the key
+     */
+    private rangeCache = new Map<number, Range>();
+
+    /**
      * Helper for creating `Range` objects. Prefer using this function because vscode-languageserver's `Range.create()` is significantly slower
      */
     public createRange(startLine: number, startCharacter: number, endLine: number, endCharacter: number): Range {
-        return {
-            start: {
-                line: startLine,
-                character: startCharacter
-            },
-            end: {
-                line: endLine,
-                character: endCharacter
-            }
-        };
+        // eslint-disable-next-line no-bitwise
+        const key = (startLine << 39) + (startCharacter << 26) + (endLine << 13) + endCharacter;
+
+        let range = this.rangeCache.get(key);
+        if (!range) {
+            range = {
+                start: this.createPosition(startLine, startCharacter),
+                end: this.createPosition(endLine, endCharacter)
+            };
+            this.rangeCache.set(key, range);
+        }
+        return range;
     }
 
     /**
      * Create a `Range` from two `Position`s
      */
     public createRangeFromPositions(startPosition: Position, endPosition: Position): Range {
-        return {
-            start: {
-                line: startPosition.line,
-                character: startPosition.character
-            },
-            end: {
-                line: endPosition.line,
-                character: endPosition.character
-            }
-        };
+        return this.createRange(startPosition.line, startPosition.character, endPosition.line, endPosition.character);
     }
 
     /**
@@ -978,13 +1069,26 @@ export class Util {
     }
 
     /**
+     * A cache of `Position` objects. The key is a 26bit integer created from line and character and leveraging bitshifting
+     * The whole point of this cache is to reduce garbage collection churn, so we didn't want to use string concatenation for the key
+     */
+    private positionCache = new Map<number, Position>();
+
+    /**
      * Create a `Position` object. Prefer this over `Position.create` for performance reasons
      */
     public createPosition(line: number, character: number) {
-        return {
-            line: line,
-            character: character
-        };
+        // eslint-disable-next-line no-bitwise
+        const key = (line << 13) + character;
+        let position = this.positionCache.get(key);
+        if (!position) {
+            position = {
+                line: line,
+                character: character
+            };
+            this.positionCache.set(key, position);
+        }
+        return position;
     }
 
     /**
@@ -1002,37 +1106,36 @@ export class Util {
     /**
      * Convert a token into a BscType
      */
-    public tokenToBscType(token: Token, allowCustomType = true) {
+    public tokenToBscType(token: Token) {
         // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
         switch (token.kind) {
             case TokenKind.Boolean:
                 return new BooleanType(token.text);
             case TokenKind.True:
             case TokenKind.False:
-                return new BooleanType();
+                return BooleanType.instance;
             case TokenKind.Double:
                 return new DoubleType(token.text);
             case TokenKind.DoubleLiteral:
-                return new DoubleType();
+                return DoubleType.instance;
             case TokenKind.Dynamic:
                 return new DynamicType(token.text);
             case TokenKind.Float:
                 return new FloatType(token.text);
             case TokenKind.FloatLiteral:
-                return new FloatType();
+                return FloatType.instance;
             case TokenKind.Function:
-                //TODO should there be a more generic function type without a signature that's assignable to all other function types?
-                return new FunctionType(new DynamicType(token.text));
+                return new FunctionType(token.text);
             case TokenKind.Integer:
                 return new IntegerType(token.text);
             case TokenKind.IntegerLiteral:
-                return new IntegerType();
+                return IntegerType.instance;
             case TokenKind.Invalid:
-                return new InvalidType(token.text);
+                return DynamicType.instance; // TODO: use InvalidType better new InvalidType(token.text);
             case TokenKind.LongInteger:
                 return new LongIntegerType(token.text);
             case TokenKind.LongIntegerLiteral:
-                return new LongIntegerType();
+                return LongIntegerType.instance;
             case TokenKind.Object:
                 return new ObjectType(token.text);
             case TokenKind.String:
@@ -1041,7 +1144,7 @@ export class Util {
             case TokenKind.TemplateStringExpressionBegin:
             case TokenKind.TemplateStringExpressionEnd:
             case TokenKind.TemplateStringQuasi:
-                return new StringType();
+                return StringType.instance;
             case TokenKind.Void:
                 return new VoidType(token.text);
             case TokenKind.Identifier:
@@ -1050,14 +1153,16 @@ export class Util {
                         return new BooleanType(token.text);
                     case 'double':
                         return new DoubleType(token.text);
+                    case 'dynamic':
+                        return new DynamicType(token.text);
                     case 'float':
                         return new FloatType(token.text);
                     case 'function':
-                        return new FunctionType(new DynamicType(token.text));
+                        return new FunctionType(token.text);
                     case 'integer':
                         return new IntegerType(token.text);
                     case 'invalid':
-                        return new InvalidType(token.text);
+                        return DynamicType.instance; // TODO: use InvalidType better new InvalidType(token.text);
                     case 'longinteger':
                         return new LongIntegerType(token.text);
                     case 'object':
@@ -1067,25 +1172,240 @@ export class Util {
                     case 'void':
                         return new VoidType(token.text);
                 }
-                if (allowCustomType) {
-                    return new CustomType(token.text);
-                }
         }
+    }
+
+    /**
+     * Deciphers the correct types for fields based on docs
+     * https://developer.roku.com/en-ca/docs/references/scenegraph/xml-elements/interface.md
+     * @param typeDescriptor the type descriptor from the docs
+     * @returns {BscType} the known type, or dynamic
+     */
+    public getNodeFieldType(typeDescriptor: string, lookupTable?: SymbolTable): BscType {
+        const typeDescriptorLower = typeDescriptor.toLowerCase().trim();
+        const bscType = this.tokenToBscType(createToken(TokenKind.Identifier, typeDescriptorLower));
+        if (bscType) {
+            return bscType;
+        }
+        if (typeDescriptorLower.startsWith('array of ')) {
+            let arrayOfTypeName = typeDescriptorLower.substring(9); //cut off beginning 'array of'
+            if (arrayOfTypeName.endsWith('s')) {
+                // remove "s" in "floats", etc.
+                arrayOfTypeName = arrayOfTypeName.substring(0, arrayOfTypeName.length - 1);
+            }
+            if (arrayOfTypeName.endsWith('\'')) {
+                // remove "'" in "float's", etc.
+                arrayOfTypeName = arrayOfTypeName.substring(0, arrayOfTypeName.length - 1);
+            }
+            let arrayType = this.getNodeFieldType(arrayOfTypeName, lookupTable);
+            return new ArrayType(arrayType);
+        } else if (typeDescriptorLower.startsWith('option ')) {
+            const actualTypeName = typeDescriptorLower.substring('option '.length); //cut off beginning 'option '
+            return this.getNodeFieldType(actualTypeName, lookupTable);
+        } else if (typeDescriptorLower.startsWith('value ')) {
+            const actualTypeName = typeDescriptorLower.substring('value '.length); //cut off beginning 'value '
+            return this.getNodeFieldType(actualTypeName, lookupTable);
+        } else if (typeDescriptorLower === 'uri') {
+            return StringType.instance;
+        } else if (typeDescriptorLower === 'vector2d' || typeDescriptorLower === 'floatarray') {
+            return new ArrayType(FloatType.instance);
+        } else if (typeDescriptorLower === 'intarray') {
+            return new ArrayType(IntegerType.instance);
+        } else if (typeDescriptorLower === 'boolarray') {
+            return new ArrayType(BooleanType.instance);
+        } else if (typeDescriptorLower === 'stringarray' || typeDescriptorLower === 'strarray') {
+            return new ArrayType(StringType.instance);
+        } else if (typeDescriptorLower === 'int') {
+            return IntegerType.instance;
+        } else if (typeDescriptorLower === 'time') {
+            return FloatType.instance;
+        } else if (typeDescriptorLower === 'str') {
+            return StringType.instance;
+        } else if (typeDescriptorLower === 'bool') {
+            return BooleanType.instance;
+        } else if (typeDescriptorLower === 'assocarray' || typeDescriptorLower === 'associative array') {
+            return new AssociativeArrayType();
+        } else if (typeDescriptorLower === 'node') {
+            return ComponentType.instance;
+        } else if (typeDescriptorLower === 'nodearray') {
+            return new ArrayType(ComponentType.instance);
+        } else if (lookupTable) {
+            //try doing a lookup
+            return lookupTable.getSymbolType(typeDescriptorLower, { flags: SymbolTypeFlag.typetime });
+        }
+
+        //  TODO: Handle  'rect2d', 'rect2dArray', 'color', 'colorarray', 'time'
+        return DynamicType.instance;
+    }
+
+    /**
+     * Return the type of the result of a binary operator
+     * Note: compound assignments (eg. +=) internally use a binary expression, so that's why TokenKind.PlusEqual, etc. are here too
+     */
+    public binaryOperatorResultType(leftType: BscType, operator: Token, rightType: BscType): BscType {
+        if ((isAnyReferenceType(leftType) && !leftType.isResolvable()) ||
+            (isAnyReferenceType(rightType) && !rightType.isResolvable())) {
+            return new BinaryOperatorReferenceType(leftType, operator, rightType, (lhs, op, rhs) => {
+                return this.binaryOperatorResultType(lhs, op, rhs);
+            });
+        }
+        if (isEnumMemberType(leftType)) {
+            leftType = leftType.underlyingType;
+        }
+        if (isEnumMemberType(rightType)) {
+            rightType = rightType.underlyingType;
+        }
+        let hasDouble = isDoubleType(leftType) || isDoubleType(rightType);
+        let hasFloat = isFloatType(leftType) || isFloatType(rightType);
+        let hasLongInteger = isLongIntegerType(leftType) || isLongIntegerType(rightType);
+        let hasInvalid = isInvalidType(leftType) || isInvalidType(rightType);
+        let hasDynamic = isDynamicType(leftType) || isDynamicType(rightType);
+        let bothNumbers = isNumberType(leftType) && isNumberType(rightType);
+        let bothStrings = isStringType(leftType) && isStringType(rightType);
+        let eitherBooleanOrNum = (isNumberType(leftType) || isBooleanType(leftType)) && (isNumberType(rightType) || isBooleanType(rightType));
+
+        // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
+        switch (operator.kind) {
+            // Math operators
+            case TokenKind.Plus:
+            case TokenKind.PlusEqual:
+                if (bothStrings) {
+                    // "string" + "string" is the only binary expression allowed with strings
+                    return StringType.instance;
+                }
+            // eslint-disable-next-line no-fallthrough
+            case TokenKind.Minus:
+            case TokenKind.MinusEqual:
+            case TokenKind.Star:
+            case TokenKind.StarEqual:
+            case TokenKind.Mod:
+                if (bothNumbers) {
+                    if (hasDouble) {
+                        return DoubleType.instance;
+                    } else if (hasFloat) {
+                        return FloatType.instance;
+
+                    } else if (hasLongInteger) {
+                        return LongIntegerType.instance;
+                    }
+                    return IntegerType.instance;
+                }
+                break;
+            case TokenKind.Forwardslash:
+            case TokenKind.ForwardslashEqual:
+                if (bothNumbers) {
+                    if (hasDouble) {
+                        return DoubleType.instance;
+                    } else if (hasFloat) {
+                        return FloatType.instance;
+
+                    } else if (hasLongInteger) {
+                        return LongIntegerType.instance;
+                    }
+                    return FloatType.instance;
+                }
+                break;
+            case TokenKind.Backslash:
+            case TokenKind.BackslashEqual:
+                if (bothNumbers) {
+                    if (hasLongInteger) {
+                        return LongIntegerType.instance;
+                    }
+                    return IntegerType.instance;
+                }
+                break;
+            case TokenKind.Caret:
+                if (bothNumbers) {
+                    if (hasDouble || hasLongInteger) {
+                        return DoubleType.instance;
+                    } else if (hasFloat) {
+                        return FloatType.instance;
+                    }
+                    return IntegerType.instance;
+                }
+                break;
+            // Bitshift operators
+            case TokenKind.LeftShift:
+            case TokenKind.LeftShiftEqual:
+            case TokenKind.RightShift:
+            case TokenKind.RightShiftEqual:
+                if (bothNumbers) {
+                    if (hasLongInteger) {
+                        return LongIntegerType.instance;
+                    }
+                    // Bitshifts are allowed with non-integer numerics
+                    // but will always truncate to ints
+                    return IntegerType.instance;
+                }
+                break;
+            // Comparison operators
+            // All comparison operators result in boolean
+            case TokenKind.Equal:
+            case TokenKind.LessGreater:
+                // = and <> can accept invalid / dynamic
+                if (hasDynamic || hasInvalid || bothStrings || eitherBooleanOrNum) {
+                    return BooleanType.instance;
+                }
+                break;
+            case TokenKind.Greater:
+            case TokenKind.Less:
+            case TokenKind.GreaterEqual:
+            case TokenKind.LessEqual:
+                if (bothStrings || bothNumbers) {
+                    return BooleanType.instance;
+                }
+                break;
+            // Logical operators
+            case TokenKind.Or:
+            case TokenKind.And:
+                if (eitherBooleanOrNum) {
+                    return BooleanType.instance;
+                }
+                break;
+        }
+        return DynamicType.instance;
+    }
+
+    /**
+     * Return the type of the result of a binary operator
+     */
+    public unaryOperatorResultType(operator: Token, exprType: BscType): BscType {
+        // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
+        switch (operator.kind) {
+            // Math operators
+            case TokenKind.Minus:
+                if (isNumberType(exprType)) {
+                    // a negative number will be the same type, eg, double->double, int->int, etc.
+                    return exprType;
+                }
+                break;
+            case TokenKind.Not:
+                if (isBooleanType(exprType)) {
+                    return BooleanType.instance;
+                } else if (isNumberType(exprType)) {
+                    //numbers can be "notted"
+                    // by default they go to ints, except longints, which stay that way
+                    if (isLongIntegerType(exprType)) {
+                        return LongIntegerType.instance;
+                    }
+                    return IntegerType.instance;
+                }
+                break;
+        }
+        return DynamicType.instance;
     }
 
     /**
      * Get the extension for the given file path. Basically the part after the final dot, except for
      * `d.bs` which is treated as single extension
+     * @returns the file extension (i.e. ".d.bs", ".bs", ".brs", ".xml", ".jpg", etc...)
      */
     public getExtension(filePath: string) {
         filePath = filePath.toLowerCase();
         if (filePath.endsWith('.d.bs')) {
             return '.d.bs';
         } else {
-            const idx = filePath.lastIndexOf('.');
-            if (idx > -1) {
-                return filePath.substring(idx);
-            }
+            return path.extname(filePath).toLowerCase();
         }
     }
 
@@ -1160,6 +1480,10 @@ export class Util {
     }
 
 
+    public concatAnnotationLeadingTrivia(stmt: Statement, otherTrivia: Token[]): Token[] {
+        return [...(stmt.annotations?.map(anno => anno.getLeadingTrivia()).flat() ?? []), ...otherTrivia];
+    }
+
     /**
      * Create a SourceNode that maps every line to itself. Useful for creating maps for files
      * that haven't changed at all, but we still need the map
@@ -1179,23 +1503,6 @@ export class Util {
     }
 
     /**
-     * Creates a new SGAttribute object, but keeps the existing Range references (since those shouldn't ever get changed directly)
-     */
-    public cloneSGAttribute(attr: SGAttribute, value: string) {
-        return {
-            key: {
-                text: attr.key.text,
-                range: attr.range
-            },
-            value: {
-                text: value,
-                range: attr.value.range
-            },
-            range: attr.range
-        } as SGAttribute;
-    }
-
-    /**
      * Converts a path into a standardized format (drive letter to lower, remove extra slashes, use single slash type, resolve relative parts, etc...)
      */
     public standardizePath(thePath: string) {
@@ -1210,11 +1517,20 @@ export class Util {
      * @param relatedInformationFallbackLocation a default location to use for all `relatedInformation` entries that are missing a location
      */
     public toDiagnostic(diagnostic: Diagnostic | BsDiagnostic, relatedInformationFallbackLocation: string) {
+        let relatedInformation = diagnostic.relatedInformation ?? [];
+        if (relatedInformation.length > MAX_RELATED_INFOS_COUNT) {
+            const relatedInfoLength = relatedInformation.length;
+            relatedInformation = relatedInformation.slice(0, MAX_RELATED_INFOS_COUNT);
+            relatedInformation.push({
+                message: `...and ${relatedInfoLength - MAX_RELATED_INFOS_COUNT} more`,
+                location: util.createLocation('   ', util.createRange(0, 0, 0, 0))
+            });
+        }
         return {
             severity: diagnostic.severity,
             range: diagnostic.range,
             message: diagnostic.message,
-            relatedInformation: diagnostic.relatedInformation?.map(x => {
+            relatedInformation: relatedInformation.map(x => {
 
                 //clone related information just in case a plugin added circular ref info here
                 const clone = { ...x };
@@ -1320,27 +1636,74 @@ export class Util {
 
     /**
      * Gets each part of the dotted get.
-     * @param expression any ast expression
+     * @param node any ast expression
      * @returns an array of the parts of the dotted get. If not fully a dotted get, then returns undefined
      */
-    public getAllDottedGetParts(expression: Expression): Identifier[] | undefined {
+    public getAllDottedGetParts(node: AstNode): Identifier[] | undefined {
+        //this is a hot function and has been optimized. Don't rewrite unless necessary
         const parts: Identifier[] = [];
-        let nextPart = expression;
-        while (nextPart) {
-            if (isDottedGetExpression(nextPart)) {
-                parts.push(nextPart?.name);
-                nextPart = nextPart.obj;
-            } else if (isNamespacedVariableNameExpression(nextPart)) {
-                nextPart = nextPart.expression;
-            } else if (isVariableExpression(nextPart)) {
-                parts.push(nextPart?.name);
-                break;
-            } else {
-                //we found a non-DottedGet expression, so return because this whole operation is invalid.
-                return undefined;
+        let nextPart = node;
+        loop: while (nextPart) {
+            switch (nextPart?.kind) {
+                case AstNodeKind.AssignmentStatement:
+                    return [(node as AssignmentStatement).name];
+                case AstNodeKind.DottedGetExpression:
+                    parts.push((nextPart as DottedGetExpression)?.name);
+                    nextPart = (nextPart as DottedGetExpression).obj;
+                    continue;
+                case AstNodeKind.CallExpression:
+                    nextPart = (nextPart as CallExpression).callee;
+                    continue;
+                case AstNodeKind.TypeExpression:
+                    nextPart = (nextPart as TypeExpression).expression;
+                    continue;
+                case AstNodeKind.VariableExpression:
+                    parts.push((nextPart as VariableExpression)?.name);
+                    break loop;
+                case AstNodeKind.LiteralExpression:
+                    parts.push((nextPart as LiteralExpression)?.token as Identifier);
+                    break loop;
+                case AstNodeKind.IndexedGetExpression:
+                    nextPart = (nextPart as IndexedGetExpression).obj;
+                    continue;
+                case AstNodeKind.FunctionParameterExpression:
+                    return [(nextPart as FunctionParameterExpression).name];
+                case AstNodeKind.GroupingExpression:
+                    parts.push(createIdentifier('()', nextPart.range));
+                    break loop;
+                default:
+                    //we found a non-DottedGet expression, so return because this whole operation is invalid.
+                    return undefined;
             }
         }
         return parts.reverse();
+    }
+
+    /**
+     * Given an expression, return all the DottedGet name parts as a string.
+     * Mostly used to convert namespaced item full names to a strings
+     */
+    public getAllDottedGetPartsAsString(node: Expression | Statement, parseMode = ParseMode.BrighterScript): string {
+        //this is a hot function and has been optimized. Don't rewrite unless necessary
+        /* eslint-disable no-var */
+        var sep = parseMode === ParseMode.BrighterScript ? '.' : '_';
+        const parts = this.getAllDottedGetParts(node) ?? [];
+        var result = parts[0]?.text;
+        for (var i = 1; i < parts.length; i++) {
+            result += sep + parts[i].text;
+        }
+        return result;
+        /* eslint-enable no-var */
+    }
+
+    public stringJoin(strings: string[], separator: string) {
+        // eslint-disable-next-line no-var
+        var result = strings[0] ?? '';
+        // eslint-disable-next-line no-var
+        for (var i = 1; i < strings.length; i++) {
+            result += separator + strings[i];
+        }
+        return result;
     }
 
     /**
@@ -1356,7 +1719,7 @@ export class Util {
             } else if (isCallExpression(nextPart) || isCallfuncExpression(nextPart)) {
                 nextPart = nextPart.callee;
 
-            } else if (isNamespacedVariableNameExpression(nextPart)) {
+            } else if (isTypeExpression(nextPart)) {
                 nextPart = nextPart.expression;
             } else {
                 break;
@@ -1372,35 +1735,37 @@ export class Util {
     public getDottedGetPath(expression: Expression): [VariableExpression, ...DottedGetExpression[]] {
         let parts: Expression[] = [];
         let nextPart = expression;
-        while (nextPart) {
-            if (isDottedGetExpression(nextPart)) {
-                parts.unshift(nextPart);
-                nextPart = nextPart.obj;
-
-            } else if (isIndexedGetExpression(nextPart) || isXmlAttributeGetExpression(nextPart)) {
-                nextPart = nextPart.obj;
-                parts = [];
-
-            } else if (isCallExpression(nextPart) || isCallfuncExpression(nextPart)) {
-                nextPart = nextPart.callee;
-                parts = [];
-
-            } else if (isNewExpression(nextPart)) {
-                nextPart = nextPart.call.callee;
-                parts = [];
-
-            } else if (isNamespacedVariableNameExpression(nextPart)) {
-                nextPart = nextPart.expression;
-
-            } else if (isVariableExpression(nextPart)) {
-                parts.unshift(nextPart);
-                break;
-            } else {
-                parts = [];
-                break;
+        loop: while (nextPart) {
+            switch (nextPart?.kind) {
+                case AstNodeKind.DottedGetExpression:
+                    parts.push(nextPart);
+                    nextPart = (nextPart as DottedGetExpression).obj;
+                    continue;
+                case AstNodeKind.IndexedGetExpression:
+                case AstNodeKind.XmlAttributeGetExpression:
+                    nextPart = (nextPart as IndexedGetExpression | XmlAttributeGetExpression).obj;
+                    parts = [];
+                    continue;
+                case AstNodeKind.CallExpression:
+                case AstNodeKind.CallfuncExpression:
+                    nextPart = (nextPart as CallExpression | CallfuncExpression).callee;
+                    parts = [];
+                    continue;
+                case AstNodeKind.NewExpression:
+                    nextPart = (nextPart as NewExpression).call.callee;
+                    parts = [];
+                    continue;
+                case AstNodeKind.TypeExpression:
+                    nextPart = (nextPart as TypeExpression).expression;
+                    continue;
+                case AstNodeKind.VariableExpression:
+                    parts.push(nextPart);
+                    break loop;
+                default:
+                    return [] as any;
             }
         }
-        return parts as any;
+        return parts.reverse() as any;
     }
 
     /**
@@ -1443,6 +1808,153 @@ export class Util {
                 range: this.createRange(0, 0, 0, Number.MAX_VALUE)
             }]);
         }
+    }
+
+    /**
+     * Find the index of the last item in the array that matches.
+     */
+    public findLastIndex<T>(array: T[], matcher: (T) => boolean) {
+        for (let i = array.length - 1; i >= 0; i--) {
+            if (matcher(array[i])) {
+                return i;
+            }
+        }
+    }
+
+    public processTypeChain(typeChain: TypeChainEntry[]): TypeChainProcessResult {
+        let fullChainName = '';
+        let fullErrorName = '';
+        let itemName = '';
+        let previousTypeName = '';
+        let parentTypeName = '';
+        let errorRange: Range;
+        let containsDynamic = false;
+        for (let i = 0; i < typeChain.length; i++) {
+            const chainItem = typeChain[i];
+            const dotSep = chainItem.separatorToken?.text ?? '.';
+            if (i > 0) {
+                fullChainName += dotSep;
+            }
+            fullChainName += chainItem.name;
+            parentTypeName = previousTypeName;
+            fullErrorName = previousTypeName ? `${previousTypeName}${dotSep}${chainItem.name}` : chainItem.name;
+            previousTypeName = chainItem.type?.toString() ?? '';
+            itemName = chainItem.name;
+            containsDynamic = containsDynamic || (isDynamicType(chainItem.type) && !isAnyReferenceType(chainItem.type));
+            if (!chainItem.isResolved) {
+                errorRange = chainItem.range;
+                break;
+            }
+        }
+        return {
+            itemName: itemName,
+            itemParentTypeName: parentTypeName,
+            fullNameOfItem: fullErrorName,
+            fullChainName: fullChainName,
+            range: errorRange,
+            containsDynamic: containsDynamic
+        };
+    }
+
+
+    public isInTypeExpression(expression: AstNode): boolean {
+        //TODO: this is much faster than node.findAncestor(), but may need to be updated for "complicated" type expressions
+        if (isTypeExpression(expression) ||
+            isTypeExpression(expression.parent) ||
+            isTypedArrayExpression(expression) ||
+            isTypedArrayExpression(expression.parent)) {
+            return true;
+        }
+        if (isBinaryExpression(expression.parent)) {
+            let currentExpr: AstNode = expression.parent;
+            while (isBinaryExpression(currentExpr) && currentExpr.operator.kind === TokenKind.Or) {
+                currentExpr = currentExpr.parent;
+            }
+            return isTypeExpression(currentExpr) || isTypedArrayExpression(currentExpr);
+        }
+        return false;
+    }
+
+    public setContainsUnresolvedSymbol(symbolLowerNameSet: Set<string>, symbol: UnresolvedSymbol) {
+
+        const possibleOriginalSymbolNamesLower = [];
+        let nameSoFar = '';
+        for (const tce of symbol.typeChain) {
+            if (nameSoFar.length > 0) {
+                nameSoFar += '.';
+            }
+            nameSoFar += tce.name.toLowerCase();
+            possibleOriginalSymbolNamesLower.push(nameSoFar);
+        }
+        const possibleNamespace = symbol.containingNamespaces?.join('.') ?? '';
+
+        for (const possibleNameLower of possibleOriginalSymbolNamesLower) {
+            if (symbolLowerNameSet.has(possibleNameLower)) {
+                return true;
+            }
+            if (possibleNamespace) {
+                const fullName = possibleNamespace + '.' + possibleNameLower;
+                if (symbolLowerNameSet.has(fullName.toLowerCase())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    public truncate<T>(options: {
+        leadingText: string;
+        items: T[];
+        trailingText?: string;
+        maxLength: number;
+        itemSeparator?: string;
+        partBuilder?: (item: T) => string;
+    }): string {
+        let leadingText = options.leadingText;
+        let items = options?.items ?? [];
+        let trailingText = options?.trailingText ?? '';
+        let maxLength = options?.maxLength ?? 160;
+        let itemSeparator = options?.itemSeparator ?? ', ';
+        let partBuilder = options?.partBuilder ?? ((x) => x.toString());
+
+        let parts = [];
+        let length = leadingText.length + (trailingText?.length ?? 0);
+
+        //calculate the max number of items we could fit in the given space
+        for (let i = 0; i < items.length; i++) {
+            let part = partBuilder(items[i]);
+            if (i > 0) {
+                part = itemSeparator + part;
+            }
+            parts.push(part);
+            length += part.length;
+            //exit the loop if we've maxed out our length
+            if (length >= maxLength) {
+                break;
+            }
+        }
+        let message: string;
+        //we have enough space to include all the parts
+        if (parts.length >= items.length) {
+            message = leadingText + parts.join('') + trailingText;
+
+            //we require truncation
+        } else {
+            //account for truncation message length including max possible "more" items digits, trailing text length, and the separator between last item and trailing text
+            length = leadingText.length + `...and ${items.length} more`.length + itemSeparator.length + (trailingText?.length ?? 0);
+            message = leadingText;
+            for (let i = 0; i < parts.length; i++) {
+                //always include at least 2 items. if this part would overflow the max, then skip it and finalize the message
+                if (i > 1 && length + parts[i].length > maxLength) {
+                    message += itemSeparator + `...and ${items.length - i} more` + trailingText;
+                    return message;
+                } else {
+                    message += parts[i];
+                    length += parts[i].length;
+                }
+            }
+        }
+        return message;
     }
 }
 

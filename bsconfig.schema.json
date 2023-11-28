@@ -21,6 +21,21 @@
             "description": "The root directory of your Roku project. Defaults to the current working directory (or cwd property)",
             "type": "string"
         },
+        "manifest": {
+            "description": "A entry to modify manifest values",
+            "type": "object",
+            "properties": {
+                "bs_const": {
+                    "description": "A dictionary of bs_consts to change or add to the manifest. Each entry ",
+                    "type": "object",
+                    "patternProperties": {
+                        "^.+$": {
+                            "type": ["boolean", "null"]
+                        }
+                    }
+                }
+            }
+        },
         "files": {
             "description": "The list of files that should be used in this project. Supports globs. Optionally, you can specify an object with `src` and `dest` properties to move files from one location into a different destination location",
             "default": [
@@ -137,6 +152,16 @@
                         "description": "A BrighterScript error code that will be ignored during compile"
                     }
                 ]
+            }
+        },
+        "diagnosticSeverityOverrides": {
+            "description": "A map of error codes with their severity level override (error|warn|info)",
+            "type": "object",
+            "patternProperties": {
+                ".{1,}": {
+                    "type": ["number", "string"],
+                    "enum": ["error", "warn", "info", "hint"]
+                }
             }
         },
         "emitFullPaths": {

@@ -1,5 +1,5 @@
 import type { Expression } from '../parser/AstNode';
-import type { CallExpression, CallfuncExpression, NewExpression } from '../parser/Expression';
+import type { CallExpression, CallfuncExpression, NewExpression, VariableExpression } from '../parser/Expression';
 import type { ClassStatement, NamespaceStatement } from '../parser/Statement';
 import { isCallExpression, isCallfuncExpression, isVariableExpression, isDottedGetExpression, isClassStatement, isNewExpression } from '../astUtils/reflection';
 import type { BrsFile } from '../files/BrsFile';
@@ -24,7 +24,7 @@ export class CallExpressionInfo {
     expression?: Expression;
 
     //the contextually relevant callExpression, which relates to it
-    callExpression?: CallExpression;
+    callExpression?: CallExpression | CallfuncExpression;
     type: CallExpressionType;
 
     file: BrsFile;
@@ -70,7 +70,7 @@ export class CallExpressionInfo {
         } else if (isVariableExpression(callExpression.callee)) {
             this.name = callExpression.callee.name.text;
         } else if (isVariableExpression(callExpression)) {
-            this.name = callExpression.name.text;
+            this.name = (callExpression as VariableExpression).name.text;
         } else if (isDottedGetExpression(callExpression.callee)) {
             this.name = callExpression.callee.name.text;
             if (isDottedGetExpression(callExpression.callee) && isVariableExpression(callExpression.callee.obj)) {
@@ -94,7 +94,7 @@ export class CallExpressionInfo {
         return util.rangeContains(boundingRange, this.position);
     }
 
-    ascertainCallExpression(): CallExpression {
+    ascertainCallExpression(): CallExpression | CallfuncExpression {
         let expression = this.expression;
         function isCallFuncOrCallExpression(expression: Expression) {
             return isCallfuncExpression(expression) || isCallExpression(expression);

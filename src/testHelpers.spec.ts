@@ -13,6 +13,7 @@ import { getDiagnosticLine } from './diagnosticUtils';
 import { firstBy } from 'thenby';
 import undent from 'undent';
 import type { File } from './files/File';
+import type { BscType } from './types/BscType';
 
 export const tempDir = s`${__dirname}/../.tmp`;
 export const rootDir = s`${tempDir}/rootDir`;
@@ -137,10 +138,11 @@ export function expectDiagnostics(arg: DiagnosticCollection, expected: Array<Par
  * @param arg - any object that contains diagnostics (such as `Program`, `Scope`, or even an array of diagnostics)
  * @param expected an array of expected diagnostics. if it's a string, assume that's a diagnostic error message
  */
-export function expectDiagnosticsIncludes(arg: DiagnosticCollection, expected: Array<PartialDiagnostic | string | number>) {
+export function expectDiagnosticsIncludes(arg: DiagnosticCollection, expected: PartialDiagnostic | string | number | Array<PartialDiagnostic | string | number>) {
+    let actualExpected = Array.isArray(expected) ? expected : [expected];
     const actualDiagnostics = getDiagnostics(arg);
     const expectedDiagnostics =
-        expected.map(x => {
+        actualExpected.map(x => {
             let result = x;
             if (typeof x === 'string') {
                 result = { message: x };
@@ -256,12 +258,12 @@ function getTestFileAction(
     action: (file: File) => Promise<{ code: string; map?: string }>,
     scopeGetter: () => [program: Program, rootDir: string]
 ) {
-    return async function testFileAction(source: string | File, expected?: string, formatType: 'trim' | 'none' = 'trim', destPath = 'source/main.bs', failOnDiagnostic = true) {
+    return async function testFileAction<TFile extends File = File>(source: string | File, expected?: string, formatType: 'trim' | 'none' = 'trim', destPath = 'source/main.bs', failOnDiagnostic = true) {
         let [program, rootDir] = scopeGetter();
         let file: File;
         if (typeof source === 'string') {
             expected = expected ? expected : source;
-            file = program.setFile<BrsFile>({ src: s`${rootDir}/${destPath}`, dest: destPath }, source);
+            file = program.setFile<TFile>({ src: s`${rootDir}/${destPath}`, dest: destPath }, source);
         } else {
             file = source;
         }
@@ -369,4 +371,20 @@ export function mapToObject<T>(map: Map<any, T>) {
         result[key] = value;
     }
     return result;
+}
+
+/**
+ * Test that a type is what was expected
+ */
+export function expectTypeToBe(someType: BscType, expectedTypeClass: any) {
+    expect(someType?.constructor?.name).to.eq(expectedTypeClass.name);
+}
+
+export function stripConsoleColors(inputString) {
+    // Regular expression to match ANSI escape codes for colors
+    // eslint-disable-next-line no-control-regex
+    const colorPattern = /\u001b\[(?:\d*;){0,5}\d*m/g;
+
+    // Remove all occurrences of ANSI escape codes
+    return inputString.replace(colorPattern, '');
 }

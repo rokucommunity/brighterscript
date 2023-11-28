@@ -17,6 +17,7 @@ import { isBrsFile, isLiteralString } from './astUtils/reflection';
 import { createVisitor, WalkMode } from './astUtils/visitors';
 import { tempDir, rootDir } from './testHelpers.spec';
 import { URI } from 'vscode-uri';
+import { BusyStatusTracker } from './BusyStatusTracker';
 
 const sinon = createSandbox();
 
@@ -76,6 +77,7 @@ describe('LanguageServer', () => {
     beforeEach(() => {
         sinon.restore();
         server = new LanguageServer();
+        server['busyStatusTracker'] = new BusyStatusTracker();
         workspaceFolders = [workspacePath];
 
         vfs = {};
@@ -1072,7 +1074,8 @@ describe('LanguageServer', () => {
                 //make a plugin that changes string text
                 server.projects[0].builder.program.plugins.add({
                     name: 'test-plugin',
-                    beforeProgramTranspile: (program, entries, editor) => {
+                    beforeProgramTranspile: (event) => {
+                        const { program, editor } = event;
                         const file = program.getFile('source/main.bs');
                         if (isBrsFile(file)) {
                             file.ast.walk(createVisitor({
@@ -1153,6 +1156,63 @@ describe('LanguageServer', () => {
             semanticTokensPromise
         ]);
         expectZeroDiagnostics(server.projects[0].builder.program);
+    });
+
+    describe('onCompletion', () => {
+        let completionDocuments: TextDocument[] = [];
+
+        beforeEach(async () => {
+            server['connection'] = server['createConnection']();
+            await server['createProject'](workspacePath);
+            await server['createProject'](s`${workspacePath}/alpha`);
+            await server['createProject'](s`${workspacePath}/beta`);
+            for (const project of server.projects) {
+                const filePath = s`source/file.brs`;
+                const contents = `
+                    function pi()
+                        return 3.141592653589793
+                    end function
+
+                    function buildAwesome()
+                        return 42
+                    end function
+                `;
+                const file = project.builder.program.setFile(filePath, contents);
+                if (file) {
+                    let document = TextDocument.create(util.pathToUri(file.srcPath), 'brightscript', 1, contents);
+                    server['documents']['_documents'][document.uri] = document;
+                    completionDocuments.push(document);
+                }
+                project.builder.program.setFile(s`${rootDir}/source/main.bs`, `
+                    sub main()
+                        print   'completion here
+                    end sub
+                `);
+            }
+        });
+
+        it('should remove duplicate items across projects', async () => {
+            fsExtra.outputFileSync(s`${rootDir}/bsconfig.json`, '');
+            const subProjectConfig = {
+                files: [
+                    '**/*',
+                    { src: '../source/**/*', dest: 'source/common' }
+                ]
+            };
+
+            fsExtra.outputFileSync(s`${rootDir}/alpha/bsconfig.json`, JSON.stringify(subProjectConfig));
+            fsExtra.outputFileSync(s`${rootDir}/beta/bsconfig.json`, JSON.stringify(subProjectConfig));
+            server.run();
+            await server['syncProjects']();
+            const result = await server['onCompletion']({
+                textDocument: { uri: util.pathToUri(s`${rootDir}/source/main.bs`) },
+                position: util.createPosition(2, 26)
+            });
+            expect(result.filter(compItem => compItem.label === 'buildAwesome')).to.length(1);
+            expect(result.filter(compItem => compItem.label === 'pi')).to.length(1);
+            expect(result.filter(compItem => compItem.label === 'LCase')).to.length(1);
+        });
+
     });
 });
 

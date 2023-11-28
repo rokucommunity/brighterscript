@@ -21,6 +21,20 @@ describe('globalCallables', () => {
             program.setFile('source/main.brs', `
                 sub main()
                     adIface = Roku_Ads()
+                    print adIface
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+    });
+
+    describe('Roku_Event_Dispatcher', () => {
+        it('exists', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    red = Roku_Event_Dispatcher()
+                    print red
                 end sub
             `);
             program.validate();
@@ -59,12 +73,8 @@ describe('globalCallables', () => {
         program.validate();
         const hover = program.getHover(file.srcPath, util.createPosition(2, 25));
         expect(
-            hover[0].contents.toString().replace('\r\n', '\n')
-        ).to.eql([
-            '```brightscript',
-            'function Mid(s as string, p as integer, n? as integer) as string',
-            '```'
-        ].join('\n'));
+            hover[0].contents.toString()
+        ).to.include('function Mid(s as string, p as integer, n? as integer) as string');
     });
 
     describe('bslCore', () => {

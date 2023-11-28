@@ -16,6 +16,7 @@ import * as he from 'he';
 import * as deepmerge from 'deepmerge';
 import { NodeHtmlMarkdown } from 'node-html-markdown';
 import { isVariableExpression } from '../src/astUtils/reflection';
+import { SymbolTypeFlag } from '../src';
 
 type Token = marked.Token;
 
@@ -298,7 +299,7 @@ class Runner {
                                 const arg = call.args[i];
                                 let paramName = `param${i}`;
                                 if (isVariableExpression(arg)) {
-                                    paramName = arg.getName(ParseMode.BrightScript)
+                                    paramName = arg.getName(ParseMode.BrightScript);
                                 }
                                 signature.params.push({
                                     name: paramName,
@@ -311,7 +312,7 @@ class Runner {
                             component.constructors.push(signature);
                         }
                     } else if (match[1]) {
-                        const signature = this.getConstructorSignature(name, match[1])
+                        const signature = this.getConstructorSignature(name, match[1]);
 
                         if (signature) {
                             component.constructors.push(signature);
@@ -332,7 +333,7 @@ class Runner {
     }
 
     private getConstructorSignature(componentName: string, sourceCode: string) {
-        const foundParamTexts = this.findParamTexts(sourceCode)
+        const foundParamTexts = this.findParamTexts(sourceCode);
 
         if (foundParamTexts && foundParamTexts[0].toLowerCase() === componentName.toLowerCase()) {
             const signature = {
@@ -371,7 +372,7 @@ class Runner {
         let paramType = 'dynamic';
         let paramName = defaultParamName;
 
-        const isOptional = foundParam.endsWith(']');
+        const isOptional = foundParam.endsWith(']') || foundParam.includes('=');
 
         if (paramTypeIndex >= 0) {
             // if we found a word that looks like a type, use it for the type, and remove it from the array
@@ -491,11 +492,6 @@ class Runner {
 
     private async buildNodes() {
         const docs = this.flatten(this.references.SceneGraph);
-        docs.push({
-            categoryName: '',
-            path: '/docs/references/scenegraph/dynamic-voice-keyboard-nodes/rsg-palette.md',
-            name: 'RSGPalette'
-        });
 
         for (let i = 0; i < docs.length; i++) {
             const doc = docs[i];
@@ -712,15 +708,21 @@ class Runner {
         return symbolName?.replaceAll(/[\[\]\\]/g, '');
     }
 
+
+    private fixFunctionParams(text: string): string {
+        return text.replace(/to as /ig, 'toValue as ');
+    }
+
     private getMethod(text: string) {
-        // var state = new TranspileState(new BrsFile('', '', new Program({}));
-        const { statements } = Parser.parse(`function ${this.sanitizeMarkdownSymbol(text)}\nend function`);
+        // var state = new TranspileState(new BrsFile({ srcPath: '', destPath: '', program: new Program({})});
+        const functionSignatureToParse = `function ${this.fixFunctionParams(this.sanitizeMarkdownSymbol(text))}\nend function`;
+        const { statements } = Parser.parse(functionSignatureToParse);
         if (statements.length > 0) {
             const func = statements[0] as FunctionStatement;
             const signature = {
                 name: func.name?.text,
                 params: [],
-                returnType: func.func.returnTypeToken?.text ?? 'Void'
+                returnType: func.func.returnTypeExpression?.getType({ flags: SymbolTypeFlag.typetime })?.toTypeString() ?? 'Void'
             } as Func;
 
 
@@ -734,6 +736,8 @@ class Runner {
                 }
             }
             return signature;
+        } else {
+            console.error('Could not parse method', functionSignatureToParse);
         }
 
     }
@@ -753,12 +757,127 @@ class Runner {
     private mergeOverrides() {
         this.result = deepmerge(this.result, {
             nodes: {
+                node: {
+                    // Taken from: https://developer.roku.com/en-ca/docs/developer-program/core-concepts/handling-application-events.md#functional-fields
+                    methods: [
+                        {
+                            description: `callFunc() is a synchronized interface on roSGNode. It will always execute in the component's owning ScriptEngine and thread (by rendezvous if necessary), and it will always use the m and m.top of the owning component. Any context from the caller can be passed via one or more method parameters, which may be of any type (previously, callFunc() only supported a single associative array parameter).\n\nTo call the function, use the \`callFunc\` field with the required method signature. A return value, if any, can be an object that is similarly arbitrary. The method being called must determine how to interpret the parameters included in the \`callFunc\` field.`,
+                            name: 'callFunc',
+                            params: [
+                                {
+                                    default: null,
+                                    description: 'The function name to call.',
+                                    isRequired: true,
+                                    name: 'functionName',
+                                    type: 'String'
+                                }
+                            ],
+                            isVariadic: true,
+                            returnType: 'Dynamic'
+                        }
+                    ]
+                }
             },
-            components: {},
+            components: {
+                roregion: {
+                    interfaces: [{
+                        name: 'ifDraw2D',
+                        url: 'https://developer.roku.com/docs/references/brightscript/interfaces/ifdraw2d.md'
+                    }]
+                }
+            },
             events: {},
             interfaces: {}
         });
+
+
+        // fix ifStringOp overloads
+        fixOverloadedMethod(this.result.interfaces.ifstringops, 'instr');
+        fixOverloadedMethod(this.result.interfaces.ifstringops, 'mid');
+        fixOverloadedMethod(this.result.interfaces.ifstringops, 'startsWith');
+        fixOverloadedMethod(this.result.interfaces.ifstringops, 'endswith');
+
+        // fix ifSGNodeField overloads
+        fixOverloadedMethod(this.result.interfaces.ifsgnodefield, 'observeField');
+        fixOverloadedMethod(this.result.interfaces.ifsgnodefield, 'observeFieldScoped');
+
+        // fix ifdraw2d overloads
+        fixOverloadedMethod(this.result.interfaces.ifdraw2d, 'drawScaledObject');
     }
+}
+
+function fixOverloadedMethod(iface: RokuInterface, funcName: string) {
+    const originalOverloads = iface.methods.filter(method => method.name.toLowerCase() === funcName.toLowerCase());
+    const descriptions: string[] = [];
+    const returnDescriptions: string[] = [];
+    const returnTypes: string[] = [];
+    for (const originalOverload of originalOverloads) {
+        if (!descriptions.includes(originalOverload.description)) {
+            descriptions.push(originalOverload.description);
+        }
+        if (!returnDescriptions.includes(originalOverload.returnDescription)) {
+            returnDescriptions.push(originalOverload.returnDescription);
+        }
+        if (!returnTypes.includes(originalOverload.returnType)) {
+            returnTypes.push(originalOverload.returnType);
+        }
+    }
+    const mergedFunc: Func = {
+        name: originalOverloads[0].name,
+        params: [],
+        description: `**OVERLOADED METHOD**\n\n` + descriptions.join('\n\n or \n\n'),
+        returnType: returnTypes.length > 0 ? returnTypes.join(' or ') : '',
+        returnDescription: returnDescriptions.length > 0 ? returnDescriptions.join('\n\n or \n\n') : ''
+    };
+
+    const maxParamsInAnyOverload = Math.max(...originalOverloads.map(x => x.params.length));
+    for (let i = 0; i < maxParamsInAnyOverload; i++) {
+        const paramNames: string[] = [];
+        let paramIsRequired = true;
+        const paramDescriptions: string[] = [];
+        const paramDefaults: string[] = [];
+        const paramTypes: string[] = [];
+
+        for (const originalMethod of originalOverloads) {
+            let p = originalMethod.params[i];
+            if (p) {
+                if (!paramNames.includes(p.name)) {
+                    paramNames.push(p.name);
+                }
+                if (!paramDescriptions.includes(p.description)) {
+                    paramDescriptions.push(p.description);
+                }
+                if (p.default && !paramDefaults.includes(p.default)) {
+                    paramDefaults.push(p.default);
+                }
+                const pTypes = Array.isArray(p.type) ? p.type : [p.type];
+                for (const pType of pTypes) {
+                    if (!paramTypes.includes(pType)) {
+                        paramTypes.push(pType);
+                    }
+                }
+                paramIsRequired = paramIsRequired && p.isRequired;
+            } else {
+                paramIsRequired = false;
+            }
+        }
+        // camelCase param names
+        let mergedParamName = paramNames.map((name, index) => {
+            return index === 0 ? name : name.charAt(0).toUpperCase() + name.slice(1);
+        }).join('Or');
+
+        mergedFunc.params.push({
+            name: mergedParamName,
+            description: paramDescriptions.join(' OR '),
+            default: paramDefaults.length > 0 ? paramDefaults.join(' or ') : null,
+            isRequired: paramIsRequired,
+            type: paramTypes.join(' or ')
+        });
+    }
+    // remove existing
+    iface.methods = iface.methods.filter(method => method.name.toLowerCase() !== funcName.toLowerCase());
+    // add to list
+    iface.methods.push(mergedFunc);
 }
 
 let cache: Record<string, string>;
@@ -778,7 +897,12 @@ function saveCache() {
 async function getJson(url: string) {
     if (!cache[url]) {
         console.log('Fetching from web', url);
-        cache[url] = (await phin(url)).body.toString();
+        cache[url] = (await phin({
+            url: url,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
+            }
+        })).body.toString();
         saveCache();
     } else {
         console.log('Fetching from cache', url);
@@ -797,6 +921,7 @@ function deepSearch<T = any>(object, key, predicate): T {
         return object;
     }
 
+    // eslint-disable-next-line @typescript-eslint/prefer-for-of
     for (let i = 0; i < Object.keys(object).length; i++) {
         let value = object[Object.keys(object)[i]];
         if (typeof value === 'object' && value) {
@@ -911,9 +1036,13 @@ class TokenManager {
     public tokens: marked.TokensList;
 
     public async process(url: string) {
-        this.html = (await getJson(url)).content;
-        this.markdown = turndownService.turndown(this.html);
-        this.tokens = marked.lexer(this.markdown);
+        try {
+            this.html = (await getJson(url)).content;
+            this.markdown = turndownService.turndown(this.html);
+            this.tokens = marked.lexer(this.markdown);
+        } catch (e) {
+            console.error('Unable to process url: ', url);
+        }
         return this;
     }
 
@@ -1078,16 +1207,16 @@ class TokenManager {
     }
 
     /**
-    * Find any `is deprecated` text between the specified items
-    */
+     * Find any `is deprecated` text between the specified items
+     */
     public getDeprecatedDescription(startToken: Token, endToken: Token) {
         const deprecatedDescription = this.find<marked.Tokens.Text>(x => !!/is\s*deprecated/i.exec(x?.text), startToken, endToken)?.text;
         return deprecatedDescription;
     }
 
     /**
-    * Sets `deprecatedDescription` and `isDeprecated` on passed in entity if `deprecated` is mentioned between the two tokens
-    */
+     * Sets `deprecatedDescription` and `isDeprecated` on passed in entity if `deprecated` is mentioned between the two tokens
+     */
     public setDeprecatedData(entity: PossiblyDeprecated, startToken: Token, endToken: Token) {
         entity.deprecatedDescription = this.getDeprecatedDescription(startToken, endToken);
         if (entity.deprecatedDescription) {
@@ -1191,6 +1320,7 @@ interface SceneGraphNode {
     interfaces: Reference[];
     events: Reference[];
     fields: SceneGraphNodeField[];
+    methods: Func[];
 }
 
 interface SceneGraphNodeField {
@@ -1225,6 +1355,7 @@ interface Signature {
     params: Param[];
     returnType: string;
     returnDescription: string;
+    isVariadic?: boolean;
 }
 interface ElementFilter {
     id?: string;

@@ -1,4 +1,7 @@
-module.exports = async (suite, name, brighterscript, projectPath, options) => {
+import type { TargetOptions } from '../target-runner';
+
+module.exports = async (options: TargetOptions) => {
+    const { suite, name, version, fullName, brighterscript, projectPath, suiteOptions } = options;
     const { ProgramBuilder } = brighterscript;
 
     const builder = new ProgramBuilder();
@@ -9,7 +12,8 @@ module.exports = async (suite, name, brighterscript, projectPath, options) => {
         copyToStaging: false,
         //disable diagnostic reporting (they still get collected)
         diagnosticFilters: ['**/*'],
-        logLevel: 'error'
+        logLevel: 'error',
+        ...options.additionalConfig
     });
     if (Object.keys(builder.program.files).length === 0) {
         throw new Error('No files found in program');
@@ -22,9 +26,9 @@ module.exports = async (suite, name, brighterscript, projectPath, options) => {
         file.needsTranspiled = true;
     }
 
-    suite.add(name, () => {
+    suite.add(fullName, () => {
         for (const file of files) {
             file.transpile();
         }
-    }, options);
+    }, suiteOptions);
 };
