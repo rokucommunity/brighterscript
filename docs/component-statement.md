@@ -77,6 +77,26 @@ end namespace
 
 <br/>
 
+### Extending a namespaced component
+You can extend components using their namespaced path.
+```vb
+component ExtendedMoviePoster extends Acme.components.MoviePoster
+end component
+```
+
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+
+`components/acme_components_MoviePoster.xml`
+```xml
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="ExtendedMoviePoster" extends="acme_components_MoviePoster">
+</component>
+```
+</details>
+
+<br/>
+
 
 ## Private properties and functions
 Private properties are written to `m`. Private functions are transpiled to scope-level functions (i.e. not written to m) and we will remove the `m.` when calling those functions.
@@ -164,7 +184,7 @@ end sub
 <br/>
 
 ## Including functions defined elsewhere
-You can also attach an external function to the component. This allows you to keep functionality in separate files if desired.
+You can also attach an external function to the component. This allows you to keep functionality in separate files if desired, and expose it as a interface function.
 ```vb
 import "UserInteraction.bs"
 component MoviePoster extends "Poster"
@@ -364,8 +384,8 @@ end sub
 </details>
 <br/>
 
-## InitialFocus
-To set `initialFocus`, you can add that to the template's `<component` tag
+## Setting `<component>` element attributes
+To set a component element attribute such as `initialFocus`, you can add that to the template's `<component>` tag.
 ```vb
 @Template(`
     <component initialFocus="bottomBar">
@@ -420,7 +440,7 @@ end component
 
 
 ## Field Annotations
-You can preceed a field with annotations that describe additional features of the field.
+You can precede a field with annotations that describe additional features of the field.
 
 ### @Alias
 ```vb
@@ -448,14 +468,19 @@ end component
 <?xml version="1.0" encoding="utf-8" ?>
 <component name="MoviePoster" extends="Poster">
     <interface>
-        <field id="title" type="string" alias="title.text,titleCopy.text" />
+        <field id="minutes" type="string" alias="title.text,titleCopy.text" />
     </interface>
+    <children>
+        <Label id="title" />
+        <Label id="titleCopy" />
+    </children>
 </component>
 ```
 </details>
 <br/>
 
 ### @OnChange
+Note: It is not recommended to use `onChange` if your component extends a Task, as noted [here](https://developer.roku.com/en-ca/docs/developer-program/performance-guide/optimization-techniques.md).
 ```vb
 @Template(`
     <Label id="title" />
