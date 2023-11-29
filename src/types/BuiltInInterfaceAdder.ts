@@ -114,8 +114,6 @@ export class BuiltInInterfaceAdder {
             return 'roInvalid';
         } else if (isCallableType(theType)) {
             return 'roFunction';
-        } else if (isClassType(theType)) {
-            return 'roAssociativeArray';
         } else if (isAssociativeArrayType(theType)) {
             return 'roAssociativeArray';
         } else if (isArrayType(theType)) {
