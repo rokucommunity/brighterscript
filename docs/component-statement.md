@@ -205,7 +205,7 @@ end component
 <component name="MoviePoster" extends="Poster">
     <interface>
         <function name="play" />
-        <function name="seek" />
+        <function name="markAsFavorite" />
     </interface>
     <script uri="MoviePoster.brs" />
     <script uri="UserInteraction.brs" />
