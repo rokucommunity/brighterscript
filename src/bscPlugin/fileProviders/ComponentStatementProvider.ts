@@ -79,7 +79,7 @@ export class ComponentStatementProvider {
     private registerCodebehind(name: string, statement: ComponentStatement, destDir: string) {
         //create the codebehind file
         const file = this.event.fileFactory.BrsFile({
-            srcPath: `virtual:/${destDir}/${name}.codebehind.brs`,
+            srcPath: `virtual:/${destDir}/${name}.codebehind.bs`,
             destPath: `${destDir}/${name}.codebehind.brs`
         });
         const initStatements: Statement[] = [];

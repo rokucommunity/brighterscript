@@ -1,11 +1,16 @@
 import type { ProvideFileEvent } from '../../interfaces';
 import chalk from 'chalk';
 import { LogLevel } from '../../Logger';
+import { ComponentStatementProvider } from './ComponentStatementProvider';
 
 export class FileProvider {
     constructor(
         private event: ProvideFileEvent
-    ) { }
+    ) {
+        this.componentStatementProvider = new ComponentStatementProvider(event);
+    }
+
+    private componentStatementProvider: ComponentStatementProvider;
 
     public process() {
         //if the event already has a file for this path, assume some other plugin has processed this event already
@@ -37,6 +42,9 @@ export class FileProvider {
         });
 
         this.event.files.push(file);
+
+        //emit virtual files for each component statement
+        this.componentStatementProvider.process(file);
     }
 
     private handleXmlFile() {
