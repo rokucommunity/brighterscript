@@ -173,7 +173,6 @@ export enum AstNodeKind {
     CallExpression = 'CallExpression',
     FunctionExpression = 'FunctionExpression',
     FunctionParameterExpression = 'FunctionParameterExpression',
-    NamespacedVariableNameExpression = 'NamespacedVariableNameExpression',
     DottedGetExpression = 'DottedGetExpression',
     XmlAttributeGetExpression = 'XmlAttributeGetExpression',
     IndexedGetExpression = 'IndexedGetExpression',
@@ -237,5 +236,6 @@ export enum AstNodeKind {
     Block = 'Block',
     TypeExpression = 'TypeExpression',
     TypeCastExpression = 'TypeCastExpression',
-    TypedArrayExpression = 'TypedArrayExpression'
+    TypedArrayExpression = 'TypedArrayExpression',
+    ComponentStatement = 'ComponentStatement'
 }

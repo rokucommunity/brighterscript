@@ -2913,12 +2913,8 @@ export class ComponentStatement extends Statement implements TypedefProvider {
             endComponent: Token;
             extends?: Token;
         },
-        /**
-         * The name of the component (without any preceeding namespace)
-         */
         public body: Statement[],
-        public parentName?: LiteralExpression | NamespacedVariableNameExpression,
-        public namespaceName?: NamespacedVariableNameExpression
+        public parentName?: LiteralExpression | TypeExpression
     ) {
         super();
         this.range = util.createBoundingRange(
@@ -2930,6 +2926,8 @@ export class ComponentStatement extends Statement implements TypedefProvider {
             this.tokens.endComponent
         );
     }
+
+    public readonly kind = AstNodeKind.ContinueStatement;
 
     /**
      * The name of this component

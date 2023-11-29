@@ -2711,7 +2711,7 @@ export class Parser {
      * @returns an expression that was successfully parsed
      */
     private getTypeExpressionPart(changedTokens: { token: Token; oldKind: TokenKind }[]) {
-        let expr: VariableExpression | DottedGetExpression;
+        let expr: VariableExpression | DottedGetExpression | TypedArrayExpression;
         if (this.checkAny(...DeclarableTypes)) {
             // if this is just a type, just use directly
             expr = new VariableExpression(this.advance() as Identifier);

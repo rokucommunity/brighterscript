@@ -56,7 +56,7 @@ export class ComponentStatementProvider {
 
                 //declare interface field
             } else if (isFieldStatement(member) && member.accessModifier?.text.toLowerCase() === 'public') {
-                return `<field id="${member.name.text}" type="${member.type.text}" />`;
+                return `<field id="${member.name.text}" type="${member.typeExpression.getName()}" />`;
             } else {
                 return '';
             }

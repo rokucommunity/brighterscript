@@ -283,7 +283,7 @@ function getTestFileAction(
 
         expect(sources[0]).to.equal(sources[1]);
         return {
-            file: file,
+            file: file as TFile,
             source: source,
             expected: expected,
             actual: codeWithMap.code,
