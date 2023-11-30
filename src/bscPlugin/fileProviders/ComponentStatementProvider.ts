@@ -117,7 +117,7 @@ export class ComponentStatementProvider {
                     });
                     response.push(textOutput);
                 }
-            });
+            };
 
             response = response.filter((item, index) => {
                 return response.indexOf(item) === index;
