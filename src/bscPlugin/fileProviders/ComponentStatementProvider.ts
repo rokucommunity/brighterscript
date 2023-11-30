@@ -56,13 +56,24 @@ export class ComponentStatementProvider {
 
                 //declare interface field
             } else if (isFieldStatement(member) && member.accessModifier?.text.toLowerCase() === 'public') {
-                return `<field
-                    id="${member.name.text}"
-                    type="${member.typeExpression.getName()}"
-                    alias="${this.getAnnotationValue(member.annotations?.filter(x => x.name.toLowerCase() === 'alias'))}"
-                    onChange="${this.getAnnotationValue(member.annotations?.filter(x => x.name.toLowerCase() === 'onchange'))}"
-                    alwaysNotify="${this.getAnnotationValue(member.annotations?.filter(x => x.name.toLowerCase() === 'alwaysnotify')) === 'true'}"
-                />`;
+                let fieldAttributes = {
+                    id: member.name.text,
+                    type: member.typeExpression.getName(),
+                    alias: this.getAnnotationValue(member.annotations?.filter(x => x.name.toLowerCase() === 'alias')),
+                    onChange: this.getAnnotationValue(member.annotations?.filter(x => x.name.toLowerCase() === 'onchange')),
+                    alwaysNotify: this.getAnnotationValue(member.annotations?.filter(x => x.name.toLowerCase() === 'alwaysnotify')) === 'true' ? 'true' : ''
+                };
+
+                let field = '<field';
+                Object.keys(fieldAttributes).forEach(attribute => {
+                    let value = fieldAttributes[attribute];
+                    // Only add a attribute if the value is not empty.
+                    if (value !== '') {
+                        field += ` ${attribute}="${fieldAttributes[attribute]}"`;
+                    }
+                });
+                field += ' />';
+                return field;
             } else {
                 return '';
             }
@@ -71,7 +82,8 @@ export class ComponentStatementProvider {
         let componentChildren = '';
         const template = statement.annotations?.find(x => x.name.toLowerCase() === 'template');
         if (template) {
-            componentChildren = `<children>${this.getAnnotationValue([template])}</children>`;
+            // TODO: Better strip of component and children elements.
+            componentChildren = `<children>${this.getAnnotationValue([template]).replaceAll('<component>', '').replaceAll('</component>', '').replaceAll('<children>', '').replaceAll('</children>', '')}</children>`;
         }
 
         xmlFile.parse(undent`
@@ -90,27 +102,27 @@ export class ComponentStatementProvider {
 
     private getAnnotationValue(annotations: any) {
         let response = [];
-        annotations.forEach(a => {
-            let args = a?.call?.args[0];
-            if (isVariableExpression(args) || isDottedGetExpression(args)) {
-                response.push(args.name.text);
-            } else if (isLiteralExpression(args)) {
-                let values = args?.token?.text.replaceAll('\"', '').replaceAll(' ', '').split(',');
-                response = response.concat(values);
-            } else if (isTemplateStringExpression(args)) {
-                let textOutput = '';
-                args.quasis[0]?.expressions?.forEach((a: { token: { text: string } }) => {
-                    if (!a.token.text.includes('component>') && !a.token.text.includes('children>')) {
+        if (annotations !== undefined) {
+            annotations.forEach(a => {
+                let args = a?.call?.args[0];
+                if (isVariableExpression(args) || isDottedGetExpression(args)) {
+                    response.push(args.name.text);
+                } else if (isLiteralExpression(args)) {
+                    let values = args?.token?.text.replaceAll('\"', '').replaceAll(' ', '').split(',');
+                    response = response.concat(values);
+                } else if (isTemplateStringExpression(args)) {
+                    let textOutput = '';
+                    args.quasis[0]?.expressions?.forEach((a: { token: { text: string } }) => {
                         textOutput += a.token.text;
-                    }
-                });
-                response.push(textOutput);
-            }
-        });
+                    });
+                    response.push(textOutput);
+                }
+            });
 
-        response = response.filter((item, index) => {
-            return response.indexOf(item) === index;
-        });
+            response = response.filter((item, index) => {
+                return response.indexOf(item) === index;
+            });
+        }
         return response.join(', ');
     }
 
