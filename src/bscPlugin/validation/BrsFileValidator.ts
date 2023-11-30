@@ -76,6 +76,16 @@ export class BrsFileValidator {
                 // eslint-disable-next-line no-bitwise
                 node.parent.getSymbolTable()?.addSymbol(node.name?.text, { definingNode: node }, nodeType, SymbolTypeFlag.typetime | SymbolTypeFlag.runtime);
             },
+            ComponentStatement: (node) => {
+                this.validateDeclarationLocations(node, 'component', () => util.createBoundingRange(node.tokens.component, node.tokens.name));
+
+                //register this component
+                const nodeType = node.getType({ flags: SymbolTypeFlag.typetime });
+                node.getSymbolTable().addSymbol('m', undefined, nodeType, SymbolTypeFlag.runtime);
+                // eslint-disable-next-line no-bitwise
+                node.parent.getSymbolTable()?.addSymbol(node.tokens.name?.text, { definingNode: node }, nodeType, SymbolTypeFlag.typetime | SymbolTypeFlag.runtime);
+                this.validateComponentStatement(node);
+            },
             AssignmentStatement: (node) => {
                 //register this variable
                 const nodeType = node.getType({ flags: SymbolTypeFlag.runtime });
@@ -163,9 +173,6 @@ export class BrsFileValidator {
             },
             ContinueStatement: (node) => {
                 this.validateContinueStatement(node);
-            },
-            ComponentStatement: (node) => {
-                this.validateComponentStatement(node);
             }
         });
 
