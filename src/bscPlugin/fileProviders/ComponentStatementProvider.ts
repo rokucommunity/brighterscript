@@ -82,7 +82,6 @@ export class ComponentStatementProvider {
         };
         const initialFocus = statement.annotations?.find(x => x.name.toLowerCase() === 'initialfocus');
         if (isAnnotationExpression(initialFocus)) {
-            console.log(initialFocus);
             componentAttributes.initialFocus = this.getAnnotationValue([initialFocus]);
         }
         xmlFile.parse(undent`
@@ -116,7 +115,6 @@ export class ComponentStatementProvider {
         let response = [];
         if (annotations !== undefined) {
             for (const annotation of annotations) {
-                // console.log(annotation);
                 let args = annotation?.call?.args[0];
                 if (isVariableExpression(args) || isDottedGetExpression(args)) {
                     response.push(args.name.text);
