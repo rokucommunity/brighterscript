@@ -786,6 +786,42 @@ describe('ScopeValidator', () => {
             ]);
         });
 
+        it('allows a class constructor to be passed as arg to param typed `as function`', () => {
+            program.setFile('source/file.bs', `
+                sub callSomeFunc(someFunc as function)
+                    someFunc()
+                end sub
+
+                class MyKlass
+                end class
+
+                sub doStuff()
+                callSomeFunc(MyKlass)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows a namespaced class constructor to be passed as arg to param typed `as function`', () => {
+            program.setFile('source/file.bs', `
+                sub callSomeFunc(someFunc as function)
+                    someFunc()
+                end sub
+
+                namespace Alpha
+                    class MyKlass
+                    end class
+
+                    sub doStuff()
+                        callSomeFunc(MyKlass)
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
         it('allows any variable to passed as argument to an untyped param with default type invalid', () => {
             program.setFile('source/util.brs', `
                 sub doSomething(x = invalid)

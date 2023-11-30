@@ -1065,8 +1065,74 @@ describe('BrsFile BrighterScript classes', () => {
             `, 'trim', 'source/main.bs');
         });
 
+        it('allows namespaced class function as function parameters', async () => {
+            await testTranspile(`
+                namespace Alpha
+                    function foo()
+                        return 1
+                    end function
 
-        it.only('allows class constructors as functions in array', async () => {
+                    function callSomeFunc(f as function)
+                        return f()
+                    end function
+
+                    sub callFoo()
+                        callSomeFunc(foo)
+                    end sub
+                end namespace
+            `, `
+                function Alpha_foo()
+                    return 1
+                end function
+
+                function Alpha_callSomeFunc(f as function)
+                    return f()
+                end function
+
+                sub Alpha_callFoo()
+                    Alpha_callSomeFunc(Alpha_foo)
+                end sub
+            `, 'trim', 'source/main.bs');
+        });
+
+        it('allows namespaced class constructors as function parameters', async () => {
+            await testTranspile(`
+                namespace Alpha
+                    class Button
+                    end class
+
+                    function callSomeFunc(f as function)
+                        return f()
+                    end function
+
+                    sub makeButton()
+                        callSomeFunc(Button)
+                    end sub
+                end namespace
+            `, `
+                function __Alpha_Button_builder()
+                    instance = {}
+                    instance.new = sub()
+                    end sub
+                    return instance
+                end function
+                function Alpha_Button()
+                    instance = __Alpha_Button_builder()
+                    instance.new()
+                    return instance
+                end function
+
+                function Alpha_callSomeFunc(f as function)
+                    return f()
+                end function
+
+                sub Alpha_makeButton()
+                    Alpha_callSomeFunc(Alpha_Button)
+                end sub
+            `, 'trim', 'source/main.bs');
+        });
+
+        it('allows class constructors as functions in array', async () => {
             await testTranspile(`
                 namespace Alpha
                     class Button
@@ -1081,7 +1147,7 @@ describe('BrsFile BrighterScript classes', () => {
 
                         sub init()
                             button = new Alpha.Button()
-                            items = [m.button, button]
+                            items = [m.button, button, Alpha.Button]
                         end sub
                     end class
                 end namespace
@@ -1107,6 +1173,7 @@ describe('BrsFile BrighterScript classes', () => {
                         button = Alpha_Button()
                         items = [
                             m.button
+                            Alpha_button
                             Alpha_Button
                         ]
                     end sub
