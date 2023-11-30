@@ -100,7 +100,7 @@ export class ComponentStatementProvider {
         this.event.files.push(xmlFile);
     }
 
-    private getAnnotationValue(annotations: any) {
+    private getAnnotationValue(annotations: AnnotationExpression[]) {
         let response = [];
         if (annotations !== undefined) {
             annotations.forEach(a => {
