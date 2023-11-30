@@ -12,6 +12,7 @@ import { createFunctionStatement, createFunctionExpression, createDottedSetState
 import type { Statement } from '../../parser/AstNode';
 import { TokenKind } from '../../lexer/TokenKind';
 import { VariableExpression } from '../../parser/Expression';
+import type { AnnotationExpression } from '../../parser/Expression';
 
 export class ComponentStatementProvider {
     constructor(
