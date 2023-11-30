@@ -7,7 +7,7 @@ import { Cache } from '../../Cache';
 import * as path from 'path';
 import { util } from '../../util';
 import type { ProvideFileEvent } from '../../interfaces';
-import { isDottedGetExpression, isFieldStatement, isMethodStatement, isVariableExpression, isLiteralExpression, isTemplateStringExpression } from '../../astUtils/reflection';
+import { isDottedGetExpression, isFieldStatement, isMethodStatement, isVariableExpression, isLiteralExpression, isTemplateStringExpression, isAnnotationExpression } from '../../astUtils/reflection';
 import { createFunctionStatement, createFunctionExpression, createDottedSetStatement, createVariableExpression } from '../../astUtils/creators';
 import type { Statement } from '../../parser/AstNode';
 import { TokenKind } from '../../lexer/TokenKind';
@@ -57,24 +57,13 @@ export class ComponentStatementProvider {
 
                 //declare interface field
             } else if (isFieldStatement(member) && member.accessModifier?.text.toLowerCase() === 'public') {
-                let fieldAttributes = {
+                return this.generateTagWithAttributes('field', {
                     id: member.name.text,
                     type: member.typeExpression.getName(),
                     alias: this.getAnnotationValue(member.annotations?.filter(x => x.name.toLowerCase() === 'alias')),
                     onChange: this.getAnnotationValue(member.annotations?.filter(x => x.name.toLowerCase() === 'onchange')),
                     alwaysNotify: this.getAnnotationValue(member.annotations?.filter(x => x.name.toLowerCase() === 'alwaysnotify')) === 'true' ? 'true' : ''
-                };
-
-                let field = '<field';
-                Object.keys(fieldAttributes).forEach(attribute => {
-                    let value = fieldAttributes[attribute];
-                    // Only add a attribute if the value is not empty.
-                    if (value !== '') {
-                        field += ` ${attribute}="${fieldAttributes[attribute]}"`;
-                    }
-                });
-                field += ' />';
-                return field;
+                }, true);
             } else {
                 return '';
             }
@@ -82,13 +71,23 @@ export class ComponentStatementProvider {
 
         let componentChildren = '';
         const template = statement.annotations?.find(x => x.name.toLowerCase() === 'template');
-        if (template) {
+        if (isAnnotationExpression(template)) {
             // TODO: Better strip of component and children elements.
             componentChildren = `<children>${this.getAnnotationValue([template]).replaceAll('<component>', '').replaceAll('</component>', '').replaceAll('<children>', '').replaceAll('</children>', '')}</children>`;
         }
 
+        let componentAttributes = {
+            name: name,
+            extends: statement.getParentName(ParseMode.BrightScript) ?? 'Group',
+            initialFocus: ''
+        };
+        const initialFocus = statement.annotations?.find(x => x.name.toLowerCase() === 'initialfocus');
+        if (isAnnotationExpression(initialFocus)) {
+            console.log(initialFocus);
+            componentAttributes.initialFocus = this.getAnnotationValue([initialFocus]);
+        }
         xmlFile.parse(undent`
-            <component name="${name}" extends="${statement.getParentName(ParseMode.BrightScript) ?? 'Group'}">
+            ${this.generateTagWithAttributes('component', componentAttributes)};
                 <script uri="${util.sanitizePkgPath(file.destPath)}" />
                 <script uri="${util.sanitizePkgPath(codebehindFile.destPath)}" />
                 ${interfaceMembers.length > 0 ? '<interface>' : ''}
@@ -101,10 +100,24 @@ export class ComponentStatementProvider {
         this.event.files.push(xmlFile);
     }
 
+    private generateTagWithAttributes(identifier = '' as string, attributes = {} as Record<string, any>, closeEnd = false as boolean) {
+        let tag = `<${identifier}`;
+        Object.keys(attributes).forEach(attribute => {
+            let value = attributes[attribute];
+            // Only add a attribute if the value is not empty.
+            if (value !== '') {
+                tag += ` ${attribute}="${attributes[attribute]}"`;
+            }
+        });
+        tag += closeEnd ? ' />': ' >';
+        return tag;
+    }
+
     private getAnnotationValue(annotations: AnnotationExpression[]) {
         let response = [];
         if (annotations !== undefined) {
-           for (const annotation of annotations) {
+            for (const annotation of annotations) {
+                // console.log(annotation);
                 let args = annotation?.call?.args[0];
                 if (isVariableExpression(args) || isDottedGetExpression(args)) {
                     response.push(args.name.text);
