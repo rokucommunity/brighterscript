@@ -117,7 +117,13 @@ export class ComponentStatementProvider {
             for (const annotation of annotations) {
                 let args = annotation?.call?.args[0];
                 if (isVariableExpression(args) || isDottedGetExpression(args)) {
-                    response.push(args.name.text);
+                    let value = '';
+                    let objText = args.obj.name.text;
+                    if (isDottedGetExpression(args) && objText !== 'm') {
+                        value += `${objText}.`;
+                    }
+                    value += args.name.text;
+                    response.push(value);
                 } else if (isLiteralExpression(args)) {
                     let values = args?.token?.text.replaceAll('\"', '').replaceAll(' ', '').split(',');
                     response = response.concat(values);

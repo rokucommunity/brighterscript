@@ -369,4 +369,130 @@ describe('ComponentStatement', () => {
             end sub
         `);
     });
+
+    it('includes xml template', async () => {
+        program.setFile('components/ZombieKeyboard.bs', `
+            @template(\`
+                <label />
+            \`)
+            component ZombieKeyboard
+            end component
+        `);
+
+        await testTranspile(program.getFile('components/ZombieKeyboard.xml'), `
+            <component name="ZombieKeyboard" extends="Group">
+                <script uri="pkg:/components/ZombieKeyboard.brs" type="text/brightscript" />
+                <script uri="pkg:/components/ZombieKeyboard.codebehind.brs" type="text/brightscript" />
+                <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                <children>
+                    <label />
+                </children>
+            </component>
+        `);
+    });
+
+    it('support initialFocus annotation', async () => {
+        program.setFile('components/ZombieKeyboard.bs', `
+            @template(\`
+                <label id="theLabel" />
+            \`)
+            @initialFocus(m.theLabel)
+            component ZombieKeyboard
+            end component
+        `);
+
+
+        await testTranspile(program.getFile('components/ZombieKeyboard.xml'), `
+            <component name="ZombieKeyboard" extends="Group" initialFocus="theLabel">
+                <script uri="pkg:/components/ZombieKeyboard.brs" type="text/brightscript" />
+                <script uri="pkg:/components/ZombieKeyboard.codebehind.brs" type="text/brightscript" />
+                <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                <children>
+                    <label id="theLabel" />
+                </children>
+            </component>
+        `);
+    });
+
+    it('support alwaysNotify annotations on interface fields', async () => {
+        program.setFile('components/ZombieKeyboard.bs', `
+            component ZombieKeyboard
+                @alwaysNotify(true)
+                public testField as string
+            end component
+        `);
+
+        await testTranspile(program.getFile('components/ZombieKeyboard.xml'), `
+            <component name="ZombieKeyboard" extends="Group">
+                <script uri="pkg:/components/ZombieKeyboard.brs" type="text/brightscript" />
+                <script uri="pkg:/components/ZombieKeyboard.codebehind.brs" type="text/brightscript" />
+                <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                <interface>
+                    <field id="testField" type="string" alwaysNotify="true" />
+                </interface>
+            </component>
+        `);
+    });
+
+    it('support alias annotations on interface fields', async () => {
+        program.setFile('components/ZombieKeyboard.bs', `
+            @template(\`
+                <label id="theLabel" />
+                <label id="theOtherLabel" />
+            \`)
+            component ZombieKeyboard
+                @alias("theLabel.text")
+                @alias(theLabel.text)
+                @alias("theOtherLabel.text")
+                @alias("theOtherLabel.text", "theLabel.text")
+                @alias("theLabel.text", "theOtherLabel.text")
+                public testField as string
+            end component
+        `);
+
+        await testTranspile(program.getFile('components/ZombieKeyboard.xml'), `
+            <component name="ZombieKeyboard" extends="Group">
+                <script uri="pkg:/components/ZombieKeyboard.brs" type="text/brightscript" />
+                <script uri="pkg:/components/ZombieKeyboard.codebehind.brs" type="text/brightscript" />
+                <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                <interface>
+                    <field id="testField" type="string" alias="theLabel.text, theOtherLabel.text" />
+                </interface>
+                <children>
+                    <label id="theLabel" />
+                    <label id="theOtherLabel" />
+                </children>
+            </component>
+        `);
+    });
+
+    it('support onChange annotations on interface fields', async () => {
+        program.setFile('components/ZombieKeyboard.bs', `
+            component ZombieKeyboard
+                @onChange(m.doSomething)
+                public testField as string
+
+                private sub doSomething()
+                    print "do something"
+                end sub
+            end component
+        `);
+
+        await testTranspile(program.getFile('components/ZombieKeyboard.codebehind.brs'), `
+            sub doSomething()
+                print "do something"
+            end sub
+        `);
+
+        await testTranspile(program.getFile('components/ZombieKeyboard.xml'), `
+            <component name="ZombieKeyboard" extends="Group">
+                <script uri="pkg:/components/ZombieKeyboard.brs" type="text/brightscript" />
+                <script uri="pkg:/components/ZombieKeyboard.codebehind.brs" type="text/brightscript" />
+                <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                <interface>
+                    <field id="testField" type="string" onChange="doSomething" />
+                </interface>
+            </component>
+        `);
+    });
 });
