@@ -4,7 +4,7 @@ You can define a component in code, similar to how you would define a class.
 ## Basic usage
 ```vb
 component MoviePoster extends "Poster"
-    sub init()
+    private sub init()
         print "MoviePoster init()"
     end sub
 end component
@@ -102,7 +102,7 @@ end component
 Private properties are written to `m`. Private functions are transpiled to scope-level functions (i.e. not written to m) and we will remove the `m.` when calling those functions.
 ```vb
 component MoviePoster extends "Poster"
-    sub init()
+    private sub init()
         m.toggleSubtitles()
     end sub
     private areSubtitlesEnabled as boolean = true
@@ -347,7 +347,7 @@ XML component templates can also be loaded from another file by using the `@Temp
 ```vb
 @TemplateUrl("./MoviePoster.xml")
 component MoviePoster extends "Poster"
-    sub init()
+    private sub init()
         print "MoviePoster"
     end sub
 end component
