@@ -85,22 +85,22 @@ describe('BuiltInInterfaceAdder', () => {
         expectTypeToBe(myType.getMemberType('join', { flags: SymbolTypeFlag.runtime }), TypedFunctionType);
     });
 
-    it('should add members to ClassType', () => {
+    it('should not add members to ClassType', () => {
         const myType = new ClassType('Klass');
         BuiltInInterfaceAdder.addBuiltInInterfacesToType(myType);
 
-        expectTypeToBe(myType.getMemberType('clear', { flags: SymbolTypeFlag.runtime }), TypedFunctionType);
-        expectTypeToBe(myType.getMemberType('lookUp', { flags: SymbolTypeFlag.runtime }), TypedFunctionType);
+        expect(myType.getMemberType('clear', { flags: SymbolTypeFlag.runtime }).isResolvable()).to.be.false;
+        expect(myType.getMemberType('lookUp', { flags: SymbolTypeFlag.runtime }).isResolvable()).to.be.false;
     });
 
-    it('should allow classes to override built in members', () => {
+    it('should allow classes to override AA members', () => {
         const myType = new ClassType('Klass');
         myType.addMember('clear', null, new BooleanType(), SymbolTypeFlag.runtime);
         BuiltInInterfaceAdder.addBuiltInInterfacesToType(myType);
         expectTypeToBe(myType.getMemberType('clear', { flags: SymbolTypeFlag.runtime }), BooleanType);
     });
 
-    it('should not include members that have already been overridded', () => {
+    it('should not include members that have already been overrided', () => {
         const myType = new ClassType('Klass');
         myType.addMember('clear', null, new BooleanType(), SymbolTypeFlag.runtime);
         BuiltInInterfaceAdder.addBuiltInInterfacesToType(myType);
