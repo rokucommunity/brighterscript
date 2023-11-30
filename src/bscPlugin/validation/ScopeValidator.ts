@@ -1,12 +1,12 @@
 import { URI } from 'vscode-uri';
-import { isAssignmentStatement, isBrsFile, isClassType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isObjectType, isPrimitiveType, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
+import { isAssignmentStatement, isBrsFile, isCallableType, isClassStatement, isClassType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isObjectType, isPrimitiveType, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import { DiagnosticOrigin } from '../../interfaces';
 import type { BsDiagnostic, BsDiagnosticWithOrigin, ExtraSymbolData, OnScopeValidateEvent, TypeChainEntry, TypeCompatibilityData } from '../../interfaces';
 import { SymbolTypeFlag } from '../../SymbolTable';
-import type { AssignmentStatement, DottedSetStatement, EnumStatement, ReturnStatement } from '../../parser/Statement';
+import type { AssignmentStatement, DottedSetStatement, EnumStatement, NamespaceStatement, ReturnStatement } from '../../parser/Statement';
 import util from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
@@ -20,6 +20,7 @@ import type { BscType } from '../../types';
 import type { File } from '../../files/File';
 import { InsideSegmentWalkMode } from '../../AstValidationSegmenter';
 import { TokenKind } from '../../lexer/TokenKind';
+import { ParseMode } from '../../parser/Parser';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -311,13 +312,23 @@ export class ScopeValidator {
             }
             let paramIndex = 0;
             for (let arg of expression.args) {
-                const argType = arg.getType({ flags: SymbolTypeFlag.runtime });
+                const data = {} as ExtraSymbolData;
+                let argType = arg.getType({ flags: SymbolTypeFlag.runtime, data: data });
 
                 const paramType = funcType.params[paramIndex]?.type;
                 if (!paramType) {
                     // unable to find a paramType -- maybe there are more args than params
                     break;
                 }
+
+                if (isCallableType(paramType) && isClassType(argType) && isClassStatement(data.definingNode)) {
+                    // the param is expecting a function, but we're passing a Class... are we actually passing the constructor? then we're ok!
+                    const namespace = expression.findAncestor<NamespaceStatement>(isNamespaceStatement);
+                    if (file.calleeIsKnownFunction(arg, namespace?.getName(ParseMode.BrighterScript))) {
+                        argType = data.definingNode.getConstructorType();
+                    }
+                }
+
                 const compatibilityData: TypeCompatibilityData = {};
                 if (!paramType?.isTypeCompatible(argType, compatibilityData)) {
                     this.addMultiScopeDiagnostic({

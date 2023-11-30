@@ -1953,6 +1953,12 @@ export class ClassStatement extends Statement implements TypedefProvider {
         return `__${name}_builder`;
     }
 
+    public getConstructorType() {
+        const constructorType = this.getConstructorFunction()?.getType({ flags: SymbolTypeFlag.runtime }) ?? new TypedFunctionType(null);
+        constructorType.returnType = this.getType({ flags: SymbolTypeFlag.runtime });
+        return constructorType;
+    }
+
     /**
      * Get the constructor function for this class (if exists), or undefined if not exist
      */
