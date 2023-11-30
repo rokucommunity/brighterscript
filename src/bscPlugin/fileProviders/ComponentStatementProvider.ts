@@ -20,7 +20,6 @@ export class ComponentStatementProvider {
     ) {
     }
 
-
     /**
      * Create virtual files for every component statement found in this physical file
      */
