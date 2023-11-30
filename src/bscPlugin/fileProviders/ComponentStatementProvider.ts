@@ -103,8 +103,8 @@ export class ComponentStatementProvider {
     private getAnnotationValue(annotations: AnnotationExpression[]) {
         let response = [];
         if (annotations !== undefined) {
-            annotations.forEach(a => {
-                let args = a?.call?.args[0];
+           for (const annotation of annotations) {
+                let args = annotation?.call?.args[0];
                 if (isVariableExpression(args) || isDottedGetExpression(args)) {
                     response.push(args.name.text);
                 } else if (isLiteralExpression(args)) {
