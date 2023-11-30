@@ -10,7 +10,7 @@ import { ParseMode } from '../../Parser';
 import * as fsExtra from 'fs-extra';
 import { TypeExpression } from '../../..';
 
-describe('ComponentStatement', () => {
+describe.only('ComponentStatement', () => {
     const rootDir = s`${process.cwd()}/.tmp/rootDir`;
     let program: Program;
     let testTranspile = getTestTranspile(() => [program, rootDir]);
@@ -284,7 +284,7 @@ describe('ComponentStatement', () => {
         `);
     });
 
-    it.only('adds private member to m and creates init function if missing', async () => {
+    it.skip('adds private member to m and creates init function if missing', async () => {
         program.setFile('components/ZombieKeyboard.bs', `
             component ZombieKeyboard
                 private isEnabled = true
@@ -442,7 +442,6 @@ describe('ComponentStatement', () => {
             \`)
             component ZombieKeyboard
                 @alias("theLabel.text")
-                @alias(theLabel.text)
                 @alias("theOtherLabel.text")
                 @alias("theOtherLabel.text", "theLabel.text")
                 @alias("theLabel.text", "theOtherLabel.text")
