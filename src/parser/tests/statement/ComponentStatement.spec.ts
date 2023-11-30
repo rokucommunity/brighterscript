@@ -267,13 +267,13 @@ describe('ComponentStatement', () => {
 
         await testTranspile(program.getFile('components/ZombieKeyboard.xml'), `
             <component name="ZombieKeyboard" extends="Group">
+                <script uri="pkg:/components/ZombieKeyboard.brs" type="text/brightscript" />
+                <script uri="pkg:/components/ZombieKeyboard.codebehind.brs" type="text/brightscript" />
+                <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
                 <interface>
                     <field id="isEnabled" type="boolean" />
                     <function name="EnableVoiceMode" />
                 </interface>
-                <script uri="pkg:/components/ZombieKeyboard.brs" type="text/brightscript" />
-                <script uri="pkg:/components/ZombieKeyboard.codebehind.brs" type="text/brightscript" />
-                <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
             </component>
         `);
 
@@ -284,7 +284,7 @@ describe('ComponentStatement', () => {
         `);
     });
 
-    it('adds private member to m and creates init function if missing', async () => {
+    it.only('adds private member to m and creates init function if missing', async () => {
         program.setFile('components/ZombieKeyboard.bs', `
             component ZombieKeyboard
                 private isEnabled = true

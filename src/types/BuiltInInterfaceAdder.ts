@@ -5,7 +5,7 @@ import type { TypedFunctionType } from './TypedFunctionType';
 import type { SymbolTable } from '../SymbolTable';
 import { SymbolTypeFlag } from '../SymbolTable';
 import type { BscType } from './BscType';
-import { isArrayType, isAssociativeArrayType, isBooleanType, isCallableType, isClassType, isComponentType, isDoubleType, isEnumMemberType, isFloatType, isIntegerType, isInterfaceType, isInvalidType, isLongIntegerType, isStringType } from '../astUtils/reflection';
+import { isArrayType, isAssociativeArrayType, isBooleanType, isCallableType, isComponentType, isDoubleType, isEnumMemberType, isFloatType, isIntegerType, isInterfaceType, isInvalidType, isLongIntegerType, isStringType } from '../astUtils/reflection';
 import type { ComponentType } from './ComponentType';
 import util from '../util';
 import type { UnionType } from './UnionType';
@@ -114,8 +114,6 @@ export class BuiltInInterfaceAdder {
             return 'roInvalid';
         } else if (isCallableType(theType)) {
             return 'roFunction';
-        } else if (isClassType(theType)) {
-            return 'roAssociativeArray';
         } else if (isAssociativeArrayType(theType)) {
             return 'roAssociativeArray';
         } else if (isArrayType(theType)) {
