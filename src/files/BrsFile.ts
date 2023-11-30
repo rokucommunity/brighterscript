@@ -897,6 +897,32 @@ export class BrsFile implements File {
                     if (namespace.functionStatements.has(lowerCalleeName)) {
                         return true;
                     }
+                    if (namespace.classStatements.has(lowerCalleeName)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Determine if the callee (i.e. function name) is a known function
+     */
+    public calleeIsKnownFunction(callee: Expression, namespaceName?: string) {
+        //if we have a variable and a namespace
+        if (isVariableExpression(callee)) {
+            if (namespaceName) {
+                return this.calleeIsKnownNamespaceFunction(callee, namespaceName);
+            }
+            let scopes = this.program.getScopesForFile(this);
+            let lowerCalleeName = callee?.name?.text?.toLowerCase();
+            for (let scope of scopes) {
+                if (scope.getCallableByName(lowerCalleeName)) {
+                    return true;
+                }
+                if (scope.getClass(lowerCalleeName)) {
+                    return true;
                 }
             }
         }
