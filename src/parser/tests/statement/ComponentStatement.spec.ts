@@ -10,7 +10,7 @@ import { ParseMode } from '../../Parser';
 import * as fsExtra from 'fs-extra';
 import { TypeExpression } from '../../..';
 
-describe.only('ComponentStatement', () => {
+describe('ComponentStatement', () => {
     const rootDir = s`${process.cwd()}/.tmp/rootDir`;
     let program: Program;
     let testTranspile = getTestTranspile(() => [program, rootDir]);
