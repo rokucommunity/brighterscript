@@ -26,7 +26,7 @@ jobs:
           CURRENT_VERSION=$(grep -o '\"version\": *\"[^\"]*\"' package.json | awk -F'\"' '{print $4}')
           SANITIZED_BRANCH_NAME=$(echo "$GITHUB_HEAD_REF" | sed 's/[^0-9a-zA-Z-]/-/g')
           BUILD_VERSION="$CURRENT_VERSION-$SANITIZED_BRANCH_NAME.$(date +%Y%m%d%H%M%S)"
-          NPM_PACKAGE_NAME=$(grep -o '\"name\": *\"[^\"]*\"' package.json | awk -F'\"' '{print $4}')
+          NPM_PACKAGE_NAME=$(grep -o '\"name\": *\"[^\"]*\"' package.json | awk -F'\"' '{print $4}' | sed -e 's/@//g' -e 's#/#-#g')
           ARTIFACT_NAME=$(echo "$NPM_PACKAGE_NAME-$BUILD_VERSION.tgz" | tr '/' '-')
           ARTIFACT_URL="${{ github.server_url }}/${{ github.repository }}/releases/download/v0.0.0-packages/${ARTIFACT_NAME}"
 
@@ -38,7 +38,7 @@ jobs:
       - run: npm pack
 
       # create the release if not exist
-      - run: gh release create v0.0.0-packages --latest=false --prerelease --notes "catchall release for temp packages" -R ${{ github.repository }}
+      - run: gh release create v0.0.0-packages --title "v0.0.0-packages" --latest=false --prerelease --notes "catchall release for temp packages" -R ${{ github.repository }}
         continue-on-error: true
 
       # upload this artifact to the "packages" github release
