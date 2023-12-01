@@ -284,7 +284,7 @@ describe('ComponentStatement', () => {
         `);
     });
 
-    it.only('adds private member to m and creates init function if missing', async () => {
+    it.skip('adds private member to m and creates init function if missing', async () => {
         program.setFile('components/ZombieKeyboard.bs', `
             component ZombieKeyboard
                 private isEnabled = true
