@@ -6,7 +6,6 @@ import type { BrsFile } from '../../../files/BrsFile';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { createVisitor, WalkMode } from '../../../astUtils/visitors';
 import * as sinon from 'sinon';
-import { ParseMode } from '../../Parser';
 import * as fsExtra from 'fs-extra';
 import { TypeExpression } from '../../..';
 
@@ -245,7 +244,7 @@ describe('ComponentStatement', () => {
             </component>
         `);
 
-        await testTranspile(program.getFile('components/MainScene.codebehind.brs'), `
+        await testTranspile(program.getFile('components/MainScene.codebehind.bs'), `
             sub init()
                 print "MainScene"
             end sub
@@ -382,7 +381,7 @@ describe('ComponentStatement', () => {
         await testTranspile(program.getFile('components/ZombieKeyboard.xml'), `
             <component name="ZombieKeyboard" extends="Group">
                 <script uri="pkg:/components/ZombieKeyboard.brs" type="text/brightscript" />
-                <script uri="pkg:/components/ZombieKeyboard.codebehind.bs" type="text/brightscript" />
+                <script uri="pkg:/components/ZombieKeyboard.codebehind.brs" type="text/brightscript" />
                 <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
                 <children>
                     <label />
@@ -405,7 +404,7 @@ describe('ComponentStatement', () => {
         await testTranspile(program.getFile('components/ZombieKeyboard.xml'), `
             <component name="ZombieKeyboard" extends="Group" initialFocus="theLabel">
                 <script uri="pkg:/components/ZombieKeyboard.brs" type="text/brightscript" />
-                <script uri="pkg:/components/ZombieKeyboard.codebehind.bs" type="text/brightscript" />
+                <script uri="pkg:/components/ZombieKeyboard.codebehind.brs" type="text/brightscript" />
                 <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
                 <children>
                     <label id="theLabel" />
@@ -477,7 +476,7 @@ describe('ComponentStatement', () => {
             end component
         `);
 
-        await testTranspile(program.getFile('components/ZombieKeyboard.codebehind.brs'), `
+        await testTranspile(program.getFile('components/ZombieKeyboard.codebehind.bs'), `
             sub doSomething()
                 print "do something"
             end sub
