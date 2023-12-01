@@ -130,9 +130,7 @@ export class ComponentStatementProvider {
                 }
             }
 
-            response = response.filter((item, index) => {
-                return response.indexOf(item) === index;
-            });
+            response = response.filter((item, index) => response.indexOf(item) === index);
         }
         return response.join(', ');
     }
@@ -141,7 +139,8 @@ export class ComponentStatementProvider {
         //create the codebehind file
         const file = this.event.fileFactory.BrsFile({
             srcPath: `virtual:/${destDir}/${name}.codebehind.bs`,
-            destPath: `${destDir}/${name}.codebehind.brs`
+            destPath: `${destDir}/${name}.codebehind.bs`,
+            pkgPath: `${destDir}/${name}.codebehind.brs`
         });
         const initStatements: Statement[] = [];
         let initFunc: FunctionStatement;
