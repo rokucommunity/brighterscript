@@ -27,6 +27,7 @@ import { InterfaceType } from '../types/InterfaceType';
 import type { BscType } from '../types/BscType';
 import { VoidType } from '../types/VoidType';
 import { TypedFunctionType } from '../types/TypedFunctionType';
+import { ComponentType } from '../types/ComponentType';
 
 export class EmptyStatement extends Statement {
     constructor(
@@ -2931,9 +2932,10 @@ export class ComponentStatement extends Statement implements TypedefProvider {
             ...this.body ?? [],
             this.tokens.endComponent
         );
+        this.symbolTable = new SymbolTable(`ComponentStatement: '${this.tokens.name?.text}'`, () => this.parent?.getSymbolTable());
     }
 
-    public readonly kind = AstNodeKind.ContinueStatement;
+    public readonly kind = AstNodeKind.ComponentStatement;
 
     /**
      * The name of this component
@@ -2990,5 +2992,26 @@ export class ComponentStatement extends Statement implements TypedefProvider {
 
     getTypedef(state: TranspileState): (string | SourceNode)[] {
         throw new Error('Method not implemented.');
+    }
+
+    getType(options: GetTypeOptions) {
+        // TODO: For ComponentStatements, the ComponentType *might* be built twice, once for the statement,
+        // and once for the XMLScope. We need to verify where is the correct place.
+        const superComponent = this.parentName?.getType(options) as ComponentType;
+        const resultType = new ComponentType(this.getName(ParseMode.BrighterScript), superComponent);
+        for (const statement of this.getMembers()) {
+            if (isMethodStatement(statement)) {
+                const funcType = statement?.func.getType({ ...options, typeChain: undefined }); //no typechain needed
+                const flag = SymbolTypeFlag.runtime;
+                // TODO - Callfunc members?
+                resultType.addMember(statement?.name?.text, { definingNode: statement }, funcType, flag);
+            } else if (isFieldStatement(statement)) {
+                const fieldType = statement.getType({ ...options, typeChain: undefined }); //no typechain needed
+                const flag = statement.isOptional ? SymbolTypeFlag.runtime | SymbolTypeFlag.optional : SymbolTypeFlag.runtime;
+                resultType.addMember(statement?.name?.text, { definingNode: statement }, fieldType, flag);
+            }
+        }
+        options.typeChain?.push(new TypeChainEntry(resultType.name, resultType, options.flags, this.range));
+        return resultType;
     }
 }
