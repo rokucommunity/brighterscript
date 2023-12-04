@@ -6,6 +6,7 @@ import type { BrsFile } from '../../../files/BrsFile';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { createVisitor, WalkMode } from '../../../astUtils/visitors';
 import * as sinon from 'sinon';
+import { ParseMode } from '../../Parser';
 import * as fsExtra from 'fs-extra';
 import { TypeExpression } from '../../..';
 
