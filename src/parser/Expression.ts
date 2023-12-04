@@ -1416,15 +1416,17 @@ export class AnnotationExpression extends Expression {
     ) {
         super();
         this.name = nameToken.text;
-        this.range = util.createBoundingRange(
-            atToken,
-            nameToken
-        );
     }
 
     public readonly kind = AstNodeKind.AnnotationExpression;
 
-    public range: Range;
+    public get range() {
+        return util.createBoundingRange(
+            this.atToken,
+            this.nameToken,
+            this.call
+        );
+    }
 
     public name: string;
 
