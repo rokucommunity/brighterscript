@@ -392,8 +392,7 @@ describe('ComponentStatement', () => {
             </component>
         `);
 
-        await testTranspile(program.getFile('components/ZombieKeyboard.codebehind.bs'), `
-        `);
+        await testTranspile(program.getFile('components/ZombieKeyboard.codebehind.bs'), ``);
     });
 
     it('support initialFocus annotation', async () => {
@@ -418,8 +417,7 @@ describe('ComponentStatement', () => {
             </component>
         `);
 
-        await testTranspile(program.getFile('components/ZombieKeyboard.codebehind.bs'), `
-        `);
+        await testTranspile(program.getFile('components/ZombieKeyboard.codebehind.bs'), ``);
     });
 
     it('support alwaysNotify annotations on interface fields', async () => {
@@ -440,6 +438,8 @@ describe('ComponentStatement', () => {
                 </interface>
             </component>
         `);
+
+        await testTranspile(program.getFile('components/ZombieKeyboard.codebehind.bs'), ``);
     });
 
     it('support alias annotations on interface fields', async () => {
@@ -471,6 +471,8 @@ describe('ComponentStatement', () => {
                 </children>
             </component>
         `);
+
+        await testTranspile(program.getFile('components/ZombieKeyboard.codebehind.bs'), ``);
     });
 
     it('support onChange annotations on interface fields', async () => {
