@@ -380,6 +380,11 @@ describe('ComponentStatement', () => {
             component ZombieKeyboard
             end component
         `);
+        expectZeroDiagnostics(program);
+
+        expect(
+            program.getFile('components/ZombieKeyboard.codebehind.bs')
+        ).to.exist;
 
         await testTranspile(program.getFile('components/ZombieKeyboard.xml'), `
             <component name="ZombieKeyboard" extends="Group">
@@ -391,8 +396,6 @@ describe('ComponentStatement', () => {
                 </children>
             </component>
         `);
-
-        await testTranspile(program.getFile('components/ZombieKeyboard.codebehind.bs'), ``);
     });
 
     it('support initialFocus annotation', async () => {
