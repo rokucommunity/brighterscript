@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/await-thenable */
 import util, { standardizePath as s } from '../../../util';
 import { Program } from '../../../Program';
 import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile, stagingDir, tempDir } from '../../../testHelpers.spec';
@@ -193,6 +194,7 @@ describe('ComponentStatement', () => {
             end component
         `);
 
+        // eslint-disable-next-line @typescript-eslint/await-thenable
         await testTranspile(program.getFile('components/MainScene.xml'), `
             <component name="MainScene" extends="Group">
                 <script uri="pkg:/components/MainScene.brs" type="text/brightscript" />
@@ -389,6 +391,9 @@ describe('ComponentStatement', () => {
                 </children>
             </component>
         `);
+
+        await testTranspile(program.getFile('components/ZombieKeyboard.codebehind.bs'), `
+        `);
     });
 
     it('support initialFocus annotation', async () => {
@@ -411,6 +416,9 @@ describe('ComponentStatement', () => {
                     <label id="theLabel" />
                 </children>
             </component>
+        `);
+
+        await testTranspile(program.getFile('components/ZombieKeyboard.codebehind.bs'), `
         `);
     });
 
