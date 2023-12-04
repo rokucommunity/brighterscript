@@ -471,21 +471,22 @@ export class ProgramBuilder {
             });
             this.logger.trace('ProgramBuilder.loadAllFilesAST() files:', files);
 
-            const acceptableSourceExtensions = ['.bs', '.brs', '.xml'];
             const typedefFiles = [] as FileObj[];
             const sourceFiles = [] as FileObj[];
             let manifestFile: FileObj | null = null;
 
             for (const file of files) {
-                const srcLower = file.src.toLowerCase();
-                if (srcLower.endsWith('.d.bs')) {
-                    typedefFiles.push(file);
-                } else if (acceptableSourceExtensions.includes(path.extname(srcLower))) {
+                // source files (.brs, .bs, .xml)
+                if (/(?<!\.d)\.(bs|brs|xml)$/i.test(file.dest)) {
                     sourceFiles.push(file);
-                } else {
-                    if (file.dest.toLowerCase() === 'manifest') {
-                        manifestFile = file;
-                    }
+
+                    // typedef files (.d.bs)
+                } else if (/\.d\.bs$/i.test(file.dest)) {
+                    typedefFiles.push(file);
+
+                    // manifest file
+                } else if (/^manifest$/i.test(file.dest)) {
+                    manifestFile = file;
                 }
             }
 
