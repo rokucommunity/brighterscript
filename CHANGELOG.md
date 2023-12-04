@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.65.11](https://github.com/rokucommunity/brighterscript/compare/v0.65.10...v0.65.11) - 2023-11-30
+### Changed
+ - upgrade to [roku-deploy@3.11.1](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3111---2023-11-30). Notable changes since 3.10.5:
+     - Wait for file stream to close before resolving promise ([roku-deploy#133](https://github.com/rokucommunity/roku-deploy/pull/133))
+### Fixed
+ - enums as class initial values ([#950](https://github.com/rokucommunity/brighterscript/pull/950))
+
+
+
+## [0.65.10](https://github.com/rokucommunity/brighterscript/compare/v0.65.9...v0.65.10) - 2023-11-14
+### Changed
+ - upgrade to [roku-deploy@3.10.5](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3105---2023-11-14). Notable changes since 3.10.4:
+     - Add better device-info docs ([roku-deploy#128](https://github.com/rokucommunity/roku-deploy/pull/128))
+     - Added some more message grabbing logic ([roku-deploy#127](https://github.com/rokucommunity/roku-deploy/pull/127))
+
+
+
 ## [0.65.9](https://github.com/rokucommunity/brighterscript/compare/v0.65.8...v0.65.9) - 2023-11-06
 ### Changed
  - upgrade to [roku-deploy@3.10.4](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3104---2023-11-03). Notable changes since 3.10.3:
