@@ -2637,7 +2637,7 @@ describe('Program', () => {
         });
     });
 
-    describe('getManifest', () => {
+    describe('manifest', () => {
         beforeEach(() => {
             fsExtra.emptyDirSync(tempDir);
             fsExtra.writeFileSync(`${tempDir}/manifest`, trim`
@@ -2659,7 +2659,28 @@ describe('Program', () => {
             program.dispose();
         });
 
-        it('loads the manifest', () => {
+        it('loads the manifest from project root', () => {
+            let manifest = program.getManifest();
+            testCommonManifestValues(manifest);
+            expect(manifest.get('bs_const')).to.equal('DEBUG=false');
+        });
+
+        it('loads the manifest from a FileObj', () => {
+            fsExtra.emptyDirSync(tempDir);
+            fsExtra.ensureDirSync(`${tempDir}/someDeepDir`);
+            fsExtra.writeFileSync(`${tempDir}/someDeepDir/manifest`, trim`
+                # Channel Details
+                title=sample manifest
+                major_version=2
+                minor_version=0
+                build_version=0
+                supports_input_launch=1
+                bs_const=DEBUG=false
+            `);
+            program.loadManifest({
+                src: `${tempDir}/someDeepDir/manifest`,
+                dest: 'manifest'
+            });
             let manifest = program.getManifest();
             testCommonManifestValues(manifest);
             expect(manifest.get('bs_const')).to.equal('DEBUG=false');

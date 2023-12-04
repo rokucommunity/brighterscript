@@ -79,6 +79,28 @@ describe('ProgramBuilder', () => {
             expect(stub.getCalls()).to.be.lengthOf(3);
         });
 
+        it('finds and loads a manifest before all other files', async () => {
+            sinon.stub(util, 'getFilePaths').returns(Promise.resolve([{
+                src: 'file1.brs',
+                dest: 'file1.brs'
+            }, {
+                src: 'file2.bs',
+                dest: 'file2.bs'
+            }, {
+                src: 'file3.xml',
+                dest: 'file4.xml'
+            }, {
+                src: 'manifest',
+                dest: 'manifest'
+            }]));
+
+            let stubLoadManifest = sinon.stub(builder.program, 'loadManifest');
+            let stubSetFile = sinon.stub(builder.program, 'setFile');
+            sinon.stub(builder, 'getFileContents').returns(Promise.resolve(''));
+            await builder['loadFiles']();
+            expect(stubLoadManifest.calledBefore(stubSetFile)).to.be.true;
+        });
+
         it('loads all type definitions first', async () => {
             const requestedFiles = [] as string[];
             builder['fileResolvers'].push((filePath) => {

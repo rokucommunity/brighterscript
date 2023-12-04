@@ -471,53 +471,46 @@ export class ProgramBuilder {
      */
     private async loadFiles() {
         await this.logger.time(LogLevel.log, ['load files'], async () => {
-            let errorCount = 0;
             let files = await this.logger.time(LogLevel.debug, ['getFilePaths'], async () => {
                 return util.getFilePaths(this.options);
             });
             this.logger.trace('ProgramBuilder.loadFiles() files:', files);
 
             const typedefFiles = [] as FileObj[];
-            const nonTypedefFiles = [] as FileObj[];
+            const allOtherFiles = [] as FileObj[];
+            let manifestFile: FileObj | null = null;
+
             for (const file of files) {
-                const srcLower = file.src.toLowerCase();
-                if (srcLower.endsWith('.d.bs')) {
+                // typedef files
+                if (/\.d\.bs$/i.test(file.dest)) {
                     typedefFiles.push(file);
+
+                    // all other files
                 } else {
-                    nonTypedefFiles.push(file);
+                    if (/^manifest$/i.test(file.dest)) {
+                        //manifest file
+                        manifestFile = file;
+                    }
+                    allOtherFiles.push(file);
                 }
             }
 
-            //preload every type definition file first, which eliminates duplicate file loading
-            await Promise.all(
-                typedefFiles.map(async (fileObj) => {
-                    try {
-                        this.program.setFile(
-                            fileObj,
-                            await this.getFileContents(fileObj.src)
-                        );
-                    } catch (e) {
-                        //log the error, but don't fail this process because the file might be fixable later
-                        this.logger.log(e);
-                    }
-                })
-            );
+            //load the manifest file first
+            if (manifestFile) {
+                this.program.loadManifest(manifestFile);
+            }
 
-            // load every file other than the type definitions into the program3
-            await Promise.all(
-                nonTypedefFiles.map(async (fileObj) => {
-                    try {
-                        this.program.setFile(
-                            fileObj,
-                            await this.getFileContents(fileObj.src)
-                        );
-                    } catch (e) {
-                        //log the error, but don't fail this process because the file might be fixable later
-                        this.logger.log(e);
-                    }
-                })
-            );
-            return errorCount;
+            const loadFile = async (fileObj) => {
+                try {
+                    this.program.setFile(fileObj, await this.getFileContents(fileObj.src));
+                } catch (e) {
+                    this.logger.log(e); // log the error, but don't fail this process because the file might be fixable later
+                }
+            };
+            // preload every type definition file, which eliminates duplicate file loading
+            await Promise.all(typedefFiles.map(loadFile));
+            // load all other files
+            await Promise.all(allOtherFiles.map(loadFile));
         });
     }
 
