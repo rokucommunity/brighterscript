@@ -126,7 +126,8 @@ export class BrsFileValidator {
                         transpiledNamespaceFunctionName,
                         { definingNode: node },
                         funcType,
-                        SymbolTypeFlag.runtime
+                        // eslint-disable-next-line no-bitwise
+                        SymbolTypeFlag.runtime | SymbolTypeFlag.postTranspile
                     );
                 }
             },
