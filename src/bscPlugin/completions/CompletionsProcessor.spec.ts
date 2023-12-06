@@ -1814,4 +1814,86 @@ describe('CompletionsProcessor', () => {
 
     });
 
+
+    describe('brighterscript vs brightscript', () => {
+        it('should not include transpiled versions of symbols in brighterscript code', () => {
+            program.setFile('source/main.bs', `
+                namespace Alpha
+                    sub beta()
+                        print "hello"
+                    end sub
+
+                    sub gamma()
+                        ' completions here should NOT have Alpha_beta or Alpha_gamma
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            //  | ' completions here
+            const completions = program.getCompletions('source/main.bs', util.createPosition(6, 25));
+            expectCompletionsExcludes(completions, [{
+                label: 'Alpha_beta',
+                kind: CompletionItemKind.Function
+            }, {
+                label: 'Alpha_gamma',
+                kind: CompletionItemKind.Function
+            }]);
+            expectCompletionsIncludes(completions, [{
+                label: 'Alpha',
+                kind: CompletionItemKind.Module
+            }]);
+        });
+
+        it('should include transpiled versions of symbols in brightscript code', () => {
+            program.setFile('source/main.bs', `
+                namespace Alpha
+                    sub beta()
+                        print "hello"
+                    end sub
+
+                    sub gamma()
+                        print "gamma"
+                    end sub
+                end namespace
+            `);
+            program.setFile('source/other.brs', `
+                sub inBrsFile()
+                      ' completions here should have Alpha_beta and Alpha_gamma
+                end sub
+            `);
+            program.validate();
+            //  | ' completions here
+            const completions = program.getCompletions('source/other.brs', util.createPosition(2, 21));
+            expectCompletionsIncludes(completions, [{
+                label: 'Alpha_beta',
+                kind: CompletionItemKind.Function
+            }, {
+                label: 'Alpha_gamma',
+                kind: CompletionItemKind.Function
+            }]);
+            expectCompletionsExcludes(completions, [{
+                label: 'Alpha',
+                kind: CompletionItemKind.Module
+            }]);
+        });
+
+        it('should not include namespaces in brightscript code', () => {
+            program.setFile('source/main.bs', `
+                namespace Alpha
+                end namespace
+            `);
+            program.setFile('source/other.brs', `
+                sub inBrsFile()
+                      ' completions here should have Alpha_beta and Alpha_gamma
+                end sub
+            `);
+            program.validate();
+            //  | ' completions here
+            const completions = program.getCompletions('source/other.brs', util.createPosition(2, 21));
+            expectCompletionsExcludes(completions, [{
+                label: 'Alpha',
+                kind: CompletionItemKind.Module
+            }]);
+        });
+    });
 });
