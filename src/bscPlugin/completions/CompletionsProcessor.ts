@@ -265,8 +265,8 @@ export class CompletionsProcessor {
                     }
                 }
 
-                // get all scope available symbols
-                currentSymbols.push(...scope.symbolTable.getOwnSymbols(symbolTableLookupFlag));
+
+                currentSymbols.push(...this.getScopeSymbolCompletions(file, scope, symbolTableLookupFlag));
 
                 // get global symbols
                 if (!gotSymbolsFromGlobal) {
@@ -294,6 +294,26 @@ export class CompletionsProcessor {
             scope.unlinkSymbolTable();
         }
         return result;
+    }
+
+    private getScopeSymbolCompletions(file: BrsFile, scope: Scope, symbolTableLookupFlag: SymbolTypeFlag) {
+        // get all scope available symbols
+        const scopeAvailableSymbols = scope.symbolTable.getOwnSymbols(symbolTableLookupFlag).filter(sym => {
+            if (file.parseMode === ParseMode.BrighterScript) {
+                // eslint-disable-next-line no-bitwise
+                if (sym.flags & SymbolTypeFlag.postTranspile) {
+                    // underscored symbols should not be available in Brighterscript files
+                    return false;
+                }
+            } else if (file.parseMode === ParseMode.BrightScript) {
+                if (isNamespaceType(sym.type)) {
+                    return false;
+                }
+            }
+            return true;
+        });
+
+        return scopeAvailableSymbols;
     }
 
     private getSymbolsCompletion(symbols: BscSymbol[], areMembers = false): CompletionItem[] {
