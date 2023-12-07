@@ -1039,7 +1039,7 @@ export class Scope {
             }
 
             const thisNodeKindName = util.getAstNodeFriendlyName(node);
-            const thatNodeKindName = link.file.srcPath === 'global' ? 'Function' : util.getAstNodeFriendlyName(link.item) ?? '';
+            const thatNodeKindName = link.file.srcPath === 'global' ? 'Global Function' : util.getAstNodeFriendlyName(link.item) ?? '';
 
             let thatNameRange = (link.item as any)?.tokens?.name?.range ?? link.item?.range;
 
@@ -1055,18 +1055,20 @@ export class Scope {
                 }
             }
 
+            const relatedInformation = thatNameRange ? [{
+                message: `${thatNodeKindName} declared here`,
+                location: util.createLocation(
+                    URI.file(link.file?.srcPath).toString(),
+                    thatNameRange
+                )
+            }] : undefined;
+
             this.diagnostics.push({
                 file: file,
                 ...DiagnosticMessages.nameCollision(thisNodeKindName, thatNodeKindName, name),
                 origin: DiagnosticOrigin.Scope,
                 range: nameRange,
-                relatedInformation: [{
-                    message: `${thatNodeKindName} declared here`,
-                    location: util.createLocation(
-                        URI.file(link.file.srcPath).toString(),
-                        thatNameRange
-                    )
-                }]
+                relatedInformation: relatedInformation
             });
         }
 
