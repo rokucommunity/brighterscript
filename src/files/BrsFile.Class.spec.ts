@@ -6,7 +6,7 @@ import { expect } from '../chai-config.spec';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { Range } from 'vscode-languageserver';
 import { ParseMode } from '../parser/Parser';
-import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile, trim } from '../testHelpers.spec';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics, getTestTranspile, trim } from '../testHelpers.spec';
 import { standardizePath as s } from '../util';
 import * as fsExtra from 'fs-extra';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
@@ -1651,7 +1651,7 @@ describe('BrsFile BrighterScript classes', () => {
             end class
         `);
         program.validate();
-        expectDiagnostics(program, [
+        expectDiagnosticsIncludes(program, [
             DiagnosticMessages.duplicateClassDeclaration('source', 'Animal')
         ]);
     });
@@ -1666,7 +1666,7 @@ describe('BrsFile BrighterScript classes', () => {
             end namespace
         `);
         program.validate();
-        expectDiagnostics(program, [
+        expectDiagnosticsIncludes(program, [
             DiagnosticMessages.duplicateClassDeclaration('source', 'NameA.NameB.Animal')
         ]);
     });
@@ -1694,7 +1694,7 @@ describe('BrsFile BrighterScript classes', () => {
             end sub
         `);
         program.validate();
-        expectDiagnostics(program, [
+        expectDiagnosticsIncludes(program, [
             DiagnosticMessages.functionCannotHaveSameNameAsClass('Animal').message
         ]);
     });
@@ -1707,7 +1707,7 @@ describe('BrsFile BrighterScript classes', () => {
             end sub
         `);
         program.validate();
-        expectDiagnostics(program, [
+        expectDiagnosticsIncludes(program, [
             DiagnosticMessages.functionCannotHaveSameNameAsClass('animal').message
         ]);
     });

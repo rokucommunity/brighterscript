@@ -1956,6 +1956,10 @@ export class Util {
         }
         return message;
     }
+
+    public getAstNodeFriendlyName(node: AstNode) {
+        return node?.kind.replace(/Statement|Expression/g, '');
+    }
 }
 
 /**

@@ -25,7 +25,9 @@ import { NamespaceType } from './types/NamespaceType';
 import { referenceTypeFactory } from './types/ReferenceType';
 import { unionTypeFactory } from './types/UnionType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
-import type { AstNode } from './parser/AstNode';
+import { AstNodeKind, type AstNode, type Statement } from './parser/AstNode';
+import { WalkMode, createVisitor } from './astUtils/visitors';
+import type { Token } from './lexer/Token';
 
 /**
  * Assign some few factories to the SymbolTable to prevent cyclical imports. This file seems like the most intuitive place to do the linking
@@ -100,6 +102,22 @@ export class Scope {
             ns = lookup.get(nameLower);
         }
         return ns;
+    }
+
+    /**
+     * Get a NamespaceContainer by its name, looking for a fully qualified version first, then global version next if not found
+     */
+    public getNamespacesWithRoot(rootName: string, containingNamespace?: string) {
+        const nameLower = rootName?.toLowerCase();
+        const lookup = this.namespaceLookup;
+        const lookupKeys = [...lookup.keys()];
+        let lookupName = nameLower;
+        if (containingNamespace) {
+            lookupName = `${containingNamespace?.toLowerCase()}.${nameLower}`;
+        }
+
+        const nsList = lookupKeys.filter(key => key.startsWith(lookupName)).map(key => lookup.get(key));
+        return nsList;
     }
 
     /**
@@ -229,6 +247,31 @@ export class Scope {
             result = constMap.get(lowerName);
         }
         return result;
+    }
+
+
+    public getAllFileLinks(name: string, containingNamespace?: string): FileLink<Statement>[] {
+        let links: FileLink<Statement>[] = [];
+        links.push(this.getClassFileLink(name, containingNamespace),
+            this.getInterfaceFileLink(name, containingNamespace),
+            this.getConstFileLink(name, containingNamespace),
+            this.getEnumFileLink(name, containingNamespace));
+
+
+        const nameSpaces = this.getNamespacesWithRoot(name, containingNamespace);
+        if (nameSpaces?.length > 0) {
+            const nsContainersWithStatement = nameSpaces.filter(nsContainer => nsContainer?.namespaceStatements?.length > 0)?.[0];
+            if (nsContainersWithStatement) {
+                links.push({ item: nsContainersWithStatement?.namespaceStatements?.[0], file: nsContainersWithStatement?.file as BrsFile });
+            }
+        }
+
+        const callable = this.getCallableByName(name);
+        if (callable) {
+            links.push({ item: callable.functionStatement, file: callable.file as BrsFile });
+        }
+        // remove empty links
+        return links.filter(link => link);
     }
 
     /**
@@ -724,6 +767,7 @@ export class Scope {
             this.diagnosticDetectShadowedLocalVars(file, callableContainerMap);
             this.diagnosticDetectFunctionCollisions(file);
             this.detectVariableNamespaceCollisions(file);
+            this.detectNameCollisions(file);
         });
     }
 
@@ -932,16 +976,100 @@ export class Scope {
                 }
 
                 //find any functions that have the same name as a class
-                if (this.hasClass(lowerFuncName)) {
+                const klassLink = this.getClassFileLink(lowerFuncName);
+                if (klassLink) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.functionCannotHaveSameNameAsClass(funcName),
                         range: func.nameRange,
                         file: file,
-                        origin: DiagnosticOrigin.Scope
+                        origin: DiagnosticOrigin.Scope,
+                        relatedInformation: [{
+                            location: util.createLocation(
+                                URI.file(klassLink.file.srcPath).toString(),
+                                klassLink.item.name.range
+                            ),
+                            message: 'Original class declared here'
+                        }]
                     });
                 }
             }
         }
+    }
+
+    private detectNameCollisions(file: BrsFile) {
+        file.ast.walk(createVisitor({
+            NamespaceStatement: (nsStmt) => {
+                this.validateNameCollision(file, nsStmt, nsStmt.getNameParts()?.[0]);
+            },
+            ClassStatement: (classStmt) => {
+                this.validateNameCollision(file, classStmt, classStmt.name);
+            },
+            InterfaceStatement: (ifaceStmt) => {
+                this.validateNameCollision(file, ifaceStmt, ifaceStmt.tokens.name);
+            },
+            ConstStatement: (constStmt) => {
+                this.validateNameCollision(file, constStmt, constStmt.tokens.name);
+            },
+            EnumStatement: (enumStmt) => {
+                this.validateNameCollision(file, enumStmt, enumStmt.tokens.name);
+            }
+        }), {
+            walkMode: WalkMode.visitStatements
+        });
+    }
+
+
+    validateNameCollision(file: BrsFile, node: AstNode, nameIdentifier: Token) {
+        const name = nameIdentifier?.text;
+        if (!name || !node) {
+            return;
+        }
+        const nameRange = nameIdentifier.range;
+
+        const containingNamespace = node.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
+        const links = this.getAllFileLinks(name, containingNamespace);
+        for (let link of links) {
+            if (!link || link.item === node) {
+                // refers to same node
+                continue;
+            }
+            if (isNamespaceStatement(link.item) && isNamespaceStatement(node)) {
+                // namespace can be declared multiple times
+                continue;
+            }
+
+            const thisNodeKindName = util.getAstNodeFriendlyName(node);
+            const thatNodeKindName = link.file.srcPath === 'global' ? 'Function' : util.getAstNodeFriendlyName(link.item) ?? '';
+
+            let thatNameRange = (link.item as any)?.tokens?.name?.range ?? link.item?.range;
+
+            // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
+            switch (link.item?.kind) {
+                case AstNodeKind.ClassStatement: {
+                    thatNameRange = (link.item as ClassStatement).name?.range;
+                    break;
+                }
+                case AstNodeKind.NamespaceStatement: {
+                    thatNameRange = (link.item as NamespaceStatement).getNameParts()?.[0]?.range;
+                    break;
+                }
+            }
+
+            this.diagnostics.push({
+                file: file,
+                ...DiagnosticMessages.nameCollision(thisNodeKindName, thatNodeKindName, name),
+                origin: DiagnosticOrigin.Scope,
+                range: nameRange,
+                relatedInformation: [{
+                    message: `${thatNodeKindName} declared here`,
+                    location: util.createLocation(
+                        URI.file(link.file.srcPath).toString(),
+                        thatNameRange
+                    )
+                }]
+            });
+        }
+
     }
 
 

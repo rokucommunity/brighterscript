@@ -758,6 +758,11 @@ export let DiagnosticMessages = {
         message: `'${symbol}' is incompatible across scope group (${scopeName})`, // TODO: Add scopes where it was defined
         code: 1145,
         severity: DiagnosticSeverity.Error
+    }),
+    nameCollision: (thisThingKind: string, thatThingKind: string, thatThingName: string) => ({
+        message: `${thisThingKind} has same name as ${thatThingKind} '${thatThingName}'`,
+        code: 1146,
+        severity: DiagnosticSeverity.Error
     })
 };
 export const defaultMaximumTruncationLength = 160;
