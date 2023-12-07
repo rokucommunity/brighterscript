@@ -45,6 +45,12 @@ describe('InterfaceType', () => {
             });
         });
 
+        it('does not crash when given non types', () => {
+            const iface = new InterfaceType('roArray');
+            expect(iface.isTypeCompatible(undefined)).to.be.false;
+            expect(iface.isTypeCompatible(null)).to.be.false;
+        });
+
         it('roku component types are compatible with BscTypes', () => {
             // TODO: Fix String type compatibility -  reason is because of overloaded members (Mid(), StartsWith(), etc)
             // SEE: https://github.com/rokucommunity/brighterscript/issues/926
