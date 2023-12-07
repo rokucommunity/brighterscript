@@ -202,6 +202,15 @@ describe('EnumStatement', () => {
     });
 
     describe('validation', () => {
+        it('allows enums named `optional`', () => {
+            program.setFile('source/main.bs', `
+                enum optional
+                    thing = 1
+                end enum
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
 
         it('catches duplicate enums from same file', () => {
             program.setFile('source/main.bs', `

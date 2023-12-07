@@ -1427,13 +1427,16 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
         nameToken: Identifier,
         asToken: Token,
         typeToken: Token,
-        public type: BscType
+        public type: BscType,
+        optionalToken?: Token
     ) {
         super();
+        this.tokens.optional = optionalToken;
         this.tokens.name = nameToken;
         this.tokens.as = asToken;
         this.tokens.type = typeToken;
         this.range = util.createBoundingRange(
+            optionalToken,
             nameToken,
             asToken,
             typeToken
@@ -1443,6 +1446,7 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
     public range: Range;
 
     public tokens = {} as {
+        optional?: Token;
         name: Identifier;
         as: Token;
         type: Token;
@@ -1450,6 +1454,10 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
 
     public get name() {
         return this.tokens.name.text;
+    }
+
+    public get isOptional() {
+        return !!this.tokens.optional;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -1465,7 +1473,12 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
                 state.indent()
             );
         }
-
+        if (this.isOptional) {
+            result.push(
+                this.tokens.optional.text,
+                ' '
+            );
+        }
         result.push(
             this.tokens.name.text
         );
@@ -1492,9 +1505,11 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         rightParen: Token,
         asToken?: Token,
         returnTypeToken?: Token,
-        public returnType?: BscType
+        public returnType?: BscType,
+        optionalToken?: Token
     ) {
         super();
+        this.tokens.optional = optionalToken;
         this.tokens.functionType = functionTypeToken;
         this.tokens.name = nameToken;
         this.tokens.leftParen = leftParen;
@@ -1505,6 +1520,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
 
     public get range() {
         return util.createBoundingRange(
+            this.tokens.optional,
             this.tokens.functionType,
             this.tokens.name,
             this.tokens.leftParen,
@@ -1516,6 +1532,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
     }
 
     public tokens = {} as {
+        optional?: Token;
         functionType: Token;
         name: Identifier;
         leftParen: Token;
@@ -1523,6 +1540,10 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         as: Token;
         returnType: Token;
     };
+
+    public get isOptional() {
+        return !!this.tokens.optional;
+    }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
@@ -1535,6 +1556,13 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
                 ...annotation.getTypedef(state),
                 state.newline,
                 state.indent()
+            );
+        }
+
+        if (this.isOptional) {
+            result.push(
+                this.tokens.optional.text,
+                ' '
             );
         }
 
@@ -2071,12 +2099,12 @@ export class MethodStatement extends FunctionStatement {
 
         //check whether any calls to super exist
         let containsSuperCall =
-        this.func.body.statements.findIndex((x) => {
-            //is a call statement
-            return isExpressionStatement(x) && isCallExpression(x.expression) &&
-            //is a call to super
-            util.findBeginningVariableExpression(x.expression.callee as any).name.text.toLowerCase() === 'super';
-        }) !== -1;
+            this.func.body.statements.findIndex((x) => {
+                //is a call statement
+                return isExpressionStatement(x) && isCallExpression(x.expression) &&
+                    //is a call to super
+                    util.findBeginningVariableExpression(x.expression.callee as any).name.text.toLowerCase() === 'super';
+            }) !== -1;
 
         //if a call to super exists, quit here
         if (containsSuperCall) {
@@ -2163,7 +2191,8 @@ export class FieldStatement extends Statement implements TypedefProvider {
         readonly as?: Token,
         readonly type?: Token,
         readonly equal?: Token,
-        readonly initialValue?: Expression
+        readonly initialValue?: Expression,
+        readonly optional?: Token
     ) {
         super();
         this.range = util.createBoundingRange(
@@ -2192,6 +2221,10 @@ export class FieldStatement extends Statement implements TypedefProvider {
 
     public readonly range: Range;
 
+    public get isOptional() {
+        return !!this.optional;
+    }
+
     transpile(state: BrsTranspileState): TranspileResult {
         throw new Error('transpile not implemented for ' + Object.getPrototypeOf(this).constructor.name);
     }
@@ -2214,8 +2247,12 @@ export class FieldStatement extends Statement implements TypedefProvider {
 
             result.push(
                 this.accessModifier?.text ?? 'public',
-                ' ',
-                this.name?.text,
+                ' '
+            );
+            if (this.isOptional) {
+                result.push(this.optional.text, ' ');
+            }
+            result.push(this.name?.text,
                 ' as ',
                 type.toTypeString()
             );
