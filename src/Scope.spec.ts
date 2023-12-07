@@ -1219,6 +1219,92 @@ describe('Scope', () => {
             expectZeroDiagnostics(program);
         });
 
+        describe('name collisions', () => {
+            it('should validate when class and interfaces have name collisions', () => {
+                program.setFile('source/main.bs', `
+                    class Log
+                    end class
+
+                    interface Lcase
+                        name as string
+                    end interface
+
+                `);
+                program.validate();
+                expectDiagnosticsIncludes(program, [
+                    DiagnosticMessages.nameCollision('Class', 'Global Function', 'Log').message,
+                    DiagnosticMessages.nameCollision('Interface', 'Global Function', 'Lcase').message
+                ]);
+            });
+
+            it('should validate when a namespace has a name collision', () => {
+                program.setFile('source/main.bs', `
+                    namespace Log ' this is invalid because it has the same name as a global function
+                        function anything()
+                        end function
+                    end namespace
+                `);
+                program.validate();
+                expectDiagnosticsIncludes(program, [
+                    DiagnosticMessages.nameCollision('Namespace', 'Global Function', 'Log').message
+                ]);
+            });
+
+            it('should validate when a namespace has a name collision with a class', () => {
+                program.setFile('source/main.bs', `
+                    namespace SomeKlass
+                        function anything()
+                        end function
+                    end namespace
+
+                    class SomeKlass
+                    end class
+                `);
+                program.validate();
+                let diagnostics = program.getDiagnostics();
+                expectDiagnosticsIncludes(diagnostics, [
+                    DiagnosticMessages.nameCollision('Namespace', 'Class', 'SomeKlass').message,
+                    DiagnosticMessages.nameCollision('Class', 'Namespace', 'SomeKlass').message
+                ]);
+            });
+
+            it('should validate when an enum has a name collision with a namespace', () => {
+                program.setFile('source/main.bs', `
+                    namespace SomeEnum
+                        function anything()
+                        end function
+                    end namespace
+
+                    enum SomeEnum
+                        a = "A"
+                        b = "B"
+                    end enum
+                `);
+                program.validate();
+                let diagnostics = program.getDiagnostics();
+                expectDiagnosticsIncludes(diagnostics, [
+                    DiagnosticMessages.nameCollision('Enum', 'Namespace', 'SomeEnum').message,
+                    DiagnosticMessages.nameCollision('Namespace', 'Enum', 'SomeEnum').message
+                ]);
+            });
+
+            it('should validate when a const has a name collision with something else', () => {
+                program.setFile('source/main.bs', `
+                    namespace SomeEnum
+                        const MY_CONST = "hello"
+                    end namespace
+
+                    function MY_CONST()
+                    end function
+                `);
+                program.validate();
+                let diagnostics = program.getDiagnostics();
+                expectDiagnosticsIncludes(diagnostics, [
+                    DiagnosticMessages.nameCollision('Const', 'Function', 'MY_CONST').message
+                ]);
+            });
+        });
+
         describe('custom types', () => {
             it('detects an unknown function return type', () => {
                 program.setFile(`source/main.bs`, `
@@ -2064,6 +2150,63 @@ describe('Scope', () => {
                 expect(childScope.getAllCallables().map(x => x.callable.name)).to.include('parentSub');
             });
         });
+
+        describe('.d.bs files', () => {
+            it('should be able to include .d.bs files', () => {
+                program.setFile('source/roku_modules/anything.d.bs', `
+                    function anything()
+                    end function
+                `);
+                program.setFile('source/main.bs', `
+                    namespace alpha
+                         sub someFunc()
+                            anything()
+                         end sub
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+
+            it('should be able to include .d.bs files that have namespaces', () => {
+                program.setFile('source/roku_modules/anything.d.bs', `
+                    namespace SomeNamespace
+                        function anything()
+                        end function
+                    end namespace
+                `);
+                program.setFile('source/main.bs', `
+                    namespace alpha
+                         sub someFunc()
+                              SomeNamespace.anything()
+                         end sub
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('should validate when a namespace in a .d.bs file has an invalid name', () => {
+                program.setFile('source/roku_modules/anything.d.bs', `
+                    namespace Log ' this is invalid because it has the same name as a global function
+                        function anything()
+                        end function
+                    end namespace
+                `);
+                program.setFile('source/main.bs', `
+                    namespace alpha
+                         sub someFunc()
+                         end sub
+                    end namespace
+                `);
+                program.validate();
+                expectDiagnosticsIncludes(program, [
+                    DiagnosticMessages.nameCollision('Namespace', 'Global Function', 'Log').message
+                ]);
+
+            });
+        });
     });
 
     describe('detachParent', () => {
@@ -2590,9 +2733,9 @@ describe('Scope', () => {
         describe('const values', () => {
             it('should allow const values to be composed of other const values from namespaces', () => {
                 program.setFile('source/constants.bs', `
-                    const pi = alpha.beta.pi
-                    const two = alpha.gamma.two
-                    const twoPi = two * pi
+                    const top_pi = alpha.beta.pi
+                    const top_two = alpha.gamma.two
+                    const top_twoPi = top_two * top_pi
                 `);
                 program.setFile('source/ns.bs', `
                     namespace alpha.beta

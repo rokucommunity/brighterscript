@@ -67,11 +67,20 @@ describe('ConstStatement', () => {
     it('allows const with the name `optional`', () => {
         program.setFile('source/main.bs', `
             const optional = true
+            sub main()
+                print optional
+            end sub
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
+    it('allows const with the name `optional` in a namespace', () => {
+        program.setFile('source/main.bs', `
             namespace alpha
                 const optional = true
             end namespace
             sub main()
-                print optional
                 print alpha.optional
             end sub
         `);

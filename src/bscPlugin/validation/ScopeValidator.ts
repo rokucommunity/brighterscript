@@ -12,7 +12,7 @@ import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
 import type { Token } from '../../lexer/Token';
 import type { AstNode } from '../../parser/AstNode';
-import { type Expression } from '../../parser/AstNode';
+import type { Expression } from '../../parser/AstNode';
 import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression } from '../../parser/Expression';
 import { CallExpression } from '../../parser/Expression';
 import { createVisitor } from '../../astUtils/visitors';

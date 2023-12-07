@@ -1,7 +1,7 @@
 import { expect } from '../../../chai-config.spec';
 import { LiteralExpression } from '../../Expression';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
-import { expectDiagnostics, expectInstanceOf, expectZeroDiagnostics, getTestTranspile, trim } from '../../../testHelpers.spec';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectInstanceOf, expectZeroDiagnostics, getTestTranspile, trim } from '../../../testHelpers.spec';
 import { ParseMode, Parser } from '../../Parser';
 import { util, standardizePath as s } from '../../../util';
 import { EnumStatement, InterfaceStatement } from '../../Statement';
@@ -223,7 +223,7 @@ describe('EnumStatement', () => {
                 end enum
             `);
             program.validate();
-            expectDiagnostics(program, [{
+            expectDiagnosticsIncludes(program, [{
                 ...DiagnosticMessages.duplicateEnumDeclaration('source', 'Direction'),
                 relatedInformation: [{
                     location: util.createLocation(
@@ -247,7 +247,7 @@ describe('EnumStatement', () => {
                 end enum
             `);
             program.validate();
-            expectDiagnostics(program, [{
+            expectDiagnosticsIncludes(program, [{
                 ...DiagnosticMessages.duplicateEnumDeclaration('source', 'Direction'),
                 relatedInformation: [{
                     location: util.createLocation(

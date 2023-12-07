@@ -206,7 +206,7 @@ export class SymbolTable implements SymbolTypeGetter {
     }
 
     getSymbolType(name: string, options: GetSymbolTypeOptions): BscType {
-        const cacheEntry = this.getCachedType(name, options);
+        const cacheEntry = options.ignoreCacheForRetrieval ? undefined : this.getCachedType(name, options);
         let resolvedType = cacheEntry?.type;
         let doSetCache = !resolvedType;
         const originalIsReferenceType = isAnyReferenceType(resolvedType);
