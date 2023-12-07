@@ -2563,8 +2563,8 @@ describe('Program', () => {
         });
     });
 
-    describe('global symbol table', () => {
-        it('adds primitves', () => {
+    describe.only('global symbol table', () => {
+        it('adds primitives', () => {
             const table = program.globalScope.symbolTable;
             const opts = { flags: SymbolTypeFlag.typetime };
             const rtOpts = { flags: SymbolTypeFlag.runtime };
@@ -2588,6 +2588,9 @@ describe('Program', () => {
 
             expectTypeToBe(table.getSymbolType('roRegistry', opts), InterfaceType);
             expectTypeToBe(table.getSymbolType('roRegistry', opts).getMemberType('GetSectionList', rtOpts), TypedFunctionType);
+
+            expectTypeToBe(table.getSymbolType('roSGNode', opts), InterfaceType);
+            expectTypeToBe(table.getSymbolType('roSGNode', opts).getMemberType('appendChild', rtOpts), TypedFunctionType);
         });
 
         it('adds brightscript interfaces', () => {
@@ -2634,6 +2637,19 @@ describe('Program', () => {
             expectTypeToBe(table.getSymbolType('roSGNodeTimer', opts).getMemberType('duration', rtOpts), FloatType);
             expectTypeToBe(table.getSymbolType('roSGNodeTimer', opts).getMemberType('fire', rtOpts), DynamicType);
 
+            expectTypeToBe(table.getSymbolType('roSGNodeNode', opts), ComponentType);
+            expectTypeToBe(table.getSymbolType('roSGNodeNode', opts).getMemberType('id', rtOpts), StringType);
+            expectTypeToBe(table.getSymbolType('roSGNodeNode', opts).getMemberType('change', rtOpts), AssociativeArrayType);
+        });
+
+        it.only('roSGNode and roSGNodeNode are type equivalent', () => {
+            const table = program.globalScope.symbolTable;
+            const opts = { flags: SymbolTypeFlag.typetime };
+            const roSGNodeType = table.getSymbolType('roSGNode', opts);
+            const roSGNodeNodeType = table.getSymbolType('roSGNodeNode', opts);
+
+            expect(roSGNodeType.isTypeCompatible(roSGNodeNodeType)).to.be.true;
+            expect(roSGNodeNodeType.isTypeCompatible(roSGNodeType)).to.be.true;
         });
     });
 
