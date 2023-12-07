@@ -1652,7 +1652,7 @@ describe('BrsFile BrighterScript classes', () => {
         `);
         program.validate();
         expectDiagnosticsIncludes(program, [
-            DiagnosticMessages.duplicateClassDeclaration('source', 'Animal')
+            DiagnosticMessages.nameCollision('Class', 'Class', 'Animal')
         ]);
     });
 
@@ -1667,7 +1667,7 @@ describe('BrsFile BrighterScript classes', () => {
         `);
         program.validate();
         expectDiagnosticsIncludes(program, [
-            DiagnosticMessages.duplicateClassDeclaration('source', 'NameA.NameB.Animal')
+            DiagnosticMessages.nameCollision('Class', 'Class', 'Animal').message
         ]);
     });
 
@@ -1682,7 +1682,7 @@ describe('BrsFile BrighterScript classes', () => {
         `);
         program.validate();
         expectDiagnostics(program, [
-            DiagnosticMessages.namespacedClassCannotShareNamewithNonNamespacedClass('Animal').message
+            DiagnosticMessages.nameCollision('Class', 'Class', 'Animal').message
         ]);
     });
 

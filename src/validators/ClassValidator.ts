@@ -4,7 +4,6 @@ import type { CallExpression } from '../parser/Expression';
 import { ParseMode } from '../parser/Parser';
 import type { ClassStatement, MethodStatement, NamespaceStatement } from '../parser/Statement';
 import { CancellationTokenSource } from 'vscode-languageserver';
-import { URI } from 'vscode-uri';
 import util from '../util';
 import { isCallExpression, isFieldStatement, isMethodStatement, isNamespaceStatement } from '../astUtils/reflection';
 import type { BsDiagnostic } from '../interfaces';
@@ -29,7 +28,6 @@ export class BsClassValidator {
         this.diagnostics = [];
 
         this.findClasses();
-        this.findNamespaceNonNamespaceCollisions();
         this.linkClassesWithParents();
         this.detectCircularReferences();
         this.validateMemberCollisions();
@@ -86,30 +84,6 @@ export class BsClassValidator {
                 }
             }
         });
-    }
-
-    private findNamespaceNonNamespaceCollisions() {
-        for (const [className, classStatement] of this.classes) {
-            //catch namespace class collision with global class
-            let nonNamespaceClass = this.classes.get(util.getTextAfterFinalDot(className).toLowerCase());
-            const namespace = classStatement.findAncestor<NamespaceStatement>(isNamespaceStatement);
-            if (namespace && nonNamespaceClass) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.namespacedClassCannotShareNamewithNonNamespacedClass(
-                        nonNamespaceClass.name.text
-                    ),
-                    file: classStatement.file,
-                    range: classStatement.name.range,
-                    relatedInformation: [{
-                        location: util.createLocation(
-                            URI.file(nonNamespaceClass.file.srcPath).toString(),
-                            nonNamespaceClass.name.range
-                        ),
-                        message: 'Original class declared here'
-                    }]
-                });
-            }
-        }
     }
 
     private verifyChildConstructor() {
@@ -338,21 +312,6 @@ export class BsClassValidator {
                 if (!alreadyDefinedClass) {
                     this.classes.set(lowerName, classStatement);
                     classStatement.file = file;
-
-                    //add a diagnostic about this class already existing
-                } else {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.duplicateClassDeclaration(this.scope.name, name),
-                        file: file,
-                        range: classStatement.name.range,
-                        relatedInformation: [{
-                            location: util.createLocation(
-                                URI.file(alreadyDefinedClass.file.srcPath).toString(),
-                                this.classes.get(lowerName).range
-                            ),
-                            message: ''
-                        }]
-                    });
                 }
             }
         });

@@ -252,10 +252,11 @@ export class Scope {
 
     public getAllFileLinks(name: string, containingNamespace?: string): FileLink<Statement>[] {
         let links: FileLink<Statement>[] = [];
-        links.push(this.getClassFileLink(name, containingNamespace),
-            this.getInterfaceFileLink(name, containingNamespace),
-            this.getConstFileLink(name, containingNamespace),
-            this.getEnumFileLink(name, containingNamespace));
+
+        links.push(this.getClassFileLink(name) ?? this.getClassFileLink(name, containingNamespace),
+            this.getInterfaceFileLink(name) ?? this.getInterfaceFileLink(name, containingNamespace),
+            this.getConstFileLink(name) ?? this.getConstFileLink(name, containingNamespace),
+            this.getEnumFileLink(name) ?? this.getEnumFileLink(name, containingNamespace));
 
 
         const nameSpaces = this.getNamespacesWithRoot(name, containingNamespace);

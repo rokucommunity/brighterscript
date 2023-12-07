@@ -1232,8 +1232,8 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectDiagnosticsIncludes(program, [
-                    DiagnosticMessages.nameCollision('Class', 'Function', 'Log').message,
-                    DiagnosticMessages.nameCollision('Interface', 'Function', 'Lcase').message
+                    DiagnosticMessages.nameCollision('Class', 'Global Function', 'Log').message,
+                    DiagnosticMessages.nameCollision('Interface', 'Global Function', 'Lcase').message
                 ]);
             });
 
@@ -1246,7 +1246,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectDiagnosticsIncludes(program, [
-                    DiagnosticMessages.nameCollision('Namespace', 'Function', 'Log').message
+                    DiagnosticMessages.nameCollision('Namespace', 'Global Function', 'Log').message
                 ]);
             });
 
@@ -2202,7 +2202,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectDiagnosticsIncludes(program, [
-                    DiagnosticMessages.nameCollision('Namespace', 'Function', 'Log').message
+                    DiagnosticMessages.nameCollision('Namespace', 'Global Function', 'Log').message
                 ]);
 
             });
@@ -2733,9 +2733,9 @@ describe('Scope', () => {
         describe('const values', () => {
             it('should allow const values to be composed of other const values from namespaces', () => {
                 program.setFile('source/constants.bs', `
-                    const pi = alpha.beta.pi
-                    const two = alpha.gamma.two
-                    const twoPi = two * pi
+                    const top_pi = alpha.beta.pi
+                    const top_two = alpha.gamma.two
+                    const top_twoPi = top_two * top_pi
                 `);
                 program.setFile('source/ns.bs', `
                     namespace alpha.beta

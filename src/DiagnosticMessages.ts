@@ -129,7 +129,7 @@ export let DiagnosticMessages = {
         code: 1021,
         severity: DiagnosticSeverity.Error
     }),
-    namespacedClassCannotShareNamewithNonNamespacedClass: (nonNamespacedClassName: string) => ({
+    __unused4: (nonNamespacedClassName: string) => ({
         message: `Namespaced class cannot have the same name as a non-namespaced class '${nonNamespacedClassName}'`,
         code: 1022,
         severity: DiagnosticSeverity.Error
@@ -159,8 +159,8 @@ export let DiagnosticMessages = {
         code: 1027,
         severity: DiagnosticSeverity.Error
     }),
-    duplicateClassDeclaration: (scopeName: string, className: string) => ({
-        message: `Scope '${scopeName}' already contains a class with name '${className}'`,
+    nameCollision: (thisThingKind: string, thatThingKind: string, thatThingName: string) => ({
+        message: `${thisThingKind} has same name as ${thatThingKind} '${thatThingName}'`,
         code: 1028,
         severity: DiagnosticSeverity.Error
     }),
@@ -757,11 +757,6 @@ export let DiagnosticMessages = {
     incompatibleSymbolDefinition: (symbol: string, scopeName: string) => ({
         message: `'${symbol}' is incompatible across scope group (${scopeName})`, // TODO: Add scopes where it was defined
         code: 1145,
-        severity: DiagnosticSeverity.Error
-    }),
-    nameCollision: (thisThingKind: string, thatThingKind: string, thatThingName: string) => ({
-        message: `${thisThingKind} has same name as ${thatThingKind} '${thatThingName}'`,
-        code: 1146,
         severity: DiagnosticSeverity.Error
     })
 };
