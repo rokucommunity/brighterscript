@@ -1596,7 +1596,6 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
                 ' '
             );
         }
-
         result.push(
             this.tokens.name.text
         );

@@ -154,21 +154,47 @@ export type CompilerPluginFactory = () => CompilierPlugin;
 
 export interface CompilerPlugin {
     name: string;
-    //program events
-    beforeProgramCreate?: (builder: ProgramBuilder) => void;
-    afterProgramCreate?: (program: Program) => void;
+    /**
+     * Called before a new program is created
+     */
+    beforeProgramCreate?: PluginHandler<BeforeProgramCreateEvent>;
+    /**
+     * Called after a new program is created
+     */
+    afterProgramCreate?: PluginHandler<AfterProgramCreateEvent>;
 
-    beforePrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
-    afterPrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
 
-    beforePublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
-    afterPublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+    /**
+     * Called before the program gets prepared for building
+     */
+    beforePrepareProgram?: PluginHandler<BeforePrepareProgramEvent>;
+    /**
+     * Called when the program gets prepared for building
+     */
+    prepareProgram?: PluginHandler<PrepareProgramEvent>;
+    /**
+     * Called after the program gets prepared for building
+     */
+    afterPrepareProgram?: PluginHandler<AfterPrepareProgramEvent>;
 
-    beforeProgramValidate?: (program: Program) => void;
-    afterProgramValidate?: (program: Program) => void;
 
-    beforeProgramTranspile?: (program: Program, entries: TranspileObj[], editor: Editor) => void;
-    afterProgramTranspile?: (program: Program, entries: TranspileObj[], editor: Editor) => void;
+    /**
+     * Called before the entire program is validated
+     */
+    beforeProgramValidate?: PluginHandler<BeforeProgramValidateEvent>;
+    /**
+     * Called before the entire program is validated
+     */
+    onProgramValidate?: PluginHandler<OnProgramValidateEvent>;
+    /**
+     * Called after the program has been validated
+     */
+    afterProgramValidate?: PluginHandler<AfterProgramValidateEvent>;
+
+    /**
+     * Called right before the program is disposed/destroyed
+     */
+    beforeProgramDispose?: PluginHandler<BeforeProgramDisposeEvent>;
 
     /**
      * Emitted before the program starts collecting completions
@@ -183,6 +209,7 @@ export interface CompilerPlugin {
      */
     afterProvideCompletions?: PluginHandler<AfterProvideCompletionsEvent>;
 
+
     /**
      * Called before the `provideHover` hook. Use this if you need to prepare any of the in-memory objects before the `provideHover` gets called
      */
@@ -196,34 +223,58 @@ export interface CompilerPlugin {
      */
     afterProvideHover?: PluginHandler<AfterProvideHoverEvent>;
 
-    //scope events
-    afterScopeCreate?: (scope: Scope) => void;
+    /**
+     * Called after a scope was created
+     */
+    afterScopeCreate?: PluginHandler<AfterScopeCreateEvent>;
 
-    beforeScopeDispose?: (scope: Scope) => void;
-    afterScopeDispose?: (scope: Scope) => void;
+    beforeScopeDispose?: PluginHandler<BeforeScopeDisposeEvent>;
+    onScopeDispose?: PluginHandler<OnScopeDisposeEvent>;
+    afterScopeDispose?: PluginHandler<AfterScopeDisposeEvent>;
 
-    beforeScopeValidate?: ValidateHandler;
+    beforeScopeValidate?: PluginHandler<BeforeScopeValidateEvent>;
     onScopeValidate?: PluginHandler<OnScopeValidateEvent>;
-    afterScopeValidate?: ValidateHandler;
+    afterScopeValidate?: PluginHandler<BeforeScopeValidateEvent>;
 
     onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
     onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
 
+
     /**
-     * Called before a file is added to the program. This is triggered for every file (even virtual files emitted by other files)
+     * Called before plugins are asked to provide files to the program. (excludes virtual files produced by `provideFile` events).
+     * Call the `setFileData()` method to override the file contents.
      */
     beforeProvideFile?: PluginHandler<BeforeProvideFileEvent>;
     /**
-     * Give plugins the opportunity to handle parsing/validating a file
+     * Give plugins the opportunity to handle processing a file. (excludes virtual files produced by `provideFile` events)
      */
     provideFile?: PluginHandler<ProvideFileEvent>;
     /**
-     * Called after a file was added to the program.
+     * Called after a file was added to the program. (excludes virtual files produced by `provideFile` events)
      */
     afterProvideFile?: PluginHandler<AfterProvideFileEvent>;
 
-    beforeFileParse?: PluginHandler<BeforeFileParseEvent>;
-    afterFileParse?: (file: File) => void;
+
+    /**
+     * Called before a file is added to the program.
+     * Includes physical files as well as any virtual files produced by `provideFile` events
+     */
+    beforeFileAdd?: PluginHandler<BeforeFileAddEvent>;
+    /**
+     * Called after a file has been added to the program.
+     * Includes physical files as well as any virtual files produced by `provideFile` events
+     */
+    afterFileAdd?: PluginHandler<AfterFileAddEvent>;
+
+    /**
+     * Called before a file is removed from the program. This includes physical and virtual files
+     */
+    beforeFileRemove?: PluginHandler<BeforeFileRemoveEvent>;
+    /**
+     * Called after a file has been removed from the program. This includes physical and virtual files
+     */
+    afterFileRemove?: PluginHandler<AfterFileRemoveEvent>;
+
 
     /**
      * Called before each file is validated
@@ -236,13 +287,84 @@ export interface CompilerPlugin {
     /**
      * Called after each file is validated
      */
-    afterFileValidate?: (file: File) => void;
+    afterFileValidate?: PluginHandler<AfterFileValidateEvent>;
 
-    beforeFileTranspile?: PluginHandler<BeforeFileTranspileEvent>;
-    afterFileTranspile?: PluginHandler<AfterFileTranspileEvent>;
 
-    beforeFileDispose?: (file: File) => void;
-    afterFileDispose?: (file: File) => void;
+    /**
+     * Called right before the program builds (i.e. generates the code and puts it in the stagingDir
+     */
+    beforeBuildProgram?: PluginHandler<BeforeBuildProgramEvent>;
+    /**
+     * Called right after the program builds (i.e. generates the code and puts it in the stagingDir
+     */
+    afterBuildProgram?: PluginHandler<AfterBuildProgramEvent>;
+
+
+    /**
+     * Before preparing the file for building
+     */
+    beforePrepareFile?: PluginHandler<BeforePrepareFileEvent>;
+    /**
+     * Prepare the file for building
+     */
+    prepareFile?: PluginHandler<PrepareFileEvent>;
+    /**
+     * After preparing the file for building
+     */
+    afterPrepareFile?: PluginHandler<AfterPrepareFileEvent>;
+
+
+    /**
+     * Before the program turns all file objects into their final buffers
+     */
+    beforeSerializeProgram?: PluginHandler<BeforeSerializeProgramEvent>;
+    /**
+     * Emitted right at the start of the program turning all file objects into their final buffers
+     */
+    onSerializeProgram?: PluginHandler<OnSerializeProgramEvent>;
+    /**
+     * After the program turns all file objects into their final buffers
+     */
+    afterSerializeProgram?: PluginHandler<AfterSerializeProgramEvent>;
+
+
+    /**
+     * Before turning the file into its final contents
+     */
+    beforeSerializeFile?: PluginHandler<BeforeSerializeFileEvent>;
+    /**
+     * Turn the file into its final contents (i.e. transpile a bs file, compress a jpeg, etc)
+     */
+    serializeFile?: PluginHandler<SerializeFileEvent>;
+    /**
+     * After turning the file into its final contents
+     */
+    afterSerializeFile?: PluginHandler<AfterSerializeFileEvent>;
+
+
+    /**
+     * Called before any files are written
+     */
+    beforeWriteProgram?: PluginHandler<BeforeWriteProgramEvent>;
+    /**
+     * Called after all files are written
+     */
+    afterWriteProgram?: PluginHandler<AfterWriteProgramEvent>;
+
+
+    /**
+     * Before a file is written to disk. These are raw files that contain the final output. One `File` may produce several of these
+     */
+    beforeWriteFile?: PluginHandler<BeforeWriteFileEvent>;
+    /**
+     * Called when a file should be persisted (usually writing to storage). These are raw files that contain the final output. One `File` may produce several of these.
+     * When a plugin has handled a file, it should be pushed to the `handledFiles` set so future plugins don't write the file multiple times
+     */
+    writeFile?: PluginHandler<WriteFileEvent>;
+    /**
+     * Before a file is written to disk. These are raw files that contain the final output. One `File` may produce several of these
+     */
+    afterWriteFile?: PluginHandler<AfterWriteFileEvent>;
 }
 
 // related types:
