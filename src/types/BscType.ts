@@ -73,6 +73,9 @@ export abstract class BscType {
     }
 
     checkCompatibilityBasedOnMembers(targetType: BscType, flags: SymbolTypeFlag, data: TypeCompatibilityData = {}) {
+        if (!targetType) {
+            return false;
+        }
         let isSuperSet = true;
         data.missingFields ||= [];
         data.fieldMismatches ||= [];
@@ -113,7 +116,7 @@ export abstract class BscType {
                             return superSetSoFar;
                         }
 
-                        const myMemberAllowsTargetType = memberSymbol.type.isTypeCompatible(typeOfTargetSymbol, { depth: data.depth });
+                        const myMemberAllowsTargetType = memberSymbol.type?.isTypeCompatible(typeOfTargetSymbol, { depth: data.depth });
                         if (!myMemberAllowsTargetType) {
                             data.fieldMismatches.push({ name: memberSymbol.name, expectedType: memberSymbol.type, actualType: targetType.getMemberType(memberSymbol.name, { flags: flags }) });
                         }
@@ -133,4 +136,3 @@ export abstract class BscType {
         this.hasAddedBuiltInInterfaces = true;
     }
 }
-
