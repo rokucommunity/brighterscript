@@ -2655,6 +2655,28 @@ describe('Program', () => {
             const second = roSGNodeNodeType.isTypeCompatible(roSGNodeType, data);
             expect(second).to.be.true;
         });
+
+        it('components are compatible with roSGNode and roSGNodeNode', () => {
+            const table = program.globalScope.symbolTable;
+            const opts = { flags: SymbolTypeFlag.typetime };
+            const roSGNodeType = table.getSymbolType('roSGNode', opts);
+            const roSGNodeNodeType = table.getSymbolType('roSGNodeNode', opts);
+
+            const labelType = table.getSymbolType('roSGNodeLabel', opts);
+            const posterType = table.getSymbolType('roSGNodePoster', opts);
+            const rowListType = table.getSymbolType('roSGNodeRowList', opts);
+            const taskType = table.getSymbolType('roSGNodeTask', opts);
+
+            expect(roSGNodeType.isTypeCompatible(labelType)).to.be.true;
+            expect(roSGNodeType.isTypeCompatible(posterType)).to.be.true;
+            expect(roSGNodeType.isTypeCompatible(rowListType)).to.be.true;
+            expect(roSGNodeType.isTypeCompatible(taskType)).to.be.true;
+
+            expect(roSGNodeNodeType.isTypeCompatible(labelType)).to.be.true;
+            expect(roSGNodeNodeType.isTypeCompatible(posterType)).to.be.true;
+            expect(roSGNodeNodeType.isTypeCompatible(rowListType)).to.be.true;
+            expect(roSGNodeNodeType.isTypeCompatible(taskType)).to.be.true;
+        });
     });
 
     describe('manifest', () => {
