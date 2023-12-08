@@ -64,7 +64,10 @@ export class BuiltInInterfaceAdder {
 
     private static buildMethodFromDocData(method: BRSInterfaceMethodData, overrides?: Map<string, BuiltInInterfaceOverride>, thisType?: BscType): TypedFunctionType {
         const override = overrides?.get(method.name.toLowerCase());
-        const returnType = override?.returnType ?? this.getPrimitiveType(method.returnType);
+        let returnType = override?.returnType ?? this.getPrimitiveType(method.returnType);
+        if (!returnType && method.returnType.toLowerCase() === (thisType as any)?.name?.toLowerCase()) {
+            returnType = thisType;
+        }
         const methodFuncType = this.typedFunctionFactory(returnType);
         methodFuncType.name = method.name;
         methodFuncType.isVariadic = method.isVariadic ?? false;
