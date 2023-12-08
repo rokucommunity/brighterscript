@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.65.13](https://github.com/rokucommunity/brighterscript/compare/v0.65.12...v0.65.13) - 2023-12-08
+### Fixed
+ - broken enum transpiling ([#985](https://github.com/rokucommunity/brighterscript/pull/985))
+
+
+
 ## [0.65.12](https://github.com/rokucommunity/brighterscript/compare/v0.65.11...v0.65.12) - 2023-12-07
 ### Added
  - `optional` modifier for interface and class members ([#955](https://github.com/rokucommunity/brighterscript/pull/955))
