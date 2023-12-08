@@ -55,7 +55,7 @@ end namespace
 ```BrightScript
 function Vertibrates_Birds_GetAllBirds()
     return [
-        Vertibrates_Birds_GetDuck(),
+        Vertibrates_Birds_GetDuck()
         Vertibrates_Birds_GetGoose()
     ]
 end function
@@ -147,7 +147,7 @@ namespace Vertibrates
     namespace Reptiles
         sub Hiss()
         end sub
-    end
+    end namespace
 end namespace
 ```
 

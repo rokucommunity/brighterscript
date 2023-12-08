@@ -479,7 +479,7 @@ export class Parser {
             DiagnosticMessages.expectedKeyword(TokenKind.Interface),
             TokenKind.Interface
         );
-        const nameToken = this.identifier();
+        const nameToken = this.identifier(...this.allowedLocalIdentifiers);
 
         let extendsToken: Token;
         let parentInterfaceName: TypeExpression;
@@ -524,7 +524,6 @@ export class Parser {
                 } else if (this.check(TokenKind.Comment)) {
                     decl = this.commentStatement();
                 }
-
                 if (decl) {
                     this.consumePendingAnnotations(decl);
                     body.push(decl);

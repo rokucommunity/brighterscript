@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.66.0-alpha.10](https://github.com/rokucommunity/brighterscript/compare/v0.66.0-alpha.9...v0.66.0-alpha.10) - 2023-12-07
+### Fixed
+ - class constructor used as function transpilation and validation ([#972](https://github.com/rokucommunity/brighterscript/pull/972))
+ - exception when given unknown type ([#983](https://github.com/rokucommunity/brighterscript/pull/983))
+### Changed
+ - classes do not include AA members ([#970](https://github.com/rokucommunity/brighterscript/pull/970))
+ - remove post-transpiled symbols from .bs code completion ([#979](https://github.com/rokucommunity/brighterscript/pull/979))
+ - general purpose name collision diagnostic ([#982](https://github.com/rokucommunity/brighterscript/pull/982))
+
+
+
 ## [0.66.0-alpha.9](https://github.com/rokucommunity/brighterscript/compare/v0.66.0-alpha.8...v0.66.0-alpha.9) - 2023-11-28
 ### Fixed
  - removed `v8-profiler-next` package as a dependency (it'll be installed on-demand) ([#1287a5d](https://github.com/rokucommunity/brighterscript/commits/1287a5d7628c0e3ae3154697dfa4d12df5d7e96a))
@@ -118,6 +129,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.66.0-alpha.0](https://github.com/rokucommunity/brighterscript/compare/v0.65.1...v0.66.0-alpha.0) - 2023-06-09
 ### Changed
  - all the type tracking stuff!
+## [0.65.12](https://github.com/rokucommunity/brighterscript/compare/v0.65.11...v0.65.12) - 2023-12-07
+### Added
+ - `optional` modifier for interface and class members ([#955](https://github.com/rokucommunity/brighterscript/pull/955))
+ - manifest loading from files ([#942](https://github.com/rokucommunity/brighterscript/pull/942))
+### Changed
+ - use regex for faster manifest/typedef detection ([#976](https://github.com/rokucommunity/brighterscript/pull/976))
+ - out-of-date transpile blocks in docs ([#956](https://github.com/rokucommunity/brighterscript/pull/956))
+### Fixed
+ - Correct RANGE in template string when dealing with quotes in annotations ([#975](https://github.com/rokucommunity/brighterscript/pull/975))
+
+
+
 ## [0.65.11](https://github.com/rokucommunity/brighterscript/compare/v0.65.10...v0.65.11) - 2023-11-30
 ### Changed
  - upgrade to [roku-deploy@3.11.1](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3111---2023-11-30). Notable changes since 3.10.5:

@@ -6,11 +6,10 @@ import { Parser, ParseMode } from './Parser';
 import type { FunctionStatement, AssignmentStatement, FieldStatement } from './Statement';
 import { ClassStatement } from './Statement';
 import { NewExpression } from './Expression';
-import { StringType } from '../types/StringType';
 import { expectDiagnosticsIncludes, expectZeroDiagnostics } from '../testHelpers.spec';
-import { SymbolTypeFlag } from '../SymbolTable';
 import { isClassStatement } from '../astUtils/reflection';
-import { parse } from './Parser.spec';
+import { StringType } from '../types/StringType';
+import { SymbolTypeFlag } from '../SymbolTable';
 
 describe('parser class', () => {
     it('throws exception when used in brightscript scope', () => {
@@ -418,12 +417,12 @@ describe('parser class', () => {
 
     describe('optional members', () => {
         it('allows optional fields', () => {
-            let { statements, diagnostics } = parse(`
+            let { statements, diagnostics } = Parser.parse(`
                 class HasOptional
                     optional name as string
                     optional height
                 end class
-            `, ParseMode.BrighterScript);
+            `, { mode: ParseMode.BrighterScript });
             expectZeroDiagnostics(diagnostics);
             expect(statements.length).to.eq(1);
             expect(isClassStatement(statements[0])).to.be.true;
@@ -435,12 +434,12 @@ describe('parser class', () => {
         });
 
         it('allows fields named optional', () => {
-            let { statements, diagnostics } = parse(`
+            let { statements, diagnostics } = Parser.parse(`
                 class IsJustOptional
                     optional
                     someThingElse
                 end class
-            `, ParseMode.BrighterScript);
+            `, { mode: ParseMode.BrighterScript });
             expectZeroDiagnostics(diagnostics);
             expect(statements.length).to.eq(1);
             expect(isClassStatement(statements[0])).to.be.true;
@@ -454,11 +453,11 @@ describe('parser class', () => {
         });
 
         it('allows typed fields named optional', () => {
-            let { statements, diagnostics } = parse(`
+            let { statements, diagnostics } = Parser.parse(`
                 class IsJustOptional
                     optional as string
                 end class
-            `, ParseMode.BrighterScript);
+            `, { mode: ParseMode.BrighterScript });
             expectZeroDiagnostics(diagnostics);
             expect(statements.length).to.eq(1);
             expect(isClassStatement(statements[0])).to.be.true;
@@ -472,11 +471,11 @@ describe('parser class', () => {
         });
 
         it('allows fields named optional that are also optional', () => {
-            let { statements, diagnostics } = parse(`
+            let { statements, diagnostics } = Parser.parse(`
                 class IsJustOptional
                     optional optional
                 end class
-            `, ParseMode.BrighterScript);
+            `, { mode: ParseMode.BrighterScript });
             expectZeroDiagnostics(diagnostics);
             expect(statements.length).to.eq(1);
             expect(isClassStatement(statements[0])).to.be.true;
@@ -490,14 +489,14 @@ describe('parser class', () => {
         });
 
         it('disallows optional methods', () => {
-            let { statements, diagnostics } = parse(`
+            let { statements, diagnostics } = Parser.parse(`
                 class HasOptional
 
                     optional function getValue() as boolean
                         return false
                     end function
                 end class
-            `, ParseMode.BrighterScript);
+            `, { mode: ParseMode.BrighterScript });
             expectDiagnosticsIncludes(diagnostics, [
                 DiagnosticMessages.expectedNewlineOrColon().message
             ]);
@@ -505,11 +504,11 @@ describe('parser class', () => {
         });
 
         it('allows fields named `as` that are also optional', () => {
-            let { statements, diagnostics } = parse(`
+            let { statements, diagnostics } = Parser.parse(`
                 class IsJustOptional
                     optional as
                 end class
-            `, ParseMode.BrighterScript);
+            `, { mode: ParseMode.BrighterScript });
             expectZeroDiagnostics(diagnostics);
             expect(statements.length).to.eq(1);
             expect(isClassStatement(statements[0])).to.be.true;
