@@ -133,6 +133,10 @@ export class Program {
             }
             nodeType = new ComponentType(nodeData.name, parentNode);
             nodeType.addBuiltInInterfaces();
+            if (nodeData.name === 'Node') {
+                // Add `roSGNode` as shorthand for `roSGNodeNode`
+                this.globalScope.symbolTable.addSymbol('roSGNode', { description: nodeData.description }, nodeType, SymbolTypeFlag.typetime);
+            }
             this.globalScope.symbolTable.addSymbol(nodeName, { description: nodeData.description }, nodeType, SymbolTypeFlag.typetime);
         } else {
             nodeType = this.globalScope.symbolTable.getSymbolType(nodeName, { flags: SymbolTypeFlag.typetime }) as ComponentType;
@@ -166,7 +170,10 @@ export class Program {
         for (const componentData of Object.values(components) as BRSComponentData[]) {
             const nodeType = new InterfaceType(componentData.name);
             nodeType.addBuiltInInterfaces();
-            this.globalScope.symbolTable.addSymbol(componentData.name, { description: componentData.description }, nodeType, SymbolTypeFlag.typetime);
+            if (componentData.name !== 'roSGNode') {
+                // we will add `roSGNode` as shorthand for `roSGNodeNode`, since all roSgNode components are SceneGraph nodes
+                this.globalScope.symbolTable.addSymbol(componentData.name, { description: componentData.description }, nodeType, SymbolTypeFlag.typetime);
+            }
         }
 
         for (const ifaceData of Object.values(interfaces) as BRSInterfaceData[]) {

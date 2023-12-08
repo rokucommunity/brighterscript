@@ -355,6 +355,8 @@ export class CompletionsProcessor {
             return CompletionItemKind.EnumMember;
         } else if (isNamespaceType(type)) {
             return CompletionItemKind.Module;
+        } else if (isComponentType(type)) {
+            return CompletionItemKind.Interface;
         }
         if (areMembers) {
             return CompletionItemKind.Field;

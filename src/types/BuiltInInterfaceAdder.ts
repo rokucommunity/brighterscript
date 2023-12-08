@@ -52,7 +52,7 @@ export class BuiltInInterfaceAdder {
             const lowerIfaceName = iface.name.toLowerCase();
             const ifaceData = (interfaces[lowerIfaceName] ?? events[lowerIfaceName]) as BRSInterfaceData;
             for (const method of ifaceData.methods ?? []) {
-                const methodFuncType = this.buildMethodFromDocData(method, overrides);
+                const methodFuncType = this.buildMethodFromDocData(method, overrides, thisType);
                 builtInMemberTable.addSymbol(method.name, { description: method.description, completionPriority: 1 }, methodFuncType, SymbolTypeFlag.runtime);
             }
             for (const property of ifaceData.properties ?? []) {
@@ -62,16 +62,22 @@ export class BuiltInInterfaceAdder {
         }
     }
 
-    private static buildMethodFromDocData(method: BRSInterfaceMethodData, overrides?: Map<string, BuiltInInterfaceOverride>): TypedFunctionType {
+    private static buildMethodFromDocData(method: BRSInterfaceMethodData, overrides?: Map<string, BuiltInInterfaceOverride>, thisType?: BscType): TypedFunctionType {
         const override = overrides?.get(method.name.toLowerCase());
-        const returnType = override?.returnType ?? this.getPrimitiveType(method.returnType);
+        let returnType = override?.returnType ?? this.getPrimitiveType(method.returnType);
+        if (!returnType && method.returnType.toLowerCase() === (thisType as any)?.name?.toLowerCase()) {
+            returnType = thisType;
+        }
         const methodFuncType = this.typedFunctionFactory(returnType);
         methodFuncType.name = method.name;
         methodFuncType.isVariadic = method.isVariadic ?? false;
         // eslint-disable-next-line @typescript-eslint/prefer-for-of
         for (let i = 0; i < method.params.length; i++) {
             const param = method.params[i];
-            const paramType = override?.parameterTypes?.[i] ?? this.getPrimitiveType(param.type);
+            let paramType = override?.parameterTypes?.[i] ?? this.getPrimitiveType(param.type);
+            if (!paramType && param.type.toLowerCase() === (thisType as any)?.name?.toLowerCase()) {
+                paramType = thisType;
+            }
             methodFuncType.addParameter(param.name, paramType, !param.isRequired);
         }
         return methodFuncType;
@@ -156,7 +162,7 @@ export class BuiltInInterfaceAdder {
             memberTable.addSymbol(field.name, { description: field.description, completionPriority: 1 }, util.getNodeFieldType(field.type, lookupTable), SymbolTypeFlag.runtime);
         }
         for (const method of builtInNode.methods ?? []) {
-            const methodFuncType = this.buildMethodFromDocData(method);
+            const methodFuncType = this.buildMethodFromDocData(method, null, thisType);
             memberTable.addSymbol(method.name, { description: method.description, completionPriority: 1 }, methodFuncType, SymbolTypeFlag.runtime);
         }
     }
