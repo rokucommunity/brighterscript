@@ -39,25 +39,13 @@ export class BrsFilePreTranspileProcessor {
      * For example, all of these would return the enum: `SomeNamespace.SomeEnum.SomeMember`, SomeEnum.SomeMember, `SomeEnum`
      */
     private getEnumInfo(name: string, containingNamespace: string, scope: Scope) {
-        //look for the enum directly
-        let result = scope?.getEnumFileLink(name, containingNamespace);
 
-        if (result) {
+        //do we have an enum MEMBER reference? (i.e. SomeEnum.someMember or SomeNamespace.SomeEnum.SomeMember)
+        let memberLink = scope.getEnumMemberFileLink(name, containingNamespace);
+        if (memberLink) {
+            const value = memberLink.item.getValue();
             return {
-                enum: result.item
-            };
-        }
-        //assume we've been given the enum.member syntax, so pop the member and try again
-        const parts = name.toLowerCase().split('.');
-        const memberName = parts.pop();
-        if (containingNamespace && parts[0] !== containingNamespace.toLowerCase()) {
-            parts.unshift(containingNamespace.toLowerCase());
-        }
-        result = scope?.getEnumMap().get(parts.join('.'));
-        if (result) {
-            const value = result.item.getMemberValue(memberName);
-            return {
-                enum: result.item,
+                enum: memberLink.item.parent,
                 value: new LiteralExpression(createToken(
                     //just use float literal for now...it will transpile properly with any literal value
                     value.startsWith('"') ? TokenKind.StringLiteral : TokenKind.FloatLiteral,
@@ -65,6 +53,16 @@ export class BrsFilePreTranspileProcessor {
                 ))
             };
         }
+
+        //do we have an enum reference? (i.e. SomeEnum or SomeNamespace.SomeEnum)
+        let enumLink = scope?.getEnumFileLink(name, containingNamespace);
+
+        if (enumLink) {
+            return {
+                enum: enumLink.item
+            };
+        }
+
     }
 
     private processExpression(expression: Expression, scope: Scope) {
