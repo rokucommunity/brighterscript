@@ -2563,7 +2563,7 @@ describe('Program', () => {
         });
     });
 
-    describe.only('global symbol table', () => {
+    describe('global symbol table', () => {
         it('adds primitives', () => {
             const table = program.globalScope.symbolTable;
             const opts = { flags: SymbolTypeFlag.typetime };
@@ -2589,8 +2589,6 @@ describe('Program', () => {
             expectTypeToBe(table.getSymbolType('roRegistry', opts), InterfaceType);
             expectTypeToBe(table.getSymbolType('roRegistry', opts).getMemberType('GetSectionList', rtOpts), TypedFunctionType);
 
-            expectTypeToBe(table.getSymbolType('roSGNode', opts), InterfaceType);
-            expectTypeToBe(table.getSymbolType('roSGNode', opts).getMemberType('appendChild', rtOpts), TypedFunctionType);
         });
 
         it('adds brightscript interfaces', () => {
@@ -2642,14 +2640,20 @@ describe('Program', () => {
             expectTypeToBe(table.getSymbolType('roSGNodeNode', opts).getMemberType('change', rtOpts), AssociativeArrayType);
         });
 
-        it.only('roSGNode and roSGNodeNode are type equivalent', () => {
+        it('roSGNode and roSGNodeNode are type equivalent', () => {
             const table = program.globalScope.symbolTable;
             const opts = { flags: SymbolTypeFlag.typetime };
             const roSGNodeType = table.getSymbolType('roSGNode', opts);
             const roSGNodeNodeType = table.getSymbolType('roSGNodeNode', opts);
 
-            expect(roSGNodeType.isTypeCompatible(roSGNodeNodeType)).to.be.true;
-            expect(roSGNodeNodeType.isTypeCompatible(roSGNodeType)).to.be.true;
+            expectTypeToBe(roSGNodeType, ComponentType);
+            expectTypeToBe(roSGNodeNodeType, ComponentType);
+            let data = {};
+            const first = roSGNodeType.isTypeCompatible(roSGNodeNodeType, data);
+            expect(first).to.be.true;
+            data = {};
+            const second = roSGNodeNodeType.isTypeCompatible(roSGNodeType, data);
+            expect(second).to.be.true;
         });
     });
 
