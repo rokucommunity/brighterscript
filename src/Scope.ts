@@ -181,7 +181,6 @@ export class Scope {
             let member = enumeration.item.findChild<EnumMemberStatement>((child) => isEnumMemberStatement(child) && child.name?.toLowerCase() === memberName);
             return member ? { item: member, file: enumeration.file } : undefined;
         }
-        return enumeration;
     }
 
     /**

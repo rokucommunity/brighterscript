@@ -519,6 +519,24 @@ describe('EnumStatement', () => {
     });
 
     describe('transpile', () => {
+        it('supports non-namespaced enum from within a namespace', () => {
+            program.options.autoImportComponentScript = true;
+            testTranspile(`
+                namespace alpha
+                    sub test()
+                        print Direction.up
+                    end sub
+                end namespace
+                enum Direction
+                    up = "up"
+                end enum
+            `, `
+                sub alpha_test()
+                    print "up"
+                end sub
+            `);
+        });
+
         it('transpiles negative number', () => {
             testTranspile(`
                 sub main()

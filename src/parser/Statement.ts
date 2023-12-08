@@ -2574,6 +2574,13 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
         );
     }
 
+    /**
+     * Get the value of this enum. Requires that `.parent` is set
+     */
+    public getValue() {
+        return (this.parent as EnumStatement).getMemberValue(this.name);
+    }
+
     public transpile(state: BrsTranspileState): TranspileResult {
         return [];
     }
