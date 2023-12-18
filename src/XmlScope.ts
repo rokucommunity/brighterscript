@@ -71,7 +71,7 @@ export class XmlScope extends Scope {
         }
         //validate fields
         for (const field of api.fields) {
-            const { id, type } = field;
+            const { id, type, onChange } = field;
             if (!id) {
                 this.diagnosticMissingAttribute(field, 'id');
             }
@@ -85,6 +85,15 @@ export class XmlScope extends Scope {
                     range: field.getAttribute('type').value.range,
                     file: this.xmlFile
                 });
+            }
+            if (onChange) {
+                if (!callableContainerMap.has(onChange.toLowerCase())) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.xmlFunctionNotFound(onChange),
+                        range: field.getAttribute('onchange').value.range,
+                        file: this.xmlFile
+                    });
+                }
             }
         }
     }

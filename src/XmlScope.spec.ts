@@ -103,6 +103,7 @@ describe('XmlScope', () => {
                         <function id="func3" />
                         <function name="" />
                         <function name />
+                        <field id="field1" type="string" onChange="func4" />
                     </interface>
                     <script uri="child.brs"/>
                 </component>
@@ -127,6 +128,9 @@ describe('XmlScope', () => {
                 range: Range.create(7, 9, 7, 17)
             }, { // syntax error expecting '=' but found '/>'
                 code: DiagnosticMessages.xmlGenericParseError('').code
+            }, { // onChange function
+                ...DiagnosticMessages.xmlFunctionNotFound('func4'),
+                range: Range.create(8, 51, 8, 56)
             }]);
         });
 
