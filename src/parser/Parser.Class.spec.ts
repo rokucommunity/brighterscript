@@ -6,6 +6,8 @@ import { Parser, ParseMode } from './Parser';
 import type { FunctionStatement, AssignmentStatement, FieldStatement } from './Statement';
 import { ClassStatement } from './Statement';
 import { NewExpression } from './Expression';
+import { expectDiagnosticsIncludes, expectZeroDiagnostics } from '../testHelpers.spec';
+import { isClassStatement } from '../astUtils/reflection';
 
 describe('parser class', () => {
     it('throws exception when used in brightscript scope', () => {
@@ -408,6 +410,90 @@ describe('parser class', () => {
             `, { mode: ParseMode.BrightScript });
 
             expect(diagnostics[0]?.message).to.not.exist;
+        });
+    });
+
+    describe('optional members', () => {
+        it('allows optional fields', () => {
+            let { statements, diagnostics } = Parser.parse(`
+                class HasOptional
+                    optional name as string
+                    optional height
+                end class
+            `, { mode: ParseMode.BrighterScript });
+            expectZeroDiagnostics(diagnostics);
+            expect(statements.length).to.eq(1);
+            expect(isClassStatement(statements[0])).to.be.true;
+            const klass = statements[0] as ClassStatement;
+            klass.fields.forEach(f => expect(f.isOptional).to.be.true);
+        });
+
+        it('allows fields named optional', () => {
+            let { statements, diagnostics } = Parser.parse(`
+                class IsJustOptional
+                    optional
+                    someThingElse
+                end class
+            `, { mode: ParseMode.BrighterScript });
+            expectZeroDiagnostics(diagnostics);
+            expect(statements.length).to.eq(1);
+            expect(isClassStatement(statements[0])).to.be.true;
+            const klass = statements[0] as ClassStatement;
+            klass.fields.forEach(f => expect(f.isOptional).to.be.false);
+        });
+
+        it('allows typed fields named optional', () => {
+            let { statements, diagnostics } = Parser.parse(`
+                class IsJustOptional
+                    optional as string
+                end class
+            `, { mode: ParseMode.BrighterScript });
+            expectZeroDiagnostics(diagnostics);
+            expect(statements.length).to.eq(1);
+            expect(isClassStatement(statements[0])).to.be.true;
+            const klass = statements[0] as ClassStatement;
+            klass.fields.forEach(f => expect(f.isOptional).to.be.false);
+        });
+
+        it('allows fields named optional that are also optional', () => {
+            let { statements, diagnostics } = Parser.parse(`
+                class IsJustOptional
+                    optional optional
+                end class
+            `, { mode: ParseMode.BrighterScript });
+            expectZeroDiagnostics(diagnostics);
+            expect(statements.length).to.eq(1);
+            expect(isClassStatement(statements[0])).to.be.true;
+            const klass = statements[0] as ClassStatement;
+            klass.fields.forEach(f => expect(f.isOptional).to.be.true);
+        });
+
+        it('disallows optional methods', () => {
+            let { statements, diagnostics } = Parser.parse(`
+                class HasOptional
+                    optional function getValue() as boolean
+                        return false
+                    end function
+                end class
+            `, { mode: ParseMode.BrighterScript });
+
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.expectedNewlineOrColon().message
+            ]);
+            expect(statements.length).to.eq(1);
+        });
+
+        it('allows fields named `as` that are also optional', () => {
+            let { statements, diagnostics } = Parser.parse(`
+                class IsJustOptional
+                    optional as
+                end class
+            `, { mode: ParseMode.BrighterScript });
+            expectZeroDiagnostics(diagnostics);
+            expect(statements.length).to.eq(1);
+            expect(isClassStatement(statements[0])).to.be.true;
+            const klass = statements[0] as ClassStatement;
+            klass.fields.forEach(f => expect(f.isOptional).to.be.true);
         });
     });
 });
