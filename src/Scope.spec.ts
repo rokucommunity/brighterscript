@@ -30,7 +30,7 @@ import { InterfaceType } from './types/InterfaceType';
 import { ComponentType } from './types/ComponentType';
 import * as path from 'path';
 
-describe.only('Scope', () => {
+describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
     let rootDir = process.cwd();
     let program: Program;
