@@ -30,7 +30,7 @@ import { InterfaceType } from './types/InterfaceType';
 import { ComponentType } from './types/ComponentType';
 import * as path from 'path';
 
-describe('Scope', () => {
+describe.only('Scope', () => {
     let sinon = sinonImport.createSandbox();
     let rootDir = process.cwd();
     let program: Program;
@@ -1266,6 +1266,28 @@ describe('Scope', () => {
                     DiagnosticMessages.nameCollision('Namespace', 'Class', 'SomeKlass').message,
                     DiagnosticMessages.nameCollision('Class', 'Namespace', 'SomeKlass').message
                 ]);
+            });
+
+            it('should not give diagnostics for a class that partially matches a namespace', () => {
+                program.setFile('source/main.bs', `
+                    namespace some.nameSpace
+                        function anything()
+                        end function
+                    end namespace
+
+                    namespace some
+                            class name
+                            end class
+                    end namespace
+
+                    namespace some
+                        class name2
+                        end class
+                    end namespace
+                `);
+                program.validate();
+                let diagnostics = program.getDiagnostics();
+                expect(diagnostics).to.be.empty;
             });
 
             it('should validate when an enum has a name collision with a namespace', () => {
