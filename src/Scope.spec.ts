@@ -1268,6 +1268,28 @@ describe('Scope', () => {
                 ]);
             });
 
+            it('should not give diagnostics for a class that partially matches a namespace', () => {
+                program.setFile('source/main.bs', `
+                    namespace some.nameSpace
+                        function anything()
+                        end function
+                    end namespace
+
+                    namespace some
+                            class name
+                            end class
+                    end namespace
+
+                    namespace some
+                        class name2
+                        end class
+                    end namespace
+                `);
+                program.validate();
+                let diagnostics = program.getDiagnostics();
+                expect(diagnostics).to.be.empty;
+            });
+
             it('should validate when an enum has a name collision with a namespace', () => {
                 program.setFile('source/main.bs', `
                     namespace SomeEnum

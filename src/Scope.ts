@@ -115,8 +115,7 @@ export class Scope {
         if (containingNamespace) {
             lookupName = `${containingNamespace?.toLowerCase()}.${nameLower}`;
         }
-
-        const nsList = lookupKeys.filter(key => key.startsWith(lookupName)).map(key => lookup.get(key));
+        const nsList = lookupKeys.filter(key => key === lookupName).map(key => lookup.get(key));
         return nsList;
     }
 
