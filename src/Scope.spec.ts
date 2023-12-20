@@ -3602,6 +3602,61 @@ describe('Scope', () => {
             expectZeroDiagnostics(program);
             expect(changedSymbolsSize).to.equal(0);
         });
+        it.only('does not throw exception when updating a file with roSGNodeNode interface extension', () => {
+            program.setFile<BrsFile>('source/class.bs', `
+
+                namespace mc.internal.commands
+                    interface ICommandTask extends roSGNodeNode
+                        __commandName as string
+                    end interface
+
+                    function doesItWork(thing as mc.internal.commands.ICommandTask)
+                        ? thing.__commandName
+                        ? thing.itIs
+                    end function
+                end namespace
+            `);
+
+            program.validate();
+
+            program.setFile<BrsFile>('source/class.bs', `
+
+                namespace mc.internal.commands
+                    interface ICommandTask extends roSGNodeNode
+                        __commandName as string
+                    end interface
+
+                    function doesItWork(thing as mc.internal.commands.ICommandTask)
+                        ? thing.__commandName
+                        ? thing.itIs
+                    end function
+                end namespace
+            `);
+
+            program.validate();
+
+            expectZeroDiagnostics(program);
+
+            program.setFile<BrsFile>('source/subclass.bs', `
+                class SubTestClass extends TestClass
+                    ' added a comment
+                    length as float
+                end class
+            `);
+
+            let changedSymbolsSize = -1;
+            class TestScopeValidator implements CompilerPlugin {
+                name = 'TestScopeValidator';
+                public onScopeValidate(event: OnScopeValidateEvent) {
+                    changedSymbolsSize = event.changedSymbols.get(SymbolTypeFlag.runtime).size;
+                }
+            }
+
+            program.plugins.add(new TestScopeValidator());
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(changedSymbolsSize).to.equal(0);
+        });
 
     });
 
