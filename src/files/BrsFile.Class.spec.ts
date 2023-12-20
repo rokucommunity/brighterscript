@@ -1708,9 +1708,11 @@ describe('BrsFile BrighterScript classes', () => {
             namespace App.Logic
                 class FirstClass extends App.CoreClass
                 end class
+                class SecondClass extends FirstClass
+                end class
             end namespace
             namespace App.OtherLogic
-                class FinalClass extends App.Logic.FirstClass
+                class FinalClass extends App.Logic.SecondClass
                 end class
             end namespace
         `, `
@@ -1739,8 +1741,21 @@ describe('BrsFile BrighterScript classes', () => {
                 instance.new()
                 return instance
             end function
-            function __App_OtherLogic_FinalClass_builder()
+            function __App_Logic_SecondClass_builder()
                 instance = __App_Logic_FirstClass_builder()
+                instance.super1_new = instance.new
+                instance.new = sub()
+                    m.super1_new()
+                end sub
+                return instance
+            end function
+            function App_Logic_SecondClass()
+                instance = __App_Logic_SecondClass_builder()
+                instance.new()
+                return instance
+            end function
+            function __App_OtherLogic_FinalClass_builder()
+                instance = __App_Logic_SecondClass_builder()
                 instance.super2_new = instance.new
                 instance.new = sub()
                     m.super2_new()
