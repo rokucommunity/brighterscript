@@ -1696,6 +1696,65 @@ describe('BrsFile BrighterScript classes', () => {
         program.validate();
     });
 
+    it('extending namespaced class transpiles properly', () => {
+        testTranspile(`
+            namespace App
+                class CoreClass
+                    sub new()
+                        print "CoreClass.new()"
+                    end sub
+                end class
+            end namespace
+            namespace App.Logic
+                class FirstClass extends App.CoreClass
+                end class
+            end namespace
+            namespace App.OtherLogic
+                class FinalClass extends App.Logic.FirstClass
+                end class
+            end namespace
+        `, `
+            function __App_CoreClass_builder()
+                instance = {}
+                instance.new = sub()
+                    print "CoreClass.new()"
+                end sub
+                return instance
+            end function
+            function App_CoreClass()
+                instance = __App_CoreClass_builder()
+                instance.new()
+                return instance
+            end function
+            function __App_Logic_FirstClass_builder()
+                instance = __App_CoreClass_builder()
+                instance.super0_new = instance.new
+                instance.new = sub()
+                    m.super0_new()
+                end sub
+                return instance
+            end function
+            function App_Logic_FirstClass()
+                instance = __App_Logic_FirstClass_builder()
+                instance.new()
+                return instance
+            end function
+            function __App_OtherLogic_FinalClass_builder()
+                instance = __App_Logic_FirstClass_builder()
+                instance.super2_new = instance.new
+                instance.new = sub()
+                    m.super2_new()
+                end sub
+                return instance
+            end function
+            function App_OtherLogic_FinalClass()
+                instance = __App_OtherLogic_FinalClass_builder()
+                instance.new()
+                return instance
+            end function
+        `);
+    });
+
     it.skip('detects calling class constructors with too many parameters', () => {
         program.setFile('source/main.bs', `
             class Parameterless
