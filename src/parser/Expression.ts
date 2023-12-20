@@ -1174,10 +1174,12 @@ export class CallfuncExpression extends Expression {
 
         const calleeType = this.callee.getType({ ...options, flags: SymbolTypeFlag.runtime });
         if (isComponentType(calleeType) || isReferenceType(calleeType)) {
-            const funcType = (calleeType as ComponentType).getCallFuncType(this.methodName.text, options);
-            options.typeChain?.push(new TypeChainEntry(this.methodName.text, funcType, options.flags, this.methodName.range, createToken(TokenKind.Callfunc)));
-            if (options.ignoreCall) {
-                result = funcType;
+            const funcType = (calleeType as ComponentType).getCallFuncType?.(this.methodName.text, options);
+            if (funcType) {
+                options.typeChain?.push(new TypeChainEntry(this.methodName.text, funcType, options.flags, this.methodName.range, createToken(TokenKind.Callfunc)));
+                if (options.ignoreCall) {
+                    result = funcType;
+                }
             }
             /* TODO:
                 make callfunc return types work
