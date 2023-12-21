@@ -37,22 +37,35 @@ import { URI } from 'vscode-uri';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import type { BsConfig } from './BsConfig';
 import { Deferred } from './deferred';
-import { DiagnosticMessages } from './DiagnosticMessages';
 import { ProgramBuilder } from './ProgramBuilder';
 import { standardizePath as s, util } from './util';
 import { Logger } from './Logger';
 import { Throttler } from './Throttler';
-import { KeyedThrottler } from './KeyedThrottler';
 import { DiagnosticCollection } from './DiagnosticCollection';
 import { isBrsFile } from './astUtils/reflection';
 import { encodeSemanticTokens, semanticTokensLegend } from './SemanticTokenUtils';
 import type { BusyStatus } from './BusyStatusTracker';
 import { BusyStatusTracker } from './BusyStatusTracker';
+import { ProjectManager } from './lsp/ProjectManager';
 
 export class LanguageServer {
+    constructor() {
+        this.projectManager = new ProjectManager();
+        //anytime a project finishes validation, send diagnostics
+        this.projectManager.on('flush-diagnostics', () => {
+            void this.sendDiagnostics();
+        });
+        //allow the lsp to provide file contents
+        this.projectManager.addFileResolver(this.documentFileResolver.bind(this));
+    }
+
     private connection = undefined as Connection;
 
-    public projects = [] as Project[];
+    /**
+     * Manages all projects for this language server
+     */
+    private projectManager: ProjectManager;
+
 
     /**
      * The number of milliseconds that should be used for language server typing debouncing
@@ -85,8 +98,6 @@ export class LanguageServer {
     }
 
     private loggerSubscription: () => void;
-
-    private keyedThrottler = new KeyedThrottler(this.debounceTimeout);
 
     public validateThrottler = new Throttler(0);
 
@@ -251,17 +262,7 @@ export class LanguageServer {
      * Ask the client for the list of `files.exclude` patterns. Useful when determining if we should process a file
      */
     private async getWorkspaceExcludeGlobs(workspaceFolder: string): Promise<string[]> {
-        let config = {
-            exclude: {} as Record<string, boolean>
-        };
-        //if supported, ask vscode for the `files.exclude` configuration
-        if (this.hasConfigurationCapability) {
-            //get any `files.exclude` globs to use to filter
-            config = await this.connection.workspace.getConfiguration({
-                scopeUri: workspaceFolder,
-                section: 'files'
-            });
-        }
+        const config = await this.getClientConfiguration(workspaceFolder, 'files');
         return Object
             .keys(config?.exclude ?? {})
             .filter(x => config?.exclude?.[x])
@@ -281,51 +282,6 @@ export class LanguageServer {
     }
 
     /**
-     * Scan the workspace for all `bsconfig.json` files. If at least one is found, then only folders who have bsconfig.json are returned.
-     * If none are found, then the workspaceFolder itself is treated as a project
-     */
-    @TrackBusyStatus
-    private async getProjectPaths(workspaceFolder: string) {
-        const excludes = (await this.getWorkspaceExcludeGlobs(workspaceFolder)).map(x => s`!${x}`);
-        const files = await rokuDeploy.getFilePaths([
-            '**/bsconfig.json',
-            //exclude all files found in `files.exclude`
-            ...excludes
-        ], workspaceFolder);
-        //if we found at least one bsconfig.json, then ALL projects must have a bsconfig.json.
-        if (files.length > 0) {
-            return files.map(file => s`${path.dirname(file.src)}`);
-        }
-
-        //look for roku project folders
-        const rokuLikeDirs = (await Promise.all(
-            //find all folders containing a `manifest` file
-            (await rokuDeploy.getFilePaths([
-                '**/manifest',
-                ...excludes
-
-                //is there at least one .bs|.brs file under the `/source` folder?
-            ], workspaceFolder)).map(async manifestEntry => {
-                const manifestDir = path.dirname(manifestEntry.src);
-                const files = await rokuDeploy.getFilePaths([
-                    'source/**/*.{brs,bs}',
-                    ...excludes
-                ], manifestDir);
-                if (files.length > 0) {
-                    return manifestDir;
-                }
-            })
-            //throw out nulls
-        )).filter(x => !!x);
-        if (rokuLikeDirs.length > 0) {
-            return rokuLikeDirs;
-        }
-
-        //treat the workspace folder as a brightscript project itself
-        return [workspaceFolder];
-    }
-
-    /**
      * Find all folders with bsconfig.json files in them, and treat each as a project.
      * Treat workspaces that don't have a bsconfig.json as a project.
      * Handle situations where bsconfig.json files were added or removed (to elevate/lower workspaceFolder projects accordingly)
@@ -333,54 +289,47 @@ export class LanguageServer {
      */
     @TrackBusyStatus
     private async syncProjects() {
-        const workspacePaths = await this.getWorkspacePaths();
-        let projectPaths = (await Promise.all(
-            workspacePaths.map(async workspacePath => {
-                const projectPaths = await this.getProjectPaths(workspacePath);
-                return projectPaths.map(projectPath => ({
-                    projectPath: projectPath,
-                    workspacePath: workspacePath
-                }));
+        // get all workspace paths from the client
+        let workspaces = await Promise.all(
+            (await this.connection.workspace.getWorkspaceFolders() ?? []).map(async (x) => {
+                const workspaceFolder = util.uriToPath(x.uri);
+                return {
+                    workspaceFolder: workspaceFolder,
+                    excludePatterns: await this.getWorkspaceExcludeGlobs(workspaceFolder),
+                    bsconfigPath: (await this.getClientConfiguration(x.uri, 'brightscript'))?.configFile
+                };
             })
-        )).flat(1);
-
-        //delete projects not represented in the list
-        for (const project of this.getProjects()) {
-            if (!projectPaths.find(x => x.projectPath === project.projectPath)) {
-                this.removeProject(project);
-            }
-        }
-
-        //exclude paths to projects we already have
-        projectPaths = projectPaths.filter(x => {
-            //only keep this project path if there's not a project with that path
-            return !this.projects.find(project => project.projectPath === x.projectPath);
-        });
-
-        //dedupe by project path
-        projectPaths = [
-            ...projectPaths.reduce(
-                (acc, x) => acc.set(x.projectPath, x),
-                new Map<string, typeof projectPaths[0]>()
-            ).values()
-        ];
-
-        //create missing projects
-        await Promise.all(
-            projectPaths.map(x => this.createProject(x.projectPath, x.workspacePath))
         );
+
+
+        await this.projectManager.syncProjects(workspaces);
+
         //flush diagnostics
         await this.sendDiagnostics();
     }
 
     /**
-     * Get all workspace paths from the client
+     * Given a workspaceFolder path, get the specified configuration from the client (if applicable).
+     * Be sure to use optional chaining to traverse the result in case that configuration doesn't exist or the client doesn't support `getConfiguration`
+     * @param workspaceFolder the folder for the workspace in the client
      */
-    private async getWorkspacePaths() {
-        let workspaceFolders = await this.connection.workspace.getWorkspaceFolders() ?? [];
-        return workspaceFolders.map((x) => {
-            return util.uriToPath(x.uri);
-        });
+    private async getClientConfiguration<T extends Record<string, any>>(workspaceFolder: string, section: string): Promise<T> {
+        let scopeUri: string;
+        if (workspaceFolder.startsWith('file:')) {
+            scopeUri = URI.parse(workspaceFolder).toString();
+        } else {
+            scopeUri = URI.file(workspaceFolder).toString();
+        }
+        let config = {};
+
+        //if the client supports configuration, look for config group called "brightscript"
+        if (this.hasConfigurationCapability) {
+            config = await this.connection.workspace.getConfiguration({
+                scopeUri: scopeUri,
+                section: section
+            });
+        }
+        return config as T;
     }
 
     /**
@@ -458,147 +407,6 @@ export class LanguageServer {
         let document = this.documents.get(pathUri);
         if (document) {
             return document.getText();
-        }
-    }
-
-    private async getConfigFilePath(workspacePath: string) {
-        let scopeUri: string;
-        if (workspacePath.startsWith('file:')) {
-            scopeUri = URI.parse(workspacePath).toString();
-        } else {
-            scopeUri = URI.file(workspacePath).toString();
-        }
-        let config = {
-            configFile: undefined
-        };
-        //if the client supports configuration, look for config group called "brightscript"
-        if (this.hasConfigurationCapability) {
-            config = await this.connection.workspace.getConfiguration({
-                scopeUri: scopeUri,
-                section: 'brightscript'
-            });
-        }
-        let configFilePath: string;
-
-        //if there's a setting, we need to find the file or show error if it can't be found
-        if (config?.configFile) {
-            configFilePath = path.resolve(workspacePath, config.configFile);
-            if (await util.pathExists(configFilePath)) {
-                return configFilePath;
-            } else {
-                this.sendCriticalFailure(`Cannot find config file specified in user / workspace settings at '${configFilePath}'`);
-            }
-        }
-
-        //default to config file path found in the root of the workspace
-        configFilePath = path.resolve(workspacePath, 'bsconfig.json');
-        if (await util.pathExists(configFilePath)) {
-            return configFilePath;
-        }
-
-        //look for the deprecated `brsconfig.json` file
-        configFilePath = path.resolve(workspacePath, 'brsconfig.json');
-        if (await util.pathExists(configFilePath)) {
-            return configFilePath;
-        }
-
-        //no config file could be found
-        return undefined;
-    }
-
-
-    /**
-     * A unique project counter to help distinguish log entries in lsp mode
-     */
-    private projectCounter = 0;
-
-    /**
-     * @param projectPath path to the project
-     * @param workspacePath path to the workspace in which all project should reside or are referenced by
-     * @param projectNumber an optional project number to assign to the project. Used when reloading projects that should keep the same number
-     */
-    @TrackBusyStatus
-    private async createProject(projectPath: string, workspacePath = projectPath, projectNumber?: number) {
-        workspacePath ??= projectPath;
-        let project = this.projects.find((x) => x.projectPath === projectPath);
-        //skip this project if we already have it
-        if (project) {
-            return;
-        }
-
-        let builder = new ProgramBuilder();
-        projectNumber ??= this.projectCounter++;
-        builder.logger.prefix = `[prj${projectNumber}]`;
-        builder.logger.log(`Created project #${projectNumber} for: "${projectPath}"`);
-
-        //flush diagnostics every time the program finishes validating
-        builder.plugins.add({
-            name: 'bsc-language-server',
-            afterProgramValidate: () => {
-                void this.sendDiagnostics();
-            }
-        });
-
-        //prevent clearing the console on run...this isn't the CLI so we want to keep a full log of everything
-        builder.allowConsoleClearing = false;
-
-        //look for files in our in-memory cache before going to the file system
-        builder.addFileResolver(this.documentFileResolver.bind(this));
-
-        let configFilePath = await this.getConfigFilePath(projectPath);
-
-        let cwd = projectPath;
-
-        //if the config file exists, use it and its folder as cwd
-        if (configFilePath && await util.pathExists(configFilePath)) {
-            cwd = path.dirname(configFilePath);
-        } else {
-            //config file doesn't exist...let `brighterscript` resolve the default way
-            configFilePath = undefined;
-        }
-
-        const firstRunDeferred = new Deferred<any>();
-
-        let newProject: Project = {
-            projectNumber: projectNumber,
-            builder: builder,
-            firstRunPromise: firstRunDeferred.promise,
-            projectPath: projectPath,
-            workspacePath: workspacePath,
-            isFirstRunComplete: false,
-            isFirstRunSuccessful: false,
-            configFilePath: configFilePath,
-            isStandaloneFileProject: false
-        };
-
-        this.projects.push(newProject);
-
-        try {
-            await builder.run({
-                cwd: cwd,
-                project: configFilePath,
-                watch: false,
-                createPackage: false,
-                deploy: false,
-                copyToStaging: false,
-                showDiagnosticsInConsole: false
-            });
-            newProject.isFirstRunComplete = true;
-            newProject.isFirstRunSuccessful = true;
-            firstRunDeferred.resolve();
-        } catch (e) {
-            builder.logger.error(e);
-            firstRunDeferred.reject(e);
-            newProject.isFirstRunComplete = true;
-            newProject.isFirstRunSuccessful = false;
-        }
-        //if we found a deprecated brsconfig.json, add a diagnostic warning the user
-        if (configFilePath && path.basename(configFilePath) === 'brsconfig.json') {
-            builder.addDiagnostic(configFilePath, {
-                ...DiagnosticMessages.brsConfigJsonIsDeprecated(),
-                range: util.createRange(0, 0, 0, 0)
-            });
-            return this.sendDiagnostics();
         }
     }
 
@@ -692,7 +500,7 @@ export class LanguageServer {
         let filePath = util.uriToPath(params.textDocument.uri);
 
         //wait until the file has settled
-        await this.keyedThrottler.onIdleOnce(filePath, true);
+        await this.onValidateSettled();
 
         let completions = this
             .getProjects()
@@ -729,7 +537,7 @@ export class LanguageServer {
         let srcPath = util.uriToPath(params.textDocument.uri);
 
         //wait until the file has settled
-        await this.keyedThrottler.onIdleOnce(srcPath, true);
+        await this.onValidateSettled();
 
         const codeActions = this
             .getProjects()
@@ -744,17 +552,6 @@ export class LanguageServer {
             }
         }
         return codeActions;
-    }
-
-    /**
-     * Remove a project from the language server
-     */
-    private removeProject(project: Project) {
-        const idx = this.projects.indexOf(project);
-        if (idx > -1) {
-            this.projects.splice(idx, 1);
-        }
-        project?.builder?.dispose();
     }
 
     /**
@@ -967,9 +764,7 @@ export class LanguageServer {
         //All functions below can handle being given a file path AND a folder path, and will only operate on the one they are looking for
         let consumeCount = 0;
         await Promise.all(changes.map(async (change) => {
-            await this.keyedThrottler.run(change.srcPath, async () => {
-                consumeCount += await this.handleFileChange(project, change) ? 1 : 0;
-            });
+            consumeCount += await this.handleFileChange(project, change) ? 1 : 0;
         }));
 
         if (consumeCount > 0) {
@@ -1100,7 +895,7 @@ export class LanguageServer {
         try {
 
             //throttle file processing. first call is run immediately, and then the last call is processed.
-            await this.keyedThrottler.run(filePath, () => {
+            await this.keyedThrottler.run(filePath, async () => {
 
                 let documentText = document.getText();
                 for (const project of this.getProjects()) {
@@ -1115,9 +910,9 @@ export class LanguageServer {
                         }, documentText);
                     }
                 }
+                // validate all projects
+                await this.validateAllThrottled();
             });
-            // validate all projects
-            await this.validateAllThrottled();
         } catch (e: any) {
             this.sendCriticalFailure(`Critical error parsing/validating ${filePath}: ${e.message}`);
         }
@@ -1283,6 +1078,7 @@ export class LanguageServer {
 
     private async sendDiagnostics() {
         await this.sendDiagnosticsThrottler.run(async () => {
+            // await this.projectManager.onSettle();
             //wait for all programs to finish running. This ensures the `Program` exists.
             await Promise.all(
                 this.projects.map(x => x.firstRunPromise)
@@ -1330,27 +1126,6 @@ export class LanguageServer {
         this.loggerSubscription?.();
         this.validateThrottler.dispose();
     }
-}
-
-export interface Project {
-    /**
-     * A unique number for this project, generated during this current language server session. Mostly used so we can identify which project is doing logging
-     */
-    projectNumber: number;
-    firstRunPromise: Promise<any>;
-    builder: ProgramBuilder;
-    /**
-     * The path to where the project resides
-     */
-    projectPath: string;
-    /**
-     * The path to the workspace where this project resides. A workspace can have multiple projects (by adding a bsconfig.json to each folder).
-     */
-    workspacePath: string;
-    isFirstRunComplete: boolean;
-    isFirstRunSuccessful: boolean;
-    configFilePath?: string;
-    isStandaloneFileProject: boolean;
 }
 
 export enum CustomCommands {

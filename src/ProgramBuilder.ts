@@ -41,8 +41,12 @@ export class ProgramBuilder {
     public plugins: PluginInterface = new PluginInterface([], { logger: this.logger });
     private fileResolvers = [] as FileResolver[];
 
-    public addFileResolver(fileResolver: FileResolver) {
-        this.fileResolvers.push(fileResolver);
+    /**
+     * Add file resolvers that will be able to provide file contents before loading from the file system
+     * @param fileResolvers
+     */
+    public addFileResolver(...fileResolvers: FileResolver[]) {
+        this.fileResolvers.push(...fileResolvers);
     }
 
     /**
