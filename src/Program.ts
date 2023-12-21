@@ -167,6 +167,11 @@ export class Program {
             this.globalScope.symbolTable.addSymbol(callable.name, { description: callable.shortDescription }, callable.type, SymbolTypeFlag.runtime);
         }
 
+
+        for (const nodeData of Object.values(nodes) as SGNodeData[]) {
+            this.recursivelyAddNodeToSymbolTable(nodeData);
+        }
+
         for (const componentData of Object.values(components) as BRSComponentData[]) {
             const nodeType = new InterfaceType(componentData.name);
             nodeType.addBuiltInInterfaces();
@@ -188,9 +193,6 @@ export class Program {
             this.globalScope.symbolTable.addSymbol(eventData.name, { description: eventData.description }, nodeType, SymbolTypeFlag.typetime);
         }
 
-        for (const nodeData of Object.values(nodes) as SGNodeData[]) {
-            this.recursivelyAddNodeToSymbolTable(nodeData);
-        }
     }
 
     /**
