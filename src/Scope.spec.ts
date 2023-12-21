@@ -3603,6 +3603,105 @@ describe('Scope', () => {
             expect(changedSymbolsSize).to.equal(0);
         });
 
+        it('does not throw exception when updating a file with roSGNodeNode interface extension', () => {
+            program.setFile<BrsFile>('source/class.bs', `
+
+                namespace mc.internal.commands
+                    interface ICommandTask extends roSGNodeNode
+                        __commandName as string
+                    end interface
+
+                    function doesItWork(thing as mc.internal.commands.ICommandTask)
+                        ? thing.__commandName
+                    end function
+                end namespace
+            `);
+
+            program.validate();
+            let symbolChanges: Map<SymbolTypeFlag, Set<string>>;
+            class TestScopeValidator implements CompilerPlugin {
+                name = 'TestScopeValidator';
+                public onScopeValidate(event: OnScopeValidateEvent) {
+                    symbolChanges = event.changedSymbols;
+                }
+            }
+            program.plugins.add(new TestScopeValidator());
+            program.setFile<BrsFile>('source/class.bs', `
+
+                namespace mc.internal.commands
+                    interface ICommandTask extends roSGNodeNode
+                        __commandName as string
+                        __otherProp as integer
+                    end interface
+
+                    function doesItWork(thing as mc.internal.commands.ICommandTask)
+                        ? thing.__commandName
+                    end function
+                end namespace
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+            let runTimeChanges = symbolChanges.get(SymbolTypeFlag.runtime);
+            let typeTimeChanges = symbolChanges.get(SymbolTypeFlag.typetime);
+
+            expect(runTimeChanges.size).to.equal(2); // both the underscored and dotted versions of doesItWork
+            expect(typeTimeChanges.size).to.equal(1); // mc.internal.commands.ICommandTask
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+
+        it('does not throw exception when updating a file with roSGNode interface extension', () => {
+            program.setFile<BrsFile>('source/class.bs', `
+
+                namespace mc.internal.commands
+                    interface ICommandTask extends roSGNode
+                        __commandName as string
+                    end interface
+
+                    function doesItWork(thing as mc.internal.commands.ICommandTask)
+                        ? thing.__commandName
+                    end function
+                end namespace
+            `);
+
+            program.validate();
+            let symbolChanges: Map<SymbolTypeFlag, Set<string>>;
+            class TestScopeValidator implements CompilerPlugin {
+                name = 'TestScopeValidator';
+                public onScopeValidate(event: OnScopeValidateEvent) {
+                    symbolChanges = event.changedSymbols;
+                }
+            }
+            program.plugins.add(new TestScopeValidator());
+            program.setFile<BrsFile>('source/class.bs', `
+
+                namespace mc.internal.commands
+                    interface ICommandTask extends roSGNodeNode
+                        __commandName as string
+                        __otherProp as integer
+                    end interface
+
+                    function doesItWork(thing as mc.internal.commands.ICommandTask)
+                        ? thing.__commandName
+                    end function
+                end namespace
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+            let runTimeChanges = symbolChanges.get(SymbolTypeFlag.runtime);
+            let typeTimeChanges = symbolChanges.get(SymbolTypeFlag.typetime);
+
+            expect(runTimeChanges.size).to.equal(2); // both the underscored and dotted versions of doesItWork
+            expect(typeTimeChanges.size).to.equal(1); // mc.internal.commands.ICommandTask
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
     });
 
     describe('performance', () => {

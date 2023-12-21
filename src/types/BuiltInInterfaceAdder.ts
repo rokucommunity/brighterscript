@@ -57,7 +57,7 @@ export class BuiltInInterfaceAdder {
             }
             for (const property of ifaceData.properties ?? []) {
                 const override = overrides?.get(property.name.toLowerCase());
-                builtInMemberTable.addSymbol(property.name, { description: property.description, completionPriority: 1 }, override?.type ?? this.getPrimitiveType(property.type), SymbolTypeFlag.runtime);
+                builtInMemberTable.addSymbol(property.name, { description: property.description, completionPriority: 1 }, override?.type ?? this.getPrimitiveType(property.type) ?? this.getPrimitiveType('dynamic'), SymbolTypeFlag.runtime);
             }
         }
     }
@@ -78,6 +78,7 @@ export class BuiltInInterfaceAdder {
             if (!paramType && param.type.toLowerCase() === (thisType as any)?.name?.toLowerCase()) {
                 paramType = thisType;
             }
+            paramType ??= this.primitiveTypeInstanceCache.get('dynamic');
             methodFuncType.addParameter(param.name, paramType, !param.isRequired);
         }
         return methodFuncType;
@@ -97,7 +98,7 @@ export class BuiltInInterfaceAdder {
             if (!this.getLookupTable) {
                 throw new Error(`Unable to find type instance '${typeName}'`);
             }
-            return this.getLookupTable()?.getSymbolType(typeName, { flags: SymbolTypeFlag.typetime });
+            return this.getLookupTable()?.getSymbolType(typeName, { flags: SymbolTypeFlag.typetime, fullName: typeName, tableProvider: this.getLookupTable });
         }
 
         return returnType;
