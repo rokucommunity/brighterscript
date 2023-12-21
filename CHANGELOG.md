@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.66.0-alpha.11](https://github.com/rokucommunity/brighterscript/compare/v0.66.0-alpha.10...v0.66.0-alpha.11) - 2023-12-21
+### Changed
+ - Make `roSGNode` and `roSGNodeNode` the same ([#984](https://github.com/rokucommunity/brighterscript/pull/984))
+### Fixed
+ - Scope validation crash ([#991](https://github.com/rokucommunity/brighterscript/pull/991))
+ - Namespace validation crash ([#989](https://github.com/rokucommunity/brighterscript/pull/989))
+
+
+
 ## [0.66.0-alpha.10](https://github.com/rokucommunity/brighterscript/compare/v0.66.0-alpha.9...v0.66.0-alpha.10) - 2023-12-07
 ### Fixed
  - class constructor used as function transpilation and validation ([#972](https://github.com/rokucommunity/brighterscript/pull/972))
