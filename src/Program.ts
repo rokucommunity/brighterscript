@@ -804,12 +804,6 @@ export class Program {
                 return scope;
             }
         }
-
-        console.dir(`No scope found for file ${file.srcPath}`);
-
-        // Something bad has happened and we have a file which does not appear in any scope;
-        // return a fake scope to prevent a crash.
-        // return Scope.nullScope(this);
     }
 
     public getStatementsByName(name: string, originFile: BrsFile, namespaceName?: string): FileLink<Statement>[] {

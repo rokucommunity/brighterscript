@@ -3,8 +3,7 @@ import * as fsExtra from 'fs-extra';
 import { Program } from '../../Program';
 import { standardizePath as s } from '../../util';
 import { tempDir, rootDir } from '../../testHelpers.spec';
-import { BrsFile, type BeforeFileTranspileEvent, Logger, LogLevel } from '../..';
-import { BrsFilePreTranspileProcessor } from './BrsFilePreTranspileProcessor';
+import { Logger, LogLevel } from '../..';
 import PluginInterface from '../../PluginInterface';
 const sinon = createSandbox();
 
