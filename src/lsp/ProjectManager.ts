@@ -25,6 +25,7 @@ export class ProjectManager {
 
     private emitter = new EventEmitter();
 
+    public on(eventName: 'critical-failure', handler: (data: { project: Project; message: string }) => void);
     public on(eventName: 'flush-diagnostics', handler: (data: { project: Project }) => void);
     public on(eventName: string, handler: (payload: any) => void) {
         this.emitter.on(eventName, handler);
@@ -175,7 +176,7 @@ export class ProjectManager {
 
         //skip this project if we already have it
         if (this.hasProject(config.projectPath)) {
-            return;
+            return this.getProject(config.projectPath);
         }
 
         let builder = new ProgramBuilder();
@@ -254,13 +255,15 @@ export class ProjectManager {
             });
             this.emit('flush-diagnostics', { project: newProject });
         }
+        return newProject;
     }
 
     private async getBsconfigPath(config: ProjectConfig) {
+
         let configFilePath: string;
         //if there's a setting, we need to find the file or show error if it can't be found
         if (config?.bsconfigPath) {
-            configFilePath = path.resolve(config.projectPath, config?.bsconfigPath);
+            configFilePath = path.resolve(config.projectPath, config.bsconfigPath);
             if (await util.pathExists(configFilePath)) {
                 return configFilePath;
             } else {
@@ -271,14 +274,19 @@ export class ProjectManager {
             }
         }
 
+        //the rest of these require a projectPath, so return early if we don't have one
+        if (!config?.projectPath) {
+            return undefined;
+        }
+
         //default to config file path found in the root of the workspace
-        configFilePath = path.resolve(config.projectPath, 'bsconfig.json');
+        configFilePath = s`${config.projectPath}/bsconfig.json`;
         if (await util.pathExists(configFilePath)) {
             return configFilePath;
         }
 
         //look for the deprecated `brsconfig.json` file
-        configFilePath = path.resolve(config.projectPath, 'brsconfig.json');
+        configFilePath = s`${config.projectPath}/brsconfig.json`;
         if (await util.pathExists(configFilePath)) {
             return configFilePath;
         }
@@ -309,7 +317,7 @@ interface ProjectConfig {
     /**
      * A list of glob patterns used to _exclude_ files from various bsconfig searches
      */
-    excludePatterns: string[];
+    excludePatterns?: string[];
     /**
      * An optional project number to assign to the project within the context of a language server. reloaded projects should keep the same number if possible
      */

@@ -43,7 +43,7 @@ export class ProgramBuilder {
 
     /**
      * Add file resolvers that will be able to provide file contents before loading from the file system
-     * @param fileResolvers
+     * @param fileResolvers a list of file resolvers
      */
     public addFileResolver(...fileResolvers: FileResolver[]) {
         this.fileResolvers.push(...fileResolvers);
@@ -75,7 +75,7 @@ export class ProgramBuilder {
         let file: BscFile = this.program.getFile(srcPath);
         if (!file) {
             file = {
-                pkgPath: this.program.getPkgPath(srcPath),
+                pkgPath: path.basename(srcPath),
                 pathAbsolute: srcPath, //keep this for backwards-compatibility. TODO remove in v1
                 srcPath: srcPath,
                 getDiagnostics: () => {
