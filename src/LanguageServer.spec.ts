@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-non-null-assertion */
+/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
 import { expect } from './chai-config.spec';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
@@ -515,7 +517,7 @@ describe('LanguageServer', () => {
                         m.buildAwesome()
                     end if
                 end sub
-            `);
+            `)!;
             addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.bs" />`);
         });
 
@@ -589,7 +591,7 @@ describe('LanguageServer', () => {
 
     describe('onReferences', () => {
         let functionDocument: TextDocument;
-        let referenceFileUris = [];
+        let referenceFileUris: string[] = [];
 
         beforeEach(async () => {
             server['connection'] = server['createConnection']();
@@ -601,7 +603,7 @@ describe('LanguageServer', () => {
                 function buildAwesome()
                     return 42
                 end function
-            `);
+            `)!;
 
             for (let i = 0; i < 5; i++) {
                 let name = `CallComponent${i}`;
@@ -612,7 +614,7 @@ describe('LanguageServer', () => {
                             buildAwesome()
                         end if
                     end sub
-                `);
+                `)!;
 
                 addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.brs" />`);
                 referenceFileUris.push(document.uri);
@@ -673,7 +675,7 @@ describe('LanguageServer', () => {
                 function buildAwesome()
                     return 42
                 end function
-            `);
+            `)!;
 
             const name = `CallComponent`;
             referenceDocument = addScriptFile(name, `
@@ -685,7 +687,7 @@ describe('LanguageServer', () => {
                         m.top.observeFieldScope("loadFinished", "buildAwesome")
                     end if
                 end sub
-            `);
+            `)!;
 
             addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.brs" />`);
         });
@@ -755,7 +757,7 @@ describe('LanguageServer', () => {
                         return 42
                     end function
                 end class
-            `, 'bs');
+            `, 'bs')!;
 
             const name = `CallComponent`;
             referenceDocument = addScriptFile(name, `
@@ -763,7 +765,7 @@ describe('LanguageServer', () => {
                     build = new Build()
                     build.awesome()
                 end sub
-            `);
+            `)!;
 
             addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.bs" />`);
 
@@ -799,13 +801,13 @@ describe('LanguageServer', () => {
                 function buildAwesome()
                     return 42
                 end function
-            `);
+            `)!;
 
             // We run the check twice as the first time is with it not cached and second time is with it cached
             for (let i = 0; i < 2; i++) {
-                const symbols = await server.onDocumentSymbol({
+                const symbols = (await server.onDocumentSymbol({
                     textDocument: document
-                });
+                }))!;
                 expect(symbols.length).to.equal(2);
                 expect(symbols[0].name).to.equal('pi');
                 expect(symbols[1].name).to.equal('buildAwesome');
@@ -823,13 +825,13 @@ describe('LanguageServer', () => {
                         return 42
                     end function
                 end class
-            `, 'bs');
+            `, 'bs')!;
 
             // We run the check twice as the first time is with it not cached and second time is with it cached
             for (let i = 0; i < 2; i++) {
-                const symbols = await server['onDocumentSymbol']({
+                const symbols = (await server['onDocumentSymbol']({
                     textDocument: document
-                });
+                }))!;
 
                 expect(symbols.length).to.equal(1);
                 const classSymbol = symbols[0];
@@ -852,14 +854,14 @@ describe('LanguageServer', () => {
                         return 42
                     end function
                 end namespace
-            `, 'bs');
+            `, 'bs')!;
             program.validate();
 
             // We run the check twice as the first time is with it not cached and second time is with it cached
             for (let i = 0; i < 2; i++) {
-                const symbols = await server['onDocumentSymbol']({
+                const symbols = (await server['onDocumentSymbol']({
                     textDocument: document
-                });
+                }))!;
 
                 expect(symbols.length).to.equal(1);
                 const namespaceSymbol = symbols[0];
@@ -1047,10 +1049,10 @@ describe('LanguageServer', () => {
                 fsExtra.outputFileSync(s`${rootDir}/bsconfig.json`, '');
                 server.run();
                 await server['syncProjects']();
-                const result = await server.onExecuteCommand({
+                const result = (await server.onExecuteCommand({
                     command: CustomCommands.TranspileFile,
                     arguments: [s`${rootDir}/source/main.bs`]
-                });
+                }))!;
                 expect(
                     trim(result?.code)
                 ).to.eql(trim`
@@ -1075,7 +1077,7 @@ describe('LanguageServer', () => {
                 server.projects[0].builder.program.plugins.add({
                     name: 'test-plugin',
                     beforeProgramTranspile: (program, entries, editor) => {
-                        const file = program.getFile('source/main.bs');
+                        const file = program.getFile('source/main.bs')!;
                         if (isBrsFile(file)) {
                             file.ast.walk(createVisitor({
                                 LiteralExpression: (expression) => {
@@ -1091,10 +1093,10 @@ describe('LanguageServer', () => {
                     afterProgramTranspile: afterSpy
                 });
 
-                const result = await server.onExecuteCommand({
+                const result = (await server.onExecuteCommand({
                     command: CustomCommands.TranspileFile,
                     arguments: [s`${rootDir}/source/main.bs`]
-                });
+                }))!;
                 expect(
                     trim(result?.code)
                 ).to.eql(trim`

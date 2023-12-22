@@ -4,7 +4,7 @@ import type { ParseError } from 'jsonc-parser';
 import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 import * as path from 'path';
 import { rokuDeploy, DefaultFiles, standardizePath as rokuDeployStandardizePath } from 'roku-deploy';
-import type { Diagnostic, Position, Range, Location } from 'vscode-languageserver';
+import type { Diagnostic, Position, Range, Location, DiagnosticRelatedInformation } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
@@ -78,7 +78,7 @@ export class Util {
      * Determine if this path is a directory
      */
     public isDirectorySync(dirPath: string | undefined) {
-        return fs.existsSync(dirPath) && fs.lstatSync(dirPath).isDirectory();
+        return dirPath !== undefined && fs.existsSync(dirPath) && fs.lstatSync(dirPath).isDirectory();
     }
 
     /**
@@ -263,7 +263,7 @@ export class Util {
      * @param targetCwd the cwd where the work should be performed
      * @param callback a function to call when the cwd has been changed to `targetCwd`
      */
-    public cwdWork<T>(targetCwd: string | null | undefined, callback: () => T) {
+    public cwdWork<T>(targetCwd: string | null | undefined, callback: () => T): T {
         let originalCwd = process.cwd();
         if (targetCwd) {
             process.chdir(targetCwd);
@@ -285,7 +285,9 @@ export class Util {
         if (err) {
             throw err;
         } else {
-            return result;
+            // Justification: `result` is set as long as `err` is not set and vice versa
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion,  @typescript-eslint/no-unnecessary-type-assertion
+            return result!;
         }
     }
 
@@ -789,8 +791,8 @@ export class Util {
      * @param array the array to flatMap over
      * @param callback a function that is called for every array item
      */
-    public flatMap<T, R>(array: T[], callback: (arg: T) => R) {
-        return Array.prototype.concat.apply([], array.map(callback)) as never as R;
+    public flatMap<T, R>(array: T[], callback: (arg: T) => R[]): R[] {
+        return Array.prototype.concat.apply([], array.map(callback));
     }
 
     /**
@@ -1258,7 +1260,7 @@ export class Util {
      * @param diagnostic the diagnostic to clone
      * @param relatedInformationFallbackLocation a default location to use for all `relatedInformation` entries that are missing a location
      */
-    public toDiagnostic(diagnostic: Diagnostic | BsDiagnostic, relatedInformationFallbackLocation: string) {
+    public toDiagnostic(diagnostic: Diagnostic | BsDiagnostic, relatedInformationFallbackLocation: string): Diagnostic {
         return {
             severity: diagnostic.severity,
             range: diagnostic.range,
@@ -1278,7 +1280,7 @@ export class Util {
                 }
                 return clone;
                 //filter out null relatedInformation items
-            }).filter(x => x),
+            }).filter((x): x is DiagnosticRelatedInformation => Boolean(x)),
             code: diagnostic.code,
             source: 'brs'
         };

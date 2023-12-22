@@ -6,8 +6,12 @@ import { standardizePath as s } from './util';
 
 export class DiagnosticFilterer {
     private byFile: Record<string, BsDiagnostic[]>;
-    private filters: Array<{ src?: string; codes?: (number | string)[] }>;
-    private rootDir: string;
+    private filters: Array<{ src?: string; codes?: (number | string)[] }> | undefined;
+    private rootDir: string | undefined;
+
+    constructor() {
+        this.byFile = {};
+    }
 
     /**
      * Filter a list of diagnostics based on the provided filters
@@ -24,7 +28,7 @@ export class DiagnosticFilterer {
         let result = this.getDiagnostics();
 
         //clean up
-        delete this.byFile;
+        this.byFile = {};
         delete this.rootDir;
         delete this.filters;
 
@@ -108,7 +112,7 @@ export class DiagnosticFilterer {
             let fileDiagnostics = this.byFile[filePath];
             for (let i = 0; i < fileDiagnostics.length; i++) {
                 let diagnostic = fileDiagnostics[i];
-                if (filter.codes.includes(diagnostic.code)) {
+                if (diagnostic.code && filter.codes.includes(diagnostic.code)) {
                     //remove this diagnostic
                     fileDiagnostics.splice(i, 1);
                     //repeat this loop iteration (with the new item at this index)
@@ -123,7 +127,7 @@ export class DiagnosticFilterer {
         let globalIgnoreCodes: (number | string)[] = [...config1.ignoreErrorCodes ?? []];
         let diagnosticFilters = [...config1.diagnosticFilters ?? []];
 
-        let result = [];
+        let result: Array<{ src?: string; codes: (number | string)[] }> = [];
 
         for (let filter of diagnosticFilters as any[]) {
             if (typeof filter === 'number') {
@@ -151,6 +155,6 @@ export class DiagnosticFilterer {
                 codes: globalIgnoreCodes
             });
         }
-        return result as Array<{ src?: string; codes: (number | string)[] }>;
+        return result;
     }
 }

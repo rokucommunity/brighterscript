@@ -1,0 +1,35 @@
+{
+    "compilerOptions": {
+        "noImplicitAny": false,
+        "target": "ES2017",
+        "module": "CommonJS",
+        "sourceMap": true,
+        "rootDir": "src",
+        "outDir": "dist",
+        "declaration": true,
+        "strict": true,
+        "strictNullChecks": true,
+        "forceConsistentCasingInFileNames": true,
+        "experimentalDecorators": true,
+        "preserveConstEnums": true,
+        "downlevelIteration": true,
+        "noUnusedLocals": true,
+        "allowSyntheticDefaultImports": true,
+        "resolveJsonModule": true,
+        "lib": [
+            "es2017",
+            "es2019.array",
+            "dom"
+        ],
+        "noEmit": true
+    },
+    "include": [
+        "src/**/*.ts"
+    ],
+    "exclude": [
+        "node_modules/**/*"
+    ],
+    "ts-node": {
+        "transpileOnly": true
+    }
+}

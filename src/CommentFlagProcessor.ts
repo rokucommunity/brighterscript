@@ -51,11 +51,12 @@ export class CommentFlagProcessor {
         let affectedRange: Range;
         if (tokenized.disableType === 'line') {
             affectedRange = util.createRange(range.start.line, 0, range.start.line, range.start.character);
-        } else if (tokenized.disableType === 'next-line') {
+        } else {
+            // tokenized.disableType must be 'next-line'
             affectedRange = util.createRange(range.start.line + 1, 0, range.start.line + 1, Number.MAX_SAFE_INTEGER);
         }
 
-        let commentFlag: CommentFlag;
+        let commentFlag: CommentFlag | null = null;
 
         //statement to disable EVERYTHING
         if (tokenized.codes.length === 0) {
@@ -115,10 +116,10 @@ export class CommentFlagProcessor {
     /**
      * Small tokenizer for bs:disable comments
      */
-    private tokenize(text: string, range: Range) {
+    private tokenize(text: string, range: Range): DisableToken | null {
         let lowerText = text.toLowerCase();
         let offset = 0;
-        let commentTokenText: string;
+        let commentTokenText: string | null = null;
 
         for (const starter of this.commentStarters) {
             if (text.startsWith(starter)) {
@@ -177,9 +178,11 @@ export class CommentFlagProcessor {
      * Given a string, extract each item split by whitespace
      * @param text the text to tokenize
      */
-    private tokenizeByWhitespace(text: string) {
-        let tokens = [] as Array<{ startIndex: number; text: string }>;
-        let currentToken = null;
+    private tokenizeByWhitespace(text: string): Token[] {
+
+        let tokens = [] as Array<Token>;
+        let currentToken: Token | null = null;
+
         for (let i = 0; i < text.length; i++) {
             let char = text[i];
             //if we hit whitespace
@@ -205,4 +208,18 @@ export class CommentFlagProcessor {
         }
         return tokens;
     }
+}
+
+interface Token {
+    startIndex: number;
+    text: string;
+}
+
+interface DisableToken {
+    commentTokenText: string | null;
+    disableType: 'line' | 'next-line';
+    codes: {
+        code: string;
+        range: Range;
+    }[];
 }
