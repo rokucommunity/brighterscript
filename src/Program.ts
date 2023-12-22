@@ -809,9 +809,7 @@ export class Program {
 
         // Something bad has happened and we have a file which does not appear in any scope;
         // return a fake scope to prevent a crash.
-        const scope = new Scope('', this);
-        scope.attachDependencyGraph(new DependencyGraph());
-        return scope;
+        return Scope.nullScope(this);
     }
 
     public getStatementsByName(name: string, originFile: BrsFile, namespaceName?: string): FileLink<Statement>[] {

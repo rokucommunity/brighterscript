@@ -16,7 +16,7 @@ import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import type { BrsFile } from './files/BrsFile';
-import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
+import { DependencyGraph, type DependencyChangedEvent } from './DependencyGraph';
 import { isBrsFile, isMethodStatement, isClassStatement, isConstStatement, isCustomType, isEnumStatement, isFunctionStatement, isFunctionType, isXmlFile, isNamespaceStatement, isEnumMemberStatement } from './astUtils/reflection';
 import { SymbolTable } from './SymbolTable';
 import type { Statement } from './parser/AstNode';
@@ -1258,6 +1258,16 @@ export class Scope {
             link = this.getClassFileLink(link.item.parentClassName?.getName(ParseMode.BrighterScript)?.toLowerCase(), callsiteNamespace);
         }
         return items;
+    }
+
+    /**
+     * Returns an empty scope. Should only be used in cases where it doesn't make sense
+     * for a scope to exist.
+     */
+    public static nullScope(program: Program): Scope {
+        const scope = new Scope('', program);
+        scope.attachDependencyGraph(new DependencyGraph());
+        return scope;
     }
 }
 
