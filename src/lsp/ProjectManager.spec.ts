@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import { ProjectManager } from './ProjectManager';
-import { tempDir, rootDir, expectDiagnostics } from '../testHelpers.spec';
+import { tempDir, rootDir, expectDiagnostics, expectDiagnosticsAsync } from '../testHelpers.spec';
 import * as fsExtra from 'fs-extra';
 import { standardizePath as s } from '../util';
 import { Deferred } from '../deferred';
@@ -9,7 +9,7 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import { ProgramBuilder } from '..';
 const sinon = createSandbox();
 
-describe.only('ProjectManager', () => {
+describe('ProjectManager', () => {
     let manager: ProjectManager;
 
     beforeEach(() => {
@@ -195,7 +195,7 @@ describe.only('ProjectManager', () => {
                 workspaceFolder: rootDir,
                 bsconfigPath: 'subdir1/brsconfig.json'
             });
-            expectDiagnostics(project.builder, [
+            await expectDiagnosticsAsync(project, [
                 DiagnosticMessages.brsConfigJsonIsDeprecated()
             ]);
         });
@@ -224,7 +224,7 @@ describe.only('ProjectManager', () => {
             await manager['getBsconfigPath']({
                 projectPath: rootDir,
                 workspaceFolder: rootDir,
-                bsconfigPath: s`${rootDir}/bsconfig.json`,
+                bsconfigPath: s`${rootDir}/bsconfig.json`
             });
             expect(
                 (await deferred.promise).startsWith('Cannot find config file')
@@ -241,9 +241,8 @@ describe.only('ProjectManager', () => {
             ).to.eql(s`${rootDir}/brsconfig.json`);
         });
 
-
         it('does not crash on undefined', async () => {
-            await manager['getBsconfigPath'](undefined)
+            await manager['getBsconfigPath'](undefined);
         });
     });
 

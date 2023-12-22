@@ -46,6 +46,7 @@ import { isBrsFile } from './astUtils/reflection';
 import { encodeSemanticTokens, semanticTokensLegend } from './SemanticTokenUtils';
 import type { BusyStatus } from './BusyStatusTracker';
 import { BusyStatusTracker } from './BusyStatusTracker';
+import type { WorkspaceConfig } from './lsp/ProjectManager';
 import { ProjectManager } from './lsp/ProjectManager';
 
 export class LanguageServer {
@@ -256,6 +257,44 @@ export class LanguageServer {
         };
     }
 
+    /**
+     * Called when the client has finished initializing
+     */
+    @AddStackToErrorMessage
+    @TrackBusyStatus
+    private async onInitialized() {
+        let projectCreatedDeferred = new Deferred();
+        this.initialProjectsCreated = projectCreatedDeferred.promise;
+
+        try {
+            if (this.hasConfigurationCapability) {
+                // Register for all configuration changes.
+                await this.connection.client.register(
+                    DidChangeConfigurationNotification.type,
+                    undefined
+                );
+            }
+
+            await this.syncProjects();
+
+            if (this.clientHasWorkspaceFolderCapability) {
+                this.connection.workspace.onDidChangeWorkspaceFolders(async (evt) => {
+                    await this.syncProjects();
+                });
+            }
+            await this.waitAllProjectFirstRuns(false);
+            projectCreatedDeferred.resolve();
+        } catch (e: any) {
+            this.sendCriticalFailure(
+                `Critical failure during BrighterScript language server startup.
+                Please file a github issue and include the contents of the 'BrighterScript Language Server' output channel.
+
+                Error message: ${e.message}`
+            );
+            throw e;
+        }
+    }
+
     private initialProjectsCreated: Promise<any>;
 
     /**
@@ -293,14 +332,17 @@ export class LanguageServer {
         let workspaces = await Promise.all(
             (await this.connection.workspace.getWorkspaceFolders() ?? []).map(async (x) => {
                 const workspaceFolder = util.uriToPath(x.uri);
+                const config = await this.getClientConfiguration(x.uri, 'brightscript');
                 return {
                     workspaceFolder: workspaceFolder,
                     excludePatterns: await this.getWorkspaceExcludeGlobs(workspaceFolder),
-                    bsconfigPath: (await this.getClientConfiguration(x.uri, 'brightscript'))?.configFile
-                };
+                    bsconfigPath: config.configFile,
+                    //TODO we need to solidify the actual name of this flag in user/workspace settings
+                    threadingEnabled: config.threadingEnabled
+
+                } as WorkspaceConfig;
             })
         );
-
 
         await this.projectManager.syncProjects(workspaces);
 
@@ -330,44 +372,6 @@ export class LanguageServer {
             });
         }
         return config as T;
-    }
-
-    /**
-     * Called when the client has finished initializing
-     */
-    @AddStackToErrorMessage
-    @TrackBusyStatus
-    private async onInitialized() {
-        let projectCreatedDeferred = new Deferred();
-        this.initialProjectsCreated = projectCreatedDeferred.promise;
-
-        try {
-            if (this.hasConfigurationCapability) {
-                // Register for all configuration changes.
-                await this.connection.client.register(
-                    DidChangeConfigurationNotification.type,
-                    undefined
-                );
-            }
-
-            await this.syncProjects();
-
-            if (this.clientHasWorkspaceFolderCapability) {
-                this.connection.workspace.onDidChangeWorkspaceFolders(async (evt) => {
-                    await this.syncProjects();
-                });
-            }
-            await this.waitAllProjectFirstRuns(false);
-            projectCreatedDeferred.resolve();
-        } catch (e: any) {
-            this.sendCriticalFailure(
-                `Critical failure during BrighterScript language server startup.
-                Please file a github issue and include the contents of the 'BrighterScript Language Server' output channel.
-
-                Error message: ${e.message}`
-            );
-            throw e;
-        }
     }
 
     /**

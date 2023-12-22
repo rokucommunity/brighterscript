@@ -1,12 +1,18 @@
-import type { Project } from './Project';
 import { standardizePath as s, util } from '../util';
 import { rokuDeploy } from 'roku-deploy';
 import * as path from 'path';
-import { ProgramBuilder } from '../ProgramBuilder';
 import * as EventEmitter from 'eventemitter3';
-import type { CompilerPlugin, FileResolver } from '../interfaces';
-import { Deferred } from '../deferred';
-import { DiagnosticMessages } from '../DiagnosticMessages';
+import type { FileResolver } from '../interfaces';
+import type { LspProject } from './LspProject';
+import { Project } from './Project';
+import { WorkerThreadProject } from './worker/WorkerThreadProject';
+
+interface ProjectManagerConstructorArgs {
+    /**
+     * Should each project run in its own dedicated worker thread or all run on the main thread
+     */
+    threadingEnabled: boolean;
+}
 
 /**
  * Manages all brighterscript projects for the language server
@@ -16,17 +22,16 @@ export class ProjectManager {
     /**
      * Collection of all projects
      */
-    public projects: Project[] = [];
+    public projects: LspProject[] = [];
 
     /**
      * A unique project counter to help distinguish log entries in lsp mode
      */
-    private projectCounter = 0;
+    private static projectNumberSequence = 0;
 
-    private emitter = new EventEmitter();
 
-    public on(eventName: 'critical-failure', handler: (data: { project: Project; message: string }) => void);
-    public on(eventName: 'flush-diagnostics', handler: (data: { project: Project }) => void);
+    public on(eventName: 'critical-failure', handler: (data: { project: LspProject; message: string }) => void);
+    public on(eventName: 'flush-diagnostics', handler: (data: { project: LspProject }) => void);
     public on(eventName: string, handler: (payload: any) => void) {
         this.emitter.on(eventName, handler);
         return () => {
@@ -34,13 +39,14 @@ export class ProjectManager {
         };
     }
 
-    private emit(eventName: 'critical-failure', data: { project: Project; message: string });
-    private emit(eventName: 'flush-diagnostics', data: { project: Project });
+    private emit(eventName: 'critical-failure', data: { project: LspProject; message: string });
+    private emit(eventName: 'flush-diagnostics', data: { project: LspProject });
     private async emit(eventName: string, data?) {
         //emit these events on next tick, otherwise they will be processed immediately which could cause issues
         await util.sleep(0);
         this.emitter.emit(eventName, data);
     }
+    private emitter = new EventEmitter();
 
     private fileResolvers = [] as FileResolver[];
 
@@ -56,14 +62,15 @@ export class ProjectManager {
      * @param workspaceConfigs an array of workspaces
      */
     public async syncProjects(workspaceConfigs: WorkspaceConfig[]) {
-        //build a list of unique projects
+        //build a list of unique projects across all workspace folders
         let projectConfigs = (await Promise.all(
             workspaceConfigs.map(async workspaceConfig => {
                 const projectPaths = await this.getProjectPaths(workspaceConfig);
                 return projectPaths.map(projectPath => ({
                     projectPath: s`${projectPath}`,
                     workspaceFolder: s`${workspaceConfig}`,
-                    excludePatterns: workspaceConfig.excludePatterns
+                    excludePatterns: workspaceConfig.excludePatterns,
+                    threadingEnabled: workspaceConfig.threadingEnabled
                 }));
             })
         )).flat(1);
@@ -163,146 +170,55 @@ export class ProjectManager {
     /**
      * Remove a project from the language server
      */
-    private removeProject(project: Project) {
+    private removeProject(project: LspProject) {
         const idx = this.projects.findIndex(x => x.projectPath === project?.projectPath);
         if (idx > -1) {
             this.projects.splice(idx, 1);
         }
-        project?.builder?.dispose();
+        project?.dispose();
     }
 
-    private async createProject(config: ProjectConfig) {
-        config.workspaceFolder ??= config.projectPath;
-
+    /**
+     * Create a project for the given config
+     * @param config
+     * @returns a new project, or the existing project if one already exists with this config info
+     */
+    private async createProject(config1: ProjectConfig) {
         //skip this project if we already have it
-        if (this.hasProject(config.projectPath)) {
-            return this.getProject(config.projectPath);
+        if (this.hasProject(config1.projectPath)) {
+            return this.getProject(config1.projectPath);
         }
 
-        let builder = new ProgramBuilder();
+        let project: LspProject = config1.threadingEnabled
+            ? new WorkerThreadProject()
+            : new Project();
 
-        config.projectNumber ??= this.projectCounter++;
-
-        builder.logger.prefix = `[prj${config.projectNumber}]`;
-        builder.logger.log(`Created project #${config.projectNumber} for: "${config.projectPath}"`);
-
-        //flush diagnostics every time the program finishes validating
-        builder.plugins.add({
-            name: 'bsc-language-server',
-            afterProgramValidate: () => {
-                this.emit('flush-diagnostics', { project: this.getProject(config) });
-            }
-        } as CompilerPlugin);
-
-        //prevent clearing the console on run...this isn't the CLI so we want to keep a full log of everything
-        builder.allowConsoleClearing = false;
-
-        //register any external file resolvers
-        builder.addFileResolver(...this.fileResolvers);
-
-        let configFilePath = await this.getBsconfigPath(config);
-
-        let cwd = config.projectPath;
-
-        //if the config file exists, use it and its folder as cwd
-        if (configFilePath && await util.pathExists(configFilePath)) {
-            cwd = path.dirname(configFilePath);
-        } else {
-            //config file doesn't exist...let `brighterscript` resolve the default way
-            configFilePath = undefined;
-        }
-
-        const firstRunDeferred = new Deferred<any>();
-
-        let newProject: Project = {
-            projectNumber: config.projectNumber,
-            builder: builder,
-            firstRunPromise: firstRunDeferred.promise,
-            projectPath: config.projectPath,
-            workspaceFolder: config.workspaceFolder,
-            isFirstRunComplete: false,
-            isFirstRunSuccessful: false,
-            configFilePath: configFilePath,
-            isStandaloneFileProject: false
-        };
-
-        this.projects.push(newProject);
-
-        try {
-            await builder.run({
-                cwd: cwd,
-                project: configFilePath,
-                watch: false,
-                createPackage: false,
-                deploy: false,
-                copyToStaging: false,
-                showDiagnosticsInConsole: false
-            });
-            newProject.isFirstRunComplete = true;
-            newProject.isFirstRunSuccessful = true;
-            firstRunDeferred.resolve();
-        } catch (e) {
-            builder.logger.error(e);
-            firstRunDeferred.reject(e);
-            newProject.isFirstRunComplete = true;
-            newProject.isFirstRunSuccessful = false;
-        }
-        //if we found a deprecated brsconfig.json, add a diagnostic warning the user
-        if (configFilePath && path.basename(configFilePath) === 'brsconfig.json') {
-            builder.addDiagnostic(configFilePath, {
-                ...DiagnosticMessages.brsConfigJsonIsDeprecated(),
-                range: util.createRange(0, 0, 0, 0)
-            });
-            this.emit('flush-diagnostics', { project: newProject });
-        }
-        return newProject;
-    }
-
-    private async getBsconfigPath(config: ProjectConfig) {
-
-        let configFilePath: string;
-        //if there's a setting, we need to find the file or show error if it can't be found
-        if (config?.bsconfigPath) {
-            configFilePath = path.resolve(config.projectPath, config.bsconfigPath);
-            if (await util.pathExists(configFilePath)) {
-                return configFilePath;
-            } else {
-                this.emit('critical-failure', {
-                    message: `Cannot find config file specified in user / workspace settings at '${configFilePath}'`,
-                    project: this.getProject(config)
-                });
-            }
-        }
-
-        //the rest of these require a projectPath, so return early if we don't have one
-        if (!config?.projectPath) {
-            return undefined;
-        }
-
-        //default to config file path found in the root of the workspace
-        configFilePath = s`${config.projectPath}/bsconfig.json`;
-        if (await util.pathExists(configFilePath)) {
-            return configFilePath;
-        }
-
-        //look for the deprecated `brsconfig.json` file
-        configFilePath = s`${config.projectPath}/brsconfig.json`;
-        if (await util.pathExists(configFilePath)) {
-            return configFilePath;
-        }
-
-        //no config file could be found
-        return undefined;
+        await project.activate({
+            projectPath: config1.projectPath,
+            workspaceFolder: config1.workspaceFolder,
+            projectNumber: config1.projectNumber ?? ProjectManager.projectNumberSequence++
+        });
     }
 }
 
-interface WorkspaceConfig {
+export interface WorkspaceConfig {
+    /**
+     * Absolute path to the folder where the workspace resides
+     */
     workspaceFolder: string;
+    /**
+     * A list of glob patterns used to _exclude_ files from various bsconfig searches
+     */
     excludePatterns?: string[];
     /**
      * Path to a bsconfig that should be used instead of the auto-discovery algorithm. If this is present, no bsconfig discovery should be used. and an error should be emitted if this file is missing
      */
     bsconfigPath?: string;
+    /**
+     * Should the projects in this workspace be run in their own dedicated worker threads, or all run on the main thread
+     * TODO - is there a better name for this?
+     */
+    threadingEnabled?: boolean;
 }
 
 interface ProjectConfig {
@@ -326,4 +242,9 @@ interface ProjectConfig {
      * Path to a bsconfig that should be used instead of the auto-discovery algorithm. If this is present, no bsconfig discovery should be used. and an error should be emitted if this file is missing
      */
     bsconfigPath?: string;
+    /**
+     * Should this project run in its own dedicated worker thread
+     * TODO - is there a better name for this?
+     */
+    threadingEnabled?: boolean;
 }

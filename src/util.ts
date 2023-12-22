@@ -4,12 +4,12 @@ import type { ParseError } from 'jsonc-parser';
 import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 import * as path from 'path';
 import { rokuDeploy, DefaultFiles, standardizePath as rokuDeployStandardizePath } from 'roku-deploy';
-import type { Diagnostic, Position, Range, Location } from 'vscode-languageserver';
+import type { Diagnostic, Position, Range, Location, Disposable } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, DisposableLike } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -1280,7 +1280,7 @@ export class Util {
                 //filter out null relatedInformation items
             }).filter(x => x),
             code: diagnostic.code,
-            source: 'brs'
+            source: diagnostic.source ?? 'brs'
         };
     }
 
@@ -1495,6 +1495,20 @@ export class Util {
                 file: file,
                 range: this.createRange(0, 0, 0, Number.MAX_VALUE)
             }]);
+        }
+    }
+
+    /**
+     * Execute dispose for a series of disposable items
+     * @param disposables a list of functions or disposables
+     */
+    public applyDispose(disposables: DisposableLike[]) {
+        for (const disposable of disposables ?? []) {
+            if (typeof disposable === 'function') {
+                disposable();
+            } else {
+                disposable?.dispose?.();
+            }
         }
     }
 }
