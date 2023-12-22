@@ -65,10 +65,7 @@ export class DependencyGraph {
     public getAllDependencies(keys: string | string[], exclude?: string[]) {
         if (typeof keys === 'string') {
             return this.nodes[keys]?.getAllDependencies(exclude) ?? [];
-        } else if (keys === undefined) {
-            return [];
         } else {
-            console.log(`keys: ${String(keys)}`);
             const set = new Set<string>();
             for (const key of keys) {
                 const dependencies = this.getAllDependencies(key, exclude);

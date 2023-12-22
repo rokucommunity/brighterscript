@@ -1259,16 +1259,6 @@ export class Scope {
         }
         return items;
     }
-
-    /**
-     * Returns an empty scope. Should only be used in cases where it doesn't make sense
-     * for a scope to exist.
-     */
-    public static nullScope(program: Program): Scope {
-        const scope = new Scope('', program);
-        scope.attachDependencyGraph(new DependencyGraph());
-        return scope;
-    }
 }
 
 export interface NamespaceContainer {
