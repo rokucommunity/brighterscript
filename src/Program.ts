@@ -796,7 +796,7 @@ export class Program {
     /**
      * Get the first found scope for a file.
      */
-    public getFirstScopeForFile(file: XmlFile | BrsFile): Scope {
+    public getFirstScopeForFile(file: XmlFile | BrsFile): Scope | undefined {
         for (let key in this.scopes) {
             let scope = this.scopes[key];
 
@@ -809,7 +809,7 @@ export class Program {
 
         // Something bad has happened and we have a file which does not appear in any scope;
         // return a fake scope to prevent a crash.
-        return Scope.nullScope(this);
+        // return Scope.nullScope(this);
     }
 
     public getStatementsByName(name: string, originFile: BrsFile, namespaceName?: string): FileLink<Statement>[] {

@@ -1271,7 +1271,7 @@ export class Scope {
     }
 }
 
-interface NamespaceContainer {
+export interface NamespaceContainer {
     file: BscFile;
     fullName: string;
     nameRange: Range;

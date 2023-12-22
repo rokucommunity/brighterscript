@@ -62,7 +62,7 @@ export class DependencyGraph {
      * @param keys the key (or keys) for which to get the dependencies
      * @param exclude a list of keys to exclude from traversal. Anytime one of these nodes is encountered, it is skipped.
      */
-    public getAllDependencies(keys: string | string[] | undefined, exclude?: string[]) {
+    public getAllDependencies(keys: string | string[], exclude?: string[]) {
         if (typeof keys === 'string') {
             return this.nodes[keys]?.getAllDependencies(exclude) ?? [];
         } else if (keys === undefined) {
