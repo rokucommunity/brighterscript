@@ -285,7 +285,7 @@ export class Util {
         if (err) {
             throw err;
         } else {
-            // Justification: `result` is set as long as `err` is not set and vice versa
+            //justification: `result` is set as long as `err` is not set and vice versa
             // eslint-disable-next-line @typescript-eslint/no-non-null-assertion,  @typescript-eslint/no-unnecessary-type-assertion
             return result!;
         }

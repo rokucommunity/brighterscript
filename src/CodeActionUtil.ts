@@ -11,7 +11,7 @@ export class CodeActionUtil {
         for (const change of obj.changes) {
             const uri = URI.file(change.filePath).toString();
 
-            // Justification: `edit` is defined above so we know that `edit.changes` is defined.
+            //justification: `edit` is defined above so we know that `edit.changes` is defined.
             /* eslint-disable @typescript-eslint/no-non-null-assertion,  @typescript-eslint/no-unnecessary-type-assertion */
 
             //create the edit changes array for this uri
