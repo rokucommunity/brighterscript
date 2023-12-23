@@ -34,7 +34,7 @@ import type { SGAttribute } from './parser/SGTypes';
 import * as requireRelative from 'require-relative';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
-import type { Expression, Statement } from './parser/AstNode';
+import type { AstNode, Expression, Statement } from './parser/AstNode';
 
 export class Util {
     public clearConsole() {
@@ -164,7 +164,7 @@ export class Util {
      * @param configFilePath the relative or absolute path to a brighterscript config json file
      * @param parentProjectPaths a list of parent config files. This is used by this method to recursively build the config list
      */
-    public loadConfigFile(configFilePath: string, parentProjectPaths?: string[], cwd = process.cwd()) {
+    public loadConfigFile(configFilePath: string | undefined, parentProjectPaths?: string[], cwd = process.cwd()): BsConfig | undefined {
         if (configFilePath) {
             //if the config file path starts with question mark, then it's optional. return undefined if it doesn't exist
             if (configFilePath.startsWith('?')) {
@@ -311,7 +311,7 @@ export class Util {
             result.project = config.project;
         }
         if (result.project) {
-            let configFile = this.loadConfigFile(result.project, null, config?.cwd);
+            let configFile = this.loadConfigFile(result.project, undefined, config?.cwd);
             result = Object.assign(result, configFile);
         }
         //override the defaults with the specified options
@@ -512,7 +512,7 @@ export class Util {
      * |  bbb | bb   |  bbb |  b   | bbb  |    bb |  bb   |     b | a     |
      * ```
      */
-    public rangesIntersect(a: Range, b: Range) {
+    public rangesIntersect(a: Range | undefined, b: Range | undefined) {
         //stop if the either range is misisng
         if (!a || !b) {
             return false;
@@ -541,7 +541,7 @@ export class Util {
      * |  bbb | bb   |  bbb |  b   | bbb  |    bb |  bb   |     b | a     |
      * ```
      */
-    public rangesIntersectOrTouch(a: Range, b: Range) {
+    public rangesIntersectOrTouch(a: Range | undefined, b: Range | undefined) {
         //stop if the either range is misisng
         if (!a || !b) {
             return false;
@@ -568,7 +568,7 @@ export class Util {
         return this.comparePositionToRange(position, range) === 0;
     }
 
-    public comparePositionToRange(position: Position, range: Range) {
+    public comparePositionToRange(position: Position | undefined, range: Range | undefined) {
         //stop if the either range is misisng
         if (!position || !range) {
             return 0;
@@ -734,7 +734,7 @@ export class Util {
             //this diagnostic is affected by this flag
             if (diagnostic.range && this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
                 //if the flag acts upon this diagnostic's code
-                if (flag.codes === null || flag.codes.includes(diagnosticCode)) {
+                if (flag.codes === null || (diagnosticCode !== undefined && flag.codes.includes(diagnosticCode))) {
                     return true;
                 }
             }
@@ -744,7 +744,7 @@ export class Util {
     /**
      * Walks up the chain to find the closest bsconfig.json file
      */
-    public async findClosestConfigFile(currentPath: string) {
+    public async findClosestConfigFile(currentPath: string): Promise<string | undefined> {
         //make the path absolute
         currentPath = path.resolve(
             path.normalize(
@@ -752,7 +752,7 @@ export class Util {
             )
         );
 
-        let previousPath: string;
+        let previousPath: string | undefined;
         //using ../ on the root of the drive results in the same file path, so that's how we know we reached the top
         while (previousPath !== currentPath) {
             previousPath = currentPath;
@@ -869,9 +869,10 @@ export class Util {
     /**
      * Find a script import that the current position touches, or undefined if not found
      */
-    public getScriptImportAtPosition(scriptImports: FileReference[], position: Position) {
+    public getScriptImportAtPosition(scriptImports: FileReference[], position: Position): FileReference | undefined {
         let scriptImport = scriptImports.find((x) => {
-            return x.filePathRange.start.line === position.line &&
+            return x.filePathRange &&
+                x.filePathRange.start.line === position.line &&
                 //column between start and end
                 position.character >= x.filePathRange.start.character &&
                 position.character <= x.filePathRange.end.character;
@@ -897,7 +898,7 @@ export class Util {
         return string.split(/\r?\n/g);
     }
 
-    public getTextForRange(string: string | string[], range: Range) {
+    public getTextForRange(string: string | string[], range: Range): string {
         let lines: string[];
         if (Array.isArray(string)) {
             lines = string;
@@ -919,7 +920,9 @@ export class Util {
             rangeLines.push(lines[i]);
         }
         const lastLine = rangeLines.pop();
-        rangeLines.push(lastLine.substring(0, endCharacter));
+        if (lastLine !== undefined) {
+            rangeLines.push(lastLine.substring(0, endCharacter));
+        }
         return rangeLines.join('\n');
     }
 
@@ -969,9 +972,9 @@ export class Util {
      * Given a list of ranges, create a range that starts with the first non-null lefthand range, and ends with the first non-null
      * righthand range. Returns undefined if none of the items have a range.
      */
-    public createBoundingRange(...locatables: Array<{ range?: Range }>) {
-        let leftmostRange: Range;
-        let rightmostRange: Range;
+    public createBoundingRange(...locatables: Array<{ range?: Range }>): Range | undefined {
+        let leftmostRange: Range | undefined;
+        let rightmostRange: Range | undefined;
 
         for (let i = 0; i < locatables.length; i++) {
             //set the leftmost non-null-range item
@@ -996,7 +999,10 @@ export class Util {
             }
         }
         if (leftmostRange) {
-            return this.createRangeFromPositions(leftmostRange.start, rightmostRange.end);
+            //if we don't have a rightmost range, use the leftmost range for both the start and end
+            return this.createRangeFromPositions(
+                leftmostRange.start,
+                rightmostRange ? rightmostRange.end : leftmostRange.end);
         } else {
             return undefined;
         }
@@ -1096,6 +1102,7 @@ export class Util {
                     return new CustomType(token.text);
                 }
         }
+        //TODO: What should happen when nothing matches?
     }
 
     /**
@@ -1117,7 +1124,7 @@ export class Util {
     /**
      * Load and return the list of plugins
      */
-    public loadPlugins(cwd: string, pathOrModules: string[], onError?: (pathOrModule: string, err: Error) => void) {
+    public loadPlugins(cwd: string, pathOrModules: string[], onError?: (pathOrModule: string, err: Error) => void): CompilerPlugin[] {
         const logger = new Logger();
         return pathOrModules.reduce<CompilerPlugin[]>((acc, pathOrModule) => {
             if (typeof pathOrModule === 'string') {
@@ -1125,7 +1132,7 @@ export class Util {
                     const loaded = requireRelative(pathOrModule, cwd);
                     const theExport: CompilerPlugin | CompilerPluginFactory = loaded.default ? loaded.default : loaded;
 
-                    let plugin: CompilerPlugin;
+                    let plugin: CompilerPlugin | undefined;
 
                     // legacy plugins returned a plugin object. If we find that, then add a warning
                     if (typeof theExport === 'object') {
@@ -1135,6 +1142,9 @@ export class Util {
                         // the official plugin format is a factory function that returns a new instance of a plugin.
                     } else if (typeof theExport === 'function') {
                         plugin = theExport();
+                    } else {
+                        //this should never happen; somehow an invalid plugin has made it into here
+                        throw new Error(`TILT: Encountered an invalid plugin: ${String(plugin)}`);
                     }
 
                     if (!plugin.name) {
@@ -1240,7 +1250,7 @@ export class Util {
         let source = bslib.source as string;
 
         //apply the `bslib_` prefix to the functions
-        let match: RegExpExecArray;
+        let match: RegExpExecArray | null;
         const positions = [] as number[];
         const regexp = /^(\s*(?:function|sub)\s+)([a-z0-9_]+)/mg;
         // eslint-disable-next-line no-cond-assign
@@ -1376,7 +1386,7 @@ export class Util {
      */
     public getAllDottedGetParts(node: Expression | Statement): Identifier[] | undefined {
         const parts: Identifier[] = [];
-        let nextPart = node;
+        let nextPart: AstNode | undefined = node;
         while (nextPart) {
             if (isAssignmentStatement(node)) {
                 return [node.name];
@@ -1479,7 +1489,7 @@ export class Util {
 
     public validateTooDeepFile(file: (BrsFile | XmlFile)) {
         //find any files nested too deep
-        let pkgPath = file.pkgPath ?? file.pkgPath.toString();
+        let pkgPath = file.pkgPath ?? (file.pkgPath as any).toString();
         let rootFolder = pkgPath.replace(/^pkg:/, '').split(/[\\\/]/)[0].toLowerCase();
 
         if (isBrsFile(file) && rootFolder !== 'source') {
@@ -1506,7 +1516,7 @@ export class Util {
  * we can't use `object.tag` syntax.
  */
 export function standardizePath(stringParts, ...expressions: any[]) {
-    let result = [];
+    let result: string[] = [];
     for (let i = 0; i < stringParts.length; i++) {
         result.push(stringParts[i], expressions[i]);
     }
