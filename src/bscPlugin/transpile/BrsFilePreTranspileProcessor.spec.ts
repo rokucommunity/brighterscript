@@ -3,7 +3,7 @@ import * as fsExtra from 'fs-extra';
 import { Program } from '../../Program';
 import { standardizePath as s } from '../../util';
 import { tempDir, rootDir } from '../../testHelpers.spec';
-import { Logger, LogLevel } from '../..';
+import { Logger, LogLevel } from '../../Logger';
 import PluginInterface from '../../PluginInterface';
 const sinon = createSandbox();
 
