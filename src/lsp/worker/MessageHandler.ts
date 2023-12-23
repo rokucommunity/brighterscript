@@ -76,11 +76,11 @@ export class MessageHandler {
      * @param name the name of the request
      * @param options the request options
      */
-    public async sendRequest<R>(name: string, options?: { data: any; id?: number }) {
+    public async sendRequest<R>(name: string, options?: { data: any[]; id?: number }) {
         const request: WorkerMessage = {
             type: 'request',
             name: name,
-            data: options?.data,
+            data: options?.data ?? [],
             id: options?.id ?? this.idSequence++
         };
         const responsePromise = this.onResponse<R>(request.id);
@@ -102,8 +102,8 @@ export class MessageHandler {
      */
     public sendResponse(request: WorkerMessage, options?: { data: any } | { error: Error } | undefined) {
         const response: WorkerResponse = {
-            name: request.name,
             type: 'response',
+            name: request.name,
             id: request.id
         };
         if ('error' in options) {
@@ -120,11 +120,11 @@ export class MessageHandler {
      * @param name the name of the request
      * @param options options for the update
      */
-    public sendUpdate<T>(name: string, options?: { data?: any; id?: number }) {
+    public sendUpdate<T>(name: string, options?: { data?: any[]; id?: number }) {
         let update: WorkerMessage = {
-            name: name,
-            data: options?.data,
             type: 'update',
+            name: name,
+            data: options?.data ?? [],
             id: options?.id ?? this.idSequence++
         };
         this.port.postMessage(update);

@@ -11,6 +11,7 @@ export class WorkerThreadProjectRunner {
         //make a new instance of the project (which is the same way we run it in the main thread).
         const project = new Project();
         const messageHandler = new MessageHandler({
+            name: 'WorkerThread',
             port: parentPort,
             onRequest: async (request: WorkerMessage) => {
                 try {

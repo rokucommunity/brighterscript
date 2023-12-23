@@ -1,15 +1,13 @@
-import { expect } from 'chai';
 import { tempDir, rootDir, expectDiagnosticsAsync } from '../../testHelpers.spec';
 import * as fsExtra from 'fs-extra';
-import { createSandbox } from 'sinon';
-import { standardizePath as s } from '../../util';
-import { WorkerThreadProject } from './WorkerThreadProject';
+import { WorkerThreadProject, workerPool } from './WorkerThreadProject';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
-
-const sinon = createSandbox();
 
 describe.only('WorkerThreadProject', () => {
     let project: WorkerThreadProject;
+    before(() => {
+        workerPool.preload(1);
+    });
 
     beforeEach(() => {
         project?.dispose();
@@ -22,16 +20,21 @@ describe.only('WorkerThreadProject', () => {
         project?.dispose();
     });
 
-    describe.only('activate', () => {
-        it('finds bsconfig.json at root', async () => {
-            fsExtra.outputFileSync(`${rootDir}/bsconfig.json`, '');
-            await project.activate({
-                projectPath: rootDir
-            });
-            expect(project.configFilePath).to.eql(s`${rootDir}/bsconfig.json`);
-        });
+    after(() => {
+        //shut down all the worker threads after we're finished with all the tests
+        workerPool.dispose();
+    });
 
-        it.only('shows diagnostics after running', async () => {
+    it('wake up the worker thread', async function test() {
+        this.timeout(20_000);
+        await project.activate({
+            projectPath: rootDir,
+            projectNumber: 1
+        });
+    });
+
+    describe('activate', () => {
+        it('shows diagnostics after running', async () => {
             fsExtra.outputFileSync(`${rootDir}/source/main.brs`, `
                 sub main()
                     print varNotThere

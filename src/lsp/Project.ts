@@ -9,7 +9,13 @@ import { URI } from 'vscode-uri';
 
 export class Project implements LspProject {
 
+    /**
+     * Activates this project. Every call to `activate` should completely reset the project, clear all used ram and start from scratch.
+     * @param options
+     */
     public async activate(options: ActivateOptions) {
+        this.dispose();
+
         this.projectPath = options.projectPath;
         this.workspaceFolder = options.workspaceFolder;
         this.projectNumber = options.projectNumber;
@@ -78,12 +84,14 @@ export class Project implements LspProject {
     }
 
     public dispose() {
+        this.builder?.dispose();
+        this.emitter?.removeAllListeners();
     }
 
     /**
      * Manages the BrighterScript program. The main interface into the compiler/validator
      */
-    private builder = new ProgramBuilder();
+    private builder: ProgramBuilder;
 
     /**
      * The path to where the project resides

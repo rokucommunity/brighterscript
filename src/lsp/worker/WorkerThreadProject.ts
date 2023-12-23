@@ -5,9 +5,20 @@ import { MessageHandler } from './MessageHandler';
 import util from '../../util';
 import type { LspDiagnostic } from '../LspProject';
 import { type ActivateOptions, type LspProject } from '../LspProject';
-import { isMainThread, parentPort, workerData } from 'worker_threads';
+import { isMainThread, parentPort } from 'worker_threads';
 import { WorkerThreadProjectRunner } from './WorkerThreadProjectRunner';
 import type { Project } from '../Project';
+import { WorkerPool } from './WorkerPool';
+
+export const workerPool = new WorkerPool(() => {
+    return new Worker(
+        __filename,
+        {
+            //wire up ts-node if we're running in ts-node
+            execArgv: /\.ts$/i.test(__filename) ? ['--require', 'ts-node/register'] : undefined
+        }
+    );
+});
 
 //if this script us running in a Worker, run
 if (!isMainThread) {
@@ -23,22 +34,15 @@ export class WorkerThreadProject implements LspProject {
         this.projectNumber = options.projectNumber;
         this.configFilePath = options.configFilePath;
 
-        //start the worker thread
-        this.worker = new Worker(
-            __filename,
-            {
-                ...options,
-                //wire up ts-node if we're running in ts-node
-                execArgv: /\.ts$/i.test(__filename) ? ['--require', 'ts-node/register'] : undefined
-            }
-        );
+        // start a new worker thread or get an unused existing thread
+        this.worker = workerPool.getWorker();
         this.messageHandler = new MessageHandler({
+            name: 'MainThread',
             port: this.worker,
             onRequest: this.processRequest.bind(this),
             onUpdate: this.processUpdate.bind(this)
         });
-
-        await this.messageHandler.sendRequest('activate');
+        await this.messageHandler.sendRequest('activate', { data: [options] });
     }
 
     public async getDiagnostics() {
@@ -47,8 +51,10 @@ export class WorkerThreadProject implements LspProject {
     }
 
     public dispose() {
-        //terminate the worker thread. we don't need to wait for it since this is immediate
-        this.worker.terminate();
+        //restore the worker back to the worker pool so it can be used again
+        if (this.worker) {
+            workerPool.releaseWorker(this.worker);
+        }
         this.messageHandler.dispose();
         this.emitter.removeAllListeners();
     }
