@@ -1252,7 +1252,7 @@ describe('parser', () => {
             `, ParseMode.BrighterScript);
             expect(diagnostics[0]?.message).not.to.exist;
             let cs = statements[0] as ClassStatement;
-            expect(cs.annotations).to.be.undefined;
+            expect(cs.annotations.length).to.equal(0);
         });
 
         it('can convert argument of an annotation to JS types', () => {

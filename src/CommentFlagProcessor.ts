@@ -179,7 +179,6 @@ export class CommentFlagProcessor {
      * @param text the text to tokenize
      */
     private tokenizeByWhitespace(text: string): Token[] {
-
         let tokens = [] as Array<Token>;
         let currentToken: Token | null = null;
 
