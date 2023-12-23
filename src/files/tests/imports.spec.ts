@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
+/* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { expect } from '../../chai-config.spec';
 import * as sinonImport from 'sinon';
 import * as fsExtra from 'fs-extra';
@@ -53,8 +55,8 @@ describe('import statements', () => {
         `);
         let files = Object.keys(program.files).map(x => program.getFile(x)).filter(x => !!x).map(x => {
             return {
-                src: x.srcPath,
-                dest: x.pkgPath
+                src: x!.srcPath,
+                dest: x!.pkgPath
             };
         });
         await program.transpile(files, stagingDir);
@@ -247,7 +249,7 @@ describe('import statements', () => {
                 <script type="text/brightscript" uri="pkg:/source/maestro/ioc/IOCMixin.brs" />
                 <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
             </component>
-        `, null, 'components/AuthenticationService.xml');
+        `, null as any, 'components/AuthenticationService.xml');
     });
 
     it('handles malformed imports', () => {

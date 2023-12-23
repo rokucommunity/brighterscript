@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
+/* eslint-disable @typescript-eslint/no-non-null-assertion */
 import type { Token } from '../lexer/Token';
 import { TokenKind, AllowedLocalIdentifiers, ReservedWords, DisallowedLocalIdentifiers, AllowedProperties } from '../lexer/TokenKind';
 import * as CC from './Chunk';
@@ -7,16 +9,16 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 
 /** * Parses `Tokens` into chunks of tokens, excluding conditional compilation directives. */
 export class PreprocessorParser {
-    public diagnostics: Diagnostic[];
+    public diagnostics: Diagnostic[] = [];
 
-    public tokens: Token[];
+    public tokens: Token[] | undefined;
 
     private current = 0;
 
     /**
      * an array of chunks (conditional compilation directives and the associated BrightScript)
      */
-    public chunks: CC.Chunk[];
+    public chunks: CC.Chunk[] = [];
 
     /**
      * Parses an array of tokens into an array of "chunks" - conditional compilation directives and their
@@ -251,10 +253,10 @@ export class PreprocessorParser {
     }
 
     private peek() {
-        return this.tokens[this.current];
+        return this.tokens![this.current];
     }
 
     private previous() {
-        return this.tokens[this.current - 1];
+        return this.tokens![this.current - 1];
     }
 }

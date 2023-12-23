@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
+/* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { assert, expect } from './chai-config.spec';
 import * as pick from 'object.pick';
 import * as sinonImport from 'sinon';
@@ -21,6 +23,7 @@ import { isBrsFile } from './astUtils/reflection';
 import type { LiteralExpression } from './parser/Expression';
 import type { AstEditor } from './astUtils/AstEditor';
 import { tempDir, rootDir, stagingDir } from './testHelpers.spec';
+import type { BsDiagnostic } from './interfaces';
 
 let sinon = sinonImport.createSandbox();
 
@@ -263,11 +266,11 @@ describe('Program', () => {
         });
 
         it('allows adding diagnostics', () => {
-            const expected = [{
+            const expected: BsDiagnostic[] = [{
                 message: 'message',
                 file: undefined,
                 range: undefined
-            }];
+            }] as any;
             program.addDiagnostics(expected);
             const actual = (program as any).diagnostics;
             expect(actual).to.deep.equal(expected);
@@ -720,7 +723,7 @@ describe('Program', () => {
 
     describe('reloadFile', () => {
         it('picks up new files in a scope when an xml file is loaded', () => {
-            program.options.ignoreErrorCodes.push(1013);
+            program.options.ignoreErrorCodes!.push(1013);
             program.setFile('components/component1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="HeroScene" extends="Scene">
@@ -766,7 +769,7 @@ describe('Program', () => {
         });
 
         it('reloads referenced fles when xml file changes', () => {
-            program.options.ignoreErrorCodes.push(1013);
+            program.options.ignoreErrorCodes!.push(1013);
             program.setFile('components/component1.brs', '');
 
             let xmlFile = program.setFile('components/component1.xml', trim`
@@ -1735,19 +1738,19 @@ describe('Program', () => {
     });
 
     it('does not create map by default', async () => {
-        fsExtra.ensureDirSync(program.options.stagingDir);
+        fsExtra.ensureDirSync(program.options.stagingDir!);
         program.setFile('source/main.brs', `
             sub main()
             end sub
         `);
         program.validate();
-        await program.transpile([], program.options.stagingDir);
+        await program.transpile([], program.options.stagingDir!);
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/main.brs`)).is.true;
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/main.brs.map`)).is.false;
     });
 
     it('creates sourcemap for brs and xml files', async () => {
-        fsExtra.ensureDirSync(program.options.stagingDir);
+        fsExtra.ensureDirSync(program.options.stagingDir!);
         program.setFile('source/main.brs', `
             sub main()
             end sub
@@ -1770,27 +1773,27 @@ describe('Program', () => {
             dest: s`components/comp1.xml`
         }];
         program.options.sourceMap = true;
-        await program.transpile(filePaths, program.options.stagingDir);
+        await program.transpile(filePaths, program.options.stagingDir!);
 
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/main.brs.map`)).is.true;
         expect(fsExtra.pathExistsSync(s`${stagingDir}/components/comp1.xml.map`)).is.true;
     });
 
     it('copies the bslib.brs file', async () => {
-        fsExtra.ensureDirSync(program.options.stagingDir);
+        fsExtra.ensureDirSync(program.options.stagingDir!);
         program.validate();
 
-        await program.transpile([], program.options.stagingDir);
+        await program.transpile([], program.options.stagingDir!);
 
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/bslib.brs`)).is.true;
     });
 
     it('copies the bslib.brs file to optionally specified directory', async () => {
-        fsExtra.ensureDirSync(program.options.stagingDir);
+        fsExtra.ensureDirSync(program.options.stagingDir!);
         program.options.bslibDestinationDir = 'source/opt';
         program.validate();
 
-        await program.transpile([], program.options.stagingDir);
+        await program.transpile([], program.options.stagingDir!);
 
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/opt/bslib.brs`)).is.true;
     });
@@ -1873,7 +1876,7 @@ describe('Program', () => {
         }, {
             src: s`${rootDir}/source/main.bs`,
             dest: 'source/main.bs'
-        }], program.options.stagingDir);
+        }], program.options.stagingDir!);
 
         //entries should now be in alphabetic order
         expect(
@@ -1960,7 +1963,7 @@ describe('Program', () => {
                     print "hello world"
                 end sub
             `);
-            let literalExpression: LiteralExpression;
+            let literalExpression: LiteralExpression | undefined;
             //replace all strings with "goodbye world"
             program.plugins.add({
                 name: 'TestPlugin',
@@ -1989,7 +1992,7 @@ describe('Program', () => {
             );
 
             //our literalExpression should have been restored to its original value
-            expect(literalExpression.token.text).to.eql('"hello world"');
+            expect(literalExpression!.token.text).to.eql('"hello world"');
         });
 
         it('handles AstEditor for beforeProgramTranspile', async () => {
@@ -1998,7 +2001,7 @@ describe('Program', () => {
                     print "hello world"
                 end sub
             `);
-            let literalExpression: LiteralExpression;
+            let literalExpression: LiteralExpression | undefined;
             //replace all strings with "goodbye world"
             program.plugins.add({
                 name: 'TestPlugin',
@@ -2025,7 +2028,7 @@ describe('Program', () => {
             );
 
             //our literalExpression should have been restored to its original value
-            expect(literalExpression.token.text).to.eql('"hello world"');
+            expect(literalExpression!.token.text).to.eql('"hello world"');
         });
 
         it('copies bslib.brs when no ropm version was found', async () => {
@@ -2046,7 +2049,7 @@ describe('Program', () => {
                     print SOURCE_LINE_NUM
                 end sub
             `);
-            await program.transpile([], program.options.stagingDir);
+            await program.transpile([], program.options.stagingDir!);
             expect(trimMap(
                 fsExtra.readFileSync(s`${stagingDir}/source/logger.brs`).toString()
             )).to.eql(trim`
@@ -2062,7 +2065,7 @@ describe('Program', () => {
                     print "logInfo"
                 end sub
             `);
-            await program.transpile([], program.options.stagingDir);
+            await program.transpile([], program.options.stagingDir!);
             expect(trimMap(
                 fsExtra.readFileSync(s`${stagingDir}/source/logger.brs`).toString()
             )).to.eql(trim`
@@ -2078,7 +2081,7 @@ describe('Program', () => {
                 <component name="Component1" extends="Scene">
                 </component>
             `);
-            await program.transpile([], program.options.stagingDir);
+            await program.transpile([], program.options.stagingDir!);
             expect(trimMap(
                 fsExtra.readFileSync(s`${stagingDir}/components/Component1.xml`).toString()
             )).to.eql(trim`
@@ -2096,7 +2099,7 @@ describe('Program', () => {
                 <component name="Component1" extends="Scene">
                 </component>
             `);
-            await program.transpile([], program.options.stagingDir);
+            await program.transpile([], program.options.stagingDir!);
             expect(trimMap(
                 fsExtra.readFileSync(s`${stagingDir}/components/Component1.xml`).toString()
             )).to.eql(trim`

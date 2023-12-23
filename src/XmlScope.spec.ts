@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { expect } from './chai-config.spec';
 import { Position, Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from './DiagnosticMessages';
@@ -40,7 +41,7 @@ describe('XmlScope', () => {
                 <component name="Child" extends="Parent">
                 </component>
             `);
-            let childScope = program.getComponentScope('Child');
+            let childScope = program.getComponentScope('Child')!;
 
             program.validate();
 
@@ -86,7 +87,7 @@ describe('XmlScope', () => {
                 </component>
             `);
             program.validate();
-            expect(program.getComponentScope('Child').getOwnFiles()[0]).to.equal(xmlFile);
+            expect(program.getComponentScope('Child')!.getOwnFiles()[0]).to.equal(xmlFile);
         });
     });
 
@@ -113,7 +114,7 @@ describe('XmlScope', () => {
                 end sub
             `);
             program.validate();
-            let childScope = program.getComponentScope('child');
+            let childScope = program.getComponentScope('child')!;
             expectDiagnostics(childScope, [{
                 ...DiagnosticMessages.xmlFunctionNotFound('func2'),
                 range: Range.create(4, 24, 4, 29)
@@ -157,7 +158,7 @@ describe('XmlScope', () => {
                 end sub
             `);
             program.validate();
-            expectDiagnostics(program.getComponentScope('child'), [{
+            expectDiagnostics(program.getComponentScope('child')!, [{
                 ...DiagnosticMessages.xmlInvalidFieldType('no'),
                 range: Range.create(4, 33, 4, 35)
             }, {

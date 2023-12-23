@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
+/* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { expect } from '../../../chai-config.spec';
 import { LiteralExpression } from '../../Expression';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
@@ -447,7 +449,7 @@ describe('EnumStatement', () => {
         function expectMemberValueMap(code: string, expected: Record<string, string>) {
             const file = program.setFile<BrsFile>('source/lib.brs', code);
             const cancel = new CancellationTokenSource();
-            let firstEnum: EnumStatement;
+            let firstEnum: EnumStatement | undefined;
             file.ast.walk(statement => {
                 if (isEnumStatement(statement)) {
                     firstEnum = statement;
@@ -458,7 +460,7 @@ describe('EnumStatement', () => {
                 cancel: cancel.token
             });
             expect(firstEnum).to.exist;
-            const values = firstEnum.getMemberValueMap();
+            const values = firstEnum!.getMemberValueMap();
             expect(
                 [...values].reduce((prev, [key, value]) => {
                     prev[key] = value;

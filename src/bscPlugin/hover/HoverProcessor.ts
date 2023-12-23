@@ -17,7 +17,7 @@ export class HoverProcessor {
     }
 
     public process() {
-        let hover: Hover;
+        let hover: Hover | null | undefined;
         if (isBrsFile(this.event.file)) {
             hover = this.getBrsFileHover(this.event.file);
         } else if (isXmlFile(this.event.file)) {
@@ -40,7 +40,7 @@ export class HoverProcessor {
         return parts.join('\n');
     }
 
-    private getBrsFileHover(file: BrsFile): Hover {
+    private getBrsFileHover(file: BrsFile): Hover | null | undefined {
         const scope = this.event.scopes[0];
         const fence = (code: string) => util.mdFence(code, 'brightscript');
         //get the token at the position
@@ -127,6 +127,9 @@ export class HoverProcessor {
      */
     private getTokenDocumentation(tokens: Token[], token?: Token) {
         const comments = [] as Token[];
+        if (!token) {
+            return undefined;
+        }
         const idx = tokens?.indexOf(token);
         if (!idx || idx === -1) {
             return undefined;
@@ -150,7 +153,7 @@ export class HoverProcessor {
         }
     }
 
-    private getXmlFileHover(file: XmlFile) {
+    private getXmlFileHover(file: XmlFile): Hover | undefined {
         //TODO add xml hovers
         return undefined;
     }

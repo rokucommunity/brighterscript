@@ -17,7 +17,7 @@ export class Preprocessor implements CC.Visitor {
     /** The set of errors encountered when pre-processing conditional compilation directives. */
     public diagnostics = [] as Diagnostic[];
 
-    public processedTokens: Token[];
+    public processedTokens: Token[] | undefined;
 
     /**
      * Filters the tokens contained within a set of chunks based on a set of constants.
@@ -169,11 +169,10 @@ export class Preprocessor implements CC.Visitor {
     }
 
     /**
-     * Resolves a token to a JavaScript boolean value, or throws an error.
-     * @param token the token to resolve to either `true`, `false`, or an error
-     * @throws if attempting to reference an undefined `#const` or if `token` is neither `true`, `false`, nor an identifier.
+     * Resolves a token to a JavaScript boolean value, or logs a diagnostic error.
+     * @param token the token to resolve to either `true`, `false`, or `undefined`
      */
-    public evaluateCondition(token: Token): boolean {
+    public evaluateCondition(token: Token): boolean | undefined {
         switch (token.kind) {
             case TokenKind.True:
                 return true;

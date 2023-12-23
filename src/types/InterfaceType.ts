@@ -11,18 +11,19 @@ export class InterfaceType implements BscType {
     /**
      * The name of the interface. Can be null.
      */
-    public name: string;
+    public name: string | undefined;
 
     public isAssignableTo(targetType: BscType) {
         //we must have all of the members of the target type, and they must be equivalent types
         if (isInterfaceType(targetType)) {
             for (const [targetMemberName, targetMemberType] of targetType.members) {
+                const ourMemberType = this.members.get(targetMemberName);
                 //we don't have the target member
-                if (!this.members.has(targetMemberName)) {
+                if (!ourMemberType) {
                     return false;
                 }
                 //our member's type is not assignable to the target member type
-                if (!this.members.get(targetMemberName).isAssignableTo(targetMemberType)) {
+                if (!ourMemberType.isAssignableTo(targetMemberType)) {
                     return false;
                 }
             }

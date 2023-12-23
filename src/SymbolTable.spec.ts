@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { SymbolTable } from './SymbolTable';
 import { expect } from './chai-config.spec';
 import { StringType } from './types/StringType';
@@ -13,36 +14,36 @@ describe('SymbolTable', () => {
 
     it('is case insensitive', () => {
         const st = new SymbolTable('Child');
-        st.addSymbol('foo', null, new StringType());
-        expect(st.getSymbol('FOO').length).eq(1);
-        expect(st.getSymbol('FOO')[0].type.toString()).eq('string');
+        st.addSymbol('foo', null as any, new StringType());
+        expect(st.getSymbol('FOO')!.length).eq(1);
+        expect(st.getSymbol('FOO')![0].type.toString()).eq('string');
     });
 
     it('stores all previous symbols', () => {
         const st = new SymbolTable('Child');
-        st.addSymbol('foo', null, new StringType());
-        st.addSymbol('foo', null, new IntegerType());
-        expect(st.getSymbol('FOO').length).eq(2);
+        st.addSymbol('foo', null as any, new StringType());
+        st.addSymbol('foo', null as any, new IntegerType());
+        expect(st.getSymbol('FOO')!.length).eq(2);
     });
 
 
     it('reads from parent symbol table if not found in current', () => {
         const st = new SymbolTable('Child', () => parent);
-        parent.addSymbol('foo', null, new StringType());
-        expect(st.getSymbol('foo')[0].type.toString()).eq('string');
+        parent.addSymbol('foo', null as any, new StringType());
+        expect(st.getSymbol('foo')![0].type.toString()).eq('string');
     });
 
     it('reads from current table if it exists', () => {
         const st = new SymbolTable('Child', () => parent);
-        parent.addSymbol('foo', null, new StringType());
-        st.addSymbol('foo', null, new IntegerType());
-        expect(st.getSymbol('foo')[0].type.toString()).eq('integer');
+        parent.addSymbol('foo', null as any, new StringType());
+        st.addSymbol('foo', null as any, new IntegerType());
+        expect(st.getSymbol('foo')![0].type.toString()).eq('integer');
     });
 
     it('correct checks if a symbol is in the table using hasSymbol', () => {
         const child = new SymbolTable('Child', () => parent);
-        parent.addSymbol('foo', null, new StringType());
-        child.addSymbol('bar', null, new IntegerType());
+        parent.addSymbol('foo', null as any, new StringType());
+        child.addSymbol('bar', null as any, new IntegerType());
         expect(parent.hasSymbol('foo')).to.be.true;
         expect(parent.hasSymbol('bar')).to.be.false;
         expect(child.hasSymbol('foo')).to.be.true;
@@ -54,25 +55,25 @@ describe('SymbolTable', () => {
 
         it('adds each symbol to the table', () => {
             const st = new SymbolTable('Child');
-            st.addSymbol('foo', null, new StringType());
+            st.addSymbol('foo', null as any, new StringType());
             const otherTable = new SymbolTable('OtherTable');
-            otherTable.addSymbol('bar', null, new IntegerType());
-            otherTable.addSymbol('foo', null, new IntegerType());
+            otherTable.addSymbol('bar', null as any, new IntegerType());
+            otherTable.addSymbol('foo', null as any, new IntegerType());
             st.mergeSymbolTable(otherTable);
         });
     });
 
     it('searches siblings before parents', () => {
-        parent.addSymbol('alpha', null, new StringType());
+        parent.addSymbol('alpha', null as any, new StringType());
 
         const child = new SymbolTable('Child', () => parent);
 
         const sibling = new SymbolTable('Sibling');
         child.addSibling(sibling);
-        sibling.addSymbol('alpha', null, new BooleanType());
+        sibling.addSymbol('alpha', null as any, new BooleanType());
 
         expect(
-            child.getSymbol('alpha').map(x => x.type.toTypeString())
+            child.getSymbol('alpha')!.map(x => x.type.toTypeString())
         ).to.eql([
             'boolean'
         ]);

@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
+/* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { expect } from '../chai-config.spec';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { TokenKind, AllowedLocalIdentifiers, AllowedProperties } from '../lexer/TokenKind';
@@ -196,10 +198,10 @@ describe('parser class', () => {
             expect(diagnostics).to.be.empty;
             expect(statements[0]).instanceof(ClassStatement);
             let field = (statements[0] as ClassStatement).body[0] as FieldStatement;
-            expect(field.accessModifier.kind).to.equal(TokenKind.Public);
-            expect(field.name.text).to.equal('firstName');
-            expect(field.as.text).to.equal('as');
-            expect(field.type.text).to.equal('string');
+            expect(field.accessModifier!.kind).to.equal(TokenKind.Public);
+            expect(field.name!.text).to.equal('firstName');
+            expect(field.as!.text).to.equal('as');
+            expect(field.type!.text).to.equal('string');
         });
 
         it('can be solely an identifier', () => {
@@ -211,7 +213,7 @@ describe('parser class', () => {
             let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             expect(diagnostics).to.be.lengthOf(0);
             let cls = statements[0] as ClassStatement;
-            expect(cls.fields[0].name.text).to.equal('firstName');
+            expect(cls.fields[0].name!.text).to.equal('firstName');
         });
 
         it('malformed field does not impact leading and trailing fields', () => {
@@ -224,8 +226,8 @@ describe('parser class', () => {
                 `);
             let { statements } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             let cls = statements[0] as ClassStatement;
-            expect(cls.fields[0].name.text).to.equal('firstName');
-            expect(cls.fields[cls.fields.length - 1].name.text).to.equal('lastName');
+            expect(cls.fields[0].name!.text).to.equal('firstName');
+            expect(cls.fields[cls.fields.length - 1].name!.text).to.equal('lastName');
         });
 
         it(`detects missing type after 'as' keyword`, () => {
@@ -237,7 +239,7 @@ describe('parser class', () => {
             let { diagnostics, statements } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             expect(diagnostics.length).to.be.greaterThan(0);
             let cls = statements[0] as ClassStatement;
-            expect(cls.fields[0].name.text).to.equal('middleName');
+            expect(cls.fields[0].name!.text).to.equal('middleName');
             expect(diagnostics[0].code).to.equal(DiagnosticMessages.expectedIdentifierAfterKeyword('as').code);
         });
 
@@ -269,7 +271,7 @@ describe('parser class', () => {
             expect(theClass).to.be.instanceof(ClassStatement);
             let method = theClass.methods[0];
             expect(method.name.text).to.equal('getName');
-            expect(method.accessModifier.text).to.equal('public');
+            expect(method.accessModifier!.text).to.equal('public');
             expect(method.func).to.exist;
         });
 
@@ -285,7 +287,7 @@ describe('parser class', () => {
             expect(diagnostics).to.be.lengthOf(0);
             let theClass = statements[0] as ClassStatement;
             let method = theClass.methods[0];
-            expect(method.accessModifier.text).to.equal('public');
+            expect(method.accessModifier!.text).to.equal('public');
             expect(method.func).to.exist;
         });
 
@@ -366,8 +368,8 @@ describe('parser class', () => {
         let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
         expect(diagnostics[0]?.message).to.not.exist;
         let stmt = (statements[1] as ClassStatement);
-        expect(stmt.extendsKeyword.text).to.equal('extends');
-        expect(stmt.parentClassName.getName(ParseMode.BrighterScript)).to.equal('Person');
+        expect(stmt.extendsKeyword!.text).to.equal('extends');
+        expect(stmt.parentClassName!.getName(ParseMode.BrighterScript)).to.equal('Person');
     });
 
     it('catches missing identifier after "extends" keyword', () => {

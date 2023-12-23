@@ -228,7 +228,7 @@ describe('LanguageServer', () => {
         it('sends diagnostics that were triggered by the program instead of vscode', async () => {
             server['connection'] = server['createConnection']();
             await server['createProject'](workspacePath);
-            let stub: SinonStub;
+            let stub: SinonStub | undefined;
             const promise = new Promise((resolve) => {
                 stub = sinon.stub(connection, 'sendDiagnostics').callsFake(resolve as any);
             });
@@ -240,7 +240,7 @@ describe('LanguageServer', () => {
             `);
             program.validate();
             await promise;
-            expect(stub.called).to.be.true;
+            expect(stub!.called).to.be.true;
         });
     });
 
@@ -836,7 +836,7 @@ describe('LanguageServer', () => {
                 expect(symbols.length).to.equal(1);
                 const classSymbol = symbols[0];
                 expect(classSymbol.name).to.equal('MyFirstClass');
-                const classChildrenSymbols = classSymbol.children;
+                const classChildrenSymbols = classSymbol.children!;
                 expect(classChildrenSymbols.length).to.equal(2);
                 expect(classChildrenSymbols[0].name).to.equal('pi');
                 expect(classChildrenSymbols[1].name).to.equal('buildAwesome');
@@ -866,7 +866,7 @@ describe('LanguageServer', () => {
                 expect(symbols.length).to.equal(1);
                 const namespaceSymbol = symbols[0];
                 expect(namespaceSymbol.name).to.equal('MyFirstNamespace');
-                const classChildrenSymbols = namespaceSymbol.children;
+                const classChildrenSymbols = namespaceSymbol.children!;
                 expect(classChildrenSymbols.length).to.equal(2);
                 expect(classChildrenSymbols[0].name).to.equal('MyFirstNamespace.pi');
                 expect(classChildrenSymbols[1].name).to.equal('MyFirstNamespace.buildAwesome');

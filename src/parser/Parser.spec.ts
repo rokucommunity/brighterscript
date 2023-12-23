@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
+/* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { expect, assert } from '../chai-config.spec';
 import { Lexer } from '../lexer/Lexer';
 import { ReservedWords, TokenKind } from '../lexer/TokenKind';
@@ -750,13 +752,13 @@ describe('parser', () => {
                         expectCommentWithText(ifStmt.thenBranch.statements[1], `'comment 2`);
                         expectCommentWithText(ifStmt.thenBranch.statements[3], `'comment 3`);
 
-                        let elseIfBranch = ifStmt.elseBranch;
+                        let elseIfBranch = ifStmt.elseBranch!;
                         if (isIfStatement(elseIfBranch)) {
                             expectCommentWithText(elseIfBranch.thenBranch.statements[0], `'comment 4`);
                             expectCommentWithText(elseIfBranch.thenBranch.statements[1], `'comment 5`);
                             expectCommentWithText(elseIfBranch.thenBranch.statements[3], `'comment 6`);
 
-                            let elseBranch = elseIfBranch.elseBranch;
+                            let elseBranch = elseIfBranch.elseBranch!;
                             if (isBlock(elseBranch)) {
                                 expectCommentWithText(elseBranch.statements[0], `'comment 7`);
                                 expectCommentWithText(elseBranch.statements[1], `'comment 8`);
@@ -1310,7 +1312,8 @@ describe('parser', () => {
 function parse(text: string, mode?: ParseMode) {
     let { tokens } = Lexer.scan(text);
     return Parser.parse(tokens, {
-        mode: mode
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        mode: mode!
     });
 }
 

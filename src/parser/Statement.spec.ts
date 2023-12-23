@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
+/* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { expect } from '../chai-config.spec';
 import type { NamespaceStatement } from './Statement';
 import { Body, CommentStatement, EmptyStatement } from './Statement';
@@ -58,12 +60,12 @@ describe('Statement', () => {
                 end namespace
             `);
             program.validate();
-            let node = program.getFile<BrsFile>('source/main.brs').ast.findChild<NamespaceStatement>(isNamespaceStatement);
-            while (node.findChild(isNamespaceStatement)) {
-                node = node.findChild<NamespaceStatement>(isNamespaceStatement);
+            let node = program.getFile<BrsFile>('source/main.brs')!.ast.findChild<NamespaceStatement>(isNamespaceStatement);
+            while (node!.findChild(isNamespaceStatement)) {
+                node = node!.findChild<NamespaceStatement>(isNamespaceStatement);
             }
-            expect(node.getName(ParseMode.BrighterScript)).to.equal('NameA.NameB');
-            expect(node.getName(ParseMode.BrightScript)).to.equal('NameA_NameB');
+            expect(node!.getName(ParseMode.BrighterScript)).to.equal('NameA.NameB');
+            expect(node!.getName(ParseMode.BrightScript)).to.equal('NameA_NameB');
         });
     });
 

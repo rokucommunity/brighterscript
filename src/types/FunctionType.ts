@@ -11,7 +11,7 @@ export class FunctionType implements BscType {
     /**
      * The name of the function for this type. Can be null
      */
-    public name: string;
+    public name: string | undefined;
 
     /**
      * Determines if this is a sub or not
@@ -65,7 +65,7 @@ export class FunctionType implements BscType {
     }
 
     public toString() {
-        let paramTexts = [];
+        let paramTexts: string[] = [];
         for (let param of this.params) {
             paramTexts.push(`${param.name}${param.isOptional ? '?' : ''} as ${param.type.toString()}`);
         }

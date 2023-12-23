@@ -51,7 +51,7 @@ describe('parser return statements', () => {
             token(TokenKind.Newline, '\\n'),
             token(TokenKind.Return, 'return'),
             identifier('RebootSystem'),
-            { kind: TokenKind.LeftParen, text: '(', range: null },
+            { kind: TokenKind.LeftParen, text: '(', range: null as any },
             token(TokenKind.RightParen, ')'),
             token(TokenKind.Newline, '\\n'),
             token(TokenKind.EndFunction, 'end function'),

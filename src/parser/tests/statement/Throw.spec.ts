@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-non-null-assertion */
+/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
 import { expect } from '../../../chai-config.spec';
 import type { TryCatchStatement, ThrowStatement } from '../../Statement';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
@@ -12,7 +14,7 @@ describe('parser ThrowStatement', () => {
             catch
             end try
         `);
-        const throwStatement = (parser.ast.statements[0] as TryCatchStatement).tryBranch.statements[0] as ThrowStatement;
+        const throwStatement = (parser.ast.statements[0] as TryCatchStatement).tryBranch!.statements[0] as ThrowStatement;
         //the statement should still exist and have null expression
         expect(throwStatement).to.exist;
         expect(throwStatement.expression).to.be.instanceof(LiteralExpression);
@@ -26,7 +28,7 @@ describe('parser ThrowStatement', () => {
             end try
         `);
         expect(parser.diagnostics[0]?.message).to.eql(DiagnosticMessages.missingExceptionExpressionAfterThrowKeyword().message);
-        const throwStatement = (parser.ast.statements[0] as TryCatchStatement).tryBranch.statements[0] as ThrowStatement;
+        const throwStatement = (parser.ast.statements[0] as TryCatchStatement).tryBranch!.statements[0] as ThrowStatement;
         //the statement should still exist and have null expression
         expect(throwStatement).to.exist;
         expect(throwStatement.expression).to.not.exist;

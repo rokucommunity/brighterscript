@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { expect } from '../../chai-config.spec';
 import { SemanticTokenModifiers, SemanticTokenTypes } from 'vscode-languageserver-protocol';
 import type { BrsFile } from '../../files/BrsFile';
@@ -25,7 +26,7 @@ describe('BrsFileSemanticTokensProcessor', () => {
             expectZeroDiagnostics(program);
         }
         const result = util.sortByRange(
-            program.getSemanticTokens(file.srcPath)
+            program.getSemanticTokens(file.srcPath)!
         );
 
         //sort modifiers

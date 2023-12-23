@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
+/* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { expect } from '../../../chai-config.spec';
 import type { DimStatement } from '../../Statement';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
@@ -68,10 +70,10 @@ function validatePass(text: string, dimStatementIndex: number, identifierText: s
     expect(dimStatement).to.exist;
     expect(dimStatement.dimToken).to.exist;
     expect(dimStatement.identifier).to.exist;
-    expect(dimStatement.identifier.text).to.equal(identifierText);
+    expect(dimStatement.identifier!.text).to.equal(identifierText);
     expect(dimStatement.openingSquare).to.exist;
     expect(dimStatement.dimensions).to.exist;
-    expect(dimStatement.dimensions.length).to.equal(dimensionsCount);
+    expect(dimStatement.dimensions!.length).to.equal(dimensionsCount);
     expect(dimStatement.closingSquare).to.exist;
     expect(dimStatement.range).to.exist;
 }

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { util } from '../util';
 import * as fsExtra from 'fs-extra';
 import { Program } from '../Program';
@@ -36,10 +37,10 @@ describe('AstNode', () => {
                 `);
             program.validate();
             expectZeroDiagnostics(program);
-            const delta = file.ast.findChildAtPosition<DottedGetExpression>(util.createPosition(3, 52));
+            const delta = file.ast.findChildAtPosition<DottedGetExpression>(util.createPosition(3, 52))!;
             expect(delta.name.text).to.eql('delta');
 
-            const foxtrot = file.ast.findChildAtPosition<DottedGetExpression>(util.createPosition(3, 71));
+            const foxtrot = file.ast.findChildAtPosition<DottedGetExpression>(util.createPosition(3, 71))!;
             expect(foxtrot.name.text).to.eql('foxtrot');
         });
     });
@@ -131,7 +132,7 @@ describe('AstNode', () => {
             const secondStatement = (file.ast.statements[0] as FunctionStatement).func.body.statements[1];
             const foxtrot = file.ast.findChild((node) => {
                 return isDottedGetExpression(node) && node.name?.text === 'foxtrot';
-            });
+            })!;
             expect(
                 foxtrot.findAncestor(isPrintStatement)
             ).to.equal(secondStatement);
@@ -146,7 +147,7 @@ describe('AstNode', () => {
             `);
             const foxtrot = file.ast.findChild((node) => {
                 return isDottedGetExpression(node) && node.name?.text === 'foxtrot';
-            });
+            })!;
             expect(
                 foxtrot.findAncestor(isClassStatement)
             ).to.be.undefined;
@@ -162,7 +163,7 @@ describe('AstNode', () => {
             const firstStatement = (file.ast.statements[0] as FunctionStatement).func.body.statements[0];
             const foxtrot = file.ast.findChild((node) => {
                 return isDottedGetExpression(node) && node.name?.text === 'foxtrot';
-            });
+            })!;
             expect(
                 foxtrot.findAncestor(node => firstStatement)
             ).to.equal(firstStatement);

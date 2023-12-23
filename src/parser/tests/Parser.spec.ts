@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
+/* eslint-disable @typescript-eslint/no-non-null-assertion */
 import type { Token } from '../../lexer/Token';
 import { TokenKind, ReservedWords } from '../../lexer/TokenKind';
 import { interpolatedRange } from '../../astUtils/creators';
@@ -11,8 +13,8 @@ import type { Range } from 'vscode-languageserver';
 export function token(kind: TokenKind, text?: string): Token {
     return {
         kind: kind,
-        text: text,
-        isReserved: ReservedWords.has((text || '').toLowerCase()),
+        text: text!,
+        isReserved: ReservedWords.has((text ?? '').toLowerCase()),
         range: interpolatedRange,
         leadingWhitespace: ''
     };
