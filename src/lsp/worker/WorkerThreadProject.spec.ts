@@ -2,6 +2,7 @@ import { tempDir, rootDir, expectDiagnosticsAsync } from '../../testHelpers.spec
 import * as fsExtra from 'fs-extra';
 import { WorkerThreadProject, workerPool } from './WorkerThreadProject';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
+import { expect } from 'chai';
 
 export async function wakeWorkerThread() {
     console.log('waking up a worker thread');
@@ -16,15 +17,17 @@ export async function wakeWorkerThread() {
     }
 }
 
+export const wakeWorkerThreadPromise = wakeWorkerThread();
+
 after(() => {
     workerPool.dispose();
 });
 
-describe('WorkerThreadProject', () => {
+describe.only('WorkerThreadProject', () => {
     let project: WorkerThreadProject;
-    before(async function warmUpWorker() {
+    before(async function workerThreadWarmup() {
         this.timeout(20_000);
-        await wakeWorkerThread();
+        await wakeWorkerThreadPromise;
     });
 
     beforeEach(() => {
@@ -50,8 +53,9 @@ describe('WorkerThreadProject', () => {
                 projectPath: rootDir,
                 projectNumber: 1
             });
-
-            await expectDiagnosticsAsync(project, [
+            const diagnostics = await project.getDiagnostics();
+            expect(diagnostics).lengthOf(1);
+            await expectDiagnosticsAsync(diagnostics, [
                 DiagnosticMessages.cannotFindName('varNotThere').message
             ]);
         });

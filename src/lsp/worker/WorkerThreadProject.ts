@@ -15,12 +15,16 @@ export const workerPool = new WorkerPool(() => {
         __filename,
         {
             //wire up ts-node if we're running in ts-node
-            execArgv: /\.ts$/i.test(__filename) ? ['--require', 'ts-node/register'] : undefined
+            execArgv: /\.ts$/i.test(__filename)
+                ? ['--require', 'ts-node/register']
+                /* istanbul ignore next */
+                : undefined
         }
     );
 });
 
 //if this script us running in a Worker, run
+/* istanbul ignore next */
 if (!isMainThread) {
     const runner = new WorkerThreadProjectRunner();
     runner.run(parentPort);

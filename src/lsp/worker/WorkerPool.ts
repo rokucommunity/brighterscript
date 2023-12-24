@@ -23,9 +23,18 @@ export class WorkerPool {
     public preload(count: number) {
         while (this.freeWorkers.length < count) {
             this.freeWorkers.push(
-                this.getWorker()
+                this.createWorker()
             );
         }
+    }
+
+    /**
+     * Create a new worker
+     */
+    private createWorker() {
+        const worker = this.factory();
+        this.allWorkers.push(worker);
+        return worker;
     }
 
     /**
@@ -35,9 +44,7 @@ export class WorkerPool {
     public getWorker() {
         //we have no free workers. spin up a new one
         if (this.freeWorkers.length === 0) {
-            const worker = this.factory();
-            this.allWorkers.push(worker);
-            return worker;
+            return this.createWorker();
         } else {
             //return an existing free worker
             return this.freeWorkers.pop();

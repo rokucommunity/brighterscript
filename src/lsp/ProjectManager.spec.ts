@@ -6,15 +6,15 @@ import { standardizePath as s } from '../util';
 import { createSandbox } from 'sinon';
 import { Project } from './Project';
 import { WorkerThreadProject } from './worker/WorkerThreadProject';
-import { wakeWorkerThread } from './worker/WorkerThreadProject.spec';
+import { wakeWorkerThreadPromise } from './worker/WorkerThreadProject.spec';
 const sinon = createSandbox();
 
 describe.only('ProjectManager', () => {
     let manager: ProjectManager;
 
-    before(async function warmUpWorker() {
+    before(async function workerThreadWarmup() {
         this.timeout(20_000);
-        await wakeWorkerThread();
+        await wakeWorkerThreadPromise;
     });
 
     beforeEach(() => {
