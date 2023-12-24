@@ -1,54 +1,48 @@
 import { expect } from 'chai';
 import { ProjectManager } from './ProjectManager';
-import { tempDir, rootDir, expectDiagnostics, expectDiagnosticsAsync } from '../testHelpers.spec';
+import { tempDir, rootDir } from '../testHelpers.spec';
 import * as fsExtra from 'fs-extra';
 import { standardizePath as s } from '../util';
-import { Deferred } from '../deferred';
 import { createSandbox } from 'sinon';
-import { DiagnosticMessages } from '../DiagnosticMessages';
-import { ProgramBuilder } from '..';
+import { Project } from './Project';
+import { WorkerThreadProject } from './worker/WorkerThreadProject';
+import { wakeWorkerThread } from './worker/WorkerThreadProject.spec';
 const sinon = createSandbox();
 
-describe('ProjectManager', () => {
+describe.only('ProjectManager', () => {
     let manager: ProjectManager;
+
+    before(async function warmUpWorker() {
+        this.timeout(20_000);
+        await wakeWorkerThread();
+    });
 
     beforeEach(() => {
         manager = new ProjectManager();
         fsExtra.emptyDirSync(tempDir);
+        sinon.restore();
     });
 
     afterEach(() => {
         fsExtra.emptyDirSync(tempDir);
+        sinon.restore();
     });
 
-    describe('addFileResolver', () => {
-        it('runs added resolvers', async () => {
-            const mock = sinon.mock();
-            manager.addFileResolver(mock);
-            fsExtra.outputFileSync(`${rootDir}/source/main.brs`, '');
 
-            await manager.syncProjects([{
-                workspaceFolder: rootDir
-            }]);
-            expect(mock.called).to.be.true;
-        });
-    });
+    describe('on', () => {
+        it('emits events', async () => {
+            const stub = sinon.stub();
+            const off = manager.on('flush-diagnostics', stub);
+            await manager['emit']('flush-diagnostics', { project: undefined });
+            expect(stub.callCount).to.eql(1);
 
-    describe('events', () => {
-        it('emits flush-diagnostics after validate finishes', async () => {
-            const deferred = new Deferred<boolean>();
-            const disable = manager.on('flush-diagnostics', () => {
-                deferred.resolve(true);
-            });
-            await manager.syncProjects([{
-                workspaceFolder: rootDir
-            }]);
-            expect(
-                await deferred.promise
-            ).to.eql(true);
+            await manager['emit']('flush-diagnostics', { project: undefined });
+            expect(stub.callCount).to.eql(2);
 
-            //disable future events
-            disable();
+            off();
+
+            await manager['emit']('flush-diagnostics', { project: undefined });
+            expect(stub.callCount).to.eql(2);
         });
     });
 
@@ -165,6 +159,29 @@ describe('ProjectManager', () => {
                 s`${rootDir}/subdir2`
             ]);
         });
+
+        it('spawns a worker thread when threading is enabled', async () => {
+            await manager.syncProjects([{
+                workspaceFolder: rootDir,
+                threadingEnabled: true
+            }]);
+            expect(manager.projects[0]).instanceof(WorkerThreadProject);
+        });
+    });
+
+    describe('getProject', () => {
+        it('uses .projectPath if param is not a string', async () => {
+            await manager.syncProjects([{
+                workspaceFolder: rootDir
+            }]);
+            expect(
+                manager['getProject']({
+                    projectPath: rootDir
+                })
+            ).to.include({
+                projectPath: rootDir
+            });
+        });
     });
 
     describe('createProject', () => {
@@ -188,61 +205,22 @@ describe('ProjectManager', () => {
             expect(manager.projects[0].projectNumber).to.eql(3);
         });
 
-        it('warns about deprecated brsconfig.json', async () => {
-            fsExtra.outputFileSync(`${rootDir}/subdir1/brsconfig.json`, '');
-            const project = await manager['createProject']({
-                projectPath: rootDir,
-                workspaceFolder: rootDir,
-                bsconfigPath: 'subdir1/brsconfig.json'
-            });
-            await expectDiagnosticsAsync(project, [
-                DiagnosticMessages.brsConfigJsonIsDeprecated()
-            ]);
-        });
-
         it('properly tracks a failed run', async () => {
             //force a total crash
-            sinon.stub(ProgramBuilder.prototype, 'run').returns(
+            sinon.stub(Project.prototype, 'activate').returns(
                 Promise.reject(new Error('Critical failure'))
             );
-            const project = await manager['createProject']({
-                projectPath: rootDir,
-                workspaceFolder: rootDir,
-                bsconfigPath: 'subdir1/brsconfig.json'
-            });
-            expect(project.isFirstRunComplete).to.be.true;
-            expect(project.isFirstRunSuccessful).to.be.false;
-        });
-    });
-
-    describe('getBsconfigPath', () => {
-        it('emits critical failure for missing file', async () => {
-            const deferred = new Deferred<string>();
-            manager.on('critical-failure', (event) => {
-                deferred.resolve(event.message);
-            });
-            await manager['getBsconfigPath']({
-                projectPath: rootDir,
-                workspaceFolder: rootDir,
-                bsconfigPath: s`${rootDir}/bsconfig.json`
-            });
-            expect(
-                (await deferred.promise).startsWith('Cannot find config file')
-            ).to.be.true;
-        });
-
-        it('finds brsconfig.json', async () => {
-            fsExtra.outputFileSync(`${rootDir}/brsconfig.json`, '');
-            expect(
-                await manager['getBsconfigPath']({
+            let error;
+            try {
+                await manager['createProject']({
                     projectPath: rootDir,
-                    workspaceFolder: rootDir
-                })
-            ).to.eql(s`${rootDir}/brsconfig.json`);
-        });
-
-        it('does not crash on undefined', async () => {
-            await manager['getBsconfigPath'](undefined);
+                    workspaceFolder: rootDir,
+                    bsconfigPath: 'subdir1/brsconfig.json'
+                });
+            } catch (e) {
+                error = e;
+            }
+            expect(error).to.include({ message: 'Critical failure' });
         });
     });
 

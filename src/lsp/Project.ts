@@ -47,19 +47,15 @@ export class Project implements LspProject {
         //TODO handle in-memory file stuff
         // builder.addFileResolver(...this.fileResolvers);
 
-        try {
-            await this.builder.run({
-                cwd: cwd,
-                project: this.configFilePath,
-                watch: false,
-                createPackage: false,
-                deploy: false,
-                copyToStaging: false,
-                showDiagnosticsInConsole: false
-            });
-        } catch (e) {
-            this.builder.logger.error(e);
-        }
+        await this.builder.run({
+            cwd: cwd,
+            project: this.configFilePath,
+            watch: false,
+            createPackage: false,
+            deploy: false,
+            copyToStaging: false,
+            showDiagnosticsInConsole: false
+        });
 
         //if we found a deprecated brsconfig.json, add a diagnostic warning the user
         if (this.configFilePath && path.basename(this.configFilePath) === 'brsconfig.json') {
@@ -81,11 +77,6 @@ export class Project implements LspProject {
                 };
             })
         );
-    }
-
-    public dispose() {
-        this.builder?.dispose();
-        this.emitter?.removeAllListeners();
     }
 
     /**
@@ -173,4 +164,9 @@ export class Project implements LspProject {
         this.emitter.emit(eventName, data);
     }
     private emitter = new EventEmitter();
+
+    public dispose() {
+        this.builder?.dispose();
+        this.emitter.removeAllListeners();
+    }
 }

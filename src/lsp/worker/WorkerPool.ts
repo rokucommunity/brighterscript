@@ -7,15 +7,22 @@ export class WorkerPool {
 
     }
 
-    private workers: Worker[] = [];
+    /**
+     * List of workers that are free to be used by a new task
+     */
+    private freeWorkers: Worker[] = [];
+    /**
+     * List of all workers that we've ever created
+     */
+    private allWorkers: Worker[] = [];
 
     /**
      * Ensure that there are ${count} workers available in the pool
-     * @param count
+     * @param count the number of total free workers that should exist when this function exits
      */
     public preload(count: number) {
-        while (this.workers.length < count) {
-            this.workers.push(
+        while (this.freeWorkers.length < count) {
+            this.freeWorkers.push(
                 this.getWorker()
             );
         }
@@ -26,7 +33,15 @@ export class WorkerPool {
      * @returns a worker
      */
     public getWorker() {
-        return this.workers.pop() ?? this.factory();
+        //we have no free workers. spin up a new one
+        if (this.freeWorkers.length === 0) {
+            const worker = this.factory();
+            this.allWorkers.push(worker);
+            return worker;
+        } else {
+            //return an existing free worker
+            return this.freeWorkers.pop();
+        }
     }
 
     /**
@@ -34,15 +49,24 @@ export class WorkerPool {
      * @param worker the worker
      */
     public releaseWorker(worker: Worker) {
-        this.workers.push(worker);
+        //add this worker back to the free workers list (if it's not already in there)
+        if (!this.freeWorkers.includes(worker)) {
+            this.freeWorkers.push(worker);
+        }
     }
 
     /**
      * Shut down all active worker pools
      */
     public dispose() {
-        for (const worker of this.workers) {
-            worker.terminate();
+        for (const worker of this.allWorkers) {
+            try {
+                worker.terminate();
+            } catch (e) {
+                console.error(e);
+            }
         }
+        this.allWorkers = [];
+        this.freeWorkers = [];
     }
 }

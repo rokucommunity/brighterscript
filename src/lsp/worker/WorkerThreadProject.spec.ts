@@ -3,10 +3,28 @@ import * as fsExtra from 'fs-extra';
 import { WorkerThreadProject, workerPool } from './WorkerThreadProject';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 
-describe.only('WorkerThreadProject', () => {
+export async function wakeWorkerThread() {
+    console.log('waking up a worker thread');
+    const project = new WorkerThreadProject();
+    try {
+        await project.activate({
+            projectPath: rootDir,
+            projectNumber: 1
+        });
+    } finally {
+        project.dispose();
+    }
+}
+
+after(() => {
+    workerPool.dispose();
+});
+
+describe('WorkerThreadProject', () => {
     let project: WorkerThreadProject;
-    before(() => {
-        workerPool.preload(1);
+    before(async function warmUpWorker() {
+        this.timeout(20_000);
+        await wakeWorkerThread();
     });
 
     beforeEach(() => {
@@ -18,19 +36,6 @@ describe.only('WorkerThreadProject', () => {
     afterEach(() => {
         fsExtra.emptyDirSync(tempDir);
         project?.dispose();
-    });
-
-    after(() => {
-        //shut down all the worker threads after we're finished with all the tests
-        workerPool.dispose();
-    });
-
-    it('wake up the worker thread', async function test() {
-        this.timeout(20_000);
-        await project.activate({
-            projectPath: rootDir,
-            projectNumber: 1
-        });
     });
 
     describe('activate', () => {

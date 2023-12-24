@@ -50,15 +50,6 @@ export class WorkerThreadProject implements LspProject {
         return diagnostics.data;
     }
 
-    public dispose() {
-        //restore the worker back to the worker pool so it can be used again
-        if (this.worker) {
-            workerPool.releaseWorker(this.worker);
-        }
-        this.messageHandler.dispose();
-        this.emitter.removeAllListeners();
-    }
-
     /**
      * Handles request/response/update messages from the worker thread
      */
@@ -99,7 +90,6 @@ export class WorkerThreadProject implements LspProject {
     public configFilePath?: string;
 
     public on(eventName: 'critical-failure', handler: (data: { project: Project; message: string }) => void);
-    public on(eventName: 'flush-diagnostics', handler: (data: { project: Project }) => void);
     public on(eventName: string, handler: (payload: any) => void) {
         this.emitter.on(eventName, handler);
         return () => {
@@ -108,11 +98,19 @@ export class WorkerThreadProject implements LspProject {
     }
 
     private emit(eventName: 'critical-failure', data: { project: Project; message: string });
-    private emit(eventName: 'flush-diagnostics', data: { project: Project });
     private async emit(eventName: string, data?) {
         //emit these events on next tick, otherwise they will be processed immediately which could cause issues
         await util.sleep(0);
         this.emitter.emit(eventName, data);
     }
     private emitter = new EventEmitter();
+
+    public dispose() {
+        //move the worker back to the pool so it can be used again
+        if (this.worker) {
+            workerPool.releaseWorker(this.worker);
+        }
+        this.messageHandler.dispose();
+        this.emitter.removeAllListeners();
+    }
 }

@@ -2,17 +2,9 @@ import { standardizePath as s, util } from '../util';
 import { rokuDeploy } from 'roku-deploy';
 import * as path from 'path';
 import * as EventEmitter from 'eventemitter3';
-import type { FileResolver } from '../interfaces';
 import type { LspProject } from './LspProject';
 import { Project } from './Project';
 import { WorkerThreadProject } from './worker/WorkerThreadProject';
-
-interface ProjectManagerConstructorArgs {
-    /**
-     * Should each project run in its own dedicated worker thread or all run on the main thread
-     */
-    threadingEnabled: boolean;
-}
 
 /**
  * Manages all brighterscript projects for the language server
@@ -47,12 +39,6 @@ export class ProjectManager {
         this.emitter.emit(eventName, data);
     }
     private emitter = new EventEmitter();
-
-    private fileResolvers = [] as FileResolver[];
-
-    public addFileResolver(fileResolver: FileResolver) {
-        this.fileResolvers.push(fileResolver);
-    }
 
     /**
      * Given a list of all desired projects, create any missing projects and destroy and projects that are no longer available
@@ -192,6 +178,10 @@ export class ProjectManager {
         let project: LspProject = config1.threadingEnabled
             ? new WorkerThreadProject()
             : new Project();
+
+        this.projects.push(project);
+
+        //TODO subscribe to various events for this project
 
         await project.activate({
             projectPath: config1.projectPath,
