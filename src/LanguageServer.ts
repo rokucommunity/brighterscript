@@ -50,16 +50,6 @@ import type { WorkspaceConfig } from './lsp/ProjectManager';
 import { ProjectManager } from './lsp/ProjectManager';
 
 export class LanguageServer {
-    constructor() {
-        this.projectManager = new ProjectManager();
-        //anytime a project finishes validation, send diagnostics
-        this.projectManager.on('flush-diagnostics', () => {
-            void this.sendDiagnostics();
-        });
-        //allow the lsp to provide file contents
-        this.projectManager.addFileResolver(this.documentFileResolver.bind(this));
-    }
-
     private connection = undefined as Connection;
 
     /**
@@ -94,10 +84,6 @@ export class LanguageServer {
      */
     private documents = new TextDocuments(TextDocument);
 
-    private createConnection() {
-        return createConnection(ProposedFeatures.all);
-    }
-
     private loggerSubscription: () => void;
 
     public validateThrottler = new Throttler(0);
@@ -114,9 +100,17 @@ export class LanguageServer {
 
     //run the server
     public run() {
+        this.projectManager = new ProjectManager();
+        //anytime a project finishes validation, send diagnostics
+        this.projectManager.on('flush-diagnostics', () => {
+            void this.sendDiagnostics();
+        });
+        //allow the lsp to provide file contents
+        //TODO handlet this...
+        // this.projectManager.addFileResolver(this.documentFileResolver.bind(this));
+
         // Create a connection for the server. The connection uses Node's IPC as a transport.
-        // Also include all preview / proposed LSP features.
-        this.connection = this.createConnection();
+        this.establishConnection();
 
         // Send the current status of the busyStatusTracker anytime it changes
         this.busyStatusTracker.on('change', (status) => {
@@ -196,18 +190,6 @@ export class LanguageServer {
 
         // Listen on the connection
         this.connection.listen();
-    }
-
-    private busyStatusIndex = -1;
-    private sendBusyStatus(status: BusyStatus) {
-        this.busyStatusIndex = ++this.busyStatusIndex <= 0 ? 0 : this.busyStatusIndex;
-
-        this.connection.sendNotification(NotificationName.busyStatus, {
-            status: status,
-            timestamp: Date.now(),
-            index: this.busyStatusIndex,
-            activeRuns: [...this.busyStatusTracker.activeRuns]
-        });
     }
 
     /**
@@ -294,6 +276,32 @@ export class LanguageServer {
             throw e;
         }
     }
+
+    /**
+     * Establish a connection to the client if not already connected
+     */
+    private establishConnection() {
+        if (!this.connection) {
+            this.connection = createConnection(ProposedFeatures.all);
+        }
+    }
+
+    /**
+     * Send a new busy status notification to the client based on the current busy status
+     * @param status
+     */
+    private sendBusyStatus(status: BusyStatus) {
+        this.busyStatusIndex = ++this.busyStatusIndex <= 0 ? 0 : this.busyStatusIndex;
+
+        this.connection.sendNotification(NotificationName.busyStatus, {
+            status: status,
+            timestamp: Date.now(),
+            index: this.busyStatusIndex,
+            activeRuns: [...this.busyStatusTracker.activeRuns]
+        });
+    }
+    private busyStatusIndex = -1;
+
 
     private initialProjectsCreated: Promise<any>;
 
@@ -482,14 +490,6 @@ export class LanguageServer {
             newProject.isFirstRunSuccessful = false;
         });
         return newProject;
-    }
-
-    private getProjects() {
-        let projects = this.projects.slice();
-        for (let key in this.standaloneFileProjects) {
-            projects.push(this.standaloneFileProjects[key]);
-        }
-        return projects;
     }
 
     /**
