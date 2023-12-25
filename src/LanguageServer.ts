@@ -21,7 +21,11 @@ import type {
     SemanticTokens,
     SemanticTokensParams,
     TextDocumentChangeEvent,
-    Hover
+    Hover,
+    HandlerResult,
+    InitializeError,
+    InitializeResult,
+    InitializedParams
 } from 'vscode-languageserver/node';
 import {
     SemanticTokensRequest,
@@ -49,7 +53,11 @@ import { BusyStatusTracker } from './BusyStatusTracker';
 import type { WorkspaceConfig } from './lsp/ProjectManager';
 import { ProjectManager } from './lsp/ProjectManager';
 
-export class LanguageServer {
+export class LanguageServer implements OnHandler<Connection> {
+
+    /**
+     * The language server protocol connection, used to send and receive all requests and responses
+     */
     private connection = undefined as Connection;
 
     /**
@@ -106,7 +114,7 @@ export class LanguageServer {
             void this.sendDiagnostics();
         });
         //allow the lsp to provide file contents
-        //TODO handlet this...
+        //TODO handle this...
         // this.projectManager.addFileResolver(this.documentFileResolver.bind(this));
 
         // Create a connection for the server. The connection uses Node's IPC as a transport.
@@ -122,13 +130,15 @@ export class LanguageServer {
             this.connection.tracer.log(text);
         });
 
-        this.connection.onInitialize(this.onInitialize.bind(this));
+        //bind all our on* methods that share the same name from connection
+        for (const name of Object.getOwnPropertyNames(LanguageServer.prototype)) {
+            if (/on+/.test(name) && typeof this.connection[name] === 'function') {
+                this.connection[name](this[name].bind(this));
+            }
+        }
 
-        this.connection.onInitialized(this.onInitialized.bind(this)); //eslint-disable-line
-
-        this.connection.onDidChangeConfiguration(this.onDidChangeConfiguration.bind(this)); //eslint-disable-line
-
-        this.connection.onDidChangeWatchedFiles(this.onDidChangeWatchedFiles.bind(this)); //eslint-disable-line
+        //TODO switch to a more specific connection function call once they actually add it
+        this.connection.onRequest(SemanticTokensRequest.method, this.onFullSemanticTokens.bind(this));
 
         // The content of a text document has changed. This event is emitted
         // when the text document is first opened, when its content has changed,
@@ -138,52 +148,6 @@ export class LanguageServer {
 
         //whenever a document gets closed
         this.documents.onDidClose(this.onDocumentClose.bind(this));
-
-        // This handler provides the initial list of the completion items.
-        this.connection.onCompletion(this.onCompletion.bind(this));
-
-        // This handler resolves additional information for the item selected in
-        // the completion list.
-        this.connection.onCompletionResolve(this.onCompletionResolve.bind(this));
-
-        this.connection.onHover(this.onHover.bind(this));
-
-        this.connection.onExecuteCommand(this.onExecuteCommand.bind(this));
-
-        this.connection.onDefinition(this.onDefinition.bind(this));
-
-        this.connection.onDocumentSymbol(this.onDocumentSymbol.bind(this));
-
-        this.connection.onWorkspaceSymbol(this.onWorkspaceSymbol.bind(this));
-
-        this.connection.onSignatureHelp(this.onSignatureHelp.bind(this));
-
-        this.connection.onReferences(this.onReferences.bind(this));
-
-        this.connection.onCodeAction(this.onCodeAction.bind(this));
-
-        //TODO switch to a more specific connection function call once they actually add it
-        this.connection.onRequest(SemanticTokensRequest.method, this.onFullSemanticTokens.bind(this));
-
-        /*
-        this.connection.onDidOpenTextDocument((params) => {
-             // A text document got opened in VSCode.
-             // params.uri uniquely identifies the document. For documents stored on disk this is a file URI.
-             // params.text the initial full content of the document.
-            this.connection.console.log(`${params.textDocument.uri} opened.`);
-        });
-        this.connection.onDidChangeTextDocument((params) => {
-             // The content of a text document did change in VSCode.
-             // params.uri uniquely identifies the document.
-             // params.contentChanges describe the content changes to the document.
-            this.connection.console.log(`${params.textDocument.uri} changed: ${JSON.stringify(params.contentChanges)}`);
-        });
-        this.connection.onDidCloseTextDocument((params) => {
-             // A text document got closed in VSCode.
-             // params.uri uniquely identifies the document.
-            this.connection.console.log(`${params.textDocument.uri} closed.`);
-        });
-        */
 
         // listen for open, change and close text document events
         this.documents.listen(this.connection);
@@ -196,7 +160,7 @@ export class LanguageServer {
      * Called when the client starts initialization
      */
     @AddStackToErrorMessage
-    public onInitialize(params: InitializeParams) {
+    public onInitialize(params: InitializeParams): HandlerResult<InitializeResult, InitializeError> {
         let clientCapabilities = params.capabilities;
 
         // Does the client support the `workspace/configuration` request?
@@ -244,7 +208,7 @@ export class LanguageServer {
      */
     @AddStackToErrorMessage
     @TrackBusyStatus
-    private async onInitialized() {
+    public async onInitialized() {
         let projectCreatedDeferred = new Deferred();
         this.initialProjectsCreated = projectCreatedDeferred.promise;
 
@@ -274,6 +238,357 @@ export class LanguageServer {
                 Error message: ${e.message}`
             );
             throw e;
+        }
+    }
+
+    /**
+     * Provide a list of completion items based on the current cursor position
+     */
+    @AddStackToErrorMessage
+    @TrackBusyStatus
+    public async onCompletion(params: TextDocumentPositionParams) {
+        //ensure programs are initialized
+        await this.waitAllProjectFirstRuns();
+
+        let filePath = util.uriToPath(params.textDocument.uri);
+
+        //wait until the file has settled
+        await this.onValidateSettled();
+
+        let completions = this
+            .getProjects()
+            .flatMap(workspace => workspace.builder.program.getCompletions(filePath, params.position));
+
+        for (let completion of completions) {
+            completion.commitCharacters = ['.'];
+        }
+
+        return completions;
+    }
+
+    /**
+     * Provide a full completion item from the selection
+     */
+    @AddStackToErrorMessage
+    public onCompletionResolve(item: CompletionItem): CompletionItem {
+        if (item.data === 1) {
+            item.detail = 'TypeScript details';
+            item.documentation = 'TypeScript documentation';
+        } else if (item.data === 2) {
+            item.detail = 'JavaScript details';
+            item.documentation = 'JavaScript documentation';
+        }
+        return item;
+    }
+
+    @AddStackToErrorMessage
+    @TrackBusyStatus
+    public async onCodeAction(params: CodeActionParams) {
+        //ensure programs are initialized
+        await this.waitAllProjectFirstRuns();
+
+        let srcPath = util.uriToPath(params.textDocument.uri);
+
+        //wait until the file has settled
+        await this.onValidateSettled();
+
+        const codeActions = this
+            .getProjects()
+            //skip programs that don't have this file
+            .filter(x => x.builder?.program?.hasFile(srcPath))
+            .flatMap(workspace => workspace.builder.program.getCodeActions(srcPath, params.range));
+
+        //clone the diagnostics for each code action, since certain diagnostics can have circular reference properties that kill the language server if serialized
+        for (const codeAction of codeActions) {
+            if (codeAction.diagnostics) {
+                codeAction.diagnostics = codeAction.diagnostics.map(x => util.toDiagnostic(x, params.textDocument.uri));
+            }
+        }
+        return codeActions;
+    }
+
+
+    @AddStackToErrorMessage
+    private async onDidChangeConfiguration() {
+        if (this.hasConfigurationCapability) {
+            //if the user changes any config value, just mass-reload all projects
+            await this.reloadProjects(this.getProjects());
+            // Reset all cached document settings
+        } else {
+            // this.globalSettings = <ExampleSettings>(
+            //     (change.settings.languageServerExample || this.defaultSettings)
+            // );
+        }
+    }
+
+    /**
+     * Called when watched files changed (add/change/delete).
+     * The CLIENT is in charge of what files to watch, so all client
+     * implementations should ensure that all valid project
+     * file types are watched (.brs,.bs,.xml,manifest, and any json/text/image files)
+     */
+    @AddStackToErrorMessage
+    @TrackBusyStatus
+    private async onDidChangeWatchedFiles(params: DidChangeWatchedFilesParams) {
+        //ensure programs are initialized
+        await this.waitAllProjectFirstRuns();
+
+        let projects = this.getProjects();
+
+        //convert all file paths to absolute paths
+        let changes = params.changes.map(x => {
+            return {
+                type: x.type,
+                srcPath: s`${URI.parse(x.uri).fsPath}`
+            };
+        });
+
+        let keys = changes.map(x => x.srcPath);
+
+        //filter the list of changes to only the ones that made it through the debounce unscathed
+        changes = changes.filter(x => keys.includes(x.srcPath));
+
+        //if we have changes to work with
+        if (changes.length > 0) {
+
+            //if any bsconfig files were added or deleted, re-sync all projects instead of the more specific approach below
+            if (changes.find(x => (x.type === FileChangeType.Created || x.type === FileChangeType.Deleted) && path.basename(x.srcPath).toLowerCase() === 'bsconfig.json')) {
+                return this.syncProjects();
+            }
+
+            //reload any workspace whose bsconfig.json file has changed
+            {
+                let projectsToReload = [] as Project[];
+                //get the file paths as a string array
+                let filePaths = changes.map((x) => x.srcPath);
+
+                for (let project of projects) {
+                    if (project.configFilePath && filePaths.includes(project.configFilePath)) {
+                        projectsToReload.push(project);
+                    }
+                }
+                if (projectsToReload.length > 0) {
+                    //vsc can generate a ton of these changes, for vsc system files, so we need to bail if there's no work to do on any of our actual project files
+                    //reload any projects that need to be reloaded
+                    await this.reloadProjects(projectsToReload);
+                }
+
+                //reassign `projects` to the non-reloaded projects
+                projects = projects.filter(x => !projectsToReload.includes(x));
+            }
+
+            //convert created folders into a list of files of their contents
+            const directoryChanges = changes
+                //get only creation items
+                .filter(change => change.type === FileChangeType.Created)
+                //keep only the directories
+                .filter(change => util.isDirectorySync(change.srcPath));
+
+            //remove the created directories from the changes array (we will add back each of their files next)
+            changes = changes.filter(x => !directoryChanges.includes(x));
+
+            //look up every file in each of the newly added directories
+            const newFileChanges = directoryChanges
+                //take just the path
+                .map(x => x.srcPath)
+                //exclude the roku deploy staging folder
+                .filter(dirPath => !dirPath.includes('.roku-deploy-staging'))
+                //get the files for each folder recursively
+                .flatMap(dirPath => {
+                    //look up all files
+                    let files = fastGlob.sync('**/*', {
+                        absolute: true,
+                        cwd: rokuDeployUtil.toForwardSlashes(dirPath)
+                    });
+                    return files.map(x => {
+                        return {
+                            type: FileChangeType.Created,
+                            srcPath: s`${x}`
+                        };
+                    });
+                });
+
+            //add the new file changes to the changes array.
+            changes.push(...newFileChanges as any);
+
+            //give every workspace the chance to handle file changes
+            await Promise.all(
+                projects.map((project) => this.handleFileChanges(project, changes))
+            );
+        }
+    }
+
+    @AddStackToErrorMessage
+    public async onHover(params: TextDocumentPositionParams) {
+        //ensure programs are initialized
+        await this.waitAllProjectFirstRuns();
+
+        const srcPath = util.uriToPath(params.textDocument.uri);
+        let projects = this.getProjects();
+        let hovers = projects
+            //get hovers from all projects
+            .map((x) => x.builder.program.getHover(srcPath, params.position))
+            //flatten to a single list
+            .flat();
+
+        const contents = [
+            ...(hovers ?? [])
+                //pull all hover contents out into a flag array of strings
+                .map(x => {
+                    return Array.isArray(x?.contents) ? x?.contents : [x?.contents];
+                }).flat()
+                //remove nulls
+                .filter(x => !!x)
+                //dedupe hovers across all projects
+                .reduce((set, content) => set.add(content), new Set<string>()).values()
+        ];
+
+        if (contents.length > 0) {
+            let hover: Hover = {
+                //use the range from the first hover
+                range: hovers[0]?.range,
+                //the contents of all hovers
+                contents: contents
+            };
+            return hover;
+        }
+    }
+
+    @AddStackToErrorMessage
+    @TrackBusyStatus
+    public async onWorkspaceSymbol(params: WorkspaceSymbolParams) {
+        await this.waitAllProjectFirstRuns();
+
+        const results = util.flatMap(
+            await Promise.all(this.getProjects().map(project => {
+                return project.builder.program.getWorkspaceSymbols();
+            })),
+            c => c
+        );
+
+        // Remove duplicates
+        const allSymbols = Object.values(results.reduce((map, symbol) => {
+            const key = symbol.location.uri + symbol.name;
+            map[key] = symbol;
+            return map;
+        }, {}));
+        return allSymbols as SymbolInformation[];
+    }
+
+    @AddStackToErrorMessage
+    @TrackBusyStatus
+    public async onDocumentSymbol(params: DocumentSymbolParams) {
+        await this.waitAllProjectFirstRuns();
+
+        await this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true);
+
+        const srcPath = util.uriToPath(params.textDocument.uri);
+        for (const project of this.getProjects()) {
+            const file = project.builder.program.getFile(srcPath);
+            if (isBrsFile(file)) {
+                return file.getDocumentSymbols();
+            }
+        }
+    }
+
+    @AddStackToErrorMessage
+    @TrackBusyStatus
+    public async onDefinition(params: TextDocumentPositionParams) {
+        await this.waitAllProjectFirstRuns();
+
+        const srcPath = util.uriToPath(params.textDocument.uri);
+
+        const results = util.flatMap(
+            await Promise.all(this.getProjects().map(project => {
+                return project.builder.program.getDefinition(srcPath, params.position);
+            })),
+            c => c
+        );
+        return results;
+    }
+
+    @AddStackToErrorMessage
+    @TrackBusyStatus
+    public async onSignatureHelp(params: SignatureHelpParams) {
+        await this.waitAllProjectFirstRuns();
+
+        const filepath = util.uriToPath(params.textDocument.uri);
+        await this.keyedThrottler.onIdleOnce(filepath, true);
+
+        try {
+            const signatures = util.flatMap(
+                await Promise.all(this.getProjects().map(project => project.builder.program.getSignatureHelp(filepath, params.position)
+                )),
+                c => c
+            );
+
+            const activeSignature = signatures.length > 0 ? 0 : null;
+
+            const activeParameter = activeSignature >= 0 ? signatures[activeSignature]?.index : null;
+
+            let results: SignatureHelp = {
+                signatures: signatures.map((s) => s.signature),
+                activeSignature: activeSignature,
+                activeParameter: activeParameter
+            };
+            return results;
+        } catch (e: any) {
+            this.connection.console.error(`error in onSignatureHelp: ${e.stack ?? e.message ?? e}`);
+            return {
+                signatures: [],
+                activeSignature: 0,
+                activeParameter: 0
+            };
+        }
+    }
+
+    @AddStackToErrorMessage
+    @TrackBusyStatus
+    public async onReferences(params: ReferenceParams) {
+        await this.waitAllProjectFirstRuns();
+
+        const position = params.position;
+        const srcPath = util.uriToPath(params.textDocument.uri);
+
+        const results = util.flatMap(
+            await Promise.all(this.getProjects().map(project => {
+                return project.builder.program.getReferences(srcPath, position);
+            })),
+            c => c
+        );
+        return results.filter((r) => r);
+    }
+
+    @AddStackToErrorMessage
+    @TrackBusyStatus
+    private async onFullSemanticTokens(params: SemanticTokensParams) {
+        await this.waitAllProjectFirstRuns();
+        //wait for the file to settle (in case there are multiple file changes in quick succession)
+        await this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true);
+        //wait for the validation cycle to settle
+        await this.onValidateSettled();
+
+        const srcPath = util.uriToPath(params.textDocument.uri);
+        for (const project of this.projects) {
+            //find the first program that has this file, since it would be incredibly inefficient to generate semantic tokens for the same file multiple times.
+            if (project.builder.program.hasFile(srcPath)) {
+                let semanticTokens = project.builder.program.getSemanticTokens(srcPath);
+                return {
+                    data: encodeSemanticTokens(semanticTokens)
+                } as SemanticTokens;
+            }
+        }
+    }
+
+    @AddStackToErrorMessage
+    @TrackBusyStatus
+    public async onExecuteCommand(params: ExecuteCommandParams) {
+        await this.waitAllProjectFirstRuns();
+        if (params.command === CustomCommands.TranspileFile) {
+            const result = await this.transpileFile(params.arguments[0]);
+            //back-compat: include `pathAbsolute` property so older vscode versions still work
+            (result as any).pathAbsolute = result.srcPath;
+            return result;
         }
     }
 
@@ -492,71 +807,6 @@ export class LanguageServer {
         return newProject;
     }
 
-    /**
-     * Provide a list of completion items based on the current cursor position
-     */
-    @AddStackToErrorMessage
-    @TrackBusyStatus
-    private async onCompletion(params: TextDocumentPositionParams) {
-        //ensure programs are initialized
-        await this.waitAllProjectFirstRuns();
-
-        let filePath = util.uriToPath(params.textDocument.uri);
-
-        //wait until the file has settled
-        await this.onValidateSettled();
-
-        let completions = this
-            .getProjects()
-            .flatMap(workspace => workspace.builder.program.getCompletions(filePath, params.position));
-
-        for (let completion of completions) {
-            completion.commitCharacters = ['.'];
-        }
-
-        return completions;
-    }
-
-    /**
-     * Provide a full completion item from the selection
-     */
-    @AddStackToErrorMessage
-    private onCompletionResolve(item: CompletionItem): CompletionItem {
-        if (item.data === 1) {
-            item.detail = 'TypeScript details';
-            item.documentation = 'TypeScript documentation';
-        } else if (item.data === 2) {
-            item.detail = 'JavaScript details';
-            item.documentation = 'JavaScript documentation';
-        }
-        return item;
-    }
-
-    @AddStackToErrorMessage
-    @TrackBusyStatus
-    private async onCodeAction(params: CodeActionParams) {
-        //ensure programs are initialized
-        await this.waitAllProjectFirstRuns();
-
-        let srcPath = util.uriToPath(params.textDocument.uri);
-
-        //wait until the file has settled
-        await this.onValidateSettled();
-
-        const codeActions = this
-            .getProjects()
-            //skip programs that don't have this file
-            .filter(x => x.builder?.program?.hasFile(srcPath))
-            .flatMap(workspace => workspace.builder.program.getCodeActions(srcPath, params.range));
-
-        //clone the diagnostics for each code action, since certain diagnostics can have circular reference properties that kill the language server if serialized
-        for (const codeAction of codeActions) {
-            if (codeAction.diagnostics) {
-                codeAction.diagnostics = codeAction.diagnostics.map(x => util.toDiagnostic(x, params.textDocument.uri));
-            }
-        }
-        return codeActions;
-    }
 
     /**
      * Reload each of the specified workspaces
@@ -648,117 +898,6 @@ export class LanguageServer {
         }
     }
 
-    @AddStackToErrorMessage
-    private async onDidChangeConfiguration() {
-        if (this.hasConfigurationCapability) {
-            //if the user changes any config value, just mass-reload all projects
-            await this.reloadProjects(this.getProjects());
-            // Reset all cached document settings
-        } else {
-            // this.globalSettings = <ExampleSettings>(
-            //     (change.settings.languageServerExample || this.defaultSettings)
-            // );
-        }
-    }
-
-    /**
-     * Called when watched files changed (add/change/delete).
-     * The CLIENT is in charge of what files to watch, so all client
-     * implementations should ensure that all valid project
-     * file types are watched (.brs,.bs,.xml,manifest, and any json/text/image files)
-     */
-    @AddStackToErrorMessage
-    @TrackBusyStatus
-    private async onDidChangeWatchedFiles(params: DidChangeWatchedFilesParams) {
-        //ensure programs are initialized
-        await this.waitAllProjectFirstRuns();
-
-        let projects = this.getProjects();
-
-        //convert all file paths to absolute paths
-        let changes = params.changes.map(x => {
-            return {
-                type: x.type,
-                srcPath: s`${URI.parse(x.uri).fsPath}`
-            };
-        });
-
-        let keys = changes.map(x => x.srcPath);
-
-        //filter the list of changes to only the ones that made it through the debounce unscathed
-        changes = changes.filter(x => keys.includes(x.srcPath));
-
-        //if we have changes to work with
-        if (changes.length > 0) {
-
-            //if any bsconfig files were added or deleted, re-sync all projects instead of the more specific approach below
-            if (changes.find(x => (x.type === FileChangeType.Created || x.type === FileChangeType.Deleted) && path.basename(x.srcPath).toLowerCase() === 'bsconfig.json')) {
-                return this.syncProjects();
-            }
-
-            //reload any workspace whose bsconfig.json file has changed
-            {
-                let projectsToReload = [] as Project[];
-                //get the file paths as a string array
-                let filePaths = changes.map((x) => x.srcPath);
-
-                for (let project of projects) {
-                    if (project.configFilePath && filePaths.includes(project.configFilePath)) {
-                        projectsToReload.push(project);
-                    }
-                }
-                if (projectsToReload.length > 0) {
-                    //vsc can generate a ton of these changes, for vsc system files, so we need to bail if there's no work to do on any of our actual project files
-                    //reload any projects that need to be reloaded
-                    await this.reloadProjects(projectsToReload);
-                }
-
-                //reassign `projects` to the non-reloaded projects
-                projects = projects.filter(x => !projectsToReload.includes(x));
-            }
-
-            //convert created folders into a list of files of their contents
-            const directoryChanges = changes
-                //get only creation items
-                .filter(change => change.type === FileChangeType.Created)
-                //keep only the directories
-                .filter(change => util.isDirectorySync(change.srcPath));
-
-            //remove the created directories from the changes array (we will add back each of their files next)
-            changes = changes.filter(x => !directoryChanges.includes(x));
-
-            //look up every file in each of the newly added directories
-            const newFileChanges = directoryChanges
-                //take just the path
-                .map(x => x.srcPath)
-                //exclude the roku deploy staging folder
-                .filter(dirPath => !dirPath.includes('.roku-deploy-staging'))
-                //get the files for each folder recursively
-                .flatMap(dirPath => {
-                    //look up all files
-                    let files = fastGlob.sync('**/*', {
-                        absolute: true,
-                        cwd: rokuDeployUtil.toForwardSlashes(dirPath)
-                    });
-                    return files.map(x => {
-                        return {
-                            type: FileChangeType.Created,
-                            srcPath: s`${x}`
-                        };
-                    });
-                });
-
-            //add the new file changes to the changes array.
-            changes.push(...newFileChanges as any);
-
-            //give every workspace the chance to handle file changes
-            await Promise.all(
-                projects.map((project) => this.handleFileChanges(project, changes))
-            );
-        }
-
-    }
-
     /**
      * This only operates on files that match the specified files globs, so it is safe to throw
      * any file changes you receive with no unexpected side-effects
@@ -838,42 +977,6 @@ export class LanguageServer {
     }
 
     @AddStackToErrorMessage
-    private async onHover(params: TextDocumentPositionParams) {
-        //ensure programs are initialized
-        await this.waitAllProjectFirstRuns();
-
-        const srcPath = util.uriToPath(params.textDocument.uri);
-        let projects = this.getProjects();
-        let hovers = projects
-            //get hovers from all projects
-            .map((x) => x.builder.program.getHover(srcPath, params.position))
-            //flatten to a single list
-            .flat();
-
-        const contents = [
-            ...(hovers ?? [])
-                //pull all hover contents out into a flag array of strings
-                .map(x => {
-                    return Array.isArray(x?.contents) ? x?.contents : [x?.contents];
-                }).flat()
-                //remove nulls
-                .filter(x => !!x)
-                //dedupe hovers across all projects
-                .reduce((set, content) => set.add(content), new Set<string>()).values()
-        ];
-
-        if (contents.length > 0) {
-            let hover: Hover = {
-                //use the range from the first hover
-                range: hovers[0]?.range,
-                //the contents of all hovers
-                contents: contents
-            };
-            return hover;
-        }
-    }
-
-    @AddStackToErrorMessage
     private async onDocumentClose(event: TextDocumentChangeEvent<TextDocument>): Promise<void> {
         const { document } = event;
         let filePath = URI.parse(document.uri).fsPath;
@@ -943,111 +1046,6 @@ export class LanguageServer {
         }
     }
 
-    @AddStackToErrorMessage
-    @TrackBusyStatus
-    public async onWorkspaceSymbol(params: WorkspaceSymbolParams) {
-        await this.waitAllProjectFirstRuns();
-
-        const results = util.flatMap(
-            await Promise.all(this.getProjects().map(project => {
-                return project.builder.program.getWorkspaceSymbols();
-            })),
-            c => c
-        );
-
-        // Remove duplicates
-        const allSymbols = Object.values(results.reduce((map, symbol) => {
-            const key = symbol.location.uri + symbol.name;
-            map[key] = symbol;
-            return map;
-        }, {}));
-        return allSymbols as SymbolInformation[];
-    }
-
-    @AddStackToErrorMessage
-    @TrackBusyStatus
-    public async onDocumentSymbol(params: DocumentSymbolParams) {
-        await this.waitAllProjectFirstRuns();
-
-        await this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true);
-
-        const srcPath = util.uriToPath(params.textDocument.uri);
-        for (const project of this.getProjects()) {
-            const file = project.builder.program.getFile(srcPath);
-            if (isBrsFile(file)) {
-                return file.getDocumentSymbols();
-            }
-        }
-    }
-
-    @AddStackToErrorMessage
-    @TrackBusyStatus
-    private async onDefinition(params: TextDocumentPositionParams) {
-        await this.waitAllProjectFirstRuns();
-
-        const srcPath = util.uriToPath(params.textDocument.uri);
-
-        const results = util.flatMap(
-            await Promise.all(this.getProjects().map(project => {
-                return project.builder.program.getDefinition(srcPath, params.position);
-            })),
-            c => c
-        );
-        return results;
-    }
-
-    @AddStackToErrorMessage
-    @TrackBusyStatus
-    private async onSignatureHelp(params: SignatureHelpParams) {
-        await this.waitAllProjectFirstRuns();
-
-        const filepath = util.uriToPath(params.textDocument.uri);
-        await this.keyedThrottler.onIdleOnce(filepath, true);
-
-        try {
-            const signatures = util.flatMap(
-                await Promise.all(this.getProjects().map(project => project.builder.program.getSignatureHelp(filepath, params.position)
-                )),
-                c => c
-            );
-
-            const activeSignature = signatures.length > 0 ? 0 : null;
-
-            const activeParameter = activeSignature >= 0 ? signatures[activeSignature]?.index : null;
-
-            let results: SignatureHelp = {
-                signatures: signatures.map((s) => s.signature),
-                activeSignature: activeSignature,
-                activeParameter: activeParameter
-            };
-            return results;
-        } catch (e: any) {
-            this.connection.console.error(`error in onSignatureHelp: ${e.stack ?? e.message ?? e}`);
-            return {
-                signatures: [],
-                activeSignature: 0,
-                activeParameter: 0
-            };
-        }
-    }
-
-    @AddStackToErrorMessage
-    @TrackBusyStatus
-    private async onReferences(params: ReferenceParams) {
-        await this.waitAllProjectFirstRuns();
-
-        const position = params.position;
-        const srcPath = util.uriToPath(params.textDocument.uri);
-
-        const results = util.flatMap(
-            await Promise.all(this.getProjects().map(project => {
-                return project.builder.program.getReferences(srcPath, position);
-            })),
-            c => c
-        );
-        return results.filter((r) => r);
-    }
-
     private onValidateSettled() {
         return Promise.all([
             //wait for the validator to start running (or timeout if it never did)
@@ -1055,27 +1053,6 @@ export class LanguageServer {
             //wait for the validator to stop running (or resolve immediately if it's already idle)
             this.validateThrottler.onIdleOnce(true)
         ]);
-    }
-
-    @AddStackToErrorMessage
-    @TrackBusyStatus
-    private async onFullSemanticTokens(params: SemanticTokensParams) {
-        await this.waitAllProjectFirstRuns();
-        //wait for the file to settle (in case there are multiple file changes in quick succession)
-        await this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true);
-        //wait for the validation cycle to settle
-        await this.onValidateSettled();
-
-        const srcPath = util.uriToPath(params.textDocument.uri);
-        for (const project of this.projects) {
-            //find the first program that has this file, since it would be incredibly inefficient to generate semantic tokens for the same file multiple times.
-            if (project.builder.program.hasFile(srcPath)) {
-                let semanticTokens = project.builder.program.getSemanticTokens(srcPath);
-                return {
-                    data: encodeSemanticTokens(semanticTokens)
-                } as SemanticTokens;
-            }
-        }
     }
 
     private diagnosticCollection = new DiagnosticCollection();
@@ -1101,18 +1078,6 @@ export class LanguageServer {
                 });
             }
         });
-    }
-
-    @AddStackToErrorMessage
-    @TrackBusyStatus
-    public async onExecuteCommand(params: ExecuteCommandParams) {
-        await this.waitAllProjectFirstRuns();
-        if (params.command === CustomCommands.TranspileFile) {
-            const result = await this.transpileFile(params.arguments[0]);
-            //back-compat: include `pathAbsolute` property so older vscode versions still work
-            (result as any).pathAbsolute = result.srcPath;
-            return result;
-        }
     }
 
     private async transpileFile(srcPath: string) {
@@ -1184,3 +1149,49 @@ function TrackBusyStatus(target: any, propertyKey: string, descriptor: PropertyD
         }, originalMethod.name);
     };
 }
+
+type Methods<T> = {
+    [K in keyof T]: T[K] extends Function ? K : never;
+}[keyof T];
+
+type AllMethods<T> = {
+    [K in Methods<T>]: T[K];
+};
+
+type FilterMethodsStartsWith<T, U extends string> = {
+    [K in keyof T as K extends `${U}${string}` ? K : never]: T[K];
+};
+
+type FirstArgumentType<T> = T extends (...args: [infer U, ...any[]]) => any ? U : never;
+
+type FirstArgumentTypesOfFilteredMethods<T, U extends string> = {
+    [K in keyof FilterMethodsStartsWith<T, U>]: FirstArgumentType<FilterMethodsStartsWith<T, U>[K]>;
+};
+
+// Example object
+class Example {
+    onEvent1(arg1: number) {
+        // Some implementation
+    }
+
+    handleEvent(arg1: string, arg2: boolean) {
+        // Some implementation
+    }
+
+    onSomething(arg1: Date, arg2: number[]) {
+        // Some implementation
+    }
+
+    notRelatedMethod() {
+        // Some implementation
+    }
+}
+
+type Handler<T> = {
+    [K in keyof T as K extends `on${string}` ? K : never]:
+    T[K] extends (arg: infer U) => void ? (arg: U) => void : never;
+};
+// Extracts the argument type from the function and constructs the desired interface
+type OnHandler<T> = {
+    [K in keyof Handler<T>]: Handler<T>[K] extends (arg: infer U) => void ? U : never;
+};
