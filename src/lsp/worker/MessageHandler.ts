@@ -8,14 +8,14 @@ interface PseudoMessagePort {
     postMessage: typeof parentPort['postMessage'];
 }
 
-export class MessageHandler {
+export class MessageHandler<T, TRequestName = MethodNames<T>> {
     constructor(
         options: {
             name?: string;
             port: PseudoMessagePort;
-            onRequest?: (message: WorkerMessage) => any;
-            onResponse?: (message: WorkerMessage) => any;
-            onUpdate?: (message: WorkerMessage) => any;
+            onRequest?: (message: WorkerRequest) => any;
+            onResponse?: (message: WorkerResponse) => any;
+            onUpdate?: (message: WorkerUpdate) => any;
         }
     ) {
         this.name = options?.name;
@@ -76,17 +76,17 @@ export class MessageHandler {
      * @param name the name of the request
      * @param options the request options
      */
-    public async sendRequest<R>(name: string, options?: { data: any[]; id?: number }) {
+    public async sendRequest<R>(name: TRequestName, options?: { data: any[]; id?: number }) {
         const request: WorkerMessage = {
             type: 'request',
-            name: name,
+            name: name as string,
             data: options?.data ?? [],
             id: options?.id ?? this.idSequence++
         };
         const responsePromise = this.onResponse<R>(request.id);
         this.port.postMessage(request);
         const response = await responsePromise;
-        if (response.error) {
+        if ('error' in response) {
             const error = this.objectToError(response.error);
             (error as any)._response = response;
             //throw the error so it causes a rejected promise (like we'd expect)
@@ -98,7 +98,7 @@ export class MessageHandler {
     /**
      * Send a request to the worker, and wait for a response.
      * @param request the request we are responding to
-     * @param response the data to be sent as the response
+     * @param options options for this request
      */
     public sendResponse(request: WorkerMessage, options?: { data: any } | { error: Error } | undefined) {
         const response: WorkerResponse = {
@@ -162,15 +162,33 @@ export class MessageHandler {
     }
 }
 
-export interface WorkerMessage<T = any> {
+export interface WorkerRequest<TData = any> {
     id: number;
-    type: 'request' | 'response' | 'update';
+    type: 'request';
     name: string;
-    data?: T;
+    data?: TData;
 }
-export interface WorkerResponse<T = any> extends WorkerMessage<T> {
+
+export interface WorkerResponse<TData = any> {
+    id: number;
+    type: 'response';
+    name: string;
+    data?: TData;
     /**
      * An error occurred on the remote side. There will be no `.data` value
      */
     error?: Error;
 }
+
+export interface WorkerUpdate<TData = any> {
+    id: number;
+    type: 'update';
+    name: string;
+    data?: TData;
+}
+
+export type WorkerMessage<T = any> = WorkerRequest<T> | WorkerResponse<T> | WorkerUpdate<T>;
+
+type MethodNames<T> = {
+    [K in keyof T]: T[K] extends (...args: any[]) => any ? K : never;
+}[keyof T];

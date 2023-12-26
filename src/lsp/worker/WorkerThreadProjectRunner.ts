@@ -1,3 +1,4 @@
+import type { LspProject } from '../LspProject';
 import { Project } from '../Project';
 import type { WorkerMessage } from './MessageHandler';
 import { MessageHandler } from './MessageHandler';
@@ -10,7 +11,7 @@ export class WorkerThreadProjectRunner {
     public run(parentPort: MessagePort) {
         //make a new instance of the project (which is the same way we run it in the main thread).
         const project = new Project();
-        const messageHandler = new MessageHandler({
+        const messageHandler = new MessageHandler<LspProject>({
             name: 'WorkerThread',
             port: parentPort,
             onRequest: async (request: WorkerMessage) => {

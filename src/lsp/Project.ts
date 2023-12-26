@@ -6,15 +6,16 @@ import type { ActivateOptions, LspProject } from './LspProject';
 import type { CompilerPlugin } from '../interfaces';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { URI } from 'vscode-uri';
+import { Deferred } from '../deferred';
 
 export class Project implements LspProject {
-
     /**
      * Activates this project. Every call to `activate` should completely reset the project, clear all used ram and start from scratch.
      * @param options
      */
     public async activate(options: ActivateOptions) {
         this.dispose();
+        this.isActivated = new Deferred();
 
         this.projectPath = options.projectPath;
         this.workspaceFolder = options.workspaceFolder;
@@ -25,7 +26,7 @@ export class Project implements LspProject {
         this.builder.logger.prefix = `[prj${this.projectNumber}]`;
         this.builder.logger.log(`Created project #${this.projectNumber} for: "${this.projectPath}"`);
 
-        let cwd;
+        let cwd: string;
         //if the config file exists, use it and its folder as cwd
         if (this.configFilePath && await util.pathExists(this.configFilePath)) {
             cwd = path.dirname(this.configFilePath);
@@ -65,18 +66,49 @@ export class Project implements LspProject {
             });
             this.emit('flush-diagnostics', { project: this });
         }
+        this.isActivated.resolve();
     }
 
+    /**
+     * Gets resolved when the project has finished activating
+     */
+    private isActivated: Deferred;
+
     public getDiagnostics() {
-        return Promise.resolve(
-            this.builder.getDiagnostics().map(x => {
-                const uri = URI.file(x.file.srcPath).toString();
-                return {
-                    ...util.toDiagnostic(x, uri),
-                    uri: uri
-                };
-            })
-        );
+        return this.builder.getDiagnostics().map(x => {
+            const uri = URI.file(x.file.srcPath).toString();
+            return {
+                ...util.toDiagnostic(x, uri),
+                uri: uri
+            };
+        });
+    }
+
+    /**
+     * Promise that resolves the next time the system is idle. If the system is already idle, it will resolve immediately
+     */
+    private async onIdle(): Promise<void> {
+        await Promise.all([
+            this.isActivated.promise
+        ]);
+    }
+
+    /**
+     * Determine if this project has the specified file
+     * @param srcPath the absolute path to the file
+     * @returns true if the project has the file, false if it does not
+     */
+    public hasFile(srcPath: string) {
+        return this.builder.program.hasFile(srcPath);
+    }
+
+    /**
+     * Get the full list of semantic tokens for the given file path
+     * @param srcPath absolute path to the source file
+     */
+    public async getSemanticTokens(srcPath: string) {
+        await this.onIdle();
+        return this.builder.program.getSemanticTokens(srcPath);
     }
 
     /**
@@ -168,5 +200,10 @@ export class Project implements LspProject {
     public dispose() {
         this.builder?.dispose();
         this.emitter.removeAllListeners();
+        if (this.isActivated?.isCompleted === false) {
+            this.isActivated.reject(
+                new Error('Project was disposed, activation has been aborted')
+            );
+        }
     }
 }

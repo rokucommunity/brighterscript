@@ -1,4 +1,5 @@
-import type { Diagnostic } from 'vscode-languageserver-types';
+import type { CompletionItem, Diagnostic, Position } from 'vscode-languageserver';
+import { SemanticToken } from '..';
 
 /**
  * Defines the contract between the ProjectManager and the main or worker thread Project classes
@@ -19,12 +20,23 @@ export interface LspProject {
      * Initialize and start running the project. This will scan for all files, and build a full project in memory, then validate the project
      * @param options
      */
-    activate(options: ActivateOptions): Promise<void>;
+    activate(options: ActivateOptions): MaybePromise<void>;
 
     /**
      * Get the list of all diagnostics from this project
      */
-    getDiagnostics(): Promise<LspDiagnostic[]>;
+    getDiagnostics(): MaybePromise<LspDiagnostic[]>;
+
+    /**
+     * Get the full list of semantic tokens for the given file path
+     * @param srcPath absolute path to the source file
+     */
+    getSemanticTokens(srcPath: string): MaybePromise<SemanticToken[]>;
+
+    /**
+     * Does this project have the specified filie
+     */
+    hasFile(srcPath: string): MaybePromise<boolean>;
 
     /**
      * Release all resources so this file can be safely garbage collected
@@ -54,3 +66,5 @@ export interface ActivateOptions {
 export interface LspDiagnostic extends Diagnostic {
     uri: string;
 }
+
+type MaybePromise<T> = T | Promise<T>;

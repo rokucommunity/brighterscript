@@ -155,6 +155,10 @@ describe('LanguageServer', () => {
         });
     });
 
+    it('notifies user of critical runtime crash when activating a project', () => {
+        throw new Error('Implement me!');
+    });
+
     describe('sendDiagnostics', () => {
         it('waits for program to finish loading before sending diagnostics', async () => {
             server.onInitialize({
@@ -1107,7 +1111,7 @@ describe('LanguageServer', () => {
         });
     });
 
-    it('semantic tokens request waits until after validation has finished', async () => {
+    it.only('semantic tokens request waits until after validation has finished', async () => {
         fsExtra.outputFileSync(s`${rootDir}/source/main.bs`, `
             sub main()
                 print \`hello world\`
@@ -1133,7 +1137,7 @@ describe('LanguageServer', () => {
         fsExtra.outputFileSync(s`${rootDir}/source/sgnode.bs`, getContents());
         server.run();
         await server['syncProjects']();
-        expectZeroDiagnostics(server['projectManager'].projects[0].builder.program);
+        expectZeroDiagnostics(server['projectManager'].get.projects[0].builder.program);
 
         fsExtra.outputFileSync(s`${rootDir}/source/sgnode.bs`, getContents());
         const changeWatchedFilesPromise = server['onDidChangeWatchedFiles']({

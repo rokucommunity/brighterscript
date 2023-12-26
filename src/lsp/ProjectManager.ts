@@ -5,40 +5,16 @@ import * as EventEmitter from 'eventemitter3';
 import type { LspProject } from './LspProject';
 import { Project } from './Project';
 import { WorkerThreadProject } from './worker/WorkerThreadProject';
+import type { Position } from 'vscode-languageserver';
 
 /**
  * Manages all brighterscript projects for the language server
  */
 export class ProjectManager {
-
     /**
      * Collection of all projects
      */
     public projects: LspProject[] = [];
-
-    /**
-     * A unique project counter to help distinguish log entries in lsp mode
-     */
-    private static projectNumberSequence = 0;
-
-
-    public on(eventName: 'critical-failure', handler: (data: { project: LspProject; message: string }) => void);
-    public on(eventName: 'flush-diagnostics', handler: (data: { project: LspProject }) => void);
-    public on(eventName: string, handler: (payload: any) => void) {
-        this.emitter.on(eventName, handler);
-        return () => {
-            this.emitter.removeListener(eventName, handler);
-        };
-    }
-
-    private emit(eventName: 'critical-failure', data: { project: LspProject; message: string });
-    private emit(eventName: 'flush-diagnostics', data: { project: LspProject });
-    private async emit(eventName: string, data?) {
-        //emit these events on next tick, otherwise they will be processed immediately which could cause issues
-        await util.sleep(0);
-        this.emitter.emit(eventName, data);
-    }
-    private emitter = new EventEmitter();
 
     /**
      * Given a list of all desired projects, create any missing projects and destroy and projects that are no longer available
@@ -86,6 +62,28 @@ export class ProjectManager {
         await Promise.all(
             projectConfigs.map(config => this.createProject(config))
         );
+    }
+
+    public async getSemanticTokens(srcPath: string) {
+        for (const project of this.projects) {
+            //find the first program that has this file, since it would be incredibly inefficient to generate semantic tokens for the same file multiple times.
+            if (await project.hasFile(srcPath)) {
+                const result = await Promise.resolve(
+                    project.getSemanticTokens(srcPath)
+                );
+                return result;
+            }
+        }
+    }
+
+    public async getCompletions(srcPath: string, position: Position) {
+        const completions = await Promise.all(
+            this.projects.map(x => x.getCompletions(srcPath, position))
+        );
+
+        for (let completion of completions) {
+            completion.commitCharacters = ['.'];
+        }
     }
 
     /**
@@ -165,6 +163,11 @@ export class ProjectManager {
     }
 
     /**
+     * A unique project counter to help distinguish log entries in lsp mode
+     */
+    private static projectNumberSequence = 0;
+
+    /**
      * Create a project for the given config
      * @param config
      * @returns a new project, or the existing project if one already exists with this config info
@@ -188,7 +191,27 @@ export class ProjectManager {
             workspaceFolder: config1.workspaceFolder,
             projectNumber: config1.projectNumber ?? ProjectManager.projectNumberSequence++
         });
+        console.log('Activated');
     }
+
+    public on(eventName: 'critical-failure', handler: (data: { project: LspProject; message: string }) => void);
+    public on(eventName: 'flush-diagnostics', handler: (data: { project: LspProject }) => void);
+    public on(eventName: string, handler: (payload: any) => void) {
+        this.emitter.on(eventName, handler);
+        return () => {
+            this.emitter.removeListener(eventName, handler);
+        };
+    }
+
+    private emit(eventName: 'critical-failure', data: { project: LspProject; message: string });
+    private emit(eventName: 'flush-diagnostics', data: { project: LspProject });
+    private async emit(eventName: string, data?) {
+        //emit these events on next tick, otherwise they will be processed immediately which could cause issues
+        await util.sleep(0);
+        this.emitter.emit(eventName, data);
+    }
+    private emitter = new EventEmitter();
+
 }
 
 export interface WorkspaceConfig {

@@ -9,6 +9,7 @@ import { isMainThread, parentPort } from 'worker_threads';
 import { WorkerThreadProjectRunner } from './WorkerThreadProjectRunner';
 import type { Project } from '../Project';
 import { WorkerPool } from './WorkerPool';
+import { SemanticToken } from '../..';
 
 export const workerPool = new WorkerPool(() => {
     return new Worker(
@@ -40,7 +41,7 @@ export class WorkerThreadProject implements LspProject {
 
         // start a new worker thread or get an unused existing thread
         this.worker = workerPool.getWorker();
-        this.messageHandler = new MessageHandler({
+        this.messageHandler = new MessageHandler<LspProject>({
             name: 'MainThread',
             port: this.worker,
             onRequest: this.processRequest.bind(this),
@@ -50,14 +51,28 @@ export class WorkerThreadProject implements LspProject {
     }
 
     public async getDiagnostics() {
-        const diagnostics = await this.messageHandler.sendRequest<LspDiagnostic[]>('getDiagnostics');
-        return diagnostics.data;
+        const response = await this.messageHandler.sendRequest<LspDiagnostic[]>('getDiagnostics');
+        return response.data;
+    }
+
+    public async hasFile(srcPath: string) {
+        const response = await this.messageHandler.sendRequest<boolean>('hasFile');
+        return response.data;
+    }
+
+    /**
+     * Get the full list of semantic tokens for the given file path
+     * @param srcPath absolute path to the source file
+     */
+    public async getSemanticTokens(srcPath: string) {
+        const response = await this.messageHandler.sendRequest<SemanticToken[]>('getSemanticTokens');
+        return response.data;
     }
 
     /**
      * Handles request/response/update messages from the worker thread
      */
-    private messageHandler: MessageHandler;
+    private messageHandler: MessageHandler<LspProject>;
 
     private processRequest(request: WorkerMessage) {
 

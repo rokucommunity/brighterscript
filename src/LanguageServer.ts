@@ -25,7 +25,9 @@ import type {
     HandlerResult,
     InitializeError,
     InitializeResult,
-    InitializedParams
+    CompletionParams,
+    ResultProgressReporter,
+    WorkDoneProgressReporter
 } from 'vscode-languageserver/node';
 import {
     SemanticTokensRequest,
@@ -137,7 +139,7 @@ export class LanguageServer implements OnHandler<Connection> {
             }
         }
 
-        //TODO switch to a more specific connection function call once they actually add it
+        //Register semantic token requestsTODO switch to a more specific connection function call once they actually add it
         this.connection.onRequest(SemanticTokensRequest.method, this.onFullSemanticTokens.bind(this));
 
         // The content of a text document has changed. This event is emitted
@@ -171,34 +173,34 @@ export class LanguageServer implements OnHandler<Connection> {
         //return the capabilities of the server
         return {
             capabilities: {
-                textDocumentSync: TextDocumentSyncKind.Full,
-                // Tell the client that the server supports code completion
-                completionProvider: {
-                    resolveProvider: true,
-                    //anytime the user types a period, auto-show the completion results
-                    triggerCharacters: ['.'],
-                    allCommitCharacters: ['.', '@']
-                },
-                documentSymbolProvider: true,
-                workspaceSymbolProvider: true,
+                // textDocumentSync: TextDocumentSyncKind.Full,
+                // // Tell the client that the server supports code completion
+                // completionProvider: {
+                //     resolveProvider: true,
+                //     //anytime the user types a period, auto-show the completion results
+                //     triggerCharacters: ['.'],
+                //     allCommitCharacters: ['.', '@']
+                // },
+                // documentSymbolProvider: true,
+                // workspaceSymbolProvider: true,
                 semanticTokensProvider: {
                     legend: semanticTokensLegend,
                     full: true
                 } as SemanticTokensOptions,
-                referencesProvider: true,
-                codeActionProvider: {
-                    codeActionKinds: [CodeActionKind.Refactor]
-                },
-                signatureHelpProvider: {
-                    triggerCharacters: ['(', ',']
-                },
-                definitionProvider: true,
-                hoverProvider: true,
-                executeCommandProvider: {
-                    commands: [
-                        CustomCommands.TranspileFile
-                    ]
-                }
+                // referencesProvider: true,
+                // codeActionProvider: {
+                //     codeActionKinds: [CodeActionKind.Refactor]
+                // },
+                // signatureHelpProvider: {
+                //     triggerCharacters: ['(', ',']
+                // },
+                // definitionProvider: true,
+                // hoverProvider: true,
+                // executeCommandProvider: {
+                //     commands: [
+                //         CustomCommands.TranspileFile
+                //     ]
+                // }
             } as ServerCapabilities
         };
     }
@@ -209,9 +211,6 @@ export class LanguageServer implements OnHandler<Connection> {
     @AddStackToErrorMessage
     @TrackBusyStatus
     public async onInitialized() {
-        let projectCreatedDeferred = new Deferred();
-        this.initialProjectsCreated = projectCreatedDeferred.promise;
-
         try {
             if (this.hasConfigurationCapability) {
                 // Register for all configuration changes.
@@ -228,8 +227,6 @@ export class LanguageServer implements OnHandler<Connection> {
                     await this.syncProjects();
                 });
             }
-            await this.waitAllProjectFirstRuns(false);
-            projectCreatedDeferred.resolve();
         } catch (e: any) {
             this.sendCriticalFailure(
                 `Critical failure during BrighterScript language server startup.
@@ -246,22 +243,11 @@ export class LanguageServer implements OnHandler<Connection> {
      */
     @AddStackToErrorMessage
     @TrackBusyStatus
-    public async onCompletion(params: TextDocumentPositionParams) {
-        //ensure programs are initialized
-        await this.waitAllProjectFirstRuns();
-
-        let filePath = util.uriToPath(params.textDocument.uri);
-
-        //wait until the file has settled
-        await this.onValidateSettled();
-
-        let completions = this
-            .getProjects()
-            .flatMap(workspace => workspace.builder.program.getCompletions(filePath, params.position));
-
-        for (let completion of completions) {
-            completion.commitCharacters = ['.'];
-        }
+    public async onCompletion1(params: CompletionParams, workDoneProgress: WorkDoneProgressReporter, resultProgress?: ResultProgressReporter<CompletionItem[]>) {
+        const completions = await this.projectManager.getCompletions(
+            util.uriToPath(params.textDocument.uri),
+            params.position
+        );
 
         return completions;
     }
@@ -559,25 +545,16 @@ export class LanguageServer implements OnHandler<Connection> {
         return results.filter((r) => r);
     }
 
+
     @AddStackToErrorMessage
     @TrackBusyStatus
     private async onFullSemanticTokens(params: SemanticTokensParams) {
-        await this.waitAllProjectFirstRuns();
-        //wait for the file to settle (in case there are multiple file changes in quick succession)
-        await this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true);
-        //wait for the validation cycle to settle
-        await this.onValidateSettled();
-
         const srcPath = util.uriToPath(params.textDocument.uri);
-        for (const project of this.projects) {
-            //find the first program that has this file, since it would be incredibly inefficient to generate semantic tokens for the same file multiple times.
-            if (project.builder.program.hasFile(srcPath)) {
-                let semanticTokens = project.builder.program.getSemanticTokens(srcPath);
-                return {
-                    data: encodeSemanticTokens(semanticTokens)
-                } as SemanticTokens;
-            }
-        }
+        const result = await this.projectManager.getSemanticTokens(srcPath);
+
+        return {
+            data: encodeSemanticTokens(result)
+        } as SemanticTokens;
     }
 
     @AddStackToErrorMessage
@@ -616,9 +593,6 @@ export class LanguageServer implements OnHandler<Connection> {
         });
     }
     private busyStatusIndex = -1;
-
-
-    private initialProjectsCreated: Promise<any>;
 
     /**
      * Ask the client for the list of `files.exclude` patterns. Useful when determining if we should process a file
@@ -708,21 +682,7 @@ export class LanguageServer implements OnHandler<Connection> {
      * Wait for all programs' first run to complete
      */
     private async waitAllProjectFirstRuns(waitForFirstProject = true) {
-        if (waitForFirstProject) {
-            await this.initialProjectsCreated;
-        }
-
-        for (let project of this.getProjects()) {
-            try {
-                await project.firstRunPromise;
-            } catch (e: any) {
-                status = 'critical-error';
-                //the first run failed...that won't change unless we reload the workspace, so replace with resolved promise
-                //so we don't show this error again
-                project.firstRunPromise = Promise.resolve();
-                this.sendCriticalFailure(`BrighterScript language server failed to start: \n${e.message}`);
-            }
-        }
+        //TODO delete me
     }
 
     /**
@@ -1059,24 +1019,24 @@ export class LanguageServer implements OnHandler<Connection> {
 
     private async sendDiagnostics() {
         await this.sendDiagnosticsThrottler.run(async () => {
-            // await this.projectManager.onSettle();
-            //wait for all programs to finish running. This ensures the `Program` exists.
-            await Promise.all(
-                this.projects.map(x => x.firstRunPromise)
-            );
+            // // await this.projectManager.onSettle();
+            // //wait for all programs to finish running. This ensures the `Program` exists.
+            // await Promise.all(
+            //     this.projects.map(x => x.firstRunPromise)
+            // );
 
-            //Get only the changes to diagnostics since the last time we sent them to the client
-            const patch = this.diagnosticCollection.getPatch(this.projects);
+            // //Get only the changes to diagnostics since the last time we sent them to the client
+            // const patch = this.diagnosticCollection.getPatch(this.projects);
 
-            for (let filePath in patch) {
-                const uri = URI.file(filePath).toString();
-                const diagnostics = patch[filePath].map(d => util.toDiagnostic(d, uri));
+            // for (let filePath in patch) {
+            //     const uri = URI.file(filePath).toString();
+            //     const diagnostics = patch[filePath].map(d => util.toDiagnostic(d, uri));
 
-                this.connection.sendDiagnostics({
-                    uri: uri,
-                    diagnostics: diagnostics
-                });
-            }
+            //     this.connection.sendDiagnostics({
+            //         uri: uri,
+            //         diagnostics: diagnostics
+            //     });
+            // }
         });
     }
 
