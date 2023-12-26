@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.65.15](https://github.com/rokucommunity/brighterscript/compare/v0.65.14...v0.65.15) - 2023-12-26
+### Fixed
+ - Prevent errors when using enums in a file that's not included in any scopes ([#995](https://github.com/rokucommunity/brighterscript/pull/995))
+
+
+
 ## [0.65.14](https://github.com/rokucommunity/brighterscript/compare/v0.65.13...v0.65.14) - 2023-12-20
 ### Fixed
  - multi-namespace class inheritance transpile bug ([#990](https://github.com/rokucommunity/brighterscript/pull/990))
