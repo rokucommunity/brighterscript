@@ -71,6 +71,11 @@ export class XmlFile {
     public commentFlags = [] as CommentFlag[];
 
     /**
+     * should this file be written to disk
+     */
+    readonly isPublishable = true;
+
+    /**
      * The list of script imports delcared in the XML of this file.
      * This excludes parent imports and auto codebehind imports
      */
@@ -458,27 +463,56 @@ export class XmlFile {
         this.program.logger.debug('XmlFile', chalk.green(this.pkgPath), ...args);
     }
 
+    private determinePkgMapPath(uri) {
+        if (/^pkg:\/.+/.test(uri)) {
+            return uri.replace(/^pkg:\//, '');
+        }
+        const fileDirectory = this.pkgPath.replace(/\/\w+\.xml$/, '');
+        const pkgMapPath = path.normalize(`${fileDirectory}/${uri}`);
+        return pkgMapPath;
+    }
+
+    private checkScriptsForPublishableImports(scripts: SGScript[]): [boolean, SGScript[]] {
+        if (this.program.options.publishEmptyFiles) {
+            return [false, scripts];
+        }
+        const publishableScripts = scripts.filter(script => {
+            const uriAttributeValue = script.attributes.find((v) => v.key.text === 'uri')?.value.text;
+            const pkgMapPath = this.determinePkgMapPath(uriAttributeValue);
+            let file = this.program.getFile(pkgMapPath);
+            if (!file && pkgMapPath.endsWith(this.program.bslibPkgPath)) {
+                return true;
+            }
+            if (!file && pkgMapPath.endsWith('.brs')) {
+                file = this.program.getFile(pkgMapPath.replace(/\.brs$/, '.bs'));
+            }
+            return file?.isPublishable;
+        });
+        return [publishableScripts.length !== scripts.length, publishableScripts];
+    }
+
     /**
      * Convert the brightscript/brighterscript source code into valid brightscript
      */
     public transpile(): CodeWithSourceMap {
         const state = new TranspileState(this.srcPath, this.program.options);
 
+        const originalScripts = this.ast.component?.scripts ?? [];
         const extraImportScripts = this.getMissingImportsForTranspile().map(uri => {
             const script = new SGScript();
             script.uri = util.getRokuPkgPath(uri.replace(/\.bs$/, '.brs'));
             return script;
         });
 
-        let transpileResult: SourceNode | undefined;
+        const [scriptsHaveChanged, publishableScripts] = this.checkScriptsForPublishableImports([
+            ...originalScripts,
+            ...extraImportScripts
+        ]);
 
-        if (this.needsTranspiled || extraImportScripts.length > 0) {
+        let transpileResult: SourceNode | undefined;
+        if (this.needsTranspiled || extraImportScripts.length > 0 || scriptsHaveChanged) {
             //temporarily add the missing imports as script tags
-            const originalScripts = this.ast.component?.scripts ?? [];
-            this.ast.component.scripts = [
-                ...originalScripts,
-                ...extraImportScripts
-            ];
+            this.ast.component.scripts = publishableScripts;
 
             transpileResult = new SourceNode(null, null, state.srcPath, this.parser.ast.transpile(state));
 

@@ -78,6 +78,27 @@ export class BrsFile {
     }
 
     /**
+     * Should this file be written to disk
+     */
+    public get isPublishable() {
+        let isPublishable = false;
+        this.ast.walk(createVisitor({
+            FunctionStatement: () => {
+                isPublishable = true;
+            },
+            MethodStatement: () => {
+                isPublishable = true;
+            },
+            ClassStatement: () => {
+                isPublishable = true;
+            }
+        }), {
+            walkMode: WalkMode.visitStatementsRecursive
+        });
+        return isPublishable;
+    }
+
+    /**
      * The parseMode used for the parser for this file
      */
     public parseMode = ParseMode.BrightScript;
