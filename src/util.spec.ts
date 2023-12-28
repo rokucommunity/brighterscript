@@ -302,6 +302,12 @@ describe('util', () => {
             expect(util.normalizeConfig(<any>{ emitDefinitions: 'true' }).emitDefinitions).to.be.false;
         });
 
+        it('sets publishEmptyFiles to true by default, or false if explicitly false', () => {
+            expect(util.normalizeConfig({}).publishEmptyFiles).to.be.true;
+            expect(util.normalizeConfig({ publishEmptyFiles: true }).publishEmptyFiles).to.be.true;
+            expect(util.normalizeConfig({ publishEmptyFiles: false }).publishEmptyFiles).to.be.false;
+        });
+
         it('loads project from disc', () => {
             fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.json`, `{ "outFile": "customOutDir/pkg.zip" }`);
             let config = util.normalizeAndResolveConfig({

@@ -899,6 +899,65 @@ describe('XmlFile', () => {
             const code = file.transpile().code;
             expect(code.endsWith(`<!--//# sourceMappingURL=./SimpleScene.xml.map -->`)).to.be.true;
         });
+
+        it('removes script imports if given file is not publishable', () => {
+            program.options.publishEmptyFiles = false;
+            program.setFile(`components/SimpleScene.bs`, `
+                enum simplescenetypes
+                    hero
+                    intro
+                end enum
+            `);
+
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component
+                    name="SimpleScene" extends="Scene"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:noNamespaceSchemaLocation="https://devtools.web.roku.com/schema/RokuSceneGraph.xsd"
+                >
+                    <script type="text/brightscript" uri="SimpleScene.bs"/>
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://devtools.web.roku.com/schema/RokuSceneGraph.xsd">
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/SimpleScene.xml');
+        });
+
+        it('removes extra imports found via dependencies if given file is not publishable', () => {
+            program.options.publishEmptyFiles = false;
+            program.setFile(`source/simplescenetypes.bs`, `
+                enum SimpleSceneTypes
+                    world = "world"
+                end enum
+            `);
+            program.setFile(`components/SimpleScene.bs`, `
+                import "pkg:/source/simplescenetypes.bs"
+
+                sub init()
+                    ? "Hello " + SimpleSceneTypes.world
+                end sub
+            `);
+
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component
+                    name="SimpleScene" extends="Scene"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:noNamespaceSchemaLocation="https://devtools.web.roku.com/schema/RokuSceneGraph.xsd"
+                >
+                    <script type="text/brightscript" uri="SimpleScene.bs"/>
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://devtools.web.roku.com/schema/RokuSceneGraph.xsd">
+                    <script type="text/brightscript" uri="SimpleScene.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/SimpleScene.xml');
+        });
     });
 
     describe('Transform plugins', () => {
