@@ -109,16 +109,17 @@ export class WorkerThreadProject implements LspProject {
      */
     public configFilePath?: string;
 
-    public on(eventName: 'critical-failure', handler: (data: { project: Project; message: string }) => void);
+    public on(eventName: 'critical-failure', handler: (data: { message: string }) => void);
     public on(eventName: 'diagnostics', handler: (data: { diagnostics: LspDiagnostic[] }) => MaybePromise<void>);
-    public on(eventName: string, handler: (payload: any) => void) {
-        this.emitter.on(eventName, handler);
+    public on(eventName: 'all', handler: (eventName: string, data: any) => MaybePromise<void>);
+    public on(eventName: string, handler: (...args: any[]) => MaybePromise<void>) {
+        this.emitter.on(eventName, handler as any);
         return () => {
-            this.emitter.removeListener(eventName, handler);
+            this.emitter.removeListener(eventName, handler as any);
         };
     }
 
-    private emit(eventName: 'critical-failure', data: { project: Project; message: string });
+    private emit(eventName: 'critical-failure', data: { message: string });
     private emit(eventName: 'diagnostics', data: { diagnostics: LspDiagnostic[] });
     private async emit(eventName: string, data?) {
         //emit these events on next tick, otherwise they will be processed immediately which could cause issues

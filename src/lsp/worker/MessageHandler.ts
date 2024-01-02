@@ -189,6 +189,6 @@ export interface WorkerUpdate<TData = any> {
 
 export type WorkerMessage<T = any> = WorkerRequest<T> | WorkerResponse<T> | WorkerUpdate<T>;
 
-type MethodNames<T> = {
+export type MethodNames<T> = {
     [K in keyof T]: T[K] extends (...args: any[]) => any ? K : never;
 }[keyof T];

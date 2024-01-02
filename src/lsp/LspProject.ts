@@ -44,6 +44,7 @@ export interface LspProject {
      * @param handler
      */
     on(eventName: 'diagnostics', handler: (data: { diagnostics: LspDiagnostic[] }) => void);
+    on(eventName: 'all', handler: (eventName: string, data: Record<string, any>) => void);
 
     /**
      * Release all resources so this file can be safely garbage collected

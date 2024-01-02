@@ -67,8 +67,6 @@ export class ProjectManager {
 
     /**
      * Return the first project where the async matcher returns true
-     * @param callback
-     * @returns
      */
     private findFirstMatchingProject(callback: (project: LspProject) => boolean | PromiseLike<boolean>) {
         const deferred = new Deferred<LspProject>();
@@ -215,11 +213,13 @@ export class ProjectManager {
 
         this.projects.push(project);
 
-        project.on('diagnostics', (event) => {
-            this.emit('diagnostics', { ...event, project: project });
+        //pipe all project-specific events through our emitter, and include the project reference
+        project.on('all', (eventName, data) => {
+            this.emit(eventName as any, {
+                ...data,
+                project: project
+            } as any);
         });
-
-        //TODO subscribe to various events for this project
 
         await project.activate({
             projectPath: config1.projectPath,
