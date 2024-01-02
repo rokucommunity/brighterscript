@@ -86,14 +86,11 @@ export class BrsFile {
             FunctionStatement: () => {
                 isPublishable = true;
             },
-            MethodStatement: () => {
-                isPublishable = true;
-            },
             ClassStatement: () => {
                 isPublishable = true;
             }
         }), {
-            walkMode: WalkMode.visitStatementsRecursive
+            walkMode: WalkMode.visitStatements
         });
         return isPublishable;
     }
