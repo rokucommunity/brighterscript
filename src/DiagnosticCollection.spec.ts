@@ -9,7 +9,7 @@ import * as path from 'path';
 import { standardizePath } from './util';
 import { interpolatedRange } from './astUtils/creators';
 
-describe.only('DiagnosticCollection', () => {
+describe('DiagnosticCollection', () => {
     let collection: DiagnosticCollection;
     let project: Project;
 

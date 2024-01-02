@@ -17,7 +17,13 @@ export async function wakeWorkerThread() {
     }
 }
 
-export const wakeWorkerThreadPromise = wakeWorkerThread();
+let wakeWorkerThreadPromise1: Promise<any>;
+export function getWakeWorkerThreadPromise() {
+    if (wakeWorkerThreadPromise1 === undefined) {
+        wakeWorkerThreadPromise1 = wakeWorkerThread();
+    }
+    return wakeWorkerThreadPromise1;
+}
 
 after(() => {
     workerPool.dispose();
@@ -27,7 +33,7 @@ describe('WorkerThreadProject', () => {
     let project: WorkerThreadProject;
     before(async function workerThreadWarmup() {
         this.timeout(20_000);
-        await wakeWorkerThreadPromise;
+        await getWakeWorkerThreadPromise();
     });
 
     beforeEach(() => {

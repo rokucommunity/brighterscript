@@ -2,20 +2,15 @@ import { expect } from 'chai';
 import { ProjectManager } from './ProjectManager';
 import { tempDir, rootDir } from '../testHelpers.spec';
 import * as fsExtra from 'fs-extra';
-import { standardizePath as s } from '../util';
+import util, { standardizePath as s } from '../util';
 import { createSandbox } from 'sinon';
 import { Project } from './Project';
 import { WorkerThreadProject } from './worker/WorkerThreadProject';
-import { wakeWorkerThreadPromise } from './worker/WorkerThreadProject.spec';
+import { getWakeWorkerThreadPromise } from './worker/WorkerThreadProject.spec';
 const sinon = createSandbox();
 
 describe('ProjectManager', () => {
     let manager: ProjectManager;
-
-    before(async function workerThreadWarmup() {
-        this.timeout(20_000);
-        await wakeWorkerThreadPromise;
-    });
 
     beforeEach(() => {
         manager = new ProjectManager();
@@ -158,6 +153,13 @@ describe('ProjectManager', () => {
                 s`${rootDir}/subdir1`,
                 s`${rootDir}/subdir2`
             ]);
+        });
+    });
+
+    describe('threading', () => {
+        before(async function workerThreadWarmup() {
+            this.timeout(20_000);
+            await getWakeWorkerThreadPromise();
         });
 
         it('spawns a worker thread when threading is enabled', async () => {
