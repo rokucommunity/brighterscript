@@ -3,13 +3,13 @@ import { Worker } from 'worker_threads';
 import type { WorkerMessage } from './MessageHandler';
 import { MessageHandler } from './MessageHandler';
 import util from '../../util';
-import type { LspDiagnostic } from '../LspProject';
+import type { LspDiagnostic, MaybePromise } from '../LspProject';
 import { type ActivateOptions, type LspProject } from '../LspProject';
 import { isMainThread, parentPort } from 'worker_threads';
 import { WorkerThreadProjectRunner } from './WorkerThreadProjectRunner';
 import type { Project } from '../Project';
 import { WorkerPool } from './WorkerPool';
-import { SemanticToken } from '../..';
+import type { SemanticToken } from '../../interfaces';
 
 export const workerPool = new WorkerPool(() => {
     return new Worker(
@@ -79,7 +79,8 @@ export class WorkerThreadProject implements LspProject {
     }
 
     private processUpdate(update: WorkerMessage) {
-
+        //for now, all updates are treated like "events"
+        this.emit(update.name as any, update.data);
     }
 
     /**
@@ -109,6 +110,7 @@ export class WorkerThreadProject implements LspProject {
     public configFilePath?: string;
 
     public on(eventName: 'critical-failure', handler: (data: { project: Project; message: string }) => void);
+    public on(eventName: 'diagnostics', handler: (data: { diagnostics: LspDiagnostic[] }) => MaybePromise<void>);
     public on(eventName: string, handler: (payload: any) => void) {
         this.emitter.on(eventName, handler);
         return () => {
@@ -117,10 +119,13 @@ export class WorkerThreadProject implements LspProject {
     }
 
     private emit(eventName: 'critical-failure', data: { project: Project; message: string });
+    private emit(eventName: 'diagnostics', data: { diagnostics: LspDiagnostic[] });
     private async emit(eventName: string, data?) {
         //emit these events on next tick, otherwise they will be processed immediately which could cause issues
         await util.sleep(0);
         this.emitter.emit(eventName, data);
+        //emit the 'all' event
+        this.emitter.emit('all', eventName, data);
     }
     private emitter = new EventEmitter();
 

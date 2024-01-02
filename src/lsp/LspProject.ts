@@ -1,5 +1,5 @@
-import type { CompletionItem, Diagnostic, Position } from 'vscode-languageserver';
-import { SemanticToken } from '..';
+import type { Diagnostic } from 'vscode-languageserver';
+import type { SemanticToken } from '../interfaces';
 
 /**
  * Defines the contract between the ProjectManager and the main or worker thread Project classes
@@ -39,6 +39,13 @@ export interface LspProject {
     hasFile(srcPath: string): MaybePromise<boolean>;
 
     /**
+     * An event that is emitted anytime the diagnostics for the project have changed (typically after a validate cycle has finished)
+     * @param eventName
+     * @param handler
+     */
+    on(eventName: 'diagnostics', handler: (data: { diagnostics: LspDiagnostic[] }) => void);
+
+    /**
      * Release all resources so this file can be safely garbage collected
      */
     dispose(): void;
@@ -67,4 +74,4 @@ export interface LspDiagnostic extends Diagnostic {
     uri: string;
 }
 
-type MaybePromise<T> = T | Promise<T>;
+export type MaybePromise<T> = T | Promise<T>;

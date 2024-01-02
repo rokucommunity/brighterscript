@@ -42,7 +42,6 @@ import {
 import { URI } from 'vscode-uri';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import type { BsConfig } from './BsConfig';
-import { Deferred } from './deferred';
 import { ProgramBuilder } from './ProgramBuilder';
 import { standardizePath as s, util } from './util';
 import { Logger } from './Logger';
@@ -54,6 +53,8 @@ import type { BusyStatus } from './BusyStatusTracker';
 import { BusyStatusTracker } from './BusyStatusTracker';
 import type { WorkspaceConfig } from './lsp/ProjectManager';
 import { ProjectManager } from './lsp/ProjectManager';
+import type { LspDiagnostic, LspProject } from './lsp/LspProject';
+import type { Project } from './lsp/Project';
 
 export class LanguageServer implements OnHandler<Connection> {
 
@@ -98,8 +99,6 @@ export class LanguageServer implements OnHandler<Connection> {
 
     public validateThrottler = new Throttler(0);
 
-    private sendDiagnosticsThrottler = new Throttler(0);
-
     private boundValidateAll = this.validateAll.bind(this);
 
     private validateAllThrottled() {
@@ -111,10 +110,12 @@ export class LanguageServer implements OnHandler<Connection> {
     //run the server
     public run() {
         this.projectManager = new ProjectManager();
-        //anytime a project finishes validation, send diagnostics
-        this.projectManager.on('flush-diagnostics', () => {
-            void this.sendDiagnostics();
+
+        //anytime a project emits a collection of diagnostics, send them to the client
+        this.projectManager.on('diagnostics', (event) => {
+            void this.sendDiagnostics(event);
         });
+
         //allow the lsp to provide file contents
         //TODO handle this...
         // this.projectManager.addFileResolver(this.documentFileResolver.bind(this));
@@ -186,7 +187,7 @@ export class LanguageServer implements OnHandler<Connection> {
                 semanticTokensProvider: {
                     legend: semanticTokensLegend,
                     full: true
-                } as SemanticTokensOptions,
+                } as SemanticTokensOptions
                 // referencesProvider: true,
                 // codeActionProvider: {
                 //     codeActionKinds: [CodeActionKind.Refactor]
@@ -642,9 +643,6 @@ export class LanguageServer implements OnHandler<Connection> {
         );
 
         await this.projectManager.syncProjects(workspaces);
-
-        //flush diagnostics
-        await this.sendDiagnostics();
     }
 
     /**
@@ -953,6 +951,7 @@ export class LanguageServer implements OnHandler<Connection> {
     @AddStackToErrorMessage
     @TrackBusyStatus
     private async validateTextDocument(event: TextDocumentChangeEvent<TextDocument>): Promise<void> {
+        return;
         const { document } = event;
         //ensure programs are initialized
         await this.waitAllProjectFirstRuns();
@@ -1015,30 +1014,23 @@ export class LanguageServer implements OnHandler<Connection> {
         ]);
     }
 
-    private diagnosticCollection = new DiagnosticCollection();
+    /**
+     * Send diagnostics to the client
+     */
+    private async sendDiagnostics(options: { project: LspProject; diagnostics: LspDiagnostic[] }) {
+        const patch = this.diagnosticCollection.getPatch(options.project, options.diagnostics);
 
-    private async sendDiagnostics() {
-        await this.sendDiagnosticsThrottler.run(async () => {
-            // // await this.projectManager.onSettle();
-            // //wait for all programs to finish running. This ensures the `Program` exists.
-            // await Promise.all(
-            //     this.projects.map(x => x.firstRunPromise)
-            // );
+        await Promise.all(Object.keys(patch).map(async (srcPath) => {
+            const uri = URI.file(srcPath).toString();
+            const diagnostics = patch[srcPath].map(d => util.toDiagnostic(d, uri));
 
-            // //Get only the changes to diagnostics since the last time we sent them to the client
-            // const patch = this.diagnosticCollection.getPatch(this.projects);
-
-            // for (let filePath in patch) {
-            //     const uri = URI.file(filePath).toString();
-            //     const diagnostics = patch[filePath].map(d => util.toDiagnostic(d, uri));
-
-            //     this.connection.sendDiagnostics({
-            //         uri: uri,
-            //         diagnostics: diagnostics
-            //     });
-            // }
-        });
+            await this.connection.sendDiagnostics({
+                uri: uri,
+                diagnostics: diagnostics
+            });
+        }));
     }
+    private diagnosticCollection = new DiagnosticCollection();
 
     private async transpileFile(srcPath: string) {
         //wait all program first runs
@@ -1049,6 +1041,11 @@ export class LanguageServer implements OnHandler<Connection> {
                 return project.builder.program.getTranspiledFileContents(srcPath);
             }
         }
+    }
+
+    private getProjects() {
+        //TODO delete this because projectManager handles all this stuff now
+        return [];
     }
 
     public dispose() {
@@ -1108,43 +1105,6 @@ function TrackBusyStatus(target: any, propertyKey: string, descriptor: PropertyD
             return originalMethod.apply(this, args);
         }, originalMethod.name);
     };
-}
-
-type Methods<T> = {
-    [K in keyof T]: T[K] extends Function ? K : never;
-}[keyof T];
-
-type AllMethods<T> = {
-    [K in Methods<T>]: T[K];
-};
-
-type FilterMethodsStartsWith<T, U extends string> = {
-    [K in keyof T as K extends `${U}${string}` ? K : never]: T[K];
-};
-
-type FirstArgumentType<T> = T extends (...args: [infer U, ...any[]]) => any ? U : never;
-
-type FirstArgumentTypesOfFilteredMethods<T, U extends string> = {
-    [K in keyof FilterMethodsStartsWith<T, U>]: FirstArgumentType<FilterMethodsStartsWith<T, U>[K]>;
-};
-
-// Example object
-class Example {
-    onEvent1(arg1: number) {
-        // Some implementation
-    }
-
-    handleEvent(arg1: string, arg2: boolean) {
-        // Some implementation
-    }
-
-    onSomething(arg1: Date, arg2: number[]) {
-        // Some implementation
-    }
-
-    notRelatedMethod() {
-        // Some implementation
-    }
 }
 
 type Handler<T> = {

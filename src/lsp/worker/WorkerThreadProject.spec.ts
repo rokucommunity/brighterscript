@@ -23,7 +23,7 @@ after(() => {
     workerPool.dispose();
 });
 
-describe.only('WorkerThreadProject', () => {
+describe('WorkerThreadProject', () => {
     let project: WorkerThreadProject;
     before(async function workerThreadWarmup() {
         this.timeout(20_000);

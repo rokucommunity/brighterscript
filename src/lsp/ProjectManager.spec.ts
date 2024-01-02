@@ -9,7 +9,7 @@ import { WorkerThreadProject } from './worker/WorkerThreadProject';
 import { wakeWorkerThreadPromise } from './worker/WorkerThreadProject.spec';
 const sinon = createSandbox();
 
-describe.only('ProjectManager', () => {
+describe('ProjectManager', () => {
     let manager: ProjectManager;
 
     before(async function workerThreadWarmup() {
@@ -32,16 +32,16 @@ describe.only('ProjectManager', () => {
     describe('on', () => {
         it('emits events', async () => {
             const stub = sinon.stub();
-            const off = manager.on('flush-diagnostics', stub);
-            await manager['emit']('flush-diagnostics', { project: undefined });
+            const off = manager.on('diagnostics', stub);
+            await manager['emit']('diagnostics', { project: undefined, diagnostics: [] });
             expect(stub.callCount).to.eql(1);
 
-            await manager['emit']('flush-diagnostics', { project: undefined });
+            await manager['emit']('diagnostics', { project: undefined, diagnostics: [] });
             expect(stub.callCount).to.eql(2);
 
             off();
 
-            await manager['emit']('flush-diagnostics', { project: undefined });
+            await manager['emit']('diagnostics', { project: undefined, diagnostics: [] });
             expect(stub.callCount).to.eql(2);
         });
     });

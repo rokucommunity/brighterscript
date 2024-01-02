@@ -30,5 +30,11 @@ export class WorkerThreadProjectRunner {
 
             }
         });
+
+        project.on('all', (eventName: string, data: any) => {
+            messageHandler.sendUpdate(eventName, {
+                data: data
+            });
+        });
     }
 }

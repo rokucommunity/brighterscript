@@ -79,7 +79,7 @@ export class MessageHandler<T, TRequestName = MethodNames<T>> {
     public async sendRequest<R>(name: TRequestName, options?: { data: any[]; id?: number }) {
         const request: WorkerMessage = {
             type: 'request',
-            name: name as string,
+            name: name as any,
             data: options?.data ?? [],
             id: options?.id ?? this.idSequence++
         };

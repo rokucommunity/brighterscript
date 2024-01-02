@@ -8,7 +8,7 @@ import { Project } from './Project';
 import { createSandbox } from 'sinon';
 const sinon = createSandbox();
 
-describe.only('Project', () => {
+describe('Project', () => {
     let project: Project;
 
     beforeEach(() => {
@@ -26,16 +26,16 @@ describe.only('Project', () => {
     describe('on', () => {
         it('emits events', async () => {
             const stub = sinon.stub();
-            const off = project.on('flush-diagnostics', stub);
-            await project['emit']('flush-diagnostics', { project: project });
+            const off = project.on('diagnostics', stub);
+            await project['emit']('diagnostics', { project: project, diagnostics: [] });
             expect(stub.callCount).to.eql(1);
 
-            await project['emit']('flush-diagnostics', { project: project });
+            await project['emit']('diagnostics', { project: project, diagnostics: [] });
             expect(stub.callCount).to.eql(2);
 
             off();
 
-            await project['emit']('flush-diagnostics', { project: project });
+            await project['emit']('diagnostics', { project: project, diagnostics: [] });
             expect(stub.callCount).to.eql(2);
         });
     });

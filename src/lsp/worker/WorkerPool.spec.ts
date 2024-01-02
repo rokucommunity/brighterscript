@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { WorkerPool } from './WorkerPool';
 import type { Worker } from 'worker_threads';
 
-describe.only('WorkerPool', () => {
+describe('WorkerPool', () => {
     let pool: WorkerPool;
     let workers: Worker[] = [] as any;
 

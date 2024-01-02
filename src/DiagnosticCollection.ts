@@ -1,12 +1,20 @@
-import type { BsDiagnostic } from './interfaces';
-import type { Project } from './LanguageServer';
+import { URI } from 'vscode-uri';
+import type { LspDiagnostic, LspProject } from './lsp/LspProject';
 import { util } from './util';
+import { firstBy } from 'thenby';
 
 export class DiagnosticCollection {
-    private previousDiagnosticsByFile = {} as Record<string, KeyedDiagnostic[]>;
+    private previousDiagnosticsByFile: Record<string, KeyedDiagnostic[]> = {};
 
-    public getPatch(projects: Project[]) {
-        const diagnosticsByFile = this.getDiagnosticsByFileFromProjects(projects);
+    /**
+     * Get a patch of any changed diagnostics since last time. This takes a single project and diagnostics, but evaulates
+     * the patch based on all previously seen projects. It's supposed to be a rolling patch.
+     * This will include _ALL_ diagnostics for a file if any diagnostics have changed for that file, due to how the language server expects diagnostics to be sent.
+     * @param projects
+     * @returns
+     */
+    public getPatch(project: LspProject, diagnostics: LspDiagnostic[]) {
+        const diagnosticsByFile = this.getDiagnosticsByFile(project, diagnostics as KeyedDiagnostic[]);
 
         const patch = {
             ...this.getRemovedPatch(diagnosticsByFile),
@@ -19,26 +27,49 @@ export class DiagnosticCollection {
         return patch;
     }
 
-    private getDiagnosticsByFileFromProjects(projects: Project[]) {
-        const result = {} as Record<string, KeyedDiagnostic[]>;
+    /**
+     * Get all the previous diagnostics, remove any that were exclusive to the current project, then mix in the project's new diagnostics.
+     * @param project the latest project that should have its diagnostics refreshed
+     * @param thisProjectDiagnostics diagnostics for the project
+     * @returns
+     */
+    private getDiagnosticsByFile(project: LspProject, thisProjectDiagnostics: KeyedDiagnostic[]) {
+        const result = this.clonePreviousDiagnosticsByFile();
 
-        //get all diagnostics for all projects
-        let diagnostics = Array.prototype.concat.apply([] as KeyedDiagnostic[],
-            projects.map((x) => x.builder.getDiagnostics())
-        ) as KeyedDiagnostic[];
+        const diagnosticsByKey = new Map<string, KeyedDiagnostic>();
 
-        const keys = {};
+        //delete all diagnostics linked to this project
+        for (const srcPath in result) {
+            const diagnostics = result[srcPath];
+            for (let i = diagnostics.length - 1; i >= 0; i--) {
+                const diagnostic = diagnostics[i];
+
+                //remember this diagnostic key for use when deduping down below
+                diagnosticsByKey.set(diagnostic.key, diagnostic);
+
+                const idx = diagnostic.projects.indexOf(project);
+                //unlink the diagnostic from this project
+                if (idx > -1) {
+                    diagnostic.projects.splice(idx, 1);
+                }
+                //delete this diagnostic if it's no longer linked to any projects
+                if (diagnostic.projects.length === 0) {
+                    diagnostics.splice(i, 1);
+                    diagnosticsByKey.delete(diagnostic.key);
+                }
+            }
+        }
+
         //build the full current set of diagnostics by file
-        for (let diagnostic of diagnostics) {
-            const srcPath = diagnostic.file.srcPath ?? diagnostic.file.srcPath;
+        for (let diagnostic of thisProjectDiagnostics) {
+            const srcPath = URI.parse(diagnostic.uri).fsPath;
             //ensure the file entry exists
             if (!result[srcPath]) {
                 result[srcPath] = [];
             }
-            const diagnosticMap = result[srcPath];
 
             //fall back to a default range if missing
-            const range = diagnostic?.range ?? util.createRange(0, 0, 0, 0);
+            const range = diagnostic.range ?? util.createRange(0, 0, 0, 0);
 
             diagnostic.key =
                 srcPath.toLowerCase() + '-' +
@@ -49,13 +80,46 @@ export class DiagnosticCollection {
                 range.end.character +
                 diagnostic.message;
 
+            diagnostic.projects ??= [project];
+
             //don't include duplicates
-            if (!keys[diagnostic.key]) {
-                keys[diagnostic.key] = true;
-                diagnosticMap.push(diagnostic);
+            if (!diagnosticsByKey.has(diagnostic.key)) {
+                diagnosticsByKey.set(diagnostic.key, diagnostic);
+
+                const diagnosticsForFile = result[srcPath];
+                diagnosticsForFile.push(diagnostic);
+            }
+
+            const projects = diagnosticsByKey.get(diagnostic.key).projects;
+            //link this project to the diagnostic
+            if (!projects.includes(project)) {
+                projects.push(project);
             }
         }
+
+        //sort the list so it's easier to compare later
+        for (let key in result) {
+            result[key].sort(firstBy(x => x.key));
+        }
         return result;
+    }
+
+    /**
+     * Clone the previousDiagnosticsByFile, retaining the array of project references on each diagnostic
+     */
+    private clonePreviousDiagnosticsByFile() {
+        let clone: typeof this.previousDiagnosticsByFile = {};
+        for (let key in this.previousDiagnosticsByFile) {
+            clone[key] = [];
+            for (const diagnostic of this.previousDiagnosticsByFile[key]) {
+                clone[key].push({
+                    ...diagnostic,
+                    //make a copy of the projects array (but keep the project references intact)
+                    projects: [...diagnostic.projects]
+                });
+            }
+        }
+        return clone;
     }
 
     /**
@@ -117,6 +181,7 @@ export class DiagnosticCollection {
     }
 }
 
-interface KeyedDiagnostic extends BsDiagnostic {
+interface KeyedDiagnostic extends LspDiagnostic {
     key: string;
+    projects: LspProject[];
 }

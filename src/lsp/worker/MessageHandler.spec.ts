@@ -1,10 +1,11 @@
 import { MessageChannel } from 'worker_threads';
 import { MessageHandler } from './MessageHandler';
 import { expect } from '../../chai-config.spec';
+import type { LspProject } from '../LspProject';
 
 describe('MessageHandler', () => {
-    let server: MessageHandler;
-    let client: MessageHandler;
+    let server: MessageHandler<LspProject>;
+    let client: MessageHandler<LspProject>;
     let channel: MessageChannel;
 
     beforeEach(() => {
@@ -27,10 +28,10 @@ describe('MessageHandler', () => {
                 });
             }
         });
-        let client = new MessageHandler({ port: channel.port2 });
+        let client = new MessageHandler<LspProject>({ port: channel.port2 });
         let error: Error;
         try {
-            await client.sendRequest('doSomething');
+            await client.sendRequest('activate');
         } catch (e) {
             error = e as any;
         }

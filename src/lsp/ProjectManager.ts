@@ -2,7 +2,7 @@ import { standardizePath as s, util } from '../util';
 import { rokuDeploy } from 'roku-deploy';
 import * as path from 'path';
 import * as EventEmitter from 'eventemitter3';
-import type { LspProject } from './LspProject';
+import type { LspDiagnostic, LspProject, MaybePromise } from './LspProject';
 import { Project } from './Project';
 import { WorkerThreadProject } from './worker/WorkerThreadProject';
 import type { Position } from 'vscode-languageserver';
@@ -77,13 +77,13 @@ export class ProjectManager {
     }
 
     public async getCompletions(srcPath: string, position: Position) {
-        const completions = await Promise.all(
-            this.projects.map(x => x.getCompletions(srcPath, position))
-        );
+        // const completions = await Promise.all(
+        //     this.projects.map(x => x.getCompletions(srcPath, position))
+        // );
 
-        for (let completion of completions) {
-            completion.commitCharacters = ['.'];
-        }
+        // for (let completion of completions) {
+        //     completion.commitCharacters = ['.'];
+        // }
     }
 
     /**
@@ -184,6 +184,10 @@ export class ProjectManager {
 
         this.projects.push(project);
 
+        project.on('diagnostics', (event) => {
+            this.emit('diagnostics', { ...event, project: project });
+        });
+
         //TODO subscribe to various events for this project
 
         await project.activate({
@@ -194,24 +198,23 @@ export class ProjectManager {
         console.log('Activated');
     }
 
-    public on(eventName: 'critical-failure', handler: (data: { project: LspProject; message: string }) => void);
-    public on(eventName: 'flush-diagnostics', handler: (data: { project: LspProject }) => void);
-    public on(eventName: string, handler: (payload: any) => void) {
-        this.emitter.on(eventName, handler);
+    public on(eventName: 'critical-failure', handler: (data: { project: LspProject; message: string }) => MaybePromise<void>);
+    public on(eventName: 'diagnostics', handler: (data: { project: LspProject; diagnostics: LspDiagnostic[] }) => MaybePromise<void>);
+    public on(eventName: string, handler: (payload: any) => MaybePromise<void>) {
+        this.emitter.on(eventName, handler as any);
         return () => {
-            this.emitter.removeListener(eventName, handler);
+            this.emitter.removeListener(eventName, handler as any);
         };
     }
 
     private emit(eventName: 'critical-failure', data: { project: LspProject; message: string });
-    private emit(eventName: 'flush-diagnostics', data: { project: LspProject });
+    private emit(eventName: 'diagnostics', data: { project: LspProject; diagnostics: LspDiagnostic[] });
     private async emit(eventName: string, data?) {
         //emit these events on next tick, otherwise they will be processed immediately which could cause issues
         await util.sleep(0);
         this.emitter.emit(eventName, data);
     }
     private emitter = new EventEmitter();
-
 }
 
 export interface WorkspaceConfig {

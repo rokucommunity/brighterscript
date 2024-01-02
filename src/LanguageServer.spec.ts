@@ -4,7 +4,7 @@ import * as path from 'path';
 import type { DidChangeWatchedFilesParams, Location } from 'vscode-languageserver';
 import { FileChangeType, Range } from 'vscode-languageserver';
 import { Deferred } from './deferred';
-import type { Project } from './LanguageServer';
+import type { Project } from './lsp/Project';
 import { CustomCommands, LanguageServer } from './LanguageServer';
 import type { SinonStub } from 'sinon';
 import { createSandbox } from 'sinon';
@@ -1111,7 +1111,7 @@ describe('LanguageServer', () => {
         });
     });
 
-    it.only('semantic tokens request waits until after validation has finished', async () => {
+    it('semantic tokens request waits until after validation has finished', async () => {
         fsExtra.outputFileSync(s`${rootDir}/source/main.bs`, `
             sub main()
                 print \`hello world\`
