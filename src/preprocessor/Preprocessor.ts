@@ -17,7 +17,7 @@ export class Preprocessor implements CC.Visitor {
     /** The set of errors encountered when pre-processing conditional compilation directives. */
     public diagnostics = [] as Diagnostic[];
 
-    public processedTokens: Token[] | undefined;
+    public processedTokens: Token[] = [];
 
     /**
      * Filters the tokens contained within a set of chunks based on a set of constants.

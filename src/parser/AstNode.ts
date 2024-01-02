@@ -47,14 +47,12 @@ export abstract class AstNode {
             if (node.symbolTable) {
                 return node.symbolTable;
             }
-            //justification: we are following a chain of nodes until we get to one with a SymbolTable,
-            //and the top-level node will always have a SymbolTable
-            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
             node = node.parent!;
         }
 
-        //justification: based on the reasoning above we will always find a SymbolTable,
-        //but we have no way to convince the typechecker of this.
+        //justification: we are following a chain of nodes until we get to one with a SymbolTable,
+        //and the top-level node will always have a SymbolTable. So we'll never hit this undefined,
+        //but it is not so easy to convince the typechecker of this.
         return undefined as any;
     }
 
@@ -133,7 +131,7 @@ export abstract class Statement extends AstNode {
     /**
      * Annotations for this statement
      */
-    public annotations: AnnotationExpression[] = [];
+    public annotations: AnnotationExpression[] | undefined;
 }
 
 

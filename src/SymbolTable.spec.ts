@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { SymbolTable } from './SymbolTable';
 import { expect } from './chai-config.spec';
 import { StringType } from './types/StringType';

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { util } from '../util';
 import * as fsExtra from 'fs-extra';
 import { Program } from '../Program';

@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
-/* eslint-disable @typescript-eslint/no-non-null-assertion */
 import type { Token } from '../../lexer/Token';
 import { TokenKind, ReservedWords } from '../../lexer/TokenKind';
 import { interpolatedRange } from '../../astUtils/creators';

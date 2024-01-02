@@ -9,7 +9,7 @@ export class InterfaceType implements BscType {
     }
 
     /**
-     * The name of the interface. Can be null.
+     * The name of the interface. Can be undefined.
      */
     public name: string | undefined;
 

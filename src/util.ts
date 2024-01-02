@@ -286,7 +286,6 @@ export class Util {
             throw err;
         } else {
             //justification: `result` is set as long as `err` is not set and vice versa
-            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion,  @typescript-eslint/no-unnecessary-type-assertion
             return result!;
         }
     }
@@ -1102,7 +1101,6 @@ export class Util {
                     return new CustomType(token.text);
                 }
         }
-        //TODO: What should happen when nothing matches?
     }
 
     /**

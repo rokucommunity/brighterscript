@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
-/* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { expect } from '../../../chai-config.spec';
 import { LiteralExpression } from '../../Expression';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
@@ -48,7 +46,7 @@ describe('EnumStatement', () => {
         `, { mode: ParseMode.BrighterScript });
 
         expectZeroDiagnostics(parser);
-        expect(parser.ast.statements[0].annotations[0].name).to.eql('someAnnotation');
+        expect(parser.ast.statements[0].annotations![0].name).to.eql('someAnnotation');
     });
 
     it('constructs when missing enum name', () => {

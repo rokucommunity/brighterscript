@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-non-null-assertion */
-/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
 import { expect } from '../../../chai-config.spec';
 import type { TryCatchStatement, ThrowStatement } from '../../Statement';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';

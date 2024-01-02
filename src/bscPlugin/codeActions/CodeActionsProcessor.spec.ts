@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
-/* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { expect } from '../../chai-config.spec';
 import { URI } from 'vscode-uri';
 import type { Range } from 'vscode-languageserver';

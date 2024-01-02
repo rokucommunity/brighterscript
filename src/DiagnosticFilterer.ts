@@ -112,7 +112,7 @@ export class DiagnosticFilterer {
             let fileDiagnostics = this.byFile[filePath];
             for (let i = 0; i < fileDiagnostics.length; i++) {
                 let diagnostic = fileDiagnostics[i];
-                if (diagnostic.code && filter.codes.includes(diagnostic.code)) {
+                if (filter.codes.includes(diagnostic.code!)) {
                     //remove this diagnostic
                     fileDiagnostics.splice(i, 1);
                     //repeat this loop iteration (with the new item at this index)

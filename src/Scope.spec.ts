@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { expect } from './chai-config.spec';
 import * as sinonImport from 'sinon';
 import { Position, Range } from 'vscode-languageserver';

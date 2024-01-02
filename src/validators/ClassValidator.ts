@@ -20,12 +20,11 @@ export class BsClassValidator {
     /**
      * The key is the namespace-prefixed class name. (i.e. `NameA.NameB.SomeClass` or `CoolClass`)
      */
-    private classes: Map<string, AugmentedClassStatement>;
+    private classes: Map<string, AugmentedClassStatement> = new Map();
 
     public constructor(scope: Scope) {
         this.scope = scope;
         this.diagnostics = [];
-        this.classes = new Map();
     }
 
     public validate() {
@@ -94,7 +93,7 @@ export class BsClassValidator {
         for (const [className, classStatement] of this.classes) {
             //catch namespace class collision with global class
             let nonNamespaceClassName = util.getTextAfterFinalDot(className)?.toLowerCase();
-            let nonNamespaceClass = nonNamespaceClassName ? this.classes.get(nonNamespaceClassName) : undefined;
+            let nonNamespaceClass = this.classes.get(nonNamespaceClassName!);
             const namespace = classStatement.findAncestor<NamespaceStatement>(isNamespaceStatement);
             if (namespace && nonNamespaceClass) {
                 this.diagnostics.push({

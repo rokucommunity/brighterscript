@@ -17,7 +17,7 @@ export class HoverProcessor {
     }
 
     public process() {
-        let hover: Hover | null | undefined;
+        let hover: Hover | undefined;
         if (isBrsFile(this.event.file)) {
             hover = this.getBrsFileHover(this.event.file);
         } else if (isXmlFile(this.event.file)) {
@@ -40,7 +40,7 @@ export class HoverProcessor {
         return parts.join('\n');
     }
 
-    private getBrsFileHover(file: BrsFile): Hover | null | undefined {
+    private getBrsFileHover(file: BrsFile): Hover | undefined {
         const scope = this.event.scopes[0];
         const fence = (code: string) => util.mdFence(code, 'brightscript');
         //get the token at the position
@@ -56,7 +56,7 @@ export class HoverProcessor {
 
         //throw out invalid tokens and the wrong kind of tokens
         if (!token || !hoverTokenTypes.includes(token.kind)) {
-            return null;
+            return undefined;
         }
 
         const expression = file.getClosestExpression(this.event.position);

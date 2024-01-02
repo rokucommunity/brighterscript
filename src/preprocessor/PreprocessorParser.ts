@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
-/* eslint-disable @typescript-eslint/no-non-null-assertion */
 import type { Token } from '../lexer/Token';
 import { TokenKind, AllowedLocalIdentifiers, ReservedWords, DisallowedLocalIdentifiers, AllowedProperties } from '../lexer/TokenKind';
 import * as CC from './Chunk';
@@ -11,7 +9,7 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 export class PreprocessorParser {
     public diagnostics: Diagnostic[] = [];
 
-    public tokens: Token[] | undefined;
+    public tokens: Token[] = [];
 
     private current = 0;
 

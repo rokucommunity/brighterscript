@@ -11,9 +11,6 @@ export class CodeActionUtil {
         for (const change of obj.changes) {
             const uri = URI.file(change.filePath).toString();
 
-            //justification: `edit` is defined above so we know that `edit.changes` is defined.
-            /* eslint-disable @typescript-eslint/no-non-null-assertion,  @typescript-eslint/no-unnecessary-type-assertion */
-
             //create the edit changes array for this uri
             if (!edit.changes![uri]) {
                 edit.changes![uri] = [];
@@ -27,8 +24,6 @@ export class CodeActionUtil {
                     TextEdit.replace(change.range, change.newText)
                 );
             }
-
-            /* eslint-enable @typescript-eslint/no-non-null-assertion,  @typescript-eslint/no-unnecessary-type-assertion */
         }
         const action = CodeAction.create(obj.title, edit, obj.kind);
         action.isPreferred = obj.isPreferred;

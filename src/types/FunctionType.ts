@@ -9,7 +9,7 @@ export class FunctionType implements BscType {
     }
 
     /**
-     * The name of the function for this type. Can be null
+     * The name of the function for this type. Can be undefined
      */
     public name: string | undefined;
 
