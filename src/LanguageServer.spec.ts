@@ -18,6 +18,7 @@ import { createVisitor, WalkMode } from './astUtils/visitors';
 import { tempDir, rootDir } from './testHelpers.spec';
 import { URI } from 'vscode-uri';
 import { BusyStatusTracker } from './BusyStatusTracker';
+import type { BscFile } from '.';
 
 const sinon = createSandbox();
 
@@ -119,7 +120,7 @@ describe('LanguageServer', () => {
             ${additionalXmlContents}
             <script type="text/brightscript" uri="${name}.brs" />
         </component>`;
-        program.setFile(filePath, contents);
+        return program.setFile(filePath, contents);
     }
 
     function addScriptFile(name: string, contents: string, extension = 'brs') {
@@ -498,6 +499,7 @@ describe('LanguageServer', () => {
 
     describe('onSignatureHelp', () => {
         let callDocument: TextDocument;
+        let importingXmlFile: BscFile;
         const functionFileBaseName = 'buildAwesome';
         const funcDefinitionLine = 'function buildAwesome(confirm = true as Boolean)';
         beforeEach(async () => {
@@ -516,7 +518,7 @@ describe('LanguageServer', () => {
                     end if
                 end sub
             `)!;
-            addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.bs" />`);
+            importingXmlFile = addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.bs" />`);
         });
 
         it('should return the expected signature info when documentation is included', async () => {
@@ -584,6 +586,21 @@ describe('LanguageServer', () => {
             expect(result.signatures).to.not.be.empty;
             const signature = result.signatures[0];
             expect(signature.label).to.equal(classMethodDefinitionLine);
+        });
+
+        it('should return "null" as signature and parameter when used on something with no signature', async () => {
+            const result = await server['onSignatureHelp']({
+                textDocument: {
+                    uri: importingXmlFile.pkgPath
+                },
+                position: util.createPosition(0, 5)
+            });
+
+            console.dir(result);
+
+            expect(result.signatures.length).to.equal(0);
+            expect(result.activeSignature).to.equal(null);
+            expect(result.activeParameter).to.equal(null);
         });
     });
 

@@ -1214,8 +1214,7 @@ export class LanguageServer {
 
             const activeSignature = signatures.length > 0 ? 0 : null;
 
-            // TODO: confirm whether this is intentional. `null >= 0` is `true`.
-            const activeParameter = activeSignature >= 0 ? signatures[activeSignature]?.index : null;
+            const activeParameter = activeSignature !== null ? signatures[activeSignature]?.index : null;
 
             let results: SignatureHelp = {
                 signatures: signatures.map((s) => s.signature),
