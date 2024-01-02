@@ -6,6 +6,7 @@ import type { LspDiagnostic, LspProject, MaybePromise } from './LspProject';
 import { Project } from './Project';
 import { WorkerThreadProject } from './worker/WorkerThreadProject';
 import type { Position } from 'vscode-languageserver';
+import { Deferred } from '../deferred';
 
 /**
  * Manages all brighterscript projects for the language server
@@ -64,15 +65,45 @@ export class ProjectManager {
         );
     }
 
-    public async getSemanticTokens(srcPath: string) {
-        for (const project of this.projects) {
-            //find the first program that has this file, since it would be incredibly inefficient to generate semantic tokens for the same file multiple times.
-            if (await project.hasFile(srcPath)) {
-                const result = await Promise.resolve(
-                    project.getSemanticTokens(srcPath)
-                );
-                return result;
+    /**
+     * Return the first project where the async matcher returns true
+     * @param callback
+     * @returns
+     */
+    private findFirstMatchingProject(callback: (project: LspProject) => boolean | PromiseLike<boolean>) {
+        const deferred = new Deferred<LspProject>();
+        let projectCount = this.projects.length;
+        let doneCount = 0;
+        this.projects.map(async (project) => {
+            try {
+                if (await Promise.resolve(callback(project)) === true) {
+                    deferred.tryResolve(project);
+                }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                doneCount++;
             }
+            //if this was the last promise, and we didn't resolve, then resolve with undefined
+            if (doneCount >= projectCount) {
+                deferred.tryResolve(undefined);
+            }
+        });
+        return deferred.promise;
+    }
+
+    public async getSemanticTokens(srcPath: string) {
+        //find the first program that has this file, since it would be incredibly inefficient to generate semantic tokens for the same file multiple times.
+        const project = await this.findFirstMatchingProject((p) => {
+            return p.hasFile(srcPath);
+        });
+
+        //if we found a project
+        if (project) {
+            const result = await Promise.resolve(
+                project.getSemanticTokens(srcPath)
+            );
+            return result;
         }
     }
 

@@ -47,6 +47,12 @@ export class Deferred<T = void, TReject = any> {
     }
     private _resolve: (value: T) => void;
 
+    public tryResolve(value?: T) {
+        if (!this.isCompleted) {
+            this.resolve(value);
+        }
+    }
+
     /**
      * Reject the promise
      */
@@ -59,4 +65,10 @@ export class Deferred<T = void, TReject = any> {
         this._reject(value);
     }
     private _reject: (value: TReject) => void;
+
+    public tryReject(reason?: TReject) {
+        if (!this.isCompleted) {
+            this.reject(reason);
+        }
+    }
 }
