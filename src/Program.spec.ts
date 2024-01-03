@@ -2166,7 +2166,7 @@ describe('Program', () => {
                 stagingDir: stagingDir,
                 sourceRoot: sourceRoot,
                 sourceMap: true,
-                publishEmptyFiles: false
+                pruneEmptyCodeFiles: true
             });
             program.setFile('source/types.bs', `
                 enum mainstyle

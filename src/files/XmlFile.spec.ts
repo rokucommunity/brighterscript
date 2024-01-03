@@ -901,7 +901,7 @@ describe('XmlFile', () => {
         });
 
         it('removes script imports if given file is not publishable', () => {
-            program.options.publishEmptyFiles = false;
+            program.options.pruneEmptyCodeFiles = true;
             program.setFile(`components/SimpleScene.bs`, `
                 enum simplescenetypes
                     hero
@@ -927,7 +927,7 @@ describe('XmlFile', () => {
         });
 
         it('removes extra imports found via dependencies if given file is not publishable', () => {
-            program.options.publishEmptyFiles = false;
+            program.options.pruneEmptyCodeFiles = true;
             program.setFile(`source/simplescenetypes.bs`, `
                 enum SimpleSceneTypes
                     world = "world"

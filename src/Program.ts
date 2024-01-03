@@ -1213,7 +1213,7 @@ export class Program {
             //mark this file as processed so we don't process it more than once
             processedFiles.add(outputPath?.toLowerCase());
 
-            if (this.options.publishEmptyFiles || file.isPublishable) {
+            if (!this.options.pruneEmptyCodeFiles || !file.canBePruned) {
                 //skip transpiling typedef files
                 if (isBrsFile(file) && file.isTypedef) {
                     return;

@@ -73,7 +73,7 @@ export class XmlFile {
     /**
      * should this file be written to disk
      */
-    readonly isPublishable = true;
+    readonly canBePruned = false;
 
     /**
      * The list of script imports delcared in the XML of this file.
@@ -463,20 +463,13 @@ export class XmlFile {
         this.program.logger.debug('XmlFile', chalk.green(this.pkgPath), ...args);
     }
 
-    private determinePkgMapPath(uri) {
-        if (/^pkg:\/.+/.test(uri)) {
-            return uri.replace(/^pkg:\//, '');
-        }
-        return util.getPkgPathFromTarget(this.pkgPath, uri);
-    }
-
     private checkScriptsForPublishableImports(scripts: SGScript[]): [boolean, SGScript[]] {
-        if (this.program.options.publishEmptyFiles) {
+        if (!this.program.options.pruneEmptyCodeFiles) {
             return [false, scripts];
         }
         const publishableScripts = scripts.filter(script => {
             const uriAttributeValue = script.attributes.find((v) => v.key.text === 'uri')?.value.text;
-            const pkgMapPath = this.determinePkgMapPath(uriAttributeValue);
+            const pkgMapPath = util.getPkgPathFromTarget(this.pkgPath, uriAttributeValue);
             let file = this.program.getFile(pkgMapPath);
             if (!file && pkgMapPath.endsWith(this.program.bslibPkgPath)) {
                 return true;
@@ -484,7 +477,7 @@ export class XmlFile {
             if (!file && pkgMapPath.endsWith('.brs')) {
                 file = this.program.getFile(pkgMapPath.replace(/\.brs$/, '.bs'));
             }
-            return file?.isPublishable;
+            return !(file?.canBePruned);
         });
         return [publishableScripts.length !== scripts.length, publishableScripts];
     }

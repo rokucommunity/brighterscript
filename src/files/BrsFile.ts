@@ -80,19 +80,19 @@ export class BrsFile {
     /**
      * Should this file be written to disk
      */
-    public get isPublishable() {
-        let isPublishable = false;
+    public get canBePruned() {
+        let canPrune = true;
         this.ast.walk(createVisitor({
             FunctionStatement: () => {
-                isPublishable = true;
+                canPrune = false;
             },
             ClassStatement: () => {
-                isPublishable = true;
+                canPrune = false;
             }
         }), {
             walkMode: WalkMode.visitStatements
         });
-        return isPublishable;
+        return canPrune;
     }
 
     /**
