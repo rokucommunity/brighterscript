@@ -2201,8 +2201,7 @@ describe('Program', () => {
                     ? "The night is " + "dark" + " and full of terror"
                 end sub
             `);
-            expect(() => fsExtra.readFileSync(s`${stagingDir}/source/types.brs`))
-                .to.throw(/ENOENT: no such file or directory, open .+\/source\/types.brs/);
+            expect(fsExtra.pathExistsSync(s`${stagingDir}/source/types.brs`)).to.be.false;
         });
     });
 

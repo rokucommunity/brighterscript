@@ -467,9 +467,7 @@ export class XmlFile {
         if (/^pkg:\/.+/.test(uri)) {
             return uri.replace(/^pkg:\//, '');
         }
-        const fileDirectory = this.pkgPath.replace(/\/\w+\.xml$/, '');
-        const pkgMapPath = path.normalize(`${fileDirectory}/${uri}`);
-        return pkgMapPath;
+        return util.getPkgPathFromTarget(this.pkgPath, uri);
     }
 
     private checkScriptsForPublishableImports(scripts: SGScript[]): [boolean, SGScript[]] {
