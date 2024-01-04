@@ -18,7 +18,8 @@
     "docs": "ts-node scripts/compile-doc-examples.ts",
     "benchmark": "cd ./benchmarks && ts-node ./index.ts",
     "scrape-roku-docs": "ts-node scripts/scrape-roku-docs.ts",
-    "rescrape-roku-docs": "rm scripts/.cache.json && ts-node scripts/scrape-roku-docs.ts"
+    "rescrape-roku-docs": "rm scripts/.cache.json && ts-node scripts/scrape-roku-docs.ts",
+    "null-check": "tsc -p tsconfig-null-safe.json"
   },
   "mocha": {
     "spec": "src/**/*.spec.ts",

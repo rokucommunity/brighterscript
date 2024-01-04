@@ -274,7 +274,7 @@ describe('ProgramBuilder', () => {
 
         let diagnostics = createBsDiagnostic('p1', ['m1']);
         let f1 = diagnostics[0].file as BrsFile;
-        f1.fileContents = null;
+        (f1.fileContents as any) = null;
         sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
 
         sinon.stub(builder.program, 'getFile').returns(f1);
@@ -292,7 +292,7 @@ describe('ProgramBuilder', () => {
         let diagnostics = createBsDiagnostic('p1', ['m1']);
         sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
 
-        sinon.stub(builder.program, 'getFile').returns(null);
+        sinon.stub(builder.program, 'getFile').returns(null as any);
 
         let printStub = sinon.stub(diagnosticUtils, 'printDiagnostic');
 
@@ -351,8 +351,8 @@ describe('ProgramBuilder', () => {
 });
 
 function createBsDiagnostic(filePath: string, messages: string[]): BsDiagnostic[] {
-    let file = new BrsFile(filePath, filePath, null);
-    let diagnostics = [];
+    let file = new BrsFile(filePath, filePath, null as any);
+    let diagnostics: BsDiagnostic[] = [];
     for (let message of messages) {
         let d = createDiagnostic(file, 1, message);
         d.file = file;
