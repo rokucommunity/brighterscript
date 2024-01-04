@@ -35,7 +35,7 @@ describe('DiagnosticCollection', () => {
 
     it('does not crash for diagnostics with missing locations', () => {
         const [d1] = addDiagnostics('file1.brs', ['I have no location']);
-        delete d1.range;
+        delete (d1 as any).range;
         testPatch({
             'file1.brs': ['I have no location']
         });
@@ -104,7 +104,7 @@ describe('DiagnosticCollection', () => {
     }
 
     function addDiagnostics(srcPath: string, messages: string[]) {
-        const newDiagnostics = [];
+        const newDiagnostics: BsDiagnostic[] = [];
         for (const message of messages) {
             newDiagnostics.push({
                 file: {
@@ -117,6 +117,6 @@ describe('DiagnosticCollection', () => {
             });
         }
         diagnostics.push(...newDiagnostics);
-        return newDiagnostics as typeof diagnostics;
+        return newDiagnostics;
     }
 });

@@ -80,7 +80,7 @@ export class CallExpression extends Expression {
     }
 
     transpile(state: BrsTranspileState, nameOverride?: string) {
-        let result = [];
+        let result: Array<string | SourceNode> = [];
 
         //transpile the name
         if (nameOverride) {
@@ -130,7 +130,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         super();
         if (this.returnTypeToken) {
             this.returnType = util.tokenToBscType(this.returnTypeToken);
-        } else if (this.functionType.text.toLowerCase() === 'sub') {
+        } else if (this.functionType?.text.toLowerCase() === 'sub') {
             this.returnType = new VoidType();
         } else {
             this.returnType = DynamicType.instance;

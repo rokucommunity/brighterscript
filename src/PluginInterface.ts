@@ -43,7 +43,7 @@ export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> 
     /**
      * Should plugin errors cause the program to fail, or should they be caught and simply logged
      */
-    private suppressErrors: boolean;
+    private suppressErrors: boolean | undefined;
 
     /**
      * Call `event` on plugins

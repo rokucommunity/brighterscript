@@ -1,7 +1,7 @@
 import { assert, expect } from '../chai-config.spec';
 import * as sinonImport from 'sinon';
 import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
-import type { Callable, CommentFlag, VariableDeclaration } from '../interfaces';
+import type { BsDiagnostic, Callable, CommentFlag, VariableDeclaration } from '../interfaces';
 import { Program } from '../Program';
 import { BooleanType } from '../types/BooleanType';
 import { DynamicType } from '../types/DynamicType';
@@ -156,10 +156,10 @@ describe('BrsFile', () => {
     });
 
     it('allows adding diagnostics', () => {
-        const expected = [{
+        const expected: BsDiagnostic[] = [{
             message: 'message',
-            file: undefined,
-            range: undefined
+            file: undefined as any,
+            range: undefined as any
         }];
         file.addDiagnostics(expected);
         expectDiagnostics(file, expected);
@@ -1394,10 +1394,10 @@ describe('BrsFile', () => {
             `);
             expect(file.callables.length).to.equal(2);
             expect(file.callables[0].name).to.equal('DoA');
-            expect(file.callables[0].nameRange.start.line).to.equal(1);
+            expect(file.callables[0].nameRange!.start.line).to.equal(1);
 
             expect(file.callables[1].name).to.equal('DoA');
-            expect(file.callables[1].nameRange.start.line).to.equal(5);
+            expect(file.callables[1].nameRange!.start.line).to.equal(5);
         });
 
         it('finds function call line and column numbers', () => {
@@ -2391,7 +2391,7 @@ describe('BrsFile', () => {
             testTranspile(
                 'sub main()\n    name = "john \nend sub',
                 'sub main()\n    name = "john "\nend sub',
-                null,
+                null as any,
                 'source/main.bs',
                 false
             );
@@ -2619,7 +2619,7 @@ describe('BrsFile', () => {
                     person = {}
                     stuff = []
                 end sub
-        `, null, 'trim');
+        `, null as any, 'trim');
         });
 
         it('does not add leading or trailing newlines', () => {
@@ -2672,8 +2672,8 @@ describe('BrsFile', () => {
                         kind: token.kind,
                         start: Position.create(
                             //convert source-map 1-based line to token 0-based line
-                            originalPosition.line - 1,
-                            originalPosition.column
+                            originalPosition.line! - 1,
+                            originalPosition.column!
                         )
                     };
                 });
@@ -3458,7 +3458,7 @@ describe('BrsFile', () => {
             `);
             const parser = file['_parser'];
             //clear the private _parser instance
-            file['_parser'] = undefined;
+            file['_parser'] = undefined as any;
 
             //force the file to get a new instance of parser
             const newParser = file.parser;
@@ -3574,7 +3574,7 @@ describe('BrsFile', () => {
                 end sub
             `);
             program.validate();
-            sinon.stub(util, 'getAllDottedGetParts').returns(null);
+            sinon.stub(util, 'getAllDottedGetParts').returns(null as any);
             // print alpha.be|ta
             expect(program.getDefinition(file.srcPath, Position.create(2, 34))).to.eql([]);
         });
