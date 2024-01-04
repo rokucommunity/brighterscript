@@ -468,7 +468,7 @@ export class XmlFile {
             return [false, scripts];
         }
         const publishableScripts = scripts.filter(script => {
-            const uriAttributeValue = script.attributes.find((v) => v.key.text === 'uri')?.value.text;
+            const uriAttributeValue = script.attributes.find((v) => v.key.text === 'uri')?.value.text || '';
             const pkgMapPath = util.getPkgPathFromTarget(this.pkgPath, uriAttributeValue);
             let file = this.program.getFile(pkgMapPath);
             if (!file && pkgMapPath.endsWith(this.program.bslibPkgPath)) {
