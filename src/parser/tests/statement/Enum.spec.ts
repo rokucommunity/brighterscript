@@ -21,7 +21,7 @@ describe('EnumStatement', () => {
     let testTranspile = getTestTranspile(() => [program, rootDir]);
 
     beforeEach(() => {
-        program = new Program({ rootDir: rootDir, sourceMap: true });
+        program = new Program(util.normalizeConfig({ rootDir: rootDir, sourceMap: true }));
     });
     afterEach(() => {
         sinon.restore();

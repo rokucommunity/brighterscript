@@ -12,9 +12,9 @@ const sinon = createSandbox();
 describe('XmlScope', () => {
     let program: Program;
     beforeEach(() => {
-        program = new Program({
+        program = new Program(util.normalizeConfig({
             rootDir: rootDir
-        });
+        }));
         sinon.restore();
     });
 
@@ -92,7 +92,7 @@ describe('XmlScope', () => {
 
     describe('validate', () => {
         it('adds an error when an interface function cannot be found', () => {
-            program = new Program({ rootDir: rootDir });
+            program = new Program(util.normalizeConfig({ rootDir: rootDir }));
 
             program.setFile('components/child.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -135,7 +135,7 @@ describe('XmlScope', () => {
         });
 
         it('adds an error when an interface field is invalid', () => {
-            program = new Program({ rootDir: rootDir });
+            program = new Program(util.normalizeConfig({ rootDir: rootDir }));
 
             program.setFile('components/child.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>

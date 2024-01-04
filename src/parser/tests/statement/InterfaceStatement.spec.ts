@@ -1,15 +1,16 @@
 import { expectZeroDiagnostics, getTestGetTypedef, getTestTranspile } from '../../../testHelpers.spec';
 import { rootDir } from '../../../testHelpers.spec';
 import { Program } from '../../../Program';
+import util from '../../../util';
 
 describe('InterfaceStatement', () => {
     let program: Program;
     const testTranspile = getTestTranspile(() => [program, rootDir]);
     const testGetTypedef = getTestGetTypedef(() => [program, rootDir]);
     beforeEach(() => {
-        program = new Program({
+        program = new Program(util.normalizeConfig({
             rootDir: rootDir
-        });
+        }));
     });
 
     it('allows strange keywords as property names', () => {

@@ -10,10 +10,10 @@ import { rootDir } from '../../testHelpers.spec';
 describe('CodeActionsProcessor', () => {
     let program: Program;
     beforeEach(() => {
-        program = new Program({
+        program = new Program(util.normalizeConfig({
             rootDir: rootDir,
             autoImportComponentScript: true
-        });
+        }));
     });
     afterEach(() => {
         program.dispose();

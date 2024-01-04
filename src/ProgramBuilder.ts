@@ -1,7 +1,7 @@
 import * as debounce from 'debounce-promise';
 import * as path from 'path';
 import { rokuDeploy } from 'roku-deploy';
-import type { BsConfig } from './BsConfig';
+import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import type { BscFile, BsDiagnostic, FileObj, FileResolver } from './interfaces';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
@@ -33,10 +33,10 @@ export class ProgramBuilder {
      */
     public allowConsoleClearing = true;
 
-    public options: BsConfig;
+    public options: FinalizedBsConfig = util.normalizeConfig({});
     private isRunning = false;
-    private watcher: Watcher;
-    public program: Program;
+    private watcher: Watcher | undefined;
+    public program: Program | undefined;
     public logger = new Logger();
     public plugins: PluginInterface = new PluginInterface([], { logger: this.logger });
     private fileResolvers = [] as FileResolver[];
@@ -68,7 +68,10 @@ export class ProgramBuilder {
     private staticDiagnostics = [] as BsDiagnostic[];
 
     public addDiagnostic(srcPath: string, diagnostic: Partial<BsDiagnostic>) {
-        let file: BscFile = this.program.getFile(srcPath);
+        if (!this.program) {
+            throw new Error('Cannot call `ProgramBuilder.addDiagnostic` before `ProgramBuilder.run()`');
+        }
+        let file: BscFile | undefined = this.program.getFile(srcPath);
         if (!file) {
             file = {
                 pkgPath: this.program.getPkgPath(srcPath),
@@ -127,7 +130,7 @@ export class ProgramBuilder {
         this.program = this.createProgram();
 
         //parse every file in the entire project
-        await this.loadAllFilesAST();
+        await this.loadAllFilesAST(this.program);
 
         if (this.options.watch) {
             this.logger.log('Starting compilation in watch mode...');
@@ -179,7 +182,7 @@ export class ProgramBuilder {
      * A handle for the watch mode interval that keeps the process alive.
      * We need this so we can clear it if the builder is disposed
      */
-    private watchInterval: NodeJS.Timer;
+    private watchInterval: NodeJS.Timer | undefined;
 
     public enableWatchMode() {
         this.watcher = new Watcher(this.options);
@@ -210,6 +213,9 @@ export class ProgramBuilder {
 
         //on any file watcher event
         this.watcher.on('all', async (event: string, thePath: string) => { //eslint-disable-line @typescript-eslint/no-misused-promises
+            if (!this.program) {
+                throw new Error('TILT: somehow file watcher ran before `ProgramBuilder.run()`');
+            }
             thePath = s`${path.resolve(this.rootDir, thePath)}`;
             if (event === 'add' || event === 'change') {
                 const fileObj = {
@@ -237,6 +243,9 @@ export class ProgramBuilder {
      * The rootDir for this program.
      */
     public get rootDir() {
+        if (!this.program) {
+            throw new Error('Cannot call `ProgramBuilder.rootDir` until after `ProgramBuilder.run()`');
+        }
         return this.program.options.rootDir;
     }
 
@@ -411,7 +420,9 @@ export class ProgramBuilder {
                     logLevel: this.options.logLevel as LogLevel,
                     outDir: util.getOutDir(this.options),
                     outFile: path.basename(this.options.outFile)
-                });
+
+                    //rokuDeploy's return type says all its fields can be nullable, but it sets values for all of them.
+                }) as any as Required<ReturnType<typeof rokuDeploy.getOptions>>;
             });
 
             //get every file referenced by the files array
@@ -419,8 +430,9 @@ export class ProgramBuilder {
 
             //remove files currently loaded in the program, we will transpile those instead (even if just for source maps)
             let filteredFileMap = [] as FileObj[];
+
             for (let fileEntry of fileMap) {
-                if (this.program.hasFile(fileEntry.src) === false) {
+                if (this.program!.hasFile(fileEntry.src) === false) {
                     filteredFileMap.push(fileEntry);
                 }
             }
@@ -440,7 +452,7 @@ export class ProgramBuilder {
 
             await this.logger.time(LogLevel.log, ['Transpiling'], async () => {
                 //transpile any brighterscript files
-                await this.program.transpile(fileMap, options.stagingDir);
+                await this.program!.transpile(fileMap, options.stagingDir);
             });
 
             this.plugins.emit('afterPublish', this, fileMap);
@@ -464,7 +476,7 @@ export class ProgramBuilder {
     /**
      * Parse and load the AST for every file in the project
      */
-    private async loadAllFilesAST() {
+    private async loadAllFilesAST(program: Program) {
         await this.logger.time(LogLevel.log, ['Parsing files'], async () => {
             let files = await this.logger.time(LogLevel.debug, ['getFilePaths'], async () => {
                 return util.getFilePaths(this.options);
@@ -491,12 +503,12 @@ export class ProgramBuilder {
             }
 
             if (manifestFile) {
-                this.program.loadManifest(manifestFile);
+                program.loadManifest(manifestFile);
             }
 
             const loadFile = async (fileObj) => {
                 try {
-                    this.program.setFile(fileObj, await this.getFileContents(fileObj.src));
+                    program.setFile(fileObj, await this.getFileContents(fileObj.src));
                 } catch (e) {
                     this.logger.log(e); // log the error, but don't fail this process because the file might be fixable later
                 }

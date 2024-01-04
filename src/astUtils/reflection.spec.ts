@@ -5,16 +5,16 @@ import { FunctionExpression, NamespacedVariableNameExpression, BinaryExpression,
 import type { Token } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
 import { isPrintStatement, isIfStatement, isBody, isAssignmentStatement, isBlock, isExpressionStatement, isCommentStatement, isExitForStatement, isExitWhileStatement, isFunctionStatement, isIncrementStatement, isGotoStatement, isLabelStatement, isReturnStatement, isEndStatement, isStopStatement, isForStatement, isForEachStatement, isWhileStatement, isDottedSetStatement, isIndexedSetStatement, isLibraryStatement, isNamespaceStatement, isImportStatement, isExpression, isBinaryExpression, isCallExpression, isFunctionExpression, isNamespacedVariableNameExpression, isDottedGetExpression, isXmlAttributeGetExpression, isIndexedGetExpression, isGroupingExpression, isLiteralExpression, isEscapedCharCodeLiteralExpression, isArrayLiteralExpression, isAALiteralExpression, isUnaryExpression, isVariableExpression, isSourceLiteralExpression, isNewExpression, isCallfuncExpression, isTemplateStringQuasiExpression, isTemplateStringExpression, isTaggedTemplateStringExpression, isBrsFile, isXmlFile, isClassStatement, isStatement, isAnnotationExpression, isTryCatchStatement, isCatchStatement, isThrowStatement } from './reflection';
-import { createToken, createStringLiteral, interpolatedRange as range } from './creators';
+import { createToken, createStringLiteral, interpolatedRange as range, createVariableExpression } from './creators';
 import { Program } from '../Program';
 import { BrsFile } from '../files/BrsFile';
 import { XmlFile } from '../files/XmlFile';
-import { createVariableExpression } from '..';
+import util from '../util';
 
 describe('reflection', () => {
     describe('Files', () => {
         it('recognizes files', () => {
-            const program = new Program({});
+            const program = new Program(util.normalizeConfig({}));
             const file = new BrsFile('path/to/source/file.brs', 'pkg:/source/file.brs', program);
             const comp = new XmlFile('path/to/components/file.xml', 'pkg:/components/file.brs', program);
             expect(isBrsFile(file)).to.be.true;

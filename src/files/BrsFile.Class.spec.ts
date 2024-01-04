@@ -7,7 +7,7 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import { Range } from 'vscode-languageserver';
 import { ParseMode } from '../parser/Parser';
 import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile, trim } from '../testHelpers.spec';
-import { standardizePath as s } from '../util';
+import util, { standardizePath as s } from '../util';
 import * as fsExtra from 'fs-extra';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { doesNotThrow } from 'assert';
@@ -23,7 +23,7 @@ describe('BrsFile BrighterScript classes', () => {
     beforeEach(() => {
         fsExtra.ensureDirSync(rootDir);
         fsExtra.emptyDirSync(tempDir);
-        program = new Program({ rootDir: rootDir, stagingDir: stagingDir });
+        program = new Program(util.normalizeConfig({ rootDir: rootDir, stagingDir: stagingDir }));
     });
     afterEach(() => {
         sinon.restore();

@@ -9,13 +9,14 @@ import { Program } from '../Program';
 import { trim } from '../testHelpers.spec';
 import type { BrsFile } from '../files/BrsFile';
 import { tempDir } from '../testHelpers.spec';
+import util from '../util';
 
 describe('Statement', () => {
     let program: Program;
     beforeEach(() => {
-        program = new Program({
+        program = new Program(util.normalizeConfig({
             cwd: tempDir
-        });
+        }));
     });
     describe('EmptyStatement', () => {
         it('returns empty array for transpile', () => {

@@ -9,7 +9,7 @@ import type { BsDiagnostic, FileReference } from '../interfaces';
 import { Program } from '../Program';
 import { BrsFile } from './BrsFile';
 import { XmlFile } from './XmlFile';
-import { standardizePath as s } from '../util';
+import util, { standardizePath as s } from '../util';
 import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
 import { ProgramBuilder } from '../ProgramBuilder';
 import { LogLevel } from '../Logger';
@@ -27,7 +27,7 @@ describe('XmlFile', () => {
         fsExtra.emptyDirSync(tempDir);
         fsExtra.ensureDirSync(rootDir);
         fsExtra.ensureDirSync(stagingDir);
-        program = new Program({ rootDir: rootDir });
+        program = new Program(util.normalizeConfig({ rootDir: rootDir }));
         file = new XmlFile(`${rootDir}/components/MainComponent.xml`, 'components/MainComponent.xml', program);
     });
     afterEach(() => {
@@ -326,10 +326,10 @@ describe('XmlFile', () => {
         });
 
         it('is not enabled by default', () => {
-            program = new Program({
+            program = new Program(util.normalizeConfig({
                 rootDir: rootDir,
                 autoImportComponentScript: true
-            });
+            }));
             program.setFile('components/comp1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentScene" extends="GrandparentScene">
@@ -565,10 +565,10 @@ describe('XmlFile', () => {
     });
 
     it('detects when importing the codebehind file unnecessarily', () => {
-        program = new Program({
+        program = new Program(util.normalizeConfig({
             autoImportComponentScript: true,
             rootDir: rootDir
-        });
+        }));
         program.setFile(`components/SimpleScene.bs`, '');
         program.setFile(`components/SimpleScene.xml`, trim`
             <?xml version="1.0" encoding="utf-8" ?>
@@ -990,9 +990,9 @@ describe('XmlFile', () => {
     describe('Transform plugins', () => {
         function parseFileWithPlugins(validateXml: (file: XmlFile) => void) {
             const rootDir = process.cwd();
-            const program = new Program({
+            const program = new Program(util.normalizeConfig({
                 rootDir: rootDir
-            });
+            }));
             program.plugins.add({
                 name: 'Transform plugins',
                 afterFileParse: file => validateXml(file as XmlFile)

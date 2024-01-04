@@ -15,10 +15,10 @@ describe('AstNode', () => {
 
     beforeEach(() => {
         fsExtra.emptyDirSync(tempDir);
-        program = new Program({
+        program = new Program(util.normalizeConfig({
             rootDir: rootDir,
             stagingDir: stagingDir
-        });
+        }));
         program.createSourceScope(); //ensure source scope is created
     });
     afterEach(() => {

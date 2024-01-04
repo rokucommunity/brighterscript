@@ -152,7 +152,7 @@ describe('LanguageServer', () => {
             let filePath = `${rootDir}/main.brs`;
             writeToFs(filePath, `sub main(): return: end sub`);
             let firstProject: Project = await server['createStandaloneFileProject'](filePath);
-            expectZeroDiagnostics(firstProject.builder.program);
+            expectZeroDiagnostics(firstProject.builder.program!);
         });
     });
 
@@ -231,7 +231,7 @@ describe('LanguageServer', () => {
             const promise = new Promise((resolve) => {
                 stub = sinon.stub(connection, 'sendDiagnostics').callsFake(resolve as any);
             });
-            const { program } = server.projects[0].builder;
+            const program = server.projects[0].builder.program!;
             program.setFile('source/lib.bs', `
                 sub lib()
                     functionDoesNotExist()
@@ -247,7 +247,7 @@ describe('LanguageServer', () => {
         it('prevents creating package on first run', async () => {
             server['connection'] = server['createConnection']();
             await server['createProject'](workspacePath);
-            expect(server['projects'][0].builder.program.options.copyToStaging).to.be.false;
+            expect(server['projects'][0].builder.program!.options.copyToStaging).to.be.false;
         });
     });
 
@@ -262,7 +262,7 @@ describe('LanguageServer', () => {
             } as any);
             writeToFs(mainPath, `sub main(): return: end sub`);
             await server['onInitialized']();
-            expect(server.projects[0].builder.program.hasFile(mainPath)).to.be.true;
+            expect(server.projects[0].builder.program!.hasFile(mainPath)).to.be.true;
             //move a file into the directory...the program should detect it
             let libPath = s`${workspacePath}/source/lib.brs`;
             writeToFs(libPath, 'sub lib(): return : end sub');
@@ -283,7 +283,7 @@ describe('LanguageServer', () => {
                     // }
                 ]
             });
-            expect(server.projects[0].builder.program.hasFile(libPath)).to.be.true;
+            expect(server.projects[0].builder.program!.hasFile(libPath)).to.be.true;
         });
     });
 
@@ -457,7 +457,7 @@ describe('LanguageServer', () => {
             fsExtra.outputFileSync(s`${rootDir}/source/lib.brs`, '');
             await server['syncProjects']();
 
-            const stub2 = sinon.stub(server.projects[0].builder.program, 'setFile');
+            const stub2 = sinon.stub(server.projects[0].builder.program!, 'setFile');
 
             await server['onDidChangeWatchedFiles']({
                 changes: [{
@@ -482,7 +482,7 @@ describe('LanguageServer', () => {
             fsExtra.outputFileSync(s`${externalDir}/source/lib.brs`, '');
             await server['syncProjects']();
 
-            const stub2 = sinon.stub(server.projects[0].builder.program, 'setFile');
+            const stub2 = sinon.stub(server.projects[0].builder.program!, 'setFile');
 
             await server['onDidChangeWatchedFiles']({
                 changes: [{
@@ -505,7 +505,7 @@ describe('LanguageServer', () => {
         beforeEach(async () => {
             server['connection'] = server['createConnection']();
             await server['createProject'](workspacePath);
-            program = server.projects[0].builder.program;
+            program = server.projects[0].builder.program!;
 
             const name = `CallComponent`;
             callDocument = addScriptFile(name, `
@@ -611,7 +611,7 @@ describe('LanguageServer', () => {
         beforeEach(async () => {
             server['connection'] = server['createConnection']();
             await server['createProject'](workspacePath);
-            program = server.projects[0].builder.program;
+            program = server.projects[0].builder.program!;
 
             const functionFileBaseName = 'buildAwesome';
             functionDocument = addScriptFile(functionFileBaseName, `
@@ -679,7 +679,7 @@ describe('LanguageServer', () => {
         beforeEach(async () => {
             server['connection'] = server['createConnection']();
             await server['createProject'](workspacePath);
-            program = server.projects[0].builder.program;
+            program = server.projects[0].builder.program!;
 
             const functionFileBaseName = 'buildAwesome';
             functionDocument = addScriptFile(functionFileBaseName, `
@@ -804,7 +804,7 @@ describe('LanguageServer', () => {
         beforeEach(async () => {
             server['connection'] = server['createConnection']();
             await server['createProject'](workspacePath);
-            program = server.projects[0].builder.program;
+            program = server.projects[0].builder.program!;
         });
 
         it('should return the expected symbols even if pulled from cache', async () => {
@@ -893,7 +893,7 @@ describe('LanguageServer', () => {
         beforeEach(async () => {
             server['connection'] = server['createConnection']();
             await server['createProject'](workspacePath);
-            program = server.projects[0].builder.program;
+            program = server.projects[0].builder.program!;
         });
 
         it('should return the expected symbols even if pulled from cache', async () => {
@@ -1089,7 +1089,7 @@ describe('LanguageServer', () => {
                 await server['syncProjects']();
                 const afterSpy = sinon.spy();
                 //make a plugin that changes string text
-                server.projects[0].builder.program.plugins.add({
+                server.projects[0].builder.program!.plugins.add({
                     name: 'test-plugin',
                     beforeProgramTranspile: (program, entries, editor) => {
                         const file = program.getFile('source/main.bs')!;
@@ -1150,7 +1150,7 @@ describe('LanguageServer', () => {
         fsExtra.outputFileSync(s`${rootDir}/source/sgnode.bs`, getContents());
         server.run();
         await server['syncProjects']();
-        expectZeroDiagnostics(server.projects[0].builder.program);
+        expectZeroDiagnostics(server.projects[0].builder.program!);
 
         fsExtra.outputFileSync(s`${rootDir}/source/sgnode.bs`, getContents());
         const changeWatchedFilesPromise = server['onDidChangeWatchedFiles']({
@@ -1171,7 +1171,7 @@ describe('LanguageServer', () => {
             changeWatchedFilesPromise,
             semanticTokensPromise
         ]);
-        expectZeroDiagnostics(server.projects[0].builder.program);
+        expectZeroDiagnostics(server.projects[0].builder.program!);
     });
 });
 

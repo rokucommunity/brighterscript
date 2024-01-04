@@ -10,7 +10,7 @@ const fence = (code: string) => util.mdFence(code, 'brightscript');
 describe('HoverProcessor', () => {
     let program: Program;
     beforeEach(() => {
-        program = new Program({ rootDir: rootDir, sourceMap: true });
+        program = new Program(util.normalizeConfig({ rootDir: rootDir, sourceMap: true }));
     });
     afterEach(() => {
         sinon.restore();
@@ -120,9 +120,9 @@ describe('HoverProcessor', () => {
 
         it('finds function hover in scope', () => {
             let rootDir = process.cwd();
-            program = new Program({
+            program = new Program(util.normalizeConfig({
                 rootDir: rootDir
-            });
+            }));
 
             let mainFile = program.setFile('source/main.brs', `
                 sub Main()

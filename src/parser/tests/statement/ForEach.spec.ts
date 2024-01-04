@@ -3,6 +3,7 @@ import { rootDir } from '../../../testHelpers.spec';
 import { Program } from '../../../Program';
 import { createSandbox } from 'sinon';
 import { getTestTranspile } from '../../../testHelpers.spec';
+import util from '../../../util';
 
 const sinon = createSandbox();
 
@@ -11,7 +12,7 @@ describe('ForEachStatement', () => {
     let testTranspile = getTestTranspile(() => [program, rootDir]);
 
     beforeEach(() => {
-        program = new Program({ rootDir: rootDir, sourceMap: true });
+        program = new Program(util.normalizeConfig({ rootDir: rootDir, sourceMap: true }));
     });
     afterEach(() => {
         sinon.restore();

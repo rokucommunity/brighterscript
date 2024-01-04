@@ -7,10 +7,10 @@ import { expect } from './chai-config.spec';
 describe('globalCallables', () => {
     let program: Program;
     beforeEach(() => {
-        program = new Program({
+        program = new Program(util.normalizeConfig({
             rootDir: rootDir,
             stagingDir: stagingDir
-        });
+        }));
     });
     afterEach(() => {
         program.dispose();

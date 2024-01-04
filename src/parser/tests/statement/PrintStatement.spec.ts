@@ -6,6 +6,7 @@ import { Range } from 'vscode-languageserver';
 import { Program } from '../../../Program';
 import { rootDir } from '../../../testHelpers.spec';
 import { getTestTranspile } from '../../../testHelpers.spec';
+import util from '../../../util';
 
 describe('parser print statements', () => {
 
@@ -13,9 +14,9 @@ describe('parser print statements', () => {
     const testTranspile = getTestTranspile(() => [program, rootDir]);
 
     beforeEach(() => {
-        program = new Program({
+        program = new Program(util.normalizeConfig({
             rootDir: rootDir
-        });
+        }));
     });
 
     it('parses singular print statements', () => {

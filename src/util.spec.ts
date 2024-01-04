@@ -8,7 +8,7 @@ import { createSandbox } from 'sinon';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { tempDir, rootDir } from './testHelpers.spec';
 import { Program } from './Program';
-import type { BsDiagnostic } from '.';
+import { LogLevel, type BsDiagnostic } from '.';
 
 const sinon = createSandbox();
 
@@ -42,7 +42,7 @@ describe('util', () => {
 
     describe('diagnosticIsSuppressed', () => {
         it('does not crash when diagnostic is missing location information', () => {
-            const program = new Program({});
+            const program = new Program(util.normalizeConfig({}));
             const file = program.setFile('source/main.brs', '');
             const diagnostic: BsDiagnostic = {
                 file: file,
@@ -389,6 +389,36 @@ describe('util', () => {
         it('strips leading and/or trailing slashes from bslibDestinationDir', () => {
             ['source/opt', '/source/opt', 'source/opt/', '/source/opt/'].forEach(input => {
                 expect(util.normalizeConfig(<any>{ bslibDestinationDir: input }).bslibDestinationDir).to.equal('source/opt');
+            });
+        });
+
+        it('returns the expected values when given an empty object', () => {
+            const finalized = util.normalizeConfig({});
+            delete (finalized as any).cwd;
+            expect(finalized).to.deep.equal({
+                deploy: false,
+                files: ['source/**/*.*', 'components/**/*.*', 'images/**/*.*', 'manifest'],
+                createPackage: true,
+                outFile: './out/brighterscript.zip',
+                sourceMap: false,
+                username: 'rokudev',
+                watch: false,
+                emitFullPaths: false,
+                retainStagingDir: false,
+                retainStagingFolder: false,
+                copyToStaging: true,
+                ignoreErrorCodes: [],
+                diagnosticSeverityOverrides: {},
+                diagnosticFilters: [],
+                plugins: [],
+                autoImportComponentScript: false,
+                showDiagnosticsInConsole: true,
+                sourceRoot: undefined,
+                allowBrighterScriptInBrightScript: false,
+                emitDefinitions: false,
+                removeParameterTypes: false,
+                logLevel: LogLevel.log,
+                bslibDestinationDir: 'source'
             });
         });
     });

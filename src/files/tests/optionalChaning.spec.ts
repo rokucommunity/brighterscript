@@ -15,10 +15,10 @@ describe('optional chaining', () => {
     beforeEach(() => {
         fsExtra.ensureDirSync(tempDir);
         fsExtra.emptyDirSync(tempDir);
-        program = new Program({
+        program = new Program(util.normalizeConfig({
             rootDir: rootDir,
             stagingDir: stagingDir
-        });
+        }));
     });
     afterEach(() => {
         sinon.restore();

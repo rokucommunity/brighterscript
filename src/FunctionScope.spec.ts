@@ -3,13 +3,14 @@ import { expect } from './chai-config.spec';
 import { FunctionScope } from './FunctionScope';
 import type { FunctionExpression } from './parser/Expression';
 import { Program } from './Program';
+import { util } from './util';
 
 describe('FunctionScope', () => {
     let scope: FunctionScope;
     let rootDir = process.cwd();
     let program: Program;
     beforeEach(() => {
-        program = new Program({ rootDir: rootDir });
+        program = new Program(util.normalizeConfig({ rootDir: rootDir }));
         scope = new FunctionScope(null as any as FunctionExpression);
     });
 
