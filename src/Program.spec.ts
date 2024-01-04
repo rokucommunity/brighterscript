@@ -31,10 +31,10 @@ describe('Program', () => {
     beforeEach(() => {
         fsExtra.ensureDirSync(tempDir);
         fsExtra.emptyDirSync(tempDir);
-        program = new Program(util.normalizeConfig({
+        program = new Program({
             rootDir: rootDir,
             stagingDir: stagingDir
-        }));
+        });
         program.createSourceScope(); //ensure source scope is created
     });
     afterEach(() => {
@@ -126,7 +126,7 @@ describe('Program', () => {
         it('works with different cwd', () => {
             let projectDir = s`${tempDir}/project2`;
             fsExtra.ensureDirSync(projectDir);
-            program = new Program(util.normalizeConfig({ cwd: projectDir }));
+            program = new Program({ cwd: projectDir });
             program.setFile('source/lib.brs', 'function main()\n    print "hello world"\nend function');
             // await program.reloadFile('source/lib.brs', `'this is a comment`);
             //if we made it to here, nothing exploded, so the test passes
@@ -135,25 +135,25 @@ describe('Program', () => {
         it(`adds files in the source folder to the 'source' scope`, () => {
             expect(program.getScopeByName('source')).to.exist;
             //no files in source scope
-            expect(program.getScopeByName('source')!.getOwnFiles().length).to.equal(0);
+            expect(program.getScopeByName('source').getOwnFiles().length).to.equal(0);
 
             //add a new source file
             program.setFile('source/main.brs', '');
             //file should be in source scope now
-            expect(program.getScopeByName('source')!.getFile('source/main.brs')).to.exist;
+            expect(program.getScopeByName('source').getFile('source/main.brs')).to.exist;
 
             //add an unreferenced file from the components folder
             program.setFile('components/component1/component1.brs', '');
 
             //source scope should have the same number of files
-            expect(program.getScopeByName('source')!.getFile('source/main.brs')).to.exist;
-            expect(program.getScopeByName('source')!.getFile(`${rootDir}/components/component1/component1.brs`)).not.to.exist;
+            expect(program.getScopeByName('source').getFile('source/main.brs')).to.exist;
+            expect(program.getScopeByName('source').getFile(`${rootDir}/components/component1/component1.brs`)).not.to.exist;
         });
 
         it('normalizes file paths', () => {
             program.setFile('source/main.brs', '');
 
-            expect(program.getScopeByName('source')!.getFile('source/main.brs')).to.exist;
+            expect(program.getScopeByName('source').getFile('source/main.brs')).to.exist;
 
             //shouldn't throw an exception because it will find the correct path after normalizing the above path and remove it
             try {
@@ -448,14 +448,14 @@ describe('Program', () => {
         });
 
         it('maintains correct callables list', () => {
-            let initialCallableCount = program.getScopeByName('source')!.getAllCallables().length;
+            let initialCallableCount = program.getScopeByName('source').getAllCallables().length;
             program.setFile('source/main.brs', `
                 sub DoSomething()
                 end sub
                 sub DoSomething()
                 end sub
             `);
-            expect(program.getScopeByName('source')!.getAllCallables().length).equals(initialCallableCount + 2);
+            expect(program.getScopeByName('source').getAllCallables().length).equals(initialCallableCount + 2);
             //set the file contents again (resetting the wasProcessed flag)
             program.setFile('source/main.brs', `
                 sub DoSomething()
@@ -463,9 +463,9 @@ describe('Program', () => {
                 sub DoSomething()
                 end sub
                 `);
-            expect(program.getScopeByName('source')!.getAllCallables().length).equals(initialCallableCount + 2);
+            expect(program.getScopeByName('source').getAllCallables().length).equals(initialCallableCount + 2);
             program.removeFile(`${rootDir}/source/main.brs`);
-            expect(program.getScopeByName('source')!.getAllCallables().length).equals(initialCallableCount);
+            expect(program.getScopeByName('source').getAllCallables().length).equals(initialCallableCount);
         });
 
         it('resets errors on revalidate', () => {
@@ -645,7 +645,7 @@ describe('Program', () => {
                 </component>
             `);
 
-            expect(program.getScopeByName('components/ChildScene.xml')!.getParentScope()!.name).to.equal(s`components/ParentScene.xml`);
+            expect(program.getScopeByName('components/ChildScene.xml').getParentScope().name).to.equal(s`components/ParentScene.xml`);
 
             //change the parent's name.
             program.setFile('components/ParentScene.xml', trim`
@@ -655,7 +655,7 @@ describe('Program', () => {
             `);
 
             //The child scope should no longer have the link to the parent scope, and should instead point back to global
-            expect(program.getScopeByName('components/ChildScene.xml')!.getParentScope()!.name).to.equal('global');
+            expect(program.getScopeByName('components/ChildScene.xml').getParentScope().name).to.equal('global');
         });
 
         it('creates a new scope for every added component xml', () => {
@@ -678,9 +678,9 @@ describe('Program', () => {
             `);
             program.setFile('components/component1.brs', '');
 
-            let scope = program.getScopeByName(`components/component1.xml`)!;
-            expect(scope.getFile('components/component1.xml')!.pkgPath).to.equal(s`components/component1.xml`);
-            expect(scope.getFile('components/component1.brs')!.pkgPath).to.equal(s`components/component1.brs`);
+            let scope = program.getScopeByName(`components/component1.xml`);
+            expect(scope.getFile('components/component1.xml').pkgPath).to.equal(s`components/component1.xml`);
+            expect(scope.getFile('components/component1.brs').pkgPath).to.equal(s`components/component1.brs`);
         });
 
         it('adds xml file to files map', () => {
@@ -763,7 +763,7 @@ describe('Program', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            expect(program.getScopeByName(xmlFile.pkgPath)!.getFile(brsPath)).to.exist;
+            expect(program.getScopeByName(xmlFile.pkgPath).getFile(brsPath)).to.exist;
         });
 
         it('reloads referenced fles when xml file changes', () => {
@@ -778,7 +778,7 @@ describe('Program', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            expect(program.getScopeByName(xmlFile.pkgPath)!.getFile('components/component1.brs')).not.to.exist;
+            expect(program.getScopeByName(xmlFile.pkgPath).getFile('components/component1.brs')).not.to.exist;
 
             //reload the xml file contents, adding a new script reference.
             xmlFile = program.setFile('components/component1.xml', trim`
@@ -788,7 +788,7 @@ describe('Program', () => {
                 </component>
             `);
 
-            expect(program.getScopeByName(xmlFile.pkgPath)!.getFile('components/component1.brs')).to.exist;
+            expect(program.getScopeByName(xmlFile.pkgPath).getFile('components/component1.brs')).to.exist;
         });
     });
 
@@ -1559,7 +1559,7 @@ describe('Program', () => {
             `);
 
             //the component scope should only have the xml file
-            expect(program.getScopeByName(xmlFile.pkgPath)!.getOwnFiles().length).to.equal(1);
+            expect(program.getScopeByName(xmlFile.pkgPath).getOwnFiles().length).to.equal(1);
 
             //create the lib file
             let libFile = program.setFile('source/lib.brs', `'comment`);
@@ -1571,7 +1571,7 @@ describe('Program', () => {
                     <script type="text/brightscript" uri="pkg:/source/lib.brs" />
                 </component>
             `);
-            let scope = program.getScopeByName(xmlFile.pkgPath)!;
+            let scope = program.getScopeByName(xmlFile.pkgPath);
             //the component scope should have the xml file AND the lib file
             expect(scope.getOwnFiles().length).to.equal(2);
             expect(scope.getFile(xmlFile.srcPath)).to.exist;
@@ -1585,7 +1585,7 @@ describe('Program', () => {
             `);
 
             //the scope should again only have the xml file loaded
-            expect(program.getScopeByName(xmlFile.pkgPath)!.getOwnFiles().length).to.equal(1);
+            expect(program.getScopeByName(xmlFile.pkgPath).getOwnFiles().length).to.equal(1);
             expect(program.getScopeByName(xmlFile.pkgPath)).to.exist;
         });
     });
@@ -2110,12 +2110,12 @@ describe('Program', () => {
 
         it('uses sourceRoot when provided for brs files', async () => {
             let sourceRoot = s`${tempDir}/sourceRootFolder`;
-            program = new Program(util.normalizeConfig({
+            program = new Program({
                 rootDir: rootDir,
                 stagingDir: stagingDir,
                 sourceRoot: sourceRoot,
                 sourceMap: true
-            }));
+            });
             program.setFile('source/main.brs', `
                 sub main()
                 end sub
@@ -2136,12 +2136,12 @@ describe('Program', () => {
 
         it('uses sourceRoot when provided for bs files', async () => {
             let sourceRoot = s`${tempDir}/sourceRootFolder`;
-            program = new Program(util.normalizeConfig({
+            program = new Program({
                 rootDir: rootDir,
                 stagingDir: stagingDir,
                 sourceRoot: sourceRoot,
                 sourceMap: true
-            }));
+            });
             program.setFile('source/main.bs', `
                 sub main()
                 end sub
@@ -3025,9 +3025,9 @@ describe('Program', () => {
                 supports_input_launch=1
                 bs_const=DEBUG=false
             `);
-            program.options = util.normalizeConfig({
+            program.options = {
                 rootDir: tempDir
-            });
+            };
         });
 
         afterEach(() => {

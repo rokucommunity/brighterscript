@@ -17,9 +17,9 @@ describe('Scope', () => {
     let rootDir = process.cwd();
     let program: Program;
     beforeEach(() => {
-        program = new Program(util.normalizeConfig({
+        program = new Program({
             rootDir: rootDir
-        }));
+        });
         program.createSourceScope();
     });
     afterEach(() => {
@@ -1404,7 +1404,7 @@ describe('Scope', () => {
             });
 
             it('scopes types to correct scope', () => {
-                program = new Program(util.normalizeConfig({ rootDir: rootDir }));
+                program = new Program({ rootDir: rootDir });
 
                 program.setFile('components/foo.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
@@ -1438,7 +1438,7 @@ describe('Scope', () => {
             });
 
             it('can reference types from parent component', () => {
-                program = new Program(util.normalizeConfig({ rootDir: rootDir }));
+                program = new Program({ rootDir: rootDir });
 
                 program.setFile('components/parent.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
@@ -1471,7 +1471,7 @@ describe('Scope', () => {
 
     describe('inheritance', () => {
         it('inherits callables from parent', () => {
-            program = new Program(util.normalizeConfig({ rootDir: rootDir }));
+            program = new Program({ rootDir: rootDir });
 
             program.setFile('components/child.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>

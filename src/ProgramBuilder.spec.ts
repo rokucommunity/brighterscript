@@ -54,9 +54,9 @@ describe('ProgramBuilder', () => {
                 dest: 'file4.xml'
             }]));
 
-            let stub = sinon.stub(builder.program!, 'setFile');
+            let stub = sinon.stub(builder.program, 'setFile');
             sinon.stub(builder, 'getFileContents').returns(Promise.resolve(''));
-            await builder['loadAllFilesAST'](builder.program!);
+            await builder['loadAllFilesAST']();
             expect(stub.getCalls()).to.be.lengthOf(3);
         });
 
@@ -75,10 +75,10 @@ describe('ProgramBuilder', () => {
                 dest: 'manifest'
             }]));
 
-            let stubLoadManifest = sinon.stub(builder.program!, 'loadManifest');
-            let stubSetFile = sinon.stub(builder.program!, 'setFile');
+            let stubLoadManifest = sinon.stub(builder.program, 'loadManifest');
+            let stubSetFile = sinon.stub(builder.program, 'setFile');
             sinon.stub(builder, 'getFileContents').returns(Promise.resolve(''));
-            await builder['loadAllFilesAST'](builder.program!);
+            await builder['loadAllFilesAST']();
             expect(stubLoadManifest.calledBefore(stubSetFile)).to.be.true;
         });
 
@@ -91,8 +91,8 @@ describe('ProgramBuilder', () => {
             fsExtra.outputFileSync(s`${rootDir}/source/main.d.bs`, '');
             fsExtra.outputFileSync(s`${rootDir}/source/lib.d.bs`, '');
             fsExtra.outputFileSync(s`${rootDir}/source/lib.brs`, '');
-            const stub = sinon.stub(builder.program!, 'setFile');
-            await builder['loadAllFilesAST'](builder.program!);
+            const stub = sinon.stub(builder.program, 'setFile');
+            await builder['loadAllFilesAST']();
             const srcPaths = stub.getCalls().map(x => x.args[0].src);
             //the d files should be first
             expect(srcPaths.indexOf(s`${rootDir}/source/main.d.bs`)).within(0, 1);
@@ -108,7 +108,7 @@ describe('ProgramBuilder', () => {
                 requestedFiles.push(s(filePath));
             });
             fsExtra.outputFileSync(s`${rootDir}/source/main.brs`, '');
-            await builder['loadAllFilesAST'](builder.program!);
+            await builder['loadAllFilesAST']();
             //the d file should not be requested because `loadAllFilesAST` knows it doesn't exist
             expect(requestedFiles).not.to.include(s`${rootDir}/source/main.d.bs`);
             expect(requestedFiles).to.include(s`${rootDir}/source/main.brs`);
@@ -125,7 +125,7 @@ describe('ProgramBuilder', () => {
                 project: s`${rootDir}/bsconfig.json`,
                 username: 'john'
             });
-            expect(builder.program!.options.username).to.equal('rokudev');
+            expect(builder.program.options.username).to.equal('rokudev');
         });
 
         //this fails on the windows travis build for some reason. skipping for now since it's not critical
@@ -167,7 +167,7 @@ describe('ProgramBuilder', () => {
                 }]
             });
             expectZeroDiagnostics(builder);
-            expect(builder.program!.getFile(s``));
+            expect(builder.program.getFile(s``));
         });
     });
 
@@ -259,7 +259,7 @@ describe('ProgramBuilder', () => {
             f1.fileContents = `l1\nl2\nl3`;
             sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
 
-            sinon.stub(builder.program!, 'getFile').returns(f1);
+            sinon.stub(builder.program, 'getFile').returns(f1);
 
             let printStub = sinon.stub(diagnosticUtils, 'printDiagnostic');
 
@@ -277,7 +277,7 @@ describe('ProgramBuilder', () => {
         (f1.fileContents as any) = null;
         sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
 
-        sinon.stub(builder.program!, 'getFile').returns(f1);
+        sinon.stub(builder.program, 'getFile').returns(f1);
 
         let printStub = sinon.stub(diagnosticUtils, 'printDiagnostic');
 
@@ -292,7 +292,7 @@ describe('ProgramBuilder', () => {
         let diagnostics = createBsDiagnostic('p1', ['m1']);
         sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
 
-        sinon.stub(builder.program!, 'getFile').returns(null as any);
+        sinon.stub(builder.program, 'getFile').returns(null as any);
 
         let printStub = sinon.stub(diagnosticUtils, 'printDiagnostic');
 
