@@ -3,7 +3,7 @@ import * as fsExtra from 'fs-extra';
 import * as path from 'path';
 import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location } from 'vscode-languageserver';
 import { CompletionItemKind } from 'vscode-languageserver';
-import type { FinalizedBsConfig } from './BsConfig';
+import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
@@ -60,7 +60,7 @@ export class Program {
         /**
          * The root directory for this program
          */
-        public options: FinalizedBsConfig,
+        options: BsConfig,
         logger?: Logger,
         plugins?: PluginInterface
     ) {
@@ -77,6 +77,7 @@ export class Program {
         this.globalScope = this.createGlobalScope();
     }
 
+    public options: FinalizedBsConfig;
     public logger: Logger;
 
     private createGlobalScope(): Scope {

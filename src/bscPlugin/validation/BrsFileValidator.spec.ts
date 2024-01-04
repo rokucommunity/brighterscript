@@ -11,7 +11,7 @@ import util from '../../util';
 describe('BrsFileValidator', () => {
     let program: Program;
     beforeEach(() => {
-        program = new Program(util.normalizeConfig({}));
+        program = new Program({});
     });
 
     it('links dotted get expression parents', () => {

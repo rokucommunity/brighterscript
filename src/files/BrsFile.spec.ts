@@ -38,7 +38,7 @@ describe('BrsFile', () => {
 
     beforeEach(() => {
         fsExtra.emptyDirSync(tempDir);
-        program = new Program(util.normalizeConfig({ rootDir: rootDir, sourceMap: true }));
+        program = new Program({ rootDir: rootDir, sourceMap: true });
         file = new BrsFile(srcPath, destPath, program);
     });
     afterEach(() => {
@@ -593,7 +593,7 @@ describe('BrsFile', () => {
             });
 
             it('supports disabling non-numeric error codes', () => {
-                const program = new Program(util.normalizeConfig({}));
+                const program = new Program({});
                 const file = program.setFile('source/main.brs', `
                     sub main()
                         something = true 'bs:disable-line: LINT1005
@@ -2021,9 +2021,9 @@ describe('BrsFile', () => {
 
         it('finds function hover in scope', () => {
             let rootDir = process.cwd();
-            program = new Program(util.normalizeConfig({
+            program = new Program({
                 rootDir: rootDir
-            }));
+            });
 
             let mainFile = program.setFile('source/main.brs', `
                 sub Main()
@@ -2050,9 +2050,9 @@ describe('BrsFile', () => {
 
         it('finds namespace function hover in scope', () => {
             let rootDir = process.cwd();
-            program = new Program(util.normalizeConfig({
+            program = new Program({
                 rootDir: rootDir
-            }));
+            });
 
             let mainFile = program.setFile('source/main.brs', `
                 sub Main()
@@ -2080,9 +2080,9 @@ describe('BrsFile', () => {
 
         it('includes markdown comments in hover.', () => {
             let rootDir = process.cwd();
-            program = new Program(util.normalizeConfig({
+            program = new Program({
                 rootDir: rootDir
-            }));
+            });
 
             const file = program.setFile('source/lib.brs', `
                 '
@@ -2992,9 +2992,9 @@ describe('BrsFile', () => {
     describe('transform callback', () => {
         function parseFileWithCallback(ext: string, onParsed: () => void) {
             const rootDir = process.cwd();
-            const program = new Program(util.normalizeConfig({
+            const program = new Program({
                 rootDir: rootDir
-            }));
+            });
             program.plugins.add({
                 name: 'transform callback',
                 afterFileParse: onParsed
@@ -3055,7 +3055,7 @@ describe('BrsFile', () => {
                 end sub
             `);
 
-            const sourceScope = program.getScopeByName('source')!;
+            const sourceScope = program.getScopeByName('source');
             const functionNames = sourceScope.getAllCallables().map(x => x.callable.name);
             expect(functionNames).to.include('main');
             expect(functionNames).not.to.include('speak');

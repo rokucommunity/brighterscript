@@ -16,7 +16,6 @@ import { AstEditor } from './AstEditor';
 import { Parser } from '../parser/Parser';
 import type { Statement, Expression, AstNode } from '../parser/AstNode';
 import { expectZeroDiagnostics } from '../testHelpers.spec';
-import { util } from '../util';
 
 describe('astUtils visitors', () => {
     const rootDir = process.cwd();
@@ -78,7 +77,7 @@ describe('astUtils visitors', () => {
     `;
 
     beforeEach(() => {
-        program = new Program(util.normalizeConfig({ rootDir: rootDir }));
+        program = new Program({ rootDir: rootDir });
     });
     afterEach(() => {
         program.dispose();

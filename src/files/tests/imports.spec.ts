@@ -3,7 +3,7 @@ import * as sinonImport from 'sinon';
 import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import { Program } from '../../Program';
-import util, { standardizePath as s } from '../../util';
+import { standardizePath as s } from '../../util';
 import type { XmlFile } from '../XmlFile';
 import type { BrsFile } from '../BrsFile';
 import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile, trim, trimMap } from '../../testHelpers.spec';
@@ -18,10 +18,10 @@ describe('import statements', () => {
     beforeEach(() => {
         fsExtra.ensureDirSync(tempDir);
         fsExtra.emptyDirSync(tempDir);
-        program = new Program(util.normalizeConfig({
+        program = new Program({
             rootDir: rootDir,
             stagingDir: stagingDir
-        }));
+        });
     });
     afterEach(() => {
         sinon.restore();

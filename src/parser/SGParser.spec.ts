@@ -7,7 +7,6 @@ import { createSandbox } from 'sinon';
 import { Program } from '../Program';
 import type { XmlFile } from '../files/XmlFile';
 import { rootDir } from '../testHelpers.spec';
-import util from '../util';
 
 let sinon = createSandbox();
 describe('SGParser', () => {
@@ -15,7 +14,7 @@ describe('SGParser', () => {
     let program: Program;
 
     beforeEach(() => {
-        program = new Program(util.normalizeConfig({ rootDir: rootDir, sourceMap: false }));
+        program = new Program({ rootDir: rootDir, sourceMap: false });
     });
     afterEach(() => {
         sinon.restore();

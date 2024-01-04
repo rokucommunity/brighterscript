@@ -11,9 +11,9 @@ import { rootDir } from '../../testHelpers.spec';
 describe('BrsFileSemanticTokensProcessor', () => {
     let program: Program;
     beforeEach(() => {
-        program = new Program(util.normalizeConfig({
+        program = new Program({
             rootDir: rootDir
-        }));
+        });
     });
     afterEach(() => {
         program.dispose();
