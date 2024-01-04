@@ -7,7 +7,6 @@ import { Program } from '../../../Program';
 import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile } from '../../../testHelpers.spec';
 import { rootDir } from '../../../testHelpers.spec';
 import type { BrsFile } from '../../../files/BrsFile';
-import util from '../../../util';
 const sinon = createSandbox();
 
 describe('parser continue statements', () => {
@@ -15,7 +14,7 @@ describe('parser continue statements', () => {
     let testTranspile = getTestTranspile(() => [program, rootDir]);
 
     beforeEach(() => {
-        program = new Program(util.normalizeConfig({ rootDir: rootDir, sourceMap: true }));
+        program = new Program({ rootDir: rootDir, sourceMap: true });
     });
     afterEach(() => {
         sinon.restore();

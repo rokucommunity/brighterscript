@@ -16,7 +16,6 @@ import {
 } from '../../Expression';
 import { Program } from '../../../Program';
 import { expectZeroDiagnostics, getTestTranspile } from '../../../testHelpers.spec';
-import util from '../../../util';
 
 describe('NullCoalescingExpression', () => {
     it('throws exception when used in brightscript scope', () => {
@@ -184,7 +183,7 @@ describe('NullCoalescingExpression', () => {
         let testTranspile = getTestTranspile(() => [program, rootDir]);
 
         beforeEach(() => {
-            program = new Program(util.normalizeConfig({ rootDir: rootDir }));
+            program = new Program({ rootDir: rootDir });
         });
         afterEach(() => {
             program.dispose();

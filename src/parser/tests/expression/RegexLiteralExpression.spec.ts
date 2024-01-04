@@ -1,5 +1,5 @@
 import { Program } from '../../../Program';
-import util, { standardizePath as s } from '../../../util';
+import { standardizePath as s } from '../../../util';
 import { expectDiagnostics, getTestTranspile } from '../../../testHelpers.spec';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 
@@ -9,7 +9,7 @@ describe('RegexLiteralExpression', () => {
     let testTranspile = getTestTranspile(() => [program, rootDir]);
 
     beforeEach(() => {
-        program = new Program(util.normalizeConfig({ rootDir: rootDir }));
+        program = new Program({ rootDir: rootDir });
     });
     afterEach(() => {
         program.dispose();

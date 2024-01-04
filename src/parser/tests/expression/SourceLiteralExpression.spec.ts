@@ -1,5 +1,5 @@
 import { Program } from '../../../Program';
-import util, { standardizePath as s } from '../../../util';
+import { standardizePath as s } from '../../../util';
 import * as fileUrl from 'file-url';
 import { getTestTranspile } from '../../../testHelpers.spec';
 
@@ -9,7 +9,7 @@ describe('SourceLiteralExpression', () => {
     let testTranspile = getTestTranspile(() => [program, rootDir]);
 
     beforeEach(() => {
-        program = new Program(util.normalizeConfig({ rootDir: rootDir }));
+        program = new Program({ rootDir: rootDir });
     });
     afterEach(() => {
         program.dispose();
@@ -178,10 +178,10 @@ describe('SourceLiteralExpression', () => {
 
         it('accounts for sourceRoot in SOURCE_FILE_PATH', () => {
             let sourceRoot = s`${process.cwd()} / sourceRoot`;
-            program = new Program(util.normalizeConfig({
+            program = new Program({
                 rootDir: rootDir,
                 sourceRoot: sourceRoot
-            }));
+            });
             testTranspile(`
                 sub main()
                     print SOURCE_FILE_PATH
@@ -195,10 +195,10 @@ describe('SourceLiteralExpression', () => {
 
         it('accounts for sourceRoot in SOURCE_LOCATION', () => {
             let sourceRoot = s`${process.cwd()} / sourceRoot`;
-            program = new Program(util.normalizeConfig({
+            program = new Program({
                 rootDir: rootDir,
                 sourceRoot: sourceRoot
-            }));
+            });
             testTranspile(`
                 sub main()
                     print SOURCE_LOCATION

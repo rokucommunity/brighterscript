@@ -103,7 +103,7 @@ describe('TemplateStringExpression', () => {
         let testTranspile = getTestTranspile(() => [program, rootDir]);
 
         beforeEach(() => {
-            program = new Program(util.normalizeConfig({ rootDir: rootDir }));
+            program = new Program({ rootDir: rootDir });
         });
 
         afterEach(() => {

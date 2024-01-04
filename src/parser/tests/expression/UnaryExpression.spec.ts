@@ -1,15 +1,14 @@
 import { expectZeroDiagnostics, getTestTranspile } from '../../../testHelpers.spec';
 import { rootDir } from '../../../testHelpers.spec';
 import { Program } from '../../../Program';
-import util from '../../../util';
 
 describe('UnaryExpression', () => {
     let program: Program;
     const testTranspile = getTestTranspile(() => [program, rootDir]);
     beforeEach(() => {
-        program = new Program(util.normalizeConfig({
+        program = new Program({
             rootDir: rootDir
-        }));
+        });
     });
 
     it('handles advanced cases', () => {
