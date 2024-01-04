@@ -991,7 +991,7 @@ export class Program {
     /**
      * Get semantic tokens for the specified file
      */
-    public getSemanticTokens(srcPath: string) {
+    public getSemanticTokens(srcPath: string): SemanticToken[] | undefined {
         const file = this.getFile(srcPath);
         if (file) {
             const result = [] as SemanticToken[];

@@ -22,7 +22,7 @@ export class Logger {
         logLevel?: LogLevel,
         public prefix?: string
     ) {
-        this.logLevel = logLevel;
+        this.logLevel = logLevel ?? LogLevel.log;
     }
 
     public get logLevel() {
@@ -45,7 +45,7 @@ export class Logger {
         if (this._logLevel === LogLevel.trace) {
             method = console.trace;
         }
-        let finalArgs = [];
+        let finalArgs: any[] = [];
         //evaluate any functions to get their values.
         //This allows more complicated values to only be evaluated if this log level is active
         for (let arg of args) {

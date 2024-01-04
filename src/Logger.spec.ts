@@ -109,14 +109,14 @@ describe('Logger', () => {
         it('calls action even if logLevel is wrong', () => {
             logger.logLevel = LogLevel.error;
             const spy = sinon.spy();
-            logger.time(LogLevel.info, null, spy);
+            logger.time(LogLevel.info, [], spy);
             expect(spy.called).to.be.true;
         });
 
         it('runs timer when loglevel is right', () => {
             logger.logLevel = LogLevel.log;
             const spy = sinon.spy();
-            logger.time(LogLevel.log, null, spy);
+            logger.time(LogLevel.log, [], spy);
             expect(spy.called).to.be.true;
         });
 
@@ -126,13 +126,13 @@ describe('Logger', () => {
                 return true;
             });
             expect(
-                logger.time(LogLevel.log, null, spy)
+                logger.time(LogLevel.log, [], spy)
             ).to.be.true;
             expect(spy.called).to.be.true;
         });
 
         it('gives callable pause and resume functions even when not running timer', () => {
-            logger.time(LogLevel.info, null, (pause, resume) => {
+            logger.time(LogLevel.info, [], (pause, resume) => {
                 pause();
                 resume();
             });

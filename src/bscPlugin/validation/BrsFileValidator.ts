@@ -152,7 +152,7 @@ export class BrsFileValidator {
      *  - inside a namespace
      * This is applicable to things like FunctionStatement, ClassStatement, NamespaceStatement, EnumStatement, InterfaceStatement
      */
-    private validateDeclarationLocations(statement: Statement, keyword: string, rangeFactory?: () => Range) {
+    private validateDeclarationLocations(statement: Statement, keyword: string, rangeFactory?: () => (Range | undefined)) {
         //if nested inside a namespace, or defined at the root of the AST (i.e. in a body that has no parent)
         if (isNamespaceStatement(statement.parent?.parent) || (isBody(statement.parent) && !statement.parent?.parent)) {
             return;

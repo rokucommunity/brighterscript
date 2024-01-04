@@ -9,7 +9,7 @@ import PluginInterface from './PluginInterface';
 import { expectDiagnostics, expectZeroDiagnostics, trim } from './testHelpers.spec';
 import { Logger } from './Logger';
 import type { BrsFile } from './files/BrsFile';
-import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
+import type { NamespaceStatement } from './parser/Statement';
 import type { OnScopeValidateEvent } from './interfaces';
 
 describe('Scope', () => {
@@ -30,7 +30,7 @@ describe('Scope', () => {
     it('getEnumMemberFileLink does not crash on undefined name', () => {
         program.setFile('source/main.bs', ``);
         const scope = program.getScopesForFile('source/main.bs')[0];
-        scope.getEnumMemberFileLink(null);
+        scope.getEnumMemberFileLink(null as any);
         //test passes if this doesn't explode
     });
 
@@ -1481,7 +1481,7 @@ describe('Scope', () => {
             `);
             program.setFile(s`components/child.brs`, ``);
             program.validate();
-            let childScope = program.getComponentScope('child');
+            let childScope = program.getComponentScope('child')!;
             expect(childScope.getAllCallables().map(x => x.callable.name)).not.to.include('parentSub');
 
             program.setFile('components/parent.xml', trim`
@@ -1542,7 +1542,7 @@ describe('Scope', () => {
                     end function
                 end namespace
             `);
-            delete ((file.ast.statements[0] as NamespaceStatement).body.statements[0] as FunctionStatement).name;
+            delete ((file.ast.statements[0] as NamespaceStatement).body.statements[0] as any).name;
             program.validate();
             program['scopes']['source'].buildNamespaceLookup();
         });

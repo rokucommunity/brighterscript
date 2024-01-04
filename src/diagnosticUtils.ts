@@ -13,7 +13,7 @@ export function getPrintDiagnosticOptions(options: BsConfig) {
 
     let emitFullPaths = options?.emitFullPaths === true;
 
-    let diagnosticLevel = options?.diagnosticLevel || 'warn';
+    let diagnosticLevel = options?.diagnosticLevel ?? 'warn';
 
     let diagnosticSeverityMap = {} as Record<string, DiagnosticSeverity>;
     diagnosticSeverityMap.info = DiagnosticSeverity.Information;
@@ -56,7 +56,7 @@ export function getPrintDiagnosticOptions(options: BsConfig) {
 export function printDiagnostic(
     options: ReturnType<typeof getPrintDiagnosticOptions>,
     severity: DiagnosticSeverity,
-    filePath: string,
+    filePath: string | undefined,
     lines: string[],
     diagnostic: BsDiagnostic,
     relatedInformation?: Array<{ range: Range; filePath: string; message: string }>
@@ -150,7 +150,7 @@ export function getDiagnosticLine(diagnostic: BsDiagnostic, diagnosticLine: stri
 /**
  * Given a diagnostic, compute the range for the squiggly
  */
-export function getDiagnosticSquigglyText(line: string, startCharacter: number, endCharacter: number) {
+export function getDiagnosticSquigglyText(line: string | undefined, startCharacter: number | undefined, endCharacter: number | undefined) {
     let squiggle: string;
     //fill the entire line
     if (

@@ -917,8 +917,8 @@ export class Scope {
     }
 
     private validateClasses() {
-        let validator = new BsClassValidator();
-        validator.validate(this);
+        let validator = new BsClassValidator(this);
+        validator.validate();
         this.diagnostics.push(...validator.diagnostics);
     }
 
