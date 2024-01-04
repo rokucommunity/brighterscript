@@ -251,10 +251,10 @@ export class PreprocessorParser {
     }
 
     private peek() {
-        return this.tokens![this.current];
+        return this.tokens[this.current];
     }
 
     private previous() {
-        return this.tokens![this.current - 1];
+        return this.tokens[this.current - 1];
     }
 }
