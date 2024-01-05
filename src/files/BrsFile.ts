@@ -78,7 +78,7 @@ export class BrsFile {
     }
 
     /**
-     * Should this file be written to disk
+     * Will this file result in only comment or whitespace output? If so, it can be excluded from the output if that bsconfig setting is enabled.
      */
     public get canBePruned() {
         let canPrune = true;

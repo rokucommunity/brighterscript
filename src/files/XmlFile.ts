@@ -71,7 +71,7 @@ export class XmlFile {
     public commentFlags = [] as CommentFlag[];
 
     /**
-     * should this file be written to disk
+     * Will this file result in only comment or whitespace output? If so, it can be excluded from the output if that bsconfig setting is enabled.
      */
     readonly canBePruned = false;
 

@@ -187,10 +187,10 @@ export interface BsConfig {
      */
     sourceMap?: boolean;
     /**
-     * Enables the publishing of empty tranpiled files. Some Brighterscript files
-     * are left empty or with comments only after transpilation to Brightscript.
-     * The default behaviour is to write these to disk after transpilation.
-     * Setting this flag to true will prevent empty files being written and will
+     * Excludes empty files from being included in the output. Some Brighterscript files
+     * are left empty or with only comments after transpilation to Brightscript.
+     * The default behavior is to write these to disk after transpilation.
+     * Setting this flag to `true` will prevent empty files being written and will
      * remove associated script tags from XML
      * @default false
      */
