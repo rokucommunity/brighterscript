@@ -958,6 +958,33 @@ describe('XmlFile', () => {
                 </component>
             `, 'none', 'components/SimpleScene.xml');
         });
+
+        it('removes imports of empty brightscript files', () => {
+            program.options.pruneEmptyCodeFiles = true;
+            program.setFile(`components/EmptyFile.brs`, '');
+            program.setFile(`components/SimpleScene.brs`, `
+                sub init()
+                    ? "Hello World"
+                end sub
+            `);
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component
+                    name="SimpleScene" extends="Scene"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:noNamespaceSchemaLocation="https://devtools.web.roku.com/schema/RokuSceneGraph.xsd"
+                >
+                    <script type="text/brightscript" uri="SimpleScene.brs"/>
+                    <script type="text/brightscript" uri="EmptyFile.brs"/>
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://devtools.web.roku.com/schema/RokuSceneGraph.xsd">
+                    <script type="text/brightscript" uri="SimpleScene.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/SimpleScene.xml');
+        });
     });
 
     describe('Transform plugins', () => {
