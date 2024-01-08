@@ -1213,28 +1213,30 @@ export class Program {
             //mark this file as processed so we don't process it more than once
             processedFiles.add(outputPath?.toLowerCase());
 
-            //skip transpiling typedef files
-            if (isBrsFile(file) && file.isTypedef) {
-                return;
-            }
+            if (!this.options.pruneEmptyCodeFiles || !file.canBePruned) {
+                //skip transpiling typedef files
+                if (isBrsFile(file) && file.isTypedef) {
+                    return;
+                }
 
-            const fileTranspileResult = this._getTranspiledFileContents(file, outputPath);
+                const fileTranspileResult = this._getTranspiledFileContents(file, outputPath);
 
-            //make sure the full dir path exists
-            await fsExtra.ensureDir(path.dirname(outputPath));
+                //make sure the full dir path exists
+                await fsExtra.ensureDir(path.dirname(outputPath));
 
-            if (await fsExtra.pathExists(outputPath)) {
-                throw new Error(`Error while transpiling "${file.srcPath}". A file already exists at "${outputPath}" and will not be overwritten.`);
-            }
-            const writeMapPromise = fileTranspileResult.map ? fsExtra.writeFile(`${outputPath}.map`, fileTranspileResult.map.toString()) : null;
-            await Promise.all([
-                fsExtra.writeFile(outputPath, fileTranspileResult.code),
-                writeMapPromise
-            ]);
+                if (await fsExtra.pathExists(outputPath)) {
+                    throw new Error(`Error while transpiling "${file.srcPath}". A file already exists at "${outputPath}" and will not be overwritten.`);
+                }
+                const writeMapPromise = fileTranspileResult.map ? fsExtra.writeFile(`${outputPath}.map`, fileTranspileResult.map.toString()) : null;
+                await Promise.all([
+                    fsExtra.writeFile(outputPath, fileTranspileResult.code),
+                    writeMapPromise
+                ]);
 
-            if (fileTranspileResult.typedef) {
-                const typedefPath = outputPath.replace(/\.brs$/i, '.d.bs');
-                await fsExtra.writeFile(typedefPath, fileTranspileResult.typedef);
+                if (fileTranspileResult.typedef) {
+                    const typedefPath = outputPath.replace(/\.brs$/i, '.d.bs');
+                    await fsExtra.writeFile(typedefPath, fileTranspileResult.typedef);
+                }
             }
         };
 

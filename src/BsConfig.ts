@@ -186,7 +186,15 @@ export interface BsConfig {
      * @default true
      */
     sourceMap?: boolean;
-
+    /**
+     * Excludes empty files from being included in the output. Some Brighterscript files
+     * are left empty or with only comments after transpilation to Brightscript.
+     * The default behavior is to write these to disk after transpilation.
+     * Setting this flag to `true` will prevent empty files being written and will
+     * remove associated script tags from XML
+     * @default false
+     */
+    pruneEmptyCodeFiles?: boolean;
     /**
      * Allow brighterscript features (classes, interfaces, etc...) to be included in BrightScript (`.brs`) files, and force those files to be transpiled.
      * @default false

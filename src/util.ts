@@ -342,6 +342,7 @@ export class Util {
         config.diagnosticSeverityOverrides = config.diagnosticSeverityOverrides ?? {};
         config.diagnosticFilters = config.diagnosticFilters ?? [];
         config.plugins = config.plugins ?? [];
+        config.pruneEmptyCodeFiles = config.pruneEmptyCodeFiles === true ? true : false;
         config.autoImportComponentScript = config.autoImportComponentScript === true ? true : false;
         config.showDiagnosticsInConsole = config.showDiagnosticsInConsole === false ? false : true;
         config.sourceRoot = config.sourceRoot ? standardizePath(config.sourceRoot) : undefined;

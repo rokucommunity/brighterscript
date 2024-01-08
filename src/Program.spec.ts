@@ -2159,6 +2159,51 @@ describe('Program', () => {
                 s`${sourceRoot}/source/main.bs`
             );
         });
+
+        it('does not publish files that are empty', async () => {
+            let sourceRoot = s`${tempDir}/sourceRootFolder`;
+            program = new Program({
+                rootDir: rootDir,
+                stagingDir: stagingDir,
+                sourceRoot: sourceRoot,
+                sourceMap: true,
+                pruneEmptyCodeFiles: true
+            });
+            program.setFile('source/types.bs', `
+                enum mainstyle
+                    dark = "dark"
+                    light = "light"
+                end enum
+            `);
+            program.setFile('source/main.bs', `
+                import "pkg:/source/types.bs"
+
+                sub main()
+                    ? "The night is " + mainstyle.dark + " and full of terror"
+                end sub
+            `);
+            await program.transpile([
+                {
+                    src: s`${rootDir}/source/main.bs`,
+                    dest: s`source/main.bs`
+                },
+                {
+                    src: s`${rootDir}/source/types.bs`,
+                    dest: s`source/types.bs`
+                }
+            ], stagingDir);
+
+            expect(trimMap(
+                fsExtra.readFileSync(s`${stagingDir}/source/main.brs`).toString()
+            )).to.eql(trim`
+                'import "pkg:/source/types.bs"
+
+                sub main()
+                    ? "The night is " + "dark" + " and full of terror"
+                end sub
+            `);
+            expect(fsExtra.pathExistsSync(s`${stagingDir}/source/types.brs`)).to.be.false;
+        });
     });
 
     describe('typedef', () => {

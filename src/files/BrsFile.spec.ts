@@ -182,6 +182,66 @@ describe('BrsFile', () => {
         });
     });
 
+    describe('canBePruned', () => {
+        it('returns false is target file has contains a function statement', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    print \`pkg:\`
+                end sub
+            `);
+            const file = program.getFile('source/main.brs');
+            expect(file.canBePruned).to.be.false;
+        });
+
+        it('returns false if target file contains a class statement', () => {
+            program.setFile('source/main.brs', `
+                class Animal
+                    public name as string
+                end class
+            `);
+            const file = program.getFile('source/main.brs');
+            expect(file.canBePruned).to.be.false;
+        });
+
+        it('returns false if target file contains a class statement', () => {
+            program.setFile('source/main.brs', `
+                namespace Vertibrates.Birds
+                    function GetDucks()
+                    end function
+                end namespace
+            `);
+            const file = program.getFile('source/main.brs');
+            expect(file.canBePruned).to.be.false;
+        });
+
+        it('returns true if target file contains only enum', () => {
+            program.setFile('source/main.brs', `
+                enum Direction
+                    up
+                    down
+                    left
+                    right
+                end enum
+            `);
+            const file = program.getFile('source/main.brs');
+            expect(file.canBePruned).to.be.true;
+        });
+
+        it('returns true if target file is empty', () => {
+            program.setFile('source/main.brs', '');
+            const file = program.getFile('source/main.brs');
+            expect(file.canBePruned).to.be.true;
+        });
+
+        it('returns true if target file only has comments', () => {
+            program.setFile('source/main.brs', `
+                ' this is an interesting comment
+            `);
+            const file = program.getFile('source/main.brs');
+            expect(file.canBePruned).to.be.true;
+        });
+    });
+
     describe('getScopesForFile', () => {
         it('finds the scope for the file', () => {
             let file = program.setFile('source/main.brs', ``);
