@@ -2437,6 +2437,67 @@ describe('BrsFile', () => {
             `);
         });
 
+        it('allows typecasts wrapped in parens', async () => {
+            program.setFile('source/SomeKlass.bs', `
+                class SomeKlass
+                end class
+            `);
+            await testTranspile(`
+                sub foo(obj as SomeKlass)
+                    (obj as roAssociativeArray).append({key:"value"})
+                    print 3 + (obj as roAssociativeArray).count()
+                end sub
+            `, `
+                sub foo(obj as dynamic)
+                    obj.append({
+                        key: "value"
+                    })
+                    print 3 + obj.count()
+                end sub
+            `);
+        });
+
+        it('allows multiple typecasts wrapped in parens', async () => {
+            program.setFile('source/SomeKlass.bs', `
+                class SomeKlass
+                    function value()
+                        return 0.123
+                    end function
+                end class
+            `);
+            await testTranspile(`
+                sub foo(obj)
+                    print val( sin( (0.707 + (obj as SomeKlass).value()) as float ).toStr() as string)
+                end sub
+            `, `
+                sub foo(obj)
+                    print val(sin((0.707 + obj.value())).toStr())
+                end sub
+            `);
+        });
+
+        it('allows a string of typecasts wrapped in parens', async () => {
+            program.setFile('source/SomeKlass.bs', `
+                class SomeKlass
+                    function data()
+                        return {key: "value"}
+                    end function
+                end class
+
+                interface SomeIFace
+                    key
+                end interface
+            `);
+            await testTranspile(`
+                sub foo(obj)
+                    print (((obj as SomeKlass).data() as SomeIFace).key as string).len() as integer
+                end sub
+            `, `
+                sub foo(obj)
+                    print obj.data().key.len()
+                end sub
+            `);
+        });
     });
 
     describe('callfunc operator', () => {
