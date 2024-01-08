@@ -1,5 +1,5 @@
 import { URI } from 'vscode-uri';
-import { isBrsFile, isLiteralExpression, isNamespaceStatement, isXmlScope } from '../../astUtils/reflection';
+import { isBrsFile, isCallExpression, isLiteralExpression, isNamespaceStatement, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -12,7 +12,7 @@ import type { Token } from '../../lexer/Token';
 import type { Scope } from '../../Scope';
 import type { DiagnosticRelatedInformation } from 'vscode-languageserver';
 import type { Expression } from '../../parser/AstNode';
-import type { VariableExpression, DottedGetExpression } from '../../parser/Expression';
+import type { VariableExpression, DottedGetExpression, CallExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 
 /**
@@ -76,10 +76,19 @@ export class ScopeValidator {
                 const parts = util.getDottedGetPath(expression);
 
                 if (parts.length > 0) {
+
+                    //determine if this is a call expression chain (so we can validate the call later on)
+                    let isCall = false;
+                    const parent = parts[parts.length - 1].parent;
+                    //the parent should be the call, and the .callee should be the last part. That avoicds incorrectly matching to args inside another function
+                    isCall = isCallExpression(parent) && parent.callee === parts[parts.length - 1];
+
                     result.push({
                         parts: parts,
+                        fullName: parts.map(x => x.name.text).join('.'),
                         expression: expression,
-                        enclosingNamespaceNameLower: expression.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript)?.toLowerCase()
+                        enclosingNamespaceNameLower: expression.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript)?.toLowerCase(),
+                        isCallExpression: isCallExpression(parent)
                     });
                 }
             }
@@ -107,6 +116,11 @@ export class ScopeValidator {
                 });
                 //skip to the next expression
                 continue;
+            }
+
+            //validate the first function call we find in a given expression
+            if (info.isCallExpression) {
+                this.validateCallWithWrongParamCount(info as ExpressionInfo<CallExpression>, file);
             }
 
             const enumStatement = scope.getEnum(firstNamespacePartLower, info.enclosingNamespaceNameLower);
@@ -162,6 +176,7 @@ export class ScopeValidator {
                     continue outer;
                 }
             }
+
             //if the full expression is a namespace path, this is an illegal statement because namespaces don't exist at runtme
             if (scope.getNamespace(entityNameLower, info.enclosingNamespaceNameLower)) {
                 this.addMultiScopeDiagnostic({
@@ -169,6 +184,38 @@ export class ScopeValidator {
                     range: info.expression.range,
                     file: file
                 }, 'When used in scope');
+            }
+        }
+    }
+
+    /**
+     * Validate function call param count function callDetect calls to functions with the incorrect number of parameters
+     */
+    private validateCallWithWrongParamCount(info: ExpressionInfo<CallExpression>, file: BscFile) {
+        const callExpression = info.parts[info.parts.length - 1].parent as CallExpression;
+        let callable = this.event.scope.getCallableByName(info.fullName);
+        //
+
+        if (callable) {
+            //get min/max parameter count for callable
+            let minParams = 0;
+            let maxParams = 0;
+            for (let param of callable.params) {
+                maxParams++;
+                //optional parameters must come last, so we can assume that minParams won't increase once we hit
+                //the first isOptional
+                if (param.isOptional !== true) {
+                    minParams++;
+                }
+            }
+            let expCallArgCount = callExpression.args.length;
+            if (callExpression.args.length > maxParams || callExpression.args.length < minParams) {
+                let minMaxParamsText = minParams === maxParams ? maxParams : `${minParams}-${maxParams}`;
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.mismatchArgumentCount(minMaxParamsText, expCallArgCount),
+                    range: callExpression.callee.range,
+                    file: file
+                }, 'When called from scope');
             }
         }
     }
@@ -366,12 +413,17 @@ export class ScopeValidator {
     private multiScopeCache = new Cache<string, BsDiagnostic>();
 }
 
-interface ExpressionInfo {
+interface ExpressionInfo<TExpression = Expression> {
     parts: Readonly<[VariableExpression, ...DottedGetExpression[]]>;
-    expression: Readonly<Expression>;
+    /**
+     * All the parts joined together and separated by `.` (i.e. `alpha.beta.charlie`)
+     */
+    fullName: string;
+    expression: Readonly<TExpression>;
     /**
      * The full namespace name that encloses this expression
      */
     enclosingNamespaceNameLower?: string;
+    isCallExpression: boolean;
 }
 type DeepWriteable<T> = { -readonly [P in keyof T]: DeepWriteable<T[P]> };

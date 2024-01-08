@@ -998,6 +998,94 @@ describe('Scope', () => {
             ]);
         });
 
+        it('handles chained namespace function calls properly', () => {
+            program.setFile('source/file.bs', `
+                sub test()
+                    print alpha.getBeta().getCharlie(1)
+                end sub
+                namespace alpha
+                    function getBeta()
+                        return {
+                            getCharlie: function(p1)
+                                return "charlie"
+                            end function
+                        }
+                    end function
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it.only('finds the correct function to compare params to', () => {
+            program.setFile('source/file.bs', `
+
+                namespace is
+                    function node(value as dynamic, subType = "" as string)
+                    end function
+                end namespace
+
+                namespace sgnode
+                    sub trigger(node as object, field as string)
+                        sgnode.observe(node, field)
+                    end sub
+                    sub observe(node as object, field as string)
+                    end sub
+                end namespace
+
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('detects calling namespaced function with too many parameters', () => {
+            program.setFile('source/file.bs', `
+                namespace alpha
+                    sub test()
+                    end sub
+                end namespace
+                sub b()
+                    alpha.test(1)
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.mismatchArgumentCount(0, 1).message
+            ]);
+        });
+
+        it('detects calling namespace-relative function with too many parameters', () => {
+            program.setFile('source/file.bs', `
+                namespace alpha
+                    sub test()
+                    end sub
+                    sub b()
+                        test(1)
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.mismatchArgumentCount(0, 1).message
+            ]);
+        });
+
+        it('detects calling namespace-relative function with too many parameters', () => {
+            program.setFile('source/file.bs', `
+                namespace alpha
+                    sub test()
+                    end sub
+                    sub b()
+                        alpha.test(1)
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.mismatchArgumentCount(0, 1).message
+            ]);
+        });
+
         it('detects calling class constructors with too many parameters', () => {
             program.setFile('source/main.bs', `
                 function noop0()

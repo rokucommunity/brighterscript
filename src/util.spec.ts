@@ -8,7 +8,11 @@ import { createSandbox } from 'sinon';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { tempDir, rootDir } from './testHelpers.spec';
 import { Program } from './Program';
-import type { BsDiagnostic } from '.';
+import type { BsDiagnostic } from './interfaces';
+import { Parser } from './parser/Parser';
+import { isDottedGetExpression, isPrintStatement, isVariableExpression } from './astUtils/reflection';
+import type { PrintStatement } from './parser/Statement';
+import type { Expression } from './parser/AstNode';
 
 const sinon = createSandbox();
 
@@ -377,7 +381,7 @@ describe('util', () => {
         });
 
         it('sets default value for bslibDestinationDir', () => {
-            expect(util.normalizeConfig(<any>{ }).bslibDestinationDir).to.equal('source');
+            expect(util.normalizeConfig(<any>{}).bslibDestinationDir).to.equal('source');
         });
 
         it('strips leading and/or trailing slashes from bslibDestinationDir', () => {
@@ -902,6 +906,46 @@ describe('util', () => {
                     'uri', util.createRange(2, 3, 4, 5)
                 )
             }]);
+        });
+    });
+
+    describe('getDottedGetPath', () => {
+        function doTest(text: string, expectedNames: string[]) {
+            const expression = Parser.parse(
+                `print ${text}`
+            ).ast.findChild<PrintStatement>(isPrintStatement).expressions[0] as Expression;
+            const names = util.getDottedGetPath(expression).map((expression) => {
+                if (isVariableExpression(expression) || isDottedGetExpression(expression)) {
+                    return expression.name.text;
+                } else {
+                    throw new Error('Encountered invalid expression type: ' + (expression as any).constructor.name);
+                }
+            });
+            expect(names).to.eql(expectedNames);
+        }
+
+        it('finds variableExpression', () => {
+            doTest(`alpha`, [
+                'alpha'
+            ]);
+        });
+
+        it('finds dottedGet and variable expression', () => {
+            doTest(`alpha.beta`, [
+                'alpha', 'beta'
+            ]);
+        });
+
+        it('finds multiple dottedGet and variable expression', () => {
+            doTest(`alpha.beta.charlie.delta`, [
+                'alpha', 'beta', 'charlie', 'delta'
+            ]);
+        });
+
+        it('stops at callExpression', () => {
+            doTest(`alpha.beta().charlie()`, [
+                'alpha', 'beta'
+            ]);
         });
     });
 });
