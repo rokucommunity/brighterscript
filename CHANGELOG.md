@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.65.16](https://github.com/rokucommunity/brighterscript/compare/v0.65.15...v0.65.16) - 2024-01-08
+### Added
+ - Add `pruneEmptyCodeFiles` option to prevent publishing of empty files and exclude unnecessary script imports ([#997](https://github.com/rokucommunity/brighterscript/pull/997))
+### Changed
+ - chore: improve null safety ([#996](https://github.com/rokucommunity/brighterscript/pull/996))
+
+
+
 ## [0.65.15](https://github.com/rokucommunity/brighterscript/compare/v0.65.14...v0.65.15) - 2023-12-26
 ### Fixed
  - Prevent errors when using enums in a file that's not included in any scopes ([#995](https://github.com/rokucommunity/brighterscript/pull/995))
