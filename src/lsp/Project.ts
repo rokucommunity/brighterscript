@@ -7,6 +7,9 @@ import type { CompilerPlugin } from '../interfaces';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { URI } from 'vscode-uri';
 import { Deferred } from '../deferred';
+import { rokuDeploy } from 'roku-deploy';
+import { DocumentManager } from './DocumentManager';
+import { ReaderWriterManager } from './ReaderWriterManager';
 
 export class Project implements LspProject {
     /**
@@ -73,6 +76,21 @@ export class Project implements LspProject {
     }
 
     /**
+     * Validate the project. This will trigger a full validation on any scopes that were changed since the last validation,
+     * and will also eventually emit a new 'diagnostics' event that includes all diagnostics for the project
+     */
+    public validate() {
+        this.builder.program.validate();
+    }
+
+    /**
+     * Get the bsconfig options from the program. Should only be called after `.activate()` has completed.
+     */
+    public getOptions() {
+        return this.builder.program.options;
+    }
+
+    /**
      * Gets resolved when the project has finished activating
      */
     private isActivated: Deferred;
@@ -103,6 +121,37 @@ export class Project implements LspProject {
      */
     public hasFile(srcPath: string) {
         return this.builder.program.hasFile(srcPath);
+    }
+
+    /**
+     * Set new contents for a file. This is safe to call any time. Changes will be queued and flushed at the correct times
+     * during the program's lifecycle flow
+     * @param srcPath absolute source path of the file
+     * @param fileContents the text contents of the file
+     */
+    public setFile(srcPath: string, fileContents: string) {
+        this.builder.program.setFile(
+            {
+                src: srcPath,
+                dest: rokuDeploy.getDestPath(srcPath, this.getFilePaths(), this.builder.program.options.rootDir)
+            },
+            fileContents
+        );
+    }
+
+    /**
+     * Remove the in-memory file at the specified path. This is typically called when the user (or file system watcher) triggers a file delete
+     * @param srcPath absolute path to the file
+     */
+    public removeFile(srcPath: string) {
+        this.builder.program.removeFile(srcPath);
+    }
+
+    /**
+     * Get the list of all file paths that are currently loaded in the project
+     */
+    public getFilePaths() {
+        return Object.keys(this.builder.program.files).sort();
     }
 
     /**
@@ -211,4 +260,31 @@ export class Project implements LspProject {
             );
         }
     }
+}
+
+/**
+ * An annotation used to wrap the method in a readerWriter.write() call
+ */
+function WriteLock(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+    let originalMethod = descriptor.value;
+
+    //wrapping the original method
+    descriptor.value = function value(this: Project, ...args: any[]) {
+        return (this as any).readerWriter.write(() => {
+            return originalMethod.apply(this, args);
+        }, originalMethod.name);
+    };
+}
+/**
+ * An annotation used to wrap the method in a readerWriter.read() call
+ */
+function ReadLock(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+    let originalMethod = descriptor.value;
+
+    //wrapping the original method
+    descriptor.value = function value(this: Project, ...args: any[]) {
+        return (this as any).readerWriter.read(() => {
+            return originalMethod.apply(this, args);
+        }, originalMethod.name);
+    };
 }

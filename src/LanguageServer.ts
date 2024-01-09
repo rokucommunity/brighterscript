@@ -68,12 +68,6 @@ export class LanguageServer implements OnHandler<Connection> {
      */
     private projectManager: ProjectManager;
 
-
-    /**
-     * The number of milliseconds that should be used for language server typing debouncing
-     */
-    private debounceTimeout = 150;
-
     /**
      * These projects are created on the fly whenever a file is opened that is not included
      * in any of the workspace-based projects.
@@ -140,14 +134,14 @@ export class LanguageServer implements OnHandler<Connection> {
             }
         }
 
-        //Register semantic token requestsTODO switch to a more specific connection function call once they actually add it
+        //Register semantic token requests. TODO switch to a more specific connection function call once they actually add it
         this.connection.onRequest(SemanticTokensRequest.method, this.onFullSemanticTokens.bind(this));
 
         // The content of a text document has changed. This event is emitted
         // when the text document is first opened, when its content has changed,
         // or when document is closed without saving (original contents are sent as a change)
         //
-        this.documents.onDidChangeContent(this.validateTextDocument.bind(this));
+        this.documents.onDidChangeContent(this.onTextDocumentDidChangeContent.bind(this));
 
         //whenever a document gets closed
         this.documents.onDidClose(this.onDocumentClose.bind(this));
@@ -586,7 +580,7 @@ export class LanguageServer implements OnHandler<Connection> {
     private sendBusyStatus(status: BusyStatus) {
         this.busyStatusIndex = ++this.busyStatusIndex <= 0 ? 0 : this.busyStatusIndex;
 
-        this.connection.sendNotification(NotificationName.busyStatus, {
+        void this.connection.sendNotification(NotificationName.busyStatus, {
             status: status,
             timestamp: Date.now(),
             index: this.busyStatusIndex,
@@ -673,7 +667,7 @@ export class LanguageServer implements OnHandler<Connection> {
      * Send a critical failure notification to the client, which should show a notification of some kind
      */
     private sendCriticalFailure(message: string) {
-        this.connection.sendNotification('critical-failure', message);
+        void this.connection.sendNotification('critical-failure', message);
     }
 
     /**
@@ -950,38 +944,9 @@ export class LanguageServer implements OnHandler<Connection> {
 
     @AddStackToErrorMessage
     @TrackBusyStatus
-    private async validateTextDocument(event: TextDocumentChangeEvent<TextDocument>): Promise<void> {
-        return;
-        const { document } = event;
-        //ensure programs are initialized
-        await this.waitAllProjectFirstRuns();
-
-        let filePath = URI.parse(document.uri).fsPath;
-
-        try {
-
-            //throttle file processing. first call is run immediately, and then the last call is processed.
-            await this.keyedThrottler.run(filePath, async () => {
-
-                let documentText = document.getText();
-                for (const project of this.getProjects()) {
-                    //only add or replace existing files. All of the files in the project should
-                    //have already been loaded by other means
-                    if (project.builder.program.hasFile(filePath)) {
-                        let rootDir = project.builder.program.options.rootDir ?? project.builder.program.options.cwd;
-                        let dest = rokuDeploy.getDestPath(filePath, project.builder.program.options.files, rootDir);
-                        project.builder.program.setFile({
-                            src: filePath,
-                            dest: dest
-                        }, documentText);
-                    }
-                }
-                // validate all projects
-                await this.validateAllThrottled();
-            });
-        } catch (e: any) {
-            this.sendCriticalFailure(`Critical error parsing/validating ${filePath}: ${e.message}`);
-        }
+    private onTextDocumentDidChangeContent(event: TextDocumentChangeEvent<TextDocument>) {
+        const srcPath = URI.parse(event.document.uri).fsPath;
+        this.projectManager.setFile(srcPath, event.document.getText());
     }
 
     @TrackBusyStatus

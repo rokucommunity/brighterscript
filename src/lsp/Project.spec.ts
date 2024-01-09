@@ -27,15 +27,15 @@ describe('Project', () => {
         it('emits events', async () => {
             const stub = sinon.stub();
             const off = project.on('diagnostics', stub);
-            await project['emit']('diagnostics', { project: project, diagnostics: [] });
+            await project['emit']('diagnostics', { diagnostics: [] });
             expect(stub.callCount).to.eql(1);
 
-            await project['emit']('diagnostics', { project: project, diagnostics: [] });
+            await project['emit']('diagnostics', { diagnostics: [] });
             expect(stub.callCount).to.eql(2);
 
             off();
 
-            await project['emit']('diagnostics', { project: project, diagnostics: [] });
+            await project['emit']('diagnostics', { diagnostics: [] });
             expect(stub.callCount).to.eql(2);
         });
     });

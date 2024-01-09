@@ -7,15 +7,58 @@ import { Project } from './Project';
 import { WorkerThreadProject } from './worker/WorkerThreadProject';
 import type { Position } from 'vscode-languageserver';
 import { Deferred } from '../deferred';
+import type { FlushEvent } from './DocumentManager';
+import { DocumentManager } from './DocumentManager';
 
 /**
  * Manages all brighterscript projects for the language server
  */
 export class ProjectManager {
+
     /**
      * Collection of all projects
      */
     public projects: LspProject[] = [];
+
+    private documentManager = new DocumentManager({
+        delay: 150
+    });
+
+
+    constructor() {
+        this.documentManager.on('flush', (event) => {
+            void this.applyDocumentChanges(event);
+        });
+    }
+
+    /**
+     * Apply all of the queued document changes. This should only be called as a result of the documentManager flushing changes, and never called manually
+     * @param event the document changes that have occurred since the last time we applied
+     */
+    private async applyDocumentChanges(event: FlushEvent) {
+        //apply all of the document actions to each project in parallel
+        await Promise.all(this.projects.map(async (project) => {
+            await Promise.all(event.actions.map(async (action) => {
+                if (action.type === 'set') {
+                    await project.setFile(action.srcPath, action.fileContents);
+                } else if (action.type === 'delete') {
+                    await project.removeFile(action.srcPath);
+                }
+            }));
+
+            //now that all the files have been sent, validate the project (which will trigger downstream diagnostics to flow)
+            await this.validateProject(project);
+        }));
+    }
+
+    /**
+     * Validate the given project. This wraps the call in locks to ensure other actions will wait
+     * @param project
+     */
+    private async validateProject(project) {
+        await project.validate();
+    }
+
 
     /**
      * Given a list of all desired projects, create any missing projects and destroy and projects that are no longer available
@@ -63,6 +106,16 @@ export class ProjectManager {
         await Promise.all(
             projectConfigs.map(config => this.createProject(config))
         );
+    }
+
+    /**
+     * Set new contents for a file. This is safe to call any time. Changes will be queued and flushed at the correct times
+     * during the program's lifecycle flow
+     * @param srcPath absolute source path of the file
+     * @param fileContents the text contents of the file
+     */
+    public setFile(srcPath: string, fileContents: string) {
+        this.documentManager.set(srcPath, fileContents);
     }
 
     /**

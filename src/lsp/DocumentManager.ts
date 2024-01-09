@@ -1,30 +1,51 @@
+import * as EventEmitter from 'eventemitter3';
+import type { MaybePromise } from './LspProject';
+
 /**
  * Maintains a queued/buffered list of file operations. These operations don't actually do anything on their own.
  * You need to call the .apply() function and provide an action to operate on them.
  */
 export class DocumentManager {
+
+    constructor(
+        private options: { delay: number }) {
+    }
+
     private queue = new Map<string, DocumentAction>();
+
+    private timeoutHandle: NodeJS.Timeout;
+    private throttle() {
+        if (this.timeoutHandle) {
+            clearTimeout(this.timeoutHandle);
+        }
+        this.timeoutHandle = setTimeout(() => {
+            this.flush();
+        }, this.options.delay);
+    }
 
     /**
      * Add/set the contents of a file
      * @param document
      */
-    public set(document: Document) {
-        if (this.queue.has(document.paths.src)) {
-            this.queue.delete(document.paths.src);
+    public set(srcPath: string, fileContents: string) {
+        if (this.queue.has(srcPath)) {
+            this.queue.delete(srcPath);
         }
-        this.queue.set(document.paths.src, { action: 'set', document: document });
+        this.queue.set(srcPath, {
+            type: 'set',
+            srcPath: srcPath,
+            fileContents: fileContents
+        });
+        this.throttle();
     }
 
     /**
      * Delete a file
      * @param document
      */
-    public delete(document: Document) {
-        if (this.queue.has(document.paths.src)) {
-            this.queue.delete(document.paths.src);
-        }
-        this.queue.set(document.paths.src, { action: 'delete', document: document });
+    public delete(srcPath: string) {
+        this.queue.delete(srcPath);
+        this.queue.set(srcPath, { type: 'delete', srcPath: srcPath });
     }
 
     /**
@@ -34,35 +55,58 @@ export class DocumentManager {
         return this.queue.size > 0;
     }
 
-    /**
-     * Indicates whether we are currently in the middle of an `apply()` session or not
-     */
-    public isBlocked = false;
+    private flush() {
+        const event: FlushEvent = {
+            actions: [...this.queue.values()]
+        };
+        this.queue.clear();
 
-    /**
-     * Get all of the pending documents and clear the queue
-     */
-    public async apply<R>(action: (actions: DocumentAction[]) => any): Promise<R> {
-        this.isBlocked = true;
-        try {
-            const documentActions = [...this.queue.values()];
-            const result = await Promise.resolve(action(documentActions));
-            return result;
-        } finally {
-            this.isBlocked = false;
-        }
+        this.emitSync('flush', event);
+    }
+
+    public once(eventName: 'flush'): Promise<FlushEvent>;
+    public once(eventName: string): Promise<any> {
+        return new Promise((resolve) => {
+            const off = this.on(eventName as any, (data) => {
+                off();
+                resolve(data);
+            });
+        });
+    }
+
+    public on(eventName: 'flush', handler: (data: any) => MaybePromise<void>);
+    public on(eventName: string, handler: (...args: any[]) => MaybePromise<void>) {
+        this.emitter.on(eventName, handler as any);
+        return () => {
+            this.emitter.removeListener(eventName, handler as any);
+        };
+    }
+
+    private emitSync(eventName: 'flush', data: FlushEvent);
+    private emitSync(eventName: string, data?) {
+        this.emitter.emit(eventName, data);
+    }
+
+    private emitter = new EventEmitter();
+
+    public dispose() {
+        this.queue = new Map();
+        this.emitter.removeAllListeners();
     }
 }
 
-export interface DocumentAction {
-    action: 'set' | 'delete';
-    document: Document;
+export interface SetDocumentAction {
+    type: 'set';
+    srcPath: string;
+    fileContents: string;
+}
+export interface DeleteDocumentAction {
+    type: 'delete';
+    srcPath: string;
 }
 
-export interface Document {
-    paths: {
-        src: string;
-        dest: string;
-    };
-    getText: () => string;
+export type DocumentAction = SetDocumentAction | DeleteDocumentAction;
+
+export interface FlushEvent {
+    actions: DocumentAction[];
 }

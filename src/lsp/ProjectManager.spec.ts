@@ -249,7 +249,7 @@ describe('ProjectManager', () => {
         });
     });
 
-    describe.only('raceUntil', () => {
+    describe('raceUntil', () => {
         beforeEach(() => {
         });
 

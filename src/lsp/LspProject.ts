@@ -1,5 +1,6 @@
 import type { Diagnostic } from 'vscode-languageserver';
 import type { SemanticToken } from '../interfaces';
+import type { BsConfig } from '../BsConfig';
 
 /**
  * Defines the contract between the ProjectManager and the main or worker thread Project classes
@@ -23,6 +24,22 @@ export interface LspProject {
     activate(options: ActivateOptions): MaybePromise<void>;
 
     /**
+     * Validate the project. This will trigger a full validation on any scopes that were changed since the last validation,
+     * and will also eventually emit a new 'diagnostics' event that includes all diagnostics for the project
+     */
+    validate(): MaybePromise<void>;
+
+    /**
+     * Get the bsconfig options from the program. Should only be called after `.activate()` has completed.
+     */
+    getOptions(): MaybePromise<BsConfig>;
+
+    /**
+     * Get the list of all file paths that are currently loaded in the project
+     */
+    getFilePaths(): MaybePromise<string[]>;
+
+    /**
      * Get the list of all diagnostics from this project
      */
     getDiagnostics(): MaybePromise<LspDiagnostic[]>;
@@ -34,9 +51,22 @@ export interface LspProject {
     getSemanticTokens(srcPath: string): MaybePromise<SemanticToken[]>;
 
     /**
-     * Does this project have the specified filie
+     * Does this project have the specified file. Should only be called after `.activate()` has completed.
      */
     hasFile(srcPath: string): MaybePromise<boolean>;
+
+    /**
+     * Add or replace the in-memory contents of the file at the specified path. This is typically called as the user is typing.
+     * @param srcPath absolute path to the file
+     * @param fileContents the contents of the file
+     */
+    setFile(srcPath: string, fileContents: string): MaybePromise<void>;
+
+    /**
+     * Remove the in-memory file at the specified path. This is typically called when the user (or file system watcher) triggers a file delete
+     * @param srcPath absolute path to the file
+     */
+    removeFile(srcPath: string): MaybePromise<void>;
 
     /**
      * An event that is emitted anytime the diagnostics for the project have changed (typically after a validate cycle has finished)
