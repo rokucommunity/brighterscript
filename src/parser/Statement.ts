@@ -27,7 +27,6 @@ import { InterfaceType } from '../types/InterfaceType';
 import type { BscType } from '../types/BscType';
 import { VoidType } from '../types/VoidType';
 import { TypedFunctionType } from '../types/TypedFunctionType';
-import type { BrsFile } from '../files/BrsFile';
 
 export class EmptyStatement extends Statement {
     constructor(
@@ -1935,7 +1934,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
      * Get all ancestor classes, in closest-to-furthest order (i.e. 0 is parent, 1 is grandparent, etc...).
      * This will return an empty array if no ancestors were found
      */
-    public getAncestors(state: { file: BrsFile }) {
+    public getAncestors(state: BrsTranspileState) {
         let ancestors = [] as ClassStatement[];
         let stmt = this as ClassStatement;
         while (stmt) {
