@@ -2307,6 +2307,33 @@ describe('ScopeValidator', () => {
             ]);
         });
 
+        describe('with namespaces', () => {
+            it('protected members are accessible', () => {
+                program.setFile('source/main.bs', `
+                    namespace AccessibilityTest
+                        class MyClass
+                            private data as roAssociativeArray = {}
+                            sub new()
+                                m.data.AddReplace("key", "value")
+                            end sub
+
+                            protected sub printData()
+                                print m.data
+                            end sub
+                        end class
+
+                        class SubClass extends MyClass
+                            sub foo()
+                                m.printData()
+                            end sub
+                        end class
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+        });
+
     });
 
     describe('revalidation', () => {

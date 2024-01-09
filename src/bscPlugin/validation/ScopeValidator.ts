@@ -640,7 +640,9 @@ export class ScopeValidator {
 
                     // eslint-disable-next-line no-bitwise
                     if (childChainItem.data.flags & SymbolTypeFlag.protected) {
-                        const ancestorClasses = this.event.scope.getClassHierarchy(containingClassStmt?.getName(ParseMode.BrightScript)).map(link => link.item);
+                        const containingClassName = containingClassStmt?.getName(ParseMode.BrighterScript);
+                        const containingNamespaceName = expression.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
+                        const ancestorClasses = this.event.scope.getClassHierarchy(containingClassName, containingNamespaceName).map(link => link.item);
                         const isSubClassOfDefiningClass = ancestorClasses.includes(classStmtThatDefinesChildMember);
 
                         if (!isSubClassOfDefiningClass) {
