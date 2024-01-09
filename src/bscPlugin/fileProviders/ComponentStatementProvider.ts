@@ -176,6 +176,7 @@ export class ComponentStatementProvider {
                     createFunctionExpression(TokenKind.Sub)
                 );
                 file.ast.statements.unshift(initFunc);
+                initFunc.func.getSymbolTable().pushParentProvider(() => statement.getSymbolTable());
             }
             initFunc.func.body.statements.unshift(...initStatements);
         }
