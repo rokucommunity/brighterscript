@@ -52,6 +52,7 @@ describe('BrsFileSemanticTokensProcessor', () => {
                 sub new()
                     m.alien = new Humanoids.Aliens.Alien()
                 end sub
+                public alien
             end class
 
             namespace Humanoids.Aliens

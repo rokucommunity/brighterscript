@@ -1,8 +1,9 @@
 import type { Position } from 'vscode-languageserver';
 import { DiagnosticSeverity } from 'vscode-languageserver';
 import type { BsDiagnostic, TypeCompatibilityData } from './interfaces';
-import type { TokenKind } from './lexer/TokenKind';
+import { TokenKind } from './lexer/TokenKind';
 import util from './util';
+import { SymbolTypeFlag } from './SymbolTable';
 
 /**
  * An object that keeps track of all possible error messages.
@@ -758,6 +759,11 @@ export let DiagnosticMessages = {
         message: `'${symbol}' is incompatible across scope group (${scopeName})`, // TODO: Add scopes where it was defined
         code: 1145,
         severity: DiagnosticSeverity.Error
+    }),
+    memberAccessibilityMismatch: (memberName: string, accessModifierFlag: SymbolTypeFlag, definingClassName: string) => ({
+        message: `Member '${memberName}' is ${accessModifierNameFromFlag(accessModifierFlag)}${accessModifierAdditionalInfo(accessModifierFlag, definingClassName)}`, // TODO: Add scopes where it was defined
+        code: 1146,
+        severity: DiagnosticSeverity.Error
     })
 };
 export const defaultMaximumTruncationLength = 160;
@@ -783,6 +789,29 @@ export function typeCompatibilityMessage(actualTypeString: string, expectedTypeS
         });
     }
     return message;
+}
+
+export function accessModifierNameFromFlag(accessModifierFlag: SymbolTypeFlag) {
+    let result = TokenKind.Public;
+    // eslint-disable-next-line no-bitwise
+    if (accessModifierFlag & SymbolTypeFlag.private) {
+        result = TokenKind.Private;
+        // eslint-disable-next-line no-bitwise
+    } else if (accessModifierFlag & SymbolTypeFlag.protected) {
+        result = TokenKind.Protected;
+    }
+    return result.toLowerCase();
+}
+
+export function accessModifierAdditionalInfo(accessModifierFlag: SymbolTypeFlag, className: string) {
+    // eslint-disable-next-line no-bitwise
+    if (accessModifierFlag & SymbolTypeFlag.private) {
+        return ` and only accessible from within class '${className}'`;
+        // eslint-disable-next-line no-bitwise
+    } else if (accessModifierFlag & SymbolTypeFlag.protected) {
+        return ` and only accessible from within class '${className}' and its subclasses`;
+    }
+    return TokenKind.Public;
 }
 
 export const DiagnosticCodeMap = {} as Record<keyof (typeof DiagnosticMessages), number>;

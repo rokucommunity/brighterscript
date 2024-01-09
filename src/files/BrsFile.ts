@@ -1407,15 +1407,19 @@ export class BrsFile implements File {
             addedSymbols.set(SymbolTypeFlag.typetime, new Set());
             for (const setOfSymbols of allNeededSymbolSets) {
                 for (const symbol of setOfSymbols) {
-
                     const fullSymbolKey = symbol.typeChain.map(tce => tce.name).join('.').toLowerCase();
-                    if (this.providedSymbols.symbolMap.get(symbol.flags)?.has(fullSymbolKey)) {
-                        // this catches namespaced things
-                        continue;
-                    }
-                    if (!addedSymbols.get(symbol.flags).has(fullSymbolKey)) {
-                        requiredSymbols.push(symbol);
-                        addedSymbols.get(symbol.flags).add(fullSymbolKey);
+                    for (const flag of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
+                        // eslint-disable-next-line no-bitwise
+                        if (symbol.flags & flag) {
+                            if (this.providedSymbols.symbolMap.get(flag)?.has(fullSymbolKey)) {
+                                // this catches namespaced things
+                                continue;
+                            }
+                            if (!addedSymbols.get(flag)?.has(fullSymbolKey)) {
+                                requiredSymbols.push(symbol);
+                                addedSymbols.get(flag)?.add(fullSymbolKey);
+                            }
+                        }
                     }
                 }
             }

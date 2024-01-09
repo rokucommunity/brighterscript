@@ -51,7 +51,7 @@ export class AstValidationSegmenter {
         }
         const flag = util.isInTypeExpression(expression) ? SymbolTypeFlag.typetime : SymbolTypeFlag.runtime;
         const typeChain: TypeChainEntry[] = [];
-        const options: GetTypeOptions = { flags: flag, onlyCacheResolvedTypes: true, typeChain: typeChain };
+        const options: GetTypeOptions = { flags: flag, onlyCacheResolvedTypes: true, typeChain: typeChain, data: {} };
 
         const nodeType = expression.getType(options);
         if (!nodeType?.isResolvable()) {
@@ -64,7 +64,7 @@ export class AstValidationSegmenter {
                     symbolsSet = this.unresolvedSegmentsSymbols.get(segment);
                 }
 
-                symbolsSet.add({ typeChain: typeChain, flags: typeChain[0].flags, endChainFlags: flag, containingNamespaces: this.currentNamespaceStatement?.getNameParts()?.map(t => t.text) });
+                symbolsSet.add({ typeChain: typeChain, flags: typeChain[0].data.flags, endChainFlags: flag, containingNamespaces: this.currentNamespaceStatement?.getNameParts()?.map(t => t.text) });
             }
             return true;
         }
@@ -152,7 +152,9 @@ export class AstValidationSegmenter {
 
             if (symbolsRequired) {
                 for (const requiredSymbol of symbolsRequired.values()) {
-                    const changeSymbolSetForFlag = changedSymbols.get(requiredSymbol.flags);
+                    // eslint-disable-next-line no-bitwise
+                    const runTimeOrTypeTimeSymbolFlag = requiredSymbol.flags & (SymbolTypeFlag.runtime | SymbolTypeFlag.typetime);
+                    const changeSymbolSetForFlag = changedSymbols.get(runTimeOrTypeTimeSymbolFlag);
                     if (util.setContainsUnresolvedSymbol(changeSymbolSetForFlag, requiredSymbol)) {
                         segmentsToWalkForValidation.push(segment);
                         break;
