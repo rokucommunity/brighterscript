@@ -1408,17 +1408,19 @@ export class BrsFile implements File {
             for (const setOfSymbols of allNeededSymbolSets) {
                 for (const symbol of setOfSymbols) {
                     const fullSymbolKey = symbol.typeChain.map(tce => tce.name).join('.').toLowerCase();
-                    // eslint-disable-next-line no-bitwise
-                    const runTimeOrTypeTimeSymbolFlag = symbol.flags & (SymbolTypeFlag.runtime | SymbolTypeFlag.typetime);
-                    if (this.providedSymbols.symbolMap.get(runTimeOrTypeTimeSymbolFlag)?.has(fullSymbolKey)) {
-                        // this catches namespaced things
-                        continue;
+                    for (const flag of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
+                        // eslint-disable-next-line no-bitwise
+                        if (symbol.flags & flag) {
+                            if (this.providedSymbols.symbolMap.get(flag)?.has(fullSymbolKey)) {
+                                // this catches namespaced things
+                                continue;
+                            }
+                            if (!addedSymbols.get(flag)?.has(fullSymbolKey)) {
+                                requiredSymbols.push(symbol);
+                                addedSymbols.get(flag)?.add(fullSymbolKey);
+                            }
+                        }
                     }
-                    if (!addedSymbols.get(runTimeOrTypeTimeSymbolFlag)?.has(fullSymbolKey)) {
-                        requiredSymbols.push(symbol);
-                        addedSymbols.get(runTimeOrTypeTimeSymbolFlag).add(fullSymbolKey);
-                    }
-
                 }
             }
             return requiredSymbols;

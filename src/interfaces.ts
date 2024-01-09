@@ -787,7 +787,12 @@ export interface GetTypeOptions {
 }
 
 export class TypeChainEntry {
-    constructor(public name: string, public type: BscType, public data: ExtraSymbolData, public range: Range, public separatorToken: Token = createToken(TokenKind.Dot)) {
+    public data: ExtraSymbolData;
+    constructor(public name: string, public type: BscType, data: ExtraSymbolData, public range: Range, public separatorToken: Token = createToken(TokenKind.Dot)) {
+        if (data) {
+            // make a copy of this data
+            this.data = { ...data };
+        }
     }
     get isResolved() {
         return this.type?.isResolvable();

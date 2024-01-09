@@ -64,10 +64,14 @@ export class ScopeValidator {
                 let thisFileRequiresChangedSymbol = false;
                 for (let requiredSymbol of file.requiredSymbols) {
                     // eslint-disable-next-line no-bitwise
-                    const runTimeOrTypeTimeSymbolFlag = requiredSymbol.flags & (SymbolTypeFlag.runtime | SymbolTypeFlag.typetime);
-                    const changeSymbolSetForFlag = this.event.changedSymbols.get(runTimeOrTypeTimeSymbolFlag);
-                    if (util.setContainsUnresolvedSymbol(changeSymbolSetForFlag, requiredSymbol)) {
-                        thisFileRequiresChangedSymbol = true;
+                    for (const flag of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
+                        // eslint-disable-next-line no-bitwise
+                        if (flag & requiredSymbol.flags) {
+                            const changeSymbolSetForFlag = this.event.changedSymbols.get(flag);
+                            if (util.setContainsUnresolvedSymbol(changeSymbolSetForFlag, requiredSymbol)) {
+                                thisFileRequiresChangedSymbol = true;
+                            }
+                        }
                     }
                 }
                 const thisFileHasChanges = this.event.changedFiles.includes(file);

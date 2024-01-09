@@ -2307,6 +2307,22 @@ describe('ScopeValidator', () => {
             ]);
         });
 
+        it('should flag when trying to use an inaccessible member in the middle of a chain', () => {
+            program.setFile('source/main.bs', `
+                class SomeKlass
+                    protected name as string
+                end class
+
+                sub foo(x as SomeKlass)
+                    print x.name.len()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.memberAccessibilityMismatch('name', SymbolTypeFlag.protected, 'SomeKlass')
+            ]);
+        });
+
         describe('with namespaces', () => {
             it('protected members are accessible', () => {
                 program.setFile('source/main.bs', `
