@@ -8,6 +8,7 @@ import { IntegerType } from '../../types/IntegerType';
 import { StringType } from '../../types/StringType';
 import type { BrsFile } from '../../files/BrsFile';
 import { FloatType } from '../../types';
+import { SymbolTypeFlag } from '../../SymbolTable';
 
 describe('ScopeValidator', () => {
 
@@ -1486,6 +1487,121 @@ describe('ScopeValidator', () => {
             ]);
         });
 
+        it('detects assigning to an unknown field in a class', () => {
+            program.setFile('source/main.bs', `
+                class Klass
+                    sub new()
+                        m.unknown = "hello"
+                    end sub
+                end class
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('unknown', 'Klass.unknown')
+            ]);
+        });
+
+        it('detects assigning to an unknown field in a primitive', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    myStr = "hello"
+                    myStr.length = 2
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('length', 'string.length')
+            ]);
+        });
+
+        it('allows assigning to an unknown field in an AA', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    myAA = {}
+                    myAA.unknown = 4
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+    });
+
+    describe('itemCannotBeUsedAsVariable', () => {
+        it('detects assigning to a member of a namespace outside the namespace', () => {
+            program.setFile('source/main.bs', `
+                namespace Alpha
+                    const Name = "Alpha"
+                end namespace
+
+                sub main()
+                    Alpha.name = "Beta"
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.itemCannotBeUsedAsVariable('namespace')
+            ]);
+        });
+
+        it('detects assigning to a member of a namespace inside the namespace', () => {
+            program.setFile('source/main.bs', `
+                namespace Alpha
+                    const Name = "Alpha"
+
+                    sub inAlpha()
+                        alpha.name = "Beta"
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.itemCannotBeUsedAsVariable('namespace')
+            ]);
+        });
+
+
+        it('detects assigning to a member of a namespace outside the namespace', () => {
+            program.setFile('source/main.bs', `
+                namespace Alpha
+                    class Klass
+                    end class
+                end namespace
+
+                sub main()
+                    myKlass = new Alpha.Klass()
+                    Alpha.klass = myKlass
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.itemCannotBeUsedAsVariable('namespace')
+            ]);
+        });
+
+        it('detects assigning to a member of a namespace outside the namespace', () => {
+            program.setFile('source/main.bs', `
+                namespace Alpha
+                    class Klass
+                        function new()
+                        end function
+
+                        function init()
+                            Alpha.innerFunc = someFunc
+                        end function
+                    end class
+
+                    sub innerFunc()
+                    end sub
+                end namespace
+
+                sub someFunc()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.itemCannotBeUsedAsVariable('namespace')
+            ]);
+        });
     });
 
     describe('returnTypeMismatch', () => {
@@ -1764,7 +1880,7 @@ describe('ScopeValidator', () => {
             ]);
         });
 
-        it('allows adding new properties to a class (but why would you want to?)', () => {
+        it('disallows adding new properties to a class', () => {
             program.setFile('source/util.bs', `
                 sub doStuff(myThing as Thing)
                     myThing.getPi = 3.14
@@ -1774,8 +1890,7 @@ describe('ScopeValidator', () => {
                 end class
             `);
             program.validate();
-            //should have no errors
-            expectZeroDiagnostics(program);
+            expectDiagnostics(program, [DiagnosticMessages.cannotFindName('getPi', 'Thing.getPi')]);
         });
 
         it('validates class constructors', () => {
@@ -1977,6 +2092,219 @@ describe('ScopeValidator', () => {
             program.validate();
             //should have no errors
             expectZeroDiagnostics(program);
+        });
+
+    });
+
+    describe('memberAccessibilityMismatch', () => {
+        it('should flag when accessing a private member', () => {
+            program.setFile('source/main.bs', `
+                class SomeKlass
+                    private name as string
+                end class
+
+                sub foo(x as SomeKlass)
+                    print x.name
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.memberAccessibilityMismatch('name', SymbolTypeFlag.private, 'SomeKlass')
+            ]);
+        });
+
+
+        it('should allow accessing a private member in a class', () => {
+            program.setFile('source/main.bs', `
+                class SomeKlass
+                    private name as string
+
+                    sub foo(x as SomeKlass)
+                        print x.name
+                        print m.name
+                    end sub
+                end class
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('should flag when calling a private method outside the class', () => {
+            program.setFile('source/main.bs', `
+                class SomeKlass
+                    private sub sayHello()
+                        print "Hello"
+                    end sub
+                end class
+
+                sub foo(x as SomeKlass)
+                    x.sayHello()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.memberAccessibilityMismatch('sayHello', SymbolTypeFlag.private, 'SomeKlass')
+            ]);
+        });
+
+        it('should allow calling a private method in a class', () => {
+            program.setFile('source/main.bs', `
+                class SomeKlass
+                    private sub sayHello()
+                        print "Hello"
+                    end sub
+
+                    sub foo(x as SomeKlass)
+                        x.sayHello()
+                        m.sayHello()
+                    end sub
+                end class
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('should not allow accessing a private member in a subclass', () => {
+            program.setFile('source/main.bs', `
+                class SomeKlass
+                    private name as string
+                end class
+
+                class SubKlass extends SomeKlass
+                    sub foo()
+                        print m.name
+                    end sub
+                end class
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.memberAccessibilityMismatch('name', SymbolTypeFlag.private, 'SomeKlass')
+            ]);
+        });
+
+        it('should flag when setting a value on a private member', () => {
+            program.setFile('source/main.bs', `
+                class SomeKlass
+                    private name as string
+                end class
+
+                sub foo(x as SomeKlass)
+                    x.name = "foo"
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.memberAccessibilityMismatch('name', SymbolTypeFlag.private, 'SomeKlass')
+            ]);
+        });
+
+        it('should flag when accessing a protected member', () => {
+            program.setFile('source/main.bs', `
+                class SomeKlass
+                    protected name as string
+                end class
+
+                sub foo(x as SomeKlass)
+                    print x.name
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.memberAccessibilityMismatch('name', SymbolTypeFlag.protected, 'SomeKlass')
+            ]);
+        });
+
+        it('should allow accessing a protected member in a class', () => {
+            program.setFile('source/main.bs', `
+                class SomeKlass
+                    protected name as string
+
+                    sub foo(x as SomeKlass)
+                        print x.name
+                        print m.name
+                    end sub
+                end class
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('should flag when calling a protected method outside the class', () => {
+            program.setFile('source/main.bs', `
+                class SomeKlass
+                    protected sub sayHello()
+                        print "Hello"
+                    end sub
+                end class
+
+                class SubKlass extends SomeKlass
+                end class
+
+                sub foo(x as SomeKlass, y as SubKlass)
+                    x.sayHello()
+                    y.sayHello()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.memberAccessibilityMismatch('sayHello', SymbolTypeFlag.protected, 'SomeKlass'),
+                DiagnosticMessages.memberAccessibilityMismatch('sayHello', SymbolTypeFlag.protected, 'SomeKlass')
+            ]);
+        });
+
+        it('should allow calling a protected method in a class', () => {
+            program.setFile('source/main.bs', `
+                class SomeKlass
+                    protected sub sayHello()
+                        print "Hello"
+                    end sub
+                end class
+
+                class SubKlass extends SomeKlass
+                    sub foo(x as SomeKlass, y as SubKlass)
+                        m.sayHello()
+                        x.sayHello()
+                        y.sayHello()
+                    end sub
+                end class
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('should allow accessing a protected member in a subclass', () => {
+            program.setFile('source/main.bs', `
+                class SomeKlass
+                    protected name as string
+                end class
+
+                class SubKlass extends SomeKlass
+                    sub foo()
+                        print m.name
+                    end sub
+                end class
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('should flag when setting a value on a protected member', () => {
+            program.setFile('source/main.bs', `
+                class SomeKlass
+                    protected name as string
+                end class
+
+                class SubKlass extends SomeKlass
+                end class
+
+                sub foo(x as SubKlass)
+                    x.name = "foo"
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.memberAccessibilityMismatch('name', SymbolTypeFlag.protected, 'SomeKlass')
+            ]);
         });
 
     });

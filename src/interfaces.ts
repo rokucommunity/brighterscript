@@ -774,6 +774,7 @@ export interface ExtraSymbolData {
     description?: string;
     completionPriority?: number; // the higher the number, the lower the priority
     flags?: SymbolTypeFlag;
+    memberOfAncestor?: boolean; // this symbol comes from an ancestor symbol table
 }
 
 export interface GetTypeOptions {
@@ -786,7 +787,7 @@ export interface GetTypeOptions {
 }
 
 export class TypeChainEntry {
-    constructor(public name: string, public type: BscType, public flags: SymbolTypeFlag, public range: Range, public separatorToken: Token = createToken(TokenKind.Dot)) {
+    constructor(public name: string, public type: BscType, public data: ExtraSymbolData, public range: Range, public separatorToken: Token = createToken(TokenKind.Dot)) {
     }
     get isResolved() {
         return this.type?.isResolvable();

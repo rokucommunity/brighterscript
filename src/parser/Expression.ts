@@ -341,7 +341,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         if (funcName) {
             resultType.setName(funcName);
         }
-        options.typeChain?.push(new TypeChainEntry(funcName, resultType, options.flags, this.range));
+        options.typeChain?.push(new TypeChainEntry(funcName, resultType, options.data, this.range));
         return resultType;
     }
 }
@@ -363,7 +363,7 @@ export class FunctionParameterExpression extends Expression {
         const paramType = this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime, typeChain: undefined }) ??
             this.defaultValue?.getType({ ...options, flags: SymbolTypeFlag.runtime, typeChain: undefined }) ??
             DynamicType.instance;
-        options.typeChain?.push(new TypeChainEntry(this.name.text, paramType, options.flags, this.range));
+        options.typeChain?.push(new TypeChainEntry(this.name.text, paramType, options.data, this.range));
         return paramType;
     }
 
@@ -466,7 +466,7 @@ export class DottedGetExpression extends Expression {
     getType(options: GetTypeOptions) {
         const objType = this.obj?.getType(options);
         const result = objType?.getMemberType(this.name?.text, options);
-        options.typeChain?.push(new TypeChainEntry(this.name?.text, result, options.flags, this.name?.range ?? this.range));
+        options.typeChain?.push(new TypeChainEntry(this.name?.text, result, options.data, this.name?.range ?? this.range));
         if (result || options.flags & SymbolTypeFlag.typetime) {
             // All types should be known at typetime
             return result;
@@ -965,7 +965,7 @@ export class VariableExpression extends Expression {
             const symbolTable = this.getSymbolTable();
             resultType = symbolTable?.getSymbolType(nameKey, { ...options, fullName: nameKey, tableProvider: () => this.getSymbolTable() });
         }
-        options.typeChain?.push(new TypeChainEntry(nameKey, resultType, options.flags, this.range));
+        options.typeChain?.push(new TypeChainEntry(nameKey, resultType, options.data, this.range));
         return resultType;
     }
 }
@@ -1174,12 +1174,11 @@ export class CallfuncExpression extends Expression {
         let result: BscType = DynamicType.instance;
         // a little hacky here with checking options.ignoreCall because callFuncExpression has the method name
         // It's nicer for CallExpression, because it's a call on any expression.
-
         const calleeType = this.callee.getType({ ...options, flags: SymbolTypeFlag.runtime });
         if (isComponentType(calleeType) || isReferenceType(calleeType)) {
             const funcType = (calleeType as ComponentType).getCallFuncType?.(this.methodName.text, options);
             if (funcType) {
-                options.typeChain?.push(new TypeChainEntry(this.methodName.text, funcType, options.flags, this.methodName.range, createToken(TokenKind.Callfunc)));
+                options.typeChain?.push(new TypeChainEntry(this.methodName.text, funcType, options.data, this.methodName.range, createToken(TokenKind.Callfunc)));
                 if (options.ignoreCall) {
                     result = funcType;
                 }

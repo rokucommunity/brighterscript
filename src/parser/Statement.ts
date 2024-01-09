@@ -27,6 +27,7 @@ import { InterfaceType } from '../types/InterfaceType';
 import type { BscType } from '../types/BscType';
 import { VoidType } from '../types/VoidType';
 import { TypedFunctionType } from '../types/TypedFunctionType';
+import type { BrsFile } from '../files/BrsFile';
 
 export class EmptyStatement extends Statement {
     constructor(
@@ -168,7 +169,7 @@ export class AssignmentStatement extends Statement {
         // Note: compound assignments (eg. +=) are internally dealt with via the RHS being a BinaryExpression
         // so this.value will be a BinaryExpression, and BinaryExpressions can figure out their own types
         const rhs = this.value.getType({ ...options, typeChain: undefined });
-        options.typeChain?.push(new TypeChainEntry(this.name.text, rhs, options.flags, this.name.range));
+        options.typeChain?.push(new TypeChainEntry(this.name.text, rhs, options.data, this.name.range));
         return rhs;
     }
 }
@@ -1100,6 +1101,13 @@ export class DottedSetStatement extends Statement {
             walk(this, 'value', visitor, options);
         }
     }
+
+    getType(options: GetTypeOptions) {
+        const objType = this.obj?.getType(options);
+        const result = objType?.getMemberType(this.name?.text, options);
+        options.typeChain?.push(new TypeChainEntry(this.name?.text, result, options.data, this.name?.range ?? this.range));
+        return result;
+    }
 }
 
 export class IndexedSetStatement extends Statement {
@@ -1526,7 +1534,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
             const flag = statement.isOptional ? SymbolTypeFlag.runtime | SymbolTypeFlag.optional : SymbolTypeFlag.runtime;
             resultType.addMember(statement?.tokens.name?.text, { definingNode: statement }, memberType, flag);
         }
-        options.typeChain?.push(new TypeChainEntry(this.getName(ParseMode.BrighterScript), resultType, options.flags, this.range));
+        options.typeChain?.push(new TypeChainEntry(this.getName(ParseMode.BrighterScript), resultType, options.data, this.range));
         return resultType;
     }
 }
@@ -1751,7 +1759,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         }
         let funcName = this.getName(ParseMode.BrighterScript);
         resultType.setName(funcName);
-        options.typeChain?.push(new TypeChainEntry(resultType.name, resultType, options.flags, this.range));
+        options.typeChain?.push(new TypeChainEntry(resultType.name, resultType, options.data, this.range));
         return resultType;
     }
 }
@@ -1927,7 +1935,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
      * Get all ancestor classes, in closest-to-furthest order (i.e. 0 is parent, 1 is grandparent, etc...).
      * This will return an empty array if no ancestors were found
      */
-    public getAncestors(state: BrsTranspileState) {
+    public getAncestors(state: { file: BrsFile }) {
         let ancestors = [] as ClassStatement[];
         let stmt = this as ClassStatement;
         while (stmt) {
@@ -2155,15 +2163,30 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
         for (const statement of this.methods) {
             const funcType = statement?.func.getType({ ...options, typeChain: undefined }); //no typechain needed
-            const flag = SymbolTypeFlag.runtime;
+            let flag = SymbolTypeFlag.runtime;
+            if (statement.accessModifier?.kind === TokenKind.Private) {
+                flag |= SymbolTypeFlag.private;
+            }
+            if (statement.accessModifier?.kind === TokenKind.Protected) {
+                flag |= SymbolTypeFlag.protected;
+            }
             resultType.addMember(statement?.name?.text, { definingNode: statement }, funcType, flag);
         }
         for (const statement of this.fields) {
             const fieldType = statement.getType({ ...options, typeChain: undefined }); //no typechain needed
-            const flag = statement.isOptional ? SymbolTypeFlag.runtime | SymbolTypeFlag.optional : SymbolTypeFlag.runtime;
+            let flag = SymbolTypeFlag.runtime;
+            if (statement.isOptional) {
+                flag |= SymbolTypeFlag.optional;
+            }
+            if (statement.accessModifier?.kind === TokenKind.Private) {
+                flag |= SymbolTypeFlag.private;
+            }
+            if (statement.accessModifier?.kind === TokenKind.Protected) {
+                flag |= SymbolTypeFlag.protected;
+            }
             resultType.addMember(statement?.name?.text, { definingNode: statement }, fieldType, flag);
         }
-        options.typeChain?.push(new TypeChainEntry(resultType.name, resultType, options.flags, this.range));
+        options.typeChain?.push(new TypeChainEntry(resultType.name, resultType, options.data, this.range));
         return resultType;
     }
 }

@@ -6,7 +6,7 @@ import type { BrsFile } from '../../files/BrsFile';
 import { DiagnosticOrigin } from '../../interfaces';
 import type { BsDiagnostic, BsDiagnosticWithOrigin, ExtraSymbolData, OnScopeValidateEvent, TypeChainEntry, TypeCompatibilityData } from '../../interfaces';
 import { SymbolTypeFlag } from '../../SymbolTable';
-import type { AssignmentStatement, DottedSetStatement, EnumStatement, NamespaceStatement, ReturnStatement } from '../../parser/Statement';
+import type { AssignmentStatement, ClassStatement, DottedSetStatement, EnumStatement, NamespaceStatement, ReturnStatement } from '../../parser/Statement';
 import util from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
@@ -21,7 +21,6 @@ import type { File } from '../../files/File';
 import { InsideSegmentWalkMode } from '../../AstValidationSegmenter';
 import { TokenKind } from '../../lexer/TokenKind';
 import { ParseMode } from '../../parser/Parser';
-
 /**
  * The lower-case names of all platform-included scenegraph nodes
  */
@@ -64,7 +63,9 @@ export class ScopeValidator {
 
                 let thisFileRequiresChangedSymbol = false;
                 for (let requiredSymbol of file.requiredSymbols) {
-                    const changeSymbolSetForFlag = this.event.changedSymbols.get(requiredSymbol.flags);
+                    // eslint-disable-next-line no-bitwise
+                    const runTimeOrTypeTimeSymbolFlag = requiredSymbol.flags & (SymbolTypeFlag.runtime | SymbolTypeFlag.typetime);
+                    const changeSymbolSetForFlag = this.event.changedSymbols.get(runTimeOrTypeTimeSymbolFlag);
                     if (util.setContainsUnresolvedSymbol(changeSymbolSetForFlag, requiredSymbol)) {
                         thisFileRequiresChangedSymbol = true;
                     }
@@ -276,7 +277,7 @@ export class ScopeValidator {
      * Detect calls to functions with the incorrect number of parameters, or wrong types of arguments
      */
     private validateFunctionCall(file: BrsFile, expression: CallExpression) {
-        const getTypeOptions = { flags: SymbolTypeFlag.runtime };
+        const getTypeOptions = { flags: SymbolTypeFlag.runtime, data: {} };
         let funcType = expression?.callee?.getType(getTypeOptions);
         if (funcType?.isResolvable() && isClassType(funcType)) {
             // We're calling a class - get the constructor
@@ -370,13 +371,25 @@ export class ScopeValidator {
      * Detect return statements with incompatible types vs. declared return type
      */
     private validateDottedSetStatement(file: BrsFile, dottedSetStmt: DottedSetStatement) {
+        const typeChainExpectedLHS = [];
         const getTypeOpts = { flags: SymbolTypeFlag.runtime };
 
-        const expectedLHSType = dottedSetStmt?.obj?.getType(getTypeOpts)?.getMemberType(dottedSetStmt.name.text, getTypeOpts);
+        const expectedLHSType = dottedSetStmt?.getType({ ...getTypeOpts, data: {}, typeChain: typeChainExpectedLHS });
         const actualRHSType = dottedSetStmt?.value?.getType(getTypeOpts);
         const compatibilityData: TypeCompatibilityData = {};
+        const typeChainScan = util.processTypeChain(typeChainExpectedLHS);
+        if (!expectedLHSType?.isResolvable()) {
+            this.addMultiScopeDiagnostic({
+                file: file as File,
+                ...DiagnosticMessages.cannotFindName(typeChainScan.itemName, typeChainScan.fullNameOfItem),
+                range: typeChainScan.range
+            });
+            return;
+        }
 
-        if (expectedLHSType?.isResolvable() && !expectedLHSType?.isTypeCompatible(actualRHSType, compatibilityData)) {
+        const accessibilityIsOk = this.checkMemberAccessibility(file, dottedSetStmt, typeChainExpectedLHS);
+
+        if (accessibilityIsOk && !expectedLHSType?.isTypeCompatible(actualRHSType, compatibilityData)) {
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.assignmentTypeMismatch(actualRHSType.toString(), expectedLHSType.toString(), compatibilityData),
                 range: dottedSetStmt.range,
@@ -384,7 +397,6 @@ export class ScopeValidator {
             });
         }
     }
-
     /**
      * Detect invalid use of a binary operator
      */
@@ -557,6 +569,8 @@ export class ScopeValidator {
         const lastTypeInfo = typeChain[typeChain.length - 1];
         const parentTypeInfo = typeChain[typeChain.length - 2];
 
+        this.checkMemberAccessibility(file, expression, typeChain);
+
         if (isNamespaceType(exprType)) {
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.itemCannotBeUsedAsVariable('namespace'),
@@ -591,6 +605,59 @@ export class ScopeValidator {
                 });
             }
         }
+    }
+
+    /**
+     * Adds diagnostics for accibility mismatches
+     *
+     * @param file file
+     * @param expression containing expression
+     * @param typeChain type chain to check
+     * @returns true if member accesiibility is okay
+     */
+    private checkMemberAccessibility(file: File, expression: Expression, typeChain: TypeChainEntry[]) {
+        for (let i = 0; i < typeChain.length - 1; i++) {
+            const parentChainItem = typeChain[i];
+            const childChainItem = typeChain[i + 1];
+            if (isClassType(parentChainItem.type)) {
+                const containingClassStmt = expression.findAncestor<ClassStatement>(isClassStatement);
+                const classStmtThatDefinesChildMember = childChainItem.data?.definingNode?.findAncestor<ClassStatement>(isClassStatement);
+                if (classStmtThatDefinesChildMember) {
+                    const definingClassName = classStmtThatDefinesChildMember.getName(ParseMode.BrighterScript);
+                    const inMatchingClassStmt = containingClassStmt?.getName(ParseMode.BrighterScript).toLowerCase() === parentChainItem.type.name.toLowerCase();
+                    // eslint-disable-next-line no-bitwise
+                    if (childChainItem.data.flags & SymbolTypeFlag.private) {
+                        if (!inMatchingClassStmt || childChainItem.data.memberOfAncestor) {
+                            this.addMultiScopeDiagnostic({
+                                ...DiagnosticMessages.memberAccessibilityMismatch(childChainItem.name, childChainItem.data.flags, definingClassName),
+                                range: expression.range,
+                                file: file
+                            });
+                            // there's an error... don't worry about the rest of the chain
+                            return false;
+                        }
+                    }
+
+                    // eslint-disable-next-line no-bitwise
+                    if (childChainItem.data.flags & SymbolTypeFlag.protected) {
+                        const ancestorClasses = this.event.scope.getClassHierarchy(containingClassStmt?.getName(ParseMode.BrightScript)).map(link => link.item);
+                        const isSubClassOfDefiningClass = ancestorClasses.includes(classStmtThatDefinesChildMember);
+
+                        if (!isSubClassOfDefiningClass) {
+                            this.addMultiScopeDiagnostic({
+                                ...DiagnosticMessages.memberAccessibilityMismatch(childChainItem.name, childChainItem.data.flags, definingClassName),
+                                range: expression.range,
+                                file: file
+                            });
+                            // there's an error... don't worry about the rest of the chain
+                            return false;
+                        }
+                    }
+                }
+
+            }
+        }
+        return true;
     }
 
     /**

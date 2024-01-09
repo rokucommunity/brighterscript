@@ -148,25 +148,26 @@ export class SymbolTable implements SymbolTypeGetter {
         let currentTable: SymbolTable = this;
         const key = name?.toLowerCase();
         let result: BscSymbol[];
+        let memberOfAncestor = false;
+        const addAncestorInfo = (symbol: BscSymbol) => ({ ...symbol, data: { ...symbol.data, memberOfAncestor: memberOfAncestor } });
         do {
             // look in our map first
             if ((result = currentTable.symbolMap.get(key))) {
                 // eslint-disable-next-line no-bitwise
                 result = result.filter(symbol => symbol.flags & bitFlags);
                 if (result.length > 0) {
-                    return result;
+                    return result.map(addAncestorInfo);
                 }
             }
             //look through any sibling maps next
             for (let sibling of currentTable.siblings) {
                 result = sibling.getSymbol(key, bitFlags);
-                if (result) {
-                    if (result.length > 0) {
-                        return result;
-                    }
+                if (result?.length > 0) {
+                    return result.map(addAncestorInfo);
                 }
             }
             currentTable = currentTable.parent;
+            memberOfAncestor = true;
         } while (currentTable);
     }
 
@@ -210,8 +211,8 @@ export class SymbolTable implements SymbolTypeGetter {
         let resolvedType = cacheEntry?.type;
         let doSetCache = !resolvedType;
         const originalIsReferenceType = isAnyReferenceType(resolvedType);
-        let data = {} as ExtraSymbolData;
-        let foundFlags: SymbolTypeFlag;
+        let data = cacheEntry?.data || {} as ExtraSymbolData;
+        let foundFlags: SymbolTypeFlag = cacheEntry?.flags;
         if (!resolvedType || originalIsReferenceType) {
             const symbolTypes = this.getSymbolTypes(name, options);
             data = symbolTypes?.[0]?.data;
@@ -227,10 +228,12 @@ export class SymbolTable implements SymbolTypeGetter {
         if (doSetCache || newNonReferenceType) {
             this.setCachedType(name, { type: resolvedType, data: data, flags: foundFlags }, options);
         }
+        options.data ??= {};
         if (options.data) {
             options.data.definingNode = data?.definingNode;
             options.data.description = data?.description;
-            options.data.flags = foundFlags;
+            options.data.flags = foundFlags ?? options.flags;
+            options.data.memberOfAncestor = data?.memberOfAncestor;
         }
         return resolvedType;
     }
@@ -359,6 +362,10 @@ export interface BscSymbol {
     data: ExtraSymbolData;
     type: BscType;
     flags: SymbolTypeFlag;
+}
+
+export interface BscSymbolWithSource extends BscSymbol {
+    comesFromAncestor: boolean; // this symbol comes from an ancestor symbol table
 }
 
 export interface SymbolTypeGetter {
