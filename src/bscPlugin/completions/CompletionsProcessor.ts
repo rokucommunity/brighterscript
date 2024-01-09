@@ -1,4 +1,4 @@
-import { isBrsFile, isCallableType, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isInterfaceType, isMethodStatement, isNamespaceStatement, isNamespaceType, isNativeType, isXmlFile, isXmlScope } from '../../astUtils/reflection';
+import { isBlock, isBrsFile, isCallableType, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isFunctionExpression, isInterfaceType, isMethodStatement, isNamespaceStatement, isNamespaceType, isNativeType, isXmlFile, isXmlScope } from '../../astUtils/reflection';
 import type { FileReference, ProvideCompletionsEvent } from '../../interfaces';
 import type { File } from '../../files/File';
 import { DeclarableTypes, Keywords, TokenKind } from '../../lexer/TokenKind';
@@ -14,12 +14,11 @@ import type { XmlFile } from '../../files/XmlFile';
 import type { Program } from '../../Program';
 import type { BrsFile } from '../../files/BrsFile';
 import type { FunctionScope } from '../../FunctionScope';
-import type { BscType } from '../../types';
+import { BooleanType, InvalidType, type BscType } from '../../types';
 import type { AstNode } from '../../parser/AstNode';
 import type { FunctionStatement, NamespaceStatement } from '../../parser/Statement';
 import type { Token } from '../../lexer/Token';
 import { createIdentifier } from '../../astUtils/creators';
-
 
 export class CompletionsProcessor {
     constructor(
@@ -192,6 +191,12 @@ export class CompletionsProcessor {
         if (!expression) {
             return [];
         }
+
+        if (isFunctionExpression(expression)) {
+            // if completion is the last character of the function, use the completions of the body of the function
+            expression = expression.body;
+        }
+
         const tokenBefore = file.getTokenBefore(file.getClosestToken(expression.range.start));
 
         // helper to check get correct symbol tables for look ups
@@ -246,6 +251,9 @@ export class CompletionsProcessor {
                 // get symbols directly from current symbol table and scope
                 if (!gotSymbolsFromThisFile) {
                     currentSymbols = symbolTable?.getOwnSymbols(symbolTableLookupFlag) ?? [];
+                    if (isBlock(expression) && isFunctionExpression(expression.parent)) {
+                        currentSymbols.push(...expression.parent.getSymbolTable().getOwnSymbols(symbolTableLookupFlag));
+                    }
                     gotSymbolsFromThisFile = true;
                 }
                 if (shouldLookInNamespace) {
@@ -265,12 +273,14 @@ export class CompletionsProcessor {
                     }
                 }
 
-
                 currentSymbols.push(...this.getScopeSymbolCompletions(file, scope, symbolTableLookupFlag));
 
                 // get global symbols
                 if (!gotSymbolsFromGlobal) {
                     currentSymbols.push(...this.event.program.globalScope.symbolTable.getOwnSymbols(symbolTableLookupFlag));
+                    if (symbolTableLookupFlag === SymbolTypeFlag.runtime) {
+                        currentSymbols.push(...this.getGlobalValues());
+                    }
                     gotSymbolsFromGlobal = true;
                 }
             }
@@ -360,6 +370,13 @@ export class CompletionsProcessor {
         }
         if (areMembers) {
             return CompletionItemKind.Field;
+        }
+        const lowerSymbolName = symbol.name.toLowerCase();
+        if (lowerSymbolName === 'true' ||
+            lowerSymbolName === 'false' ||
+            lowerSymbolName === 'invalid') {
+            return CompletionItemKind.Value;
+
         }
         const tokenIdentifier = util.tokenToBscType(createIdentifier(symbol.name));
         if (isNativeType(tokenIdentifier)) {
@@ -492,6 +509,30 @@ export class CompletionsProcessor {
         }
         //no other result is possible in this case
         return completionsArray;
+    }
+
+
+    private getGlobalValues(): BscSymbol[] {
+        return [
+            {
+                name: 'true',
+                type: BooleanType.instance,
+                flags: SymbolTypeFlag.runtime,
+                data: {}
+            },
+            {
+                name: 'false',
+                type: BooleanType.instance,
+                flags: SymbolTypeFlag.runtime,
+                data: {}
+            },
+            {
+                name: 'invalid',
+                type: InvalidType.instance,
+                flags: SymbolTypeFlag.runtime,
+                data: {}
+            }
+        ];
     }
 }
 
