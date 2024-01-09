@@ -3025,9 +3025,9 @@ describe('Program', () => {
                 supports_input_launch=1
                 bs_const=DEBUG=false
             `);
-            program.options = {
+            program.options = util.normalizeConfig({
                 rootDir: tempDir
-            };
+            });
         });
 
         afterEach(() => {

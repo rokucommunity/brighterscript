@@ -56,7 +56,7 @@ describe('ProgramBuilder', () => {
 
             let stub = sinon.stub(builder.program, 'setFile');
             sinon.stub(builder, 'getFileContents').returns(Promise.resolve(''));
-            await builder['loadAllFilesAST']();
+            await builder['loadAllFilesAST'](builder.program);
             expect(stub.getCalls()).to.be.lengthOf(3);
         });
 
@@ -78,7 +78,7 @@ describe('ProgramBuilder', () => {
             let stubLoadManifest = sinon.stub(builder.program, 'loadManifest');
             let stubSetFile = sinon.stub(builder.program, 'setFile');
             sinon.stub(builder, 'getFileContents').returns(Promise.resolve(''));
-            await builder['loadAllFilesAST']();
+            await builder['loadAllFilesAST'](builder.program);
             expect(stubLoadManifest.calledBefore(stubSetFile)).to.be.true;
         });
 
@@ -92,7 +92,7 @@ describe('ProgramBuilder', () => {
             fsExtra.outputFileSync(s`${rootDir}/source/lib.d.bs`, '');
             fsExtra.outputFileSync(s`${rootDir}/source/lib.brs`, '');
             const stub = sinon.stub(builder.program, 'setFile');
-            await builder['loadAllFilesAST']();
+            await builder['loadAllFilesAST'](builder.program);
             const srcPaths = stub.getCalls().map(x => x.args[0].src);
             //the d files should be first
             expect(srcPaths.indexOf(s`${rootDir}/source/main.d.bs`)).within(0, 1);
@@ -108,7 +108,7 @@ describe('ProgramBuilder', () => {
                 requestedFiles.push(s(filePath));
             });
             fsExtra.outputFileSync(s`${rootDir}/source/main.brs`, '');
-            await builder['loadAllFilesAST']();
+            await builder['loadAllFilesAST'](builder.program);
             //the d file should not be requested because `loadAllFilesAST` knows it doesn't exist
             expect(requestedFiles).not.to.include(s`${rootDir}/source/main.d.bs`);
             expect(requestedFiles).to.include(s`${rootDir}/source/main.brs`);
