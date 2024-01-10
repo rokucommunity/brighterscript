@@ -105,6 +105,27 @@ export abstract class AstNode {
     }
 
     /**
+     * Find a list of all children first child where the matcher evaluates to true.
+     * @param matcher a function called for each node. If you return true, the specified node is included in the results. If you return a node,
+     * that node is returned. all other return values exclude that value and continue the loop
+     */
+    public findChildren<TNode extends AstNode = AstNode>(matcher: (node: AstNode, cancellationSource: CancellationTokenSource) => boolean | AstNode | undefined | void, options?: WalkOptions): Array<TNode> {
+        const cancel = new CancellationTokenSource();
+        let result: Array<AstNode> = [];
+        this.walk((node) => {
+            const matcherValue = matcher(node, cancel);
+            if (matcherValue) {
+                result.push(matcherValue === true ? node : matcherValue);
+            }
+        }, {
+            walkMode: WalkMode.visitAllRecursive,
+            ...options ?? {},
+            cancel: cancel.token
+        });
+        return result as TNode[];
+    }
+
+    /**
      * FInd the deepest child that includes the given position
      */
     public findChildAtPosition<TNodeType extends AstNode = AstNode>(position: Position, options?: WalkOptions): TNodeType | undefined {
