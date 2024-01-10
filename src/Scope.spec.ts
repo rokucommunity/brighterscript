@@ -115,6 +115,20 @@ describe('Scope', () => {
         expectZeroDiagnostics(program);
     });
 
+    it.only('does not flag unrelated namespace const and function collision', () => {
+        program.setFile('source/main.bs', `
+            namespace alpha
+                const options = {}
+            end namespace
+            namespace beta
+                sub options()
+                end sub
+            end namespace
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
     it('flags parameter with same name as namespace', () => {
         program.setFile('source/main.bs', `
             namespace NameA.NameB
