@@ -6,7 +6,7 @@ export class Stopwatch {
     /**
      * The number of milliseconds when the stopwatch was started.
      */
-    private startTime: number;
+    private startTime: number | undefined;
     start() {
         this.startTime = performance.now();
     }
@@ -17,7 +17,7 @@ export class Stopwatch {
         this.startTime = undefined;
     }
     reset() {
-        this.totalMilliseconds = undefined;
+        this.totalMilliseconds = 0;
         this.startTime = undefined;
     }
     getDurationText() {

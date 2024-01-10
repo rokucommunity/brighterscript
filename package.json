@@ -18,7 +18,8 @@
     "docs": "ts-node scripts/compile-doc-examples.ts",
     "benchmark": "cd ./benchmarks && ts-node ./index.ts",
     "scrape-roku-docs": "ts-node scripts/scrape-roku-docs.ts",
-    "rescrape-roku-docs": "rm scripts/.cache.json && ts-node scripts/scrape-roku-docs.ts"
+    "rescrape-roku-docs": "rm scripts/.cache.json && ts-node scripts/scrape-roku-docs.ts",
+    "null-check": "tsc -p tsconfig-null-safe.json"
   },
   "mocha": {
     "spec": "src/**/*.spec.ts",
@@ -144,7 +145,7 @@
     "parse-ms": "^2.1.0",
     "readline": "^1.3.0",
     "require-relative": "^0.8.7",
-    "roku-deploy": "^3.11.1",
+    "roku-deploy": "^3.11.2",
     "serialize-error": "^7.0.1",
     "source-map": "^0.7.4",
     "uuid": "^9.0.0",

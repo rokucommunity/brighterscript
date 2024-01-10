@@ -7,16 +7,16 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 
 /** * Parses `Tokens` into chunks of tokens, excluding conditional compilation directives. */
 export class PreprocessorParser {
-    public diagnostics: Diagnostic[];
+    public diagnostics: Diagnostic[] = [];
 
-    public tokens: Token[];
+    public tokens: Token[] = [];
 
     private current = 0;
 
     /**
      * an array of chunks (conditional compilation directives and the associated BrightScript)
      */
-    public chunks: CC.Chunk[];
+    public chunks: CC.Chunk[] = [];
 
     /**
      * Parses an array of tokens into an array of "chunks" - conditional compilation directives and their

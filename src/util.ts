@@ -4,6 +4,7 @@ import type { ParseError } from 'jsonc-parser';
 import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 import * as path from 'path';
 import { rokuDeploy, DefaultFiles, standardizePath as rokuDeployStandardizePath } from 'roku-deploy';
+import type { DiagnosticRelatedInformation } from 'vscode-languageserver';
 import { type Diagnostic, type Position, type Range, type Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
@@ -87,7 +88,7 @@ export class Util {
      * Determine if this path is a directory
      */
     public isDirectorySync(dirPath: string | undefined) {
-        return fs.existsSync(dirPath) && fs.lstatSync(dirPath).isDirectory();
+        return dirPath !== undefined && fs.existsSync(dirPath) && fs.lstatSync(dirPath).isDirectory();
     }
 
     /**
@@ -171,7 +172,7 @@ export class Util {
      * @param configFilePath the relative or absolute path to a brighterscript config json file
      * @param parentProjectPaths a list of parent config files. This is used by this method to recursively build the config list
      */
-    public loadConfigFile(configFilePath: string, parentProjectPaths?: string[], cwd = process.cwd()) {
+    public loadConfigFile(configFilePath: string | undefined, parentProjectPaths?: string[], cwd = process.cwd()): BsConfig | undefined {
         if (configFilePath) {
             //if the config file path starts with question mark, then it's optional. return undefined if it doesn't exist
             if (configFilePath.startsWith('?')) {
@@ -270,7 +271,7 @@ export class Util {
      * @param targetCwd the cwd where the work should be performed
      * @param callback a function to call when the cwd has been changed to `targetCwd`
      */
-    public cwdWork<T>(targetCwd: string | null | undefined, callback: () => T) {
+    public cwdWork<T>(targetCwd: string | null | undefined, callback: () => T): T {
         let originalCwd = process.cwd();
         if (targetCwd) {
             process.chdir(targetCwd);
@@ -292,7 +293,8 @@ export class Util {
         if (err) {
             throw err;
         } else {
-            return result;
+            //justification: `result` is set as long as `err` is not set and vice versa
+            return result!;
         }
     }
 
@@ -316,7 +318,7 @@ export class Util {
             result.project = config.project;
         }
         if (result.project) {
-            let configFile = this.loadConfigFile(result.project, null, config?.cwd);
+            let configFile = this.loadConfigFile(result.project, undefined, config?.cwd);
             result = Object.assign(result, configFile);
         }
         //override the defaults with the specified options
@@ -347,6 +349,7 @@ export class Util {
         config.diagnosticSeverityOverrides = config.diagnosticSeverityOverrides ?? {};
         config.diagnosticFilters = config.diagnosticFilters ?? [];
         config.plugins = config.plugins ?? [];
+        config.pruneEmptyCodeFiles = config.pruneEmptyCodeFiles === true ? true : false;
         config.autoImportComponentScript = config.autoImportComponentScript === true ? true : false;
         config.showDiagnosticsInConsole = config.showDiagnosticsInConsole === false ? false : true;
         config.sourceRoot = config.sourceRoot ? standardizePath(config.sourceRoot) : undefined;
@@ -516,7 +519,7 @@ export class Util {
      * |  bbb | bb   |  bbb |  b   | bbb  |    bb |  bb   |     b | a     |
      * ```
      */
-    public rangesIntersect(a: Range, b: Range) {
+    public rangesIntersect(a: Range | undefined, b: Range | undefined) {
         //stop if the either range is misisng
         if (!a || !b) {
             return false;
@@ -545,7 +548,7 @@ export class Util {
      * |  bbb | bb   |  bbb |  b   | bbb  |    bb |  bb   |     b | a     |
      * ```
      */
-    public rangesIntersectOrTouch(a: Range, b: Range) {
+    public rangesIntersectOrTouch(a: Range | undefined, b: Range | undefined) {
         //stop if the either range is misisng
         if (!a || !b) {
             return false;
@@ -572,7 +575,7 @@ export class Util {
         return this.comparePositionToRange(position, range) === 0;
     }
 
-    public comparePositionToRange(position: Position, range: Range) {
+    public comparePositionToRange(position: Position | undefined, range: Range | undefined) {
         //stop if the either range is misisng
         if (!position || !range) {
             return 0;
@@ -800,7 +803,7 @@ export class Util {
             //this diagnostic is affected by this flag
             if (diagnostic.range && this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
                 //if the flag acts upon this diagnostic's code
-                if (flag.codes === null || flag.codes.includes(diagnosticCode)) {
+                if (flag.codes === null || (diagnosticCode !== undefined && flag.codes.includes(diagnosticCode))) {
                     return true;
                 }
             }
@@ -811,7 +814,7 @@ export class Util {
     /**
      * Walks up the chain to find the closest bsconfig.json file
      */
-    public async findClosestConfigFile(currentPath: string) {
+    public async findClosestConfigFile(currentPath: string): Promise<string | undefined> {
         //make the path absolute
         currentPath = path.resolve(
             path.normalize(
@@ -819,7 +822,7 @@ export class Util {
             )
         );
 
-        let previousPath: string;
+        let previousPath: string | undefined;
         //using ../ on the root of the drive results in the same file path, so that's how we know we reached the top
         while (previousPath !== currentPath) {
             previousPath = currentPath;
@@ -858,8 +861,8 @@ export class Util {
      * @param array the array to flatMap over
      * @param callback a function that is called for every array item
      */
-    public flatMap<T, R>(array: T[], callback: (arg: T) => R) {
-        return Array.prototype.concat.apply([], array.map(callback)) as never as R;
+    public flatMap<T, R>(array: T[], callback: (arg: T) => R[]): R[] {
+        return Array.prototype.concat.apply([], array.map(callback));
     }
 
     /**
@@ -936,9 +939,10 @@ export class Util {
     /**
      * Find a script import that the current position touches, or undefined if not found
      */
-    public getScriptImportAtPosition(scriptImports: FileReference[], position: Position) {
+    public getScriptImportAtPosition(scriptImports: FileReference[], position: Position): FileReference | undefined {
         let scriptImport = scriptImports.find((x) => {
-            return x.filePathRange.start.line === position.line &&
+            return x.filePathRange &&
+                x.filePathRange.start.line === position.line &&
                 //column between start and end
                 position.character >= x.filePathRange.start.character &&
                 position.character <= x.filePathRange.end.character;
@@ -964,7 +968,7 @@ export class Util {
         return string.split(/\r?\n/g);
     }
 
-    public getTextForRange(string: string | string[], range: Range) {
+    public getTextForRange(string: string | string[], range: Range): string {
         let lines: string[];
         if (Array.isArray(string)) {
             lines = string;
@@ -986,7 +990,9 @@ export class Util {
             rangeLines.push(lines[i]);
         }
         const lastLine = rangeLines.pop();
-        rangeLines.push(lastLine.substring(0, endCharacter));
+        if (lastLine !== undefined) {
+            rangeLines.push(lastLine.substring(0, endCharacter));
+        }
         return rangeLines.join('\n');
     }
 
@@ -1035,9 +1041,9 @@ export class Util {
      * Given a list of ranges, create a range that starts with the first non-null lefthand range, and ends with the first non-null
      * righthand range. Returns undefined if none of the items have a range.
      */
-    public createBoundingRange(...locatables: Array<{ range?: Range }>) {
-        let leftmostRange: Range;
-        let rightmostRange: Range;
+    public createBoundingRange(...locatables: Array<{ range?: Range }>): Range | undefined {
+        let leftmostRange: Range | undefined;
+        let rightmostRange: Range | undefined;
 
         for (let i = 0; i < locatables.length; i++) {
             //set the leftmost non-null-range item
@@ -1062,7 +1068,10 @@ export class Util {
             }
         }
         if (leftmostRange) {
-            return this.createRangeFromPositions(leftmostRange.start, rightmostRange.end);
+            //if we don't have a rightmost range, use the leftmost range for both the start and end
+            return this.createRangeFromPositions(
+                leftmostRange.start,
+                rightmostRange ? rightmostRange.end : leftmostRange.end);
         } else {
             return undefined;
         }
@@ -1412,7 +1421,7 @@ export class Util {
     /**
      * Load and return the list of plugins
      */
-    public loadPlugins(cwd: string, pathOrModules: string[], onError?: (pathOrModule: string, err: Error) => void) {
+    public loadPlugins(cwd: string, pathOrModules: string[], onError?: (pathOrModule: string, err: Error) => void): CompilerPlugin[] {
         const logger = new Logger();
         return pathOrModules.reduce<CompilerPlugin[]>((acc, pathOrModule) => {
             if (typeof pathOrModule === 'string') {
@@ -1420,7 +1429,7 @@ export class Util {
                     const loaded = requireRelative(pathOrModule, cwd);
                     const theExport: CompilerPlugin | CompilerPluginFactory = loaded.default ? loaded.default : loaded;
 
-                    let plugin: CompilerPlugin;
+                    let plugin: CompilerPlugin | undefined;
 
                     // legacy plugins returned a plugin object. If we find that, then add a warning
                     if (typeof theExport === 'object') {
@@ -1430,6 +1439,9 @@ export class Util {
                         // the official plugin format is a factory function that returns a new instance of a plugin.
                     } else if (typeof theExport === 'function') {
                         plugin = theExport();
+                    } else {
+                        //this should never happen; somehow an invalid plugin has made it into here
+                        throw new Error(`TILT: Encountered an invalid plugin: ${String(plugin)}`);
                     }
 
                     if (!plugin.name) {
@@ -1516,7 +1528,7 @@ export class Util {
      * @param diagnostic the diagnostic to clone
      * @param relatedInformationFallbackLocation a default location to use for all `relatedInformation` entries that are missing a location
      */
-    public toDiagnostic(diagnostic: Diagnostic | BsDiagnostic, relatedInformationFallbackLocation: string) {
+    public toDiagnostic(diagnostic: Diagnostic | BsDiagnostic, relatedInformationFallbackLocation: string): Diagnostic {
         let relatedInformation = diagnostic.relatedInformation ?? [];
         if (relatedInformation.length > MAX_RELATED_INFOS_COUNT) {
             const relatedInfoLength = relatedInformation.length;
@@ -1545,7 +1557,7 @@ export class Util {
                 }
                 return clone;
                 //filter out null relatedInformation items
-            }).filter(x => x),
+            }).filter((x): x is DiagnosticRelatedInformation => Boolean(x)),
             code: diagnostic.code,
             source: 'brs'
         };
@@ -1967,7 +1979,7 @@ export class Util {
  * we can't use `object.tag` syntax.
  */
 export function standardizePath(stringParts, ...expressions: any[]) {
-    let result = [];
+    let result: string[] = [];
     for (let i = 0; i < stringParts.length; i++) {
         result.push(stringParts[i], expressions[i]);
     }

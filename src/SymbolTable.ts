@@ -73,7 +73,7 @@ export class SymbolTable implements SymbolTypeGetter {
     /**
      * The parent SymbolTable (if there is one)
      */
-    public get parent() {
+    public get parent(): SymbolTable | undefined {
         return this.parentProviders[this.parentProviders.length - 1]?.();
     }
 
@@ -179,7 +179,7 @@ export class SymbolTable implements SymbolTypeGetter {
         if (!this.symbolMap.has(key)) {
             this.symbolMap.set(key, []);
         }
-        this.symbolMap.get(key).push({
+        this.symbolMap.get(key)?.push({
             name: name,
             data: data,
             type: type,

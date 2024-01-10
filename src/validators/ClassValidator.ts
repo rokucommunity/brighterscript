@@ -21,12 +21,14 @@ export class BsClassValidator {
     /**
      * The key is the namespace-prefixed class name. (i.e. `NameA.NameB.SomeClass` or `CoolClass`)
      */
-    private classes: Map<string, AugmentedClassStatement>;
+    private classes: Map<string, AugmentedClassStatement> = new Map();
 
-    public validate(scope: Scope) {
+    public constructor(scope: Scope) {
         this.scope = scope;
         this.diagnostics = [];
+    }
 
+    public validate() {
         this.findClasses();
         this.linkClassesWithParents();
         this.detectCircularReferences();
@@ -98,7 +100,7 @@ export class BsClassValidator {
             ) {
                 //prevent use of `m.` anywhere before the `super()` call
                 const cancellationToken = new CancellationTokenSource();
-                let superCall: CallExpression;
+                let superCall: CallExpression | undefined;
                 newMethod.func.body.walk(createVisitor({
                     VariableExpression: (expression, parent) => {
                         const expressionNameLower = expression?.name?.text.toLowerCase();
@@ -137,20 +139,26 @@ export class BsClassValidator {
             const names = new Map<string, string>();
             do {
                 const className = cls.getName(ParseMode.BrighterScript);
+                if (!className) {
+                    break;
+                }
                 const lowerClassName = className.toLowerCase();
                 //if we've already seen this class name before, then we have a circular dependency
-                if (names.has(lowerClassName)) {
+                if (lowerClassName && names.has(lowerClassName)) {
                     this.diagnostics.push({
-                        ...DiagnosticMessages.circularReferenceDetected([
-                            ...names.values(),
-                            className
-                        ], this.scope.name),
+                        ...DiagnosticMessages.circularReferenceDetected(
+                            Array.from(names.values()).concat(className), this.scope.name),
                         file: cls.file,
                         range: cls.name.range
                     });
                     break;
                 }
                 names.set(lowerClassName, className);
+
+                if (!cls.parentClass) {
+                    break;
+                }
+
                 cls = cls.parentClass;
             } while (cls);
         }
@@ -164,14 +172,20 @@ export class BsClassValidator {
             for (let statement of classStatement.body) {
                 if (isMethodStatement(statement) || isFieldStatement(statement)) {
                     let member = statement;
-                    let lowerMemberName = member.name.text.toLowerCase();
+                    let memberName = member.name;
+
+                    if (!memberName) {
+                        continue;
+                    }
+
+                    let lowerMemberName = memberName.text.toLowerCase();
 
                     //catch duplicate member names on same class
                     if (methods[lowerMemberName] || fields[lowerMemberName]) {
                         this.diagnostics.push({
-                            ...DiagnosticMessages.duplicateIdentifier(member.name.text),
+                            ...DiagnosticMessages.duplicateIdentifier(memberName.text),
                             file: classStatement.file,
-                            range: member.name.range
+                            range: memberName.range
                         });
                     }
 
@@ -202,13 +216,13 @@ export class BsClassValidator {
                                 ancestorMemberType = ancestorAndMember.member.func.getType({ flags: SymbolTypeFlag.typetime });
                             }
                             const childFieldType = member.getType({ flags: SymbolTypeFlag.typetime });
-                            if (!ancestorMemberType.isTypeCompatible(childFieldType)) {
+                            if (childFieldType && !ancestorMemberType.isTypeCompatible(childFieldType)) {
                                 //flag incompatible child field type to ancestor field type
                                 this.diagnostics.push({
                                     ...DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty(
-                                        classStatement.getName(ParseMode.BrighterScript),
+                                        classStatement.getName(ParseMode.BrighterScript) ?? '',
                                         ancestorAndMember.classStatement.getName(ParseMode.BrighterScript),
-                                        member.name.text,
+                                        memberName.text,
                                         childFieldType.toString(),
                                         ancestorMemberType.toString()
                                     ),
@@ -246,7 +260,7 @@ export class BsClassValidator {
                                 ...DiagnosticMessages.mismatchedOverriddenMemberVisibility(
                                     classStatement.name.text,
                                     ancestorAndMember.member.name?.text,
-                                    member.accessModifier?.text || 'public',
+                                    member.accessModifier?.text ?? 'public',
                                     ancestorAndMember.member.accessModifier?.text || 'public',
                                     ancestorAndMember.classStatement.getName(ParseMode.BrighterScript)
                                 ),
@@ -266,7 +280,6 @@ export class BsClassValidator {
             }
         }
     }
-
 
     /**
      * Get the closest member with the specified name (case-insensitive)
@@ -290,7 +303,7 @@ export class BsClassValidator {
         //unlink all classes from their parents so it doesn't mess up the next scope
         for (const [, classStatement] of this.classes) {
             delete classStatement.parentClass;
-            delete classStatement.file;
+            delete (classStatement as any).file;
         }
     }
 
@@ -348,7 +361,7 @@ export class BsClassValidator {
                 let relativeParent = this.classes.get(relativeName.toLowerCase());
                 let absoluteParent = this.classes.get(absoluteName.toLowerCase());
 
-                let parentClass: AugmentedClassStatement;
+                let parentClass: AugmentedClassStatement | undefined;
                 //if we found a relative parent class
                 if (relativeParent) {
                     parentClass = relativeParent;
@@ -368,5 +381,5 @@ export class BsClassValidator {
 
 type AugmentedClassStatement = ClassStatement & {
     file: File;
-    parentClass: AugmentedClassStatement;
+    parentClass: AugmentedClassStatement | undefined;
 };

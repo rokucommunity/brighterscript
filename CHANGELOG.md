@@ -138,6 +138,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.66.0-alpha.0](https://github.com/rokucommunity/brighterscript/compare/v0.65.1...v0.66.0-alpha.0) - 2023-06-09
 ### Changed
  - all the type tracking stuff!
+## [0.65.16](https://github.com/rokucommunity/brighterscript/compare/v0.65.15...v0.65.16) - 2024-01-08
+### Added
+ - Add `pruneEmptyCodeFiles` option to prevent publishing of empty files and exclude unnecessary script imports ([#997](https://github.com/rokucommunity/brighterscript/pull/997))
+### Changed
+ - chore: improve null safety ([#996](https://github.com/rokucommunity/brighterscript/pull/996))
+
+
+
+## [0.65.15](https://github.com/rokucommunity/brighterscript/compare/v0.65.14...v0.65.15) - 2023-12-26
+### Fixed
+ - Prevent errors when using enums in a file that's not included in any scopes ([#995](https://github.com/rokucommunity/brighterscript/pull/995))
+
+
+
+## [0.65.14](https://github.com/rokucommunity/brighterscript/compare/v0.65.13...v0.65.14) - 2023-12-20
+### Fixed
+ - multi-namespace class inheritance transpile bug ([#990](https://github.com/rokucommunity/brighterscript/pull/990))
+### Changed
+ - flag missing function references for `onChange` function ([#941](https://github.com/rokucommunity/brighterscript/pull/941))
+ - upgrade to [roku-deploy@3.11.2](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3112---2023-12-20). Notable changes since 3.11.1:
+     - Update wrong host password error message ([roku-deploy#134](https://github.com/rokucommunity/roku-deploy/pull/134))
+
+
+
+## [0.65.13](https://github.com/rokucommunity/brighterscript/compare/v0.65.12...v0.65.13) - 2023-12-08
+### Fixed
+ - broken enum transpiling ([#985](https://github.com/rokucommunity/brighterscript/pull/985))
+
+
+
 ## [0.65.12](https://github.com/rokucommunity/brighterscript/compare/v0.65.11...v0.65.12) - 2023-12-07
 ### Added
  - `optional` modifier for interface and class members ([#955](https://github.com/rokucommunity/brighterscript/pull/955))

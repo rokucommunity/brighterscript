@@ -44,7 +44,7 @@ describe('XmlScope', () => {
                 <component name="Child" extends="Parent">
                 </component>
             `);
-            let childScope = program.getComponentScope('Child');
+            let childScope = program.getComponentScope('Child')!;
 
             program.validate();
 
@@ -90,7 +90,7 @@ describe('XmlScope', () => {
                 </component>
             `);
             program.validate();
-            expect(program.getComponentScope('Child').getOwnFiles()[0]).to.equal(xmlFile);
+            expect(program.getComponentScope('Child')!.getOwnFiles()[0]).to.equal(xmlFile);
         });
     });
 
@@ -107,6 +107,7 @@ describe('XmlScope', () => {
                         <function id="func3" />
                         <function name="" />
                         <function name />
+                        <field id="field1" type="string" onChange="func4" />
                     </interface>
                     <script uri="child.brs"/>
                 </component>
@@ -116,7 +117,7 @@ describe('XmlScope', () => {
                 end sub
             `);
             program.validate();
-            let childScope = program.getComponentScope('child');
+            let childScope = program.getComponentScope('child')!;
             expectDiagnostics(childScope, [{
                 ...DiagnosticMessages.xmlFunctionNotFound('func2'),
                 range: Range.create(4, 24, 4, 29)
@@ -131,6 +132,9 @@ describe('XmlScope', () => {
                 range: Range.create(7, 9, 7, 17)
             }, { // syntax error expecting '=' but found '/>'
                 code: DiagnosticMessages.xmlGenericParseError('').code
+            }, { // onChange function
+                ...DiagnosticMessages.xmlFunctionNotFound('func4'),
+                range: Range.create(8, 51, 8, 56)
             }]);
         });
 
@@ -157,7 +161,7 @@ describe('XmlScope', () => {
                 end sub
             `);
             program.validate();
-            expectDiagnostics(program.getComponentScope('child'), [{
+            expectDiagnostics(program.getComponentScope('child')!, [{
                 ...DiagnosticMessages.xmlInvalidFieldType('no'),
                 range: Range.create(4, 33, 4, 35)
             }, {

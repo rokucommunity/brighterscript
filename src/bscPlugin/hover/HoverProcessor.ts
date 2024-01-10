@@ -25,7 +25,7 @@ export class HoverProcessor {
     }
 
     public process() {
-        let hover: Hover;
+        let hover: Hover | undefined;
         if (isBrsFile(this.event.file)) {
             hover = this.getBrsFileHover(this.event.file);
         } else if (isXmlFile(this.event.file)) {

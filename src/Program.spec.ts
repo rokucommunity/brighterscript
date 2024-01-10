@@ -32,6 +32,7 @@ import { ComponentType } from './types/ComponentType';
 import { ArrayType } from './types/ArrayType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { BooleanType } from './types/BooleanType';
+import type { BsDiagnostic } from './interfaces';
 
 const sinon = createSandbox();
 
@@ -295,7 +296,7 @@ describe('Program', () => {
                 message: 'message',
                 file: undefined,
                 range: undefined
-            }];
+            }] as any as BsDiagnostic[];
             program.addDiagnostics(expected);
             const actual = (program as any).diagnostics;
             expect(actual).to.deep.equal(expected);
@@ -773,7 +774,7 @@ describe('Program', () => {
 
     describe('reloadFile', () => {
         it('picks up new files in a scope when an xml file is loaded', () => {
-            program.options.ignoreErrorCodes.push(1013);
+            program.options.ignoreErrorCodes!.push(1013);
             program.setFile('components/component1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="HeroScene" extends="Scene">
@@ -819,7 +820,7 @@ describe('Program', () => {
         });
 
         it('reloads referenced fles when xml file changes', () => {
-            program.options.ignoreErrorCodes.push(1013);
+            program.options.ignoreErrorCodes!.push(1013);
             program.setFile('components/component1.brs', '');
 
             let xmlFile = program.setFile('components/component1.xml', trim`
@@ -1143,7 +1144,7 @@ describe('Program', () => {
     });
 
     it('does not create map by default', async () => {
-        fsExtra.ensureDirSync(program.options.stagingDir);
+        fsExtra.ensureDirSync(program.options.stagingDir!);
         program.setFile('source/main.brs', `
             sub main()
             end sub
@@ -1155,7 +1156,7 @@ describe('Program', () => {
     });
 
     it('creates sourcemap for brs and xml files', async () => {
-        fsExtra.ensureDirSync(program.options.stagingDir);
+        fsExtra.ensureDirSync(program.options.stagingDir!);
         program.setFile('source/main.brs', `
             sub main()
             end sub
@@ -1181,7 +1182,7 @@ describe('Program', () => {
     });
 
     it('copies the bslib.brs file', async () => {
-        fsExtra.ensureDirSync(program.options.stagingDir);
+        fsExtra.ensureDirSync(program.options.stagingDir!);
         program.validate();
 
         await program.build({
@@ -1192,7 +1193,7 @@ describe('Program', () => {
     });
 
     it('copies the bslib.brs file to optionally specified directory', async () => {
-        fsExtra.ensureDirSync(program.options.stagingDir);
+        fsExtra.ensureDirSync(program.options.stagingDir!);
         program.options.bslibDestinationDir = 'source/opt';
         program.validate();
 
@@ -1335,7 +1336,7 @@ describe('Program', () => {
                     print "hello world"
                 end sub
             `);
-            let literalExpression: LiteralExpression;
+            let literalExpression: LiteralExpression | undefined;
             //replace all strings with "goodbye world"
             program.plugins.add({
                 name: 'TestPlugin',
@@ -1366,7 +1367,7 @@ describe('Program', () => {
             );
 
             //our literalExpression should have been restored to its original value
-            expect(literalExpression.token.text).to.eql('"hello world"');
+            expect(literalExpression!.token.text).to.eql('"hello world"');
         });
 
         it('handles Editor for beforeProgramTranspile', async () => {
@@ -1375,7 +1376,7 @@ describe('Program', () => {
                     print "hello world"
                 end sub
             `);
-            let literalExpression: LiteralExpression;
+            let literalExpression: LiteralExpression | undefined;
             //replace all strings with "goodbye world"
             program.plugins.add({
                 name: 'TestPlugin',
@@ -1404,7 +1405,7 @@ describe('Program', () => {
             );
 
             //our literalExpression should have been restored to its original value
-            expect(literalExpression.token.text).to.eql('"hello world"');
+            expect(literalExpression!.token.text).to.eql('"hello world"');
         });
 
         it('copies the embedded version of bslib.brs when a version from ropm is not found', async () => {
@@ -1548,6 +1549,42 @@ describe('Program', () => {
             ).to.eql(
                 s`${sourceRoot}/source/main.bs`
             );
+        });
+
+        it('does not publish files that are empty', async () => {
+            let sourceRoot = s`${tempDir}/sourceRootFolder`;
+            program = new Program({
+                rootDir: rootDir,
+                stagingDir: stagingDir,
+                sourceRoot: sourceRoot,
+                sourceMap: true,
+                pruneEmptyCodeFiles: true
+            });
+            program.setFile('source/types.bs', `
+                enum mainstyle
+                    dark = "dark"
+                    light = "light"
+                end enum
+            `);
+            program.setFile('source/main.bs', `
+                import "pkg:/source/types.bs"
+
+                sub main()
+                    ? "The night is " + mainstyle.dark + " and full of terror"
+                end sub
+            `);
+            await program.build();
+
+            expect(trimMap(
+                fsExtra.readFileSync(s`${stagingDir}/source/main.brs`).toString()
+            )).to.eql(trim`
+                'import "pkg:/source/types.bs"
+
+                sub main()
+                    ? "The night is " + "dark" + " and full of terror"
+                end sub
+            `);
+            expect(fsExtra.pathExistsSync(s`${stagingDir}/source/types.brs`)).to.be.false;
         });
     });
 

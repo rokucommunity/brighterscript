@@ -91,6 +91,10 @@ export interface File {
      * An editor that plugins can use to modify attributes about this file during the build process.
      */
     editor?: Editor;
+    /**
+     * Can this file be pruned from the output? This typically is true when the files not referenced anywhere, or will result in only whitespace/comment output.
+     */
+    canBePruned?: boolean;
 }
 
 export interface SerializeFileResult {

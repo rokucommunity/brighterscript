@@ -50,7 +50,7 @@ import type { BusyStatus } from './BusyStatusTracker';
 import { BusyStatusTracker } from './BusyStatusTracker';
 
 export class LanguageServer {
-    private connection = undefined as Connection;
+    private connection = undefined as any as Connection;
 
     public projects = [] as Project[];
 
@@ -84,7 +84,7 @@ export class LanguageServer {
         return createConnection(ProposedFeatures.all);
     }
 
-    private loggerSubscription: () => void;
+    private loggerSubscription: (() => void) | undefined;
 
     private keyedThrottler = new KeyedThrottler(this.debounceTimeout);
 
@@ -245,7 +245,7 @@ export class LanguageServer {
         };
     }
 
-    private initialProjectsCreated: Promise<any>;
+    private initialProjectsCreated: Promise<any> | undefined;
 
     /**
      * Ask the client for the list of `files.exclude` patterns. Useful when determining if we should process a file
@@ -749,7 +749,7 @@ export class LanguageServer {
         //clone the diagnostics for each code action, since certain diagnostics can have circular reference properties that kill the language server if serialized
         for (const codeAction of codeActions) {
             if (codeAction.diagnostics) {
-                codeAction.diagnostics = codeAction.diagnostics.map(x => util.toDiagnostic(x, params.textDocument.uri));
+                codeAction.diagnostics = codeAction.diagnostics?.map(x => util.toDiagnostic(x, params.textDocument.uri));
             }
         }
         return codeActions;
@@ -1221,7 +1221,7 @@ export class LanguageServer {
 
             const activeSignature = signatures.length > 0 ? 0 : null;
 
-            const activeParameter = activeSignature >= 0 ? signatures[activeSignature]?.index : null;
+            const activeParameter = activeSignature !== null ? signatures[activeSignature]?.index : null;
 
             let results: SignatureHelp = {
                 signatures: signatures.map((s) => s.signature),
@@ -1251,7 +1251,7 @@ export class LanguageServer {
             await Promise.all(this.getProjects().map(project => {
                 return project.builder.program.getReferences(srcPath, position);
             })),
-            c => c
+            c => c ?? []
         );
         return results.filter((r) => r);
     }
@@ -1267,7 +1267,7 @@ export class LanguageServer {
 
     @AddStackToErrorMessage
     @TrackBusyStatus
-    private async onFullSemanticTokens(params: SemanticTokensParams) {
+    private async onFullSemanticTokens(params: SemanticTokensParams): Promise<SemanticTokens | undefined> {
         await this.waitAllProjectFirstRuns();
         //wait for the file to settle (in case there are multiple file changes in quick succession)
         await this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true);
@@ -1281,9 +1281,11 @@ export class LanguageServer {
             //find the first program that has this file, since it would be incredibly inefficient to generate semantic tokens for the same file multiple times.
             if (project.builder.program.hasFile(srcPath)) {
                 let semanticTokens = project.builder.program.getSemanticTokens(srcPath);
-                return {
-                    data: encodeSemanticTokens(semanticTokens)
-                } as SemanticTokens;
+                if (semanticTokens !== undefined) {
+                    return {
+                        data: encodeSemanticTokens(semanticTokens)
+                    } as SemanticTokens;
+                }
             }
         }
     }

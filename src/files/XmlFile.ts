@@ -117,6 +117,11 @@ export class XmlFile implements File {
     public commentFlags = [] as CommentFlag[];
 
     /**
+     * Will this file result in only comment or whitespace output? If so, it can be excluded from the output if that bsconfig setting is enabled.
+     */
+    readonly canBePruned = false;
+
+    /**
      * The list of script imports delcared in the XML of this file.
      * This excludes parent imports and auto codebehind imports
      */

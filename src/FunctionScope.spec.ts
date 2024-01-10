@@ -1,6 +1,7 @@
 import { expect } from 'chai';
 import type { BrsFile } from './files/BrsFile';
 import { FunctionScope } from './FunctionScope';
+import type { FunctionExpression } from './parser/Expression';
 import { Program } from './Program';
 
 describe('FunctionScope', () => {
@@ -9,7 +10,7 @@ describe('FunctionScope', () => {
     let program: Program;
     beforeEach(() => {
         program = new Program({ rootDir: rootDir });
-        scope = new FunctionScope(null);
+        scope = new FunctionScope(null as any as FunctionExpression);
     });
 
     afterEach(() => {
