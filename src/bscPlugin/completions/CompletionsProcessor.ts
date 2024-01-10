@@ -1,4 +1,4 @@
-import { isBlock, isBrsFile, isCallableType, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isFunctionExpression, isInterfaceType, isMethodStatement, isNamespaceStatement, isNamespaceType, isNativeType, isXmlFile, isXmlScope } from '../../astUtils/reflection';
+import { isBlock, isBrsFile, isCallableType, isClassStatement, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isFunctionExpression, isInterfaceType, isMethodStatement, isNamespaceStatement, isNamespaceType, isNativeType, isXmlFile, isXmlScope } from '../../astUtils/reflection';
 import type { FileReference, ProvideCompletionsEvent } from '../../interfaces';
 import type { File } from '../../files/File';
 import { DeclarableTypes, Keywords, TokenKind } from '../../lexer/TokenKind';
@@ -16,7 +16,7 @@ import type { BrsFile } from '../../files/BrsFile';
 import type { FunctionScope } from '../../FunctionScope';
 import { BooleanType, InvalidType, type BscType } from '../../types';
 import type { AstNode } from '../../parser/AstNode';
-import type { FunctionStatement, NamespaceStatement } from '../../parser/Statement';
+import type { ClassStatement, FunctionStatement, NamespaceStatement } from '../../parser/Statement';
 import type { Token } from '../../lexer/Token';
 import { createIdentifier } from '../../astUtils/creators';
 
@@ -160,6 +160,7 @@ export class CompletionsProcessor {
         let shouldLookForMembers = false;
         let shouldLookForCallFuncMembers = false;
         let symbolTableLookupFlag = SymbolTypeFlag.runtime;
+        let beforeDotToken: Token;
 
         if (file.tokenFollows(currentToken, TokenKind.Goto)) {
             let functionScope = file.getFunctionScopeAtPosition(position);
@@ -169,12 +170,12 @@ export class CompletionsProcessor {
 
         if (file.getPreviousToken(currentToken)?.kind === TokenKind.Dot || file.isTokenNextToTokenKind(currentToken, TokenKind.Dot)) {
             const dotToken = currentToken.kind === TokenKind.Dot ? currentToken : file.getTokenBefore(currentToken, TokenKind.Dot);
-            const beforeDotToken = file.getTokenBefore(dotToken);
+            beforeDotToken = file.getTokenBefore(dotToken);
             expression = file.getClosestExpression(beforeDotToken?.range.end);
             shouldLookForMembers = true;
         } else if (file.getPreviousToken(currentToken)?.kind === TokenKind.Callfunc || file.isTokenNextToTokenKind(currentToken, TokenKind.Callfunc)) {
             const dotToken = currentToken.kind === TokenKind.Callfunc ? currentToken : file.getTokenBefore(currentToken, TokenKind.Callfunc);
-            const beforeDotToken = file.getTokenBefore(dotToken);
+            beforeDotToken = file.getTokenBefore(dotToken);
             expression = file.getClosestExpression(beforeDotToken?.range.end);
             shouldLookForCallFuncMembers = true;
         } else if (file.getPreviousToken(currentToken)?.kind === TokenKind.As || file.isTokenNextToTokenKind(currentToken, TokenKind.As)) {
@@ -231,6 +232,10 @@ export class CompletionsProcessor {
         let gotSymbolsFromGlobal = false;
         const shouldLookInNamespace: NamespaceStatement = !(shouldLookForMembers || shouldLookForCallFuncMembers) && expression.findAncestor(isNamespaceStatement);
 
+        const containingClassStmt = expression.findAncestor<ClassStatement>(isClassStatement);
+        const containingNamespace = expression.findAncestor<NamespaceStatement>(isNamespaceStatement);
+        const containingNamespaceName = containingNamespace?.getName(ParseMode.BrighterScript);
+
         for (const scope of this.event.scopes) {
             if (tokenKind === TokenKind.StringLiteral || tokenKind === TokenKind.TemplateStringQuasi) {
                 result.push(...this.getStringLiteralCompletions(scope, currentToken));
@@ -244,8 +249,13 @@ export class CompletionsProcessor {
                 currentSymbols = symbolTable?.getAllSymbols(symbolTableLookupFlag) ?? [];
                 const tokenType = expression.getType({ flags: SymbolTypeFlag.runtime });
                 if (isClassType(tokenType)) {
-                    // don't return the constructor as a property
-                    currentSymbols = currentSymbols.filter((symbol) => symbol.name !== 'new');
+                    currentSymbols = currentSymbols.filter((symbol) => {
+                        if (symbol.name === 'new') {
+                            // don't return the constructor as a property
+                            return false;
+                        }
+                        return this.isMemberAccessible(scope, symbol, containingClassStmt, containingNamespaceName);
+                    });
                 }
             } else {
                 // get symbols directly from current symbol table and scope
@@ -402,6 +412,28 @@ export class CompletionsProcessor {
         }
         return false;
 
+    }
+
+    private isMemberAccessible(scope: Scope, member: BscSymbol, containingClassStmt: ClassStatement, containingNamespaceName: string): boolean {
+        // eslint-disable-next-line no-bitwise
+        const isPrivate = member.flags & SymbolTypeFlag.private;
+        // eslint-disable-next-line no-bitwise
+        const isProtected = member.flags & SymbolTypeFlag.protected;
+
+        if (!containingClassStmt || !(isPrivate || isProtected)) {
+            // not in a class - no private or protected members allowed
+            return !(isPrivate || isProtected);
+        }
+        const containingClassName = containingClassStmt.getName(ParseMode.BrighterScript);
+        const classStmtThatDefinedMember = member.data?.definingNode?.findAncestor<ClassStatement>(isClassStatement);
+        if (isPrivate) {
+            return containingClassStmt === classStmtThatDefinedMember;
+
+        } else if (isProtected) {
+            const ancestorClasses = scope.getClassHierarchy(containingClassName, containingNamespaceName).map(link => link.item);
+            return ancestorClasses.includes(classStmtThatDefinedMember);
+        }
+        return true;
     }
 
     private getLabelCompletion(functionScope: FunctionScope) {
