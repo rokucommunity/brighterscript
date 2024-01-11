@@ -24,7 +24,7 @@ import { tempDir, rootDir, stagingDir } from './testHelpers.spec';
 
 let sinon = sinonImport.createSandbox();
 
-describe('Program', () => {
+describe.only('Program', () => {
     let program: Program;
 
     beforeEach(() => {

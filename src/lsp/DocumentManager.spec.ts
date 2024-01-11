@@ -20,12 +20,13 @@ describe.only('DocumentManager', () => {
         expect(
             await actionsPromise
         ).to.eql({
-            delete: [],
-            set: [{
-                type: 'set',
-                srcPath: 'alpha',
-                fileContents: 'three'
-            }]
+            actions: [
+                {
+                    type: 'set',
+                    srcPath: 'alpha',
+                    fileContents: 'three'
+                }
+            ]
         });
     });
 
@@ -47,16 +48,17 @@ describe.only('DocumentManager', () => {
         expect(
             await actionsPromise
         ).to.eql({
-            delete: [],
-            set: [{
-                type: 'set',
-                srcPath: 'alpha',
-                fileContents: 'three'
-            }, {
-                type: 'set',
-                srcPath: 'beta',
-                fileContents: 'four'
-            }]
+            actions: [
+                {
+                    type: 'set',
+                    srcPath: 'alpha',
+                    fileContents: 'three'
+                }, {
+                    type: 'set',
+                    srcPath: 'beta',
+                    fileContents: 'four'
+                }
+            ]
         });
     });
 
@@ -66,11 +68,12 @@ describe.only('DocumentManager', () => {
         expect(
             await manager.once('flush')
         ).to.eql({
-            delete: [{
-                type: 'delete',
-                srcPath: 'alpha'
-            }],
-            set: []
+            actions: [
+                {
+                    type: 'delete',
+                    srcPath: 'alpha'
+                }
+            ]
         });
 
         manager.set('alpha', 'two');
@@ -79,12 +82,13 @@ describe.only('DocumentManager', () => {
         expect(
             await manager.once('flush')
         ).to.eql({
-            delete: [],
-            set: [{
-                type: 'set',
-                srcPath: 'alpha',
-                fileContents: 'three'
-            }]
+            actions: [
+                {
+                    type: 'set',
+                    srcPath: 'alpha',
+                    fileContents: 'three'
+                }
+            ]
         });
     });
 });

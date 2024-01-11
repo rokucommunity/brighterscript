@@ -6,9 +6,11 @@ import type { LspDiagnostic, LspProject, MaybePromise } from './LspProject';
 import { Project } from './Project';
 import { WorkerThreadProject } from './worker/WorkerThreadProject';
 import type { Position } from 'vscode-languageserver';
+import { CancellationTokenSource } from 'vscode-languageserver';
 import { Deferred } from '../deferred';
 import type { FlushEvent } from './DocumentManager';
 import { DocumentManager } from './DocumentManager';
+import { Cache } from '../Cache';
 
 /**
  * Manages all brighterscript projects for the language server
@@ -38,6 +40,12 @@ export class ProjectManager {
     private async applyDocumentChanges(event: FlushEvent) {
         //apply all of the document actions to each project in parallel
         await Promise.all(this.projects.map(async (project) => {
+
+            //cancel any active validation that's going on
+            console.log('cancelValidate');
+            this.cancelValidateProject(project);
+
+            //apply every file event to this project
             await Promise.all(event.actions.map(async (action) => {
                 if (action.type === 'set') {
                     await project.setFile(action.srcPath, action.fileContents);
@@ -51,12 +59,27 @@ export class ProjectManager {
         }));
     }
 
+    private pendingValidations = new Cache<LspProject, CancellationTokenSource[]>();
+
     /**
      * Validate the given project. This wraps the call in locks to ensure other actions will wait
      * @param project
      */
-    private async validateProject(project) {
-        await project.validate();
+    private async validateProject(project: LspProject) {
+        const cancellationToken = new CancellationTokenSource();
+        this.pendingValidations.getOrAdd(project, () => []).push(cancellationToken);
+        await project.validate({
+            cancellationToken: cancellationToken.token
+        });
+    }
+
+    private cancelValidateProject(project: LspProject) {
+        const tokens = this.pendingValidations.getOrAdd<CancellationTokenSource[]>(project, () => []);
+
+        //remove all the tokens from the list, and cancel each one of them
+        for (const token of tokens.splice(0, tokens.length)) {
+            token.cancel();
+        }
     }
 
 

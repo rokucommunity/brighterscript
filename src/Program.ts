@@ -1,8 +1,8 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location } from 'vscode-languageserver';
-import { CompletionItemKind } from 'vscode-languageserver';
+import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location, CancellationToken } from 'vscode-languageserver';
+import { CancellationTokenSource, CompletionItemKind } from 'vscode-languageserver';
 import type { BsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
@@ -29,6 +29,7 @@ import type { Statement } from './parser/AstNode';
 import { CallExpressionInfo } from './bscPlugin/CallExpressionInfo';
 import { SignatureHelpUtil } from './bscPlugin/SignatureHelpUtil';
 import { DiagnosticSeverityAdjuster } from './DiagnosticSeverityAdjuster';
+import { Sequencer } from './common/Sequencer';
 
 const startOfSourcePkgPath = `source${path.sep}`;
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
@@ -658,45 +659,56 @@ export class Program {
     /**
      * Traverse the entire project, and validate all scopes
      */
-    public validate() {
-        this.logger.time(LogLevel.log, ['Validating project'], () => {
-            this.diagnostics = [];
-            this.plugins.emit('beforeProgramValidate', this);
+    public validate(): void;
+    public validate(options: { async: false; cancellationToken?: CancellationToken }): void;
+    public validate(options: { async: true; cancellationToken?: CancellationToken }): Promise<void>;
+    public validate(options?: { async?: boolean; cancellationToken?: CancellationToken }) {
+        return this.logger.time(LogLevel.log, ['Validating project'], (start, stop, cancel) => {
 
-            //validate every file
-            for (const file of Object.values(this.files)) {
-                //for every unvalidated file, validate it
-                if (!file.isValidated) {
-                    this.plugins.emit('beforeFileValidate', {
-                        program: this,
-                        file: file
-                    });
+            const sequencer = new Sequencer({
+                name: 'program.validate',
+                async: options?.async ?? false,
+                cancellationToken: options?.cancellationToken ?? new CancellationTokenSource().token
+            });
 
-                    //emit an event to allow plugins to contribute to the file validation process
-                    this.plugins.emit('onFileValidate', {
-                        program: this,
-                        file: file
-                    });
-                    //call file.validate() IF the file has that function defined
-                    file.validate?.();
-                    file.isValidated = true;
+            //for every unvalidated file, validate it
+            return sequencer
+                .once(() => {
+                    this.diagnostics = [];
+                    this.plugins.emit('beforeProgramValidate', this);
+                })
+                .forEach(Object.values(this.files), (file) => {
+                    if (!file.isValidated) {
+                        this.plugins.emit('beforeFileValidate', {
+                            program: this,
+                            file: file
+                        });
 
-                    this.plugins.emit('afterFileValidate', file);
-                }
-            }
+                        //emit an event to allow plugins to contribute to the file validation process
+                        this.plugins.emit('onFileValidate', {
+                            program: this,
+                            file: file
+                        });
+                        //call file.validate() IF the file has that function defined
+                        file.validate?.();
+                        file.isValidated = true;
 
-            this.logger.time(LogLevel.info, ['Validate all scopes'], () => {
-                for (let scopeName in this.scopes) {
-                    let scope = this.scopes[scopeName];
+                        this.plugins.emit('afterFileValidate', file);
+                    }
+                })
+                .forEach(Object.values(this.scopes), (scope) => {
                     scope.linkSymbolTable();
                     scope.validate();
                     scope.unlinkSymbolTable();
-                }
-            });
-
-            this.detectDuplicateComponentNames();
-
-            this.plugins.emit('afterProgramValidate', this);
+                })
+                .once(() => {
+                    this.detectDuplicateComponentNames();
+                    this.plugins.emit('afterProgramValidate', this);
+                })
+                .onCancel(() => {
+                    cancel();
+                })
+                .run();
         });
     }
 

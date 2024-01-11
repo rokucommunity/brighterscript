@@ -4,7 +4,7 @@ import type { ParseError } from 'jsonc-parser';
 import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 import * as path from 'path';
 import { rokuDeploy, DefaultFiles, standardizePath as rokuDeployStandardizePath } from 'roku-deploy';
-import type { Diagnostic, Position, Range, Location } from 'vscode-languageserver';
+import type { Diagnostic, Position, Range, Location, CancellationToken } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
@@ -1510,6 +1510,14 @@ export class Util {
                 disposable?.dispose?.();
             }
         }
+    }
+
+    /**
+     * Run a series of actions in chunks. This allows us to run them sequentially or each operation on nexttick to prevent starving the CPU
+     * @param options
+     */
+    public runInChunks(options: { async: boolean; cancel: CancellationToken; actions: Array<{ collection: any[]; action: (item: any) => any }> }) {
+
     }
 }
 

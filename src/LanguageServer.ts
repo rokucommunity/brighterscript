@@ -178,10 +178,10 @@ export class LanguageServer implements OnHandler<Connection> {
                 // },
                 // documentSymbolProvider: true,
                 // workspaceSymbolProvider: true,
-                semanticTokensProvider: {
-                    legend: semanticTokensLegend,
-                    full: true
-                } as SemanticTokensOptions
+                // semanticTokensProvider: {
+                //     legend: semanticTokensLegend,
+                //     full: true
+                // } as SemanticTokensOptions
                 // referencesProvider: true,
                 // codeActionProvider: {
                 //     codeActionKinds: [CodeActionKind.Refactor]
@@ -946,6 +946,7 @@ export class LanguageServer implements OnHandler<Connection> {
     @TrackBusyStatus
     private onTextDocumentDidChangeContent(event: TextDocumentChangeEvent<TextDocument>) {
         const srcPath = URI.parse(event.document.uri).fsPath;
+        console.log('setFile', srcPath);
         this.projectManager.setFile(srcPath, event.document.getText());
     }
 

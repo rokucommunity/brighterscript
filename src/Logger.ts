@@ -125,10 +125,10 @@ export class Logger {
      * Writes to the log (if logLevel matches), and also times how long the action took to occur.
      * `action` is called regardless of logLevel, so this function can be used to nicely wrap
      * pieces of functionality.
-     * The action function also includes two parameters, `pause` and `resume`, which can be used to improve timings by focusing only on
-     * the actual logic of that action.
+     * The action function also includes two parameters called `pause` and `resume`, which can be used to improve timings by focusing only on
+     * the actual logic of that action. The third parameter is called `cancel`, and will prevent the log function from being run
      */
-    time<T>(logLevel: LogLevel, messages: any[], action: (pause: () => void, resume: () => void) => T): T {
+    time<T>(logLevel: LogLevel, messages: any[], action: (pause: () => void, resume: () => void, cancel: () => void) => T): T {
         //call the log if loglevel is in range
         if (this._logLevel >= logLevel) {
             const stopwatch = new Stopwatch();
@@ -138,15 +138,21 @@ export class Logger {
             this[logLevelString](...messages ?? []);
             this.indent += '  ';
 
+            let isCanceled = false;
+
             stopwatch.start();
             //execute the action
-            const result = action(stopwatch.stop.bind(stopwatch), stopwatch.start.bind(stopwatch)) as any;
+            const result = action(stopwatch.stop.bind(stopwatch), stopwatch.start.bind(stopwatch), () => {
+                isCanceled = true;
+            }) as any;
 
             //return a function to call when the timer is complete
             const done = () => {
                 stopwatch.stop();
                 this.indent = this.indent.substring(2);
-                this[logLevelString](...messages ?? [], `finished. (${chalk.blue(stopwatch.getDurationText())})`);
+                if (!isCanceled) {
+                    this[logLevelString](...messages ?? [], `finished. (${chalk.blue(stopwatch.getDurationText())})`);
+                }
             };
 
             //if this is a promise, wait for it to resolve and then return the original result
@@ -160,7 +166,7 @@ export class Logger {
                 return result;
             }
         } else {
-            return action(noop, noop);
+            return action(noop, noop, noop);
         }
     }
 }
