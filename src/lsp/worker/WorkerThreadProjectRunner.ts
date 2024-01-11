@@ -47,7 +47,7 @@ export class WorkerThreadProjectRunner {
      */
     private onActivate() {
         //clean up any existing project
-        this.project.dispose();
+        this.project?.dispose();
 
         //make a new instance of the project (which is the same way we run it in the main thread).
         this.project = new Project();
