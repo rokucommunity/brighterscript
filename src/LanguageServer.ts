@@ -17,7 +17,6 @@ import type {
     SignatureHelp,
     SignatureHelpParams,
     CodeActionParams,
-    SemanticTokensOptions,
     SemanticTokens,
     SemanticTokensParams,
     TextDocumentChangeEvent,
@@ -36,8 +35,6 @@ import {
     FileChangeType,
     ProposedFeatures,
     TextDocuments,
-    TextDocumentSyncKind,
-    CodeActionKind
 } from 'vscode-languageserver/node';
 import { URI } from 'vscode-uri';
 import { TextDocument } from 'vscode-languageserver-textdocument';

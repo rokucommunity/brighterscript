@@ -87,10 +87,8 @@ export class MessageHandler<T, TRequestName = MethodNames<T>> {
         this.port.postMessage(request);
         const response = await responsePromise;
         if ('error' in response) {
-            const error = this.objectToError(response.error);
-            (error as any)._response = response;
             //throw the error so it causes a rejected promise (like we'd expect)
-            throw error;
+            throw new Error(`Worker thread encountered an error: ${JSON.stringify(response.error.stack)}`);
         }
         return response;
     }
