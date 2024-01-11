@@ -85,7 +85,7 @@ export class BrsFilePreTranspileProcessor {
         }
     }
 
-    private processExpression(expression: Expression, scope: Scope) {
+    private processExpression(expression: Expression, scope: Scope | undefined) {
         let containingNamespace = this.event.file.getNamespaceStatementForPosition(expression.range.start)?.getName(ParseMode.BrighterScript);
 
         const parts = util.splitExpression(expression);

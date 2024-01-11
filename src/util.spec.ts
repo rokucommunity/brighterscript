@@ -8,6 +8,7 @@ import { createSandbox } from 'sinon';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { tempDir, rootDir, expectTypeToBe } from './testHelpers.spec';
 import { Program } from './Program';
+import type { BsDiagnostic } from './interfaces';
 import { TypeChainEntry } from './interfaces';
 import { NamespaceType } from './types/NamespaceType';
 import { ClassType } from './types/ClassType';
@@ -75,11 +76,11 @@ describe('util', () => {
         it('does not crash when diagnostic is missing location information', () => {
             const program = new Program({});
             const file = program.setFile('source/main.brs', '');
-            const diagnostic = {
+            const diagnostic: BsDiagnostic = {
                 file: file,
                 message: 'crash',
                 //important part of the test. range must be missing
-                range: undefined
+                range: undefined as any
             };
 
             file.commentFlags.push({
@@ -117,7 +118,7 @@ describe('util', () => {
             fsExtra.outputFileSync(s`${rootDir}/grandparent.json`, `{"extends": "greatgrandparent.json"}`);
             fsExtra.outputFileSync(s`${rootDir}/greatgrandparent.json`, `{}`);
             expect(
-                util.loadConfigFile(s`${rootDir}/child.json`)._ancestors.map(x => s(x))
+                util.loadConfigFile(s`${rootDir}/child.json`)?._ancestors?.map(x => s(x))
             ).to.eql([
                 s`${rootDir}/child.json`,
                 s`${rootDir}/parent.json`,
@@ -130,7 +131,7 @@ describe('util', () => {
             fsExtra.outputFileSync(s`${rootDir}/child.json`, `{}`);
             let config = util.loadConfigFile(s`${rootDir}/child.json`);
             expect(
-                config._ancestors.map(x => s(x))
+                config?._ancestors?.map(x => s(x))
             ).to.eql([
                 s`${rootDir}/child.json`
             ]);
@@ -146,7 +147,7 @@ describe('util', () => {
                 ]
             };
             util.resolvePathsRelativeTo(config, 'plugins', s`${rootDir}/config`);
-            expect(config.plugins.map(p => (p ? util.pathSepNormalize(p, '/') : undefined))).to.deep.equal([
+            expect(config?.plugins?.map(p => (p ? util.pathSepNormalize(p, '/') : undefined))).to.deep.equal([
                 `${rootDir}/config/plugins.js`,
                 `${rootDir}/config/scripts/plugins.js`,
                 `${rootDir}/scripts/plugins.js`,
@@ -161,11 +162,11 @@ describe('util', () => {
                     'bsplugin',
                     '../config/plugins.js',
                     'bsplugin',
-                    undefined
+                    undefined as any
                 ]
             };
             util.resolvePathsRelativeTo(config, 'plugins', s`${process.cwd()}/config`);
-            expect(config.plugins.map(p => (p ? util.pathSepNormalize(p, '/') : undefined))).to.deep.equal([
+            expect(config?.plugins?.map(p => (p ? util.pathSepNormalize(p, '/') : undefined))).to.deep.equal([
                 s`${process.cwd()}/config/plugins.js`,
                 'bsplugin'
             ].map(p => util.pathSepNormalize(p, '/')));
@@ -332,6 +333,12 @@ describe('util', () => {
             expect(util.normalizeConfig(<any>{ emitDefinitions: 123 }).emitDefinitions).to.be.false;
             expect(util.normalizeConfig(<any>{ emitDefinitions: undefined }).emitDefinitions).to.be.false;
             expect(util.normalizeConfig(<any>{ emitDefinitions: 'true' }).emitDefinitions).to.be.false;
+        });
+
+        it('sets pruneEmptyCodeFiles to false by default, or true if explicitly true', () => {
+            expect(util.normalizeConfig({}).pruneEmptyCodeFiles).to.be.false;
+            expect(util.normalizeConfig({ pruneEmptyCodeFiles: true }).pruneEmptyCodeFiles).to.be.true;
+            expect(util.normalizeConfig({ pruneEmptyCodeFiles: false }).pruneEmptyCodeFiles).to.be.false;
         });
 
         it('loads project from disc', () => {
@@ -501,10 +508,10 @@ describe('util', () => {
     describe('comparePositionToRange', () => {
         it('does not crash on undefined props', () => {
             expect(
-                util.comparePositionToRange(null, util.createRange(0, 0, 0, 0))
+                util.comparePositionToRange(undefined, util.createRange(0, 0, 0, 0))
             ).to.eql(0);
             expect(
-                util.comparePositionToRange(util.createPosition(1, 1), null)
+                util.comparePositionToRange(util.createPosition(1, 1), undefined)
             ).to.eql(0);
         });
 
@@ -616,10 +623,10 @@ describe('util', () => {
     describe('rangesIntersect', () => {
         it('does not crash on undefined range', () => {
             expect(
-                util.rangesIntersect(null, util.createRange(0, 0, 0, 0))
+                util.rangesIntersect(undefined, util.createRange(0, 0, 0, 0))
             ).to.be.false;
             expect(
-                util.rangesIntersect(util.createRange(0, 0, 0, 0), null)
+                util.rangesIntersect(util.createRange(0, 0, 0, 0), undefined)
             ).to.be.false;
         });
 
@@ -715,10 +722,10 @@ describe('util', () => {
     describe('rangesIntersectOrTouch', () => {
         it('does not crash on undefined range', () => {
             expect(
-                util.rangesIntersectOrTouch(null, util.createRange(0, 0, 0, 0))
+                util.rangesIntersectOrTouch(undefined, util.createRange(0, 0, 0, 0))
             ).to.be.false;
             expect(
-                util.rangesIntersectOrTouch(util.createRange(0, 0, 0, 0), null)
+                util.rangesIntersectOrTouch(util.createRange(0, 0, 0, 0), undefined)
             ).to.be.false;
         });
 
@@ -874,11 +881,11 @@ describe('util', () => {
             expect(
                 util.toDiagnostic({
                     ...DiagnosticMessages.cannotFindName('someVar'),
-                    file: undefined,
+                    file: undefined as any,
                     range: util.createRange(1, 2, 3, 4),
                     relatedInformation: [{
                         message: 'Alpha',
-                        location: undefined
+                        location: undefined as any
                     }]
                 }, 'u/r/i').relatedInformation
             ).to.eql([{
@@ -893,7 +900,7 @@ describe('util', () => {
             expect(
                 util.toDiagnostic({
                     ...DiagnosticMessages.cannotFindName('someVar'),
-                    file: undefined,
+                    file: undefined as any,
                     range: util.createRange(1, 2, 3, 4),
                     relatedInformation: [{
                         message: 'Alpha',
@@ -902,9 +909,9 @@ describe('util', () => {
                         )
                     }, {
                         message: 'Beta',
-                        location: undefined
+                        location: undefined as any
                     }]
-                }, undefined).relatedInformation
+                }, undefined as any).relatedInformation
             ).to.eql([{
                 message: 'Alpha',
                 location: util.createLocation(

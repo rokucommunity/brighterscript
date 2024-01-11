@@ -25,7 +25,7 @@ describe('BrsFileSemanticTokensProcessor', () => {
             expectZeroDiagnostics(program);
         }
         const result = util.sortByRange(
-            program.getSemanticTokens(file.srcPath)
+            program.getSemanticTokens(file.srcPath)!
         );
 
         //sort modifiers

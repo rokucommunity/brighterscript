@@ -1,11 +1,12 @@
 import type { Expression } from '../parser/AstNode';
 import type { CallExpression, CallfuncExpression, NewExpression, VariableExpression } from '../parser/Expression';
-import type { ClassStatement, NamespaceStatement } from '../parser/Statement';
+import type { ClassStatement } from '../parser/Statement';
 import { isCallExpression, isCallfuncExpression, isVariableExpression, isDottedGetExpression, isClassStatement, isNewExpression } from '../astUtils/reflection';
 import type { BrsFile } from '../files/BrsFile';
 import type { Position } from 'vscode-languageserver-protocol';
 import { util } from '../util';
 import { ParseMode } from '../parser/Parser';
+import type { NamespaceContainer } from '../interfaces';
 
 
 export enum CallExpressionType {
@@ -29,7 +30,7 @@ export class CallExpressionInfo {
 
     file: BrsFile;
     myClass: ClassStatement;
-    namespace: NamespaceStatement;
+    namespace?: NamespaceContainer;
     dotPart: string;
     name: string;
     isCallingMethodOnMyClass: boolean;
@@ -80,7 +81,7 @@ export class CallExpressionInfo {
                 let parts = util.getAllDottedGetParts(callExpression.callee);
                 parts.splice(parts?.length - 1, 1);
                 this.dotPart = parts.map(x => x.text).join('.');
-                this.namespace = this.getNamespace(this.dotPart, this.file);
+                this.namespace = this.getNamespace();
             }
         }
 
@@ -142,7 +143,7 @@ export class CallExpressionInfo {
 
     }
 
-    private getNamespace(dotPart: string, file: BrsFile): any {
+    private getNamespace(): NamespaceContainer {
         let scope = this.file.program.getFirstScopeForFile(this.file);
         return scope.namespaceLookup.get(this.dotPart);
     }
@@ -161,4 +162,3 @@ export class CallExpressionInfo {
     }
 
 }
-

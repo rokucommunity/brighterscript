@@ -111,6 +111,24 @@ export class BrsFile implements File {
     public editor?: Editor;
 
     /**
+     * Will this file result in only comment or whitespace output? If so, it can be excluded from the output if that bsconfig setting is enabled.
+     */
+    public get canBePruned() {
+        let canPrune = true;
+        this.ast.walk(createVisitor({
+            FunctionStatement: () => {
+                canPrune = false;
+            },
+            ClassStatement: () => {
+                canPrune = false;
+            }
+        }), {
+            walkMode: WalkMode.visitStatements
+        });
+        return canPrune;
+    }
+
+    /**
      * The parseMode used for the parser for this file
      */
     public parseMode = ParseMode.BrightScript;

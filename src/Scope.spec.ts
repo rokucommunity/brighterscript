@@ -8,7 +8,7 @@ import PluginInterface from './PluginInterface';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, trim } from './testHelpers.spec';
 import { Logger } from './Logger';
 import type { BrsFile } from './files/BrsFile';
-import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
+import type { NamespaceStatement } from './parser/Statement';
 import type { CompilerPlugin, OnScopeValidateEvent } from './interfaces';
 import { DiagnosticOrigin } from './interfaces';
 import { SymbolTypeFlag } from './SymbolTable';
@@ -48,7 +48,7 @@ describe('Scope', () => {
     it('getEnumMemberFileLink does not crash on undefined name', () => {
         program.setFile('source/main.bs', ``);
         const scope = program.getScopesForFile('source/main.bs')[0];
-        scope.getEnumMemberFileLink(null);
+        scope.getEnumMemberFileLink(null as any);
         //test passes if this doesn't explode
     });
 
@@ -2147,26 +2147,26 @@ describe('Scope', () => {
                 program = new Program({ rootDir: rootDir });
 
                 program.setFile('components/child.xml', trim`
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="child" extends="parent">
-                    <script uri="child.brs"/>
-                </component>
-            `);
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="child" extends="parent">
+                        <script uri="child.brs"/>
+                    </component>
+                `);
                 program.setFile(s`components/child.brs`, ``);
                 program.validate();
                 let childScope = program.getComponentScope('child');
                 expect(childScope.getAllCallables().map(x => x.callable.name)).not.to.include('parentSub');
 
                 program.setFile('components/parent.xml', trim`
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="parent" extends="Scene">
-                    <script uri="parent.brs"/>
-                </component>
-            `);
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="parent" extends="Scene">
+                        <script uri="parent.brs"/>
+                    </component>
+                `);
                 program.setFile(s`components/parent.brs`, `
-                sub parentSub()
-                end sub
-            `);
+                    sub parentSub()
+                    end sub
+                `);
                 program.validate();
 
                 expect(childScope.getAllCallables().map(x => x.callable.name)).to.include('parentSub');
@@ -2263,7 +2263,7 @@ describe('Scope', () => {
                     end function
                 end namespace
             `);
-            delete ((file.ast.statements[0] as NamespaceStatement).body.statements[0] as FunctionStatement).name;
+            delete ((file.ast.statements[0] as NamespaceStatement).body.statements[0] as any).name;
             program.validate();
             program['scopes']['source'].buildNamespaceLookup();
         });

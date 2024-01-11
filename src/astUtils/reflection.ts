@@ -38,19 +38,19 @@ import type { AssociativeArrayType } from '../types/AssociativeArrayType';
 import { TokenKind } from '../lexer/TokenKind';
 
 // File reflection
-export function isBrsFile(file: File): file is BrsFile {
+export function isBrsFile(file: File | undefined): file is BrsFile {
     return file?.constructor.name === 'BrsFile';
 }
 
-export function isXmlFile(file: (File | XmlFile)): file is XmlFile {
+export function isXmlFile(file: (File | XmlFile | undefined)): file is XmlFile {
     return file?.constructor.name === 'XmlFile';
 }
 
-export function isAssetFile(file: (File | AssetFile)): file is AssetFile {
+export function isAssetFile(file: (File | AssetFile | undefined)): file is AssetFile {
     return file?.constructor.name === 'AssetFile';
 }
 
-export function isXmlScope(scope: (Scope)): scope is XmlScope {
+export function isXmlScope(scope: (Scope | undefined)): scope is XmlScope {
     return scope?.constructor.name === 'XmlScope';
 }
 

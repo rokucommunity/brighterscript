@@ -107,7 +107,7 @@ export class CallExpression extends Expression {
     public readonly range: Range;
 
     transpile(state: BrsTranspileState, nameOverride?: string) {
-        let result = [];
+        let result: Array<string | SourceNode> = [];
 
         //transpile the name
         if (nameOverride) {

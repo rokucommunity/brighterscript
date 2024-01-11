@@ -855,13 +855,13 @@ describe('parser', () => {
                         expectCommentWithText(ifStmt.thenBranch.statements[1], `'comment 2`);
                         expectCommentWithText(ifStmt.thenBranch.statements[3], `'comment 3`);
 
-                        let elseIfBranch = ifStmt.elseBranch;
+                        let elseIfBranch = ifStmt.elseBranch!;
                         if (isIfStatement(elseIfBranch)) {
                             expectCommentWithText(elseIfBranch.thenBranch.statements[0], `'comment 4`);
                             expectCommentWithText(elseIfBranch.thenBranch.statements[1], `'comment 5`);
                             expectCommentWithText(elseIfBranch.thenBranch.statements[3], `'comment 6`);
 
-                            let elseBranch = elseIfBranch.elseBranch;
+                            let elseBranch = elseIfBranch.elseBranch!;
                             if (isBlock(elseBranch)) {
                                 expectCommentWithText(elseBranch.statements[0], `'comment 7`);
                                 expectCommentWithText(elseBranch.statements[1], `'comment 8`);
@@ -1127,15 +1127,15 @@ describe('parser', () => {
             expect(statements[0]).to.be.instanceof(FunctionStatement);
             let fn = statements[0] as FunctionStatement;
             expect(fn.annotations).to.exist;
-            expect(fn.annotations[0]).to.be.instanceof(AnnotationExpression);
-            expect(fn.annotations[0].nameToken.text).to.equal('meta1');
-            expect(fn.annotations[0].name).to.equal('meta1');
+            expect(fn.annotations![0]).to.be.instanceof(AnnotationExpression);
+            expect(fn.annotations![0].nameToken.text).to.equal('meta1');
+            expect(fn.annotations![0].name).to.equal('meta1');
 
             expect(statements[1]).to.be.instanceof(FunctionStatement);
             fn = statements[1] as FunctionStatement;
             expect(fn.annotations).to.exist;
-            expect(fn.annotations[0]).to.be.instanceof(AnnotationExpression);
-            expect(fn.annotations[0].nameToken.text).to.equal('meta2');
+            expect(fn.annotations![0]).to.be.instanceof(AnnotationExpression);
+            expect(fn.annotations![0].nameToken.text).to.equal('meta2');
         });
 
         it('attaches annotations inside a function body', () => {
@@ -1151,7 +1151,7 @@ describe('parser', () => {
             let stat = fnStatements[0];
             expect(stat).to.exist;
             expect(stat.annotations?.length).to.equal(1);
-            expect(stat.annotations[0]).to.be.instanceof(AnnotationExpression);
+            expect(stat.annotations![0]).to.be.instanceof(AnnotationExpression);
         });
 
         it('attaches multiple annotations to next statement', () => {
@@ -1165,10 +1165,10 @@ describe('parser', () => {
             expect(statements[0]).to.be.instanceof(FunctionStatement);
             let fn = statements[0] as FunctionStatement;
             expect(fn.annotations).to.exist;
-            expect(fn.annotations.length).to.equal(3);
-            expect(fn.annotations[0]).to.be.instanceof(AnnotationExpression);
-            expect(fn.annotations[1]).to.be.instanceof(AnnotationExpression);
-            expect(fn.annotations[2]).to.be.instanceof(AnnotationExpression);
+            expect(fn.annotations!.length).to.equal(3);
+            expect(fn.annotations![0]).to.be.instanceof(AnnotationExpression);
+            expect(fn.annotations![1]).to.be.instanceof(AnnotationExpression);
+            expect(fn.annotations![2]).to.be.instanceof(AnnotationExpression);
         });
 
         it('allows annotations with parameters', () => {
@@ -1180,9 +1180,9 @@ describe('parser', () => {
             expect(diagnostics[0]?.message).not.to.exist;
             let fn = statements[0] as FunctionStatement;
             expect(fn.annotations).to.exist;
-            expect(fn.annotations[0]).to.be.instanceof(AnnotationExpression);
-            expect(fn.annotations[0].nameToken.text).to.equal('meta1');
-            expect(fn.annotations[0].call).to.be.instanceof(CallExpression);
+            expect(fn.annotations![0]).to.be.instanceof(AnnotationExpression);
+            expect(fn.annotations![0].nameToken.text).to.equal('meta1');
+            expect(fn.annotations![0].call).to.be.instanceof(CallExpression);
         });
 
         it('attaches annotations to a class', () => {
@@ -1197,7 +1197,7 @@ describe('parser', () => {
             expect(diagnostics[0]?.message).not.to.exist;
             let cs = statements[0] as ClassStatement;
             expect(cs.annotations?.length).to.equal(1);
-            expect(cs.annotations[0]).to.be.instanceof(AnnotationExpression);
+            expect(cs.annotations![0]).to.be.instanceof(AnnotationExpression);
         });
 
         it('attaches annotations to multiple clases', () => {
@@ -1218,12 +1218,12 @@ describe('parser', () => {
             expect(diagnostics[0]?.message).not.to.exist;
             let cs = statements[0] as ClassStatement;
             expect(cs.annotations?.length).to.equal(1);
-            expect(cs.annotations[0]).to.be.instanceof(AnnotationExpression);
-            expect(cs.annotations[0].name).to.equal('meta1');
+            expect(cs.annotations![0]).to.be.instanceof(AnnotationExpression);
+            expect(cs.annotations![0].name).to.equal('meta1');
             let cs2 = statements[1] as ClassStatement;
             expect(cs2.annotations?.length).to.equal(1);
-            expect(cs2.annotations[0]).to.be.instanceof(AnnotationExpression);
-            expect(cs2.annotations[0].name).to.equal('meta2');
+            expect(cs2.annotations![0]).to.be.instanceof(AnnotationExpression);
+            expect(cs2.annotations![0].name).to.equal('meta2');
         });
 
         it('attaches annotations to a namespaced class', () => {
@@ -1241,7 +1241,7 @@ describe('parser', () => {
             let ns = statements[0] as NamespaceStatement;
             let cs = ns.body.statements[0] as ClassStatement;
             expect(cs.annotations?.length).to.equal(1);
-            expect(cs.annotations[0]).to.be.instanceof(AnnotationExpression);
+            expect(cs.annotations![0]).to.be.instanceof(AnnotationExpression);
         });
 
         it('attaches annotations to a namespaced class - multiple', () => {
@@ -1265,12 +1265,12 @@ describe('parser', () => {
             let ns = statements[0] as NamespaceStatement;
             let cs = ns.body.statements[0] as ClassStatement;
             expect(cs.annotations?.length).to.equal(1);
-            expect(cs.annotations[0]).to.be.instanceof(AnnotationExpression);
-            expect(cs.annotations[0].name).to.equal('meta1');
+            expect(cs.annotations![0]).to.be.instanceof(AnnotationExpression);
+            expect(cs.annotations![0].name).to.equal('meta1');
             let cs2 = ns.body.statements[1] as ClassStatement;
             expect(cs2.annotations?.length).to.equal(1);
-            expect(cs2.annotations[0]).to.be.instanceof(AnnotationExpression);
-            expect(cs2.annotations[0].name).to.equal('meta2');
+            expect(cs2.annotations![0]).to.be.instanceof(AnnotationExpression);
+            expect(cs2.annotations![0].name).to.equal('meta2');
 
         });
 
@@ -1290,7 +1290,7 @@ describe('parser', () => {
             let cs = statements[0] as ClassStatement;
             let stat = cs.body[0];
             expect(stat.annotations?.length).to.equal(1);
-            expect(stat.annotations[0]).to.be.instanceof(AnnotationExpression);
+            expect(stat.annotations![0]).to.be.instanceof(AnnotationExpression);
         });
 
         it('attaches annotations to a class methods', () => {
@@ -1309,7 +1309,7 @@ describe('parser', () => {
             let cs = statements[0] as ClassStatement;
             let stat = cs.body[1];
             expect(stat.annotations?.length).to.equal(1);
-            expect(stat.annotations[0]).to.be.instanceof(AnnotationExpression);
+            expect(stat.annotations![0]).to.be.instanceof(AnnotationExpression);
         });
         it('attaches annotations to a class methods, fields and constructor', () => {
             let { statements, diagnostics } = parse(`
@@ -1335,16 +1335,16 @@ describe('parser', () => {
             expect(diagnostics[0]?.message).not.to.exist;
             let cs = statements[0] as ClassStatement;
             expect(cs.annotations?.length).to.equal(2);
-            expect(cs.annotations[0]).to.be.instanceof(AnnotationExpression);
+            expect(cs.annotations![0]).to.be.instanceof(AnnotationExpression);
             let stat1 = cs.body[0];
             let stat2 = cs.body[1];
             let f1 = cs.body[2];
             expect(stat1.annotations?.length).to.equal(2);
-            expect(stat1.annotations[0]).to.be.instanceof(AnnotationExpression);
+            expect(stat1.annotations![0]).to.be.instanceof(AnnotationExpression);
             expect(stat2.annotations?.length).to.equal(2);
-            expect(stat2.annotations[0]).to.be.instanceof(AnnotationExpression);
+            expect(stat2.annotations![0]).to.be.instanceof(AnnotationExpression);
             expect(f1.annotations?.length).to.equal(2);
-            expect(f1.annotations[0]).to.be.instanceof(AnnotationExpression);
+            expect(f1.annotations![0]).to.be.instanceof(AnnotationExpression);
         });
 
         it('ignores annotations on commented out lines', () => {
@@ -1379,18 +1379,18 @@ describe('parser', () => {
             expect(statements[0]).to.be.instanceof(FunctionStatement);
             let fn = statements[0] as FunctionStatement;
             expect(fn.annotations).to.exist;
-            expect(fn.annotations[0].getArguments()).to.deep.equal([]);
+            expect(fn.annotations![0].getArguments()).to.deep.equal([]);
 
             expect(statements[1]).to.be.instanceof(FunctionStatement);
             fn = statements[1] as FunctionStatement;
             expect(fn.annotations).to.exist;
-            expect(fn.annotations[0]).to.be.instanceof(AnnotationExpression);
-            expect(fn.annotations[0].getArguments()).to.deep.equal([
+            expect(fn.annotations![0]).to.be.instanceof(AnnotationExpression);
+            expect(fn.annotations![0].getArguments()).to.deep.equal([
                 'arg', 2, true,
                 { prop: 'value' }, [1, 2],
                 null
             ]);
-            let allArgs = fn.annotations[0].getArguments(false);
+            let allArgs = fn.annotations![0].getArguments(false);
             expect(allArgs.pop()).to.be.instanceOf(FunctionExpression);
         });
 
@@ -1407,7 +1407,7 @@ describe('parser', () => {
             expect(statements[0]).to.be.instanceof(FunctionStatement);
             let fn = statements[0] as FunctionStatement;
             expect(fn.annotations).to.exist;
-            expect(fn.annotations[0].getArguments()).to.deep.equal([-100]);
+            expect(fn.annotations![0].getArguments()).to.deep.equal([-100]);
         });
     });
 
@@ -2034,7 +2034,7 @@ describe('parser', () => {
 export function parse(text: string, mode?: ParseMode) {
     let { tokens } = Lexer.scan(text);
     return Parser.parse(tokens, {
-        mode: mode
+        mode: mode!
     });
 }
 

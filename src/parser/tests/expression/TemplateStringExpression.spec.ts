@@ -367,7 +367,7 @@ describe('TemplateStringExpression', () => {
             function init()
             end function
         `);
-        const ann = parser.ast.statements[0].annotations[0];
+        const ann = parser.ast.statements[0].annotations![0];
         expect(ann.range).to.eql(util.createRange(1, 12, 3, 14));
     });
 });

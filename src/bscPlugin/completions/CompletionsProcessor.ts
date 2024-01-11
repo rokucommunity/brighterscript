@@ -37,7 +37,7 @@ export class CompletionsProcessor {
         scopesForFile = scopesForFile.length > 0 ? scopesForFile : [this.event.program.globalScope];
 
         //get the completions from all scopes for this file
-        let completionResults = [];
+        let completionResults: CompletionItem[] = [];
         if (isXmlFile(file)) {
             completionResults = this.getXmlFileCompletions(this.event.position, file);
         } else if (isBrsFile(file)) {
@@ -50,10 +50,7 @@ export class CompletionsProcessor {
             completionResults = this.getBrsFileCompletions(this.event.position, file);
         }
 
-        let allCompletions = util.flatMap(
-            completionResults,
-            c => c
-        );
+        let allCompletions = completionResults.flat();
 
         //only keep completions common to every scope for this file
         let keyCounts = new Map<string, number>();

@@ -1,5 +1,6 @@
 import type { Range } from 'vscode-languageserver';
 import type { Identifier, Token } from '../lexer/Token';
+import type { SGToken } from '../parser/SGTypes';
 import { SGAttribute, SGComponent, SGInterface, SGInterfaceField, SGInterfaceFunction, SGScript } from '../parser/SGTypes';
 import { TokenKind } from '../lexer/TokenKind';
 import type { Expression } from '../parser/AstNode';
@@ -173,6 +174,13 @@ export function createCall(callee: Expression, args?: Expression[]) {
         args || [],
         []
     );
+}
+
+export function createSGToken(text: string, range?: Range) {
+    return {
+        text: text,
+        range: range ?? interpolatedRange
+    } as SGToken;
 }
 
 /**

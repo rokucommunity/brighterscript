@@ -1084,7 +1084,7 @@ export class Program {
     /**
      * Get the first found scope for a file.
      */
-    public getFirstScopeForFile(file: File): Scope {
+    public getFirstScopeForFile(file: File): Scope | undefined {
         for (let key in this.scopes) {
             let scope = this.scopes[key];
 
@@ -1281,7 +1281,7 @@ export class Program {
     /**
      * Get semantic tokens for the specified file
      */
-    public getSemanticTokens(srcPath: string) {
+    public getSemanticTokens(srcPath: string): SemanticToken[] | undefined {
         const file = this.getFile(srcPath);
         if (file) {
             const result = [] as SemanticToken[];
@@ -1459,6 +1459,11 @@ export class Program {
     private async serialize(files: File[]) {
 
         const allFiles = new Map<File, SerializedFile[]>();
+
+        //exclude prunable files if that option is enabled
+        if (this.options.pruneEmptyCodeFiles === true) {
+            files = files.filter(x => x.canBePruned !== true);
+        }
 
         const serializeProgramEvent = await this.plugins.emitAsync('beforeSerializeProgram', {
             program: this,

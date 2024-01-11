@@ -44,11 +44,11 @@ describe('BrsFileValidator', () => {
                 end class
             end namespace
         `);
-        const namespace = ast.findChild<NamespaceStatement>(isNamespaceStatement);
-        const deltaClass = namespace.findChild<ClassStatement>(isClassStatement);
+        const namespace = ast.findChild<NamespaceStatement>(isNamespaceStatement)!;
+        const deltaClass = namespace.findChild<ClassStatement>(isClassStatement)!;
         expect(deltaClass.parent).to.equal(namespace.body);
 
-        const charlie = (deltaClass.parentClassName.expression as DottedGetExpression);
+        const charlie = (deltaClass.parentClassName!.expression as DottedGetExpression);
         expect(charlie.parent).to.equal(deltaClass.parentClassName);
 
         const bravo = charlie.obj as DottedGetExpression;

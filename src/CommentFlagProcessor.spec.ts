@@ -2,13 +2,16 @@ import { expect } from './chai-config.spec';
 import { Range } from 'vscode-languageserver';
 import { CommentFlagProcessor } from './CommentFlagProcessor';
 import { Lexer } from './lexer/Lexer';
+import type { BscFile } from '.';
 
 describe('CommentFlagProcessor', () => {
     let processor: CommentFlagProcessor;
 
+    const mockBscFile: BscFile = null as any;
+
     describe('tokenizeByWhitespace', () => {
         beforeEach(() => {
-            processor = new CommentFlagProcessor(null);
+            processor = new CommentFlagProcessor(mockBscFile);
         });
 
         it('works with single chars', () => {
@@ -66,18 +69,18 @@ describe('CommentFlagProcessor', () => {
 
     describe('tokenize', () => {
         beforeEach(() => {
-            processor = new CommentFlagProcessor(null, [`'`]);
+            processor = new CommentFlagProcessor(mockBscFile, [`'`]);
         });
 
         it('skips non disable comments', () => {
             expect(
-                processor['tokenize'](`'not disable comment`, null)
+                processor['tokenize'](`'not disable comment`, null as any as Range)
             ).not.to.exist;
         });
 
         it('tokenizes bs:disable-line comment', () => {
             expect(
-                processor['tokenize'](`'bs:disable-line`, null)
+                processor['tokenize'](`'bs:disable-line`, null as any as Range)
             ).to.eql({
                 commentTokenText: `'`,
                 disableType: 'line',

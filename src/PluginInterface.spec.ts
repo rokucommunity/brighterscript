@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/prefer-ts-expect-error */
+/* eslint-disable @typescript-eslint/ban-ts-comment */
 import { expect } from './chai-config.spec';
 import * as sinon from 'sinon';
 import { Logger } from './Logger';

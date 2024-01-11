@@ -86,7 +86,7 @@ function cloneDiagnostic(actualDiagnosticInput: BsDiagnostic, expectedDiagnostic
         for (let j = 0; j < actualDiagnostic.relatedInformation.length; j++) {
             actualDiagnostic.relatedInformation[j] = cloneObject(
                 actualDiagnostic.relatedInformation[j],
-                expectedDiagnostic?.relatedInformation[j],
+                expectedDiagnostic?.relatedInformation?.[j],
                 ['location', 'message']
             ) as any;
         }
@@ -193,7 +193,7 @@ export function expectZeroDiagnostics(arg: DiagnosticCollection) {
  * @param diagnosticsCollection a collection of diagnostics
  * @param length if specified, checks the diagnostic count is exactly that amount. If omitted, the collection is just verified as non-empty
  */
-export function expectHasDiagnostics(diagnosticsCollection: DiagnosticCollection, length: number = null) {
+export function expectHasDiagnostics(diagnosticsCollection: DiagnosticCollection, length: number | null = null) {
     const diagnostics = getDiagnostics(diagnosticsCollection);
     if (length) {
         expect(diagnostics).lengthOf(length);
@@ -312,7 +312,7 @@ export function expectCompletionsIncludes(completions: CompletionItem[], expecte
             //match all existing properties of the expectedItem
             let actualItem = pick(
                 expectedItem,
-                completions.find(x => x.label === expectedItem.label)
+                completions.find(x => x.label === expectedItem.label)!
             );
             expect(actualItem).to.eql(expectedItem);
         }
@@ -330,14 +330,14 @@ export function expectCompletionsExcludes(completions: CompletionItem[], expecte
             //match all existing properties of the expectedItem
             let actualItem = pick(
                 expectedItem,
-                completions.find(x => x.label === expectedItem.label)
+                completions.find(x => x.label === expectedItem.label)!
             );
             expect(actualItem).to.not.eql(expectedItem);
         }
     }
 }
 
-export function expectThrows(callback: () => any, expectedMessage = undefined, failedTestMessage = 'Expected to throw but did not') {
+export function expectThrows(callback: () => any, expectedMessage: string | undefined = undefined, failedTestMessage = 'Expected to throw but did not') {
     let wasExceptionThrown = false;
     try {
         callback();
