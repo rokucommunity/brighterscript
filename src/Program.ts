@@ -663,53 +663,55 @@ export class Program {
     public validate(options: { async: false; cancellationToken?: CancellationToken }): void;
     public validate(options: { async: true; cancellationToken?: CancellationToken }): Promise<void>;
     public validate(options?: { async?: boolean; cancellationToken?: CancellationToken }) {
-        return this.logger.time(LogLevel.log, ['Validating project'], (start, stop, cancel) => {
+        const timeEnd = this.logger.timeStart(LogLevel.log, 'Validating project');
 
-            const sequencer = new Sequencer({
-                name: 'program.validate',
-                async: options?.async ?? false,
-                cancellationToken: options?.cancellationToken ?? new CancellationTokenSource().token
-            });
-
-            //for every unvalidated file, validate it
-            return sequencer
-                .once(() => {
-                    this.diagnostics = [];
-                    this.plugins.emit('beforeProgramValidate', this);
-                })
-                .forEach(Object.values(this.files), (file) => {
-                    if (!file.isValidated) {
-                        this.plugins.emit('beforeFileValidate', {
-                            program: this,
-                            file: file
-                        });
-
-                        //emit an event to allow plugins to contribute to the file validation process
-                        this.plugins.emit('onFileValidate', {
-                            program: this,
-                            file: file
-                        });
-                        //call file.validate() IF the file has that function defined
-                        file.validate?.();
-                        file.isValidated = true;
-
-                        this.plugins.emit('afterFileValidate', file);
-                    }
-                })
-                .forEach(Object.values(this.scopes), (scope) => {
-                    scope.linkSymbolTable();
-                    scope.validate();
-                    scope.unlinkSymbolTable();
-                })
-                .once(() => {
-                    this.detectDuplicateComponentNames();
-                    this.plugins.emit('afterProgramValidate', this);
-                })
-                .onCancel(() => {
-                    cancel();
-                })
-                .run();
+        const sequencer = new Sequencer({
+            name: 'program.validate',
+            async: options?.async ?? false,
+            cancellationToken: options?.cancellationToken ?? new CancellationTokenSource().token
         });
+
+        //for every unvalidated file, validate it
+        return sequencer
+            .once(() => {
+                this.diagnostics = [];
+                this.plugins.emit('beforeProgramValidate', this);
+            })
+            .forEach(Object.values(this.files), (file) => {
+                if (!file.isValidated) {
+                    this.plugins.emit('beforeFileValidate', {
+                        program: this,
+                        file: file
+                    });
+
+                    //emit an event to allow plugins to contribute to the file validation process
+                    this.plugins.emit('onFileValidate', {
+                        program: this,
+                        file: file
+                    });
+                    //call file.validate() IF the file has that function defined
+                    file.validate?.();
+                    file.isValidated = true;
+
+                    this.plugins.emit('afterFileValidate', file);
+                }
+            })
+            .forEach(Object.values(this.scopes), (scope) => {
+                scope.linkSymbolTable();
+                scope.validate();
+                scope.unlinkSymbolTable();
+            })
+            .once(() => {
+                this.detectDuplicateComponentNames();
+                this.plugins.emit('afterProgramValidate', this);
+            })
+            .onCancel(() => {
+                timeEnd('cancelled');
+            })
+            .onComplete(() => {
+                timeEnd();
+            })
+            .run();
     }
 
     /**

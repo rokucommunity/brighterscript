@@ -122,6 +122,28 @@ export class Logger {
     }
 
     /**
+     * Writes to the log (if logLevel matches), and also provides a function that can be called to mark the end of a time.
+     * You can override the action if, for example, the operation was cancelled instead of finished.
+     */
+    timeStart(logLevel: LogLevel, ...messages: any[]) {
+        //call the log if loglevel is in range
+        if (this._logLevel >= logLevel) {
+            const stopwatch = new Stopwatch();
+            const logLevelString = LogLevel[logLevel];
+
+            //write the initial log
+            this[logLevelString](...messages ?? []);
+
+            stopwatch.start();
+
+            return (status = 'finished') => {
+                stopwatch.stop();
+                this[logLevelString](...messages ?? [], `${status}. (${chalk.blue(stopwatch.getDurationText())})`);
+            };
+        }
+    }
+
+    /**
      * Writes to the log (if logLevel matches), and also times how long the action took to occur.
      * `action` is called regardless of logLevel, so this function can be used to nicely wrap
      * pieces of functionality.

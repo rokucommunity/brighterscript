@@ -36,6 +36,11 @@ export class Sequencer {
         return this;
     }
 
+    public onComplete(callback: () => void) {
+        this.emitter.on('complete', callback);
+        return this;
+    }
+
     public once(func: () => any) {
         this.actions.push({
             args: [],
@@ -56,30 +61,44 @@ export class Sequencer {
     }
 
     private async runAsync() {
-        for (const action of this.actions) {
-            //register a very short timeout between every action so we don't hog the CPU
-            await util.sleep(1);
+        try {
+            for (const action of this.actions) {
+                //register a very short timeout between every action so we don't hog the CPU
+                await util.sleep(1);
 
-            //if the cancellation token has asked us to cancel, then stop processing now
-            if (this.options.cancellationToken?.isCancellationRequested) {
-                return this.handleCancel();
+                //if the cancellation token has asked us to cancel, then stop processing now
+                if (this.options.cancellationToken?.isCancellationRequested) {
+                    return this.handleCancel();
+                }
+                action.func(...action.args);
             }
-            action.func(...action.args);
+        } finally {
+            this.emitter.emit('complete');
+            this.dispose();
         }
     }
 
     private runSync() {
-        for (const action of this.actions) {
-            //if the cancellation token has asked us to cancel, then stop processing now
-            if (this.options.cancellationToken.isCancellationRequested) {
-                return this.handleCancel();
+        try {
+            for (const action of this.actions) {
+                //if the cancellation token has asked us to cancel, then stop processing now
+                if (this.options.cancellationToken.isCancellationRequested) {
+                    return this.handleCancel();
+                }
+                action.func(...action.args);
             }
-            action.func(...action.args);
+        } finally {
+            this.emitter.emit('complete');
+            this.dispose();
         }
     }
 
     private handleCancel() {
         console.log(`Cancelling sequence ${this.options.name}`);
         this.emitter.emit('cancel');
+    }
+
+    private dispose() {
+        this.emitter.removeAllListeners();
     }
 }
