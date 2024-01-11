@@ -8,7 +8,7 @@ import { standardizePath as s, util } from './util';
 import { Logger, LogLevel } from './Logger';
 import * as diagnosticUtils from './diagnosticUtils';
 import type { BscFile, BsDiagnostic } from '.';
-import { Range } from '.';
+import { Deferred, Range } from '.';
 import { DiagnosticSeverity } from 'vscode-languageserver';
 import { BrsFile } from './files/BrsFile';
 import { expectZeroDiagnostics } from './testHelpers.spec';
@@ -39,6 +39,21 @@ describe('ProgramBuilder', () => {
 
     afterEach(() => {
         builder.dispose();
+    });
+
+    it('includes .program in the afterProgramCreate event', async () => {
+        builder = new ProgramBuilder();
+        const deferred = new Deferred<Program>();
+        builder.plugins.add({
+            name: 'test',
+            afterProgramCreate: () => {
+                deferred.resolve(builder.program);
+            }
+        });
+        builder['createProgram']();
+        expect(
+            await deferred.promise
+        ).to.exist;
     });
 
     describe('loadAllFilesAST', () => {

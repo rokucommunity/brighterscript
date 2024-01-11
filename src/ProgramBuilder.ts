@@ -124,7 +124,7 @@ export class ProgramBuilder {
         }
         this.logger.logLevel = this.options.logLevel as LogLevel;
 
-        this.program = this.createProgram();
+        this.createProgram();
 
         //parse every file in the entire project
         await this.loadAllFilesAST();
@@ -139,10 +139,11 @@ export class ProgramBuilder {
     }
 
     protected createProgram() {
-        const program = new Program(this.options, this.logger, this.plugins);
+        this.program = new Program(this.options, this.logger, this.plugins);
 
-        this.plugins.emit('afterProgramCreate', program);
-        return program;
+        this.plugins.emit('afterProgramCreate', this.program);
+
+        return this.program;
     }
 
     protected loadPlugins() {
