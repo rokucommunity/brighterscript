@@ -12,7 +12,7 @@ import { standardizePath as s } from './util';
 import { getDiagnosticLine } from './diagnosticUtils';
 import { firstBy } from 'thenby';
 import undent from 'undent';
-import type { File } from './files/File';
+import type { BscFile } from './files/BscFile';
 import type { BscType } from './types/BscType';
 
 export const tempDir = s`${__dirname}/../.tmp`;
@@ -69,7 +69,7 @@ interface PartialDiagnostic {
     tags?: Partial<DiagnosticTag>[];
     relatedInformation?: Partial<DiagnosticRelatedInformation>[];
     data?: unknown;
-    file?: Partial<File>;
+    file?: Partial<BscFile>;
 }
 
 /**
@@ -255,10 +255,10 @@ export function getTestGetTypedef(scopeGetter: () => [program: Program, rootDir:
 }
 
 function getTestFileAction(
-    action: (file: File) => Promise<{ code: string; map?: string }>,
+    action: (file: BscFile) => Promise<{ code: string; map?: string }>,
     scopeGetter: () => [program: Program, rootDir: string]
 ) {
-    return async function testFileAction<TFile extends File = File>(source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', destPath = 'source/main.bs', failOnDiagnostic = true) {
+    return async function testFileAction<TFile extends BscFile = BscFile>(source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', destPath = 'source/main.bs', failOnDiagnostic = true) {
         let [program, rootDir] = scopeGetter();
         expected = expected ? expected : source;
         let file = program.setFile<TFile>({ src: s`${rootDir}/${destPath}`, dest: destPath }, source);

@@ -18,7 +18,7 @@ import { createVisitor, WalkMode } from './astUtils/visitors';
 import { tempDir, rootDir } from './testHelpers.spec';
 import { URI } from 'vscode-uri';
 import { BusyStatusTracker } from './BusyStatusTracker';
-import type { File } from './files/File';
+import type { BscFile } from './files/BscFile';
 
 const sinon = createSandbox();
 
@@ -499,7 +499,7 @@ describe('LanguageServer', () => {
 
     describe('onSignatureHelp', () => {
         let callDocument: TextDocument;
-        let importingXmlFile: File;
+        let importingXmlFile: BscFile;
         const functionFileBaseName = 'buildAwesome';
         const funcDefinitionLine = 'function buildAwesome(confirm = true as Boolean)';
         beforeEach(async () => {

@@ -11,7 +11,7 @@ import { DiagnosticSeverity, Range } from 'vscode-languageserver';
 import { BrsFile } from './files/BrsFile';
 import { expectZeroDiagnostics } from './testHelpers.spec';
 import type { BsConfig } from './BsConfig';
-import type { File } from './files/File';
+import type { BscFile } from './files/BscFile';
 import type { BsDiagnostic } from './interfaces';
 import { tempDir, rootDir, stagingDir } from './testHelpers.spec';
 
@@ -402,7 +402,7 @@ function createBsDiagnostic(filePath: string, messages: string[]): BsDiagnostic[
     return diagnostics;
 }
 function createDiagnostic(
-    file: File,
+    file: BscFile,
     code: number,
     message: string,
     startLine = 0,

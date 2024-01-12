@@ -32,21 +32,21 @@ import type { InheritableType } from '../types/InheritableType';
 import { BscTypeKind } from '../types/BscTypeKind';
 import type { NamespaceType } from '../types/NamespaceType';
 import type { BaseFunctionType } from '../types/BaseFunctionType';
-import type { File } from '../files/File';
+import type { BscFile } from '../files/BscFile';
 import type { ComponentType } from '../types/ComponentType';
 import type { AssociativeArrayType } from '../types/AssociativeArrayType';
 import { TokenKind } from '../lexer/TokenKind';
 
 // File reflection
-export function isBrsFile(file: File | undefined): file is BrsFile {
+export function isBrsFile(file: BscFile | undefined): file is BrsFile {
     return file?.constructor.name === 'BrsFile';
 }
 
-export function isXmlFile(file: (File | XmlFile | undefined)): file is XmlFile {
+export function isXmlFile(file: (BscFile | XmlFile | undefined)): file is XmlFile {
     return file?.constructor.name === 'XmlFile';
 }
 
-export function isAssetFile(file: (File | AssetFile | undefined)): file is AssetFile {
+export function isAssetFile(file: (BscFile | AssetFile | undefined)): file is AssetFile {
     return file?.constructor.name === 'AssetFile';
 }
 

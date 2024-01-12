@@ -1,10 +1,10 @@
 import type { BsDiagnostic } from '../interfaces';
-import type { File } from './File';
+import type { BscFile } from './BscFile';
 import { standardizePath as s } from '../util';
 import type { FileData } from './LazyFileData';
 import { LazyFileData } from './LazyFileData';
 
-export class AssetFile implements File {
+export class AssetFile implements BscFile {
     /**
      * Create a new instance of this file
      */
