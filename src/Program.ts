@@ -74,13 +74,13 @@ export class Program {
         //normalize the root dir path
         this.options.rootDir = util.getRootDir(this.options);
 
-        this.globalScope = this.createGlobalScope();
+        this.createGlobalScope();
     }
 
     public options: FinalizedBsConfig;
     public logger: Logger;
 
-    private createGlobalScope(): Scope {
+    private createGlobalScope() {
         //create the 'global' scope
         this.globalScope = new Scope('global', this, 'scope:global');
         this.globalScope.attachDependencyGraph(this.dependencyGraph);
@@ -92,8 +92,6 @@ export class Program {
         this.globalScope.getDiagnostics = () => [];
         //TODO we might need to fix this because the isValidated clears stuff now
         (this.globalScope as any).isValidated = true;
-
-        return this.globalScope;
     }
 
     /**
@@ -112,7 +110,7 @@ export class Program {
      * A scope that contains all built-in global functions.
      * All scopes should directly or indirectly inherit from this scope
      */
-    public globalScope: Scope;
+    public globalScope: Scope = undefined as any;
 
     /**
      * Plugins which can provide extra diagnostics or transform AST

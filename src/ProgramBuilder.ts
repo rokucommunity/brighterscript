@@ -130,7 +130,7 @@ export class ProgramBuilder {
         this.program = this.createProgram();
 
         //parse every file in the entire project
-        await this.loadAllFilesAST(this.program);
+        await this.loadAllFilesAST();
 
         if (this.options.watch) {
             this.logger.log('Starting compilation in watch mode...');
@@ -244,7 +244,7 @@ export class ProgramBuilder {
      */
     public get rootDir() {
         if (!this.program) {
-            throw new Error('Cannot call `ProgramBuilder.rootDir` until after `ProgramBuilder.run()`');
+            throw new Error('Cannot access `ProgramBuilder.rootDir` until after `ProgramBuilder.run()`');
         }
         return this.program.options.rootDir;
     }
@@ -476,7 +476,7 @@ export class ProgramBuilder {
     /**
      * Parse and load the AST for every file in the project
      */
-    private async loadAllFilesAST(program: Program) {
+    private async loadAllFilesAST() {
         await this.logger.time(LogLevel.log, ['Parsing files'], async () => {
             let files = await this.logger.time(LogLevel.debug, ['getFilePaths'], async () => {
                 return util.getFilePaths(this.options);
@@ -503,12 +503,12 @@ export class ProgramBuilder {
             }
 
             if (manifestFile) {
-                program.loadManifest(manifestFile);
+                this.program!.loadManifest(manifestFile);
             }
 
             const loadFile = async (fileObj) => {
                 try {
-                    program.setFile(fileObj, await this.getFileContents(fileObj.src));
+                    this.program!.setFile(fileObj, await this.getFileContents(fileObj.src));
                 } catch (e) {
                     this.logger.log(e); // log the error, but don't fail this process because the file might be fixable later
                 }
