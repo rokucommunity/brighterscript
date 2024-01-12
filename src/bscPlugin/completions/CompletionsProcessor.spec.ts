@@ -1039,6 +1039,27 @@ describe('CompletionsProcessor', () => {
             expect(results[0]?.label).to.equal('something');
         });
 
+        it('includes function parameters at the end of the function', () => {
+            program.setFile('source/main.brs', `
+                sub main(myFuncParam as string)
+                    myValue = 234
+                    print
+                end sub
+            `);
+
+            program.validate();
+            // print |
+            let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 28));
+            expectCompletionsIncludes(completions, [{
+                label: 'myFuncParam',
+                kind: CompletionItemKind.Variable
+            }, {
+                label: 'myValue',
+                kind: CompletionItemKind.Variable
+            }]);
+        });
+
+
     });
 
     describe('getCompletions - XmlFile.spec', () => {
@@ -1706,6 +1727,27 @@ describe('CompletionsProcessor', () => {
             }]);
         });
 
+        it('does not include global values (true, false, invalid)', () => {
+            program.setFile('source/main.bs', `
+                sub foo(thing as  )
+                    print thing
+                end sub
+            `);
+            program.validate();
+            //  sub foo(thing as | )
+            const completions = program.getCompletions('source/main.bs', util.createPosition(1, 34));
+            expectCompletionsExcludes(completions, [{
+                label: 'true',
+                kind: CompletionItemKind.Value
+            }, {
+                label: 'false',
+                kind: CompletionItemKind.Value
+            }, {
+                label: 'invalid',
+                kind: CompletionItemKind.Value
+            }]);
+        });
+
         it('finds custom types', () => {
             program.setFile('source/main.bs', `
                 sub foo(thing as  )
@@ -1893,6 +1935,147 @@ describe('CompletionsProcessor', () => {
             expectCompletionsExcludes(completions, [{
                 label: 'Alpha',
                 kind: CompletionItemKind.Module
+            }]);
+        });
+    });
+
+    describe('global values', () => {
+        it('should include true, false', () => {
+            program.setFile('source/main.bs', `
+                sub foo()
+                    fooValue =
+                end sub
+            `);
+            program.validate();
+            // fooValue =  |
+            const completions = program.getCompletions('source/main.bs', util.createPosition(2, 32));
+            expectCompletionsIncludes(completions, [{
+                label: 'true',
+                kind: CompletionItemKind.Value
+            }]);
+            expectCompletionsIncludes(completions, [{
+                label: 'false',
+                kind: CompletionItemKind.Value
+            }]);
+        });
+
+        it('should include invalid', () => {
+            program.setFile('source/main.bs', `
+                sub foo()
+                    fooValue =
+                end sub
+            `);
+            program.validate();
+            // fooValue =  |
+            const completions = program.getCompletions('source/main.bs', util.createPosition(2, 32));
+            expectCompletionsIncludes(completions, [{
+                label: 'invalid',
+                kind: CompletionItemKind.Value
+            }]);
+        });
+    });
+
+    describe('accessibility values', () => {
+        it('include appropriate accessible members', () => {
+            program.setFile('source/main.bs', `
+                class Accessibility
+                    private name
+                    protected age
+                    public id
+
+                    sub someMethod()
+                        m. ' In class method
+                    end sub
+                end class
+
+                sub foo(klass as Accessibility)
+                    klass. ' outside class method
+                end sub
+            `);
+            program.validate();
+            // m.| ' In class method
+            let completions = program.getCompletions('source/main.bs', util.createPosition(7, 26));
+            expectCompletionsIncludes(completions, [{
+                label: 'name',
+                kind: CompletionItemKind.Field
+            }, {
+                label: 'age',
+                kind: CompletionItemKind.Field
+            }, {
+                label: 'id',
+                kind: CompletionItemKind.Field
+            }]);
+
+            // klass.|  ' outside class method
+            completions = program.getCompletions('source/main.bs', util.createPosition(12, 26));
+            expectCompletionsExcludes(completions, [{
+                label: 'name',
+                kind: CompletionItemKind.Field
+            }, {
+                label: 'age',
+                kind: CompletionItemKind.Field
+            }]);
+            expectCompletionsIncludes(completions, [{
+                label: 'id',
+                kind: CompletionItemKind.Field
+            }]);
+        });
+
+
+        it('includes private members on non-m variables when appropriate', () => {
+            program.setFile('source/main.bs', `
+                class Accessibility
+                    private name
+                    protected age
+                    public id
+
+                    sub foo(notM as Accessibility)
+                        notM. ' In class method
+                    end sub
+                end class
+            `);
+            program.validate();
+            // m.| ' In class method
+            let completions = program.getCompletions('source/main.bs', util.createPosition(7, 29));
+            expectCompletionsIncludes(completions, [{
+                label: 'age',
+                kind: CompletionItemKind.Field
+            }, {
+                label: 'id',
+                kind: CompletionItemKind.Field
+            }, {
+                label: 'name',
+                kind: CompletionItemKind.Field
+            }]);
+        });
+
+        it('includes protected members on sub classes', () => {
+            program.setFile('source/main.bs', `
+                class Accessibility
+                    private name
+                    protected age
+                    public id
+                end class
+
+                class AccessToo extends Accessibility
+                    sub foo()
+                        m. ' In class method
+                    end sub
+                end class
+            `);
+            program.validate();
+            // m.| ' In class method
+            let completions = program.getCompletions('source/main.bs', util.createPosition(9, 26));
+            expectCompletionsIncludes(completions, [{
+                label: 'age',
+                kind: CompletionItemKind.Field
+            }, {
+                label: 'id',
+                kind: CompletionItemKind.Field
+            }]);
+            expectCompletionsExcludes(completions, [{
+                label: 'name',
+                kind: CompletionItemKind.Field
             }]);
         });
     });
