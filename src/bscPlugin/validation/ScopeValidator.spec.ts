@@ -1442,6 +1442,25 @@ describe('ScopeValidator', () => {
                 expectZeroDiagnostics(program);
             });
         });
+
+        it('recursive types are allowed', () => {
+            program.setFile('source/util.bs', `
+                interface ChainNode
+                    name as string
+                    next as ChainNode
+                end interface
+
+                function getChain(cNode as ChainNode) as string
+                    output = cNode.name
+                    if cNode.next <> invalid
+                        output += " - " + getChain(cNode.next)
+                    end if
+                    return output
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('cannotFindName', () => {
