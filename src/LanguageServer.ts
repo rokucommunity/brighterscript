@@ -590,7 +590,7 @@ export class LanguageServer implements OnHandler<Connection> {
      * Ask the client for the list of `files.exclude` patterns. Useful when determining if we should process a file
      */
     private async getWorkspaceExcludeGlobs(workspaceFolder: string): Promise<string[]> {
-        const config = await this.getClientConfiguration(workspaceFolder, 'files');
+        const config = await this.getClientConfiguration<{ exclude: string[] }>(workspaceFolder, 'files');
         return Object
             .keys(config?.exclude ?? {})
             .filter(x => config?.exclude?.[x])
@@ -621,13 +621,13 @@ export class LanguageServer implements OnHandler<Connection> {
         let workspaces = await Promise.all(
             (await this.connection.workspace.getWorkspaceFolders() ?? []).map(async (x) => {
                 const workspaceFolder = util.uriToPath(x.uri);
-                const config = await this.getClientConfiguration(x.uri, 'brightscript');
+                const config = await this.getClientConfiguration<BrightScriptClientConfiguration>(x.uri, 'brightscript');
                 return {
                     workspaceFolder: workspaceFolder,
                     excludePatterns: await this.getWorkspaceExcludeGlobs(workspaceFolder),
                     bsconfigPath: config.configFile,
                     //TODO we need to solidify the actual name of this flag in user/workspace settings
-                    threadingEnabled: config.threadingEnabled
+                    threadingEnabled: config.languageServer.enableThreading
 
                 } as WorkspaceConfig;
             })
@@ -1078,3 +1078,10 @@ type Handler<T> = {
 type OnHandler<T> = {
     [K in keyof Handler<T>]: Handler<T>[K] extends (arg: infer U) => void ? U : never;
 };
+
+interface BrightScriptClientConfiguration {
+    configFile: string;
+    languageServer: {
+        enableThreading: boolean;
+    }
+}

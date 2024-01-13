@@ -10,6 +10,7 @@ import { WorkerThreadProjectRunner } from './WorkerThreadProjectRunner';
 import { WorkerPool } from './WorkerPool';
 import type { SemanticToken } from '../../interfaces';
 import type { BsConfig } from '../../BsConfig';
+import { DocumentAction } from '../DocumentManager';
 
 export const workerPool = new WorkerPool(() => {
     return new Worker(
@@ -96,23 +97,13 @@ export class WorkerThreadProject implements LspProject {
      * @param srcPath absolute source path of the file
      * @param fileContents the text contents of the file
      */
-    public async setFile(srcPath: string, fileContents: string) {
-        const response = await this.messageHandler.sendRequest<void>('setFile', {
-            data: [srcPath, fileContents]
+    public async applyFileChanges(documentActions: DocumentAction[]) {
+        const response = await this.messageHandler.sendRequest<boolean>('applyFileChanges', {
+            data: [documentActions]
         });
         return response.data;
     }
 
-    /**
-     * Remove the in-memory file at the specified path. This is typically called when the user (or file system watcher) triggers a file delete
-     * @param srcPath absolute path to the file
-     */
-    public async removeFile(srcPath: string) {
-        const response = await this.messageHandler.sendRequest<void>('removeFile', {
-            data: [srcPath]
-        });
-        return response.data;
-    }
 
     /**
      * Get the list of all file paths that are currently loaded in the project

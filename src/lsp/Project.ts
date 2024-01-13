@@ -9,6 +9,7 @@ import { URI } from 'vscode-uri';
 import { Deferred } from '../deferred';
 import { rokuDeploy } from 'roku-deploy';
 import { CancellationTokenSource } from 'vscode-languageserver-protocol';
+import { DocumentAction } from './DocumentManager';
 
 export class Project implements LspProject {
     /**
@@ -74,20 +75,22 @@ export class Project implements LspProject {
         this.isActivated.resolve();
     }
 
-    private cancellationTokenForValidate: CancellationTokenSource;
+    private validationCancelToken: CancellationTokenSource;
 
     /**
      * Validate the project. This will trigger a full validation on any scopes that were changed since the last validation,
-     * and will also eventually emit a new 'diagnostics' event that includes all diagnostics for the project
+     * and will also eventually emit a new 'diagnostics' event that includes all diagnostics for the project.
+     *
+     * This will cancel any currently running validation and then run a new one.
      */
     public async validate() {
         this.cancelValidate();
         //store
-        this.cancellationTokenForValidate = new CancellationTokenSource();
+        this.validationCancelToken = new CancellationTokenSource();
 
         await this.builder.program.validate({
             async: true,
-            cancellationToken: this.cancellationTokenForValidate.token
+            cancellationToken: this.validationCancelToken.token
         });
     }
 
@@ -95,7 +98,8 @@ export class Project implements LspProject {
      * Cancel any active validation that's running
      */
     public async cancelValidate() {
-        this.cancellationTokenForValidate?.cancel();
+        this.validationCancelToken?.cancel();
+        delete this.validationCancelToken;
     }
 
     /**
@@ -139,27 +143,67 @@ export class Project implements LspProject {
     }
 
     /**
+     * Add or replace the in-memory contents of the file at the specified path. This is typically called as the user is typing.
+     * This will cancel any pending validation cycles and queue a future validation cycle instead.
+     * @param srcPath absolute path to the file
+     * @param fileContents the contents of the file
+     */
+    public async applyFileChanges(documentActions: DocumentAction[]): Promise<boolean> {
+        let didChangeFiles = false;
+        for (const action of documentActions) {
+            if (this.hasFile(action.srcPath)) {
+                if (action.type === 'set') {
+                    didChangeFiles ||= this.setFile(action.srcPath, action.fileContents);
+                } else if (action.type === 'delete') {
+                    didChangeFiles ||= this.removeFile(action.srcPath);
+                }
+            }
+        }
+        if (didChangeFiles) {
+            this.validate();
+        }
+        return didChangeFiles;
+    }
+
+    /**
      * Set new contents for a file. This is safe to call any time. Changes will be queued and flushed at the correct times
      * during the program's lifecycle flow
      * @param srcPath absolute source path of the file
      * @param fileContents the text contents of the file
+     * @returns true if this program accepted and added the file. false if this file doesn't match against the program's files array
      */
-    public setFile(srcPath: string, fileContents: string) {
-        this.builder.program.setFile(
-            {
-                src: srcPath,
-                dest: rokuDeploy.getDestPath(srcPath, this.getFilePaths(), this.builder.program.options.rootDir)
-            },
-            fileContents
-        );
+    private setFile(srcPath: string, fileContents: string) {
+        const { files, rootDir } = this.builder.program.options;
+
+        //get the dest path for this file.
+        let destPath = rokuDeploy.getDestPath(srcPath, files, rootDir);
+
+        //if we got a dest path, then the program wants this file
+        if (destPath) {
+            this.builder.program.setFile(
+                {
+                    src: srcPath,
+                    dest: destPath
+                },
+                fileContents
+            );
+            return true;
+        }
+        return false;
     }
 
     /**
      * Remove the in-memory file at the specified path. This is typically called when the user (or file system watcher) triggers a file delete
-     * @param srcPath absolute path to the file
+     * @param srcPath absolute path to the File
+     * @returns true if we found and removed the file. false if we didn't have a file to remove
      */
-    public removeFile(srcPath: string) {
-        this.builder.program.removeFile(srcPath);
+    private removeFile(srcPath: string) {
+        if (this.builder.program.hasFile(srcPath)) {
+            this.builder.program.removeFile(srcPath);
+            return true;
+        } else {
+            return false;
+        }
     }
 
     /**

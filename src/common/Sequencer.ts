@@ -11,6 +11,10 @@ export class Sequencer {
             name: string;
             async?: boolean;
             cancellationToken?: CancellationToken;
+            /**
+             * The number of operations to run before registering a nexttick
+             */
+            minSyncDuration: number;
         }
     ) {
 
@@ -67,9 +71,13 @@ export class Sequencer {
 
     private async runAsync() {
         try {
+            let start = Date.now();
             for (const action of this.actions) {
                 //register a very short timeout between every action so we don't hog the CPU
-                await util.sleep(1);
+                if (Date.now() - start > this.options.minSyncDuration) {
+                    await util.sleep(1);
+                    start = Date.now();
+                }
 
                 //if the cancellation token has asked us to cancel, then stop processing now
                 if (this.options.cancellationToken?.isCancellationRequested) {

@@ -657,21 +657,29 @@ export class Program {
     }
 
     /**
+     * Counter used to track which validation run is being logged
+     */
+    private validationRunSequence = 0;
+
+    /**
      * Traverse the entire project, and validate all scopes
      */
     public validate(): void;
     public validate(options: { async: false; cancellationToken?: CancellationToken }): void;
     public validate(options: { async: true; cancellationToken?: CancellationToken }): Promise<void>;
     public validate(options?: { async?: boolean; cancellationToken?: CancellationToken }) {
-        const timeEnd = this.logger.timeStart(LogLevel.log, 'Validating project');
+        const timeEnd = this.logger.timeStart(LogLevel.log, `Validating project${this.logger.logLevel > LogLevel.log ? ` (run ${this.validationRunSequence++})` : ''}`);
 
         const sequencer = new Sequencer({
             name: 'program.validate',
             async: options?.async ?? false,
-            cancellationToken: options?.cancellationToken ?? new CancellationTokenSource().token
+            cancellationToken: options?.cancellationToken ?? new CancellationTokenSource().token,
+            //how many milliseconds can pass while doing synchronous operations before we register a short timeout
+            minSyncDuration: 150
         });
 
-        //for every unvalidated file, validate it
+        //this sequencer allows us to run in both sync and async mode, depending on whether options.async is enabled.
+        //We use this to prevent starving the CPU during long validate cycles when running in a language server context
         return sequencer
             .once(() => {
                 this.diagnostics = [];

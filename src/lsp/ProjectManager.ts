@@ -40,22 +40,7 @@ export class ProjectManager {
     private async applyDocumentChanges(event: FlushEvent) {
         //apply all of the document actions to each project in parallel
         await Promise.all(this.projects.map(async (project) => {
-
-            //cancel any active validation that's going on
-            console.log('cancelValidate');
-            await project.cancelValidate();
-
-            //apply every file event to this project
-            await Promise.all(event.actions.map(async (action) => {
-                if (action.type === 'set') {
-                    await project.setFile(action.srcPath, action.fileContents);
-                } else if (action.type === 'delete') {
-                    await project.removeFile(action.srcPath);
-                }
-            }));
-
-            //now that all the files have been sent, validate the project (which will trigger downstream diagnostics to flow)
-            await project.validate();
+            await project.applyFileChanges(event.actions);
         }));
     }
 

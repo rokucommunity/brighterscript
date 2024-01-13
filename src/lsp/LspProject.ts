@@ -1,6 +1,7 @@
 import type { CancellationToken, Diagnostic } from 'vscode-languageserver';
 import type { SemanticToken } from '../interfaces';
 import type { BsConfig } from '../BsConfig';
+import { DocumentAction } from './DocumentManager';
 
 /**
  * Defines the contract between the ProjectManager and the main or worker thread Project classes
@@ -61,17 +62,12 @@ export interface LspProject {
     hasFile(srcPath: string): MaybePromise<boolean>;
 
     /**
-     * Add or replace the in-memory contents of the file at the specified path. This is typically called as the user is typing.
-     * @param srcPath absolute path to the file
-     * @param fileContents the contents of the file
+     * Apply a series of file changes to the program.
+     * This will cancel any active validation.
+     * @param documentActions
+     * @returns a boolean indicating whether this project accepted any of the file changes. If false, then this project didn't recognize any of the files and thus did nothing
      */
-    setFile(srcPath: string, fileContents: string): MaybePromise<void>;
-
-    /**
-     * Remove the in-memory file at the specified path. This is typically called when the user (or file system watcher) triggers a file delete
-     * @param srcPath absolute path to the file
-     */
-    removeFile(srcPath: string): MaybePromise<void>;
+    applyFileChanges(documentActions: DocumentAction[]): Promise<boolean>
 
     /**
      * An event that is emitted anytime the diagnostics for the project have changed (typically after a validate cycle has finished)

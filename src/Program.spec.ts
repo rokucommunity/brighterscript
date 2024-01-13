@@ -551,6 +551,20 @@ describe.only('Program', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        it('properly handles errors in async mode', async () => {
+            const file = program.setFile<BrsFile>('source/main.brs', ``);
+            file.validate = function () {
+                throw new Error('Crash for test');
+            };
+            let error: Error;
+            try {
+                await program.validate({ async: true });
+            } catch (e) {
+                error = e as any;
+            }
+            expect(error?.message).to.eql('Crash for test');
+        });
     });
 
     describe('hasFile', () => {
