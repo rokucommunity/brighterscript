@@ -12,7 +12,7 @@ import { AssociativeArrayType } from './AssociativeArrayType';
 import { ArrayType } from './ArrayType';
 import { BooleanType } from './BooleanType';
 import { typeCompatibilityMessage } from '../DiagnosticMessages';
-import { TypeCompatibilityData } from '..';
+import type { TypeCompatibilityData } from '..';
 
 describe('InterfaceType', () => {
     describe('toJSString', () => {
