@@ -41,6 +41,11 @@ export class Sequencer {
         return this;
     }
 
+    public onSuccess(callback: () => void) {
+        this.emitter.on('success', callback);
+        return this;
+    }
+
     public once(func: () => any) {
         this.actions.push({
             args: [],
@@ -72,6 +77,7 @@ export class Sequencer {
                 }
                 action.func(...action.args);
             }
+            this.emitter.emit('success');
         } finally {
             this.emitter.emit('complete');
             this.dispose();
@@ -87,6 +93,7 @@ export class Sequencer {
                 }
                 action.func(...action.args);
             }
+            this.emitter.emit('success');
         } finally {
             this.emitter.emit('complete');
             this.dispose();

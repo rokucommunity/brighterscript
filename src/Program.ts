@@ -708,7 +708,7 @@ export class Program {
             .onCancel(() => {
                 timeEnd('cancelled');
             })
-            .onComplete(() => {
+            .onSuccess(() => {
                 timeEnd();
             })
             .run();

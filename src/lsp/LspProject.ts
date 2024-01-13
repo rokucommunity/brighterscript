@@ -27,7 +27,12 @@ export interface LspProject {
      * Validate the project. This will trigger a full validation on any scopes that were changed since the last validation,
      * and will also eventually emit a new 'diagnostics' event that includes all diagnostics for the project
      */
-    validate(options: { cancellationToken: CancellationToken }): Promise<void>;
+    validate(): Promise<void>;
+
+    /**
+     * Cancel any active validation that's running
+     */
+    cancelValidate(): Promise<void>;
 
     /**
      * Get the bsconfig options from the program. Should only be called after `.activate()` has completed.

@@ -43,7 +43,7 @@ export class ProjectManager {
 
             //cancel any active validation that's going on
             console.log('cancelValidate');
-            this.cancelValidateProject(project);
+            await project.cancelValidate();
 
             //apply every file event to this project
             await Promise.all(event.actions.map(async (action) => {
@@ -55,33 +55,9 @@ export class ProjectManager {
             }));
 
             //now that all the files have been sent, validate the project (which will trigger downstream diagnostics to flow)
-            await this.validateProject(project);
+            await project.validate();
         }));
     }
-
-    private pendingValidations = new Cache<LspProject, CancellationTokenSource[]>();
-
-    /**
-     * Validate the given project. This wraps the call in locks to ensure other actions will wait
-     * @param project
-     */
-    private async validateProject(project: LspProject) {
-        const cancellationToken = new CancellationTokenSource();
-        this.pendingValidations.getOrAdd(project, () => []).push(cancellationToken);
-        await project.validate({
-            cancellationToken: cancellationToken.token
-        });
-    }
-
-    private cancelValidateProject(project: LspProject) {
-        const tokens = this.pendingValidations.getOrAdd<CancellationTokenSource[]>(project, () => []);
-
-        //remove all the tokens from the list, and cancel each one of them
-        for (const token of tokens.splice(0, tokens.length)) {
-            token.cancel();
-        }
-    }
-
 
     /**
      * Given a list of all desired projects, create any missing projects and destroy and projects that are no longer available

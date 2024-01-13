@@ -8,7 +8,7 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import { URI } from 'vscode-uri';
 import { Deferred } from '../deferred';
 import { rokuDeploy } from 'roku-deploy';
-import type { CancellationToken } from 'vscode-languageserver-protocol';
+import { CancellationTokenSource } from 'vscode-languageserver-protocol';
 
 export class Project implements LspProject {
     /**
@@ -74,15 +74,28 @@ export class Project implements LspProject {
         this.isActivated.resolve();
     }
 
+    private cancellationTokenForValidate: CancellationTokenSource;
+
     /**
      * Validate the project. This will trigger a full validation on any scopes that were changed since the last validation,
      * and will also eventually emit a new 'diagnostics' event that includes all diagnostics for the project
      */
-    public async validate(options: { cancellationToken: CancellationToken }) {
+    public async validate() {
+        this.cancelValidate();
+        //store
+        this.cancellationTokenForValidate = new CancellationTokenSource();
+
         await this.builder.program.validate({
             async: true,
-            ...options
+            cancellationToken: this.cancellationTokenForValidate.token
         });
+    }
+
+    /**
+     * Cancel any active validation that's running
+     */
+    public async cancelValidate() {
+        this.cancellationTokenForValidate?.cancel();
     }
 
     /**

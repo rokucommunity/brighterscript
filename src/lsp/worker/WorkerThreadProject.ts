@@ -65,6 +65,14 @@ export class WorkerThreadProject implements LspProject {
     }
 
     /**
+     * Cancel any active validation that's running
+     */
+    public async cancelValidate() {
+        const response = await this.messageHandler.sendRequest<void>('cancelValidate');
+        return response.data;
+    }
+
+    /**
      * A local copy of all the file paths loaded in this program. This needs to stay in sync with any files we add/delete in the worker thread,
      * so we can keep doing in-process `.hasFile()` checks
      */
