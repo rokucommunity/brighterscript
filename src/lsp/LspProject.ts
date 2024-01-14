@@ -25,6 +25,11 @@ export interface LspProject {
     activate(options: ActivateOptions): MaybePromise<void>;
 
     /**
+     * Get a promise that resolves when the project finishes activating
+     */
+    whenActivated(): Promise<void>;
+
+    /**
      * Validate the project. This will trigger a full validation on any scopes that were changed since the last validation,
      * and will also eventually emit a new 'diagnostics' event that includes all diagnostics for the project
      */

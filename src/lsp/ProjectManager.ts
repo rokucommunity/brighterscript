@@ -6,11 +6,9 @@ import type { LspDiagnostic, LspProject, MaybePromise } from './LspProject';
 import { Project } from './Project';
 import { WorkerThreadProject } from './worker/WorkerThreadProject';
 import type { Position } from 'vscode-languageserver';
-import { CancellationTokenSource } from 'vscode-languageserver';
 import { Deferred } from '../deferred';
 import type { FlushEvent } from './DocumentManager';
 import { DocumentManager } from './DocumentManager';
-import { Cache } from '../Cache';
 
 /**
  * Manages all brighterscript projects for the language server
@@ -111,6 +109,9 @@ export class ProjectManager {
         let doneCount = 0;
         this.projects.map(async (project) => {
             try {
+                //wait for the project to activate
+                await project.whenActivated();
+
                 if (await Promise.resolve(callback(project)) === true) {
                     deferred.tryResolve(project);
                 }

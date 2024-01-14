@@ -26,7 +26,8 @@ import type {
     InitializeResult,
     CompletionParams,
     ResultProgressReporter,
-    WorkDoneProgressReporter
+    WorkDoneProgressReporter,
+    SemanticTokensOptions
 } from 'vscode-languageserver/node';
 import {
     SemanticTokensRequest,
@@ -35,6 +36,8 @@ import {
     FileChangeType,
     ProposedFeatures,
     TextDocuments,
+    TextDocumentSyncKind,
+    CodeActionKind,
 } from 'vscode-languageserver/node';
 import { URI } from 'vscode-uri';
 import { TextDocument } from 'vscode-languageserver-textdocument';
@@ -165,7 +168,7 @@ export class LanguageServer implements OnHandler<Connection> {
         //return the capabilities of the server
         return {
             capabilities: {
-                // textDocumentSync: TextDocumentSyncKind.Full,
+                textDocumentSync: TextDocumentSyncKind.Full,
                 // // Tell the client that the server supports code completion
                 // completionProvider: {
                 //     resolveProvider: true,
@@ -175,10 +178,10 @@ export class LanguageServer implements OnHandler<Connection> {
                 // },
                 // documentSymbolProvider: true,
                 // workspaceSymbolProvider: true,
-                // semanticTokensProvider: {
-                //     legend: semanticTokensLegend,
-                //     full: true
-                // } as SemanticTokensOptions
+                semanticTokensProvider: {
+                    legend: semanticTokensLegend,
+                    full: true
+                } as SemanticTokensOptions,
                 // referencesProvider: true,
                 // codeActionProvider: {
                 //     codeActionKinds: [CodeActionKind.Refactor]

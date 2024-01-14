@@ -11,6 +11,7 @@ import { WorkerPool } from './WorkerPool';
 import type { SemanticToken } from '../../interfaces';
 import type { BsConfig } from '../../BsConfig';
 import { DocumentAction } from '../DocumentManager';
+import { Deferred } from '../../deferred';
 
 export const workerPool = new WorkerPool(() => {
     return new Worker(
@@ -54,7 +55,20 @@ export class WorkerThreadProject implements LspProject {
         //populate a few properties with data from the thread so we can use them for some synchronous checks
         this.filePaths = await this.getFilePaths();
         this.options = await this.getOptions();
+
+        this.activationDeferred.resolve();
     }
+
+    private activationDeferred = new Deferred();
+
+    /**
+     * Promise that resolves when the project finishes activating
+     * @returns
+     */
+    public whenActivated() {
+        return this.activationDeferred.promise;
+    }
+
 
     /**
      * Validate the project. This will trigger a full validation on any scopes that were changed since the last validation,
