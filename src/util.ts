@@ -9,7 +9,7 @@ import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, TranspileResult } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -859,8 +859,8 @@ export class Util {
     /**
      * If the two items have lines that touch
      */
-    public linesTouch(first: { range: Range }, second: { range: Range }) {
-        if (first && second && (
+    public linesTouch(first: { range?: Range | undefined }, second: { range?: Range | undefined }) {
+        if (first && second && (first.range !== undefined) && (second.range !== undefined) && (
             first.range.start.line === second.range.start.line ||
             first.range.start.line === second.range.end.line ||
             first.range.end.line === second.range.start.line ||
@@ -988,10 +988,25 @@ export class Util {
     }
 
     /**
+     * Create a `Range` from two potentially-undefined `Position`s
+     */
+    public createRangeFromPositionsOptional(startPosition: Position | undefined, endPosition: Position | undefined): Range | undefined {
+        if (startPosition && endPosition) {
+            return this.createRangeFromPositions(startPosition, endPosition);
+        } else if (startPosition) {
+            return this.createRangeFromPositions(startPosition, startPosition);
+        } else if (endPosition) {
+            return this.createRangeFromPositions(endPosition, endPosition);
+        }
+
+        return undefined;
+    }
+
+    /**
      * Given a list of ranges, create a range that starts with the first non-null lefthand range, and ends with the first non-null
      * righthand range. Returns undefined if none of the items have a range.
      */
-    public createBoundingRange(...locatables: Array<{ range?: Range }>): Range | undefined {
+    public createBoundingRange(...locatables: Array<{ range?: Range } | null | undefined>): Range | undefined {
         let leftmostRange: Range | undefined;
         let rightmostRange: Range | undefined;
 
@@ -1526,6 +1541,21 @@ export class Util {
                 range: this.createRange(0, 0, 0, Number.MAX_VALUE)
             }]);
         }
+    }
+
+    /**
+     * Wraps SourceNode's constructor to be compatible with the TranspileResult type
+     */
+    public sourceNodeFromTranspileResult(
+        line: number | null,
+        column: number | null,
+        source: string | null,
+        chunks?: string | SourceNode | TranspileResult,
+        name?: string
+    ): SourceNode {
+        // we can use a typecast rather than actually transforming the data because SourceNode
+        // accepts a more permissive type than its typedef states
+        return new SourceNode(line, column, source, chunks as any, name);
     }
 }
 

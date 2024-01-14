@@ -1275,7 +1275,7 @@ export class BrsFile {
     /**
      * Determine if the callee (i.e. function name) is a known function declared on the given namespace.
      */
-    public calleeIsKnownNamespaceFunction(callee: Expression, namespaceName: string) {
+    public calleeIsKnownNamespaceFunction(callee: Expression, namespaceName: string | undefined) {
         //if we have a variable and a namespace
         if (isVariableExpression(callee) && namespaceName) {
             let lowerCalleeName = callee?.name?.text?.toLowerCase();
@@ -1283,7 +1283,7 @@ export class BrsFile {
                 let scopes = this.program.getScopesForFile(this);
                 for (let scope of scopes) {
                     let namespace = scope.namespaceLookup.get(namespaceName.toLowerCase());
-                    if (namespace.functionStatements[lowerCalleeName]) {
+                    if (namespace?.functionStatements[lowerCalleeName]) {
                         return true;
                     }
                 }
@@ -1676,7 +1676,7 @@ export class BrsFile {
         let transpileResult: SourceNode | undefined;
 
         if (this.needsTranspiled) {
-            transpileResult = new SourceNode(null, null, state.srcPath, this.ast.transpile(state));
+            transpileResult = util.sourceNodeFromTranspileResult(null, null, state.srcPath, this.ast.transpile(state));
         } else if (this.program.options.sourceMap) {
             //emit code as-is with a simple map to the original file location
             transpileResult = util.simpleMap(state.srcPath, this.fileContents);
@@ -1704,7 +1704,7 @@ export class BrsFile {
     public getTypedef() {
         const state = new BrsTranspileState(this);
         const typedef = this.ast.getTypedef(state);
-        const programNode = new SourceNode(null, null, this.srcPath, typedef);
+        const programNode = util.sourceNodeFromTranspileResult(null, null, this.srcPath, typedef);
         return programNode.toString();
     }
 

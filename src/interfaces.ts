@@ -392,10 +392,17 @@ export interface SemanticToken {
 }
 
 export interface TypedefProvider {
-    getTypedef(state: TranspileState): Array<SourceNode | string>;
+    getTypedef(state: TranspileState): TranspileResult;
 }
 
-export type TranspileResult = Array<(string | SourceNode)>;
+export type TranspileResult = Array<(string | SourceNode | TranspileResult)>;
+
+/**
+ * This is the type that the SourceNode class is declared as taking in its constructor.
+ * The actual type that SourceNode accepts is the more permissive TranspileResult, but
+ * we need to use this declared type for some type casts.
+ */
+export type FlattenedTranspileResult = Array<string | SourceNode>;
 
 export type FileResolver = (srcPath: string) => string | undefined | Thenable<string | undefined> | void;
 
