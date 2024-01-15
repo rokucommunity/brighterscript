@@ -10,7 +10,7 @@ import { createSandbox } from 'sinon';
 import { ComponentType } from './types/ComponentType';
 import { SymbolTypeFlag } from './SymbolTable';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
-import { ArrayType, BooleanType, DoubleType, DynamicType, FloatType, IntegerType, StringType, TypedFunctionType } from './types';
+import { ArrayType, BooleanType, DoubleType, DynamicType, FloatType, IntegerType, StringType, TypedFunctionType, UnionType } from './types';
 const sinon = createSandbox();
 
 describe('XmlScope', () => {
@@ -238,10 +238,14 @@ describe('XmlScope', () => {
             expectTypeToBe((widgetType.getMemberType('isIntArray', { flags: SymbolTypeFlag.runtime }) as ArrayType).defaultType, IntegerType);
 
             expectTypeToBe(widgetType.getMemberType('isBool', { flags: SymbolTypeFlag.runtime }), BooleanType);
-            expectTypeToBe(widgetType.getMemberType('isColor', { flags: SymbolTypeFlag.runtime }), IntegerType);
+
+            expectTypeToBe(widgetType.getMemberType('isColor', { flags: SymbolTypeFlag.runtime }), UnionType);
+            let colorType = widgetType.getMemberType('isColor', { flags: SymbolTypeFlag.runtime }) as UnionType;
+            expect(colorType.types).to.include(StringType.instance);
+            expect(colorType.types).to.include(IntegerType.instance);
 
             expectTypeToBe(widgetType.getMemberType('isColorArray', { flags: SymbolTypeFlag.runtime }), ArrayType);
-            expectTypeToBe((widgetType.getMemberType('isColorArray', { flags: SymbolTypeFlag.runtime }) as ArrayType).defaultType, IntegerType);
+            expectTypeToBe((widgetType.getMemberType('isColorArray', { flags: SymbolTypeFlag.runtime }) as ArrayType).defaultType, UnionType);
 
             expectTypeToBe(widgetType.getMemberType('isVector2d', { flags: SymbolTypeFlag.runtime }), ArrayType);
             expectTypeToBe((widgetType.getMemberType('isVector2d', { flags: SymbolTypeFlag.runtime }) as ArrayType).defaultType, FloatType);
