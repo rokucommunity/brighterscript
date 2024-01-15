@@ -64,6 +64,17 @@ export class DocumentManager {
         this.emitSync('flush', event);
     }
 
+    /**
+     * Returns a promise that resolves when there are no pending files. Will immediately resolve if there are no files,
+     * and will wait until files are flushed if there are files.
+     */
+    public async onSettle() {
+        if (this.queue.size > 0) {
+            await this.once('flush');
+            return this.onSettle();
+        }
+    }
+
     public once(eventName: 'flush'): Promise<FlushEvent>;
     public once(eventName: string): Promise<any> {
         return new Promise((resolve) => {

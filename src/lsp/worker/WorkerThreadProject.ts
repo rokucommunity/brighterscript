@@ -147,7 +147,9 @@ export class WorkerThreadProject implements LspProject {
      * @param srcPath absolute path to the source file
      */
     public async getSemanticTokens(srcPath: string) {
-        const response = await this.messageHandler.sendRequest<SemanticToken[]>('getSemanticTokens');
+        const response = await this.messageHandler.sendRequest<SemanticToken[]>('getSemanticTokens', {
+            data: [srcPath]
+        });
         return response.data;
     }
 

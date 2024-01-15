@@ -103,10 +103,13 @@ export class ProjectManager {
     /**
      * Return the first project where the async matcher returns true
      */
-    private findFirstMatchingProject(callback: (project: LspProject) => boolean | PromiseLike<boolean>) {
+    private async findFirstMatchingProject(callback: (project: LspProject) => boolean | PromiseLike<boolean>) {
         const deferred = new Deferred<LspProject>();
         let projectCount = this.projects.length;
         let doneCount = 0;
+        //wait for pending document changes to settle
+        await this.documentManager.onSettle();
+
         this.projects.map(async (project) => {
             try {
                 //wait for the project to activate
