@@ -702,7 +702,7 @@ describe('Program', () => {
             }]);
         });
 
-        it('accepts libpkg references script reference', () => {
+        it('accepts libpkg .brs script reference', () => {
             program.setFile('components/component1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="HeroScene" extends="Scene">
@@ -710,6 +710,19 @@ describe('Program', () => {
                 </component>
             `);
             program.setFile('components/component1.brs', '');
+
+            program.validate();
+            expect(program.getDiagnostics()).to.be.empty;
+        });
+
+        it('accepts libpkg .bs script reference', () => {
+            program.setFile('components/component1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="HeroScene" extends="Scene">
+                    <script type="text/brightscript" uri="libpkg:/components/component1.bs" />
+                </component>
+            `);
+            program.setFile('components/component1.bs', '');
 
             program.validate();
             expect(program.getDiagnostics()).to.be.empty;
@@ -726,6 +739,25 @@ describe('Program', () => {
                 </component>
             `);
             program.setFile('components/component1.brs', `
+                function isFound()
+                end function`
+            );
+
+            program.validate();
+            expect(program.getDiagnostics()).to.be.empty;
+        });
+
+        it('does not set function not found diagnostic for function in libpkg referenced .bs script reference', () => {
+            program.setFile('components/component1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="HeroScene" extends="Scene">
+                    <script type="text/brightscript" uri="libpkg:/components/component1.bs" />
+                    <interface>
+                        <function name="isFound"/>
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/component1.bs', `
                 function isFound()
                 end function`
             );
