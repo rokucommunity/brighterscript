@@ -414,16 +414,19 @@ export class Util {
      */
     public getPkgPathFromTarget(containingFilePathAbsolute: string, targetPath: string) {
         //if the target starts with 'pkg:', it's an absolute path. Return as is
-        if (targetPath.startsWith('pkg:/')) {
-            targetPath = targetPath.substring(5);
-            if (targetPath === '') {
-                return null;
-            } else {
-                return path.normalize(targetPath);
+        for (const packagePathPrefix of ['pkg:', 'libpkg:']) {
+
+            if (targetPath.startsWith(`${packagePathPrefix}/`)) {
+                targetPath = targetPath.substring(packagePathPrefix.length + 1);
+                if (targetPath === '') {
+                    return null;
+                } else {
+                    return path.normalize(targetPath);
+                }
             }
-        }
-        if (targetPath === 'pkg:') {
-            return null;
+            if (targetPath === packagePathPrefix) {
+                return null;
+            }
         }
 
         //remove the filename
