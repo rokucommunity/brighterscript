@@ -236,6 +236,11 @@ export class Project implements LspProject {
         return this.builder.program.getSemanticTokens(srcPath);
     }
 
+    public async transpileFile(srcPath: string) {
+        await this.onIdle();
+        return this.builder.program.getTranspiledFileContents(srcPath);
+    }
+
     /**
      * Manages the BrighterScript program. The main interface into the compiler/validator
      */

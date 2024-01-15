@@ -2,6 +2,7 @@ import type { CancellationToken, Diagnostic } from 'vscode-languageserver';
 import type { SemanticToken } from '../interfaces';
 import type { BsConfig } from '../BsConfig';
 import { DocumentAction } from './DocumentManager';
+import { FileTranspileResult } from '../Program';
 
 /**
  * Defines the contract between the ProjectManager and the main or worker thread Project classes
@@ -60,6 +61,12 @@ export interface LspProject {
      * @param srcPath absolute path to the source file
      */
     getSemanticTokens(srcPath: string): MaybePromise<SemanticToken[]>;
+
+    /**
+     * Transpile the specified file
+     * @param srcPath
+     */
+    transpileFile(srcPath: string): MaybePromise<FileTranspileResult>;
 
     /**
      * Does this project have the specified file. Should only be called after `.activate()` has completed.

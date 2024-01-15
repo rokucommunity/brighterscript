@@ -12,6 +12,7 @@ import type { SemanticToken } from '../../interfaces';
 import type { BsConfig } from '../../BsConfig';
 import { DocumentAction } from '../DocumentManager';
 import { Deferred } from '../../deferred';
+import { FileTranspileResult } from '../../Program';
 
 export const workerPool = new WorkerPool(() => {
     return new Worker(
@@ -148,6 +149,13 @@ export class WorkerThreadProject implements LspProject {
      */
     public async getSemanticTokens(srcPath: string) {
         const response = await this.messageHandler.sendRequest<SemanticToken[]>('getSemanticTokens', {
+            data: [srcPath]
+        });
+        return response.data;
+    }
+
+    public async transpileFile(srcPath: string) {
+        const response = await this.messageHandler.sendRequest<FileTranspileResult>('transpileFile', {
             data: [srcPath]
         });
         return response.data;

@@ -146,6 +146,21 @@ export class ProjectManager {
         }
     }
 
+    public async transpileFile(srcPath: string) {
+        //find the first program that has this file, since it would be incredibly inefficient to generate semantic tokens for the same file multiple times.
+        const project = await this.findFirstMatchingProject((p) => {
+            return p.hasFile(srcPath);
+        });
+
+        //if we found a project
+        if (project) {
+            const result = await Promise.resolve(
+                project.transpileFile(srcPath)
+            );
+            return result;
+        }
+    }
+
     public async getCompletions(srcPath: string, position: Position) {
         // const completions = await Promise.all(
         //     this.projects.map(x => x.getCompletions(srcPath, position))

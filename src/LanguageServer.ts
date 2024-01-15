@@ -191,11 +191,11 @@ export class LanguageServer implements OnHandler<Connection> {
                 // },
                 // definitionProvider: true,
                 // hoverProvider: true,
-                // executeCommandProvider: {
-                //     commands: [
-                //         CustomCommands.TranspileFile
-                //     ]
-                // }
+                executeCommandProvider: {
+                    commands: [
+                        CustomCommands.TranspileFile
+                    ]
+                }
             } as ServerCapabilities
         };
     }
@@ -557,7 +557,7 @@ export class LanguageServer implements OnHandler<Connection> {
     public async onExecuteCommand(params: ExecuteCommandParams) {
         await this.waitAllProjectFirstRuns();
         if (params.command === CustomCommands.TranspileFile) {
-            const result = await this.transpileFile(params.arguments[0]);
+            const result = await this.projectManager.transpileFile(params.arguments[0]);
             //back-compat: include `pathAbsolute` property so older vscode versions still work
             (result as any).pathAbsolute = result.srcPath;
             return result;
