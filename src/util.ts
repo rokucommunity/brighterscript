@@ -413,16 +413,20 @@ export class Util {
      * compute the pkg path for the target relative to the source file's location
      */
     public getPkgPathFromTarget(containingFilePathAbsolute: string, targetPath: string) {
-        //if the target starts with 'pkg:', it's an absolute path. Return as is
-        if (targetPath.startsWith('pkg:/')) {
-            targetPath = targetPath.substring(5);
+        // https://regex101.com/r/w7CG2N/1
+        const regexp = /^(?:pkg|libpkg):(\/)?/i;
+        const [fullScheme, slash] = regexp.exec(targetPath) ?? [];
+        //if the target starts with 'pkg:' or 'libpkg:' then it's an absolute path. Return as is
+        if (slash) {
+            targetPath = targetPath.substring(fullScheme.length);
             if (targetPath === '') {
                 return null;
             } else {
                 return path.normalize(targetPath);
             }
         }
-        if (targetPath === 'pkg:') {
+        //if the path is exactly `pkg:` or `libpkg:`
+        if (targetPath === fullScheme && !slash) {
             return null;
         }
 
