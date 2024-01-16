@@ -25,6 +25,7 @@ import * as fsExtra from 'fs-extra';
 import { URI } from 'vscode-uri';
 import undent from 'undent';
 import { tempDir, rootDir } from '../testHelpers.spec';
+import { XmlFile } from './XmlFile';
 
 let sinon = sinonImport.createSandbox();
 
@@ -2172,6 +2173,27 @@ describe('BrsFile', () => {
     });
 
     describe('transpile', () => {
+        it('transpilies libpkg:/ paths when encountered', () => {
+            program.setFile('source/lib.bs', `
+                import "libpkg:/source/numbers.bs"
+            `);
+            program.setFile('source/numbers.bs', `
+                sub test()
+                end sub
+            `);
+            testTranspile(`
+                <component name="TestButton" extends="Group">
+                    <script type="text/brightscript" uri="libpkg:/source/lib.bs"/>
+                </component>
+            `, `
+                <component name="TestButton" extends="Group">
+                    <script type="text/brightscript" uri="libpkg:/source/lib.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/numbers.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, undefined, 'components/TestButton.xml');
+        });
+
         it('excludes trailing commas in array literals', () => {
             testTranspile(`
                 sub main()
