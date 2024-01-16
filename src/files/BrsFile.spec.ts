@@ -25,7 +25,6 @@ import * as fsExtra from 'fs-extra';
 import { URI } from 'vscode-uri';
 import undent from 'undent';
 import { tempDir, rootDir } from '../testHelpers.spec';
-import { XmlFile } from './XmlFile';
 
 let sinon = sinonImport.createSandbox();
 
