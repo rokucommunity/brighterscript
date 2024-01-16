@@ -712,7 +712,7 @@ describe('Program', () => {
             program.setFile('components/component1.brs', '');
 
             program.validate();
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
         });
 
         it('accepts libpkg .bs script reference', () => {
@@ -725,7 +725,7 @@ describe('Program', () => {
             program.setFile('components/component1.bs', '');
 
             program.validate();
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
         });
 
         it('does not set function not found diagnostic for function in libpkg referenced script reference', () => {
@@ -744,7 +744,7 @@ describe('Program', () => {
             );
 
             program.validate();
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
         });
 
         it('does not set function not found diagnostic for function in libpkg referenced .bs script reference', () => {
@@ -763,7 +763,7 @@ describe('Program', () => {
             );
 
             program.validate();
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
         });
 
         it('sets function not found diagnostic for missing function in libpkg referenced script reference', () => {
