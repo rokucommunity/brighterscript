@@ -92,8 +92,7 @@ import {
 } from './Expression';
 import type { Diagnostic, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
-import { isAAMemberExpression, isAnnotationExpression, isBinaryExpression, isCallExpression, isCallfuncExpression, isMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
-import { createVisitor, WalkMode } from '../astUtils/visitors';
+import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression } from '../astUtils/reflection';
 import { createStringLiteral } from '../astUtils/creators';
 import { Cache } from '../Cache';
 import type { Expression, Statement } from './AstNode';
@@ -126,39 +125,19 @@ export class Parser {
         return this.ast.symbolTable;
     }
 
-    /**
-     * References for significant statements/expressions in the parser.
-     * These are initially extracted during parse-time to improve performance, but will also be dynamically regenerated if need be.
-     *
-     * If a plugin modifies the AST, then the plugin should call Parser#invalidateReferences() to force this object to refresh
-     */
-    public get references() {
-        //build the references object if it's missing.
-        if (!this._references) {
-            this.findReferences();
-        }
-        return this._references;
-    }
 
-    private _references = new References();
-
-    /**
-     * Invalidates (clears) the references collection. This should be called anytime the AST has been manipulated.
-     */
-    invalidateReferences() {
-        this._references = undefined;
-    }
+    public propertyHints = {} as Record<string, string>;
 
     private addPropertyHints(item: Token | AALiteralExpression) {
         if (isToken(item)) {
             const name = item.text;
-            this._references.propertyHints[name.toLowerCase()] = name;
+            this.propertyHints[name.toLowerCase()] = name;
         } else {
             for (const member of item.elements) {
                 if (!isCommentStatement(member)) {
                     const name = member.keyToken.text;
                     if (!name.startsWith('"')) {
-                        this._references.propertyHints[name.toLowerCase()] = name;
+                        this.propertyHints[name.toLowerCase()] = name;
                     }
                 }
             }
@@ -555,7 +534,6 @@ export class Parser {
             body,
             endInterfaceToken
         );
-        this._references.interfaceStatements.push(statement);
         this.exitAnnotationBlock(parentAnnotations);
         return statement;
     }
@@ -616,7 +594,6 @@ export class Parser {
         //consume the final `end interface` token
         result.tokens.endEnum = this.consumeToken(TokenKind.EndEnum);
 
-        this._references.enumStatements.push(result);
         this.exitAnnotationBlock(parentAnnotations);
         return result;
     }
@@ -679,9 +656,6 @@ export class Parser {
                 if (this.checkAny(TokenKind.Function, TokenKind.Sub) || (this.checkAny(TokenKind.Identifier, ...AllowedProperties) && this.checkNext(TokenKind.LeftParen))) {
                     const funcDeclaration = this.functionDeclaration(false, false);
 
-                    //remove this function from the lists because it's not a callable
-                    const functionStatement = this._references.functionStatements.pop();
-
                     //if we have an overrides keyword AND this method is called 'new', that's not allowed
                     if (overrideKeyword && funcDeclaration.name.text.toLowerCase() === 'new') {
                         this.diagnostics.push({
@@ -698,7 +672,7 @@ export class Parser {
                     );
 
                     //refer to this statement as parent of the expression
-                    functionStatement.func.functionStatement = decl as MethodStatement;
+                    funcDeclaration.func.functionStatement = decl as MethodStatement;
 
                     //fields
                 } else if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
@@ -748,7 +722,6 @@ export class Parser {
             parentClassName
         );
 
-        this._references.classStatements.push(result);
         this.exitAnnotationBlock(parentAnnotations);
         return result;
     }
@@ -931,8 +904,6 @@ export class Parser {
                 typeExpression
             );
 
-            this._references.functionExpressions.push(func);
-
             //support ending the function with `end sub` OR `end function`
             func.body = this.block();
             //if the parser was unable to produce a block, make an empty one so the AST makes some sense...
@@ -969,7 +940,6 @@ export class Parser {
                 let result = new FunctionStatement(name, func);
                 func.symbolTable.name += `: '${name?.text}'`;
                 func.functionStatement = result;
-                this._references.functionStatements.push(result);
 
                 return result;
             }
@@ -1041,15 +1011,8 @@ export class Parser {
                 name,
                 new BinaryExpression(nameExpression, operator, value)
             );
-            this.addExpressionsToReferences(nameExpression);
-            if (isBinaryExpression(value)) {
-                //remove the right-hand-side expression from this assignment operator, and replace with the full assignment expression
-                this._references.expressions.delete(value);
-            }
-            this._references.expressions.add(result);
         }
 
-        this._references.assignmentStatements.push(result);
         return result;
     }
 
@@ -1365,7 +1328,6 @@ export class Parser {
 
         result.body = body;
         result.endKeyword = endKeyword;
-        this._references.namespaceStatements.push(result);
         //cache the range property so that plugins can't affect it
         result.cacheRange();
         result.body.symbolTable.name += `: namespace '${result.name}'`;
@@ -1455,7 +1417,6 @@ export class Parser {
             name: nameToken,
             equals: equalToken
         }, expression);
-        this._references.constStatements.push(statement);
         return statement;
     }
 
@@ -1469,7 +1430,6 @@ export class Parser {
             )
         });
 
-        this._references.libraryStatements.push(libStatement);
         return libStatement;
     }
 
@@ -1484,7 +1444,6 @@ export class Parser {
             )
         );
 
-        this._references.importStatements.push(importStatement);
         return importStatement;
     }
 
@@ -2002,7 +1961,6 @@ export class Parser {
             }
 
             const result = new IncrementStatement(expr, operator);
-            this._references.expressions.add(result);
             return result;
         }
 
@@ -2287,7 +2245,6 @@ export class Parser {
 
             } while (asToken && typeExpression);
         }
-        this._references.expressions.add(expression);
         return expression;
     }
 
@@ -2319,7 +2276,6 @@ export class Parser {
         while (this.matchAny(TokenKind.And, TokenKind.Or)) {
             let operator = this.previous();
             let right = this.relational();
-            this.addExpressionsToReferences(expr, right);
             expr = new BinaryExpression(expr, operator, right);
         }
 
@@ -2341,19 +2297,10 @@ export class Parser {
         ) {
             let operator = this.previous();
             let right = this.additive();
-            this.addExpressionsToReferences(expr, right);
             expr = new BinaryExpression(expr, operator, right);
         }
 
         return expr;
-    }
-
-    private addExpressionsToReferences(...expressions: Expression[]) {
-        for (const expression of expressions) {
-            if (!isBinaryExpression(expression)) {
-                this.references.expressions.add(expression);
-            }
-        }
     }
 
     // TODO: bitshift
@@ -2364,7 +2311,6 @@ export class Parser {
         while (this.matchAny(TokenKind.Plus, TokenKind.Minus)) {
             let operator = this.previous();
             let right = this.multiplicative();
-            this.addExpressionsToReferences(expr, right);
             expr = new BinaryExpression(expr, operator, right);
         }
 
@@ -2384,7 +2330,6 @@ export class Parser {
         )) {
             let operator = this.previous();
             let right = this.exponential();
-            this.addExpressionsToReferences(expr, right);
             expr = new BinaryExpression(expr, operator, right);
         }
 
@@ -2397,7 +2342,6 @@ export class Parser {
         while (this.match(TokenKind.Caret)) {
             let operator = this.previous();
             let right = this.prefixUnary();
-            this.addExpressionsToReferences(expr, right);
             expr = new BinaryExpression(expr, operator, right);
         }
 
@@ -2466,7 +2410,6 @@ export class Parser {
         //pop the call from the  callExpressions list because this is technically something else
         this.callExpressions.pop();
         let result = new NewExpression(newToken, call);
-        this._references.newExpressions.push(result);
         return result;
     }
 
@@ -2490,22 +2433,14 @@ export class Parser {
             return this.newExpression();
         }
         let expr = this.primary();
-        //an expression to keep for _references
-        let referenceCallExpression: Expression;
+
         while (true) {
             if (this.matchAny(TokenKind.LeftParen, TokenKind.QuestionLeftParen)) {
                 expr = this.finishCall(this.previous(), expr);
-                //store this call expression in references
-                referenceCallExpression = expr;
-
             } else if (this.matchAny(TokenKind.LeftSquareBracket, TokenKind.QuestionLeftSquare) || this.matchSequence(TokenKind.QuestionDot, TokenKind.LeftSquareBracket)) {
                 expr = this.indexedGet(expr);
-
             } else if (this.match(TokenKind.Callfunc)) {
                 expr = this.callfunc(expr);
-                //store this callfunc expression in references
-                referenceCallExpression = expr;
-
             } else if (this.matchAny(TokenKind.Dot, TokenKind.QuestionDot)) {
                 if (this.match(TokenKind.LeftSquareBracket)) {
                     expr = this.indexedGet(expr);
@@ -2548,10 +2483,7 @@ export class Parser {
                 break;
             }
         }
-        //if we found a callExpression, add it to `expressions` in references
-        if (referenceCallExpression) {
-            this._references.expressions.add(referenceCallExpression);
-        }
+
         return expr;
     }
 
@@ -2644,10 +2576,6 @@ export class Parser {
                 changedTokens.push({ token: nextToken, oldKind: nextToken.kind });
                 nextToken.kind = TokenKind.Identifier;
             }
-            expr = this.identifyingExpression(AllowedTypeIdentifiers);
-            if (expr) {
-                this._references.expressions.add(expr);
-            }
         }
 
         //Check if it has square brackets, thus making it an array
@@ -2666,7 +2594,6 @@ export class Parser {
                 if (this.check(TokenKind.RightSquareBracket)) {
                     const rightBracket = this.advance();
                     expr = new TypedArrayExpression(expr, leftBracket, rightBracket);
-                    this._references.expressions.add(expr);
                 }
             }
         }
@@ -3133,147 +3060,6 @@ export class Parser {
         }
     }
 
-    /**
-     * References are found during the initial parse.
-     * However, sometimes plugins can modify the AST, requiring a full walk to re-compute all references.
-     * This does that walk.
-     */
-    private findReferences() {
-        this._references = new References();
-        const excludedExpressions = new Set<Expression>();
-
-        const visitCallExpression = (e: CallExpression | CallfuncExpression) => {
-            for (const p of e.args) {
-                this._references.expressions.add(p);
-            }
-            //add calls that were not excluded (from loop below)
-            if (!excludedExpressions.has(e)) {
-                this._references.expressions.add(e);
-            }
-
-            //if this call is part of a longer expression that includes a call higher up, find that higher one and remove it
-            if (e.callee) {
-                let node: Expression = e.callee;
-                while (node) {
-                    //the primary goal for this loop. If we found a parent call expression, remove it from `references`
-                    if (isCallExpression(node)) {
-                        this.references.expressions.delete(node);
-                        excludedExpressions.add(node);
-                        //stop here. even if there are multiple calls in the chain, each child will find and remove its closest parent, so that reduces excess walking.
-                        break;
-
-                        //when we hit a variable expression, we're definitely at the leftmost expression so stop
-                    } else if (isVariableExpression(node)) {
-                        break;
-                        //if
-
-                    } else if (isDottedGetExpression(node) || isIndexedGetExpression(node)) {
-                        node = node.obj;
-                    } else {
-                        //some expression we don't understand. log it and quit the loop
-                        this.logger.info('Encountered unknown expression while calculating function expression chain', node);
-                        break;
-                    }
-                }
-            }
-        };
-
-        this.ast.walk(createVisitor({
-            AssignmentStatement: s => {
-                this._references.assignmentStatements.push(s);
-                this.references.expressions.add(s.value);
-            },
-            ClassStatement: s => {
-                this._references.classStatements.push(s);
-            },
-            FieldStatement: s => {
-                if (s.initialValue) {
-                    this._references.expressions.add(s.initialValue);
-                }
-            },
-            NamespaceStatement: s => {
-                this._references.namespaceStatements.push(s);
-            },
-            FunctionStatement: s => {
-                this._references.functionStatements.push(s);
-            },
-            ImportStatement: s => {
-                this._references.importStatements.push(s);
-            },
-            LibraryStatement: s => {
-                this._references.libraryStatements.push(s);
-            },
-            FunctionExpression: (expression, parent) => {
-                if (!isMethodStatement(parent)) {
-                    this._references.functionExpressions.push(expression);
-                }
-            },
-            NewExpression: e => {
-                this._references.newExpressions.push(e);
-                for (const p of e.call.args) {
-                    this._references.expressions.add(p);
-                }
-            },
-            ExpressionStatement: s => {
-                this._references.expressions.add(s.expression);
-            },
-            CallfuncExpression: e => {
-                visitCallExpression(e);
-            },
-            CallExpression: e => {
-                visitCallExpression(e);
-            },
-            AALiteralExpression: e => {
-                this.addPropertyHints(e);
-                this._references.expressions.add(e);
-                for (const member of e.elements) {
-                    if (isAAMemberExpression(member)) {
-                        this._references.expressions.add(member.value);
-                    }
-                }
-            },
-            BinaryExpression: (e, parent) => {
-                //walk the chain of binary expressions and add each one to the list of expressions
-                const expressions: Expression[] = [e];
-                let expression: Expression;
-                while ((expression = expressions.pop())) {
-                    if (isBinaryExpression(expression)) {
-                        expressions.push(expression.left, expression.right);
-                    } else {
-                        this._references.expressions.add(expression);
-                    }
-                }
-            },
-            ArrayLiteralExpression: e => {
-                for (const element of e.elements) {
-                    //keep everything except comments
-                    if (!isCommentStatement(element)) {
-                        this._references.expressions.add(element);
-                    }
-                }
-            },
-            DottedGetExpression: e => {
-                this.addPropertyHints(e.name);
-            },
-            DottedSetStatement: e => {
-                this.addPropertyHints(e.name);
-            },
-            EnumStatement: e => {
-                this._references.enumStatements.push(e);
-            },
-            ConstStatement: s => {
-                this._references.constStatements.push(s);
-            },
-            UnaryExpression: e => {
-                this._references.expressions.add(e);
-            },
-            IncrementStatement: e => {
-                this._references.expressions.add(e);
-            }
-        }), {
-            walkMode: WalkMode.visitAllRecursive
-        });
-    }
 
     public dispose() {
     }
@@ -3295,95 +3081,6 @@ export interface ParseOptions {
     logger?: Logger;
 }
 
-export class References {
-    private cache = new Cache();
-    public assignmentStatements = [] as AssignmentStatement[];
-    public classStatements = [] as ClassStatement[];
-
-    public get classStatementLookup() {
-        if (!this._classStatementLookup) {
-            this._classStatementLookup = new Map();
-            for (const stmt of this.classStatements) {
-                this._classStatementLookup.set(stmt.getName(ParseMode.BrighterScript).toLowerCase(), stmt);
-            }
-        }
-        return this._classStatementLookup;
-    }
-    private _classStatementLookup: Map<string, ClassStatement>;
-
-    public functionExpressions = [] as FunctionExpression[];
-    public functionStatements = [] as FunctionStatement[];
-    /**
-     * A map of function statements, indexed by fully-namespaced lower function name.
-     */
-    public get functionStatementLookup() {
-        if (!this._functionStatementLookup) {
-            this._functionStatementLookup = new Map();
-            for (const stmt of this.functionStatements) {
-                this._functionStatementLookup.set(stmt.getName(ParseMode.BrighterScript).toLowerCase(), stmt);
-            }
-        }
-        return this._functionStatementLookup;
-    }
-    private _functionStatementLookup: Map<string, FunctionStatement>;
-
-    public interfaceStatements = [] as InterfaceStatement[];
-
-    public get interfaceStatementLookup() {
-        if (!this._interfaceStatementLookup) {
-            this._interfaceStatementLookup = new Map();
-            for (const stmt of this.interfaceStatements) {
-                this._interfaceStatementLookup.set(stmt.fullName.toLowerCase(), stmt);
-            }
-        }
-        return this._interfaceStatementLookup;
-    }
-    private _interfaceStatementLookup: Map<string, InterfaceStatement>;
-
-    public enumStatements = [] as EnumStatement[];
-
-    public get enumStatementLookup() {
-        return this.cache.getOrAdd('enums', () => {
-            const result = new Map<string, EnumStatement>();
-            for (const stmt of this.enumStatements) {
-                result.set(stmt.fullName.toLowerCase(), stmt);
-            }
-            return result;
-        });
-    }
-
-    public constStatements = [] as ConstStatement[];
-
-    public get constStatementLookup() {
-        return this.cache.getOrAdd('consts', () => {
-            const result = new Map<string, ConstStatement>();
-            for (const stmt of this.constStatements) {
-                result.set(stmt.fullName.toLowerCase(), stmt);
-            }
-            return result;
-        });
-    }
-
-    /**
-     * A collection of full expressions. This excludes intermediary expressions.
-     *
-     * Example 1:
-     * `a.b.c` is composed of `a` (variableExpression)  `.b` (DottedGetExpression) `.c` (DottedGetExpression)
-     * This will only contain the final `.c` DottedGetExpression because `.b` and `a` can both be derived by walking back from the `.c` DottedGetExpression.
-     *
-     * Example 2:
-     * `name.space.doSomething(a.b.c)` will result in 2 entries in this list. the `CallExpression` for `doSomething`, and the `.c` DottedGetExpression.
-     *
-     * Example 3:
-     * `value = SomeEnum.value > 2 or SomeEnum.otherValue < 10` will result in 4 entries. `SomeEnum.value`, `2`, `SomeEnum.otherValue`, `10`
-     */
-    public expressions = new Set<Expression>();
-    public importStatements = [] as ImportStatement[];
-    public libraryStatements = [] as LibraryStatement[];
-    public namespaceStatements = [] as NamespaceStatement[];
-    public newExpressions = [] as NewExpression[];
-    public propertyHints = {} as Record<string, string>;
-}
 
 class CancelStatementError extends Error {
     constructor() {

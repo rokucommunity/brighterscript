@@ -7,7 +7,7 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import { type CallableContainer, type BsDiagnosticWithOrigin, type FileReference, type CallableContainerMap, type FileLink, type Callable, type NamespaceContainer, type ScopeValidationOptions, type BsDiagnostic, DiagnosticOrigin } from './interfaces';
 import type { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
-import type { NamespaceStatement, ClassStatement, EnumStatement, InterfaceStatement, EnumMemberStatement, ConstStatement } from './parser/Statement';
+import type { NamespaceStatement, ClassStatement, EnumStatement, InterfaceStatement, EnumMemberStatement, ConstStatement, FunctionStatement } from './parser/Statement';
 import { type NewExpression } from './parser/Expression';
 import { ParseMode } from './parser/Parser';
 import { util } from './util';
@@ -236,6 +236,20 @@ export class Scope {
     public getConstFileLink(constName: string, containingNamespace?: string): FileLink<ConstStatement> {
         const lowerName = constName?.toLowerCase();
         const constMap = this.getConstMap();
+
+        let result = constMap.get(
+            util.getFullyQualifiedClassName(lowerName, containingNamespace?.toLowerCase())
+        );
+        //if we couldn't find the constant by its full namespaced name, look for a global constant with that name
+        if (!result) {
+            result = constMap.get(lowerName);
+        }
+        return result;
+    }
+
+    public getFunctionFileLink(funcName: string, containingNamespace?: string): FileLink<FunctionStatement> {
+        const lowerName = funcName?.toLowerCase();
+        const callableMap = this.getCallableMap();
 
         let result = constMap.get(
             util.getFullyQualifiedClassName(lowerName, containingNamespace?.toLowerCase())
