@@ -24,7 +24,7 @@ import { tempDir, rootDir, stagingDir } from './testHelpers.spec';
 
 let sinon = sinonImport.createSandbox();
 
-describe.only('Program', () => {
+describe('Program', () => {
     let program: Program;
 
     beforeEach(() => {
@@ -43,7 +43,7 @@ describe.only('Program', () => {
         program.dispose();
     });
 
-    it('Does not crazy for file not referenced by any other scope', async () => {
+    it('Does not crash for file not referenced by any other scope', async () => {
         program.setFile('tests/testFile.spec.bs', `
             function main(args as object) as object
                 return roca(args).describe("test suite", sub()
@@ -1885,8 +1885,8 @@ describe.only('Program', () => {
             src: s`${rootDir}/source/main.bs`,
             dest: 'source/main.bs'
         }, {
-            src: s`${rootDir}/source/main.bs`,
-            dest: 'source/main.bs'
+            src: s`${rootDir}/source/common.bs`,
+            dest: 'source/common.bs'
         }], program.options.stagingDir);
 
         //entries should now be in alphabetic order

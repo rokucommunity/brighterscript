@@ -141,6 +141,7 @@ export class Logger {
                 this[logLevelString](...messages ?? [], `${status}. (${chalk.blue(stopwatch.getDurationText())})`);
             };
         }
+        return noop;
     }
 
     /**
@@ -193,7 +194,7 @@ export class Logger {
     }
 }
 
-export function noop() {
+export function noop(...args: []): any {
 
 }
 

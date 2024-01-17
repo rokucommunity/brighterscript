@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import util from '../util';
 import { DocumentManager } from './DocumentManager';
 
-describe.only('DocumentManager', () => {
+describe('DocumentManager', () => {
     let manager: DocumentManager;
     beforeEach(() => {
         manager = new DocumentManager({

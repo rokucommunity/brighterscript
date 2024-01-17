@@ -1232,7 +1232,7 @@ export class BrsFile {
     }
 
     /**
-     * Find the first scope that has a namespace with this name.
+     * Finds the first scope for this file, then returns true if there's a namespace with this name.
      * Returns false if no namespace was found with that name
      */
     public calleeStartsWithNamespace(callee: Expression) {
@@ -1244,11 +1244,9 @@ export class BrsFile {
         if (isVariableExpression(left)) {
             let lowerName = left.name.text.toLowerCase();
             //find the first scope that contains this namespace
-            let scopes = this.program.getScopesForFile(this);
-            for (let scope of scopes) {
-                if (scope.namespaceLookup.has(lowerName)) {
-                    return true;
-                }
+            let scope = this.program.getFirstScopeForFile(this);
+            if (scope?.namespaceLookup.has(lowerName)) {
+                return true;
             }
         }
         return false;
@@ -1262,12 +1260,10 @@ export class BrsFile {
         if (isVariableExpression(callee) && namespaceName) {
             let lowerCalleeName = callee?.name?.text?.toLowerCase();
             if (lowerCalleeName) {
-                let scopes = this.program.getScopesForFile(this);
-                for (let scope of scopes) {
-                    let namespace = scope.namespaceLookup.get(namespaceName.toLowerCase());
-                    if (namespace.functionStatements[lowerCalleeName]) {
-                        return true;
-                    }
+                let scope = this.program.getFirstScopeForFile(this);
+                let namespace = scope.namespaceLookup.get(namespaceName.toLowerCase());
+                if (namespace.functionStatements[lowerCalleeName]) {
+                    return true;
                 }
             }
         }

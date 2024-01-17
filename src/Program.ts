@@ -1112,20 +1112,17 @@ export class Program {
      * @param filePath can be a srcPath or a destPath
      */
     public async getTranspiledFileContents(filePath: string) {
-        let fileMap = await rokuDeploy.getFilePaths(this.options.files, this.options.rootDir);
-        //remove files currently loaded in the program, we will transpile those instead (even if just for source maps)
-        let filteredFileMap = [] as FileObj[];
-        for (let fileEntry of fileMap) {
-            if (this.hasFile(fileEntry.src) === false) {
-                filteredFileMap.push(fileEntry);
-            }
-        }
+        const file = this.getFile(filePath);
+        const fileMap: FileObj[] = [{
+            src: file.srcPath,
+            dest: file.pkgPath
+        }];
         const { entries, astEditor } = this.beforeProgramTranspile(fileMap, this.options.stagingDir);
         const result = this._getTranspiledFileContents(
-            this.getFile(filePath)
+            file
         );
         this.afterProgramTranspile(entries, astEditor);
-        return result;
+        return Promise.resolve(result);
     }
 
     /**
@@ -1134,7 +1131,6 @@ export class Program {
      */
     private _getTranspiledFileContents(file: BscFile, outputPath?: string): FileTranspileResult {
         const editor = new AstEditor();
-
         this.plugins.emit('beforeFileTranspile', {
             program: this,
             file: file,
@@ -1204,15 +1200,19 @@ export class Program {
             return outputPath;
         };
 
-        const entries = Object.values(this.files).map(file => {
-            return {
-                file: file,
-                outputPath: getOutputPath(file)
-            };
+        const entries = Object.values(this.files)
+            //only include the files from fileEntries
+            .filter(file => !!mappedFileEntries[file.srcPath])
+            .map(file => {
+                return {
+                    file: file,
+                    outputPath: getOutputPath(file)
+                };
+            })
             //sort the entries to make transpiling more deterministic
-        }).sort((a, b) => {
-            return a.file.srcPath < b.file.srcPath ? -1 : 1;
-        });
+            .sort((a, b) => {
+                return a.file.srcPath < b.file.srcPath ? -1 : 1;
+            });
 
         const astEditor = new AstEditor();
 

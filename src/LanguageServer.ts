@@ -998,17 +998,6 @@ export class LanguageServer implements OnHandler<Connection> {
     }
     private diagnosticCollection = new DiagnosticCollection();
 
-    private async transpileFile(srcPath: string) {
-        //wait all program first runs
-        await this.waitAllProjectFirstRuns();
-        //find the first project that has this file
-        for (let project of this.getProjects()) {
-            if (project.builder.program.hasFile(srcPath)) {
-                return project.builder.program.getTranspiledFileContents(srcPath);
-            }
-        }
-    }
-
     private getProjects() {
         //TODO delete this because projectManager handles all this stuff now
         return [];
@@ -1086,5 +1075,5 @@ interface BrightScriptClientConfiguration {
     configFile: string;
     languageServer: {
         enableThreading: boolean;
-    }
+    };
 }
