@@ -25,7 +25,7 @@ export class BrsFileSemanticTokensProcessor {
     }
 
     private handleConstDeclarations() {
-        for (const stmt of this.event.file.parser.references.constStatements) {
+        for (const stmt of this.event.file.cachedLookups.constStatements) {
             this.addToken(stmt.tokens.name, SemanticTokenTypes.variable, [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]);
         }
     }
@@ -35,7 +35,7 @@ export class BrsFileSemanticTokensProcessor {
         const classes = [] as Array<{ className: string; namespaceName: string; range: Range }>;
 
         //classes used in function param types
-        for (const func of this.event.file.parser.references.functionExpressions) {
+        for (const func of this.event.file.cachedLookups.functionExpressions) {
             for (const param of func.parameters) {
                 if (isClassType(param.getType({ flags: SymbolTypeFlag.typetime }))) {
                     const namespace = param.findAncestor<NamespaceStatement>(isNamespaceStatement);
@@ -95,10 +95,10 @@ export class BrsFileSemanticTokensProcessor {
         }
         scope.linkSymbolTable();
         const nodes = [
-            ...this.event.file.parser.references.expressions,
+            ...this.event.file.cachedLookups.expressions,
             //make a new VariableExpression to wrap the name. This is a hack, we could probably do it better
-            ...this.event.file.parser.references.assignmentStatements,
-            ...this.event.file.parser.references.functionExpressions.map(x => x.parameters).flat()
+            ...this.event.file.cachedLookups.assignmentStatements,
+            ...this.event.file.cachedLookups.functionExpressions.map(x => x.parameters).flat()
         ];
 
         for (let node of nodes) {

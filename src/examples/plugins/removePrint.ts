@@ -8,7 +8,7 @@ export default function plugin() {
         beforePrepareFile: (event: BeforePrepareFileEvent) => {
             if (isBrsFile(event.file)) {
                 // visit functions bodies and replace `PrintStatement` nodes with `EmptyStatement`
-                for (const func of event.file.parser.references.functionExpressions) {
+                for (const func of event.file.cachedLookups.functionExpressions) {
                     func.body.walk(createVisitor({
                         PrintStatement: (statement) => {
                             event.editor.overrideTranspileResult(statement, '');

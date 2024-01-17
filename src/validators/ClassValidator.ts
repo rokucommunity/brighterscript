@@ -59,7 +59,7 @@ export class BsClassValidator {
      */
     private verifyNewExpressions() {
         this.scope.enumerateBrsFiles((file) => {
-            let newExpressions = file.parser.references.newExpressions;
+            let newExpressions = file.cachedLookups.newExpressions;
             for (let newExpression of newExpressions) {
                 let className = newExpression.className.getName(ParseMode.BrighterScript);
                 const namespaceName = newExpression.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
@@ -310,7 +310,7 @@ export class BsClassValidator {
     private findClasses() {
         this.classes = new Map();
         this.scope.enumerateBrsFiles((file) => {
-            for (let x of file.parser.references.classStatements ?? []) {
+            for (let x of file.cachedLookups.classStatements ?? []) {
                 let classStatement = x as AugmentedClassStatement;
                 let name = classStatement.getName(ParseMode.BrighterScript);
                 //skip this class if it doesn't have a name

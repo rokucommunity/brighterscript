@@ -85,7 +85,7 @@ describe('astUtils visitors', () => {
 
     function functionsWalker(visitor: (statement: Statement, parent: Statement) => void, cancel?: CancellationToken) {
         return (file: BrsFile) => {
-            file.parser.references.functionExpressions.some(functionExpression => {
+            file.cachedLookups.functionExpressions.some(functionExpression => {
                 visitor(functionExpression.body, undefined);
                 walkStatements(functionExpression.body, (statement, parent) => visitor(statement, parent), cancel);
                 return cancel?.isCancellationRequested;

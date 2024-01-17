@@ -499,7 +499,7 @@ export class CompletionsProcessor {
         let filesSearched = new Set<File>();
         for (const file of scope.getAllFiles()) {
             if (isBrsFile(file) && !filesSearched.has(file)) {
-                for (let cs of file.parser.references.classStatements) {
+                for (let cs of file.cachedLookups.classStatements) {
                     for (let s of [...cs.methods, ...cs.fields]) {
                         if (!results.has(s.name.text) && s.name.text.toLowerCase() !== 'new') {
                             results.set(s.name.text, {

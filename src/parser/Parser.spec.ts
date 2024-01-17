@@ -8,12 +8,8 @@ import type { AssignmentStatement, ClassStatement, InterfaceStatement, ReturnSta
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isClassStatement, isCommentStatement, isDottedGetExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypeCastExpression, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isClassStatement, isCommentStatement, isDottedGetExpression, isExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypeCastExpression, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import { expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics } from '../testHelpers.spec';
-import { BrsTranspileState } from './BrsTranspileState';
-import { SourceNode } from 'source-map';
-import { BrsFile } from '../files/BrsFile';
-import { Program } from '../Program';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { Expression, Statement } from './AstNode';
 import { SymbolTypeFlag } from '../SymbolTable';
@@ -29,167 +25,167 @@ describe('parser', () => {
             diagnostics: []
         });
     });
+    /*
+        describe.skip('findReferences', () => {
+            it('gets called if references are missing', () => {
+                const parser = Parser.parse(`
+                    sub main()
+                    end sub
 
-    describe('findReferences', () => {
-        it('gets called if references are missing', () => {
-            const parser = Parser.parse(`
-                sub main()
-                end sub
-
-                sub UnusedFunction()
-                end sub
-            `);
-            expect(parser.references.functionStatements.map(x => x.name.text)).to.eql([
-                'main',
-                'UnusedFunction'
-            ]);
-            //simulate a tree-shaking plugin by removing the `UnusedFunction`
-            parser.ast.statements.splice(1);
-            //tell the parser we modified the AST and need to regenerate references
-            parser.invalidateReferences();
-            expect(parser['_references']).not.to.exist;
-            //calling `references` automatically regenerates the references
-            expect(parser.references.functionStatements.map(x => x.name.text)).to.eql([
-                'main'
-            ]);
-        });
-
-        function expressionsToStrings(expressions: Set<Expression>) {
-            return [...expressions.values()].map(x => {
-                const file = new BrsFile({
-                    srcPath: '',
-                    destPath: '',
-                    program: new Program({} as any)
-                });
-                const state = new BrsTranspileState(file);
-                return new SourceNode(null, null, null, x.transpile(state)).toString();
+                    sub UnusedFunction()
+                    end sub
+                `);
+                expect(parser.references.functionStatements.map(x => x.name.text)).to.eql([
+                    'main',
+                    'UnusedFunction'
+                ]);
+                //simulate a tree-shaking plugin by removing the `UnusedFunction`
+                parser.ast.statements.splice(1);
+                //tell the parser we modified the AST and need to regenerate references
+                parser.invalidateReferences();
+                expect(parser['_references']).not.to.exist;
+                //calling `references` automatically regenerates the references
+                expect(parser.references.functionStatements.map(x => x.name.text)).to.eql([
+                    'main'
+                ]);
             });
-        }
 
-        // eslint-disable-next-line func-names, prefer-arrow-callback
-        it('works for references.expressions', function () {
-            this.timeout(5000); // this test takes a long time on github
-            const parser = Parser.parse(`
-                b += "plus-equal"
-                a += 1 + 2
-                b += getValue1() + getValue2()
-                increment++
-                decrement--
-                some.node@.doCallfunc()
-                bravo(3 + 4).jump(callMe())
-                obj = {
-                    val1: someValue
-                }
-                arr = [
-                    one
-                ]
-                thing = alpha.bravo
-                alpha.charlie()
-                delta(alpha.delta)
-                call1().a.b.call2()
-                class Person
-                    name as string = "bob"
-                end class
-                function thing(p1 = name.space.getSomething())
+            function expressionsToStrings(expressions: Set<Expression>) {
+                return [...expressions.values()].map(x => {
+                    const file = new BrsFile({
+                        srcPath: '',
+                        destPath: '',
+                        program: new Program({} as any)
+                    });
+                    const state = new BrsTranspileState(file);
+                    return new SourceNode(null, null, null, x.transpile(state)).toString();
+                });
+            }
 
-                end function
-            `);
-            const expected = [
-                '"plus-equal"',
-                'b',
-                'b += "plus-equal"',
-                '1',
-                '2',
-                'a',
-                'a += 1 + 2',
-                'getValue1()',
-                'getValue2()',
-                'b',
-                'b += getValue1() + getValue2()',
-                'increment++',
-                'decrement--',
-                //currently the "toString" does a transpile, so that's why this is different.
-                'some.node.callfunc("doCallfunc", invalid)',
-                '3',
-                '4',
-                '3 + 4',
-                'callMe()',
-                'bravo(3 + 4).jump(callMe())',
-                'someValue',
-                '{\n    val1: someValue\n}',
-                'one',
-                '[\n    one\n]',
-                'alpha.bravo',
-                'alpha.charlie()',
-                'alpha.delta',
-                'delta(alpha.delta)',
-                'call1().a.b.call2()',
-                '"bob"',
-                'name.space.getSomething()'
-            ];
+            // eslint-disable-next-line func-names, prefer-arrow-callback
+            it('works for references.expressions', function () {
+                this.timeout(5000); // this test takes a long time on github
+                const parser = Parser.parse(`
+                    b += "plus-equal"
+                    a += 1 + 2
+                    b += getValue1() + getValue2()
+                    increment++
+                    decrement--
+                    some.node@.doCallfunc()
+                    bravo(3 + 4).jump(callMe())
+                    obj = {
+                        val1: someValue
+                    }
+                    arr = [
+                        one
+                    ]
+                    thing = alpha.bravo
+                    alpha.charlie()
+                    delta(alpha.delta)
+                    call1().a.b.call2()
+                    class Person
+                        name as string = "bob"
+                    end class
+                    function thing(p1 = name.space.getSomething())
 
-            expect(
-                expressionsToStrings(parser.references.expressions)
-            ).to.eql(expected);
+                    end function
+                `);
+                const expected = [
+                    '"plus-equal"',
+                    'b',
+                    'b += "plus-equal"',
+                    '1',
+                    '2',
+                    'a',
+                    'a += 1 + 2',
+                    'getValue1()',
+                    'getValue2()',
+                    'b',
+                    'b += getValue1() + getValue2()',
+                    'increment++',
+                    'decrement--',
+                    //currently the "toString" does a transpile, so that's why this is different.
+                    'some.node.callfunc("doCallfunc", invalid)',
+                    '3',
+                    '4',
+                    '3 + 4',
+                    'callMe()',
+                    'bravo(3 + 4).jump(callMe())',
+                    'someValue',
+                    '{\n    val1: someValue\n}',
+                    'one',
+                    '[\n    one\n]',
+                    'alpha.bravo',
+                    'alpha.charlie()',
+                    'alpha.delta',
+                    'delta(alpha.delta)',
+                    'call1().a.b.call2()',
+                    '"bob"',
+                    'name.space.getSomething()'
+                ];
 
-            //tell the parser we modified the AST and need to regenerate references
-            parser.invalidateReferences();
+                expect(
+                    expressionsToStrings(parser.references.expressions)
+                ).to.eql(expected);
 
-            expect(
-                expressionsToStrings(parser.references.expressions).sort()
-            ).to.eql(expected.sort());
-        });
+                //tell the parser we modified the AST and need to regenerate references
+                parser.invalidateReferences();
 
-        it('works for references.expressions', () => {
-            const parser = Parser.parse(`
-                value = true or type(true) = "something" or Enums.A.Value = "value" and Enum1.Value = Name.Space.Enum2.Value
-            `);
-            const expected = [
-                'true',
-                'type(true)',
-                '"something"',
-                'true',
-                'Enums.A.Value',
-                '"value"',
-                'Enum1.Value',
-                'Name.Space.Enum2.Value',
-                'true or type(true) = "something" or Enums.A.Value = "value" and Enum1.Value = Name.Space.Enum2.Value'
-            ];
+                expect(
+                    expressionsToStrings(parser.references.expressions).sort()
+                ).to.eql(expected.sort());
+            });
 
-            expect(
-                expressionsToStrings(parser.references.expressions)
-            ).to.eql(expected);
+            it('works for references.expressions', () => {
+                const parser = Parser.parse(`
+                    value = true or type(true) = "something" or Enums.A.Value = "value" and Enum1.Value = Name.Space.Enum2.Value
+                `);
+                const expected = [
+                    'true',
+                    'type(true)',
+                    '"something"',
+                    'true',
+                    'Enums.A.Value',
+                    '"value"',
+                    'Enum1.Value',
+                    'Name.Space.Enum2.Value',
+                    'true or type(true) = "something" or Enums.A.Value = "value" and Enum1.Value = Name.Space.Enum2.Value'
+                ];
 
-            //tell the parser we modified the AST and need to regenerate references
-            parser.invalidateReferences();
+                expect(
+                    expressionsToStrings(parser.references.expressions)
+                ).to.eql(expected);
 
-            expect(
-                expressionsToStrings(parser.references.expressions).sort()
-            ).to.eql(expected.sort());
-        });
+                //tell the parser we modified the AST and need to regenerate references
+                parser.invalidateReferences();
 
-        it('works for logical expression', () => {
-            const parser = Parser.parse(`
-                value = Enums.A.Value = "value"
-            `);
-            const expected = [
-                'Enums.A.Value',
-                '"value"',
-                'Enums.A.Value = "value"'
-            ];
+                expect(
+                    expressionsToStrings(parser.references.expressions).sort()
+                ).to.eql(expected.sort());
+            });
 
-            expect(
-                expressionsToStrings(parser.references.expressions)
-            ).to.eql(expected);
+            it('works for logical expression', () => {
+                const parser = Parser.parse(`
+                    value = Enums.A.Value = "value"
+                `);
+                const expected = [
+                    'Enums.A.Value',
+                    '"value"',
+                    'Enums.A.Value = "value"'
+                ];
 
-            //tell the parser we modified the AST and need to regenerate references
-            parser.invalidateReferences();
+                expect(
+                    expressionsToStrings(parser.references.expressions)
+                ).to.eql(expected);
 
-            expect(
-                expressionsToStrings(parser.references.expressions).sort()
-            ).to.eql(expected.sort());
-        });
-    });
+                //tell the parser we modified the AST and need to regenerate references
+                parser.invalidateReferences();
+
+                expect(
+                    expressionsToStrings(parser.references.expressions).sort()
+                ).to.eql(expected.sort());
+            });
+        }); */
 
     describe('callfunc operator', () => {
         it('is not allowed in brightscript mode', () => {
@@ -220,7 +216,7 @@ describe('parser', () => {
         function getExpression<T>(text: string, options?: { matcher?: any; parseMode?: ParseMode }) {
             const parser = parse(text, options?.parseMode);
             expectZeroDiagnostics(parser);
-            const expressions = [...parser.references.expressions];
+            const expressions = parser.ast.findChildren<Expression>(isExpression);
             if (options?.matcher) {
                 return expressions.find(options.matcher) as unknown as T;
             } else {
@@ -289,8 +285,9 @@ describe('parser', () => {
                     key = isTrue ? ["name"] : ["age"]
                 end sub
             `, ParseMode.BrighterScript);
-            expect(parser.references.assignmentStatements[0].value).is.instanceof(IndexedGetExpression);
-            expect(parser.references.assignmentStatements[2].value).is.instanceof(TernaryExpression);
+            const assignmentStatements = parser.ast.findChildren<AssignmentStatement>(isAssignmentStatement);
+            expect(assignmentStatements[0].value).is.instanceof(IndexedGetExpression);
+            expect(assignmentStatements[2].value).is.instanceof(TernaryExpression);
         });
 
         it('distinguishes between optional chaining and ternary expression', () => {
@@ -302,8 +299,9 @@ describe('parser', () => {
                     key = isTrue ? ["name"] : getDefault()
                 end sub
             `, ParseMode.BrighterScript);
-            expect(parser.references.assignmentStatements[0].value).is.instanceof(IndexedGetExpression);
-            expect(parser.references.assignmentStatements[1].value).is.instanceof(TernaryExpression);
+            const assignmentStatements = parser.ast.findChildren<AssignmentStatement>(isAssignmentStatement);
+            expect(assignmentStatements[0].value).is.instanceof(IndexedGetExpression);
+            expect(assignmentStatements[1].value).is.instanceof(TernaryExpression);
         });
     });
 
@@ -401,7 +399,8 @@ describe('parser', () => {
                 `, ParseMode.BrighterScript);
                 expectZeroDiagnostics(parser);
                 // We expect these names to be "as given" in this context, because we aren't evaluating a full program.
-                expect(parser.references.namespaceStatements.map(statement => statement.getName(ParseMode.BrighterScript))).to.deep.equal([
+                const namespaceStatements = parser.ast.findChildren<NamespaceStatement>(isNamespaceStatement);
+                expect(namespaceStatements.map(statement => statement.getName(ParseMode.BrighterScript))).to.have.deep.members([
                     'Level1.Level2.Level3',
                     'Level1'
                 ]);

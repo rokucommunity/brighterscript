@@ -24,12 +24,18 @@ export class BrsFileValidator {
         const unlinkGlobalSymbolTable = this.event.file.parser.symbolTable.pushParentProvider(() => this.event.program.globalScope.symbolTable);
 
         util.validateTooDeepFile(this.event.file);
+
+        // Invalidate cache on this file
+        // It could have potentially changed before this from plugins, after this, it will not change
+        this.event.file.cachedLookups.invalidate();
+
         this.walk();
         this.flagTopLevelStatements();
         //only validate the file if it was actually parsed (skip files containing typedefs)
         if (!this.event.file.hasTypedef) {
             this.validateImportStatements();
         }
+
         if (isBrsFile(this.event.file)) {
             this.event.file.processSymbolInformation();
         }
@@ -114,7 +120,7 @@ export class BrsFileValidator {
                 //this function is declared inside a namespace
                 if (namespace) {
                     namespace.getSymbolTable().addSymbol(
-                        node.name.text,
+                        node.name?.text,
                         { definingNode: node },
                         funcType,
                         SymbolTypeFlag.runtime
@@ -317,9 +323,9 @@ export class BrsFileValidator {
 
         let statements = [
             // eslint-disable-next-line @typescript-eslint/dot-notation
-            ...this.event.file['_parser'].references.libraryStatements,
+            ...this.event.file.cachedLookups.libraryStatements,
             // eslint-disable-next-line @typescript-eslint/dot-notation
-            ...this.event.file['_parser'].references.importStatements
+            ...this.event.file.cachedLookups.importStatements
         ];
         for (let result of statements) {
             //if this statement is not one of the top-of-file statements,

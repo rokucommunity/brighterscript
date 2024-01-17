@@ -41,7 +41,7 @@ export class CodeActionsProcessor {
         }
 
         this.suggestedImports.add(key);
-        const importStatements = (this.event.file as BrsFile).parser.references.importStatements;
+        const importStatements = (this.event.file as BrsFile).cachedLookups.importStatements;
         //find the position of the first import statement, or the top of the file if there is none
         const insertPosition = importStatements[importStatements.length - 1]?.importToken.range?.start ?? util.createPosition(0, 0);
 

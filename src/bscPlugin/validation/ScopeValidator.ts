@@ -156,7 +156,7 @@ export class ScopeValidator {
         const diagnostics: BsDiagnosticWithOrigin[] = [];
         const enumLocationsByName = new Cache<string, Array<{ file: BrsFile; statement: EnumStatement }>>();
         this.event.scope.enumerateBrsFiles((file) => {
-            for (const enumStatement of file.parser.references.enumStatements) {
+            for (const enumStatement of file.cachedLookups.enumStatements) {
                 const fullName = enumStatement.fullName;
                 const nameLower = fullName?.toLowerCase();
                 if (nameLower?.length > 0) {

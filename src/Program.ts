@@ -23,7 +23,7 @@ import { isBrsFile, isXmlFile, isXmlScope, isNamespaceStatement } from './astUti
 import type { FunctionStatement, MethodStatement, NamespaceStatement } from './parser/Statement';
 import { BscPlugin } from './bscPlugin/BscPlugin';
 import { Editor } from './astUtils/Editor';
-import type { AstNode, Statement } from './parser/AstNode';
+import type { Statement } from './parser/AstNode';
 import { CallExpressionInfo } from './bscPlugin/CallExpressionInfo';
 import { SignatureHelpUtil } from './bscPlugin/SignatureHelpUtil';
 import { DiagnosticSeverityAdjuster } from './DiagnosticSeverityAdjuster';
@@ -1648,7 +1648,9 @@ export class Program {
         //find every file with this enum defined
         for (const scope of Object.values(this.scopes)) {
             const enumLink = scope.getEnumFileLink(lowerName);
-            files.push(enumLink?.file);
+            if (enumLink) {
+                files.push(enumLink.file);
+            }
         }
         return files;
     }

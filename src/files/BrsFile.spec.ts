@@ -218,7 +218,7 @@ describe('BrsFile', () => {
             new ImportStatement(createToken(TokenKind.Import), createToken(TokenKind.StringLiteral, 'pkg:/source/lib.brs'))
         );
         expect(file.ownScriptImports).to.be.empty;
-        file.parser.invalidateReferences();
+        file.cachedLookups.invalidate();
         expect(file.ownScriptImports.map(x => x.text)).to.eql(['pkg:/source/lib.brs']);
     });
 
@@ -1144,6 +1144,7 @@ describe('BrsFile', () => {
                     return value.subType()
                 end function
             `);
+
             expect(file.callables[0]).to.deep.include({
                 file: file,
                 nameRange: Range.create(1, 25, 1, 36)
@@ -3119,7 +3120,7 @@ describe('BrsFile', () => {
             const stub = sinon.stub(file, 'parse').callThrough();
 
             //`file.parser` is a getter, so that should force the parse to occur
-            expect(file.parser.references.functionStatements).to.be.lengthOf(1);
+            expect(file.parser.ast).to.exist;
             expect(stub.called).to.be.true;
             //parse should have been called
         });

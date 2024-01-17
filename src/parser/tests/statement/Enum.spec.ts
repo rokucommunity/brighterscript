@@ -195,7 +195,7 @@ describe('EnumStatement', () => {
         program.validate();
 
         expectZeroDiagnostics(program);
-        expect(file.parser.references.enumStatements.map(x => x.fullName)).to.eql([
+        expect(file.cachedLookups.enumStatements.map(x => x.fullName)).to.eql([
             'entities.Person',
             'Direction'
         ]);

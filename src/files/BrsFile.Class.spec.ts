@@ -45,7 +45,7 @@ describe('BrsFile BrighterScript classes', () => {
 
             end class
         `);
-        expect(file.parser.references.classStatements.map(x => x.getName(ParseMode.BrighterScript)).sort()).to.eql(['Animal', 'Duck']);
+        expect(file.cachedLookups.classStatements.map(x => x.getName(ParseMode.BrighterScript)).sort()).to.eql(['Animal', 'Duck']);
     });
 
     it('does not cause errors with incomplete class statement', () => {
@@ -110,7 +110,7 @@ describe('BrsFile BrighterScript classes', () => {
         `);
         program.validate();
         expectZeroDiagnostics(program);
-        let duckClass = file.parser.references.classStatements.find(x => x.name.text.toLowerCase() === 'duck');
+        let duckClass = file.cachedLookups.classStatements.find(x => x.name.text.toLowerCase() === 'duck');
         expect(duckClass).to.exist;
         expect(duckClass!.memberMap['move']).to.exist;
     });
@@ -1832,7 +1832,7 @@ describe('BrsFile BrighterScript classes', () => {
             end class
         `);
         doesNotThrow(() => {
-            file.parser.references.classStatements[0]['getParentClassIndex'](new BrsTranspileState(file));
+            file.cachedLookups.classStatements[0]['getParentClassIndex'](new BrsTranspileState(file));
         });
     });
 

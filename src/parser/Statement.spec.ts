@@ -88,7 +88,7 @@ describe('Statement', () => {
                     end class
                 `);
                 program.validate();
-                const stmt = file.parser.references.classStatements[0];
+                const stmt = file.cachedLookups.classStatements[0];
                 expect(stmt.getName(ParseMode.BrightScript)).to.equal('Animal');
                 expect(stmt.getName(ParseMode.BrighterScript)).to.equal('Animal');
             });
@@ -100,7 +100,7 @@ describe('Statement', () => {
                     end namespace
                 `);
                 program.validate();
-                const stmt = file.parser.references.classStatements[0];
+                const stmt = file.cachedLookups.classStatements[0];
                 expect(stmt.getName(ParseMode.BrightScript)).to.equal('NameA_Animal');
                 expect(stmt.getName(ParseMode.BrighterScript)).to.equal('NameA.Animal');
             });

@@ -318,11 +318,10 @@ describe('parser', () => {
         ];
 
         const parser = Parser.parse(tokens);
-        const { propertyHints: initialHints } = parser.references;
+        const { propertyHints: initialHints } = parser;
         expect(Object.keys(initialHints).sort()).to.deep.equal(expected, 'Initial hints');
 
-        parser.invalidateReferences();
-        const { propertyHints: refreshedHints } = parser.references;
+        const { propertyHints: refreshedHints } = parser;
         expect(Object.keys(refreshedHints).sort()).to.deep.equal(expected, 'Refreshed hints');
     });
 
@@ -346,11 +345,10 @@ describe('parser', () => {
         ];
 
         const parser = Parser.parse(tokens);
-        const { propertyHints: initialHints } = parser.references;
+        const { propertyHints: initialHints } = parser;
         expect(Object.keys(initialHints).sort()).to.deep.equal(expected, 'Initial hints');
 
-        parser.invalidateReferences();
-        const { propertyHints: refreshedHints } = parser.references;
+        const { propertyHints: refreshedHints } = parser;
         expect(Object.keys(refreshedHints).sort()).to.deep.equal(expected, 'Refreshed hints');
     });
 });

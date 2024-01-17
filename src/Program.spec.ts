@@ -13,7 +13,7 @@ import { EmptyStatement } from './parser/Statement';
 import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
 import { doesNotThrow } from 'assert';
 import { createVisitor, WalkMode } from './astUtils/visitors';
-import { isBrsFile, isExpression } from './astUtils/reflection';
+import { isBrsFile } from './astUtils/reflection';
 import type { LiteralExpression } from './parser/Expression';
 import { tempDir, rootDir, stagingDir } from './testHelpers.spec';
 import { AssetFile } from './files/AssetFile';
@@ -252,11 +252,9 @@ describe('Program', () => {
                 end sub
             `);
             //disable the plugins
-            let allExpressions = file.parser.ast.findChildren(isExpression);
-            expect(allExpressions).to.be.lengthOf(1);
+            expect(file.cachedLookups.expressions).to.be.lengthOf(1);
             program.validate();
-            allExpressions = file.parser.ast.findChildren(isExpression);
-            expect(allExpressions).to.be.lengthOf(1);
+            expect(file.cachedLookups.expressions).to.be.lengthOf(1);
         });
         it('catches duplicate XML component names', () => {
             //add 2 components which both reference the same errored file
