@@ -1596,10 +1596,15 @@ export class Program {
     public findFilesForFunction(functionName: string) {
         const files = [] as File[];
         const lowerFunctionName = functionName.toLowerCase();
-
-        for (const scope of Object.values(this.scopes)) {
-            const callable = scope.getCallableByName(lowerFunctionName);
-            files.push(callable?.file);
+        //find every file with this function defined
+        for (const file of Object.values(this.files)) {
+            if (isBrsFile(file)) {
+                //TODO handle namespace-relative function calls
+                //if the file has a function with this name
+                if (file.cachedLookups.functionStatementMap.get(lowerFunctionName)) {
+                    files.push(file);
+                }
+            }
         }
         return files;
     }
@@ -1611,9 +1616,14 @@ export class Program {
         const files = [] as File[];
         const lowerClassName = className.toLowerCase();
         //find every file with this class defined
-        for (const scope of Object.values(this.scopes)) {
-            const classLink = scope.getClassFileLink(lowerClassName);
-            files.push(classLink?.file);
+        for (const file of Object.values(this.files)) {
+            if (isBrsFile(file)) {
+                //TODO handle namespace-relative classes
+                //if the file has a function with this name
+                if (file.cachedLookups.classStatementMap.get(lowerClassName) !== undefined) {
+                    files.push(file);
+                }
+            }
         }
         return files;
     }
@@ -1624,18 +1634,17 @@ export class Program {
         //find every file with this class defined
         for (const file of Object.values(this.files)) {
             if (isBrsFile(file)) {
-                file.ast.walk(createVisitor({
-                    NamespaceStatement: (stmt) => {
-                        const namespaceName = stmt.name.toLowerCase();
-                        if (namespaceName === lowerName ||
-                            namespaceName.startsWith(lowerName + '.')
-                        ) {
-                            files.push(file);
-                        }
-                    }
-                }), {
-                    walkMode: WalkMode.walkStatements
-                });
+                if (file.cachedLookups.namespaceStatements.find((x) => {
+                    const namespaceName = x.name.toLowerCase();
+                    return (
+                        //the namespace name matches exactly
+                        namespaceName === lowerName ||
+                        //the full namespace starts with the name (honoring the part boundary)
+                        namespaceName.startsWith(lowerName + '.')
+                    );
+                })) {
+                    files.push(file);
+                }
             }
         }
 
@@ -1646,10 +1655,11 @@ export class Program {
         const files = [] as File[];
         const lowerName = name.toLowerCase();
         //find every file with this enum defined
-        for (const scope of Object.values(this.scopes)) {
-            const enumLink = scope.getEnumFileLink(lowerName);
-            if (enumLink) {
-                files.push(enumLink.file);
+        for (const file of Object.values(this.files)) {
+            if (isBrsFile(file)) {
+                if (file.cachedLookups.enumStatementMap.get(lowerName)) {
+                    files.push(file);
+                }
             }
         }
         return files;

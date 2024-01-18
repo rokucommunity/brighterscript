@@ -185,13 +185,13 @@ describe('BrsFileSemanticTokensProcessor', () => {
             //`type` function call
             range: util.createRange(2, 29, 2, 33),
             tokenType: SemanticTokenTypes.function
-        }, {
+        }, { //Humanoids
             range: util.createRange(2, 34, 2, 43),
             tokenType: SemanticTokenTypes.namespace
-        }, {
+        }, { //Aliens
             range: util.createRange(2, 44, 2, 50),
             tokenType: SemanticTokenTypes.namespace
-        }, {
+        }, { //Invade
             range: util.createRange(2, 51, 2, 57),
             tokenType: SemanticTokenTypes.function
         }]);

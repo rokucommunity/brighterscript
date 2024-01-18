@@ -7,7 +7,7 @@ import { standardizePath as s, util } from '../../util';
 import type { File } from '../../files/File';
 import { rootDir } from '../../testHelpers.spec';
 
-describe.only('CodeActionsProcessor', () => {
+describe('CodeActionsProcessor', () => {
     let program: Program;
     beforeEach(() => {
         program = new Program({
