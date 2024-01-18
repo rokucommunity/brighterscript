@@ -45,6 +45,7 @@ import { ComponentType } from './types/ComponentType';
 import { MAX_RELATED_INFOS_COUNT } from './diagnosticUtils';
 import { BinaryOperatorReferenceType } from './types/ReferenceType';
 import type { UnresolvedSymbol } from './AstValidationSegmenter';
+import { unionTypeFactory } from './types/UnionType';
 
 export class Util {
     public clearConsole() {
@@ -1206,6 +1207,10 @@ export class Util {
             return rect2dType;
         }
 
+        function getColorType() {
+            return unionTypeFactory([IntegerType.instance, StringType.instance]);
+        }
+
 
         if (typeDescriptorLower.startsWith('array of ')) {
             let arrayOfTypeName = typeDescriptorLower.substring(9); //cut off beginning 'array of'
@@ -1228,13 +1233,15 @@ export class Util {
         } else if (typeDescriptorLower === 'uri') {
             return StringType.instance;
         } else if (typeDescriptorLower === 'color') {
-            return IntegerType.instance;
+            return getColorType();
         } else if (typeDescriptorLower === 'vector2d' || typeDescriptorLower === 'floatarray') {
             return new ArrayType(FloatType.instance);
         } else if (typeDescriptorLower === 'vector2darray') {
             return new ArrayType(new ArrayType(FloatType.instance));
-        } else if (typeDescriptorLower === 'intarray' || typeDescriptorLower === 'colorarray') {
+        } else if (typeDescriptorLower === 'intarray') {
             return new ArrayType(IntegerType.instance);
+        } else if (typeDescriptorLower === 'colorarray') {
+            return new ArrayType(getColorType());
         } else if (typeDescriptorLower === 'boolarray') {
             return new ArrayType(BooleanType.instance);
         } else if (typeDescriptorLower === 'stringarray' || typeDescriptorLower === 'strarray') {
@@ -1249,7 +1256,7 @@ export class Util {
             return BooleanType.instance;
         } else if (typeDescriptorLower === 'array') {
             return new ArrayType();
-        } else if (typeDescriptorLower === 'assocarray' || typeDescriptorLower === 'associative array') {
+        } else if (typeDescriptorLower === 'assocarray' || typeDescriptorLower === 'associative array' || typeDescriptorLower === 'associativearray') {
             return new AssociativeArrayType();
         } else if (typeDescriptorLower === 'node') {
             return ComponentType.instance;
