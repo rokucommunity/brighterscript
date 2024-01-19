@@ -17,7 +17,7 @@ import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryEx
 import { CallExpression } from '../../parser/Expression';
 import { createVisitor } from '../../astUtils/visitors';
 import type { BscType } from '../../types';
-import type { File } from '../../files/File';
+import type { BscFile } from '../../files/BscFile';
 import { InsideSegmentWalkMode } from '../../AstValidationSegmenter';
 import { TokenKind } from '../../lexer/TokenKind';
 import { ParseMode } from '../../parser/Parser';
@@ -228,21 +228,21 @@ export class ScopeValidator {
             const unquotedComponentName = componentName?.text?.replace(/"/g, '');
             if (unquotedComponentName && !platformNodeNames.has(unquotedComponentName.toLowerCase()) && !this.event.program.getComponent(unquotedComponentName)) {
                 this.addDiagnosticOnce({
-                    file: file as File,
+                    file: file as BscFile,
                     ...DiagnosticMessages.unknownRoSGNode(unquotedComponentName),
                     range: componentName.range
                 });
             } else if (call?.args.length !== 2) {
                 // roSgNode should only ever have 2 args in `createObject`
                 this.addDiagnosticOnce({
-                    file: file as File,
+                    file: file as BscFile,
                     ...DiagnosticMessages.mismatchCreateObjectArgumentCount(firstParamStringValue, [2], call?.args.length),
                     range: call.range
                 });
             }
         } else if (!platformComponentNames.has(firstParamStringValue.toLowerCase())) {
             this.addDiagnosticOnce({
-                file: file as File,
+                file: file as BscFile,
                 ...DiagnosticMessages.unknownBrightScriptComponent(firstParamStringValue),
                 range: firstParamToken.range
             });
@@ -259,7 +259,7 @@ export class ScopeValidator {
             if (!validArgCounts.includes(call?.args.length)) {
                 // Incorrect number of arguments included in `createObject()`
                 this.addDiagnosticOnce({
-                    file: file as File,
+                    file: file as BscFile,
                     ...DiagnosticMessages.mismatchCreateObjectArgumentCount(firstParamStringValue, validArgCounts, call?.args.length),
                     range: call.range
                 });
@@ -268,7 +268,7 @@ export class ScopeValidator {
             // Test for deprecation
             if (brightScriptComponent.isDeprecated) {
                 this.addDiagnosticOnce({
-                    file: file as File,
+                    file: file as BscFile,
                     ...DiagnosticMessages.deprecatedBrightScriptComponent(firstParamStringValue, brightScriptComponent.deprecatedDescription),
                     range: call.range
                 });
@@ -384,7 +384,7 @@ export class ScopeValidator {
         const typeChainScan = util.processTypeChain(typeChainExpectedLHS);
         if (!expectedLHSType?.isResolvable()) {
             this.addMultiScopeDiagnostic({
-                file: file as File,
+                file: file as BscFile,
                 ...DiagnosticMessages.cannotFindName(typeChainScan.itemName, typeChainScan.fullNameOfItem),
                 range: typeChainScan.range
             });
@@ -560,7 +560,7 @@ export class ScopeValidator {
             } else {
                 const typeChainScan = util.processTypeChain(typeChain);
                 this.addMultiScopeDiagnostic({
-                    file: file as File,
+                    file: file as BscFile,
                     ...DiagnosticMessages.cannotFindName(typeChainScan.itemName, typeChainScan.fullNameOfItem),
                     range: typeChainScan.range
                 });
@@ -619,7 +619,7 @@ export class ScopeValidator {
      * @param typeChain type chain to check
      * @returns true if member accesiibility is okay
      */
-    private checkMemberAccessibility(file: File, expression: Expression, typeChain: TypeChainEntry[]) {
+    private checkMemberAccessibility(file: BscFile, expression: Expression, typeChain: TypeChainEntry[]) {
         for (let i = 0; i < typeChain.length - 1; i++) {
             const parentChainItem = typeChain[i];
             const childChainItem = typeChain[i + 1];

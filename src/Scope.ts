@@ -19,7 +19,7 @@ import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
 import { isBrsFile, isXmlFile, isEnumMemberStatement, isNamespaceStatement, isNamespaceType, isReferenceType, isCallableType } from './astUtils/reflection';
 import { SymbolTable, SymbolTypeFlag } from './SymbolTable';
-import type { File } from './files/File';
+import type { BscFile } from './files/BscFile';
 import type { BscType } from './types/BscType';
 import { NamespaceType } from './types/NamespaceType';
 import { referenceTypeFactory } from './types/ReferenceType';
@@ -264,10 +264,13 @@ export class Scope {
                 links.push({ item: nsContainersWithStatement?.namespaceStatements?.[0], file: nsContainersWithStatement?.file as BrsFile });
             }
         }
-
+        const fullNameLower = (containingNamespace ? `${containingNamespace}.${name}` : name).toLowerCase();
         const callable = this.getCallableByName(name);
         if (callable) {
-            links.push({ item: callable.functionStatement, file: callable.file as BrsFile });
+            if (!callable.hasNamespace || callable.getName(ParseMode.BrighterScript).toLowerCase() === fullNameLower) {
+                // this callable has no namespace, or has same namespace
+                links.push({ item: callable.functionStatement, file: callable.file as BrsFile });
+            }
         }
         // remove empty links
         return links.filter(link => link);
@@ -476,14 +479,14 @@ export class Scope {
      * @param filePath can be a srcPath or destPath
      * @param normalizePath should this function repair and standardize the path? Passing false should have a performance boost if you can guarantee your path is already sanitized
      */
-    public getFile<TFile extends File>(filePath: string, normalizePath = true) {
+    public getFile<TFile extends BscFile>(filePath: string, normalizePath = true) {
         if (typeof filePath !== 'string') {
             return undefined;
         }
 
-        const key: keyof Pick<File, 'srcPath' | 'destPath'> = path.isAbsolute(filePath) ? 'srcPath' : 'destPath';
+        const key: keyof Pick<BscFile, 'srcPath' | 'destPath'> = path.isAbsolute(filePath) ? 'srcPath' : 'destPath';
         let map = this.cache.getOrAdd('fileMaps-srcPath', () => {
-            const result = new Map<string, File>();
+            const result = new Map<string, BscFile>();
             for (const file of this.getAllFiles()) {
                 result.set(file[key].toLowerCase(), file);
             }
@@ -507,9 +510,9 @@ export class Scope {
      * Get the list of files referenced by this scope that are actually loaded in the program.
      * Includes files from this scope and all ancestor scopes
      */
-    public getAllFiles(): File[] {
+    public getAllFiles(): BscFile[] {
         return this.cache.getOrAdd('getAllFiles', () => {
-            let result = [] as File[];
+            let result = [] as BscFile[];
             let dependencies = this.dependencyGraph.getAllDependencies(this.dependencyGraphKey);
             for (let dependency of dependencies) {
                 //load components by their name
@@ -607,7 +610,7 @@ export class Scope {
     /**
      * Call a function for each file directly included in this scope (excluding files found only in parent scopes).
      */
-    public enumerateOwnFiles(callback: (file: File) => void) {
+    public enumerateOwnFiles(callback: (file: BscFile) => void) {
         const files = this.getOwnFiles();
         for (const file of files) {
             //either XML components or files without a typedef
@@ -774,7 +777,7 @@ export class Scope {
         this.diagnostics = this.diagnostics.filter(diag => !(diag.origin === DiagnosticOrigin.ASTSegment && diag.astSegment === astSegment));
     }
 
-    clearAstSegmentDiagnosticsByFile(file: File) {
+    clearAstSegmentDiagnosticsByFile(file: BscFile) {
         const lowerSrcPath = file.srcPath.toLowerCase();
         this.diagnostics = this.diagnostics.filter(diag => !(diag.origin === DiagnosticOrigin.ASTSegment && diag.file.srcPath.toLowerCase() === lowerSrcPath));
     }
@@ -1298,7 +1301,7 @@ export class Scope {
     /**
      * Determine if this file is included in this scope (excluding parent scopes)
      */
-    public hasFile(file: File) {
+    public hasFile(file: BscFile) {
         let files = this.getOwnFiles();
         let hasFile = files.includes(file);
         return hasFile;
@@ -1307,7 +1310,7 @@ export class Scope {
     /**
      * Get the definition (where was this thing first defined) of the symbol under the position
      */
-    public getDefinition(file: File, position: Position): Location[] {
+    public getDefinition(file: BscFile, position: Position): Location[] {
         // Overridden in XMLScope. Brs files use implementation in BrsFile
         return [];
     }
@@ -1329,5 +1332,5 @@ export class Scope {
 }
 
 interface AugmentedNewExpression extends NewExpression {
-    file: File;
+    file: BscFile;
 }

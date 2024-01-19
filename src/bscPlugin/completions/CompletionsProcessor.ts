@@ -1,6 +1,6 @@
 import { isBlock, isBrsFile, isCallableType, isClassStatement, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isFunctionExpression, isInterfaceType, isMethodStatement, isNamespaceStatement, isNamespaceType, isNativeType, isXmlFile, isXmlScope } from '../../astUtils/reflection';
 import type { FileReference, ProvideCompletionsEvent } from '../../interfaces';
-import type { File } from '../../files/File';
+import type { BscFile } from '../../files/BscFile';
 import { DeclarableTypes, Keywords, TokenKind } from '../../lexer/TokenKind';
 import type { XmlScope } from '../../XmlScope';
 import { util } from '../../util';
@@ -496,7 +496,7 @@ export class CompletionsProcessor {
 
     public getAllClassMemberCompletions(scope: Scope) {
         let results = new Map<string, CompletionItem>();
-        let filesSearched = new Set<File>();
+        let filesSearched = new Set<BscFile>();
         for (const file of scope.getAllFiles()) {
             if (isBrsFile(file) && !filesSearched.has(file)) {
                 for (let cs of file.parser.references.classStatements) {

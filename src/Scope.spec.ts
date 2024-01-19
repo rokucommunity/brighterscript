@@ -115,6 +115,51 @@ describe('Scope', () => {
         expectZeroDiagnostics(program);
     });
 
+    it('does not flag unrelated namespace const and function collision', () => {
+        program.setFile('source/main.bs', `
+            namespace alpha
+                const options = {}
+            end namespace
+            namespace beta
+                sub options()
+                end sub
+            end namespace
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
+    it('does flag related namespace const and function collision', () => {
+        program.setFile('source/main.bs', `
+            namespace alpha
+                const options = {}
+            end namespace
+            namespace alpha
+                sub options()
+                end sub
+            end namespace
+        `);
+        program.validate();
+        expectDiagnostics(program, [
+            DiagnosticMessages.nameCollision('Const', 'Function', 'options').message
+        ]);
+    });
+
+    it('does flag namespaced const and un-namespaced function collision', () => {
+        program.setFile('source/main.bs', `
+            namespace alpha
+                const options = {}
+            end namespace
+
+            sub options()
+            end sub
+        `);
+        program.validate();
+        expectDiagnostics(program, [
+            DiagnosticMessages.nameCollision('Const', 'Function', 'options').message
+        ]);
+    });
+
     it('flags parameter with same name as namespace', () => {
         program.setFile('source/main.bs', `
             namespace NameA.NameB

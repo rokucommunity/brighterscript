@@ -14,7 +14,7 @@ import type { SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
 import type { Editor } from './astUtils/Editor';
 import type { Identifier, Token } from './lexer/Token';
-import type { File } from './files/File';
+import type { BscFile } from './files/BscFile';
 import type { FileFactory } from './files/Factory';
 import type { LazyFileData } from './files/LazyFileData';
 import type { SymbolTable, SymbolTypeFlag } from './SymbolTable';
@@ -23,7 +23,7 @@ import { createToken } from './astUtils/creators';
 import { TokenKind } from './lexer/TokenKind';
 
 export interface BsDiagnostic extends Diagnostic {
-    file: File;
+    file: BscFile;
     /**
      * A generic data container where additional details of the diagnostic can be stored. These are stripped out before being sent to a languageclient, and not printed to the console.
      */
@@ -43,7 +43,7 @@ export interface BsDiagnosticWithOrigin extends BsDiagnostic {
 }
 
 export interface Callable {
-    file: File;
+    file: BscFile;
     name: string;
     /**
      * Is the callable declared as "sub". If falsey, assumed declared as "function"
@@ -86,7 +86,7 @@ export interface FunctionCall {
     range: Range;
     expression: CallExpression;
     functionScope: FunctionScope;
-    file: File;
+    file: BscFile;
     name: string;
     args: CallableArg[];
     nameRange: Range;
@@ -180,7 +180,7 @@ export interface CallableContainer {
 export type CallableContainerMap = Map<string, CallableContainer[]>;
 
 export interface CommentFlag {
-    file: File;
+    file: BscFile;
     /**
      * The location of the ignore comment.
      */
@@ -410,7 +410,7 @@ export interface CompilerPlugin {
 }
 export type PluginHandler<T, R = void> = (event: T) => R;
 
-export interface OnGetCodeActionsEvent<TFile extends File = File> {
+export interface OnGetCodeActionsEvent<TFile extends BscFile = BscFile> {
     program: Program;
     file: TFile;
     range: Range;
@@ -434,26 +434,26 @@ export type OnProgramValidateEvent = BeforeProgramValidateEvent;
 export type AfterProgramValidateEvent = BeforeProgramValidateEvent;
 
 
-export interface ProvideCompletionsEvent<TFile extends File = File> {
+export interface ProvideCompletionsEvent<TFile extends BscFile = BscFile> {
     program: Program;
     file: TFile;
     scopes: Scope[];
     position: Position;
     completions: CompletionItem[];
 }
-export type BeforeProvideCompletionsEvent<TFile extends File = File> = ProvideCompletionsEvent<TFile>;
-export type AfterProvideCompletionsEvent<TFile extends File = File> = ProvideCompletionsEvent<TFile>;
+export type BeforeProvideCompletionsEvent<TFile extends BscFile = BscFile> = ProvideCompletionsEvent<TFile>;
+export type AfterProvideCompletionsEvent<TFile extends BscFile = BscFile> = ProvideCompletionsEvent<TFile>;
 
 export interface BeforeBuildProgramEvent {
     program: Program;
-    files: File[];
+    files: BscFile[];
     editor: Editor;
 }
 export type AfterBuildProgramEvent = BeforeBuildProgramEvent;
 
 export interface ProvideHoverEvent {
     program: Program;
-    file: File;
+    file: BscFile;
     position: Position;
     scopes: Scope[];
     hovers: Hover[];
@@ -510,10 +510,10 @@ export interface OnFileParseEvent {
 }
 export interface AfterFileParseEvent {
     program: Program;
-    file: File;
+    file: BscFile;
 }
 
-export interface OnGetSemanticTokensEvent<T extends File = File> {
+export interface OnGetSemanticTokensEvent<T extends BscFile = BscFile> {
     /**
      * The program this file is from
      */
@@ -533,23 +533,23 @@ export interface OnGetSemanticTokensEvent<T extends File = File> {
 }
 
 export type BeforeFileValidateEvent = OnFileValidateEvent;
-export interface OnFileValidateEvent<T extends File = File> {
+export interface OnFileValidateEvent<T extends BscFile = BscFile> {
     program: Program;
     file: T;
 }
 export type AfterFileValidateEvent = OnFileValidateEvent;
 
-export interface OnFileValidateEvent<T extends File = File> {
+export interface OnFileValidateEvent<T extends BscFile = BscFile> {
     program: Program;
     file: T;
 }
 export interface TranspileEntry {
-    file: File;
+    file: BscFile;
     outputPath: string;
 }
 
 export interface ScopeValidationOptions {
-    changedFiles?: File[];
+    changedFiles?: BscFile[];
     changedSymbols?: Map<SymbolTypeFlag, Set<string>>;
     force?: boolean;
 }
@@ -557,11 +557,11 @@ export interface ScopeValidationOptions {
 export interface OnScopeValidateEvent {
     program: Program;
     scope: Scope;
-    changedFiles?: File[];
+    changedFiles?: BscFile[];
     changedSymbols?: Map<SymbolTypeFlag, Set<string>>;
 }
 
-export interface AfterFileTranspileEvent<TFile extends File = File> {
+export interface AfterFileTranspileEvent<TFile extends BscFile = BscFile> {
     /**
      * The program this event was triggered for
      */
@@ -582,8 +582,8 @@ export interface AfterFileTranspileEvent<TFile extends File = File> {
     typedef?: string;
 }
 
-export type BeforeProvideFileEvent<TFile extends File = File> = ProvideFileEvent<TFile>;
-export interface ProvideFileEvent<TFile extends File = File> {
+export type BeforeProvideFileEvent<TFile extends BscFile = BscFile> = ProvideFileEvent<TFile>;
+export interface ProvideFileEvent<TFile extends BscFile = BscFile> {
     /**
      * The lower-case file extension for the srcPath. (i.e. ".brs", ".xml")
      */
@@ -617,19 +617,19 @@ export interface ProvideFileEvent<TFile extends File = File> {
      */
     fileFactory: FileFactory;
 }
-export type AfterProvideFileEvent<TFile extends File = File> = ProvideFileEvent<TFile>;
+export type AfterProvideFileEvent<TFile extends BscFile = BscFile> = ProvideFileEvent<TFile>;
 
-export interface BeforeFileAddEvent<TFile extends File = File> {
+export interface BeforeFileAddEvent<TFile extends BscFile = BscFile> {
     file: TFile;
     program: Program;
 }
-export type AfterFileAddEvent<TFile extends File = File> = BeforeFileAddEvent<TFile>;
+export type AfterFileAddEvent<TFile extends BscFile = BscFile> = BeforeFileAddEvent<TFile>;
 
-export interface BeforeFileRemoveEvent<TFile extends File = File> {
+export interface BeforeFileRemoveEvent<TFile extends BscFile = BscFile> {
     file: TFile;
     program: Program;
 }
-export type AfterFileRemoveEvent<TFile extends File = File> = BeforeFileRemoveEvent<TFile>;
+export type AfterFileRemoveEvent<TFile extends BscFile = BscFile> = BeforeFileRemoveEvent<TFile>;
 
 export type BeforePrepareProgramEvent = PrepareProgramEvent;
 /**
@@ -642,17 +642,17 @@ export interface PrepareProgramEvent {
 export type AfterPrepareProgramEvent = PrepareProgramEvent;
 
 
-export type BeforePrepareFileEvent<TFile extends File = File> = PrepareFileEvent<TFile>;
+export type BeforePrepareFileEvent<TFile extends BscFile = BscFile> = PrepareFileEvent<TFile>;
 /**
  * Prepare the file for building
  */
-export interface PrepareFileEvent<TFile extends File = File> {
+export interface PrepareFileEvent<TFile extends BscFile = BscFile> {
     program: Program;
     file: TFile;
     editor: Editor;
 }
-export type OnPrepareFileEvent<TFile extends File = File> = PrepareFileEvent<TFile>;
-export type AfterPrepareFileEvent<TFile extends File = File> = PrepareFileEvent<TFile>;
+export type OnPrepareFileEvent<TFile extends BscFile = BscFile> = PrepareFileEvent<TFile>;
+export type AfterPrepareFileEvent<TFile extends BscFile = BscFile> = PrepareFileEvent<TFile>;
 
 
 /**
@@ -666,8 +666,8 @@ export interface SerializedCodeFile {
 
 export interface BeforeSerializeProgramEvent {
     program: Program;
-    files: File[];
-    result: Map<File, SerializedFile[]>;
+    files: BscFile[];
+    result: Map<BscFile, SerializedFile[]>;
 }
 export type OnSerializeProgramEvent = BeforeSerializeProgramEvent;
 export type AfterSerializeProgramEvent = BeforeSerializeProgramEvent;
@@ -686,8 +686,8 @@ export interface SerializedFile {
     pkgPath: string;
 }
 
-export type BeforeSerializeFileEvent<TFile extends File = File> = SerializeFileEvent<TFile>;
-export interface SerializeFileEvent<TFile extends File = File> {
+export type BeforeSerializeFileEvent<TFile extends BscFile = BscFile> = SerializeFileEvent<TFile>;
+export interface SerializeFileEvent<TFile extends BscFile = BscFile> {
     program: Program;
     file: TFile;
     /**
@@ -696,13 +696,13 @@ export interface SerializeFileEvent<TFile extends File = File> {
      */
     result: Map<TFile, SerializedFile[]>;
 }
-export type AfterSerializeFileEvent<TFile extends File = File> = SerializeFileEvent<TFile>;
+export type AfterSerializeFileEvent<TFile extends BscFile = BscFile> = SerializeFileEvent<TFile>;
 
 
 export interface BeforeWriteProgramEvent {
     program: Program;
     stagingDir: string;
-    files: Map<File, SerializedFile[]>;
+    files: Map<BscFile, SerializedFile[]>;
 }
 export type AfterWriteProgramEvent = BeforeWriteProgramEvent;
 
@@ -723,7 +723,7 @@ export interface WriteFileEvent {
 export type AfterWriteFileEvent = BeforeWriteFileEvent;
 
 export interface TranspileObj {
-    file: File;
+    file: BscFile;
     /**
      * The absolute path to where the file should be written during build. (i.e. somewhere inside the stagingDir)
      */
@@ -732,7 +732,7 @@ export interface TranspileObj {
 
 export interface BeforeFileDisposeEvent {
     program: Program;
-    file: File;
+    file: BscFile;
 }
 export type AfterFileDisposeEvent = BeforeFileDisposeEvent;
 export interface BeforeProgramDisposeEvent {
@@ -815,7 +815,7 @@ export interface TypeCompatibilityData {
 }
 
 export interface NamespaceContainer {
-    file: File;
+    file: BscFile;
     fullName: string;
     fullNameLower: string;
     parentNameLower: string;
