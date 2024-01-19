@@ -8,7 +8,7 @@ import * as path from 'path';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
 import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference, FileLink, SerializedCodeFile, NamespaceContainer } from '../interfaces';
-import type { Token } from '../lexer/Token';
+import { type Token } from '../lexer/Token';
 import { Lexer } from '../lexer/Lexer';
 import { TokenKind, AllowedLocalIdentifiers } from '../lexer/TokenKind';
 import { Parser, ParseMode } from '../parser/Parser';
@@ -34,7 +34,8 @@ import type { File } from './File';
 import { Editor } from '../astUtils/Editor';
 import type { UnresolvedSymbol } from '../AstValidationSegmenter';
 import { AstValidationSegmenter } from '../AstValidationSegmenter';
-import { CachedLookups } from './CachedLookups';
+import type { BscFileLike } from '../astUtils/CachedLookups';
+import { CachedLookups } from '../astUtils/CachedLookups';
 
 
 export type ProvidedSymbolMap = Map<SymbolTypeFlag, Map<string, BscSymbol>>;
@@ -69,7 +70,7 @@ export class BrsFile implements File {
             this.srcPath = s`${options.srcPath}`;
             this.destPath = s`${options.destPath}`;
             this.program = options.program;
-            this.cachedLookups = new CachedLookups(this);
+            this.cachedLookups = new CachedLookups(this as unknown as BscFileLike);
 
             this.extension = util.getExtension(this.srcPath);
             if (options.pkgPath) {
@@ -444,7 +445,7 @@ export class BrsFile implements File {
 
     public findPropertyNameCompletions(): CompletionItem[] {
         //Build completion items from all the "properties" found in the file
-        const { propertyHints } = this.parser;
+        const { propertyHints } = this.cachedLookups;
         const results = [] as CompletionItem[];
         for (const key of Object.keys(propertyHints)) {
             results.push({

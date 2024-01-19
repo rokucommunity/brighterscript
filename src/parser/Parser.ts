@@ -124,25 +124,6 @@ export class Parser {
         return this.ast.symbolTable;
     }
 
-
-    public propertyHints = {} as Record<string, string>;
-
-    private addPropertyHints(item: Token | AALiteralExpression) {
-        if (isToken(item)) {
-            const name = item.text;
-            this.propertyHints[name.toLowerCase()] = name;
-        } else {
-            for (const member of item.elements) {
-                if (!isCommentStatement(member)) {
-                    const name = member.keyToken.text;
-                    if (!name.startsWith('"')) {
-                        this.propertyHints[name.toLowerCase()] = name;
-                    }
-                }
-            }
-        }
-    }
-
     /**
      * The list of diagnostics found during the parse process
      */
@@ -2457,8 +2438,6 @@ export class Parser {
                     // force it into an identifier so the AST makes some sense
                     name.kind = TokenKind.Identifier;
                     expr = new DottedGetExpression(expr, name as Identifier, dot);
-
-                    this.addPropertyHints(name);
                 }
 
             } else if (this.checkAny(TokenKind.At, TokenKind.QuestionAt)) {
@@ -2820,7 +2799,6 @@ export class Parser {
         }
 
         const aaExpr = new AALiteralExpression(members, openingBrace, closingBrace);
-        this.addPropertyHints(aaExpr);
         return aaExpr;
     }
 

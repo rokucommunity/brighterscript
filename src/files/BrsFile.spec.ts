@@ -4162,4 +4162,67 @@ describe('BrsFile', () => {
             });
         });
     });
+
+    describe('propertyHints', () => {
+
+        it('extracts property names for completion', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', `
+                function main(arg as string)
+                    aa1 = {
+                        "sprop1": 0,
+                        prop1: 1
+                        prop2: {
+                            prop3: 2
+                        }
+                    }
+                    aa2 = {
+                        prop4: {
+                            prop5: 5,
+                            "sprop2": 0,
+                            prop6: 6
+                        },
+                        prop7: 7
+                    }
+                    calling({
+                        prop8: 8,
+                        prop9: 9
+                    })
+                    aa1.field1 = 1
+                    aa1.field2.field3 = 2
+                    calling(aa2.field4, 3 + aa2.field5.field6)
+                end function
+            `);
+
+            const expected = [
+                'field1', 'field2', 'field3', 'field4', 'field5', 'field6',
+                'prop1', 'prop2', 'prop3', 'prop4', 'prop5', 'prop6', 'prop7', 'prop8', 'prop9'
+            ];
+
+            const { propertyHints } = file.cachedLookups;
+            expect(Object.keys(propertyHints).sort()).to.deep.equal(expected, 'Initial hints');
+        });
+
+        it('extracts property names matching JavaScript reserved names', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', `
+                function main(arg as string)
+                    aa1 = {
+                        "constructor": 0,
+                        constructor: 1
+                        valueOf: {
+                            toString: 2
+                        }
+                    }
+                    aa1.constructor = 1
+                    aa1.valueOf.toString = 2
+                end function
+            `);
+
+            const expected = [
+                'constructor', 'tostring', 'valueof'
+            ];
+
+            const { propertyHints } = file.cachedLookups;
+            expect(Object.keys(propertyHints).sort()).to.deep.equal(expected, 'Initial hints');
+        });
+    });
 });

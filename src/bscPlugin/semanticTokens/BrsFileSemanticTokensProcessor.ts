@@ -79,6 +79,9 @@ export class BrsFileSemanticTokensProcessor {
     }
 
     private addToken(locatable: Locatable, type: SemanticTokenTypes, modifiers: SemanticTokenModifiers[] = []) {
+
+        console.log(' - ', locatable.text, util.rangeToString(locatable.range), type);
+
         this.event.semanticTokens.push({
             range: locatable.range,
             tokenType: type,
@@ -108,6 +111,9 @@ export class BrsFileSemanticTokensProcessor {
             } else if (isNewExpression(node)) {
                 node = node.call.callee;
             }
+
+            console.log(node.kind, util.rangeToString(node.range));
+
             const containingNamespaceNameLower = node.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript).toLowerCase();
             const tokens = util.getAllDottedGetParts(node);
             const processedNames: string[] = [];
