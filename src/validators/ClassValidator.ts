@@ -13,7 +13,7 @@ import { TokenKind } from '../lexer/TokenKind';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import { SymbolTypeFlag } from '../SymbolTable';
-import type { File } from '../files/File';
+import type { BscFile } from '../files/BscFile';
 
 export class BsClassValidator {
     private scope: Scope;
@@ -380,6 +380,6 @@ export class BsClassValidator {
 }
 
 type AugmentedClassStatement = ClassStatement & {
-    file: File;
+    file: BscFile;
     parentClass: AugmentedClassStatement | undefined;
 };

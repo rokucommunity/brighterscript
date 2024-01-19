@@ -15,11 +15,11 @@ import { type SGToken } from '../parser/SGTypes';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import type { IToken, TokenType } from 'chevrotain';
 import { TranspileState } from '../parser/TranspileState';
-import type { File } from './File';
+import type { BscFile } from './BscFile';
 import type { Editor } from '../astUtils/Editor';
 import type { FunctionScope } from '../FunctionScope';
 
-export class XmlFile implements File {
+export class XmlFile implements BscFile {
     /**
      * Create a new instance of BrsFile
      */
@@ -406,7 +406,7 @@ export class XmlFile implements File {
     /**
      * Determines if this xml file has a reference to the specified file (or if it's itself)
      */
-    public doesReferenceFile(file: File) {
+    public doesReferenceFile(file: BscFile) {
         return this.cache.getOrAdd(`doesReferenceFile: ${file.destPath}`, () => {
             if (file === this) {
                 return true;

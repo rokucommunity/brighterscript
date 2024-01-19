@@ -4,7 +4,7 @@ import type { Range } from 'vscode-languageserver';
 import { Program } from '../../Program';
 import { expectCodeActions, trim } from '../../testHelpers.spec';
 import { standardizePath as s, util } from '../../util';
-import type { File } from '../../files/File';
+import type { BscFile } from '../../files/BscFile';
 import { rootDir } from '../../testHelpers.spec';
 
 describe('CodeActionsProcessor', () => {
@@ -22,7 +22,7 @@ describe('CodeActionsProcessor', () => {
     /**
      * Helper function for testing code actions
      */
-    function testGetCodeActions(file: File | string, range: Range, expected: string[]) {
+    function testGetCodeActions(file: BscFile | string, range: Range, expected: string[]) {
         program.validate();
         expect(
             program.getCodeActions(

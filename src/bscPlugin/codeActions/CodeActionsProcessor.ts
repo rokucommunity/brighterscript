@@ -4,7 +4,7 @@ import { codeActionUtil } from '../../CodeActionUtil';
 import type { DiagnosticMessageType } from '../../DiagnosticMessages';
 import { DiagnosticCodeMap } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
-import type { File } from '../../files/File';
+import type { BscFile } from '../../files/BscFile';
 import type { XmlFile } from '../../files/XmlFile';
 import type { OnGetCodeActionsEvent } from '../../interfaces';
 import { ParseMode } from '../../parser/Parser';
@@ -34,7 +34,7 @@ export class CodeActionsProcessor {
     /**
      * Generic import suggestion function. Shouldn't be called directly from the main loop, but instead called by more specific diagnostic handlers
      */
-    private suggestImports(diagnostic: Diagnostic, key: string, files: File[]) {
+    private suggestImports(diagnostic: Diagnostic, key: string, files: BscFile[]) {
         //skip if we already have this suggestion
         if (this.suggestedImports.has(key)) {
             return;

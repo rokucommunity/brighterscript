@@ -1,10 +1,8 @@
 import type { SourceMapGenerator } from 'source-map';
 import type { Editor } from '../astUtils/Editor';
 import type { BsDiagnostic, CommentFlag } from '../interfaces';
-import type { BrsFile } from './BrsFile';
-import type { XmlFile } from './XmlFile';
 
-export interface File {
+export interface BscFile {
     /**
      * A string name representing the file type. This is generally the class name (i.e. 'BrsFile', 'XmlFile')
      */
@@ -101,19 +99,15 @@ export interface SerializeFileResult {
     content: Buffer;
     map?: SourceMapGenerator;
 }
-/**
- * @deprecated use `File` instead
- */
-//included for backwards compatibility reasons. Remove in v1
-export type BscFile = BrsFile | XmlFile;
+
 
 /**
  * Create a basic `File` object.
  */
-export function createFile(props: Partial<File>) {
+export function createFile(props: Partial<BscFile>) {
     props.diagnostics ??= [];
     props.dependencies ??= [];
     props.dependencyGraphKey ??= props.destPath;
     props.disposables ??= [];
-    return props as File;
+    return props as BscFile;
 }

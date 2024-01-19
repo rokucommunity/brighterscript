@@ -8,7 +8,7 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import type { BrsFile, ProvidedSymbolInfo } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
 import type { BsDiagnostic, FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, BeforeFileAddEvent, BeforeFileRemoveEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj } from './interfaces';
-import type { File } from './files/File';
+import type { BscFile } from './files/BscFile';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -269,17 +269,17 @@ export class Program {
     /**
      * A map of every file loaded into this program, indexed by its original file location
      */
-    public files = {} as Record<string, File>;
+    public files = {} as Record<string, BscFile>;
     /**
      * A map of every file loaded into this program, indexed by its destPath
      */
-    private destMap = new Map<string, File>();
+    private destMap = new Map<string, BscFile>();
     /**
      * Plugins can contribute multiple virtual files for a single physical file.
      * This collection links the virtual files back to the physical file that produced them.
      * The key is the standardized and lower-cased srcPath
      */
-    private fileClusters = new Map<string, File[]>();
+    private fileClusters = new Map<string, BscFile[]>();
 
     private scopes = {} as Record<string, Scope>;
 
@@ -420,7 +420,7 @@ export class Program {
      * by any scope in the program.
      */
     public getUnreferencedFiles() {
-        let result = [] as File[];
+        let result = [] as BscFile[];
         for (let filePath in this.files) {
             let file = this.files[filePath];
             //is this file part of a scope
@@ -519,7 +519,7 @@ export class Program {
     /**
      * Update internal maps with this file reference
      */
-    private assignFile<T extends File = File>(file: T) {
+    private assignFile<T extends BscFile = BscFile>(file: T) {
         const fileAddEvent: BeforeFileAddEvent = {
             file: file,
             program: this
@@ -538,7 +538,7 @@ export class Program {
     /**
      * Remove this file from internal maps
      */
-    private unassignFile<T extends File = File>(file: T) {
+    private unassignFile<T extends BscFile = BscFile>(file: T) {
         delete this.files[file.srcPath.toLowerCase()];
         this.destMap.delete(file.destPath.toLowerCase());
         return file;
@@ -550,14 +550,14 @@ export class Program {
      * @param srcDestOrPkgPath the absolute path, the pkg path (i.e. `pkg:/path/to/file.brs`), or the destPath (i.e. `path/to/file.brs` relative to `pkg:/`)
      * @param fileData the file contents. omit or pass `undefined` to prevent loading the data at this time
      */
-    public setFile<T extends File>(srcDestOrPkgPath: string, fileData?: FileData): T;
+    public setFile<T extends BscFile>(srcDestOrPkgPath: string, fileData?: FileData): T;
     /**
      * Load a file into the program. If that file already exists, it is replaced.
      * @param fileEntry an object that specifies src and dest for the file.
      * @param fileData the file contents. omit or pass `undefined` to prevent loading the data at this time
      */
-    public setFile<T extends File>(fileEntry: FileObj, fileData: FileData): T;
-    public setFile<T extends File>(fileParam: FileObj | string, fileData: FileData): T {
+    public setFile<T extends BscFile>(fileEntry: FileObj, fileData: FileData): T;
+    public setFile<T extends BscFile>(fileParam: FileObj | string, fileData: FileData): T {
         //normalize the file paths
         const { srcPath, destPath } = this.getPaths(fileParam, this.options.rootDir);
 
@@ -724,14 +724,14 @@ export class Program {
     /**
      * Is this file a .brs file found somewhere within the `pkg:/source/` folder?
      */
-    private isSourceBrsFile(file: File) {
+    private isSourceBrsFile(file: BscFile) {
         return !!/^(pkg:\/)?source[\/\\]/.exec(file.destPath);
     }
 
     /**
      * Is this file a .brs file found somewhere within the `pkg:/source/` folder?
      */
-    private isComponentsXmlFile(file: File): file is XmlFile {
+    private isComponentsXmlFile(file: BscFile): file is XmlFile {
         return isXmlFile(file) && !!/^(pkg:\/)?components[\/\\]/.exec(file.destPath);
     }
 
@@ -1035,7 +1035,7 @@ export class Program {
      * @param filePaths can be an array of srcPath or a destPath strings
      * @param normalizePath should this function repair and standardize the paths? Passing false should have a performance boost if you can guarantee your paths are already sanitized
      */
-    public getFiles<T extends File>(filePaths: string[], normalizePath = true) {
+    public getFiles<T extends BscFile>(filePaths: string[], normalizePath = true) {
         return filePaths
             .map(filePath => this.getFile(filePath, normalizePath))
             .filter(file => file !== undefined) as T[];
@@ -1046,7 +1046,7 @@ export class Program {
      * @param filePath can be a srcPath or a destPath
      * @param normalizePath should this function repair and standardize the path? Passing false should have a performance boost if you can guarantee your path is already sanitized
      */
-    public getFile<T extends File>(filePath: string, normalizePath = true) {
+    public getFile<T extends BscFile>(filePath: string, normalizePath = true) {
         if (typeof filePath !== 'string') {
             return undefined;
             //is the path absolute (or the `virtual:` prefix)
@@ -1065,7 +1065,7 @@ export class Program {
      * Get a list of all scopes the file is loaded into
      * @param file the file
      */
-    public getScopesForFile(file: File | string) {
+    public getScopesForFile(file: BscFile | string) {
         if (typeof file === 'string') {
             file = this.getFile(file);
         }
@@ -1085,7 +1085,7 @@ export class Program {
     /**
      * Get the first found scope for a file.
      */
-    public getFirstScopeForFile(file: File): Scope | undefined {
+    public getFirstScopeForFile(file: BscFile): Scope | undefined {
         for (let key in this.scopes) {
             let scope = this.scopes[key];
 
@@ -1414,7 +1414,7 @@ export class Program {
      * Prepare the program for building
      * @param files the list of files that should be prepared
      */
-    private async prepare(files: File[]) {
+    private async prepare(files: BscFile[]) {
         const programEvent = {
             program: this,
             editor: this.editor,
@@ -1473,9 +1473,9 @@ export class Program {
     /**
      * Generate the contents of every file
      */
-    private async serialize(files: File[]) {
+    private async serialize(files: BscFile[]) {
 
-        const allFiles = new Map<File, SerializedFile[]>();
+        const allFiles = new Map<BscFile, SerializedFile[]>();
 
         //exclude prunable files if that option is enabled
         if (this.options.pruneEmptyCodeFiles === true) {
@@ -1522,7 +1522,7 @@ export class Program {
     /**
      * Write the entire project to disk
      */
-    private async write(stagingDir: string, files: Map<File, SerializedFile[]>) {
+    private async write(stagingDir: string, files: Map<BscFile, SerializedFile[]>) {
         const programEvent = await this.plugins.emitAsync('beforeWriteProgram', {
             program: this,
             files: files,
@@ -1594,7 +1594,7 @@ export class Program {
      * Find a list of files in the program that have a function with the given name (case INsensitive)
      */
     public findFilesForFunction(functionName: string) {
-        const files = [] as File[];
+        const files = [] as BscFile[];
         const lowerFunctionName = functionName.toLowerCase();
         //find every file with this function defined
         for (const file of Object.values(this.files)) {
@@ -1613,7 +1613,7 @@ export class Program {
      * Find a list of files in the program that have a class with the given name (case INsensitive)
      */
     public findFilesForClass(className: string) {
-        const files = [] as File[];
+        const files = [] as BscFile[];
         const lowerClassName = className.toLowerCase();
         //find every file with this class defined
         for (const file of Object.values(this.files)) {
@@ -1629,7 +1629,7 @@ export class Program {
     }
 
     public findFilesForNamespace(name: string) {
-        const files = [] as File[];
+        const files = [] as BscFile[];
         const lowerName = name.toLowerCase();
         //find every file with this class defined
         for (const file of Object.values(this.files)) {
@@ -1652,7 +1652,7 @@ export class Program {
     }
 
     public findFilesForEnum(name: string) {
-        const files = [] as File[];
+        const files = [] as BscFile[];
         const lowerName = name.toLowerCase();
         //find every file with this enum defined
         for (const file of Object.values(this.files)) {
@@ -1749,7 +1749,7 @@ export interface FileTranspileResult {
 }
 
 
-class ProvideFileEventInternal<TFile extends File = File> implements ProvideFileEvent<TFile> {
+class ProvideFileEventInternal<TFile extends BscFile = BscFile> implements ProvideFileEvent<TFile> {
     constructor(
         public program: Program,
         public srcPath: string,
@@ -1774,5 +1774,5 @@ export interface ProgramBuildOptions {
      * An array of files to build. If omitted, the entire list of files from the program will be used instead.
      * Typically you will want to leave this blank
      */
-    files?: File[];
+    files?: BscFile[];
 }
