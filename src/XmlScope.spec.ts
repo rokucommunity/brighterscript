@@ -10,7 +10,7 @@ import { createSandbox } from 'sinon';
 import { ComponentType } from './types/ComponentType';
 import { SymbolTypeFlag } from './SymbolTable';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
-import { ArrayType, FloatType, TypedFunctionType } from './types';
+import { ArrayType, BooleanType, DoubleType, DynamicType, FloatType, IntegerType, StringType, TypedFunctionType, UnionType } from './types';
 const sinon = createSandbox();
 
 describe('XmlScope', () => {
@@ -203,19 +203,69 @@ describe('XmlScope', () => {
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Widget" extends="Group">
                     <interface>
-                        <field id="alpha" type="assocArray" />
-                        <field id="beta" type="float" />
-                        <field id="charlie" type="nodeArray" />
+                        <field id="isAA" type="assocArray" />
+                        <field id="isFloat" type="float" />
+                        <field id="isNodeArray" type="nodeArray" />
+                        <field id="isArray" type="array" />
+                        <field id="isStringArray" type="stringarray" />
+                        <field id="isIntArray" type="intarray" />
+                        <field id="isUri" type="uri" />
+                        <field id="isBool" type="boolean" />
+                        <field id="isColor" type="color" />
+                        <field id="isColorArray" type="colorarray" />
+                        <field id="isVector2d" type="vector2d" />
+                        <field id="isTime" type="time" />
+                        <field id="isRect2d" type="rect2D" />
+                        <field id="isRect2dArray" type="rect2Darray" />
                     </interface>
                 </component>
             `);
             program.validate();
             const widgetType = program.globalScope.symbolTable.getSymbolType('roSGNodeWidget', { flags: SymbolTypeFlag.typetime });
 
-            expectTypeToBe(widgetType.getMemberType('alpha', { flags: SymbolTypeFlag.runtime }), AssociativeArrayType);
-            expectTypeToBe(widgetType.getMemberType('beta', { flags: SymbolTypeFlag.runtime }), FloatType);
-            expectTypeToBe(widgetType.getMemberType('charlie', { flags: SymbolTypeFlag.runtime }), ArrayType);
-            expectTypeToBe((widgetType.getMemberType('charlie', { flags: SymbolTypeFlag.runtime }) as ArrayType).defaultType, ComponentType);
+            expectTypeToBe(widgetType.getMemberType('isAA', { flags: SymbolTypeFlag.runtime }), AssociativeArrayType);
+            expectTypeToBe(widgetType.getMemberType('isFloat', { flags: SymbolTypeFlag.runtime }), FloatType);
+            expectTypeToBe(widgetType.getMemberType('isNodeArray', { flags: SymbolTypeFlag.runtime }), ArrayType);
+            expectTypeToBe((widgetType.getMemberType('isNodeArray', { flags: SymbolTypeFlag.runtime }) as ArrayType).defaultType, ComponentType);
+
+            expectTypeToBe(widgetType.getMemberType('isArray', { flags: SymbolTypeFlag.runtime }), ArrayType);
+            expectTypeToBe((widgetType.getMemberType('isArray', { flags: SymbolTypeFlag.runtime }) as ArrayType).defaultType, DynamicType);
+
+            expectTypeToBe(widgetType.getMemberType('isStringArray', { flags: SymbolTypeFlag.runtime }), ArrayType);
+            expectTypeToBe((widgetType.getMemberType('isStringArray', { flags: SymbolTypeFlag.runtime }) as ArrayType).defaultType, StringType);
+
+            expectTypeToBe(widgetType.getMemberType('isIntArray', { flags: SymbolTypeFlag.runtime }), ArrayType);
+            expectTypeToBe((widgetType.getMemberType('isIntArray', { flags: SymbolTypeFlag.runtime }) as ArrayType).defaultType, IntegerType);
+
+            expectTypeToBe(widgetType.getMemberType('isBool', { flags: SymbolTypeFlag.runtime }), BooleanType);
+
+            expectTypeToBe(widgetType.getMemberType('isColor', { flags: SymbolTypeFlag.runtime }), UnionType);
+            let colorType = widgetType.getMemberType('isColor', { flags: SymbolTypeFlag.runtime }) as UnionType;
+            expect(colorType.types).to.include(StringType.instance);
+            expect(colorType.types).to.include(IntegerType.instance);
+
+            expectTypeToBe(widgetType.getMemberType('isColorArray', { flags: SymbolTypeFlag.runtime }), ArrayType);
+            expectTypeToBe((widgetType.getMemberType('isColorArray', { flags: SymbolTypeFlag.runtime }) as ArrayType).defaultType, UnionType);
+
+            expectTypeToBe(widgetType.getMemberType('isVector2d', { flags: SymbolTypeFlag.runtime }), ArrayType);
+            expectTypeToBe((widgetType.getMemberType('isVector2d', { flags: SymbolTypeFlag.runtime }) as ArrayType).defaultType, FloatType);
+
+            expectTypeToBe(widgetType.getMemberType('isTime', { flags: SymbolTypeFlag.runtime }), DoubleType);
+
+            expectTypeToBe(widgetType.getMemberType('isRect2d', { flags: SymbolTypeFlag.runtime }), AssociativeArrayType);
+            let rect2dtype = (widgetType.getMemberType('isRect2d', { flags: SymbolTypeFlag.runtime }) as AssociativeArrayType);
+            expectTypeToBe(rect2dtype.getMemberType('height', { flags: SymbolTypeFlag.runtime }), FloatType);
+            expectTypeToBe(rect2dtype.getMemberType('width', { flags: SymbolTypeFlag.runtime }), FloatType);
+            expectTypeToBe(rect2dtype.getMemberType('x', { flags: SymbolTypeFlag.runtime }), FloatType);
+            expectTypeToBe(rect2dtype.getMemberType('y', { flags: SymbolTypeFlag.runtime }), FloatType);
+
+            expectTypeToBe(widgetType.getMemberType('isRect2dArray', { flags: SymbolTypeFlag.runtime }), ArrayType);
+            expectTypeToBe((widgetType.getMemberType('isRect2dArray', { flags: SymbolTypeFlag.runtime }) as ArrayType).defaultType, AssociativeArrayType);
+            let rect2dArrayDefault = (widgetType.getMemberType('isRect2dArray', { flags: SymbolTypeFlag.runtime }) as ArrayType).defaultType as AssociativeArrayType;
+            expectTypeToBe(rect2dArrayDefault.getMemberType('height', { flags: SymbolTypeFlag.runtime }), FloatType);
+            expectTypeToBe(rect2dArrayDefault.getMemberType('width', { flags: SymbolTypeFlag.runtime }), FloatType);
+            expectTypeToBe(rect2dArrayDefault.getMemberType('x', { flags: SymbolTypeFlag.runtime }), FloatType);
+            expectTypeToBe(rect2dArrayDefault.getMemberType('y', { flags: SymbolTypeFlag.runtime }), FloatType);
         });
 
 

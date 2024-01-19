@@ -264,10 +264,13 @@ export class Scope {
                 links.push({ item: nsContainersWithStatement?.namespaceStatements?.[0], file: nsContainersWithStatement?.file as BrsFile });
             }
         }
-
+        const fullNameLower = (containingNamespace ? `${containingNamespace}.${name}` : name).toLowerCase();
         const callable = this.getCallableByName(name);
         if (callable) {
-            links.push({ item: callable.functionStatement, file: callable.file as BrsFile });
+            if (!callable.hasNamespace || callable.getName(ParseMode.BrighterScript).toLowerCase() === fullNameLower) {
+                // this callable has no namespace, or has same namespace
+                links.push({ item: callable.functionStatement, file: callable.file as BrsFile });
+            }
         }
         // remove empty links
         return links.filter(link => link);

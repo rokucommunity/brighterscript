@@ -45,6 +45,7 @@ import { ComponentType } from './types/ComponentType';
 import { MAX_RELATED_INFOS_COUNT } from './diagnosticUtils';
 import { BinaryOperatorReferenceType } from './types/ReferenceType';
 import type { UnresolvedSymbol } from './AstValidationSegmenter';
+import { unionTypeFactory } from './types/UnionType';
 
 export class Util {
     public clearConsole() {
@@ -1196,6 +1197,21 @@ export class Util {
         if (bscType) {
             return bscType;
         }
+
+        function getRect2dType() {
+            const rect2dType = new AssociativeArrayType();
+            rect2dType.addMember('height', {}, FloatType.instance, SymbolTypeFlag.runtime);
+            rect2dType.addMember('width', {}, FloatType.instance, SymbolTypeFlag.runtime);
+            rect2dType.addMember('x', {}, FloatType.instance, SymbolTypeFlag.runtime);
+            rect2dType.addMember('y', {}, FloatType.instance, SymbolTypeFlag.runtime);
+            return rect2dType;
+        }
+
+        function getColorType() {
+            return unionTypeFactory([IntegerType.instance, StringType.instance]);
+        }
+
+
         if (typeDescriptorLower.startsWith('array of ')) {
             let arrayOfTypeName = typeDescriptorLower.substring(9); //cut off beginning 'array of'
             if (arrayOfTypeName.endsWith('s')) {
@@ -1216,10 +1232,16 @@ export class Util {
             return this.getNodeFieldType(actualTypeName, lookupTable);
         } else if (typeDescriptorLower === 'uri') {
             return StringType.instance;
+        } else if (typeDescriptorLower === 'color') {
+            return getColorType();
         } else if (typeDescriptorLower === 'vector2d' || typeDescriptorLower === 'floatarray') {
             return new ArrayType(FloatType.instance);
+        } else if (typeDescriptorLower === 'vector2darray') {
+            return new ArrayType(new ArrayType(FloatType.instance));
         } else if (typeDescriptorLower === 'intarray') {
             return new ArrayType(IntegerType.instance);
+        } else if (typeDescriptorLower === 'colorarray') {
+            return new ArrayType(getColorType());
         } else if (typeDescriptorLower === 'boolarray') {
             return new ArrayType(BooleanType.instance);
         } else if (typeDescriptorLower === 'stringarray' || typeDescriptorLower === 'strarray') {
@@ -1227,23 +1249,29 @@ export class Util {
         } else if (typeDescriptorLower === 'int') {
             return IntegerType.instance;
         } else if (typeDescriptorLower === 'time') {
-            return FloatType.instance;
+            return DoubleType.instance;
         } else if (typeDescriptorLower === 'str') {
             return StringType.instance;
         } else if (typeDescriptorLower === 'bool') {
             return BooleanType.instance;
-        } else if (typeDescriptorLower === 'assocarray' || typeDescriptorLower === 'associative array') {
+        } else if (typeDescriptorLower === 'array') {
+            return new ArrayType();
+        } else if (typeDescriptorLower === 'assocarray' || typeDescriptorLower === 'associative array' || typeDescriptorLower === 'associativearray') {
             return new AssociativeArrayType();
         } else if (typeDescriptorLower === 'node') {
             return ComponentType.instance;
         } else if (typeDescriptorLower === 'nodearray') {
             return new ArrayType(ComponentType.instance);
+        } else if (typeDescriptorLower === 'rect2d') {
+            return getRect2dType();
+        } else if (typeDescriptorLower === 'rect2darray') {
+            return new ArrayType(getRect2dType());
         } else if (lookupTable) {
             //try doing a lookup
             return lookupTable.getSymbolType(typeDescriptorLower, { flags: SymbolTypeFlag.typetime });
         }
 
-        //  TODO: Handle  'rect2d', 'rect2dArray', 'color', 'colorarray', 'time'
+        //  TODO: Handle  'rect2d', 'rect2dArray',
         return DynamicType.instance;
     }
 
