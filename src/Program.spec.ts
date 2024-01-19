@@ -33,6 +33,7 @@ import { ArrayType } from './types/ArrayType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { BooleanType } from './types/BooleanType';
 import type { BsDiagnostic } from './interfaces';
+import { DoubleType } from './types';
 
 const sinon = createSandbox();
 
@@ -2669,7 +2670,7 @@ describe('Program', () => {
             expectTypeToBe(table.getSymbolType('roSGNodeTimer', opts), ComponentType);
             expectTypeToBe(table.getSymbolType('roSGNodeTimer', opts).getMemberType('control', rtOpts), StringType);
             expectTypeToBe(table.getSymbolType('roSGNodeTimer', opts).getMemberType('repeat', rtOpts), BooleanType);
-            expectTypeToBe(table.getSymbolType('roSGNodeTimer', opts).getMemberType('duration', rtOpts), FloatType);
+            expectTypeToBe(table.getSymbolType('roSGNodeTimer', opts).getMemberType('duration', rtOpts), DoubleType);
             expectTypeToBe(table.getSymbolType('roSGNodeTimer', opts).getMemberType('fire', rtOpts), DynamicType);
 
             expectTypeToBe(table.getSymbolType('roSGNodeNode', opts), ComponentType);
