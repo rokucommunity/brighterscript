@@ -1442,6 +1442,79 @@ describe('ScopeValidator', () => {
                 expectZeroDiagnostics(program);
             });
         });
+
+        it('recursive types are allowed', () => {
+            program.setFile('source/util.bs', `
+                interface ChainNode
+                    name as string
+                    next as ChainNode
+                end interface
+
+                function getChain(cNode as ChainNode) as string
+                    output = cNode.name
+                    if cNode.next <> invalid
+                        output += " - " + getChain(cNode.next)
+                    end if
+                    return output
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('recursive types are allowed as array members', () => {
+            program.setFile('source/util.bs', `
+                interface ChainNode
+                    name as string
+                    nextItems as ChainNode[]
+                end interface
+
+                function getChain(cNode as ChainNode) as string
+                    output = cNode.name
+                    for each item in cNode.nextItems
+                        output += " - " + getChain(item)
+                    end for
+                    return output
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('deeply recursive types are allowed', () => {
+            program.setFile('source/util.bs', `
+                interface ChainNode
+                    name as string
+                    nextItem as ChainNodeWrapper
+                end interface
+
+                interface ChainNodeWrapper
+                    node as ChainNode
+                end interface
+
+                function getChain(cNode as ChainNode) as string
+                    output = cNode.name
+                    if cNode.nextItem <> invalid
+                        output += " - " + getChain(cNode.nextItem.node)
+                    end if
+                    return output
+                end function
+
+                sub useChain()
+                    chain3 = {name: "C", nextItem: invalid}
+                    wrapper3 = {node: chain3}
+                    chain2 = {name: "B", nextItem: wrapper3}
+                    wrapper2 = {node: chain2}
+                    chain1 = {name: "A", nextItem: wrapper2}
+
+                    print getChain(chain1)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+
     });
 
     describe('cannotFindName', () => {

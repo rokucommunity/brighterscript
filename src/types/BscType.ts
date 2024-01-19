@@ -3,7 +3,7 @@ import { SymbolTypeFlag } from '../SymbolTable';
 import { SymbolTable } from '../SymbolTable';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import type { ExtraSymbolData, TypeCompatibilityData } from '../interfaces';
-import { isReferenceType } from '../astUtils/reflection';
+import { isArrayType, isInheritableType, isReferenceType } from '../astUtils/reflection';
 
 export abstract class BscType {
 
@@ -115,8 +115,11 @@ export abstract class BscType {
                         if (!superSetSoFar) {
                             return superSetSoFar;
                         }
-
-                        const myMemberAllowsTargetType = memberSymbol.type?.isTypeCompatible(typeOfTargetSymbol, { depth: data.depth });
+                        const typesAreInheritableWithSameName = isInheritableType(memberSymbol.type) && isInheritableType(typeOfTargetSymbol) &&
+                            memberSymbol.type.name.toLowerCase() === typeOfTargetSymbol.name.toLowerCase();
+                        const typesAreArraysWithSameDefault = isArrayType(memberSymbol.type) && isArrayType(typeOfTargetSymbol) &&
+                            memberSymbol.type.defaultType.isEqual(typeOfTargetSymbol.defaultType);
+                        const myMemberAllowsTargetType = typesAreInheritableWithSameName || typesAreArraysWithSameDefault || memberSymbol.type?.isTypeCompatible(typeOfTargetSymbol, { depth: data.depth });
                         if (!myMemberAllowsTargetType) {
                             data.fieldMismatches.push({ name: memberSymbol.name, expectedType: memberSymbol.type, actualType: targetType.getMemberType(memberSymbol.name, { flags: flags }) });
                         }

@@ -12,6 +12,7 @@ import { AssociativeArrayType } from './AssociativeArrayType';
 import { ArrayType } from './ArrayType';
 import { BooleanType } from './BooleanType';
 import { typeCompatibilityMessage } from '../DiagnosticMessages';
+import type { TypeCompatibilityData } from '..';
 
 describe('InterfaceType', () => {
     describe('toJSString', () => {
@@ -80,6 +81,19 @@ describe('InterfaceType', () => {
             expect(
                 iface({ name: new StringType() }).isEqual(iface({ name: new IntegerType() }))
             ).to.be.false;
+        });
+
+        it('works for recursive types', () => {
+            let linkListNode1 = iface({ name: StringType.instance }, 'LinkNode');
+            linkListNode1.addMember('next', {}, linkListNode1, SymbolTypeFlag.runtime);
+
+            let linkListNode2 = iface({ name: StringType.instance }, 'LinkNode');
+            linkListNode2.addMember('next', {}, linkListNode2, SymbolTypeFlag.runtime);
+
+            let compatData = {} as TypeCompatibilityData;
+            let typesAreEqual = linkListNode1.isEqual(linkListNode2, compatData);
+            expect(typesAreEqual).to.be.true;
+            expect(compatData?.fieldMismatches ?? []).to.be.empty;
         });
     });
 
