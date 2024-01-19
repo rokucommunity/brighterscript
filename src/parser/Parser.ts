@@ -92,7 +92,7 @@ import {
 } from './Expression';
 import type { Diagnostic, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
-import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression } from '../astUtils/reflection';
+import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression } from '../astUtils/reflection';
 import { createStringLiteral } from '../astUtils/creators';
 import type { Expression, Statement } from './AstNode';
 import { SymbolTable } from '../SymbolTable';
