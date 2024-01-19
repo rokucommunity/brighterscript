@@ -14,7 +14,7 @@ import * as fsExtra from 'fs-extra';
 import * as requireRelative from 'require-relative';
 import { Throttler } from './Throttler';
 import { AssetFile } from './files/AssetFile';
-import type { File } from './files/File';
+import type { BscFile } from './files/BscFile';
 import type { BrsFile } from './files/BrsFile';
 import { URI } from 'vscode-uri';
 
@@ -69,7 +69,7 @@ export class ProgramBuilder {
     private staticDiagnostics = [] as BsDiagnostic[];
 
     public addDiagnostic(srcPath: string, diagnostic: Partial<BsDiagnostic>) {
-        let file: File = this.program.getFile(srcPath);
+        let file: BscFile = this.program.getFile(srcPath);
         if (!file) {
             // eslint-disable-next-line @typescript-eslint/dot-notation
             const paths = this.program['getPaths'](srcPath, this.program.options.rootDir ?? this.options.rootDir);

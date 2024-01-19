@@ -30,7 +30,7 @@ import type { Statement, AstNode } from '../parser/AstNode';
 import { type Expression } from '../parser/AstNode';
 import type { BscSymbol } from '../SymbolTable';
 import { SymbolTable, SymbolTypeFlag } from '../SymbolTable';
-import type { File } from './File';
+import type { BscFile } from './BscFile';
 import { Editor } from '../astUtils/Editor';
 import type { UnresolvedSymbol } from '../AstValidationSegmenter';
 import { AstValidationSegmenter } from '../AstValidationSegmenter';
@@ -48,7 +48,7 @@ export interface ProvidedSymbolInfo {
 /**
  * Holds all details about this file within the scope of the whole program
  */
-export class BrsFile implements File {
+export class BrsFile implements BscFile {
     constructor(options: {
         /**
          * The path to the file in its source location (where the source code lives in the file system)
@@ -162,7 +162,7 @@ export class BrsFile implements File {
         return this.diagnostics;
     }
 
-    public addDiagnostic(diagnostic: Diagnostic & { file?: File }) {
+    public addDiagnostic(diagnostic: Diagnostic & { file?: BscFile }) {
         if (!diagnostic.file) {
             diagnostic.file = this;
         }
