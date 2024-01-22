@@ -182,7 +182,7 @@ More information on the config file format may be found in the [bsconfig.json do
 
 ## Suppressing compiler messages
 
-The BrighterScript compiler emits errors and warnings when it encounters potentially invalid code. Errors and warnings may also be emitted by compiler plugins, such as by [the BrighterScript linter](https://github.com/rokucommunity/bslint). These messages can be suppressed if needed; see [the documentation](https://github.com/rokucommunity/BrighterScript/blob/master/docs/readme.md).
+The BrighterScript compiler emits errors and warnings when it encounters potentially invalid code. Errors and warnings may also be emitted by compiler plugins, such as by [the BrighterScript linter](https://github.com/rokucommunity/bslint). These messages can be suppressed if needed; see [the documentation](https://github.com/rokucommunity/BrighterScript/blob/master/docs/suppressing-compiler-messages.md).
 
 ## ropm support
 In order for BrighterScript-transpiled projects to work as ropm modules, they need a reference to [bslib](https://github.com/rokucommunity/bslib/blob/master/source/bslib.brs) (the BrightScript runtime library for BrighterScript features) in their package. As `ropm` and `brighterscript` become more popular, this could result in many duplicate copies of `bslib.brs`.
