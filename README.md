@@ -14,7 +14,7 @@ A superset of Roku's BrightScript language. Compiles to standard BrightScript.
 The BrighterScript language provides new features and syntax enhancements to Roku's BrightScript language. Because the language is a superset of BrightScript, the parser and associated tools (VSCode integration, cli, etc...) work with standard BrightScript (.brs) files. This means you will get benefits (as described in the following section) from using the BrighterScript compiler, whether your project contains BrighterScript (.bs) files or not. The BrighterScript language transpiles to standard BrightScript, so your code is fully compatible with all roku devices.
 
 ## Features
-BrighterScript adds several new features to the BrightScript language such as Namespaces, classes, import statements, and more. Take a look at the language specification docs for more information.
+BrighterScript adds several new features to the BrightScript language such as namespaces, classes, import statements, and more. Take a look at the language specification docs for more information.
 
 [BrighterScript Language Specification](https://github.com/rokucommunity/BrighterScript/blob/master/docs/readme.md)
 
