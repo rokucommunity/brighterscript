@@ -11,7 +11,7 @@ import { standardizePath as s } from '../util';
 import * as fsExtra from 'fs-extra';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { doesNotThrow } from 'assert';
-import { ClassStatement, MethodStatement } from '../parser/Statement';
+import type { ClassStatement, MethodStatement } from '../parser/Statement';
 import { tempDir, rootDir, stagingDir } from '../testHelpers.spec';
 import { isClassStatement } from '../astUtils/reflection';
 import { WalkMode } from '../astUtils/visitors';
