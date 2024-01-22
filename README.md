@@ -555,6 +555,12 @@ to customize where the bslib.brs file is located in the staging directory.  Note
 that using a location outside of `source` will break scripts inside `source`
 that depend on bslib.brs.  Defaults to `source`.
 
+#### `pruneEmptyCodeFiles`
+
+Type: `boolean`
+
+Remove files from the final package which would be empty or consist entirely of comments after compilation. Also removes imports of any such empty scripts from XML files. This can speed up sideloading packages during development. Defaults to `false`.
+
 
 ## Ignore errors and warnings on a per-line basis
 In addition to disabling an entire class of errors in `bsconfig.json` by using `ignoreErrorCodes`, you may also disable errors for a subset of the complier rules within a file with the following comment flags:
