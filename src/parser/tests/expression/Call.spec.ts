@@ -116,7 +116,7 @@ describe('parser call expressions', () => {
         // 3rd should be: result = data.foo
         expect(isAssignmentStatement(bodyStatements[2])).to.be.true;
         const assignStmt = (bodyStatements[2] as any);
-        expect(assignStmt.name.text).to.equal('result');
+        expect(assignStmt.tokens.name.text).to.equal('result');
         expect(assignStmt.value.name.text).to.equal('foo');
 
         // 4th should be: return result

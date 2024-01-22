@@ -109,7 +109,7 @@ export class AstValidationSegmenter {
 
         segment.walk(createVisitor({
             AssignmentStatement: (stmt) => {
-                assignedSymbols.add(stmt.name.text.toLowerCase());
+                assignedSymbols.add(stmt.tokens.name.text.toLowerCase());
             },
             FunctionParameterExpression: (expr) => {
                 assignedSymbols.add(expr.name.text.toLowerCase());

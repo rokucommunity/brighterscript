@@ -501,9 +501,9 @@ export class CompletionsProcessor {
             if (isBrsFile(file) && !filesSearched.has(file)) {
                 for (let cs of file.parser.references.classStatements) {
                     for (let s of [...cs.methods, ...cs.fields]) {
-                        if (!results.has(s.name.text) && s.name.text.toLowerCase() !== 'new') {
-                            results.set(s.name.text, {
-                                label: s.name.text,
+                        if (!results.has(s.tokens.name.text) && s.tokens.name.text.toLowerCase() !== 'new') {
+                            results.set(s.tokens.name.text, {
+                                label: s.tokens.name.text,
                                 kind: isMethodStatement(s) ? CompletionItemKind.Method : CompletionItemKind.Field
                             });
                         }

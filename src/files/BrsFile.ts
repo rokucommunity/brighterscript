@@ -568,10 +568,11 @@ export class BrsFile implements BscFile {
 
             //skip variable declarations that are outside of any scope
             if (scope) {
+                const variableName = statement.tokens.name;
                 scope.variableDeclarations.push({
-                    nameRange: statement.name.range,
-                    lineIndex: statement.name.range.start.line,
-                    name: statement.name.text,
+                    nameRange: variableName.range,
+                    lineIndex: variableName.range.start.line,
+                    name: variableName.text,
                     getType: () => {
                         return statement.getType({ flags: SymbolTypeFlag.runtime });
                     }
@@ -599,8 +600,8 @@ export class BrsFile implements BscFile {
             const funcType = statement.getType({ flags: SymbolTypeFlag.typetime });
             this.callables.push({
                 isSub: statement.func.functionType.text.toLowerCase() === 'sub',
-                name: statement.name.text,
-                nameRange: statement.name.range,
+                name: statement.tokens.name.text,
+                nameRange: statement.tokens.name.range,
                 file: this,
                 params: params,
                 range: statement.func.range,
@@ -763,7 +764,7 @@ export class BrsFile implements BscFile {
         const statementHandler = (statement: NamespaceStatement) => {
             if (!location && statement.getName(ParseMode.BrighterScript).toLowerCase() === namespaceName) {
                 const namespaceItemStatementHandler = (statement: ClassStatement | FunctionStatement) => {
-                    if (!location && statement.name.text.toLowerCase() === endName) {
+                    if (!location && statement.tokens.name.text.toLowerCase() === endName) {
                         const uri = util.pathToUri(file.srcPath);
                         location = util.createLocation(uri, statement.range);
                     }
@@ -1040,7 +1041,7 @@ export class BrsFile implements BscFile {
             return;
         }
 
-        const name = isFieldStatement(statement) ? statement.name.text : statement.getName(ParseMode.BrighterScript);
+        const name = isFieldStatement(statement) ? statement.tokens.name.text : statement.getName(ParseMode.BrighterScript);
         return DocumentSymbol.create(name, '', symbolKind, statement.range, statement.range, children);
     }
 
@@ -1163,7 +1164,7 @@ export class BrsFile implements BscFile {
                     results.push(
                         util.createLocation(
                             URI.file(classFileLink.file.srcPath).toString(),
-                            classFileLink.item.name.range
+                            classFileLink.item.tokens.name.range
                         )
                     );
                     return results;
@@ -1188,7 +1189,7 @@ export class BrsFile implements BscFile {
 
         let classToken = this.getTokenBefore(token, TokenKind.Class);
         if (classToken) {
-            let cs = this.parser.references.classStatements.find((cs) => cs.classKeyword.range === classToken.range);
+            let cs = this.parser.references.classStatements.find((cs) => cs.tokens.classKeyword?.range === classToken.range);
             if (cs?.parentClassName) {
                 const nameParts = cs.parentClassName.getNameParts();
                 let extendedClass = this.getClassFileLink(nameParts[nameParts.length - 1], nameParts.slice(0, -1).join('.'));
@@ -1272,7 +1273,7 @@ export class BrsFile implements BscFile {
             }
         };
         const fieldStatementHandler = (statement: FieldStatement) => {
-            if (statement.name.text.toLowerCase() === textToSearchFor) {
+            if (statement.tokens.name.text.toLowerCase() === textToSearchFor) {
                 results.push(util.createLocation(util.pathToUri(file.srcPath), statement.range));
             }
         };
@@ -1289,8 +1290,8 @@ export class BrsFile implements BscFile {
     public getClassMethod(classStatement: ClassStatement, name: string, walkParents = true): MethodStatement | undefined {
         //TODO - would like to write this with getClassHieararchy; but got stuck on working out the scopes to use... :(
         let statement;
-        const statementHandler = (e) => {
-            if (!statement && e.name.text.toLowerCase() === name.toLowerCase()) {
+        const statementHandler = (e: MethodStatement) => {
+            if (!statement && e.tokens.name.text.toLowerCase() === name.toLowerCase()) {
                 statement = e;
             }
         };
@@ -1602,10 +1603,10 @@ export class BrsFile implements BscFile {
             ns.namespaceStatements.push(namespaceStatement);
             ns.statements.push(...namespaceStatement.body.statements);
             for (let statement of namespaceStatement.body.statements) {
-                if (isClassStatement(statement) && statement.name) {
-                    ns.classStatements.set(statement.name.text.toLowerCase(), statement);
-                } else if (isFunctionStatement(statement) && statement.name) {
-                    ns.functionStatements.set(statement.name.text.toLowerCase(), statement);
+                if (isClassStatement(statement) && statement.tokens.name) {
+                    ns.classStatements.set(statement.tokens.name.text.toLowerCase(), statement);
+                } else if (isFunctionStatement(statement) && statement.tokens.name) {
+                    ns.functionStatements.set(statement.tokens.name.text.toLowerCase(), statement);
                 } else if (isEnumStatement(statement) && statement.fullName) {
                     ns.enumStatements.set(statement.fullName.toLowerCase(), statement);
                 } else if (isConstStatement(statement) && statement.fullName) {

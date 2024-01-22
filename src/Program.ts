@@ -1110,7 +1110,7 @@ export class Program {
 
                 for (const statement of [...file.parser.references.functionStatements, ...file.parser.references.classStatements.flatMap((cs) => cs.methods)]) {
                     let parentNamespaceName = statement.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(originFile.parseMode)?.toLowerCase();
-                    if (statement.name.text.toLowerCase() === lowerName && (!lowerNamespaceName || parentNamespaceName === lowerNamespaceName)) {
+                    if (statement.tokens.name.text.toLowerCase() === lowerName && (!lowerNamespaceName || parentNamespaceName === lowerNamespaceName)) {
                         if (!results.has(statement)) {
                             results.set(statement, { item: statement, file: file });
                         }
@@ -1146,7 +1146,7 @@ export class Program {
             filesSearched.add(file);
 
             for (const statement of file.parser.references.functionStatements) {
-                if (funcNames.has(statement.name.text)) {
+                if (funcNames.has(statement.tokens.name.text)) {
                     if (!results.has(statement)) {
                         results.set(statement, { item: statement, file: file });
                     }

@@ -68,18 +68,18 @@ export class BrsFileValidator {
                 node.parent.getSymbolTable()?.addSymbol(node.tokens.name.text, { definingNode: node }, nodeType, SymbolTypeFlag.typetime | SymbolTypeFlag.runtime);
             },
             ClassStatement: (node) => {
-                this.validateDeclarationLocations(node, 'class', () => util.createBoundingRange(node.classKeyword, node.name));
+                this.validateDeclarationLocations(node, 'class', () => util.createBoundingRange(node.tokens.classKeyword, node.tokens.name));
 
                 //register this class
                 const nodeType = node.getType({ flags: SymbolTypeFlag.typetime });
                 node.getSymbolTable().addSymbol('m', undefined, nodeType, SymbolTypeFlag.runtime);
                 // eslint-disable-next-line no-bitwise
-                node.parent.getSymbolTable()?.addSymbol(node.name?.text, { definingNode: node }, nodeType, SymbolTypeFlag.typetime | SymbolTypeFlag.runtime);
+                node.parent.getSymbolTable()?.addSymbol(node.tokens.name?.text, { definingNode: node }, nodeType, SymbolTypeFlag.typetime | SymbolTypeFlag.runtime);
             },
             AssignmentStatement: (node) => {
                 //register this variable
                 const nodeType = node.getType({ flags: SymbolTypeFlag.runtime });
-                node.parent.getSymbolTable()?.addSymbol(node.name.text, { definingNode: node }, nodeType, SymbolTypeFlag.runtime);
+                node.parent.getSymbolTable()?.addSymbol(node.tokens.name.text, { definingNode: node }, nodeType, SymbolTypeFlag.runtime);
             },
             DottedSetStatement: (node) => {
                 this.validateNoOptionalChainingInVarSet(node, [node.obj]);
@@ -98,12 +98,12 @@ export class BrsFileValidator {
                 //Namespace Types are added at the Scope level - This is handled when the SymbolTables get linked
             },
             FunctionStatement: (node) => {
-                this.validateDeclarationLocations(node, 'function', () => util.createBoundingRange(node.func.functionType, node.name));
+                this.validateDeclarationLocations(node, 'function', () => util.createBoundingRange(node.func.functionType, node.tokens.name));
                 const funcType = node.getType({ flags: SymbolTypeFlag.typetime });
 
-                if (node.name?.text) {
+                if (node.tokens.name?.text) {
                     node.parent.getSymbolTable().addSymbol(
-                        node.name.text,
+                        node.tokens.name.text,
                         { definingNode: node },
                         funcType,
                         SymbolTypeFlag.runtime
@@ -114,7 +114,7 @@ export class BrsFileValidator {
                 //this function is declared inside a namespace
                 if (namespace) {
                     namespace.getSymbolTable().addSymbol(
-                        node.name.text,
+                        node.tokens.name.text,
                         { definingNode: node },
                         funcType,
                         SymbolTypeFlag.runtime

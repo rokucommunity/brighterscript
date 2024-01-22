@@ -113,7 +113,7 @@ export class Parser {
     /**
      * The list of statements for the parsed file
      */
-    public ast = new Body([]);
+    public ast = new Body({ statements: [] });
 
     public get statements() {
         return this.ast.statements;
@@ -243,7 +243,7 @@ export class Parser {
     private body() {
         const parentAnnotations = this.enterAnnotationBlock();
 
-        let body = new Body([]);
+        let body = new Body({ statements: [] });
         if (this.tokens.length > 0) {
             this.consumeStatementSeparators(true);
 
@@ -683,19 +683,19 @@ export class Parser {
                     const functionStatement = this._references.functionStatements.pop();
 
                     //if we have an overrides keyword AND this method is called 'new', that's not allowed
-                    if (overrideKeyword && funcDeclaration.name.text.toLowerCase() === 'new') {
+                    if (overrideKeyword && funcDeclaration.tokens.name.text.toLowerCase() === 'new') {
                         this.diagnostics.push({
                             ...DiagnosticMessages.cannotUseOverrideKeywordOnConstructorFunction(),
                             range: overrideKeyword.range
                         });
                     }
 
-                    decl = new MethodStatement(
-                        accessModifier,
-                        funcDeclaration.name,
-                        funcDeclaration.func,
-                        overrideKeyword
-                    );
+                    decl = new MethodStatement({
+                        modifiers: accessModifier,
+                        nameToken: funcDeclaration.tokens.name,
+                        func: funcDeclaration.func,
+                        overrideToken: overrideKeyword
+                    });
 
                     //refer to this statement as parent of the expression
                     functionStatement.func.functionStatement = decl as MethodStatement;
@@ -739,14 +739,14 @@ export class Parser {
             });
         }
 
-        const result = new ClassStatement(
-            classKeyword,
-            className,
-            body,
-            endingKeyword,
-            extendsKeyword,
-            parentClassName
-        );
+        const result = new ClassStatement({
+            classKeywordToken: classKeyword,
+            nameToken: className,
+            body: body,
+            endClassToken: endingKeyword,
+            extendsKeywordToken: extendsKeyword,
+            parentClassName: parentClassName
+        });
 
         this._references.classStatements.push(result);
         this.exitAnnotationBlock(parentAnnotations);
@@ -801,15 +801,15 @@ export class Parser {
             initialValue = this.expression();
         }
 
-        return new FieldStatement(
-            accessModifier,
-            name,
-            asToken,
-            fieldTypeExpression,
-            equal,
-            initialValue,
-            optionalKeyword
-        );
+        return new FieldStatement({
+            accessModifierToken: accessModifier,
+            nameToken: name,
+            asToken: asToken,
+            typeExpression: fieldTypeExpression,
+            equalsToken: equal,
+            initialValue: initialValue,
+            optionalToken: optionalKeyword
+        });
     }
 
     /**
@@ -937,7 +937,10 @@ export class Parser {
             func.body = this.block();
             //if the parser was unable to produce a block, make an empty one so the AST makes some sense...
             if (!func.body) {
-                func.body = new Block([], util.createRangeFromPositions(func.range.start, func.range.start));
+                func.body = new Block({
+                    statements: [],
+                    startingRange: util.createRangeFromPositions(func.range.start, func.range.start)
+                });
             }
             func.body.symbolTable = new SymbolTable(`Block: Function '${name?.text ?? ''}'`, () => func.getSymbolTable());
 
@@ -966,7 +969,7 @@ export class Parser {
             if (isAnonymous) {
                 return func;
             } else {
-                let result = new FunctionStatement(name, func);
+                let result = new FunctionStatement({ nameToken: name, func: func });
                 func.symbolTable.name += `: '${name?.text}'`;
                 func.functionStatement = result;
                 this._references.functionStatements.push(result);
@@ -1033,14 +1036,14 @@ export class Parser {
 
         let result: AssignmentStatement;
         if (operator.kind === TokenKind.Equal) {
-            result = new AssignmentStatement(operator, name, value);
+            result = new AssignmentStatement({ equalsToken: operator, nameToken: name, value: value });
         } else {
             const nameExpression = new VariableExpression(name);
-            result = new AssignmentStatement(
-                operator,
-                name,
-                new BinaryExpression(nameExpression, operator, value)
-            );
+            result = new AssignmentStatement({
+                equalsToken: operator,
+                nameToken: name,
+                value: new BinaryExpression(nameExpression, operator, value)
+            });
             this.addExpressionsToReferences(nameExpression);
             if (isBinaryExpression(value)) {
                 //remove the right-hand-side expression from this assignment operator, and replace with the full assignment expression
@@ -1325,14 +1328,14 @@ export class Parser {
         //then this comment should be treated as a single-line comment
         let prev = this.previous();
         if (prev?.range.end.line === this.peek().range.start.line) {
-            return new CommentStatement([this.advance()]);
+            return new CommentStatement({ comments: [this.advance()] });
         } else {
             let comments = [this.advance()];
             while (this.check(TokenKind.Newline) && this.checkNext(TokenKind.Comment)) {
                 this.advance();
                 comments.push(this.advance());
             }
-            return new CommentStatement(comments);
+            return new CommentStatement({ comments: comments });
         }
     }
 
@@ -1876,18 +1879,16 @@ export class Parser {
             }
         }
 
-        return new IfStatement(
-            {
-                if: ifToken,
-                then: thenToken,
-                endIf: endIfToken,
-                else: elseToken
-            },
-            condition,
-            thenBranch,
-            elseBranch,
-            isInlineIfThen
-        );
+        return new IfStatement({
+            ifToken: ifToken,
+            thenToken: thenToken,
+            endIfToken: endIfToken,
+            elseToken: elseToken,
+            condition: condition,
+            thenBranch: thenBranch,
+            elseBranch: elseBranch,
+            isInline: isInlineIfThen
+        });
     }
 
     //consume a `then` or `else` branch block of an `if` statement
@@ -1978,7 +1979,7 @@ export class Parser {
                 });
             }
         }
-        return new Block(statements, startingRange);
+        return new Block({ statements: statements, startingRange: startingRange });
     }
 
     private expressionStatement(expr: Expression): ExpressionStatement | IncrementStatement {
@@ -2233,7 +2234,7 @@ export class Parser {
         }
 
         this.exitAnnotationBlock(parentAnnotations);
-        return new Block(statements, startingToken.range);
+        return new Block({ statements: statements, startingRange: startingToken.range });
     }
 
     /**
@@ -2731,7 +2732,7 @@ export class Parser {
                 return this.regexLiteralExpression();
 
             case this.check(TokenKind.Comment):
-                return new CommentStatement([this.advance()]);
+                return new CommentStatement({ comments: [this.advance()] });
 
             default:
                 //if we found an expected terminator, don't throw a diagnostic...just return undefined
@@ -2755,7 +2756,7 @@ export class Parser {
 
         //add any comment found right after the opening square
         if (this.check(TokenKind.Comment)) {
-            elements.push(new CommentStatement([this.advance()]));
+            elements.push(new CommentStatement({ comments: [this.advance()] }));
         }
 
         while (this.match(TokenKind.Newline)) {
@@ -2769,7 +2770,7 @@ export class Parser {
                 while (this.matchAny(TokenKind.Comma, TokenKind.Newline, TokenKind.Comment)) {
                     if (this.checkPrevious(TokenKind.Comment) || this.check(TokenKind.Comment)) {
                         let comment = this.check(TokenKind.Comment) ? this.advance() : this.previous();
-                        elements.push(new CommentStatement([comment]));
+                        elements.push(new CommentStatement({ comments: [comment] }));
                     }
                     while (this.match(TokenKind.Newline)) {
 
@@ -2834,7 +2835,7 @@ export class Parser {
             try {
                 if (this.check(TokenKind.Comment)) {
                     lastAAMember = null;
-                    members.push(new CommentStatement([this.advance()]));
+                    members.push(new CommentStatement({ comments: [this.advance()] }));
                 } else {
                     let k = key();
                     let expr = this.expression();
@@ -2855,7 +2856,7 @@ export class Parser {
                     //check for comment at the end of the current line
                     if (this.check(TokenKind.Comment) || this.checkPrevious(TokenKind.Comment)) {
                         let token = this.checkPrevious(TokenKind.Comment) ? this.previous() : this.advance();
-                        members.push(new CommentStatement([token]));
+                        members.push(new CommentStatement({ comments: [token] }));
                     } else {
                         this.consumeStatementSeparators(true);
 
@@ -2863,7 +2864,7 @@ export class Parser {
                         if (this.check(TokenKind.Comment) || this.checkPrevious(TokenKind.Comment)) {
                             let token = this.checkPrevious(TokenKind.Comment) ? this.previous() : this.advance();
                             lastAAMember = null;
-                            members.push(new CommentStatement([token]));
+                            members.push(new CommentStatement({ comments: [token] }));
                             continue;
                         }
 

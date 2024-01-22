@@ -149,7 +149,7 @@ export function createBooleanLiteral(value: string, range?: Range) {
 export function createFunctionExpression(kind: TokenKind.Sub | TokenKind.Function) {
     return new FunctionExpression(
         [],
-        new Block([], interpolatedRange),
+        new Block({ statements: [], startingRange: interpolatedRange }),
         createToken(kind),
         kind === TokenKind.Sub ? createToken(TokenKind.EndSub) : createToken(TokenKind.EndFunction),
         createToken(TokenKind.LeftParen),
@@ -158,12 +158,11 @@ export function createFunctionExpression(kind: TokenKind.Sub | TokenKind.Functio
 }
 
 export function createMethodStatement(name: string, kind: TokenKind.Sub | TokenKind.Function = TokenKind.Function, modifiers?: Token[]) {
-    return new MethodStatement(
-        modifiers,
-        createIdentifier(name),
-        createFunctionExpression(kind),
-        null
-    );
+    return new MethodStatement({
+        modifiers: modifiers,
+        nameToken: createIdentifier(name),
+        func: createFunctionExpression(kind)
+    });
 }
 
 export function createCall(callee: Expression, args?: Expression[]) {

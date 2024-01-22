@@ -79,7 +79,7 @@ describe('parser print statements', () => {
                 kind: TokenKind.Print,
                 text: 'print',
                 isReserved: true,
-                range: Range.create(0, 0, 1, 5),
+                range: Range.create(0, 0, 0, 5),
                 leadingWhitespace: '',
                 leadingTrivia: []
             },

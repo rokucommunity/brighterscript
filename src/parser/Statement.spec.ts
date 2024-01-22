@@ -32,7 +32,7 @@ describe('Statement', () => {
 
     describe('Body', () => {
         it('initializes statements array if none provided', () => {
-            const body = new Body();
+            const body = new Body({});
             expect(body.statements).to.eql([]);
         });
     });
@@ -70,7 +70,7 @@ describe('Statement', () => {
     describe('CommentStatement', () => {
         describe('walk', () => {
             it('skips visitor if canceled', () => {
-                const comment = new CommentStatement([]);
+                const comment = new CommentStatement({ comments: [] });
                 const cancel = new CancellationTokenSource();
                 cancel.cancel();
                 comment.walk(() => {

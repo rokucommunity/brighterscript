@@ -6,6 +6,7 @@ import * as path from 'path';
 import { rokuDeploy, DefaultFiles, standardizePath as rokuDeployStandardizePath } from 'roku-deploy';
 import type { DiagnosticRelatedInformation } from 'vscode-languageserver';
 import { type Diagnostic, type Position, type Range, type Location } from 'vscode-languageserver';
+import { Range as RangeNamespace } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
@@ -577,15 +578,30 @@ export class Util {
     }
 
     public comparePositionToRange(position: Position | undefined, range: Range | undefined) {
-        //stop if the either range is misisng
+        //stop if the either range is missng
         if (!position || !range) {
             return 0;
         }
 
-        if (position.line < range.start.line || (position.line === range.start.line && position.character < range.start.character)) {
+        if (this.comparePosition(position, range.start) < 0) {
             return -1;
         }
-        if (position.line > range.end.line || (position.line === range.end.line && position.character > range.end.character)) {
+        if (this.comparePosition(position, range.end) > 0) {
+            return 1;
+        }
+        return 0;
+    }
+
+    public comparePosition(a: Position | undefined, b: Position) {
+        //stop if the either position is missing
+        if (!a || !b) {
+            return 0;
+        }
+
+        if (a.line < b.line || (a.line === b.line && a.character < b.character)) {
+            return -1;
+        }
+        if (a.line > b.line || (a.line === b.line && a.character > b.character)) {
             return 1;
         }
         return 0;
@@ -1039,40 +1055,64 @@ export class Util {
     }
 
     /**
-     * Given a list of ranges, create a range that starts with the first non-null lefthand range, and ends with the first non-null
-     * righthand range. Returns undefined if none of the items have a range.
+     *  Gets the bounding range of a bunch of ranges or objects that have ranges
      */
-    public createBoundingRange(...locatables: Array<{ range?: Range }>): Range | undefined {
-        let leftmostRange: Range | undefined;
-        let rightmostRange: Range | undefined;
+    public createBoundingRange(...locatables: Array<{ range?: Range } | Range>): Range | undefined {
+        let startPosition: Position | undefined;
+        let endPosition: Position | undefined;
 
-        for (let i = 0; i < locatables.length; i++) {
-            //set the leftmost non-null-range item
-            const left = locatables[i];
+        for (let locatable of locatables) {
             //the range might be a getter, so access it exactly once
-            const leftRange = left?.range;
-            if (!leftmostRange && leftRange) {
-                leftmostRange = leftRange;
+            const locatableRange = RangeNamespace.is(locatable) ? locatable : locatable?.range;
+            if (!locatableRange) {
+                continue;
             }
 
-            //set the rightmost non-null-range item
-            const right = locatables[locatables.length - 1 - i];
-            //the range might be a getter, so access it exactly once
-            const rightRange = right?.range;
-            if (!rightmostRange && rightRange) {
-                rightmostRange = rightRange;
+            if (!startPosition) {
+                startPosition = locatableRange.start;
+            } else if (this.comparePosition(locatableRange.start, startPosition) < 0) {
+                startPosition = locatableRange.start;
             }
-
-            //if we have both sides, quit
-            if (leftmostRange && rightmostRange) {
-                break;
+            if (!endPosition) {
+                endPosition = locatableRange.end;
+            } else if (this.comparePosition(locatableRange.end, endPosition) > 0) {
+                endPosition = locatableRange.end;
             }
         }
-        if (leftmostRange) {
-            //if we don't have a rightmost range, use the leftmost range for both the start and end
-            return this.createRangeFromPositions(
-                leftmostRange.start,
-                rightmostRange ? rightmostRange.end : leftmostRange.end);
+        if (startPosition && endPosition) {
+            return this.createRangeFromPositions(startPosition, endPosition);
+        } else {
+            return undefined;
+        }
+    }
+
+    /**
+     * Gets the bounding range of an object that contains a bunch of tokens
+     * @param tokens Object with tokens in it
+     * @returns Range containing all the tokens
+     */
+    public createBoundingRangeFromTokens(tokens: Record<string, { range?: Range }>): Range | undefined {
+        let startPosition: Position | undefined;
+        let endPosition: Position | undefined;
+        for (let key in tokens) {
+            let locatableRange = tokens?.[key]?.range;
+            if (!locatableRange) {
+                continue;
+            }
+
+            if (!startPosition) {
+                startPosition = locatableRange.start;
+            } else if (this.comparePosition(locatableRange.start, startPosition) < 0) {
+                startPosition = locatableRange.start;
+            }
+            if (!endPosition) {
+                endPosition = locatableRange.end;
+            } else if (this.comparePosition(locatableRange.end, endPosition) > 0) {
+                endPosition = locatableRange.end;
+            }
+        }
+        if (startPosition && endPosition) {
+            return this.createRangeFromPositions(startPosition, endPosition);
         } else {
             return undefined;
         }
@@ -1686,7 +1726,7 @@ export class Util {
         loop: while (nextPart) {
             switch (nextPart?.kind) {
                 case AstNodeKind.AssignmentStatement:
-                    return [(node as AssignmentStatement).name];
+                    return [(node as AssignmentStatement).tokens.name];
                 case AstNodeKind.DottedGetExpression:
                     parts.push((nextPart as DottedGetExpression)?.name);
                     nextPart = (nextPart as DottedGetExpression).obj;

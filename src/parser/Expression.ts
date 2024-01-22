@@ -275,7 +275,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
                 //'function'|'sub'
                 this.functionType?.text,
                 //functionName?
-                ...(isFunctionStatement(this.parent) || isMethodStatement(this.parent) ? [' ', this.parent.name?.text ?? ''] : []),
+                ...(isFunctionStatement(this.parent) || isMethodStatement(this.parent) ? [' ', this.parent.tokens.name?.text ?? ''] : []),
                 //leftParen
                 '(',
                 //parameters

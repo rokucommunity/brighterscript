@@ -30,8 +30,8 @@ export class BrsFilePreTranspileProcessor {
         file.ast.walk(createVisitor({
             FunctionStatement: (statement) => {
                 //add the bslib prefix
-                if (!statement.name.text.startsWith('bslib_')) {
-                    editor.setProperty(statement.name, 'text', `bslib_${statement.name.text}`);
+                if (!statement.tokens.name.text.startsWith('bslib_')) {
+                    editor.setProperty(statement.tokens.name, 'text', `bslib_${statement.tokens.name.text}`);
                 }
             }
         }), {

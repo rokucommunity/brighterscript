@@ -39,7 +39,7 @@ describe('parser', () => {
                 sub UnusedFunction()
                 end sub
             `);
-            expect(parser.references.functionStatements.map(x => x.name.text)).to.eql([
+            expect(parser.references.functionStatements.map(x => x.tokens.name.text)).to.eql([
                 'main',
                 'UnusedFunction'
             ]);
@@ -49,7 +49,7 @@ describe('parser', () => {
             parser.invalidateReferences();
             expect(parser['_references']).not.to.exist;
             //calling `references` automatically regenerates the references
-            expect(parser.references.functionStatements.map(x => x.name.text)).to.eql([
+            expect(parser.references.functionStatements.map(x => x.tokens.name.text)).to.eql([
                 'main'
             ]);
         });

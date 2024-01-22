@@ -215,7 +215,7 @@ describe('astUtils visitors', () => {
             const printStatement = new PrintStatement({
                 print: createToken(TokenKind.Print)
             }, []);
-            const blockStatement = new Block([], Range.create(0, 0, 0, 0));
+            const blockStatement = new Block({ statements: [], startingRange: Range.create(0, 0, 0, 0) });
             visitor(printStatement, undefined);
             visitor(blockStatement, undefined);
             expect(printHandler.callCount).to.equal(1);
@@ -233,10 +233,13 @@ describe('astUtils visitors', () => {
             const printStatement2 = new PrintStatement({
                 print: createToken(TokenKind.Print)
             }, []);
-            const block = new Block([
-                printStatement1,
-                new ReturnStatement({ return: createToken(TokenKind.Return) })
-            ], Range.create(0, 0, 0, 0));
+            const block = new Block({
+                statements: [
+                    printStatement1,
+                    new ReturnStatement({ return: createToken(TokenKind.Return) })
+                ],
+                startingRange: Range.create(0, 0, 0, 0)
+            });
             const visitor = createVisitor({
                 PrintStatement: () => printStatement2
             });
@@ -255,10 +258,10 @@ describe('astUtils visitors', () => {
                 print: createToken(TokenKind.Print)
             }, []);
 
-            const block = new Block([
-                printStatement1
-            ], Range.create(0, 0, 0, 0));
-
+            const block = new Block({
+                statements: [printStatement1],
+                startingRange: Range.create(0, 0, 0, 0)
+            });
 
             block.walk(createVisitor({
                 PrintStatement: () => printStatement2

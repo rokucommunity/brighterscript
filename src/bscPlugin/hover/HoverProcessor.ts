@@ -96,7 +96,7 @@ export class HoverProcessor {
         let firstToken: Token;
         if (extraData?.definingNode) {
             if (isClassStatement(extraData.definingNode)) {
-                firstToken = extraData.definingNode.classKeyword;
+                firstToken = extraData.definingNode.tokens.classKeyword;
                 declarationText = firstToken?.text ?? TokenKind.Class;
             } else if (isInterfaceStatement(extraData.definingNode)) {
                 firstToken = extraData.definingNode.tokens.interface;

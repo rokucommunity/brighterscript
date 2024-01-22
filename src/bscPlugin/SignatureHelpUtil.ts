@@ -114,7 +114,7 @@ export class SignatureHelpUtil {
         const documentation = functionComments.join('').trim();
 
         const lines = util.splitIntoLines(file.fileContents);
-        let key = statement.name.text + documentation;
+        let key = statement.tokens.name.text + documentation;
         const params = [] as ParameterInformation[];
         for (const param of func.parameters) {
             params.push(ParameterInformation.create(param.name.text));

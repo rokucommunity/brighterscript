@@ -936,15 +936,15 @@ export class Scope {
         }
 
         for (let assignment of file.parser.references.assignmentStatements) {
-            let lowerAssignmentName = assignment.name.text.toLowerCase();
+            let lowerAssignmentName = assignment.tokens.name.text.toLowerCase();
             let namespace = this.getNamespace(lowerAssignmentName, assignment.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript).toLowerCase());
             //see if the param matches any starting namespace part
             if (namespace) {
                 this.diagnostics.push({
                     origin: DiagnosticOrigin.Scope,
                     file: file,
-                    ...DiagnosticMessages.variableMayNotHaveSameNameAsNamespace(assignment.name.text),
-                    range: assignment.name.range,
+                    ...DiagnosticMessages.variableMayNotHaveSameNameAsNamespace(assignment.tokens.name.text),
+                    range: assignment.tokens.name.range,
                     relatedInformation: [{
                         message: 'Namespace declared here',
                         location: util.createLocation(
@@ -988,7 +988,7 @@ export class Scope {
                         relatedInformation: [{
                             location: util.createLocation(
                                 URI.file(klassLink.file.srcPath).toString(),
-                                klassLink.item.name.range
+                                klassLink.item.tokens.name.range
                             ),
                             message: 'Original class declared here'
                         }]
@@ -1004,7 +1004,7 @@ export class Scope {
                 this.validateNameCollision(file, nsStmt, nsStmt.getNameParts()?.[0]);
             },
             ClassStatement: (classStmt) => {
-                this.validateNameCollision(file, classStmt, classStmt.name);
+                this.validateNameCollision(file, classStmt, classStmt.tokens.name);
             },
             InterfaceStatement: (ifaceStmt) => {
                 this.validateNameCollision(file, ifaceStmt, ifaceStmt.tokens.name);
@@ -1048,7 +1048,7 @@ export class Scope {
             // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
             switch (link.item?.kind) {
                 case AstNodeKind.ClassStatement: {
-                    thatNameRange = (link.item as ClassStatement).name?.range;
+                    thatNameRange = (link.item as ClassStatement).tokens.name?.range;
                     break;
                 }
                 case AstNodeKind.NamespaceStatement: {

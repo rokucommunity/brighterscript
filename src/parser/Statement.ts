@@ -53,11 +53,15 @@ export class EmptyStatement extends Statement {
  */
 export class Body extends Statement implements TypedefProvider {
     constructor(
-        public statements: Statement[] = []
+        options: {
+            statements?: Statement[];
+        }
     ) {
         super();
+        this.statements = options?.statements ?? [];
     }
 
+    public statements: Statement[] = [];
     public readonly kind = AstNodeKind.Body;
 
     public symbolTable = new SymbolTable('Body', () => this.parent?.getSymbolTable());
@@ -126,15 +130,30 @@ export class Body extends Statement implements TypedefProvider {
 
 export class AssignmentStatement extends Statement {
     constructor(
-        public equals: Token,
-        public name: Identifier,
-        public value: Expression,
-        public asToken?: Token,
-        public typeExpression?: TypeExpression
+        options: {
+            equalsToken?: Token;
+            nameToken: Identifier;
+            value: Expression;
+            // TODO: add explicit typing to assignments
+            // asToken?: Token;
+            // typeExpression?: TypeExpression;
+        }
     ) {
         super();
-        this.range = util.createBoundingRange(name, equals, value);
+        this.value = options.value;
+        this.tokens = {
+            equals: options.equalsToken,
+            name: options.nameToken
+        };
+        this.range = util.createBoundingRange(util.createBoundingRangeFromTokens(this.tokens), this.value);
     }
+
+    public tokens: {
+        equals?: Token;
+        name: Identifier;
+    };
+
+    public value: Expression;
 
     public readonly kind = AstNodeKind.AssignmentStatement;
 
@@ -146,9 +165,9 @@ export class AssignmentStatement extends Statement {
             return this.value.transpile(state);
         } else {
             return [
-                state.transpileToken(this.name),
+                state.transpileToken(this.tokens.name),
                 ' ',
-                state.transpileToken(this.equals),
+                state.transpileToken(this.tokens.equals ?? createToken(TokenKind.Equal)),
                 ' ',
                 ...this.value.transpile(state)
             ];
@@ -168,22 +187,29 @@ export class AssignmentStatement extends Statement {
         // Note: compound assignments (eg. +=) are internally dealt with via the RHS being a BinaryExpression
         // so this.value will be a BinaryExpression, and BinaryExpressions can figure out their own types
         const rhs = this.value.getType({ ...options, typeChain: undefined });
-        options.typeChain?.push(new TypeChainEntry(this.name.text, rhs, options.data, this.name.range));
+        options.typeChain?.push(new TypeChainEntry(this.tokens.name.text, rhs, options.data, this.tokens.name.range));
         return rhs;
     }
 }
 
 export class Block extends Statement {
     constructor(
-        readonly statements: Statement[],
-        readonly startingRange: Range
+        options: {
+            statements: Statement[];
+            startingRange: Range;
+        }
     ) {
         super();
+        this.statements = options.statements;
+        this.startingRange = options.startingRange;
         this.range = util.createBoundingRange(
             { range: this.startingRange },
-            ...(statements ?? [])
+            ...(this.statements ?? [])
         );
     }
+
+    public readonly statements: Statement[];
+    public readonly startingRange: Range;
 
     public readonly kind = AstNodeKind.Block;
 
@@ -254,29 +280,38 @@ export class ExpressionStatement extends Statement {
 
 export class CommentStatement extends Statement implements Expression, TypedefProvider {
     constructor(
-        public comments: Token[]
+        options: {
+            comments: Token[];
+        }
     ) {
         super();
         this.visitMode = InternalWalkMode.visitStatements | InternalWalkMode.visitExpressions;
-        if (this.comments?.length > 0) {
+        this.tokens = {
+            comments: options.comments
+        };
+        if (this.tokens.comments?.length > 0) {
             this.range = util.createBoundingRange(
-                ...this.comments
+                ...this.tokens.comments
             );
         }
     }
+
+    public tokens: {
+        comments: Token[];
+    };
 
     public readonly kind = AstNodeKind.CommentStatement;
 
     public range: Range;
 
     get text() {
-        return this.comments.map(x => x.text).join('\n');
+        return this.tokens.comments.map(x => x.text).join('\n');
     }
 
     transpile(state: BrsTranspileState) {
         let result = [];
-        for (let i = 0; i < this.comments.length; i++) {
-            let comment = this.comments[i];
+        for (let i = 0; i < this.tokens.comments.length; i++) {
+            let comment = this.tokens.comments[i];
             if (i > 0) {
                 result.push(state.indent());
             }
@@ -284,7 +319,7 @@ export class CommentStatement extends Statement implements Expression, TypedefPr
                 state.transpileToken(comment)
             );
             //add newline for all except final comment
-            if (i < this.comments.length - 1) {
+            if (i < this.tokens.comments.length - 1) {
                 result.push('\n');
             }
         }
@@ -302,13 +337,20 @@ export class CommentStatement extends Statement implements Expression, TypedefPr
 
 export class ExitForStatement extends Statement {
     constructor(
-        readonly tokens: {
-            exitFor: Token;
+        options: {
+            exitFor?: Token;
         }
     ) {
         super();
-        this.range = this.tokens.exitFor.range;
+        this.tokens = {
+            exitFor: options.exitFor
+        };
+        this.range = this.tokens.exitFor?.range;
     }
+
+    readonly tokens: {
+        exitFor?: Token;
+    };
 
     public readonly kind = AstNodeKind.ExitForStatement;
 
@@ -316,7 +358,7 @@ export class ExitForStatement extends Statement {
 
     transpile(state: BrsTranspileState) {
         return [
-            state.transpileToken(this.tokens.exitFor)
+            this.tokens.exitFor ? state.transpileToken(this.tokens.exitFor) : 'exit for'
         ];
     }
 
@@ -328,13 +370,20 @@ export class ExitForStatement extends Statement {
 
 export class ExitWhileStatement extends Statement {
     constructor(
-        readonly tokens: {
-            exitWhile: Token;
+        options: {
+            exitWhile?: Token;
         }
     ) {
         super();
-        this.range = this.tokens.exitWhile.range;
+        this.tokens = {
+            exitWhile: options.exitWhile
+        };
+        this.range = this.tokens.exitWhile?.range;
     }
+
+    readonly tokens: {
+        exitWhile?: Token;
+    };
 
     public readonly kind = AstNodeKind.ExitWhileStatement;
 
@@ -342,7 +391,7 @@ export class ExitWhileStatement extends Statement {
 
     transpile(state: BrsTranspileState) {
         return [
-            state.transpileToken(this.tokens.exitWhile)
+            this.tokens.exitWhile ? state.transpileToken(this.tokens.exitWhile) : 'exit while'
         ];
     }
 
@@ -353,12 +402,23 @@ export class ExitWhileStatement extends Statement {
 
 export class FunctionStatement extends Statement implements TypedefProvider {
     constructor(
-        public name: Identifier,
-        public func: FunctionExpression
+        options: {
+            nameToken: Identifier;
+            func: FunctionExpression;
+        }
     ) {
         super();
+        this.tokens = {
+            name: options.nameToken
+        };
+        this.func = options.func;
         this.range = this.func.range;
     }
+
+    public tokens: {
+        name: Identifier;
+    };
+    public func: FunctionExpression;
 
     public readonly kind = AstNodeKind.FunctionStatement as AstNodeKind;
 
@@ -372,9 +432,9 @@ export class FunctionStatement extends Statement implements TypedefProvider {
         if (namespace) {
             let delimiter = parseMode === ParseMode.BrighterScript ? '.' : '_';
             let namespaceName = namespace.getName(parseMode);
-            return namespaceName + delimiter + this.name?.text;
+            return namespaceName + delimiter + this.tokens.name?.text;
         } else {
-            return this.name.text;
+            return this.tokens.name.text;
         }
     }
 
@@ -385,7 +445,7 @@ export class FunctionStatement extends Statement implements TypedefProvider {
     transpile(state: BrsTranspileState) {
         //create a fake token using the full transpiled name
         let nameToken = {
-            ...this.name,
+            ...this.tokens.name,
             text: this.getName(ParseMode.BrightScript)
         };
 
@@ -416,35 +476,56 @@ export class FunctionStatement extends Statement implements TypedefProvider {
 
     getType(options: GetTypeOptions) {
         const funcExprType = this.func.getType(options);
-        funcExprType.setName(this.name?.text);
+        funcExprType.setName(this.tokens.name?.text);
         return funcExprType;
     }
 }
 
 export class IfStatement extends Statement {
     constructor(
-        readonly tokens: {
-            if: Token;
-            then?: Token;
-            else?: Token;
-            endIf?: Token;
-        },
-        readonly condition: Expression,
-        readonly thenBranch: Block,
-        readonly elseBranch?: IfStatement | Block,
-        readonly isInline?: boolean
+        options: {
+            ifToken?: Token;
+            thenToken?: Token;
+            elseToken?: Token;
+            endIfToken?: Token;
+
+            condition: Expression;
+            thenBranch: Block;
+            elseBranch?: IfStatement | Block;
+            isInline?: boolean;
+        }
     ) {
         super();
+        this.condition = options.condition;
+        this.thenBranch = options.thenBranch;
+        this.elseBranch = options.elseBranch;
+        this.isInline = options.isInline;
+
+        this.tokens = {
+            if: options.ifToken,
+            then: options.thenToken,
+            else: options.elseToken,
+            endIf: options.endIfToken
+        };
+
         this.range = util.createBoundingRange(
-            tokens.if,
-            condition,
-            tokens.then,
-            thenBranch,
-            tokens.else,
-            elseBranch,
-            tokens.endIf
+            util.createBoundingRangeFromTokens(this.tokens),
+            this.condition,
+            this.thenBranch,
+            this.elseBranch
         );
     }
+
+    readonly tokens: {
+        if?: Token;
+        then?: Token;
+        else?: Token;
+        endIf?: Token;
+    };
+    readonly condition: Expression;
+    readonly thenBranch: Block;
+    readonly elseBranch?: IfStatement | Block;
+    readonly isInline?: boolean;
 
     public readonly kind = AstNodeKind.IfStatement;
 
@@ -453,7 +534,7 @@ export class IfStatement extends Statement {
     transpile(state: BrsTranspileState) {
         let results = [];
         //if   (already indented by block)
-        results.push(state.transpileToken(this.tokens.if));
+        results.push(state.transpileToken(this.tokens.if ?? createToken(TokenKind.If)));
         results.push(' ');
         //conditions
         results.push(...this.condition.transpile(state));
@@ -1764,45 +1845,63 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
 }
 
 export class ClassStatement extends Statement implements TypedefProvider {
-    constructor(
-        readonly classKeyword: Token,
+    constructor(options: {
+        classKeywordToken?: Token;
         /**
          * The name of the class (without namespace prefix)
          */
-        readonly name: Identifier,
-        public body: Statement[],
-        readonly end: Token,
-        readonly extendsKeyword?: Token,
-        readonly parentClassName?: TypeExpression
-    ) {
+        nameToken: Identifier;
+        body: Statement[];
+        endClassToken?: Token;
+        extendsKeywordToken?: Token;
+        parentClassName?: TypeExpression;
+    }) {
         super();
-        this.body = this.body ?? [];
-        this.symbolTable = new SymbolTable(`ClassStatement: '${this.name?.text}'`, () => this.parent?.getSymbolTable());
+        this.body = options.body ?? [];
+        this.tokens = {
+            name: options.nameToken,
+            classKeyword: options.classKeywordToken,
+            endClass: options.endClassToken,
+            extendsKeyword: options.extendsKeywordToken
+        };
+        this.parentClassName = options.parentClassName;
+        this.symbolTable = new SymbolTable(`ClassStatement: '${this.tokens.name?.text}'`, () => this.parent?.getSymbolTable());
 
         for (let statement of this.body) {
             if (isMethodStatement(statement)) {
                 this.methods.push(statement);
-                this.memberMap[statement?.name?.text.toLowerCase()] = statement;
+                this.memberMap[statement?.tokens.name?.text.toLowerCase()] = statement;
             } else if (isFieldStatement(statement)) {
                 this.fields.push(statement);
-                this.memberMap[statement?.name?.text.toLowerCase()] = statement;
+                this.memberMap[statement?.tokens.name?.text.toLowerCase()] = statement;
             }
         }
 
         this.range = util.createBoundingRange(
-            classKeyword,
-            name,
-            extendsKeyword,
-            parentClassName,
-            ...(body ?? []),
-            end
+            this.parentClassName,
+            ...(this.body ?? []),
+            util.createBoundingRangeFromTokens(this.tokens)
         );
     }
 
     public readonly kind = AstNodeKind.ClassStatement;
 
+
+    public tokens: {
+        classKeyword?: Token;
+        /**
+         * The name of the class (without namespace prefix)
+         */
+        name: Identifier;
+        endClass?: Token;
+        extendsKeyword?: Token;
+    };
+    readonly body: Statement[];
+    readonly parentClassName: TypeExpression;
+
+
     public getName(parseMode: ParseMode) {
-        const name = this.name?.text;
+        const name = this.tokens.name?.text;
         if (name) {
             const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
             if (namespace) {
@@ -1819,7 +1918,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
     }
 
     public getLeadingTrivia(): Token[] {
-        return util.concatAnnotationLeadingTrivia(this, this.classKeyword.leadingTrivia);
+        return util.concatAnnotationLeadingTrivia(this, this.tokens.classKeyword?.leadingTrivia);
     }
 
     public memberMap = {} as Record<string, MemberStatement>;
@@ -1852,9 +1951,9 @@ export class ClassStatement extends Statement implements TypedefProvider {
         }
         result.push(
             'class ',
-            this.name.text
+            this.tokens.name.text
         );
-        if (this.extendsKeyword && this.parentClassName) {
+        if (this.parentClassName) {
             const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
             const fqName = util.getFullyQualifiedClassName(
                 this.parentClassName.getName(),
@@ -1970,7 +2069,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
      */
     private getConstructorFunction() {
         return this.body.find((stmt) => {
-            return (stmt as MethodStatement)?.name?.text?.toLowerCase() === 'new';
+            return (stmt as MethodStatement)?.tokens.name?.text?.toLowerCase() === 'new';
         }) as MethodStatement;
     }
 
@@ -2045,12 +2144,12 @@ export class ClassStatement extends Statement implements TypedefProvider {
                 //store overridden parent methods as super{parentIndex}_{methodName}
                 if (
                     //is override method
-                    statement.override ||
+                    statement.tokens.override ||
                     //is constructor function in child class
-                    (statement.name.text.toLowerCase() === 'new' && ancestors[0])
+                    (statement.tokens.name.text.toLowerCase() === 'new' && ancestors[0])
                 ) {
                     result.push(
-                        `instance.super${parentClassIndex}_${statement.name.text} = instance.${statement.name.text}`,
+                        `instance.super${parentClassIndex}_${statement.tokens.name.text} = instance.${statement.tokens.name.text}`,
                         state.newline,
                         state.indent()
                     );
@@ -2059,7 +2158,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
                 state.classStatement = this;
                 result.push(
                     'instance.',
-                    state.transpileToken(statement.name),
+                    state.transpileToken(statement.tokens.name),
                     ' = ',
                     ...statement.transpile(state),
                     state.newline,
@@ -2094,9 +2193,9 @@ export class ClassStatement extends Statement implements TypedefProvider {
         const constructorParams = constructorFunction ? constructorFunction.func.parameters : [];
 
         result.push(
-            state.sourceNode(this.classKeyword, 'function'),
-            state.sourceNode(this.classKeyword, ' '),
-            state.sourceNode(this.name, this.getName(ParseMode.BrightScript)),
+            state.sourceNode(this, 'function'),
+            state.sourceNode(this, ' '),
+            state.sourceNode(this.tokens.name, this.getName(ParseMode.BrightScript)),
             `(`
         );
         let i = 0;
@@ -2169,7 +2268,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
             if (statement.accessModifier?.kind === TokenKind.Protected) {
                 flag |= SymbolTypeFlag.protected;
             }
-            resultType.addMember(statement?.name?.text, { definingNode: statement }, funcType, flag);
+            resultType.addMember(statement?.tokens.name?.text, { definingNode: statement }, funcType, flag);
         }
         for (const statement of this.fields) {
             const fieldType = statement.getType({ ...options, typeChain: undefined }); //no typechain needed
@@ -2177,13 +2276,13 @@ export class ClassStatement extends Statement implements TypedefProvider {
             if (statement.isOptional) {
                 flag |= SymbolTypeFlag.optional;
             }
-            if (statement.accessModifier?.kind === TokenKind.Private) {
+            if (statement.tokens.accessModifier?.kind === TokenKind.Private) {
                 flag |= SymbolTypeFlag.private;
             }
-            if (statement.accessModifier?.kind === TokenKind.Protected) {
+            if (statement.tokens.accessModifier?.kind === TokenKind.Protected) {
                 flag |= SymbolTypeFlag.protected;
             }
-            resultType.addMember(statement?.name?.text, { definingNode: statement }, fieldType, flag);
+            resultType.addMember(statement?.tokens.name?.text, { definingNode: statement }, fieldType, flag);
         }
         options.typeChain?.push(new TypeChainEntry(resultType.name, resultType, options.data, this.range));
         return resultType;
@@ -2197,29 +2296,40 @@ const accessModifiers = [
 ];
 export class MethodStatement extends FunctionStatement {
     constructor(
-        modifiers: Token | Token[],
-        name: Identifier,
-        func: FunctionExpression,
-        public override: Token
+        options: {
+            modifiers?: Token | Token[];
+            nameToken: Identifier;
+            func: FunctionExpression;
+            overrideToken?: Token;
+        }
     ) {
-        super(name, func);
-        if (modifiers) {
-            if (Array.isArray(modifiers)) {
-                this.modifiers.push(...modifiers);
+        super(options);
+        if (options.modifiers) {
+            if (Array.isArray(options.modifiers)) {
+                this.modifiers.push(...options.modifiers);
             } else {
-                this.modifiers.push(modifiers);
+                this.modifiers.push(options.modifiers);
             }
         }
+        this.tokens = {
+            ...this.tokens,
+            override: options.overrideToken
+        };
         this.range = util.createBoundingRange(
             ...(this.modifiers),
-            override,
-            func
+            util.createBoundingRangeFromTokens(this.tokens),
+            this.func
         );
     }
 
     public readonly kind = AstNodeKind.MethodStatement as AstNodeKind;
 
     public modifiers: Token[] = [];
+
+    readonly tokens: {
+        name: Identifier;
+        override?: Token;
+    };
 
     public get accessModifier() {
         return this.modifiers.find(x => accessModifiers.includes(x.kind));
@@ -2231,7 +2341,7 @@ export class MethodStatement extends FunctionStatement {
      * Get the name of this method.
      */
     public getName(parseMode: ParseMode) {
-        return this.name.text;
+        return this.tokens.name.text;
     }
 
     public getLeadingTrivia(): Token[] {
@@ -2239,7 +2349,7 @@ export class MethodStatement extends FunctionStatement {
     }
 
     transpile(state: BrsTranspileState) {
-        if (this.name.text.toLowerCase() === 'new') {
+        if (this.tokens.name.text.toLowerCase() === 'new') {
             this.ensureSuperConstructorCall(state);
             //TODO we need to undo this at the bottom of this method
             this.injectFieldInitializersForConstructor(state);
@@ -2285,7 +2395,7 @@ export class MethodStatement extends FunctionStatement {
                 ' '
             );
         }
-        if (this.override) {
+        if (this.tokens.override) {
             result.push('override ');
         }
         result.push(
@@ -2326,7 +2436,7 @@ export class MethodStatement extends FunctionStatement {
                         kind: TokenKind.Identifier,
                         text: 'super',
                         isReserved: false,
-                        range: state.classStatement.name.range,
+                        range: state.classStatement.tokens.name.range,
                         leadingWhitespace: '',
                         leadingTrivia: []
                     }
@@ -2335,7 +2445,7 @@ export class MethodStatement extends FunctionStatement {
                     kind: TokenKind.LeftParen,
                     text: '(',
                     isReserved: false,
-                    range: state.classStatement.name.range,
+                    range: state.classStatement.tokens.name.range,
                     leadingWhitespace: '',
                     leadingTrivia: []
                 },
@@ -2343,7 +2453,7 @@ export class MethodStatement extends FunctionStatement {
                     kind: TokenKind.RightParen,
                     text: ')',
                     isReserved: false,
-                    range: state.classStatement.name.range,
+                    range: state.classStatement.tokens.name.range,
                     leadingWhitespace: '',
                     leadingTrivia: []
                 },
@@ -2362,16 +2472,20 @@ export class MethodStatement extends FunctionStatement {
         let newStatements = [] as Statement[];
         //insert the field initializers in order
         for (let field of state.classStatement.fields) {
-            let thisQualifiedName = { ...field.name };
-            thisQualifiedName.text = 'm.' + field.name.text;
+            let thisQualifiedName = { ...field.tokens.name };
+            thisQualifiedName.text = 'm.' + field.tokens.name.text;
             const fieldAssignment = field.initialValue
-                ? new AssignmentStatement(field.equal, thisQualifiedName, field.initialValue)
-                : new AssignmentStatement(
-                    createToken(TokenKind.Equal, '=', field.name.range),
-                    thisQualifiedName,
+                ? new AssignmentStatement({
+                    equalsToken: field.tokens.equals,
+                    nameToken: thisQualifiedName,
+                    value: field.initialValue
+                })
+                : new AssignmentStatement({
+                    equalsToken: createToken(TokenKind.Equal, '=', field.tokens.name.range),
+                    nameToken: thisQualifiedName,
                     //if there is no initial value, set the initial value to `invalid`
-                    createInvalidLiteral('invalid', field.name.range)
-                );
+                    value: createInvalidLiteral('invalid', field.tokens.name.range)
+                });
             // Add parent so namespace lookups work
             fieldAssignment.parent = state.classStatement;
             newStatements.push(fieldAssignment);
@@ -2387,26 +2501,43 @@ export class MethodStatement extends FunctionStatement {
 }
 
 export class FieldStatement extends Statement implements TypedefProvider {
-    constructor(
-        readonly accessModifier?: Token,
-        readonly name?: Identifier,
-        readonly as?: Token,
-        readonly typeExpression?: TypeExpression,
-        readonly equal?: Token,
-        readonly initialValue?: Expression,
-        readonly optional?: Token
-    ) {
+    constructor(options: {
+        accessModifierToken?: Token;
+        nameToken: Identifier;
+        asToken?: Token;
+        typeExpression?: TypeExpression;
+        equalsToken?: Token;
+        initialValue?: Expression;
+        optionalToken?: Token;
+    }) {
         super();
+        this.tokens = {
+            accessModifier: options.accessModifierToken,
+            name: options.nameToken,
+            as: options.asToken,
+            equals: options.equalsToken,
+            optional: options.optionalToken
+        };
+        this.typeExpression = options.typeExpression;
+        this.initialValue = options.initialValue;
+
         this.range = util.createBoundingRange(
-            accessModifier,
-            optional,
-            name,
-            as,
-            typeExpression,
-            equal,
-            initialValue
+            util.createBoundingRangeFromTokens(this.tokens),
+            this.typeExpression,
+            this.initialValue
         );
     }
+
+    readonly tokens: {
+        accessModifier?: Token;
+        name: Identifier;
+        as?: Token;
+        equals?: Token;
+        optional?: Token;
+    };
+
+    public typeExpression?: TypeExpression;
+    public initialValue?: Expression;
 
     public readonly kind = AstNodeKind.FieldStatement;
 
@@ -2422,11 +2553,11 @@ export class FieldStatement extends Statement implements TypedefProvider {
     public readonly range: Range;
 
     public getLeadingTrivia(): Token[] {
-        return util.concatAnnotationLeadingTrivia(this, this.accessModifier?.leadingTrivia ?? this.optional?.leadingTrivia ?? this.name?.leadingTrivia ?? []);
+        return util.concatAnnotationLeadingTrivia(this, this.tokens.accessModifier?.leadingTrivia ?? this.tokens.optional?.leadingTrivia ?? this.tokens.name?.leadingTrivia ?? []);
     }
 
     public get isOptional() {
-        return !!this.optional;
+        return !!this.tokens.optional;
     }
 
     transpile(state: BrsTranspileState): TranspileResult {
@@ -2435,7 +2566,7 @@ export class FieldStatement extends Statement implements TypedefProvider {
 
     getTypedef(state: BrsTranspileState) {
         const result = [];
-        if (this.name) {
+        if (this.tokens.name) {
             for (let annotation of this.annotations ?? []) {
                 result.push(
                     ...annotation.getTypedef(state),
@@ -2450,13 +2581,13 @@ export class FieldStatement extends Statement implements TypedefProvider {
             }
 
             result.push(
-                this.accessModifier?.text ?? 'public',
+                this.tokens.accessModifier?.text ?? 'public',
                 ' '
             );
             if (this.isOptional) {
-                result.push(this.optional.text, ' ');
+                result.push(this.tokens.optional.text, ' ');
             }
-            result.push(this.name?.text,
+            result.push(this.tokens.name?.text,
                 ' as ',
                 type.toTypeString()
             );

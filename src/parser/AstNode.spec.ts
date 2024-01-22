@@ -54,7 +54,7 @@ describe('AstNode', () => {
             `);
             expect(
                 file.ast.findChild((node) => {
-                    return isAssignmentStatement(node) && node.name.text === 'alpha';
+                    return isAssignmentStatement(node) && node.tokens.name.text === 'alpha';
                 })
             ).instanceof(AssignmentStatement);
         });
