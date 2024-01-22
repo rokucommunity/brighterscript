@@ -4,8 +4,8 @@ import { Parser } from '../../Parser';
 import { Lexer } from '../../../lexer/Lexer';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, rangeMatch, token } from '../Parser.spec';
-import { isBlock, isCommentStatement, isIfStatement } from '../../../astUtils/reflection';
-import type { Block, IfStatement } from '../../Statement';
+import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement } from '../../../astUtils/reflection';
+import type { Block, FunctionStatement, IfStatement } from '../../Statement';
 
 describe('parser if statements', () => {
     it('allows empty if blocks', () => {
@@ -484,10 +484,12 @@ describe('parser if statements', () => {
             function test2()
             end function
         `);
-        let { statements, diagnostics, references } = Parser.parse(tokens);
+        let parser = Parser.parse(tokens);
+        let { statements, diagnostics } = parser;
         expect(diagnostics).to.be.length.greaterThan(0);
         expect(statements).to.be.lengthOf(2);
-        expect(references.functionStatements).to.be.lengthOf(2);
+        const functionStatements = parser.ast.findChildren<FunctionStatement>(isFunctionStatement);
+        expect(functionStatements).to.be.lengthOf(2);
     });
 
     it('catches extraneous colon at the end of one-line if', () => {

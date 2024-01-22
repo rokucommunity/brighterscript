@@ -20,7 +20,7 @@ import { parseManifest, getBsConst } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
 import { isBrsFile, isXmlFile, isXmlScope, isNamespaceStatement } from './astUtils/reflection';
-import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
+import type { FunctionStatement, MethodStatement, NamespaceStatement } from './parser/Statement';
 import { BscPlugin } from './bscPlugin/BscPlugin';
 import { Editor } from './astUtils/Editor';
 import type { Statement } from './parser/AstNode';
@@ -50,6 +50,7 @@ import type { BscType } from './types';
 import { InterfaceType } from './types';
 import { BuiltInInterfaceAdder } from './types/BuiltInInterfaceAdder';
 import type { UnresolvedSymbol } from './AstValidationSegmenter';
+import { WalkMode, createVisitor } from './astUtils/visitors';
 
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
@@ -1099,6 +1100,16 @@ export class Program {
         const filesSearched = new Set<BrsFile>();
         let lowerNamespaceName = namespaceName?.toLowerCase();
         let lowerName = name?.toLowerCase();
+
+        function addToResults(statement: FunctionStatement | MethodStatement, file: BrsFile) {
+            let parentNamespaceName = statement.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(originFile.parseMode)?.toLowerCase();
+            if (statement.name.text.toLowerCase() === lowerName && (!lowerNamespaceName || parentNamespaceName === lowerNamespaceName)) {
+                if (!results.has(statement)) {
+                    results.set(statement, { item: statement, file: file as BrsFile });
+                }
+            }
+        }
+
         //look through all files in scope for matches
         for (const scope of this.getScopesForFile(originFile)) {
             for (const file of scope.getAllFiles()) {
@@ -1108,14 +1119,16 @@ export class Program {
                 }
                 filesSearched.add(file);
 
-                for (const statement of [...file.parser.references.functionStatements, ...file.parser.references.classStatements.flatMap((cs) => cs.methods)]) {
-                    let parentNamespaceName = statement.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(originFile.parseMode)?.toLowerCase();
-                    if (statement.name.text.toLowerCase() === lowerName && (!lowerNamespaceName || parentNamespaceName === lowerNamespaceName)) {
-                        if (!results.has(statement)) {
-                            results.set(statement, { item: statement, file: file });
-                        }
+                file.ast.walk(createVisitor({
+                    FunctionStatement: (statement: FunctionStatement) => {
+                        addToResults(statement, file);
+                    },
+                    MethodStatement: (statement: MethodStatement) => {
+                        addToResults(statement, file);
                     }
-                }
+                }), {
+                    walkMode: WalkMode.visitStatements
+                });
             }
         }
         return [...results.values()];
@@ -1145,13 +1158,17 @@ export class Program {
             }
             filesSearched.add(file);
 
-            for (const statement of file.parser.references.functionStatements) {
-                if (funcNames.has(statement.name.text)) {
-                    if (!results.has(statement)) {
-                        results.set(statement, { item: statement, file: file });
+            file.ast.walk(createVisitor({
+                FunctionStatement: (statement: FunctionStatement) => {
+                    if (funcNames.has(statement.name.text)) {
+                        if (!results.has(statement)) {
+                            results.set(statement, { item: statement, file: file });
+                        }
                     }
                 }
-            }
+            }), {
+                walkMode: WalkMode.visitStatements
+            });
         }
         return [...results.values()];
     }
@@ -1584,7 +1601,8 @@ export class Program {
             if (isBrsFile(file)) {
                 //TODO handle namespace-relative function calls
                 //if the file has a function with this name
-                if (file.parser.references.functionStatementLookup.get(lowerFunctionName) !== undefined) {
+                // eslint-disable-next-line @typescript-eslint/dot-notation
+                if (file['_cachedLookups'].functionStatementMap.get(lowerFunctionName)) {
                     files.push(file);
                 }
             }
@@ -1603,7 +1621,9 @@ export class Program {
             if (isBrsFile(file)) {
                 //TODO handle namespace-relative classes
                 //if the file has a function with this name
-                if (file.parser.references.classStatementLookup.get(lowerClassName) !== undefined) {
+
+                // eslint-disable-next-line @typescript-eslint/dot-notation
+                if (file['_cachedLookups'].classStatementMap.get(lowerClassName) !== undefined) {
                     files.push(file);
                 }
             }
@@ -1617,7 +1637,9 @@ export class Program {
         //find every file with this class defined
         for (const file of Object.values(this.files)) {
             if (isBrsFile(file)) {
-                if (file.parser.references.namespaceStatements.find((x) => {
+
+                // eslint-disable-next-line @typescript-eslint/dot-notation
+                if (file['_cachedLookups'].namespaceStatements.find((x) => {
                     const namespaceName = x.name.toLowerCase();
                     return (
                         //the namespace name matches exactly
@@ -1630,16 +1652,18 @@ export class Program {
                 }
             }
         }
+
         return files;
     }
 
     public findFilesForEnum(name: string) {
         const files = [] as BscFile[];
         const lowerName = name.toLowerCase();
-        //find every file with this class defined
+        //find every file with this enum defined
         for (const file of Object.values(this.files)) {
             if (isBrsFile(file)) {
-                if (file.parser.references.enumStatementLookup.get(lowerName)) {
+                // eslint-disable-next-line @typescript-eslint/dot-notation
+                if (file['_cachedLookups'].enumStatementMap.get(lowerName)) {
                     files.push(file);
                 }
             }

@@ -41,7 +41,8 @@ export class BrsFilePreTranspileProcessor {
 
     private iterateExpressions() {
         const scope = this.event.program.getFirstScopeForFile(this.event.file);
-        for (let expression of this.event.file.parser.references.expressions) {
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        for (let expression of this.event.file['_cachedLookups'].expressions) {
             if (expression) {
                 if (isUnaryExpression(expression)) {
                     this.processExpression(expression.right, scope);
@@ -89,7 +90,6 @@ export class BrsFilePreTranspileProcessor {
         let containingNamespace = this.event.file.getNamespaceStatementForPosition(expression.range.start)?.getName(ParseMode.BrighterScript);
 
         const parts = util.splitExpression(expression);
-
         const processedNames: string[] = [];
         for (let part of parts) {
             let entityName: string;

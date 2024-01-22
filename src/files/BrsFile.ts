@@ -8,7 +8,7 @@ import * as path from 'path';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
 import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference, FileLink, SerializedCodeFile, NamespaceContainer } from '../interfaces';
-import type { Token } from '../lexer/Token';
+import { type Token } from '../lexer/Token';
 import { Lexer } from '../lexer/Lexer';
 import { TokenKind, AllowedLocalIdentifiers } from '../lexer/TokenKind';
 import { Parser, ParseMode } from '../parser/Parser';
@@ -34,6 +34,8 @@ import type { BscFile } from './BscFile';
 import { Editor } from '../astUtils/Editor';
 import type { UnresolvedSymbol } from '../AstValidationSegmenter';
 import { AstValidationSegmenter } from '../AstValidationSegmenter';
+import type { BscFileLike } from '../astUtils/CachedLookups';
+import { CachedLookups } from '../astUtils/CachedLookups';
 
 
 export type ProvidedSymbolMap = Map<SymbolTypeFlag, Map<string, BscSymbol>>;
@@ -68,6 +70,7 @@ export class BrsFile implements BscFile {
             this.srcPath = s`${options.srcPath}`;
             this.destPath = s`${options.destPath}`;
             this.program = options.program;
+            this._cachedLookups = new CachedLookups(this as unknown as BscFileLike);
 
             this.extension = util.getExtension(this.srcPath);
             if (options.pkgPath) {
@@ -104,6 +107,8 @@ export class BrsFile implements BscFile {
     public pkgPath: string;
 
     public program: Program;
+
+    private _cachedLookups: CachedLookups;
 
     /**
      * An editor assigned during the build flow that manages edits that will be undone once the build process is complete.
@@ -175,10 +180,6 @@ export class BrsFile implements BscFile {
 
     public commentFlags = [] as CommentFlag[];
 
-    public callables = [] as Callable[];
-
-    public functionCalls = [] as FunctionCall[];
-
     private _functionScopes: FunctionScope[];
 
     public get functionScopes(): FunctionScope[] {
@@ -190,7 +191,7 @@ export class BrsFile implements BscFile {
 
     private get cache() {
         // eslint-disable-next-line @typescript-eslint/dot-notation
-        return this._parser?.references['cache'];
+        return this._cachedLookups['cache'];
     }
 
     /**
@@ -199,7 +200,7 @@ export class BrsFile implements BscFile {
     public get ownScriptImports() {
         const result = this.cache?.getOrAdd('BrsFile_ownScriptImports', () => {
             const result = [] as FileReference[];
-            for (const statement of this.parser?.references?.importStatements ?? []) {
+            for (const statement of this._cachedLookups?.importStatements ?? []) {
                 //register import statements
                 if (isImportStatement(statement) && statement.filePathToken) {
                     result.push({
@@ -407,12 +408,6 @@ export class BrsFile implements BscFile {
                 ...this._parser.diagnostics as BsDiagnostic[]
             );
 
-            //extract all callables from this file
-            this.findCallables();
-
-            //find all places where a sub/function is being called
-            this.findFunctionCalls();
-
             //attach this file to every diagnostic
             for (let diagnostic of this.diagnostics) {
                 diagnostic.file = this;
@@ -450,7 +445,7 @@ export class BrsFile implements BscFile {
 
     public findPropertyNameCompletions(): CompletionItem[] {
         //Build completion items from all the "properties" found in the file
-        const { propertyHints } = this.parser.references;
+        const { propertyHints } = this._cachedLookups;
         const results = [] as CompletionItem[];
         for (const key of Object.keys(propertyHints)) {
             results.push({
@@ -494,7 +489,7 @@ export class BrsFile implements BscFile {
      */
     private createFunctionScopes() {
         //find every function
-        let functions = this.parser.references.functionExpressions;
+        let functions = this._cachedLookups.functionExpressions;
 
         //create a functionScope for every function
         this._functionScopes = [];
@@ -557,7 +552,7 @@ export class BrsFile implements BscFile {
         }
 
         //find every variable assignment in the whole file
-        let assignmentStatements = this.parser.references.assignmentStatements;
+        let assignmentStatements = this._cachedLookups.assignmentStatements;
 
         for (let statement of assignmentStatements) {
 
@@ -580,131 +575,150 @@ export class BrsFile implements BscFile {
         }
     }
 
-    private findCallables() {
-        for (let statement of this.parser.references.functionStatements ?? []) {
+    public staticCallables: Callable[];
 
-            //extract the parameters
-            let params = [] as CallableParam[];
-            for (let param of statement.func.parameters) {
-                const paramType = param.getType({ flags: SymbolTypeFlag.typetime });
+    get callables(): Callable[] {
 
-                let callableParam = {
-                    name: param.name.text,
-                    type: paramType,
-                    isOptional: !!param.defaultValue,
-                    isRestArgument: false
-                };
-                params.push(callableParam);
-            }
-            const funcType = statement.getType({ flags: SymbolTypeFlag.typetime });
-            this.callables.push({
-                isSub: statement.func.functionType.text.toLowerCase() === 'sub',
-                name: statement.name.text,
-                nameRange: statement.name.range,
-                file: this,
-                params: params,
-                range: statement.func.range,
-                type: funcType,
-                getName: statement.getName.bind(statement),
-                hasNamespace: !!statement.findAncestor<NamespaceStatement>(isNamespaceStatement),
-                functionStatement: statement
-            });
+        if (this.staticCallables) {
+            // globalFile can statically set the callables
+            return this.staticCallables;
         }
+
+        return this.cache.getOrAdd(`BrsFile_callables`, () => {
+            const callables = [];
+
+            for (let statement of this._cachedLookups.functionStatements ?? []) {
+
+                //extract the parameters
+                let params = [] as CallableParam[];
+                for (let param of statement.func.parameters) {
+                    const paramType = param.getType({ flags: SymbolTypeFlag.typetime });
+
+                    let callableParam = {
+                        name: param.name?.text,
+                        type: paramType,
+                        isOptional: !!param.defaultValue,
+                        isRestArgument: false
+                    };
+                    params.push(callableParam);
+                }
+                const funcType = statement.getType({ flags: SymbolTypeFlag.typetime });
+                callables.push({
+                    isSub: statement.func.functionType.text.toLowerCase() === 'sub',
+                    name: statement.name?.text,
+                    nameRange: statement.name?.range,
+                    file: this,
+                    params: params,
+                    range: statement.func.range,
+                    type: funcType,
+                    getName: statement.getName.bind(statement),
+                    hasNamespace: !!statement.findAncestor<NamespaceStatement>(isNamespaceStatement),
+                    functionStatement: statement
+                });
+            }
+
+            return callables;
+        });
+
+
     }
 
-    private findFunctionCalls() {
-        this.functionCalls = [];
-        //for every function in the file
-        for (let func of this._parser.references.functionExpressions) {
-            //for all function calls in this function
-            for (let expression of func.callExpressions) {
-                if (
-                    //filter out dotted function invocations (i.e. object.doSomething()) (not currently supported. TODO support it)
-                    (expression.callee as any).obj ||
-                    //filter out method calls on method calls for now (i.e. getSomething().getSomethingElse())
-                    (expression.callee as any).callee ||
-                    //filter out callees without a name (immediately-invoked function expressions)
-                    !(expression.callee as any).name
-                ) {
-                    continue;
-                }
-                let functionName = (expression.callee as any).name.text;
-
-                //callee is the name of the function being called
-                let callee = expression.callee as VariableExpression;
-
-                let columnIndexBegin = callee.range.start.character;
-                let columnIndexEnd = callee.range.end.character;
-
-                let args = [] as CallableArg[];
-                //TODO convert if stmts to use instanceof instead
-                for (let arg of expression.args as any) {
-
-                    //is a literal parameter value
-                    if (isLiteralExpression(arg)) {
-                        args.push({
-                            range: arg.range,
-                            type: arg.getType(),
-                            text: arg.token.text,
-                            expression: arg,
-                            typeToken: undefined
-                        });
-
-                        //is variable being passed into argument
-                    } else if (arg.name) {
-                        args.push({
-                            range: arg.range,
-                            //TODO - look up the data type of the actual variable
-                            type: new DynamicType(),
-                            text: arg.name.text,
-                            expression: arg,
-                            typeToken: undefined
-                        });
-
-                    } else if (arg.value) {
-                        let text = '';
-                        /* istanbul ignore next: TODO figure out why value is undefined sometimes */
-                        if (arg.value.value) {
-                            text = arg.value.value.toString();
-                        }
-                        let callableArg = {
-                            range: arg.range,
-                            //TODO not sure what to do here
-                            type: new DynamicType(), // util.valueKindToBrsType(arg.value.kind),
-                            text: text,
-                            expression: arg,
-                            typeToken: undefined
-                        };
-                        //wrap the value in quotes because that's how it appears in the code
-                        if (isStringType(callableArg.type)) {
-                            callableArg.text = '"' + callableArg.text + '"';
-                        }
-                        args.push(callableArg);
-
-                    } else {
-                        args.push({
-                            range: arg.range,
-                            type: new DynamicType(),
-                            //TODO get text from other types of args
-                            text: '',
-                            expression: arg,
-                            typeToken: undefined
-                        });
+    get functionCalls(): FunctionCall[] {
+        return this.cache.getOrAdd(`BrsFile_functionCalls`, () => {
+            const functionCalls = [];
+            //for every function in the file
+            for (let func of this._cachedLookups.functionExpressions) {
+                //for all function calls in this function
+                for (let expression of func.callExpressions) {
+                    if (
+                        //filter out dotted function invocations (i.e. object.doSomething()) (not currently supported. TODO support it)
+                        (expression.callee as any).obj ||
+                        //filter out method calls on method calls for now (i.e. getSomething().getSomethingElse())
+                        (expression.callee as any).callee ||
+                        //filter out callees without a name (immediately-invoked function expressions)
+                        !(expression.callee as any).name
+                    ) {
+                        continue;
                     }
+                    let functionName = (expression.callee as any).name.text;
+
+                    //callee is the name of the function being called
+                    let callee = expression.callee as VariableExpression;
+
+                    let columnIndexBegin = callee.range.start.character;
+                    let columnIndexEnd = callee.range.end.character;
+
+                    let args = [] as CallableArg[];
+                    //TODO convert if stmts to use instanceof instead
+                    for (let arg of expression.args as any) {
+
+                        //is a literal parameter value
+                        if (isLiteralExpression(arg)) {
+                            args.push({
+                                range: arg.range,
+                                type: arg.getType(),
+                                text: arg.token.text,
+                                expression: arg,
+                                typeToken: undefined
+                            });
+
+                            //is variable being passed into argument
+                        } else if (arg.name) {
+                            args.push({
+                                range: arg.range,
+                                //TODO - look up the data type of the actual variable
+                                type: new DynamicType(),
+                                text: arg.name.text,
+                                expression: arg,
+                                typeToken: undefined
+                            });
+
+                        } else if (arg.value) {
+                            let text = '';
+                            /* istanbul ignore next: TODO figure out why value is undefined sometimes */
+                            if (arg.value.value) {
+                                text = arg.value.value.toString();
+                            }
+                            let callableArg = {
+                                range: arg.range,
+                                //TODO not sure what to do here
+                                type: new DynamicType(), // util.valueKindToBrsType(arg.value.kind),
+                                text: text,
+                                expression: arg,
+                                typeToken: undefined
+                            };
+                            //wrap the value in quotes because that's how it appears in the code
+                            if (isStringType(callableArg.type)) {
+                                callableArg.text = '"' + callableArg.text + '"';
+                            }
+                            args.push(callableArg);
+
+                        } else {
+                            args.push({
+                                range: arg.range,
+                                type: new DynamicType(),
+                                //TODO get text from other types of args
+                                text: '',
+                                expression: arg,
+                                typeToken: undefined
+                            });
+                        }
+                    }
+                    let functionCall: FunctionCall = {
+                        range: expression.range,
+                        functionScope: this.getFunctionScopeAtPosition(callee.range.start),
+                        file: this,
+                        name: functionName,
+                        nameRange: util.createRange(callee.range.start.line, columnIndexBegin, callee.range.start.line, columnIndexEnd),
+                        //TODO keep track of parameters
+                        args: args,
+                        expression: expression
+                    };
+                    functionCalls.push(functionCall);
                 }
-                let functionCall: FunctionCall = {
-                    range: expression.range,
-                    functionScope: this.getFunctionScopeAtPosition(callee.range.start),
-                    file: this,
-                    name: functionName,
-                    nameRange: util.createRange(callee.range.start.line, columnIndexBegin, callee.range.start.line, columnIndexEnd),
-                    //TODO keep track of parameters
-                    args: args,
-                    expression: expression
-                };
-                this.functionCalls.push(functionCall);
             }
-        }
+            return functionCalls;
+        });
     }
 
     /**
@@ -740,7 +754,7 @@ export class BrsFile implements BscFile {
     public getNamespaceStatementForPosition(position: Position): NamespaceStatement {
         if (position) {
             return this.cache.getOrAdd(`namespaceStatementForPosition-${position.line}:${position.character}`, () => {
-                for (const statement of this.parser.references.namespaceStatements) {
+                for (const statement of this._cachedLookups.namespaceStatements) {
                     if (util.rangeContains(statement.range, position)) {
                         return statement;
                     }
@@ -1188,7 +1202,7 @@ export class BrsFile implements BscFile {
 
         let classToken = this.getTokenBefore(token, TokenKind.Class);
         if (classToken) {
-            let cs = this.parser.references.classStatements.find((cs) => cs.classKeyword.range === classToken.range);
+            let cs = this._cachedLookups.classStatements.find((cs) => cs.classKeyword.range === classToken.range);
             if (cs?.parentClassName) {
                 const nameParts = cs.parentClassName.getNameParts();
                 let extendedClass = this.getClassFileLink(nameParts[nameParts.length - 1], nameParts.slice(0, -1).join('.'));
@@ -1460,7 +1474,7 @@ export class BrsFile implements BscFile {
             table: this.parser.symbolTable
         }];
 
-        for (const namespaceStatement of this.parser.references.namespaceStatements) {
+        for (const namespaceStatement of this._cachedLookups.namespaceStatements) {
             tablesToGetSymbolsFrom.push({
                 table: namespaceStatement.body.getSymbolTable(),
                 namePrefixLower: namespaceStatement.getName(ParseMode.BrighterScript).toLowerCase()
@@ -1553,7 +1567,7 @@ export class BrsFile implements BscFile {
 
     private buildNamespaceLookup() {
         const namespaceLookup = new Map<string, NamespaceContainer>();
-        for (let namespaceStatement of this.parser.references.namespaceStatements) {
+        for (let namespaceStatement of this._cachedLookups.namespaceStatements) {
             let nameParts = namespaceStatement.getNameParts();
 
             let loopName: string = null;
@@ -1632,8 +1646,6 @@ export class BrsFile implements BscFile {
         //deleting these properties result in lower memory usage (garbage collection is magic!)
         delete this.fileContents;
         delete this._parser;
-        delete this.callables;
-        delete this.functionCalls;
         delete this._functionScopes;
         delete this.scopesByFunc;
     }
