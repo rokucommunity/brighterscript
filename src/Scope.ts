@@ -369,8 +369,8 @@ export class Scope {
      * XmlScope overrides this to return the parent xml scope if available.
      * For globalScope this will return null.
      */
-    public getParentScope() {
-        let scope: Scope;
+    public getParentScope(): Scope | null {
+        let scope: Scope | undefined;
         //use the global scope if we didn't find a sope and this is not the global scope
         if (this.program.globalScope !== this) {
             scope = this.program.globalScope;

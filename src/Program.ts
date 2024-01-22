@@ -3,7 +3,7 @@ import * as fsExtra from 'fs-extra';
 import * as path from 'path';
 import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location } from 'vscode-languageserver';
 import { CompletionItemKind } from 'vscode-languageserver';
-import type { BsConfig } from './BsConfig';
+import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
@@ -60,7 +60,7 @@ export class Program {
         /**
          * The root directory for this program
          */
-        public options: BsConfig,
+        options: BsConfig,
         logger?: Logger,
         plugins?: PluginInterface
     ) {
@@ -77,6 +77,7 @@ export class Program {
         this.createGlobalScope();
     }
 
+    public options: FinalizedBsConfig;
     public logger: Logger;
 
     private createGlobalScope() {
@@ -109,7 +110,7 @@ export class Program {
      * A scope that contains all built-in global functions.
      * All scopes should directly or indirectly inherit from this scope
      */
-    public globalScope: Scope;
+    public globalScope: Scope = undefined as any;
 
     /**
      * Plugins which can provide extra diagnostics or transform AST
@@ -320,7 +321,7 @@ export class Program {
     /**
      * roku filesystem is case INsensitive, so find the scope by key case insensitive
      */
-    public getScopeByName(scopeName: string) {
+    public getScopeByName(scopeName: string): Scope | undefined {
         if (!scopeName) {
             return undefined;
         }
@@ -328,7 +329,7 @@ export class Program {
         //so it's safe to run the standardizePkgPath method
         scopeName = s`${scopeName}`;
         let key = Object.keys(this.scopes).find(x => x.toLowerCase() === scopeName.toLowerCase());
-        return this.scopes[key];
+        return this.scopes[key!];
     }
 
     /**
@@ -495,8 +496,8 @@ export class Program {
      * @param rootDir must be a pre-normalized path
      */
     private getPaths(fileParam: string | FileObj | { srcPath?: string; pkgPath?: string }, rootDir: string) {
-        let srcPath: string;
-        let pkgPath: string;
+        let srcPath: string | undefined;
+        let pkgPath: string | undefined;
 
         assert.ok(fileParam, 'fileParam is required');
 
@@ -631,7 +632,7 @@ export class Program {
                 this.plugins.emit('beforeScopeDispose', scope);
                 scope.dispose();
                 //notify dependencies of this scope that it has been removed
-                this.dependencyGraph.remove(scope.dependencyGraphKey);
+                this.dependencyGraph.remove(scope.dependencyGraphKey!);
                 delete this.scopes[file.pkgPath];
                 this.plugins.emit('afterScopeDispose', scope);
             }
@@ -777,15 +778,15 @@ export class Program {
      * @param file the file
      */
     public getScopesForFile(file: XmlFile | BrsFile | string) {
-        if (typeof file === 'string') {
-            file = this.getFile(file);
-        }
+
+        const resolvedFile = typeof file === 'string' ? this.getFile(file) : file;
+
         let result = [] as Scope[];
-        if (file) {
+        if (resolvedFile) {
             for (let key in this.scopes) {
                 let scope = this.scopes[key];
 
-                if (scope.hasFile(file)) {
+                if (scope.hasFile(resolvedFile)) {
                     result.push(scope);
                 }
             }
