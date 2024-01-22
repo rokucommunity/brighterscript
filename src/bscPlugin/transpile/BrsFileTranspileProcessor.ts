@@ -41,7 +41,8 @@ export class BrsFilePreTranspileProcessor {
 
     private iterateExpressions() {
         const scope = this.event.program.getFirstScopeForFile(this.event.file);
-        for (let expression of this.event.file.cachedLookups.expressions) {
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        for (let expression of this.event.file['_cachedLookups'].expressions) {
             if (expression) {
                 if (isUnaryExpression(expression)) {
                     this.processExpression(expression.right, scope);

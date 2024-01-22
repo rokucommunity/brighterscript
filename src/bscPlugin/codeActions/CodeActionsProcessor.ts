@@ -9,6 +9,7 @@ import type { XmlFile } from '../../files/XmlFile';
 import type { OnGetCodeActionsEvent } from '../../interfaces';
 import { ParseMode } from '../../parser/Parser';
 import { util } from '../../util';
+import { isBrsFile } from '../../astUtils/reflection';
 
 export class CodeActionsProcessor {
     public constructor(
@@ -36,12 +37,13 @@ export class CodeActionsProcessor {
      */
     private suggestImports(diagnostic: Diagnostic, key: string, files: BscFile[]) {
         //skip if we already have this suggestion
-        if (this.suggestedImports.has(key)) {
+        if (this.suggestedImports.has(key) || !isBrsFile(this.event.file)) {
             return;
         }
 
         this.suggestedImports.add(key);
-        const importStatements = (this.event.file as BrsFile).cachedLookups.importStatements;
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        const importStatements = this.event.file['_cachedLookups'].importStatements;
         //find the position of the first import statement, or the top of the file if there is none
         const insertPosition = importStatements[importStatements.length - 1]?.importToken.range?.start ?? util.createPosition(0, 0);
 

@@ -218,7 +218,7 @@ describe('BrsFile', () => {
             new ImportStatement(createToken(TokenKind.Import), createToken(TokenKind.StringLiteral, 'pkg:/source/lib.brs'))
         );
         expect(file.ownScriptImports).to.be.empty;
-        file.cachedLookups.invalidate();
+        file['_cachedLookups'].invalidate();
         expect(file.ownScriptImports.map(x => x.text)).to.eql(['pkg:/source/lib.brs']);
     });
 
@@ -4198,7 +4198,7 @@ describe('BrsFile', () => {
                 'prop1', 'prop2', 'prop3', 'prop4', 'prop5', 'prop6', 'prop7', 'prop8', 'prop9'
             ];
 
-            const { propertyHints } = file.cachedLookups;
+            const { propertyHints } = file['_cachedLookups'];
             expect(Object.keys(propertyHints).sort()).to.deep.equal(expected, 'Initial hints');
         });
 
@@ -4221,7 +4221,7 @@ describe('BrsFile', () => {
                 'constructor', 'tostring', 'valueof'
             ];
 
-            const { propertyHints } = file.cachedLookups;
+            const { propertyHints } = file['_cachedLookups'];
             expect(Object.keys(propertyHints).sort()).to.deep.equal(expected, 'Initial hints');
         });
     });

@@ -27,7 +27,8 @@ export class BrsFileValidator {
 
         // Invalidate cache on this file
         // It could have potentially changed before this from plugins, after this, it will not change
-        this.event.file.cachedLookups.invalidate();
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        this.event.file['_cachedLookups'].invalidate();
 
         this.walk();
         this.flagTopLevelStatements();
@@ -323,9 +324,9 @@ export class BrsFileValidator {
 
         let statements = [
             // eslint-disable-next-line @typescript-eslint/dot-notation
-            ...this.event.file.cachedLookups.libraryStatements,
+            ...this.event.file['_cachedLookups'].libraryStatements,
             // eslint-disable-next-line @typescript-eslint/dot-notation
-            ...this.event.file.cachedLookups.importStatements
+            ...this.event.file['_cachedLookups'].importStatements
         ];
         for (let result of statements) {
             //if this statement is not one of the top-of-file statements,

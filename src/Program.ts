@@ -1601,7 +1601,8 @@ export class Program {
             if (isBrsFile(file)) {
                 //TODO handle namespace-relative function calls
                 //if the file has a function with this name
-                if (file.cachedLookups.functionStatementMap.get(lowerFunctionName)) {
+                // eslint-disable-next-line @typescript-eslint/dot-notation
+                if (file['_cachedLookups'].functionStatementMap.get(lowerFunctionName)) {
                     files.push(file);
                 }
             }
@@ -1620,7 +1621,9 @@ export class Program {
             if (isBrsFile(file)) {
                 //TODO handle namespace-relative classes
                 //if the file has a function with this name
-                if (file.cachedLookups.classStatementMap.get(lowerClassName) !== undefined) {
+
+                // eslint-disable-next-line @typescript-eslint/dot-notation
+                if (file['_cachedLookups'].classStatementMap.get(lowerClassName) !== undefined) {
                     files.push(file);
                 }
             }
@@ -1634,7 +1637,9 @@ export class Program {
         //find every file with this class defined
         for (const file of Object.values(this.files)) {
             if (isBrsFile(file)) {
-                if (file.cachedLookups.namespaceStatements.find((x) => {
+
+                // eslint-disable-next-line @typescript-eslint/dot-notation
+                if (file['_cachedLookups'].namespaceStatements.find((x) => {
                     const namespaceName = x.name.toLowerCase();
                     return (
                         //the namespace name matches exactly
@@ -1657,7 +1662,8 @@ export class Program {
         //find every file with this enum defined
         for (const file of Object.values(this.files)) {
             if (isBrsFile(file)) {
-                if (file.cachedLookups.enumStatementMap.get(lowerName)) {
+                // eslint-disable-next-line @typescript-eslint/dot-notation
+                if (file['_cachedLookups'].enumStatementMap.get(lowerName)) {
                     files.push(file);
                 }
             }

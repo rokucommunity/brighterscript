@@ -1,9 +1,9 @@
 import { expect } from '../chai-config.spec';
-import type { NamespaceStatement } from './Statement';
+import type { NamespaceStatement, ClassStatement } from './Statement';
 import { Body, CommentStatement, EmptyStatement } from './Statement';
 import { ParseMode, Parser } from './Parser';
 import { WalkMode } from '../astUtils/visitors';
-import { isNamespaceStatement } from '../astUtils/reflection';
+import { isClassStatement, isNamespaceStatement } from '../astUtils/reflection';
 import { CancellationTokenSource } from 'vscode-languageserver';
 import { Program } from '../Program';
 import { trim } from '../testHelpers.spec';
@@ -88,7 +88,7 @@ describe('Statement', () => {
                     end class
                 `);
                 program.validate();
-                const stmt = file.cachedLookups.classStatements[0];
+                const stmt = file.ast.findChildren<ClassStatement>(isClassStatement)[0];
                 expect(stmt.getName(ParseMode.BrightScript)).to.equal('Animal');
                 expect(stmt.getName(ParseMode.BrighterScript)).to.equal('Animal');
             });
@@ -100,7 +100,7 @@ describe('Statement', () => {
                     end namespace
                 `);
                 program.validate();
-                const stmt = file.cachedLookups.classStatements[0];
+                const stmt = file.ast.findChildren<ClassStatement>(isClassStatement)[0];
                 expect(stmt.getName(ParseMode.BrightScript)).to.equal('NameA_Animal');
                 expect(stmt.getName(ParseMode.BrighterScript)).to.equal('NameA.Animal');
             });

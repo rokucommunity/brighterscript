@@ -87,7 +87,7 @@ describe('Scope', () => {
         program.validate();
         const scope = program.getScopesForFile('source/alpha.bs')[0];
         scope.linkSymbolTable();
-        const symbolTable = file.cachedLookups.namespaceStatements[1].body.getSymbolTable();
+        const symbolTable = file.ast.findChildren<NamespaceStatement>(isNamespaceStatement)[1].body.getSymbolTable();
         //the symbol table should contain the relative names for all items in this namespace across the entire scope
         expect(
             // eslint-disable-next-line no-bitwise

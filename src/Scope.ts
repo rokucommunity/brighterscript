@@ -328,7 +328,7 @@ export class Scope {
             const map = new Map<string, FileLink<ClassStatement>>();
             this.enumerateBrsFiles((file) => {
                 if (isBrsFile(file)) {
-                    for (let cls of file.cachedLookups.classStatements) {
+                    for (let cls of file['_cachedLookups'].classStatements) {
                         const className = cls.getName(ParseMode.BrighterScript);
                         //only track classes with a defined name (i.e. exclude nameless malformed classes)
                         if (className) {
@@ -350,7 +350,7 @@ export class Scope {
             const map = new Map<string, FileLink<InterfaceStatement>>();
             this.enumerateBrsFiles((file) => {
                 if (isBrsFile(file)) {
-                    for (let iface of file.cachedLookups.interfaceStatements) {
+                    for (let iface of file['_cachedLookups'].interfaceStatements) {
                         const ifaceName = iface.getName(ParseMode.BrighterScript);
                         //only track classes with a defined name (i.e. exclude nameless malformed classes)
                         if (ifaceName) {
@@ -371,7 +371,7 @@ export class Scope {
         return this.cache.getOrAdd('enumMap', () => {
             const map = new Map<string, FileLink<EnumStatement>>();
             this.enumerateBrsFiles((file) => {
-                for (let enumStmt of file.cachedLookups.enumStatements) {
+                for (let enumStmt of file['_cachedLookups'].enumStatements) {
                     //only track enums with a defined name (i.e. exclude nameless malformed enums)
                     if (enumStmt.fullName) {
                         map.set(enumStmt.fullName.toLowerCase(), { item: enumStmt, file: file });
@@ -390,7 +390,7 @@ export class Scope {
         return this.cache.getOrAdd('constMap', () => {
             const map = new Map<string, FileLink<ConstStatement>>();
             this.enumerateBrsFiles((file) => {
-                for (let stmt of file.cachedLookups.constStatements) {
+                for (let stmt of file['_cachedLookups'].constStatements) {
                     //only track enums with a defined name (i.e. exclude nameless malformed enums)
                     if (stmt.fullName) {
                         map.set(stmt.fullName.toLowerCase(), { item: stmt, file: file });
@@ -425,7 +425,7 @@ export class Scope {
     public isKnownNamespace(namespaceName: string) {
         let namespaceNameLower = namespaceName.toLowerCase();
         this.enumerateBrsFiles((file) => {
-            for (let namespace of file.cachedLookups.namespaceStatements) {
+            for (let namespace of file['_cachedLookups'].namespaceStatements) {
                 let loopNamespaceNameLower = namespace.name.toLowerCase();
                 if (loopNamespaceNameLower === namespaceNameLower || loopNamespaceNameLower.startsWith(namespaceNameLower + '.')) {
                     return true;
@@ -679,7 +679,7 @@ export class Scope {
     public getAllNamespaceStatements() {
         let result = [] as NamespaceStatement[];
         this.enumerateBrsFiles((file) => {
-            result.push(...file.cachedLookups.namespaceStatements);
+            result.push(...file['_cachedLookups'].namespaceStatements);
         });
         return result;
     }
@@ -911,7 +911,7 @@ export class Scope {
 
     private detectVariableNamespaceCollisions(file: BrsFile) {
         //find all function parameters
-        for (let func of file.cachedLookups.functionExpressions) {
+        for (let func of file['_cachedLookups'].functionExpressions) {
             for (let param of func.parameters) {
                 let lowerParamName = param.name.text.toLowerCase();
                 let namespace = this.getNamespace(lowerParamName, param.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript).toLowerCase());
@@ -934,7 +934,7 @@ export class Scope {
             }
         }
 
-        for (let assignment of file.cachedLookups.assignmentStatements) {
+        for (let assignment of file['_cachedLookups'].assignmentStatements) {
             let lowerAssignmentName = assignment.name.text.toLowerCase();
             let namespace = this.getNamespace(lowerAssignmentName, assignment.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript).toLowerCase());
             //see if the param matches any starting namespace part
@@ -1079,7 +1079,7 @@ export class Scope {
     public getNewExpressions() {
         let result = [] as AugmentedNewExpression[];
         this.enumerateBrsFiles((file) => {
-            let expressions = file.cachedLookups.newExpressions as AugmentedNewExpression[];
+            let expressions = file['_cachedLookups'].newExpressions as AugmentedNewExpression[];
             for (let expression of expressions) {
                 expression.file = file;
                 result.push(expression);

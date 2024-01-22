@@ -503,7 +503,8 @@ export class CompletionsProcessor {
         let filesSearched = new Set<BscFile>();
         for (const file of scope.getAllFiles()) {
             if (isBrsFile(file) && !filesSearched.has(file)) {
-                for (let cs of file.cachedLookups.classStatements) {
+                // eslint-disable-next-line @typescript-eslint/dot-notation
+                for (let cs of file['_cachedLookups'].classStatements) {
                     for (let s of [...cs.methods, ...cs.fields]) {
                         if (!results.has(s.name.text) && s.name.text.toLowerCase() !== 'new') {
                             results.set(s.name.text, {
