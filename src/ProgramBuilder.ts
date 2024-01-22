@@ -214,7 +214,7 @@ export class ProgramBuilder {
         //on any file watcher event
         this.watcher.on('all', async (event: string, thePath: string) => { //eslint-disable-line @typescript-eslint/no-misused-promises
             if (!this.program) {
-                throw new Error('TILT: somehow file watcher ran before `ProgramBuilder.run()`');
+                throw new Error('Internal invariant exception: somehow file watcher ran before `ProgramBuilder.run()`');
             }
             thePath = s`${path.resolve(this.rootDir, thePath)}`;
             if (event === 'add' || event === 'change') {
