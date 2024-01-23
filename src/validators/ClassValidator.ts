@@ -103,7 +103,7 @@ export class BsClassValidator {
                 let superCall: CallExpression | undefined;
                 newMethod.func.body.walk(createVisitor({
                     VariableExpression: (expression, parent) => {
-                        const expressionNameLower = expression?.name?.text.toLowerCase();
+                        const expressionNameLower = expression?.tokens.name?.text.toLowerCase();
                         if (expressionNameLower === 'm') {
                             this.diagnostics.push({
                                 ...DiagnosticMessages.classConstructorIllegalUseOfMBeforeSuperCall(),

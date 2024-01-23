@@ -426,17 +426,29 @@ export class FunctionParameterExpression extends Expression {
 }
 
 export class DottedGetExpression extends Expression {
-    constructor(
-        readonly obj: Expression,
-        readonly name: Identifier,
+    constructor(options: {
+        obj: Expression;
+        nameToken: Identifier;
         /**
-         * Can either be `.`, or `?.` for optional chaining
+         * Can either be `.`, or `?.` for optional chaining - defaults in transpile to '.'
          */
-        readonly dot: Token
-    ) {
+        dotToken?: Token;
+    }) {
         super();
-        this.range = util.createBoundingRange(this.obj, this.dot, this.name);
+        this.tokens = {
+            name: options.nameToken,
+            dot: options.dotToken
+        };
+        this.obj = options.obj;
+
+        this.range = util.createBoundingRange(this.obj, this.tokens.dot, this.tokens.name);
     }
+
+    readonly tokens: {
+        name: Identifier;
+        dot?: Token;
+    };
+    readonly obj: Expression;
 
     public readonly kind = AstNodeKind.DottedGetExpression;
 
@@ -451,8 +463,8 @@ export class DottedGetExpression extends Expression {
         } else {
             return [
                 ...this.obj.transpile(state),
-                state.transpileToken(this.dot),
-                state.transpileToken(this.name)
+                state.transpileToken(this.tokens.dot, '.'),
+                state.transpileToken(this.tokens.name)
             ];
         }
     }
@@ -465,8 +477,8 @@ export class DottedGetExpression extends Expression {
 
     getType(options: GetTypeOptions) {
         const objType = this.obj?.getType(options);
-        const result = objType?.getMemberType(this.name?.text, options);
-        options.typeChain?.push(new TypeChainEntry(this.name?.text, result, options.data, this.name?.range ?? this.range));
+        const result = objType?.getMemberType(this.tokens.name?.text, options);
+        options.typeChain?.push(new TypeChainEntry(this.tokens.name?.text, result, options.data, this.tokens.name?.range ?? this.range));
         if (result || options.flags & SymbolTypeFlag.typetime) {
             // All types should be known at typetime
             return result;
@@ -891,7 +903,7 @@ export class UnaryExpression extends Expression {
     transpile(state: BrsTranspileState) {
         let separatingWhitespace: string;
         if (isVariableExpression(this.right)) {
-            separatingWhitespace = this.right.name.leadingWhitespace;
+            separatingWhitespace = this.right.tokens.name.leadingWhitespace;
         } else if (isLiteralExpression(this.right)) {
             separatingWhitespace = this.right.token.leadingWhitespace;
         } else {
@@ -916,19 +928,26 @@ export class UnaryExpression extends Expression {
 }
 
 export class VariableExpression extends Expression {
-    constructor(
-        readonly name: Identifier
-    ) {
+    constructor(options: {
+        nameToken: Identifier;
+    }) {
         super();
-        this.range = this.name?.range;
+        this.tokens = {
+            name: options.nameToken
+        };
+        this.range = this.tokens.name?.range;
     }
+
+    readonly tokens: {
+        name: Identifier;
+    };
 
     public readonly kind = AstNodeKind.VariableExpression;
 
     public readonly range: Range;
 
-    public getName(parseMode: ParseMode) {
-        return this.name.text;
+    public getName(parseMode?: ParseMode) {
+        return this.tokens.name.text;
     }
 
     transpile(state: BrsTranspileState) {
@@ -947,7 +966,7 @@ export class VariableExpression extends Expression {
             //transpile  normally
         } else {
             result.push(
-                state.transpileToken(this.name)
+                state.transpileToken(this.tokens.name)
             );
         }
         return result;
@@ -959,8 +978,8 @@ export class VariableExpression extends Expression {
 
 
     getType(options: GetTypeOptions) {
-        let resultType: BscType = util.tokenToBscType(this.name);
-        const nameKey = this.name.text;
+        let resultType: BscType = util.tokenToBscType(this.tokens.name);
+        const nameKey = this.getName();
         if (!resultType) {
             const symbolTable = this.getSymbolTable();
             resultType = symbolTable?.getSymbolType(nameKey, { ...options, fullName: nameKey, tableProvider: () => this.getSymbolTable() });

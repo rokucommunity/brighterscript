@@ -107,13 +107,17 @@ export function createIdentifier(name: string, range?: Range): Identifier {
 }
 
 export function createVariableExpression(ident: string, range?: Range): VariableExpression {
-    return new VariableExpression(createToken(TokenKind.Identifier, ident, range));
+    return new VariableExpression({ nameToken: createToken(TokenKind.Identifier, ident, range) });
 }
 
 export function createDottedIdentifier(path: string[], range?: Range): DottedGetExpression {
     const ident = path.pop();
     const obj = path.length > 1 ? createDottedIdentifier(path, range) : createVariableExpression(path[0], range);
-    return new DottedGetExpression(obj, createToken(TokenKind.Identifier, ident, range), createToken(TokenKind.Dot, '.', range));
+    return new DottedGetExpression({
+        obj: obj,
+        nameToken: createToken(TokenKind.Identifier, ident, range),
+        dotToken: createToken(TokenKind.Dot, '.', range)
+    });
 }
 
 /**

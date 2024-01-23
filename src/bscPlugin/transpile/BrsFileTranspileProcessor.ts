@@ -94,7 +94,7 @@ export class BrsFilePreTranspileProcessor {
         for (let part of parts) {
             let entityName: string;
             if (isVariableExpression(part) || isDottedGetExpression(part)) {
-                processedNames.push(part?.name?.text?.toLocaleLowerCase());
+                processedNames.push(part?.tokens.name?.text?.toLocaleLowerCase());
                 entityName = processedNames.join('.');
             } else {
                 return;

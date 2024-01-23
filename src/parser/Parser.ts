@@ -1038,7 +1038,7 @@ export class Parser {
         if (operator.kind === TokenKind.Equal) {
             result = new AssignmentStatement({ equalsToken: operator, nameToken: name, value: value });
         } else {
-            const nameExpression = new VariableExpression(name);
+            const nameExpression = new VariableExpression({ nameToken: name });
             result = new AssignmentStatement({
                 equalsToken: operator,
                 nameToken: name,
@@ -1207,11 +1207,12 @@ export class Parser {
             endWhile = this.advance();
         }
 
-        return new WhileStatement(
-            { while: whileKeyword, endWhile: endWhile },
-            condition,
-            whileBlock
-        );
+        return new WhileStatement({
+            whileToken: whileKeyword,
+            endWhileToken: endWhile,
+            condition: condition,
+            body: whileBlock
+        });
     }
 
     private exitWhile(): ExitWhileStatement {
@@ -1389,7 +1390,7 @@ export class Parser {
         if (firstIdentifier) {
             // force it into an identifier so the AST makes some sense
             firstIdentifier.kind = TokenKind.Identifier;
-            const varExpr = new VariableExpression(firstIdentifier);
+            const varExpr = new VariableExpression({ nameToken: firstIdentifier });
             expr = varExpr;
 
             //consume multiple dot identifiers (i.e. `Name.Space.Can.Have.Many.Parts`)
@@ -1413,7 +1414,7 @@ export class Parser {
                 }
                 // force it into an identifier so the AST makes some sense
                 identifier.kind = TokenKind.Identifier;
-                expr = new DottedGetExpression(expr, identifier, dot);
+                expr = new DottedGetExpression({ obj: expr, nameToken: identifier, dotToken: dot });
             }
         }
         return expr;
@@ -2038,24 +2039,24 @@ export class Parser {
 
             // Create a dotted or indexed "set" based on the left-hand side's type
             if (isIndexedGetExpression(left)) {
-                return new IndexedSetStatement(
-                    left.obj,
-                    left.index,
-                    operator.kind === TokenKind.Equal
+                return new IndexedSetStatement({
+                    obj: left.obj,
+                    index: left.index,
+                    value: operator.kind === TokenKind.Equal
                         ? right
                         : new BinaryExpression(left, operator, right),
-                    left.openingSquare,
-                    left.closingSquare
-                );
+                    openingSquareToken: left.openingSquare,
+                    closingSquareToken: left.closingSquare
+                });
             } else if (isDottedGetExpression(left)) {
-                return new DottedSetStatement(
-                    left.obj,
-                    left.name,
-                    operator.kind === TokenKind.Equal
+                return new DottedSetStatement({
+                    obj: left.obj,
+                    nameToken: left.tokens.name,
+                    value: operator.kind === TokenKind.Equal
                         ? right
                         : new BinaryExpression(left, operator, right),
-                    left.dot
-                );
+                    dotToken: left.tokens.dot
+                });
             }
         }
         return this.expressionStatement(expr);
@@ -2527,7 +2528,7 @@ export class Parser {
 
                     // force it into an identifier so the AST makes some sense
                     name.kind = TokenKind.Identifier;
-                    expr = new DottedGetExpression(expr, name as Identifier, dot);
+                    expr = new DottedGetExpression({ obj: expr, nameToken: name as Identifier, dotToken: dot });
 
                     this.addPropertyHints(name);
                 }
@@ -2641,7 +2642,7 @@ export class Parser {
         let expr: VariableExpression | DottedGetExpression | TypedArrayExpression;
         if (this.checkAny(...DeclarableTypes)) {
             // if this is just a type, just use directly
-            expr = new VariableExpression(this.advance() as Identifier);
+            expr = new VariableExpression({ nameToken: this.advance() as Identifier });
         } else {
             if (this.checkAny(...AllowedTypeIdentifiers)) {
                 // Since the next token is allowed as a type identifier, change the kind
@@ -2706,7 +2707,7 @@ export class Parser {
                 return this.templateString(true);
 
             case this.matchAny(TokenKind.Identifier, ...this.allowedLocalIdentifiers):
-                return new VariableExpression(this.previous() as Identifier);
+                return new VariableExpression({ nameToken: this.previous() as Identifier });
 
             case this.match(TokenKind.LeftParen):
                 let left = this.previous();
@@ -2727,7 +2728,7 @@ export class Parser {
                 let token = Object.assign(this.previous(), {
                     kind: TokenKind.Identifier
                 }) as Identifier;
-                return new VariableExpression(token);
+                return new VariableExpression({ nameToken: token });
 
             case this.checkAny(TokenKind.Function, TokenKind.Sub):
                 return this.anonymousFunction();

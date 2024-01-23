@@ -230,7 +230,7 @@ describe('parser', () => {
         it('works for ?.', () => {
             const expression = getExpression<DottedGetExpression>(`value = person?.name`);
             expect(expression).to.be.instanceOf(DottedGetExpression);
-            expect(expression.dot.kind).to.eql(TokenKind.QuestionDot);
+            expect(expression.tokens.dot.kind).to.eql(TokenKind.QuestionDot);
         });
 
         it('works for ?[', () => {

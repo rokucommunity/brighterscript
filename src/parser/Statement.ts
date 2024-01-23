@@ -1165,22 +1165,33 @@ export class ForEachStatement extends Statement {
 }
 
 export class WhileStatement extends Statement {
-    constructor(
-        readonly tokens: {
-            while: Token;
-            endWhile: Token;
-        },
-        readonly condition: Expression,
-        readonly body: Block
-    ) {
+    constructor(options: {
+        whileToken?: Token;
+        endWhileToken?: Token;
+        condition: Expression;
+        body: Block;
+    }) {
         super();
+        this.tokens = {
+            while: options.whileToken,
+            endWhile: options.endWhileToken
+        };
+        this.body = options.body;
+        this.condition = options.condition;
         this.range = util.createBoundingRange(
-            tokens.while,
-            condition,
-            body,
-            tokens.endWhile
+            this.tokens.while,
+            this.condition,
+            this.body,
+            this.tokens.endWhile
         );
     }
+
+    readonly tokens: {
+        while?: Token;
+        endWhile?: Token;
+    };
+    readonly condition: Expression;
+    readonly body: Block;
 
     public readonly kind = AstNodeKind.WhileStatement;
 
@@ -1190,7 +1201,7 @@ export class WhileStatement extends Statement {
         let result = [];
         //while
         result.push(
-            state.transpileToken(this.tokens.while),
+            state.transpileToken(this.tokens.while, 'while'),
             ' '
         );
         //condition
@@ -1208,7 +1219,7 @@ export class WhileStatement extends Statement {
         //end while
         result.push(
             state.indent(),
-            state.transpileToken(this.tokens.endWhile)
+            state.transpileToken(this.tokens.endWhile, 'end while')
         );
 
         return result;
@@ -1225,20 +1236,33 @@ export class WhileStatement extends Statement {
 }
 
 export class DottedSetStatement extends Statement {
-    constructor(
-        readonly obj: Expression,
-        readonly name: Identifier,
-        readonly value: Expression,
-        readonly dot?: Token
-    ) {
+    constructor(options: {
+        obj: Expression;
+        nameToken: Identifier;
+        value: Expression;
+        dotToken?: Token;
+    }) {
         super();
+        this.tokens = {
+            name: options.nameToken,
+            dot: options.dotToken
+        };
+        this.obj = options.obj;
+        this.value = options.value;
         this.range = util.createBoundingRange(
-            obj,
-            dot,
-            name,
-            value
+            this.obj,
+            this.tokens.dot,
+            this.tokens.name,
+            this.value
         );
     }
+    readonly tokens: {
+        name: Identifier;
+        dot?: Token;
+    };
+
+    readonly obj: Expression;
+    readonly value: Expression;
 
     public readonly kind = AstNodeKind.DottedSetStatement;
 
@@ -1252,9 +1276,9 @@ export class DottedSetStatement extends Statement {
             return [
                 //object
                 ...this.obj.transpile(state),
-                this.dot ? state.tokenToSourceNode(this.dot) : '.',
+                this.tokens.dot ? state.tokenToSourceNode(this.tokens.dot) : '.',
                 //name
-                state.transpileToken(this.name),
+                state.transpileToken(this.tokens.name),
                 ' = ',
                 //right-hand-side of assignment
                 ...this.value.transpile(state)
@@ -1271,29 +1295,44 @@ export class DottedSetStatement extends Statement {
 
     getType(options: GetTypeOptions) {
         const objType = this.obj?.getType(options);
-        const result = objType?.getMemberType(this.name?.text, options);
-        options.typeChain?.push(new TypeChainEntry(this.name?.text, result, options.data, this.name?.range ?? this.range));
+        const result = objType?.getMemberType(this.tokens.name?.text, options);
+        options.typeChain?.push(new TypeChainEntry(this.tokens.name?.text, result, options.data, this.tokens.name?.range ?? this.range));
         return result;
     }
 }
 
 export class IndexedSetStatement extends Statement {
-    constructor(
-        readonly obj: Expression,
-        readonly index: Expression,
-        readonly value: Expression,
-        readonly openingSquare: Token,
-        readonly closingSquare: Token
-    ) {
+    constructor(options: {
+        obj: Expression;
+        index: Expression;
+        value: Expression;
+        openingSquareToken?: Token;
+        closingSquareToken?: Token;
+    }) {
         super();
+        this.tokens = {
+            openingSquare: options.openingSquareToken,
+            closingSquare: options.closingSquareToken
+        };
+        this.obj = options.obj;
+        this.index = options.index;
+        this.value = options.value;
         this.range = util.createBoundingRange(
-            obj,
-            openingSquare,
-            index,
-            closingSquare,
-            value
+            this.obj,
+            this.tokens.openingSquare,
+            this.index,
+            this.tokens.closingSquare,
+            this.value
         );
     }
+
+    readonly tokens: {
+        openingSquare?: Token;
+        closingSquare?: Token;
+    };
+    readonly obj: Expression;
+    readonly index: Expression;
+    readonly value: Expression;
 
     public readonly kind = AstNodeKind.IndexedSetStatement;
 
@@ -1308,11 +1347,11 @@ export class IndexedSetStatement extends Statement {
                 //obj
                 ...this.obj.transpile(state),
                 //   [
-                state.transpileToken(this.openingSquare),
+                state.transpileToken(this.tokens.openingSquare, '['),
                 //    index
                 ...this.index.transpile(state),
                 //         ]
-                state.transpileToken(this.closingSquare),
+                state.transpileToken(this.tokens.closingSquare, ']'),
                 //           =
                 ' = ',
                 //             value
@@ -2446,16 +2485,16 @@ export class MethodStatement extends FunctionStatement {
         const parentClassIndex = state.classStatement.getParentClassIndex(state);
         const visitor = createVisitor({
             VariableExpression: e => {
-                if (e.name.text.toLocaleLowerCase() === 'super') {
-                    state.editor.setProperty(e.name, 'text', `m.super${parentClassIndex}_new`);
+                if (e.tokens.name.text.toLocaleLowerCase() === 'super') {
+                    state.editor.setProperty(e.tokens.name, 'text', `m.super${parentClassIndex}_new`);
                 }
             },
             DottedGetExpression: e => {
                 const beginningVariable = util.findBeginningVariableExpression(e);
                 const lowerName = beginningVariable?.getName(ParseMode.BrighterScript).toLowerCase();
                 if (lowerName === 'super') {
-                    state.editor.setProperty(beginningVariable.name, 'text', 'm');
-                    state.editor.setProperty(e.name, 'text', `super${parentClassIndex}_${e.name.text}`);
+                    state.editor.setProperty(beginningVariable.tokens.name, 'text', 'm');
+                    state.editor.setProperty(e.tokens.name, 'text', `super${parentClassIndex}_${e.tokens.name.text}`);
                 }
             }
         });
@@ -2507,7 +2546,7 @@ export class MethodStatement extends FunctionStatement {
                 //is a call statement
                 return isExpressionStatement(x) && isCallExpression(x.expression) &&
                     //is a call to super
-                    util.findBeginningVariableExpression(x.expression.callee as any).name.text.toLowerCase() === 'super';
+                    util.findBeginningVariableExpression(x.expression.callee as any).tokens.name.text.toLowerCase() === 'super';
             }) !== -1;
 
         //if a call to super exists, quit here
@@ -2518,8 +2557,8 @@ export class MethodStatement extends FunctionStatement {
         //this is a child class, and the constructor doesn't contain a call to super. Inject one
         const superCall = new ExpressionStatement({
             expression: new CallExpression(
-                new VariableExpression(
-                    {
+                new VariableExpression({
+                    nameToken: {
                         kind: TokenKind.Identifier,
                         text: 'super',
                         isReserved: false,
@@ -2527,7 +2566,7 @@ export class MethodStatement extends FunctionStatement {
                         leadingWhitespace: '',
                         leadingTrivia: []
                     }
-                ),
+                }),
                 {
                     kind: TokenKind.LeftParen,
                     text: '(',

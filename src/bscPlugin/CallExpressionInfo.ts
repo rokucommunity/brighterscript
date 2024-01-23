@@ -69,13 +69,13 @@ export class CallExpressionInfo {
         if (isCallfuncExpression(callExpression)) {
             this.name = callExpression.methodName.text;
         } else if (isVariableExpression(callExpression.callee)) {
-            this.name = callExpression.callee.name.text;
+            this.name = callExpression.callee.tokens.name.text;
         } else if (isVariableExpression(callExpression)) {
-            this.name = (callExpression as VariableExpression).name.text;
+            this.name = (callExpression as VariableExpression).tokens.name.text;
         } else if (isDottedGetExpression(callExpression.callee)) {
-            this.name = callExpression.callee.name.text;
+            this.name = callExpression.callee.tokens.name.text;
             if (isDottedGetExpression(callExpression.callee) && isVariableExpression(callExpression.callee.obj)) {
-                this.isCallingMethodOnMyClass = callExpression.callee.obj.name.text === 'm';
+                this.isCallingMethodOnMyClass = callExpression.callee.obj.tokens.name.text === 'm';
 
             } else {
                 let parts = util.getAllDottedGetParts(callExpression.callee);

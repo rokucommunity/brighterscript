@@ -1543,7 +1543,7 @@ export class Util {
             }
             if (isVariableExpression(expression)) {
                 variableExpressions.push(expression);
-                uniqueVarNames.add(expression.name.text);
+                uniqueVarNames.add(expression.tokens.name.text);
             }
         }
 
@@ -1728,7 +1728,7 @@ export class Util {
                 case AstNodeKind.AssignmentStatement:
                     return [(node as AssignmentStatement).tokens.name];
                 case AstNodeKind.DottedGetExpression:
-                    parts.push((nextPart as DottedGetExpression)?.name);
+                    parts.push((nextPart as DottedGetExpression)?.tokens.name);
                     nextPart = (nextPart as DottedGetExpression).obj;
                     continue;
                 case AstNodeKind.CallExpression:
@@ -1738,7 +1738,7 @@ export class Util {
                     nextPart = (nextPart as TypeExpression).expression;
                     continue;
                 case AstNodeKind.VariableExpression:
-                    parts.push((nextPart as VariableExpression)?.name);
+                    parts.push((nextPart as VariableExpression)?.tokens.name);
                     break loop;
                 case AstNodeKind.LiteralExpression:
                     parts.push((nextPart as LiteralExpression)?.token as Identifier);

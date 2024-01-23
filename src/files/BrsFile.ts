@@ -890,7 +890,7 @@ export class BrsFile implements BscFile {
         }
 
         if (isVariableExpression(left)) {
-            let lowerName = left.name.text.toLowerCase();
+            let lowerName = left.tokens.name.text.toLowerCase();
             //find the first scope that contains this namespace
             let scopes = this.program.getScopesForFile(this);
             for (let scope of scopes) {
@@ -908,7 +908,7 @@ export class BrsFile implements BscFile {
     public calleeIsKnownNamespaceFunction(callee: Expression, namespaceName: string) {
         //if we have a variable and a namespace
         if (isVariableExpression(callee) && namespaceName) {
-            let lowerCalleeName = callee?.name?.text?.toLowerCase();
+            let lowerCalleeName = callee?.tokens.name?.text?.toLowerCase();
             if (lowerCalleeName) {
                 let scopes = this.program.getScopesForFile(this);
                 for (let scope of scopes) {
@@ -935,7 +935,7 @@ export class BrsFile implements BscFile {
                 return this.calleeIsKnownNamespaceFunction(callee, namespaceName);
             }
             let scopes = this.program.getScopesForFile(this);
-            let lowerCalleeName = callee?.name?.text?.toLowerCase();
+            let lowerCalleeName = callee?.tokens.name?.text?.toLowerCase();
             for (let scope of scopes) {
                 if (scope.getCallableByName(lowerCalleeName)) {
                     return true;
@@ -1332,7 +1332,7 @@ export class BrsFile implements BscFile {
                     processedFiles.add(file);
                     file.ast.walk(createVisitor({
                         VariableExpression: (e) => {
-                            if (e.name.text.toLowerCase() === searchFor) {
+                            if (e.tokens.name.text.toLowerCase() === searchFor) {
                                 locations.push(util.createLocation(util.pathToUri(file.srcPath), e.range));
                             }
                         }

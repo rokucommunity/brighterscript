@@ -387,18 +387,18 @@ export class BrsFileValidator {
             const node = nodes.shift();
             if (
                 // a?.b = true or a.b?.c = true
-                ((isDottedSetStatement(node) || isDottedGetExpression(node)) && node.dot?.kind === TokenKind.QuestionDot) ||
+                ((isDottedSetStatement(node) || isDottedGetExpression(node)) && node.tokens.dot?.kind === TokenKind.QuestionDot) ||
                 // a.b?[2] = true
                 (isIndexedGetExpression(node) && (node?.questionDotToken?.kind === TokenKind.QuestionDot || node.openingSquare?.kind === TokenKind.QuestionLeftSquare)) ||
                 // a?[1] = true
-                (isIndexedSetStatement(node) && node.openingSquare?.kind === TokenKind.QuestionLeftSquare)
+                (isIndexedSetStatement(node) && node.tokens.openingSquare?.kind === TokenKind.QuestionLeftSquare)
             ) {
                 //try to highlight the entire left-hand-side expression if possible
                 let range: Range;
                 if (isDottedSetStatement(parent)) {
-                    range = util.createBoundingRange(parent.obj, parent.dot, parent.name);
+                    range = util.createBoundingRange(parent.obj, parent.tokens.dot, parent.tokens.name);
                 } else if (isIndexedSetStatement(parent)) {
-                    range = util.createBoundingRange(parent.obj, parent.openingSquare, parent.index, parent.closingSquare);
+                    range = util.createBoundingRange(parent.obj, parent.tokens.openingSquare, parent.index, parent.tokens.closingSquare);
                 } else {
                     range = node.range;
                 }

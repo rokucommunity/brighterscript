@@ -142,11 +142,11 @@ export class ScopeValidator {
         if (isAssignmentStatement(definingNode) && definingNode.tokens.equals.kind === TokenKind.Equal) {
             // this symbol was defined in a "normal" assignment (eg. not a compound assignment)
             assignmentAncestor = definingNode;
-            return assignmentAncestor?.tokens.name?.text.toLowerCase() === expression?.name?.text.toLowerCase();
+            return assignmentAncestor?.tokens.name?.text.toLowerCase() === expression?.tokens.name?.text.toLowerCase();
         } else {
             assignmentAncestor = expression?.findAncestor(isAssignmentStatement);
         }
-        return assignmentAncestor?.tokens.name === expression?.name && isUnionType(exprType);
+        return assignmentAncestor?.tokens.name === expression?.tokens.name && isUnionType(exprType);
     }
 
     /**
@@ -509,7 +509,7 @@ export class ScopeValidator {
             return;
         }
         if (isVariableExpression(expression)) {
-            if (isAssignmentStatement(expression.parent) && expression.parent.tokens.name === expression.name) {
+            if (isAssignmentStatement(expression.parent) && expression.parent.tokens.name === expression.tokens.name) {
                 // Don't validate LHS of assignments
                 return;
             } else if (isNamespaceStatement(expression.parent)) {
