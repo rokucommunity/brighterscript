@@ -52,9 +52,9 @@ describe('reflection', () => {
         const namespace = new NamespaceStatement({ keywordToken: token, nameExpression: createVariableExpression('a', range), body: body, endKeywordToken: token });
         const cls = new ClassStatement({ classKeywordToken: token, nameToken: ident, body: [], endClassToken: token });
         const imports = new ImportStatement({ importToken: token, filePathToken: token });
-        const catchStmt = new CatchStatement({ catch: token }, ident, block);
+        const catchStmt = new CatchStatement({ catchToken: token, exceptionVariableToken: ident, catchBranch: block });
         const tryCatch = new TryCatchStatement({ tryToken: token, tryBranch: block, catchStatement: catchStmt });
-        const throwSt = new ThrowStatement(createToken(TokenKind.Throw));
+        const throwSt = new ThrowStatement({ throwToken: createToken(TokenKind.Throw) });
 
         it('isStatement', () => {
             expect(isStatement(library)).to.be.true;

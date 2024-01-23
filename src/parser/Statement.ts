@@ -2773,7 +2773,7 @@ export class FieldStatement extends Statement implements TypedefProvider {
 export type MemberStatement = FieldStatement | MethodStatement;
 
 export class TryCatchStatement extends Statement {
-    constructor(options: {
+    constructor(options?: {
         tryToken?: Token;
         endTryToken?: Token;
         tryBranch?: Block;
@@ -2828,20 +2828,30 @@ export class TryCatchStatement extends Statement {
 }
 
 export class CatchStatement extends Statement {
-    constructor(
-        public tokens: {
-            catch: Token;
-        },
-        public exceptionVariable?: Identifier,
-        public catchBranch?: Block
-    ) {
+    constructor(options?: {
+        catchToken?: Token;
+        exceptionVariableToken?: Identifier;
+        catchBranch?: Block;
+    }) {
         super();
+        this.tokens = {
+            catch: options?.catchToken,
+            exceptionVariable: options?.exceptionVariableToken
+        };
+        this.catchBranch = options?.catchBranch;
         this.range = util.createBoundingRange(
-            tokens.catch,
-            exceptionVariable,
-            catchBranch
+            this.tokens.catch,
+            this.tokens.exceptionVariable,
+            this.catchBranch
         );
     }
+
+    readonly tokens: {
+        catch?: Token;
+        exceptionVariable?: Identifier;
+    };
+
+    public catchBranch?: Block;
 
     public readonly kind = AstNodeKind.CatchStatement;
 
@@ -2849,9 +2859,9 @@ export class CatchStatement extends Statement {
 
     public transpile(state: BrsTranspileState): TranspileResult {
         return [
-            state.transpileToken(this.tokens.catch),
+            state.transpileToken(this.tokens.catch, 'catch'),
             ' ',
-            this.exceptionVariable?.text ?? 'e',
+            this.tokens.exceptionVariable?.text ?? 'e',
             ...(this.catchBranch?.transpile(state) ?? [])
         ];
     }
@@ -2864,16 +2874,25 @@ export class CatchStatement extends Statement {
 }
 
 export class ThrowStatement extends Statement {
-    constructor(
-        public throwToken: Token,
-        public expression?: Expression
-    ) {
+    constructor(options?: {
+        throwToken?: Token;
+        expression?: Expression;
+    }) {
         super();
+        this.tokens = {
+            throw: options.throwToken
+        };
+        this.expression = options.expression;
         this.range = util.createBoundingRange(
-            throwToken,
-            expression
+            this.tokens.throw,
+            this.expression
         );
     }
+
+    readonly tokens: {
+        throw?: Token;
+    };
+    public expression?: Expression;
 
     public readonly kind = AstNodeKind.ThrowStatement;
 
@@ -2881,7 +2900,7 @@ export class ThrowStatement extends Statement {
 
     public transpile(state: BrsTranspileState) {
         const result = [
-            state.transpileToken(this.throwToken),
+            state.transpileToken(this.tokens.throw, 'throw'),
             ' '
         ];
 
@@ -2907,17 +2926,27 @@ export class ThrowStatement extends Statement {
 
 
 export class EnumStatement extends Statement implements TypedefProvider {
-    constructor(
-        public tokens: {
-            enum: Token;
-            name: Identifier;
-            endEnum: Token;
-        },
-        public body: Array<EnumMemberStatement | CommentStatement>
-    ) {
+    constructor(options: {
+        enumToken?: Token;
+        nameToken: Identifier;
+        endEnumToken?: Token;
+        body: Array<EnumMemberStatement | CommentStatement>;
+    }) {
         super();
+        this.tokens = {
+            enum: options.enumToken,
+            name: options.nameToken,
+            endEnum: options.endEnumToken
+        };
         this.body = this.body ?? [];
     }
+
+    public tokens: {
+        enum?: Token;
+        name: Identifier;
+        endEnum?: Token;
+    };
+    public body: Array<EnumMemberStatement | CommentStatement>;
 
     public readonly kind = AstNodeKind.EnumStatement;
 
@@ -3028,7 +3057,7 @@ export class EnumStatement extends Statement implements TypedefProvider {
             );
         }
         result.push(
-            this.tokens.enum.text ?? 'enum',
+            this.tokens.enum?.text ?? 'enum',
             ' ',
             this.tokens.name.text
         );
@@ -3046,7 +3075,7 @@ export class EnumStatement extends Statement implements TypedefProvider {
         state.blockDepth--;
         result.push(
             state.indent(),
-            this.tokens.endEnum.text ?? 'end enum'
+            this.tokens.endEnum?.text ?? 'end enum'
         );
         return result;
     }
@@ -3074,15 +3103,24 @@ export class EnumStatement extends Statement implements TypedefProvider {
 }
 
 export class EnumMemberStatement extends Statement implements TypedefProvider {
-    public constructor(
-        public tokens: {
-            name: Identifier;
-            equal?: Token;
-        },
-        public value?: Expression
-    ) {
+    public constructor(options: {
+        nameToken: Identifier;
+        equalToken?: Token;
+        value?: Expression;
+    }) {
         super();
+        this.tokens = {
+            name: options.nameToken,
+            equal: options.equalToken
+        };
+        this.value = options.value;
     }
+
+    public tokens: {
+        name: Identifier;
+        equal?: Token;
+    };
+    public value?: Expression;
 
     public readonly kind = AstNodeKind.EnumMemberStatement;
 

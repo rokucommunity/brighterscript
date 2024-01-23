@@ -519,7 +519,7 @@ export class Parser {
     }
 
     private enumDeclaration(): EnumStatement {
-        const result = new EnumStatement({} as any, []);
+        const result = new EnumStatement({ nameToken: {} as any, body: [] });
         this.warnIfNotBrighterScriptMode('enum declarations');
 
         const parentAnnotations = this.enterAnnotationBlock();
@@ -1596,14 +1596,14 @@ export class Parser {
             }
             return statement;
         }
-        const catchStmt = new CatchStatement({ catch: this.advance() });
+        const catchStmt = new CatchStatement({ catchToken: this.advance() });
         statement.catchStatement = catchStmt;
 
         const exceptionVarToken = this.tryConsume(DiagnosticMessages.missingExceptionVarToFollowCatch(), TokenKind.Identifier, ...this.allowedLocalIdentifiers);
         if (exceptionVarToken) {
             // force it into an identifier so the AST makes some sense
             exceptionVarToken.kind = TokenKind.Identifier;
-            catchStmt.exceptionVariable = exceptionVarToken as Identifier;
+            catchStmt.tokens.exceptionVariable = exceptionVarToken as Identifier;
         }
 
         //ensure statement sepatator
@@ -1633,7 +1633,7 @@ export class Parser {
         } else {
             expression = this.expression();
         }
-        return new ThrowStatement(throwToken, expression);
+        return new ThrowStatement({ throwToken: throwToken, expression: expression });
     }
 
     private dimStatement() {
