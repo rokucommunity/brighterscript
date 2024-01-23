@@ -360,7 +360,7 @@ export class Parser {
         if (this.check(TokenKind.As)) {
             [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
         }
-        return new InterfaceFieldStatement(name, asToken, typeExpression, optionalKeyword);
+        return new InterfaceFieldStatement({ nameToken: name, asToken: asToken, typeExpression: typeExpression, optionalToken: optionalKeyword });
     }
 
     private consumeAsTokenAndTypeExpression(): [Token, TypeExpression] {
@@ -1576,7 +1576,7 @@ export class Parser {
     private tryCatchStatement(): TryCatchStatement {
         const tryToken = this.advance();
         const statement = new TryCatchStatement(
-            { try: tryToken }
+            { tryToken: tryToken }
         );
 
         //ensure statement separator

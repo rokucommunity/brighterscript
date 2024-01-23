@@ -1785,16 +1785,19 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
     public transpile(state: BrsTranspileState): TranspileResult {
         throw new Error('Method not implemented.');
     }
-    constructor(
-        nameToken: Identifier,
-        asToken: Token,
-        public typeExpression?: TypeExpression,
-        optionalToken?: Token
-    ) {
+    constructor(options: {
+        nameToken: Identifier;
+        asToken?: Token;
+        typeExpression?: TypeExpression;
+        optionalToken?: Token;
+    }) {
         super();
-        this.tokens.optional = optionalToken;
-        this.tokens.name = nameToken;
-        this.tokens.as = asToken;
+        this.tokens = {
+            optional: options.optionalToken,
+            name: options.nameToken,
+            as: options.asToken
+        };
+        this.typeExpression = options.typeExpression;
         this.range = util.createBoundingRange(
             this.tokens.optional,
             this.tokens.name,
@@ -1805,9 +1808,11 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
 
     public readonly kind = AstNodeKind.InterfaceFieldStatement;
 
+    public typeExpression?: TypeExpression;
+
     public range: Range;
 
-    public tokens = {} as {
+    public tokens: {
         name: Identifier;
         as: Token;
         optional?: Token;
@@ -2768,22 +2773,34 @@ export class FieldStatement extends Statement implements TypedefProvider {
 export type MemberStatement = FieldStatement | MethodStatement;
 
 export class TryCatchStatement extends Statement {
-    constructor(
-        public tokens: {
-            try: Token;
-            endTry?: Token;
-        },
-        public tryBranch?: Block,
-        public catchStatement?: CatchStatement
-    ) {
+    constructor(options: {
+        tryToken?: Token;
+        endTryToken?: Token;
+        tryBranch?: Block;
+        catchStatement?: CatchStatement;
+    }) {
         super();
+        this.tokens = {
+            try: options.tryToken,
+            endTry: options.endTryToken
+        };
+        this.tryBranch = options.tryBranch;
+        this.catchStatement = options.catchStatement;
         this.range = util.createBoundingRange(
-            tokens.try,
-            tryBranch,
-            catchStatement,
-            tokens.endTry
+            this.tokens.try,
+            this.tryBranch,
+            this.catchStatement,
+            this.tokens.endTry
         );
     }
+
+    readonly tokens: {
+        try?: Token;
+        endTry?: Token;
+    };
+
+    public tryBranch: Block;
+    public catchStatement: CatchStatement;
 
     public readonly kind = AstNodeKind.TryCatchStatement;
 
@@ -2791,14 +2808,14 @@ export class TryCatchStatement extends Statement {
 
     public transpile(state: BrsTranspileState): TranspileResult {
         return [
-            state.transpileToken(this.tokens.try),
+            state.transpileToken(this.tokens.try, 'try'),
             ...this.tryBranch.transpile(state),
             state.newline,
             state.indent(),
             ...(this.catchStatement?.transpile(state) ?? ['catch']),
             state.newline,
             state.indent(),
-            state.transpileToken(this.tokens.endTry)
+            state.transpileToken(this.tokens.endTry, 'end try')
         ];
     }
 

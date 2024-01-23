@@ -53,7 +53,7 @@ describe('reflection', () => {
         const cls = new ClassStatement({ classKeywordToken: token, nameToken: ident, body: [], endClassToken: token });
         const imports = new ImportStatement({ importToken: token, filePathToken: token });
         const catchStmt = new CatchStatement({ catch: token }, ident, block);
-        const tryCatch = new TryCatchStatement({ try: token }, block, catchStmt);
+        const tryCatch = new TryCatchStatement({ tryToken: token, tryBranch: block, catchStatement: catchStmt });
         const throwSt = new ThrowStatement(createToken(TokenKind.Throw));
 
         it('isStatement', () => {
