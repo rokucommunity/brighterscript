@@ -232,11 +232,11 @@ describe('BrsFile BrighterScript classes', () => {
                 end class
             `);
             expect(
-                (file.ast as any).statements[1].body[0].func.body.statements[0].expression.callee.name.text
+                (file.ast as any).statements[1].body[0].func.body.statements[0].expression.callee.tokens.name.text
             ).to.eql('super');
             await program.getTranspiledFileContents(file.srcPath);
             expect(
-                (file.ast as any).statements[1].body[0].func.body.statements[0].expression.callee.name.text
+                (file.ast as any).statements[1].body[0].func.body.statements[0].expression.callee.tokens.name.text
             ).to.eql('super');
         });
 

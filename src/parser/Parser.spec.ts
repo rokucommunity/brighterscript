@@ -357,13 +357,13 @@ describe('parser', () => {
             expect(first).to.be.instanceof(XmlAttributeGetExpression);
             expect(first.name.text).to.equal('firstName');
             expect(first.at.text).to.equal('@');
-            expect((first.obj as any).name.text).to.equal('personXml');
+            expect((first.obj as any).tokens.name.text).to.equal('personXml');
 
             let second = statements[1].value as XmlAttributeGetExpression;
             expect(second).to.be.instanceof(XmlAttributeGetExpression);
             expect(second.name.text).to.equal('age');
             expect(second.at.text).to.equal('@');
-            expect((second.obj as any).name.text).to.equal('firstChild');
+            expect((second.obj as any).tokens.name.text).to.equal('firstChild');
         });
 
         it('does not allow chaining of @ symbols', () => {
@@ -500,7 +500,7 @@ describe('parser', () => {
 
                 expect(isExpressionStatement(stmt)).to.be.true;
                 expect(isVariableExpression((stmt).expression)).to.be.true;
-                expect(stmt.expression.name.text).to.equal('NameA');
+                expect(stmt.expression.tokens.name.text).to.equal('NameA');
             });
 
             it('adds unended call statements', () => {
@@ -514,7 +514,7 @@ describe('parser', () => {
 
                 expect(isExpressionStatement(stmt)).to.be.true;
                 expect(isCallExpression((stmt).expression)).to.be.true;
-                expect(stmt.expression.callee.name.text).to.equal('lcase');
+                expect(stmt.expression.callee.tokens.name.text).to.equal('lcase');
             });
 
             it('adds unended indexed get statements', () => {
@@ -530,7 +530,7 @@ describe('parser', () => {
 
                 expect(isExpressionStatement(stmt)).to.be.true;
                 expect(isIndexedGetExpression((stmt).expression)).to.be.true;
-                expect(stmt.expression.obj.name.text).to.equal('nums');
+                expect(stmt.expression.obj.tokens.name.text).to.equal('nums');
             });
 
             it('adds dotted gets', () => {
@@ -553,8 +553,8 @@ describe('parser', () => {
 
                 expect(isExpressionStatement(stmt)).to.be.true;
                 expect(isDottedGetExpression((stmt).expression)).to.be.true;
-                expect(stmt.expression.obj.name.text).to.equal('a');
-                expect(stmt.expression.name.text).to.equal('b');
+                expect(stmt.expression.obj.tokens.name.text).to.equal('a');
+                expect(stmt.expression.tokens.name.text).to.equal('b');
             });
 
             it('adds function statement with missing type after as', () => {

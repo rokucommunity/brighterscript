@@ -637,15 +637,14 @@ export class BrsFile implements BscFile {
                         //filter out method calls on method calls for now (i.e. getSomething().getSomethingElse())
                         (expression.callee as any).callee ||
                         //filter out callees without a name (immediately-invoked function expressions)
-                        !(expression.callee as any).name
+                        !(expression.callee as any).tokens?.name
                     ) {
                         continue;
                     }
-                    let functionName = (expression.callee as any).name.text;
-
                     //callee is the name of the function being called
                     let callee = expression.callee as VariableExpression;
 
+                    let functionName = callee.tokens.name.text;
                     let columnIndexBegin = callee.range.start.character;
                     let columnIndexEnd = callee.range.end.character;
 
@@ -664,12 +663,12 @@ export class BrsFile implements BscFile {
                             });
 
                             //is variable being passed into argument
-                        } else if (arg.name) {
+                        } else if (arg.tokens?.name) {
                             args.push({
                                 range: arg.range,
                                 //TODO - look up the data type of the actual variable
                                 type: new DynamicType(),
-                                text: arg.name.text,
+                                text: arg.tokens.name.text,
                                 expression: arg,
                                 typeToken: undefined
                             });
