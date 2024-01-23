@@ -1289,7 +1289,7 @@ export class Parser {
 
         let name = this.identifyingExpression();
         //set the current namespace name
-        let result = new NamespaceStatement(keyword, name, null, null);
+        let result = new NamespaceStatement({ keywordToken: keyword, nameExpression: name, body: null });
 
         this.globalTerminators.push([TokenKind.EndNamespace]);
         let body = this.body();
@@ -1309,7 +1309,7 @@ export class Parser {
         this.namespaceAndFunctionDepth--;
 
         result.body = body;
-        result.endKeyword = endKeyword;
+        result.tokens.endKeyword = endKeyword;
         //cache the range property so that plugins can't affect it
         result.cacheRange();
         result.body.symbolTable.name += `: namespace '${result.name}'`;
@@ -1404,9 +1404,9 @@ export class Parser {
 
     private libraryStatement(): LibraryStatement | undefined {
         let libStatement = new LibraryStatement({
-            library: this.advance(),
+            libraryToken: this.advance(),
             //grab the next token only if it's a string
-            filePath: this.tryConsume(
+            filePathToken: this.tryConsume(
                 DiagnosticMessages.expectedStringLiteralAfterKeyword('library'),
                 TokenKind.StringLiteral
             )

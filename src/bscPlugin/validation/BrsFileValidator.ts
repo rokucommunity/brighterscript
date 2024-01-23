@@ -101,7 +101,7 @@ export class BrsFileValidator {
                 node.parent.getSymbolTable()?.addSymbol(node.tokens.item.text, { definingNode: node }, loopVarType, SymbolTypeFlag.runtime);
             },
             NamespaceStatement: (node) => {
-                this.validateDeclarationLocations(node, 'namespace', () => util.createBoundingRange(node.keyword, node.nameExpression));
+                this.validateDeclarationLocations(node, 'namespace', () => util.createBoundingRange(node.tokens.keyword, node.nameExpression));
                 //Namespace Types are added at the Scope level - This is handled when the SymbolTables get linked
             },
             FunctionStatement: (node) => {

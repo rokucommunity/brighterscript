@@ -1370,18 +1370,24 @@ export class IndexedSetStatement extends Statement {
 }
 
 export class LibraryStatement extends Statement implements TypedefProvider {
-    constructor(
-        readonly tokens: {
-            library: Token;
-            filePath: Token | undefined;
-        }
-    ) {
+    constructor(options: {
+        libraryToken: Token;
+        filePathToken?: Token;
+    }) {
         super();
+        this.tokens = {
+            library: options.libraryToken,
+            filePath: options.filePathToken
+        };
         this.range = util.createBoundingRange(
             this.tokens.library,
             this.tokens.filePath
         );
     }
+    readonly tokens: {
+        library: Token;
+        filePath?: Token;
+    };
 
     public readonly kind = AstNodeKind.LibraryStatement;
 
@@ -1412,16 +1418,30 @@ export class LibraryStatement extends Statement implements TypedefProvider {
 }
 
 export class NamespaceStatement extends Statement implements TypedefProvider {
-    constructor(
-        public keyword: Token,
-        public nameExpression: VariableExpression | DottedGetExpression,
-        public body: Body,
-        public endKeyword: Token
-    ) {
+    constructor(options: {
+        keywordToken?: Token;
+        nameExpression: VariableExpression | DottedGetExpression;
+        body: Body;
+        endKeywordToken?: Token;
+    }) {
         super();
+        this.tokens = {
+            keyword: options.keywordToken,
+            endKeyword: options.endKeywordToken
+        };
+        this.nameExpression = options.nameExpression;
+        this.body = options.body;
         this.name = this.getName(ParseMode.BrighterScript);
         this.symbolTable = new SymbolTable(`NamespaceStatement: '${this.name}'`, () => this.parent?.getSymbolTable());
     }
+
+    readonly tokens: {
+        keyword?: Token;
+        endKeyword?: Token;
+    };
+
+    readonly nameExpression: VariableExpression | DottedGetExpression;
+    public body: Body;
 
     public readonly kind = AstNodeKind.NamespaceStatement;
 
@@ -1438,10 +1458,10 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     public cacheRange() {
         if (!this._range) {
             this._range = util.createBoundingRange(
-                this.keyword,
+                this.tokens.keyword,
                 this.nameExpression,
                 this.body,
-                this.endKeyword
+                this.tokens.endKeyword
             ) ?? interpolatedRange;
         }
         return this._range;
@@ -1457,7 +1477,7 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     }
 
     public getLeadingTrivia(): Token[] {
-        return util.concatAnnotationLeadingTrivia(this, this.keyword.leadingTrivia);
+        return util.concatAnnotationLeadingTrivia(this, this.tokens.keyword?.leadingTrivia);
     }
 
     public getNameParts() {
