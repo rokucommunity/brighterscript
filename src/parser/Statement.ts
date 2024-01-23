@@ -1597,19 +1597,23 @@ export class ImportStatement extends Statement implements TypedefProvider {
 }
 
 export class InterfaceStatement extends Statement implements TypedefProvider {
-    constructor(
-        interfaceToken: Token,
-        name: Identifier,
-        extendsToken: Token,
-        public parentInterfaceName: TypeExpression,
-        public body: Statement[],
-        endInterfaceToken: Token
-    ) {
+    constructor(options: {
+        interfaceToken: Token;
+        nameToken: Identifier;
+        extendsToken?: Token;
+        parentInterfaceName?: TypeExpression;
+        body: Statement[];
+        endInterfaceToken?: Token;
+    }) {
         super();
-        this.tokens.interface = interfaceToken;
-        this.tokens.name = name;
-        this.tokens.extends = extendsToken;
-        this.tokens.endInterface = endInterfaceToken;
+        this.tokens = {
+            interface: options.interfaceToken,
+            name: options.nameToken,
+            extends: options.extendsToken,
+            endInterface: options.endInterfaceToken
+        };
+        this.parentInterfaceName = options.parentInterfaceName;
+        this.body = options.body;
         this.range = util.createBoundingRange(
             this.tokens.interface,
             this.tokens.name,
@@ -1619,14 +1623,16 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
             this.tokens.endInterface
         );
     }
+    public parentInterfaceName?: TypeExpression;
+    public body: Statement[];
 
     public readonly kind = AstNodeKind.InterfaceStatement;
 
     public tokens = {} as {
-        interface: Token;
+        interface?: Token;
         name: Identifier;
-        extends: Token;
-        endInterface: Token;
+        extends?: Token;
+        endInterface?: Token;
     };
 
     public range: Range;

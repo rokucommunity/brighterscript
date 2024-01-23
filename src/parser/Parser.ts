@@ -506,14 +506,14 @@ export class Parser {
         //consume the final `end interface` token
         const endInterfaceToken = this.consumeToken(TokenKind.EndInterface);
 
-        const statement = new InterfaceStatement(
-            interfaceToken,
-            nameToken,
-            extendsToken,
-            parentInterfaceName,
-            body,
-            endInterfaceToken
-        );
+        const statement = new InterfaceStatement({
+            interfaceToken: interfaceToken,
+            nameToken: nameToken,
+            extendsToken: extendsToken,
+            parentInterfaceName: parentInterfaceName,
+            body: body,
+            endInterfaceToken: endInterfaceToken
+        });
         this.exitAnnotationBlock(parentAnnotations);
         return statement;
     }
