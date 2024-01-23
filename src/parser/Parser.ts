@@ -1256,16 +1256,16 @@ export class Parser {
 
         // WARNING: BrightScript doesn't delete the loop initial value after a for/to loop! It just
         // stays around in scope with whatever value it was when the loop exited.
-        return new ForStatement(
-            forToken,
-            initializer,
-            toToken,
-            finalValue,
-            body,
-            endForToken,
-            stepToken,
-            incrementExpression
-        );
+        return new ForStatement({
+            forToken: forToken,
+            counterDeclaration: initializer,
+            toToken: toToken,
+            finalValue: finalValue,
+            body: body,
+            endForToken: endForToken,
+            stepToken: stepToken,
+            increment: incrementExpression
+        });
     }
 
     private forEachStatement(): ForEachStatement {
@@ -1305,16 +1305,14 @@ export class Parser {
 
         let endFor = this.advance();
 
-        return new ForEachStatement(
-            {
-                forEach: forEach,
-                in: maybeIn,
-                endFor: endFor
-            },
-            name,
-            target,
-            body
-        );
+        return new ForEachStatement({
+            forEachToken: forEach,
+            inToken: maybeIn,
+            endForToken: endFor,
+            itemToken: name,
+            target: target,
+            body: body
+        });
     }
 
     private exitFor(): ExitForStatement {
@@ -2103,14 +2101,14 @@ export class Parser {
      * @returns an AST representation of a return statement.
      */
     private returnStatement(): ReturnStatement {
-        let tokens = { return: this.previous() };
+        let options = { returnToken: this.previous() };
 
         if (this.checkEndOfStatement()) {
-            return new ReturnStatement(tokens);
+            return new ReturnStatement(options);
         }
 
         let toReturn = this.check(TokenKind.Else) ? undefined : this.expression();
-        return new ReturnStatement(tokens, toReturn);
+        return new ReturnStatement({ ...options, value: toReturn });
     }
 
     /**
@@ -2118,9 +2116,9 @@ export class Parser {
      * @returns an AST representation of an `label` statement.
      */
     private labelStatement() {
-        let tokens = {
-            identifier: this.advance(),
-            colon: this.advance()
+        let options = {
+            identifierToken: this.advance(),
+            colonToken: this.advance()
         };
 
         //label must be alone on its line, this is probably not a label
@@ -2130,7 +2128,7 @@ export class Parser {
             throw new CancelStatementError();
         }
 
-        return new LabelStatement(tokens);
+        return new LabelStatement(options);
     }
 
     /**
@@ -2167,18 +2165,18 @@ export class Parser {
      * @returns an AST representation of an `end` statement.
      */
     private endStatement() {
-        let endTokens = { end: this.advance() };
+        let options = { endToken: this.advance() };
 
-        return new EndStatement(endTokens);
+        return new EndStatement(options);
     }
     /**
      * Parses a `stop` statement
      * @returns an AST representation of a `stop` statement
      */
     private stopStatement() {
-        let tokens = { stop: this.advance() };
+        let options = { stopToken: this.advance() };
 
-        return new StopStatement(tokens);
+        return new StopStatement(options);
     }
 
     /**

@@ -91,7 +91,7 @@ export class BrsFileValidator {
                 //register the for loop variable
                 const loopTargetType = node.target.getType({ flags: SymbolTypeFlag.runtime });
                 const loopVarType = isArrayType(loopTargetType) ? loopTargetType.defaultType : DynamicType.instance;
-                node.parent.getSymbolTable()?.addSymbol(node.item.text, { definingNode: node }, loopVarType, SymbolTypeFlag.runtime);
+                node.parent.getSymbolTable()?.addSymbol(node.tokens.item.text, { definingNode: node }, loopVarType, SymbolTypeFlag.runtime);
             },
             NamespaceStatement: (node) => {
                 this.validateDeclarationLocations(node, 'namespace', () => util.createBoundingRange(node.keyword, node.nameExpression));
@@ -361,7 +361,7 @@ export class BrsFileValidator {
                 validateLoopTypeMatch(node.tokens.while.kind);
                 return true;
             } else if (isForStatement(node)) {
-                validateLoopTypeMatch(node.forToken.kind);
+                validateLoopTypeMatch(node.tokens.for.kind);
                 return true;
             } else if (isForEachStatement(node)) {
                 validateLoopTypeMatch(node.tokens.forEach.kind);

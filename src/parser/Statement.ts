@@ -830,19 +830,24 @@ export class GotoStatement extends Statement {
 }
 
 export class LabelStatement extends Statement {
-    constructor(
-        readonly tokens: {
-            identifier: Token;
-            colon: Token;
-        }
-    ) {
+    constructor(options: {
+        identifierToken: Token;
+        colonToken?: Token;
+    }) {
         super();
+        this.tokens = {
+            identifier: options.identifierToken,
+            colon: options.colonToken
+        };
         this.range = util.createBoundingRange(
-            tokens.identifier,
-            tokens.colon
+            this.tokens.identifier,
+            this.tokens.colon
         );
     }
-
+    readonly tokens: {
+        identifier: Token;
+        colon: Token;
+    };
     public readonly kind = AstNodeKind.LabelStatement;
 
     public readonly range: Range;
@@ -854,7 +859,7 @@ export class LabelStatement extends Statement {
     transpile(state: BrsTranspileState) {
         return [
             state.transpileToken(this.tokens.identifier),
-            state.transpileToken(this.tokens.colon)
+            state.transpileToken(this.tokens.colon, ':')
 
         ];
     }
@@ -865,19 +870,25 @@ export class LabelStatement extends Statement {
 }
 
 export class ReturnStatement extends Statement {
-    constructor(
-        readonly tokens: {
-            return: Token;
-        },
-        readonly value?: Expression
-    ) {
+    constructor(options?: {
+        returnToken?: Token;
+        value?: Expression;
+    }) {
         super();
+        this.tokens = {
+            return: options?.returnToken
+        };
+        this.value = options?.value;
         this.range = util.createBoundingRange(
-            tokens.return,
-            value
+            this.tokens.return,
+            this.value
         );
     }
 
+    readonly tokens: {
+        return: Token;
+    };
+    readonly value?: Expression;
     public readonly kind = AstNodeKind.ReturnStatement;
 
     public readonly range: Range;
@@ -885,7 +896,7 @@ export class ReturnStatement extends Statement {
     transpile(state: BrsTranspileState) {
         let result = [];
         result.push(
-            state.transpileToken(this.tokens.return)
+            state.transpileToken(this.tokens.return, 'return')
         );
         if (this.value) {
             result.push(' ');
@@ -902,22 +913,25 @@ export class ReturnStatement extends Statement {
 }
 
 export class EndStatement extends Statement {
-    constructor(
-        readonly tokens: {
-            end: Token;
-        }
-    ) {
+    constructor(options?: {
+        endToken?: Token;
+    }) {
         super();
-        this.range = tokens.end.range;
+        this.tokens = {
+            end: options?.endToken
+        };
+        this.range = this.tokens.end?.range;
     }
-
+    readonly tokens: {
+        end?: Token;
+    };
     public readonly kind = AstNodeKind.EndStatement;
 
     public readonly range: Range;
 
     transpile(state: BrsTranspileState) {
         return [
-            state.transpileToken(this.tokens.end)
+            state.transpileToken(this.tokens.end, 'end')
         ];
     }
 
@@ -927,14 +941,16 @@ export class EndStatement extends Statement {
 }
 
 export class StopStatement extends Statement {
-    constructor(
-        readonly tokens: {
-            stop: Token;
-        }
-    ) {
+    constructor(options?: {
+        stopToken?: Token;
+    }) {
         super();
-        this.range = tokens?.stop?.range;
+        this.tokens = { stop: options?.stopToken };
+        this.range = this.tokens?.stop?.range;
     }
+    readonly tokens: {
+        stop?: Token;
+    };
 
     public readonly kind = AstNodeKind.StopStatement;
 
@@ -942,7 +958,7 @@ export class StopStatement extends Statement {
 
     transpile(state: BrsTranspileState) {
         return [
-            state.transpileToken(this.tokens.stop)
+            state.transpileToken(this.tokens.stop, 'stop')
         ];
     }
 
@@ -952,28 +968,51 @@ export class StopStatement extends Statement {
 }
 
 export class ForStatement extends Statement {
-    constructor(
-        public forToken: Token,
-        public counterDeclaration: AssignmentStatement,
-        public toToken: Token,
-        public finalValue: Expression,
-        public body: Block,
-        public endForToken: Token,
-        public stepToken?: Token,
-        public increment?: Expression
-    ) {
+    constructor(options: {
+        forToken?: Token;
+        counterDeclaration: AssignmentStatement;
+        toToken?: Token;
+        finalValue: Expression;
+        body: Block;
+        endForToken?: Token;
+        stepToken?: Token;
+        increment?: Expression;
+    }) {
         super();
+        this.tokens = {
+            for: options.forToken,
+            to: options.toToken,
+            endFor: options.endForToken,
+            step: options.stepToken
+        };
+        this.counterDeclaration = options.counterDeclaration;
+        this.finalValue = options.finalValue;
+        this.body = options.body;
+        this.increment = options.increment;
+
         this.range = util.createBoundingRange(
-            forToken,
-            counterDeclaration,
-            toToken,
-            finalValue,
-            stepToken,
-            increment,
-            body,
-            endForToken
+            this.tokens.for,
+            this.counterDeclaration,
+            this.tokens.to,
+            this.finalValue,
+            this.tokens.step,
+            this.increment,
+            this.body,
+            this.tokens.endFor
         );
     }
+
+    readonly tokens: {
+        for?: Token;
+        to?: Token;
+        endFor?: Token;
+        step?: Token;
+    };
+
+    public counterDeclaration: AssignmentStatement;
+    public finalValue: Expression;
+    public body: Block;
+    public increment?: Expression;
 
     public readonly kind = AstNodeKind.ForStatement;
 
@@ -983,7 +1022,7 @@ export class ForStatement extends Statement {
         let result = [];
         //for
         result.push(
-            state.transpileToken(this.forToken),
+            state.transpileToken(this.tokens.for, 'for'),
             ' '
         );
         //i=1
@@ -993,16 +1032,16 @@ export class ForStatement extends Statement {
         );
         //to
         result.push(
-            state.transpileToken(this.toToken),
+            state.transpileToken(this.tokens.to, 'to'),
             ' '
         );
         //final value
         result.push(this.finalValue.transpile(state));
         //step
-        if (this.stepToken) {
+        if (this.increment) {
             result.push(
                 ' ',
-                state.transpileToken(this.stepToken),
+                state.transpileToken(this.tokens.step, 'step'),
                 ' ',
                 this.increment.transpile(state)
             );
@@ -1018,7 +1057,7 @@ export class ForStatement extends Statement {
         //end for
         result.push(
             state.indent(),
-            state.transpileToken(this.endForToken)
+            state.transpileToken(this.tokens.endFor, 'end for')
         );
 
         return result;
@@ -1039,26 +1078,42 @@ export class ForStatement extends Statement {
 }
 
 export class ForEachStatement extends Statement {
-    constructor(
-        readonly tokens: {
-            forEach: Token;
-            in: Token;
-            endFor: Token;
-        },
-        readonly item: Token,
-        readonly target: Expression,
-        readonly body: Block
-    ) {
+    constructor(options: {
+        forEachToken?: Token;
+        itemToken: Token;
+        inToken?: Token;
+        target: Expression;
+        body: Block;
+        endForToken?: Token;
+    }) {
         super();
+        this.tokens = {
+            forEach: options.forEachToken,
+            item: options.itemToken,
+            in: options.inToken,
+            endFor: options.endForToken
+        };
+        this.body = options.body;
+        this.target = options.target;
+
         this.range = util.createBoundingRange(
-            tokens.forEach,
-            item,
-            tokens.in,
-            target,
-            body,
-            tokens.endFor
+            this.tokens.forEach,
+            this.tokens.item,
+            this.tokens.in,
+            this.target,
+            this.body,
+            this.tokens.endFor
         );
     }
+
+    readonly tokens: {
+        forEach?: Token;
+        item: Token;
+        in?: Token;
+        endFor?: Token;
+    };
+    readonly body: Block;
+    readonly target: Expression;
 
     public readonly kind = AstNodeKind.ForEachStatement;
 
@@ -1068,17 +1123,17 @@ export class ForEachStatement extends Statement {
         let result = [];
         //for each
         result.push(
-            state.transpileToken(this.tokens.forEach),
+            state.transpileToken(this.tokens.forEach, 'for each'),
             ' '
         );
         //item
         result.push(
-            state.transpileToken(this.item),
+            state.transpileToken(this.tokens.item),
             ' '
         );
         //in
         result.push(
-            state.transpileToken(this.tokens.in),
+            state.transpileToken(this.tokens.in, 'in'),
             ' '
         );
         //target
@@ -1094,7 +1149,7 @@ export class ForEachStatement extends Statement {
         //end for
         result.push(
             state.indent(),
-            state.transpileToken(this.tokens.endFor)
+            state.transpileToken(this.tokens.endFor, 'end for')
         );
         return result;
     }

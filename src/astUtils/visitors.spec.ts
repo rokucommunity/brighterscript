@@ -239,7 +239,7 @@ describe('astUtils visitors', () => {
             const block = new Block({
                 statements: [
                     printStatement1,
-                    new ReturnStatement({ return: createToken(TokenKind.Return) })
+                    new ReturnStatement({ returnToken: createToken(TokenKind.Return) })
                 ],
                 startingRange: Range.create(0, 0, 0, 0)
             });

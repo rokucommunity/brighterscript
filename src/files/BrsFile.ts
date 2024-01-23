@@ -532,9 +532,9 @@ export class BrsFile implements BscFile {
             func.body?.walk(createVisitor({
                 ForEachStatement: (stmt) => {
                     scope.variableDeclarations.push({
-                        nameRange: stmt.item.range,
-                        lineIndex: stmt.item.range.start.line,
-                        name: stmt.item.text,
+                        nameRange: stmt.tokens.item.range,
+                        lineIndex: stmt.tokens.item.range.start.line,
+                        name: stmt.tokens.item.text,
                         getType: () => DynamicType.instance //TODO: Infer types from array
                     });
                 },
