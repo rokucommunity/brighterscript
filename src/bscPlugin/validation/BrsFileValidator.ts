@@ -158,8 +158,8 @@ export class BrsFileValidator {
                 node.parent.getSymbolTable().addSymbol(node.exceptionVariable.text, { definingNode: node }, DynamicType.instance, SymbolTypeFlag.runtime);
             },
             DimStatement: (node) => {
-                if (node.identifier) {
-                    node.parent.getSymbolTable().addSymbol(node.identifier.text, { definingNode: node }, DynamicType.instance, SymbolTypeFlag.runtime);
+                if (node.tokens.identifier) {
+                    node.parent.getSymbolTable().addSymbol(node.tokens.identifier.text, { definingNode: node }, node.getType({ flags: SymbolTypeFlag.runtime }), SymbolTypeFlag.runtime);
                 }
             },
             ContinueStatement: (node) => {

@@ -1732,7 +1732,13 @@ export class Parser {
             });
         }
         let rightSquareBracket = this.tryConsume(DiagnosticMessages.missingRightSquareBracketAfterDimIdentifier(), TokenKind.RightSquareBracket);
-        return new DimStatement(dim, identifier, leftSquareBracket, expressions, rightSquareBracket);
+        return new DimStatement({
+            dimToken: dim,
+            identifierToken: identifier,
+            openingSquareToken: leftSquareBracket,
+            dimensions: expressions,
+            closingSquareToken: rightSquareBracket
+        });
     }
 
     private ifStatement(): IfStatement {
@@ -2002,13 +2008,13 @@ export class Parser {
                 throw this.lastDiagnosticAsError();
             }
 
-            const result = new IncrementStatement(expr, operator);
+            const result = new IncrementStatement({ value: expr, operatorToken: operator });
             this._references.expressions.add(result);
             return result;
         }
 
         if (isCallExpression(expr) || isCallfuncExpression(expr)) {
-            return new ExpressionStatement(expr);
+            return new ExpressionStatement({ expression: expr });
         }
 
         //at this point, it's probably an error. However, we recover a little more gracefully by creating an inclosing ExpressionStatement
@@ -2016,7 +2022,7 @@ export class Parser {
             ...DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression(),
             range: expressionStart.range
         });
-        return new ExpressionStatement(expr);
+        return new ExpressionStatement({ expression: expr });
     }
 
     private setStatement(): DottedSetStatement | IndexedSetStatement | ExpressionStatement | IncrementStatement | AssignmentStatement {
@@ -2089,7 +2095,7 @@ export class Parser {
             // TODO: error, expected value
         }
 
-        return new PrintStatement({ print: printKeyword }, values);
+        return new PrintStatement({ printToken: printKeyword, expressions: values });
     }
 
     /**
@@ -2146,8 +2152,8 @@ export class Parser {
      */
     private gotoStatement() {
         let tokens = {
-            goto: this.advance(),
-            label: this.consume(
+            gotoToken: this.advance(),
+            labelToken: this.consume(
                 DiagnosticMessages.expectedLabelIdentifierAfterGotoKeyword(),
                 TokenKind.Identifier
             )
@@ -2460,7 +2466,7 @@ export class Parser {
             // wrap the name in an expression
             const endOfStatementRange = util.createRangeFromPositions(newToken.range.end, this.peek()?.range.end);
             const exprStmt = nameExpr ?? createStringLiteral('', endOfStatementRange);
-            return new ExpressionStatement(exprStmt);
+            return new ExpressionStatement({ expression: exprStmt });
         }
 
         let call = this.finishCall(leftParen, nameExpr);

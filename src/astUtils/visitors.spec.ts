@@ -213,8 +213,9 @@ describe('astUtils visitors', () => {
                 Block: blockHandler
             });
             const printStatement = new PrintStatement({
-                print: createToken(TokenKind.Print)
-            }, []);
+                printToken: createToken(TokenKind.Print),
+                expressions: []
+            });
             const blockStatement = new Block({ statements: [], startingRange: Range.create(0, 0, 0, 0) });
             visitor(printStatement, undefined);
             visitor(blockStatement, undefined);
@@ -228,11 +229,13 @@ describe('astUtils visitors', () => {
     describe('Statement editor', () => {
         it('allows replacing statements', () => {
             const printStatement1 = new PrintStatement({
-                print: createToken(TokenKind.Print)
-            }, []);
+                printToken: createToken(TokenKind.Print),
+                expressions: []
+            });
             const printStatement2 = new PrintStatement({
-                print: createToken(TokenKind.Print)
-            }, []);
+                printToken: createToken(TokenKind.Print),
+                expressions: []
+            });
             const block = new Block({
                 statements: [
                     printStatement1,
@@ -251,12 +254,14 @@ describe('astUtils visitors', () => {
             const editor = new Editor();
 
             const printStatement1 = new PrintStatement({
-                print: createToken(TokenKind.Print)
-            }, []);
+                printToken: createToken(TokenKind.Print),
+                expressions: []
+            });
 
             const printStatement2 = new PrintStatement({
-                print: createToken(TokenKind.Print)
-            }, []);
+                printToken: createToken(TokenKind.Print),
+                expressions: []
+            });
 
             const block = new Block({
                 statements: [printStatement1],
@@ -1088,11 +1093,11 @@ describe('astUtils visitors', () => {
                 PrintStatement: (astNode, parent, owner: Statement[], key) => {
                     printStatementCount++;
                     //add another expression to the list every time. This should result in 1 the first time, 2 the second, 3 the third.
-                    calls.push(new ExpressionStatement(
-                        createCall(
+                    calls.push(new ExpressionStatement({
+                        expression: createCall(
                             createVariableExpression('doSomethingBeforePrint')
                         )
-                    ));
+                    }));
                     owner.splice(key, 0, ...calls);
                 },
                 CallExpression: () => {
