@@ -45,7 +45,7 @@ export class CodeActionsProcessor {
         // eslint-disable-next-line @typescript-eslint/dot-notation
         const importStatements = this.event.file['_cachedLookups'].importStatements;
         //find the position of the first import statement, or the top of the file if there is none
-        const insertPosition = importStatements[importStatements.length - 1]?.importToken.range?.start ?? util.createPosition(0, 0);
+        const insertPosition = importStatements[importStatements.length - 1]?.tokens.import?.range?.start ?? util.createPosition(0, 0);
 
         //find all files that reference this function
         for (const file of files) {

@@ -1531,27 +1531,37 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
 }
 
 export class ImportStatement extends Statement implements TypedefProvider {
-    constructor(
-        readonly importToken: Token,
-        readonly filePathToken: Token
-    ) {
+    constructor(options: {
+        importToken?: Token;
+        filePathToken: Token;
+    }) {
         super();
+        this.tokens = {
+            import: options.importToken,
+            filePath: options.filePathToken
+        };
         this.range = util.createBoundingRange(
-            importToken,
-            filePathToken
+            this.tokens.import,
+            this.tokens.filePath
         );
-        if (this.filePathToken) {
+        if (this.tokens.filePath) {
             //remove quotes
-            this.filePath = this.filePathToken.text.replace(/"/g, '');
+            this.filePath = this.tokens.filePath.text.replace(/"/g, '');
             //adjust the range to exclude the quotes
-            this.filePathToken.range = util.createRange(
-                this.filePathToken.range.start.line,
-                this.filePathToken.range.start.character + 1,
-                this.filePathToken.range.end.line,
-                this.filePathToken.range.end.character - 1
+            this.tokens.filePath.range = util.createRange(
+                this.tokens.filePath.range.start.line,
+                this.tokens.filePath.range.start.character + 1,
+                this.tokens.filePath.range.end.line,
+                this.tokens.filePath.range.end.character - 1
             );
         }
     }
+
+    readonly tokens: {
+        import?: Token;
+        filePath: Token;
+    };
+
     public readonly kind = AstNodeKind.ImportStatement;
 
     public range: Range;
@@ -1563,9 +1573,9 @@ export class ImportStatement extends Statement implements TypedefProvider {
         //add the import statement as a comment just for debugging purposes
         return [
             `'`,
-            state.transpileToken(this.importToken),
+            state.transpileToken(this.tokens.import, 'import'),
             ' ',
-            state.transpileToken(this.filePathToken)
+            state.transpileToken(this.tokens.filePath)
         ];
     }
 
@@ -1574,10 +1584,10 @@ export class ImportStatement extends Statement implements TypedefProvider {
      */
     public getTypedef(state: BrsTranspileState) {
         return [
-            this.importToken.text,
+            this.tokens.import?.text ?? 'import',
             ' ',
             //replace any `.bs` extension with `.brs`
-            this.filePathToken.text.replace(/\.bs"?$/i, '.brs"')
+            this.tokens.filePath.text.replace(/\.bs"?$/i, '.brs"')
         ];
     }
 

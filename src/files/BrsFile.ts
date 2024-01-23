@@ -202,12 +202,12 @@ export class BrsFile implements BscFile {
             const result = [] as FileReference[];
             for (const statement of this._cachedLookups?.importStatements ?? []) {
                 //register import statements
-                if (isImportStatement(statement) && statement.filePathToken) {
+                if (isImportStatement(statement) && statement.tokens.filePath) {
                     result.push({
-                        filePathRange: statement.filePathToken.range,
+                        filePathRange: statement.tokens.filePath.range,
                         destPath: util.getPkgPathFromTarget(this.destPath, statement.filePath),
                         sourceFile: this,
-                        text: statement.filePathToken?.text
+                        text: statement.tokens.filePath.text
                     });
                 }
             }

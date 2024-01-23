@@ -1417,14 +1417,14 @@ export class Parser {
 
     private importStatement() {
         this.warnIfNotBrighterScriptMode('import statements');
-        let importStatement = new ImportStatement(
-            this.advance(),
+        let importStatement = new ImportStatement({
+            importToken: this.advance(),
             //grab the next token only if it's a string
-            this.tryConsume(
+            filePathToken: this.tryConsume(
                 DiagnosticMessages.expectedStringLiteralAfterKeyword('import'),
                 TokenKind.StringLiteral
             )
-        );
+        });
 
         return importStatement;
     }
