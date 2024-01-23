@@ -1,6 +1,8 @@
 import { expect } from '../../../chai-config.spec';
 import { Parser } from '../../Parser';
 import { TryCatchStatement } from '../../Statement';
+import { isFunctionExpression } from '../../../astUtils/reflection';
+import type { FunctionExpression } from '../../..';
 
 describe('parser try/catch', () => {
     it('can parse try catch statements', () => {
@@ -14,7 +16,9 @@ describe('parser try/catch', () => {
             end sub
         `);
         expect(parser.diagnostics[0]?.message).not.to.exist;
-        const stmt = parser.references.functionExpressions[0].body.statements[0] as TryCatchStatement;
+
+        const functionExpressions = parser.ast.findChildren<FunctionExpression>(isFunctionExpression);
+        const stmt = functionExpressions[0].body.statements[0] as TryCatchStatement;
         expect(stmt).to.be.instanceof(TryCatchStatement);
         expect(stmt.tokens.try?.text).to.eql('try');
         expect(stmt.tryBranch).to.exist.and.ownProperty('statements').to.be.lengthOf(1);

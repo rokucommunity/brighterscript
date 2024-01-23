@@ -400,7 +400,7 @@ describe('CompletionsProcessor', () => {
             expect(completions).to.be.lengthOf(2);
         });
 
-        it('get all functions and properties in scope when doing any dotted get on non m ', () => {
+        it('get all functions and properties in scope when doing any dotted get on non m', () => {
             program.setFile('source/main.bs', `
                 sub main()
                     thing.anonPropA = "foo"
@@ -442,7 +442,7 @@ describe('CompletionsProcessor', () => {
             //note - we let the vscode extension do the filtering, so we still return everything; otherwise it exhibits strange behaviour in the IDE
             expect(
                 (program.getCompletions(`${rootDir}/source/main.bs`, Position.create(4, 32))).map(x => x.label).sort()
-            ).to.eql(['anonPropA', 'anonPropB', 'person', 'personAMethodA', 'personAMethodB', 'personAMethodC', 'personAName', 'personBMethodA', 'personBMethodB', 'personBName', 'personName']);
+            ).to.eql(['NameB', 'NameC', 'anonPropA', 'anonPropB', 'person', 'personAMethodA', 'personAMethodB', 'personAMethodC', 'personAName', 'personBMethodA', 'personBMethodB', 'personBName', 'personName']);
         });
 
         it('get all functions and properties relevant for m ', () => {

@@ -291,16 +291,20 @@ export class CompletionsProcessor {
                     gotSymbolsFromGlobal = true;
                 }
             }
+
+            let ignoreAllPropertyNames = false;
+
             // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
             switch (tokenBefore.kind) {
                 case TokenKind.New:
                     //we are after a new keyword; so we can only be namespaces that have a class or classes at this point
                     currentSymbols = currentSymbols.filter(symbol => isClassType(symbol.type) || this.isNamespaceTypeWithMemberType(symbol.type, isClassType));
+                    ignoreAllPropertyNames = true;
                     break;
             }
 
             result.push(...this.getSymbolsCompletion(currentSymbols, shouldLookForMembers || shouldLookForCallFuncMembers));
-            if (shouldLookForMembers && currentSymbols.length === 0) {
+            if (shouldLookForMembers && currentSymbols.length === 0 && !ignoreAllPropertyNames) {
                 // could not find members of actual known types.. just try everything
                 result.push(...this.getPropertyNameCompletions(scope),
                     ...this.getAllClassMemberCompletions(scope).values());
@@ -499,7 +503,8 @@ export class CompletionsProcessor {
         let filesSearched = new Set<BscFile>();
         for (const file of scope.getAllFiles()) {
             if (isBrsFile(file) && !filesSearched.has(file)) {
-                for (let cs of file.parser.references.classStatements) {
+                // eslint-disable-next-line @typescript-eslint/dot-notation
+                for (let cs of file['_cachedLookups'].classStatements) {
                     for (let s of [...cs.methods, ...cs.fields]) {
                         if (!results.has(s.tokens.name.text) && s.tokens.name.text.toLowerCase() !== 'new') {
                             results.set(s.tokens.name.text, {

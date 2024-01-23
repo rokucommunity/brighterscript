@@ -3,8 +3,10 @@ import { Parser } from '../../Parser';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
-import type { ForStatement } from '../../Statement';
+import type { FunctionStatement } from '../../Statement';
+import { type ForStatement } from '../../Statement';
 import { LiteralExpression } from '../../Expression';
+import { isFunctionStatement } from '../../../astUtils/reflection';
 
 describe('parser for loops', () => {
     it('accepts a \'step\' clause', () => {
@@ -58,7 +60,8 @@ describe('parser for loops', () => {
         `);
         expect(parser.diagnostics).to.be.lengthOf(1);
         expect(parser.statements).to.be.lengthOf(1);
-        expect(parser.references.functionStatements[0].func.body.statements).to.be.lengthOf(1);
+        const functionStatements = parser.ast.findChildren<FunctionStatement>(isFunctionStatement);
+        expect(functionStatements[0].func.body.statements).to.be.lengthOf(1);
     });
 
     it('allows \'next\' to terminate loop', () => {

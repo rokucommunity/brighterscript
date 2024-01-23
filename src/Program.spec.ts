@@ -252,9 +252,9 @@ describe('Program', () => {
                 end sub
             `);
             //disable the plugins
-            expect(file.parser.references.expressions).to.be.lengthOf(1);
+            expect(file['_cachedLookups'].expressions).to.be.lengthOf(1);
             program.validate();
-            expect(file.parser.references.expressions).to.be.lengthOf(1);
+            expect(file['_cachedLookups'].expressions).to.be.lengthOf(1);
         });
         it('catches duplicate XML component names', () => {
             //add 2 components which both reference the same errored file
