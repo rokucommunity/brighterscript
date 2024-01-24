@@ -605,7 +605,7 @@ export class IndexedGetExpression extends Expression {
         obj: Expression;
         index: Expression;
         /**
-         * Can either be `[` or `?[`. If `?.[` is used, this will be `[` and `optionalChainingToken` will be `?.`
+         * Can either be `[` or `?[`. If `?.[` is used, this will be `[` and `optionalChainingToken` will be `?.` - defaults to '[' in transpile
          */
         openingSquareToken?: Token;
         closingSquareToken?: Token;
@@ -666,16 +666,25 @@ export class IndexedGetExpression extends Expression {
 }
 
 export class GroupingExpression extends Expression {
-    constructor(
-        readonly tokens: {
-            left: Token;
-            right: Token;
-        },
-        public expression: Expression
-    ) {
+    constructor(options: {
+        leftToken?: Token;
+        rightToken?: Token;
+        expression: Expression;
+    }) {
         super();
+        this.tokens = {
+            right: options.rightToken,
+            left: options.leftToken
+        };
+        this.expression = options.expression;
         this.range = util.createBoundingRange(this.tokens.left, this.expression, this.tokens.right);
     }
+
+    readonly tokens: {
+        left?: Token;
+        right?: Token;
+    };
+    public expression: Expression;
 
     public readonly kind = AstNodeKind.GroupingExpression;
 

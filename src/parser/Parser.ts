@@ -2645,7 +2645,7 @@ export class Parser {
                     DiagnosticMessages.unmatchedLeftParenAfterExpression(),
                     TokenKind.RightParen
                 );
-                return new GroupingExpression({ left: left, right: right }, expr);
+                return new GroupingExpression({ leftToken: left, rightToken: right, expression: expr });
 
             case this.matchAny(TokenKind.LeftSquareBracket):
                 return this.arrayLiteral();
