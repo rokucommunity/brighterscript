@@ -1385,8 +1385,13 @@ export class Program {
     /**
      * Try to find and load the manifest into memory
      * @param manifestFileObj A pointer to a potential manifest file object found during loading
+     * @param replaceIfAlreadyLoaded should we overwrite the internal `_manifest` if it already exists
      */
-    public loadManifest(manifestFileObj?: FileObj) {
+    public loadManifest(manifestFileObj?: FileObj, replaceIfAlreadyLoaded = true) {
+        //if we already have a manifest instance, and should not replace...then don't replace
+        if (!replaceIfAlreadyLoaded && this._manifest) {
+            return;
+        }
         let manifestPath = manifestFileObj
             ? manifestFileObj.src
             : path.join(this.options.rootDir, 'manifest');
