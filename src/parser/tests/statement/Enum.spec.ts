@@ -100,7 +100,7 @@ describe('EnumStatement', () => {
             LiteralExpression,
             LiteralExpression
         ]);
-        expect(values.map(x => x.token.text)).to.eql([
+        expect(values.map(x => x.tokens.value.text)).to.eql([
             '1',
             '2',
             '3',
@@ -126,7 +126,7 @@ describe('EnumStatement', () => {
             LiteralExpression,
             LiteralExpression
         ]);
-        expect(values.map(x => x.token.text)).to.eql([
+        expect(values.map(x => x.tokens.value.text)).to.eql([
             '"u"',
             '"d"',
             '"l"',

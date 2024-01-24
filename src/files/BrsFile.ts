@@ -657,7 +657,7 @@ export class BrsFile implements BscFile {
                             args.push({
                                 range: arg.range,
                                 type: arg.getType(),
-                                text: arg.token.text,
+                                text: arg.tokens.value.text,
                                 expression: arg,
                                 typeToken: undefined
                             });

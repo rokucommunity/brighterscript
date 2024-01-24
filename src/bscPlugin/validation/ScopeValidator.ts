@@ -216,13 +216,18 @@ export class ScopeValidator {
         if (callName !== 'createobject' || !isLiteralExpression(call?.args[0])) {
             return;
         }
-        const firstParamToken = (call?.args[0] as any)?.token;
+        const firstParamToken = (call?.args[0] as any)?.tokens?.value;
         const firstParamStringValue = firstParamToken?.text?.replace(/"/g, '');
+        if (!firstParamStringValue) {
+            return;
+        }
+        const firstParamStringValueLower = firstParamStringValue.toLowerCase();
+
         //if this is a `createObject('roSGNode'` call, only support known sg node types
-        if (firstParamStringValue?.toLowerCase() === 'rosgnode' && isLiteralExpression(call?.args[1])) {
-            const componentName: Token = (call?.args[1] as any)?.token;
+        if (firstParamStringValueLower === 'rosgnode' && isLiteralExpression(call?.args[1])) {
+            const componentName: Token = (call?.args[1] as any)?.tokens.value;
             //don't validate any components with a colon in their name (probably component libraries, but regular components can have them too).
-            if (componentName?.text?.includes(':')) {
+            if (!componentName || componentName?.text?.includes(':')) {
                 return;
             }
             //add diagnostic for unknown components
@@ -241,7 +246,7 @@ export class ScopeValidator {
                     range: call.range
                 });
             }
-        } else if (!platformComponentNames.has(firstParamStringValue.toLowerCase())) {
+        } else if (!platformComponentNames.has(firstParamStringValueLower)) {
             this.addDiagnosticOnce({
                 file: file as BscFile,
                 ...DiagnosticMessages.unknownBrightScriptComponent(firstParamStringValue),
@@ -250,9 +255,9 @@ export class ScopeValidator {
         } else {
             // This is valid brightscript component
             // Test for invalid arg counts
-            const brightScriptComponent: BRSComponentData = components[firstParamStringValue.toLowerCase()];
+            const brightScriptComponent: BRSComponentData = components[firstParamStringValueLower];
             // Valid arg counts for createObject are 1+ number of args for constructor
-            let validArgCounts = brightScriptComponent.constructors.map(cnstr => cnstr.params.length + 1);
+            let validArgCounts = brightScriptComponent?.constructors.map(cnstr => cnstr.params.length + 1);
             if (validArgCounts.length === 0) {
                 // no constructors for this component, so createObject only takes 1 arg
                 validArgCounts = [1];
@@ -267,7 +272,7 @@ export class ScopeValidator {
             }
 
             // Test for deprecation
-            if (brightScriptComponent.isDeprecated) {
+            if (brightScriptComponent?.isDeprecated) {
                 this.addDiagnosticOnce({
                     file: file as BscFile,
                     ...DiagnosticMessages.deprecatedBrightScriptComponent(firstParamStringValue, brightScriptComponent.deprecatedDescription),

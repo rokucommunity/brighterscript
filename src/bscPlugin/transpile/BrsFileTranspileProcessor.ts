@@ -77,11 +77,13 @@ export class BrsFilePreTranspileProcessor {
             const value = result.item.getMemberValue(memberName);
             return {
                 enum: result.item,
-                value: new LiteralExpression(createToken(
-                    //just use float literal for now...it will transpile properly with any literal value
-                    value?.startsWith('"') ? TokenKind.StringLiteral : TokenKind.FloatLiteral,
-                    value
-                ))
+                value: new LiteralExpression({
+                    valueToken: createToken(
+                        //just use float literal for now...it will transpile properly with any literal value
+                        value?.startsWith('"') ? TokenKind.StringLiteral : TokenKind.FloatLiteral,
+                        value
+                    )
+                })
             };
         }
     }

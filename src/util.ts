@@ -1741,7 +1741,7 @@ export class Util {
                     parts.push((nextPart as VariableExpression)?.tokens.name);
                     break loop;
                 case AstNodeKind.LiteralExpression:
-                    parts.push((nextPart as LiteralExpression)?.token as Identifier);
+                    parts.push((nextPart as LiteralExpression)?.tokens.value as Identifier);
                     break loop;
                 case AstNodeKind.IndexedGetExpression:
                     nextPart = (nextPart as IndexedGetExpression).obj;

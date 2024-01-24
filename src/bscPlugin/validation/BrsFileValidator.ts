@@ -202,7 +202,7 @@ export class BrsFileValidator {
     private validateEnumDeclaration(stmt: EnumStatement) {
         const members = stmt.getMembers();
         //the enum data type is based on the first member value
-        const enumValueKind = (members.find(x => x.value)?.value as LiteralExpression)?.token?.kind ?? TokenKind.IntegerLiteral;
+        const enumValueKind = (members.find(x => x.value)?.value as LiteralExpression)?.tokens?.value?.kind ?? TokenKind.IntegerLiteral;
         const memberNames = new Set<string>();
         for (const member of members) {
             const memberNameLower = member.name?.toLowerCase();
@@ -228,10 +228,10 @@ export class BrsFileValidator {
         let memberValueKind: TokenKind;
         let memberValue: Expression;
         if (isUnaryExpression(member.value)) {
-            memberValueKind = (member.value?.right as LiteralExpression)?.token?.kind;
+            memberValueKind = (member.value?.right as LiteralExpression)?.tokens?.value?.kind;
             memberValue = member.value?.right;
         } else {
-            memberValueKind = (member.value as LiteralExpression)?.token?.kind;
+            memberValueKind = (member.value as LiteralExpression)?.tokens?.value?.kind;
             memberValue = member.value;
         }
         const range = (memberValue ?? member)?.range;

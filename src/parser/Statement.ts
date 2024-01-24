@@ -2990,22 +2990,22 @@ export class EnumStatement extends Statement implements TypedefProvider {
                 currentIntValue++;
 
                 //if explicit integer value, use it and increment the int counter
-            } else if (isLiteralExpression(member.value) && member.value.token.kind === TokenKind.IntegerLiteral) {
+            } else if (isLiteralExpression(member.value) && member.value.tokens.value.kind === TokenKind.IntegerLiteral) {
                 //try parsing as integer literal, then as hex integer literal.
-                let tokenIntValue = util.parseInt(member.value.token.text) ?? util.parseInt(member.value.token.text.replace(/&h/i, '0x'));
+                let tokenIntValue = util.parseInt(member.value.tokens.value.text) ?? util.parseInt(member.value.tokens.value.text.replace(/&h/i, '0x'));
                 if (tokenIntValue !== undefined) {
                     currentIntValue = tokenIntValue;
                     currentIntValue++;
                 }
-                result.set(member.name?.toLowerCase(), member.value.token.text);
+                result.set(member.name?.toLowerCase(), member.value.tokens.value.text);
 
                 //simple unary expressions (like `-1`)
             } else if (isUnaryExpression(member.value) && isLiteralExpression(member.value.right)) {
-                result.set(member.name?.toLowerCase(), member.value.operator.text + member.value.right.token.text);
+                result.set(member.name?.toLowerCase(), member.value.operator.text + member.value.right.tokens.value.text);
 
                 //all other values
             } else {
-                result.set(member.name?.toLowerCase(), (member.value as LiteralExpression)?.token?.text ?? 'invalid');
+                result.set(member.name?.toLowerCase(), (member.value as LiteralExpression)?.tokens?.value?.text ?? 'invalid');
             }
         }
         return result;

@@ -130,25 +130,25 @@ export function createStringLiteral(value: string, range?: Range) {
     if (!value.startsWith('"') && !value.endsWith('"')) {
         value = '"' + value + '"';
     }
-    return new LiteralExpression(createToken(TokenKind.StringLiteral, value, range));
+    return new LiteralExpression({ valueToken: createToken(TokenKind.StringLiteral, value, range) });
 }
 export function createIntegerLiteral(value: string, range?: Range) {
-    return new LiteralExpression(createToken(TokenKind.IntegerLiteral, value, range));
+    return new LiteralExpression({ valueToken: createToken(TokenKind.IntegerLiteral, value, range) });
 }
 export function createFloatLiteral(value: string, range?: Range) {
-    return new LiteralExpression(createToken(TokenKind.FloatLiteral, value, range));
+    return new LiteralExpression({ valueToken: createToken(TokenKind.FloatLiteral, value, range) });
 }
 export function createDoubleLiteral(value: string, range?: Range) {
-    return new LiteralExpression(createToken(TokenKind.DoubleLiteral, value, range));
+    return new LiteralExpression({ valueToken: createToken(TokenKind.DoubleLiteral, value, range) });
 }
 export function createLongIntegerLiteral(value: string, range?: Range) {
-    return new LiteralExpression(createToken(TokenKind.LongIntegerLiteral, value, range));
+    return new LiteralExpression({ valueToken: createToken(TokenKind.LongIntegerLiteral, value, range) });
 }
 export function createInvalidLiteral(value?: string, range?: Range) {
-    return new LiteralExpression(createToken(TokenKind.Invalid, value, range));
+    return new LiteralExpression({ valueToken: createToken(TokenKind.Invalid, value, range) });
 }
 export function createBooleanLiteral(value: string, range?: Range) {
-    return new LiteralExpression(createToken(value === 'true' ? TokenKind.True : TokenKind.False, value, range));
+    return new LiteralExpression({ valueToken: createToken(value === 'true' ? TokenKind.True : TokenKind.False, value, range) });
 }
 export function createFunctionExpression(kind: TokenKind.Sub | TokenKind.Function) {
     return new FunctionExpression({

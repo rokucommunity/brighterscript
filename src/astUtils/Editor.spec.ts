@@ -182,7 +182,7 @@ describe('Editor', () => {
             }
         }
         it('overrides existing transpile method', () => {
-            const expression = new LiteralExpression(createToken(TokenKind.IntegerLiteral, 'original'));
+            const expression = new LiteralExpression({ valueToken: createToken(TokenKind.IntegerLiteral, 'original') });
 
             expect(transpileToString(expression)).to.eql('original');
 

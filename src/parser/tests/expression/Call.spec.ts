@@ -103,7 +103,7 @@ describe('parser call expressions', () => {
         expect(setStmt.tokens.name.text).to.equal('bar');
         expect(setStmt.obj.tokens.name.text).to.equal('foo');
         expect(setStmt.obj.obj.tokens.name.text).to.equal('data');
-        expect(setStmt.value.token.text).to.equal('"hello"');
+        expect(setStmt.value.tokens.value.text).to.equal('"hello"');
 
         // 2nd should be: data.foo.func()
         expect(isExpressionStatement(bodyStatements[1])).to.be.true;

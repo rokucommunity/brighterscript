@@ -1522,18 +1522,18 @@ export class Parser {
             if (next.kind === TokenKind.TemplateStringQuasi) {
                 //a quasi can actually be made up of multiple quasis when it includes char literals
                 currentQuasiExpressionParts.push(
-                    new LiteralExpression(next)
+                    new LiteralExpression({ valueToken: next })
                 );
                 this.advance();
             } else if (next.kind === TokenKind.EscapedCharCodeLiteral) {
                 currentQuasiExpressionParts.push(
-                    new EscapedCharCodeLiteralExpression(<any>next)
+                    new EscapedCharCodeLiteralExpression({ valueToken: next as Token & { charCode: number } })
                 );
                 this.advance();
             } else {
                 //finish up the current quasi
                 quasis.push(
-                    new TemplateStringQuasiExpression(currentQuasiExpressionParts)
+                    new TemplateStringQuasiExpression({ expressions: currentQuasiExpressionParts })
                 );
                 currentQuasiExpressionParts = [];
 
@@ -1557,7 +1557,7 @@ export class Parser {
 
         //store the final set of quasis
         quasis.push(
-            new TemplateStringQuasiExpression(currentQuasiExpressionParts)
+            new TemplateStringQuasiExpression({ expressions: currentQuasiExpressionParts })
         );
 
         if (this.isAtEnd()) {
@@ -1571,9 +1571,20 @@ export class Parser {
         } else {
             let closingBacktick = this.advance();
             if (isTagged) {
-                return new TaggedTemplateStringExpression(tagName, openingBacktick, quasis, expressions, closingBacktick);
+                return new TaggedTemplateStringExpression({
+                    tagNameToken: tagName,
+                    openingBacktickToken: openingBacktick,
+                    quasis: quasis,
+                    expressions: expressions,
+                    closingBacktickToken: closingBacktick
+                });
             } else {
-                return new TemplateStringExpression(openingBacktick, quasis, expressions, closingBacktick);
+                return new TemplateStringExpression({
+                    openingBacktickToken: openingBacktick,
+                    quasis: quasis,
+                    expressions: expressions,
+                    closingBacktickToken: closingBacktick
+                });
             }
         }
     }
@@ -2621,7 +2632,7 @@ export class Parser {
                 TokenKind.DoubleLiteral,
                 TokenKind.StringLiteral
             ):
-                return new LiteralExpression(this.previous());
+                return new LiteralExpression({ valueToken: this.previous() });
 
             //capture source literals (LINE_NUM if brightscript, or a bunch of them if brighterscript)
             case this.matchAny(TokenKind.LineNumLiteral, ...(this.options.mode === ParseMode.BrightScript ? [] : BrighterScriptSourceLiterals)):

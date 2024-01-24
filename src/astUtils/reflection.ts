@@ -395,7 +395,7 @@ export function isNativeType(value: any): value is IntegerType | LongIntegerType
 // Literal reflection
 
 export function isLiteralInvalid(value: any): value is LiteralExpression & { type: InvalidType } {
-    return isLiteralExpression(value) && value.token.kind === TokenKind.Invalid;
+    return isLiteralExpression(value) && value.tokens.value.kind === TokenKind.Invalid;
 }
 export function isLiteralBoolean(value: any): value is LiteralExpression & { type: BooleanType } {
     return isLiteralExpression(value) && isBooleanType(value.getType());

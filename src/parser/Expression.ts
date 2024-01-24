@@ -713,35 +713,43 @@ export class GroupingExpression extends Expression {
 }
 
 export class LiteralExpression extends Expression {
-    constructor(
-        public token: Token
-    ) {
+    constructor(options: {
+        valueToken: Token;
+    }) {
         super();
+        this.tokens = {
+            value: options.valueToken
+        };
     }
+
+    public tokens: {
+        value: Token;
+    };
+
     public readonly kind = AstNodeKind.LiteralExpression;
 
     public get range() {
-        return this.token.range;
+        return this.tokens.value.range;
     }
 
     public getType(options?: GetTypeOptions) {
-        return util.tokenToBscType(this.token);
+        return util.tokenToBscType(this.tokens.value);
     }
 
     transpile(state: BrsTranspileState) {
         let text: string;
-        if (this.token.kind === TokenKind.TemplateStringQuasi) {
+        if (this.tokens.value.kind === TokenKind.TemplateStringQuasi) {
             //wrap quasis with quotes (and escape inner quotemarks)
-            text = `"${this.token.text.replace(/"/g, '""')}"`;
+            text = `"${this.tokens.value.text.replace(/"/g, '""')}"`;
 
-        } else if (this.token.kind === TokenKind.StringLiteral) {
-            text = this.token.text;
+        } else if (this.tokens.value.kind === TokenKind.StringLiteral) {
+            text = this.tokens.value.text;
             //add trailing quotemark if it's missing. We will have already generated a diagnostic for this.
             if (text.endsWith('"') === false) {
                 text += '"';
             }
         } else {
-            text = this.token.text;
+            text = this.tokens.value.text;
         }
 
         return [
@@ -759,20 +767,25 @@ export class LiteralExpression extends Expression {
  * during template string transpile by identifying these expressions explicitly and skipping the bslib_toString around them
  */
 export class EscapedCharCodeLiteralExpression extends Expression {
-    constructor(
-        readonly token: Token & { charCode: number }
-    ) {
+    constructor(options: {
+        valueToken: Token & { charCode: number };
+    }) {
         super();
-        this.range = token.range;
+        this.tokens = { value: options.valueToken };
+        this.range = this.tokens.value.range;
     }
 
     public readonly kind = AstNodeKind.EscapedCharCodeLiteralExpression;
+
+    public tokens: {
+        value: Token & { charCode: number };
+    };
 
     readonly range: Range;
 
     transpile(state: BrsTranspileState) {
         return [
-            state.sourceNode(this, `chr(${this.token.charCode})`)
+            state.sourceNode(this, `chr(${this.tokens.value.charCode})`)
         ];
     }
 
@@ -1007,7 +1020,7 @@ export class UnaryExpression extends Expression {
         if (isVariableExpression(this.right)) {
             separatingWhitespace = this.right.tokens.name.leadingWhitespace;
         } else if (isLiteralExpression(this.right)) {
-            separatingWhitespace = this.right.token.leadingWhitespace;
+            separatingWhitespace = this.right.tokens.value.leadingWhitespace;
         } else {
             separatingWhitespace = ' ';
         }
@@ -1343,15 +1356,17 @@ export class CallfuncExpression extends Expression {
  * This is a single expression that represents the string contatenation of all parts of a single quasi.
  */
 export class TemplateStringQuasiExpression extends Expression {
-    constructor(
-        readonly expressions: Array<LiteralExpression | EscapedCharCodeLiteralExpression>
-    ) {
+    constructor(options: {
+        expressions: Array<LiteralExpression | EscapedCharCodeLiteralExpression>;
+    }) {
         super();
+        this.expressions = options.expressions;
         this.range = util.createBoundingRange(
-            ...expressions
+            ...this.expressions
         );
     }
 
+    readonly expressions: Array<LiteralExpression | EscapedCharCodeLiteralExpression>;
     public readonly kind = AstNodeKind.TemplateStringQuasiExpression;
 
     readonly range: Range;
@@ -1362,7 +1377,7 @@ export class TemplateStringQuasiExpression extends Expression {
         for (let expression of this.expressions) {
             //skip empty strings
             //TODO what does an empty string literal expression look like?
-            if (expression.token.text === '' && skipEmptyStrings === true) {
+            if (expression.tokens.value.text === '' && skipEmptyStrings === true) {
                 continue;
             }
             result.push(
@@ -1382,22 +1397,35 @@ export class TemplateStringQuasiExpression extends Expression {
 }
 
 export class TemplateStringExpression extends Expression {
-    constructor(
-        readonly openingBacktick: Token,
-        readonly quasis: TemplateStringQuasiExpression[],
-        readonly expressions: Expression[],
-        readonly closingBacktick: Token
-    ) {
+    constructor(options: {
+        openingBacktickToken?: Token;
+        quasis: TemplateStringQuasiExpression[];
+        expressions: Expression[];
+        closingBacktickToken?: Token;
+    }) {
         super();
+        this.tokens = {
+            openingBacktick: options.openingBacktickToken,
+            closingBacktick: options.closingBacktickToken
+        };
+        this.quasis = options.quasis;
+        this.expressions = options.expressions;
         this.range = util.createBoundingRange(
-            openingBacktick,
-            quasis[0],
-            quasis[quasis.length - 1],
-            closingBacktick
+            this.tokens.openingBacktick,
+            this.quasis[0],
+            this.quasis[this.quasis.length - 1],
+            this.tokens.closingBacktick
         );
     }
 
     public readonly kind = AstNodeKind.TemplateStringExpression;
+
+    readonly tokens: {
+        openingBacktick?: Token;
+        closingBacktick?: Token;
+    };
+    readonly quasis: TemplateStringQuasiExpression[];
+    readonly expressions: Expression[];
 
     public readonly range: Range;
 
@@ -1474,31 +1502,48 @@ export class TemplateStringExpression extends Expression {
 }
 
 export class TaggedTemplateStringExpression extends Expression {
-    constructor(
-        readonly tagName: Identifier,
-        readonly openingBacktick: Token,
-        readonly quasis: TemplateStringQuasiExpression[],
-        readonly expressions: Expression[],
-        readonly closingBacktick: Token
-    ) {
+    constructor(options: {
+        tagNameToken: Identifier;
+        openingBacktickToken?: Token;
+        quasis: TemplateStringQuasiExpression[];
+        expressions: Expression[];
+        closingBacktickToken?: Token;
+    }) {
         super();
+        this.tokens = {
+            tagName: options.tagNameToken,
+            openingBacktick: options.openingBacktickToken,
+            closingBacktick: options.closingBacktickToken
+        };
+        this.quasis = options.quasis;
+        this.expressions = options.expressions;
+
         this.range = util.createBoundingRange(
-            tagName,
-            openingBacktick,
-            quasis[0],
-            quasis[quasis.length - 1],
-            closingBacktick
+            this.tokens.tagName,
+            this.tokens.openingBacktick,
+            this.quasis[0],
+            this.quasis[this.quasis.length - 1],
+            this.tokens.closingBacktick
         );
     }
 
     public readonly kind = AstNodeKind.TaggedTemplateStringExpression;
+
+    public tokens: {
+        tagName: Identifier;
+        openingBacktick?: Token;
+        closingBacktick?: Token;
+    };
+
+    readonly quasis: TemplateStringQuasiExpression[];
+    readonly expressions: Expression[];
 
     public readonly range: Range;
 
     transpile(state: BrsTranspileState) {
         let result = [];
         result.push(
-            state.transpileToken(this.tagName),
+            state.transpileToken(this.tokens.tagName),
             '(['
         );
 
@@ -1532,7 +1577,7 @@ export class TaggedTemplateStringExpression extends Expression {
             );
         }
         result.push(
-            state.sourceNode(this.closingBacktick, '])')
+            state.sourceNode(this.tokens.closingBacktick, '])')
         );
         return result;
     }
@@ -1839,14 +1884,14 @@ function expressionToValue(expr: Expression, strict: boolean): ExpressionValue {
     }
     if (isLiteralString(expr)) {
         //remove leading and trailing quotes
-        return expr.token.text.replace(/^"/, '').replace(/"$/, '');
+        return expr.tokens.value.text.replace(/^"/, '').replace(/"$/, '');
     }
     if (isLiteralNumber(expr)) {
         return numberExpressionToValue(expr);
     }
 
     if (isLiteralBoolean(expr)) {
-        return expr.token.text.toLowerCase() === 'true';
+        return expr.tokens.value.text.toLowerCase() === 'true';
     }
     if (isArrayLiteralExpression(expr)) {
         return expr.elements
@@ -1866,9 +1911,9 @@ function expressionToValue(expr: Expression, strict: boolean): ExpressionValue {
 
 function numberExpressionToValue(expr: LiteralExpression, operator = '') {
     if (isIntegerType(expr.getType()) || isLongIntegerType(expr.getType())) {
-        return parseInt(operator + expr.token.text);
+        return parseInt(operator + expr.tokens.value.text);
     } else {
-        return parseFloat(operator + expr.token.text);
+        return parseFloat(operator + expr.tokens.value.text);
     }
 }
 
