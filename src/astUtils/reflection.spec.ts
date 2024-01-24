@@ -218,7 +218,7 @@ describe('reflection', () => {
         });
         const dottedGet = new DottedGetExpression({ obj: expr, nameToken: ident, dotToken: token });
         const xmlAttrGet = new XmlAttributeGetExpression({ obj: expr, nameToken: ident, atToken: token });
-        const indexedGet = new IndexedGetExpression(expr, expr, token, token);
+        const indexedGet = new IndexedGetExpression({ obj: expr, index: expr, openingSquareToken: token, closingSquareToken: token });
         const grouping = new GroupingExpression({ left: token, right: token }, expr);
         const literal = createStringLiteral('test');
         const escapedCarCode = new EscapedCharCodeLiteralExpression(charCode);

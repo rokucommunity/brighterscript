@@ -601,31 +601,50 @@ export class XmlAttributeGetExpression extends Expression {
 }
 
 export class IndexedGetExpression extends Expression {
-    constructor(
-        public obj: Expression,
-        public index: Expression,
+    constructor(options: {
+        obj: Expression;
+        index: Expression;
         /**
          * Can either be `[` or `?[`. If `?.[` is used, this will be `[` and `optionalChainingToken` will be `?.`
          */
-        public openingSquare: Token,
-        public closingSquare: Token,
-        public questionDotToken?: Token //  ? or ?.
-    ) {
+        openingSquareToken?: Token;
+        closingSquareToken?: Token;
+        questionDotToken?: Token;//  ? or ?.
+    }) {
         super();
-        this.range = util.createBoundingRange(this.obj, this.openingSquare, this.questionDotToken, this.openingSquare, this.index, this.closingSquare);
+        this.tokens = {
+            openingSquare: options.openingSquareToken,
+            closingSquare: options.closingSquareToken,
+            questionDotToken: options.questionDotToken
+        };
+        this.obj = options.obj;
+        this.index = options.index;
+        this.range = util.createBoundingRange(this.obj, this.tokens.openingSquare, this.tokens.questionDotToken, this.tokens.openingSquare, this.index, this.tokens.closingSquare);
     }
 
     public readonly kind = AstNodeKind.IndexedGetExpression;
+
+    public obj: Expression;
+    public index: Expression;
+
+    public tokens: {
+        /**
+         * Can either be `[` or `?[`. If `?.[` is used, this will be `[` and `optionalChainingToken` will be `?.` - defaults to '[' in transpile
+         */
+        openingSquare?: Token;
+        closingSquare?: Token;
+        questionDotToken?: Token; //  ? or ?.
+    };
 
     public readonly range: Range;
 
     transpile(state: BrsTranspileState) {
         return [
             ...this.obj.transpile(state),
-            this.questionDotToken ? state.transpileToken(this.questionDotToken) : '',
-            state.transpileToken(this.openingSquare),
+            this.tokens.questionDotToken ? state.transpileToken(this.tokens.questionDotToken) : '',
+            state.transpileToken(this.tokens.openingSquare, '['),
             ...(this.index?.transpile(state) ?? []),
-            this.closingSquare ? state.transpileToken(this.closingSquare) : ''
+            state.transpileToken(this.tokens.closingSquare, ']')
         ];
     }
 

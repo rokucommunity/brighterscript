@@ -1988,8 +1988,8 @@ export class Parser {
                     value: operator.kind === TokenKind.Equal
                         ? right
                         : new BinaryExpression({ left: left, operatorToken: operator, right: right }),
-                    openingSquareToken: left.openingSquare,
-                    closingSquareToken: left.closingSquare
+                    openingSquareToken: left.tokens.openingSquare,
+                    closingSquareToken: left.tokens.closingSquare
                 });
             } else if (isDottedGetExpression(left)) {
                 return new DottedSetStatement({
@@ -2375,7 +2375,13 @@ export class Parser {
             TokenKind.RightSquareBracket
         );
 
-        return new IndexedGetExpression(expr, index, openingSquare, closingSquare, questionDotToken);
+        return new IndexedGetExpression({
+            obj: expr,
+            index: index,
+            openingSquareToken: openingSquare,
+            closingSquareToken: closingSquare,
+            questionDotToken: questionDotToken
+        });
     }
 
     private newExpression() {

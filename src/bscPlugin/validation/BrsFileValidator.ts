@@ -396,7 +396,7 @@ export class BrsFileValidator {
                 // a?.b = true or a.b?.c = true
                 ((isDottedSetStatement(node) || isDottedGetExpression(node)) && node.tokens.dot?.kind === TokenKind.QuestionDot) ||
                 // a.b?[2] = true
-                (isIndexedGetExpression(node) && (node?.questionDotToken?.kind === TokenKind.QuestionDot || node.openingSquare?.kind === TokenKind.QuestionLeftSquare)) ||
+                (isIndexedGetExpression(node) && (node?.tokens.questionDotToken?.kind === TokenKind.QuestionDot || node.tokens.openingSquare?.kind === TokenKind.QuestionLeftSquare)) ||
                 // a?[1] = true
                 (isIndexedSetStatement(node) && node.tokens.openingSquare?.kind === TokenKind.QuestionLeftSquare)
             ) {
