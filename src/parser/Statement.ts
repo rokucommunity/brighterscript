@@ -159,7 +159,7 @@ export class AssignmentStatement extends Statement {
 
     transpile(state: BrsTranspileState) {
         //if the value is a compound assignment, just transpile the expression itself
-        if (CompoundAssignmentOperators.includes((this.value as BinaryExpression)?.operator?.kind)) {
+        if (CompoundAssignmentOperators.includes((this.value as BinaryExpression)?.tokens?.operator?.kind)) {
             return this.value.transpile(state);
         } else {
             return [
@@ -662,9 +662,9 @@ export interface PrintSeparatorSpace extends Token {
 export class PrintStatement extends Statement {
     /**
      * Creates a new internal representation of a BrightScript `print` statement.
-     * @param tokens the tokens for this statement
-     * @param tokens.print a print token
-     * @param expressions an array of expressions or `PrintSeparator`s to be evaluated and printed.
+     * @param options the options for this statement
+     * @param options.printToken a print token
+     * @param options.expressions an array of expressions or `PrintSeparator`s to be evaluated and printed.
      */
     constructor(options: {
         printToken: Token;
@@ -1270,7 +1270,7 @@ export class DottedSetStatement extends Statement {
 
     transpile(state: BrsTranspileState) {
         //if the value is a compound assignment, don't add the obj, dot, name, or operator...the expression will handle that
-        if (CompoundAssignmentOperators.includes((this.value as BinaryExpression)?.operator?.kind)) {
+        if (CompoundAssignmentOperators.includes((this.value as BinaryExpression)?.tokens?.operator?.kind)) {
             return this.value.transpile(state);
         } else {
             return [
@@ -1340,7 +1340,7 @@ export class IndexedSetStatement extends Statement {
 
     transpile(state: BrsTranspileState) {
         //if the value is a component assignment, don't add the obj, index or operator...the expression will handle that
-        if (CompoundAssignmentOperators.includes((this.value as BinaryExpression)?.operator?.kind)) {
+        if (CompoundAssignmentOperators.includes((this.value as BinaryExpression)?.tokens?.operator?.kind)) {
             return this.value.transpile(state);
         } else {
             return [

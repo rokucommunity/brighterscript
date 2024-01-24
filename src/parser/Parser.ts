@@ -992,7 +992,11 @@ export class Parser {
             result = new AssignmentStatement({
                 equalsToken: operator,
                 nameToken: name,
-                value: new BinaryExpression(nameExpression, operator, value)
+                value: new BinaryExpression({
+                    left: nameExpression,
+                    operatorToken: operator,
+                    right: value
+                })
             });
         }
 
@@ -1983,7 +1987,7 @@ export class Parser {
                     index: left.index,
                     value: operator.kind === TokenKind.Equal
                         ? right
-                        : new BinaryExpression(left, operator, right),
+                        : new BinaryExpression({ left: left, operatorToken: operator, right: right }),
                     openingSquareToken: left.openingSquare,
                     closingSquareToken: left.closingSquare
                 });
@@ -1993,7 +1997,7 @@ export class Parser {
                     nameToken: left.tokens.name,
                     value: operator.kind === TokenKind.Equal
                         ? right
-                        : new BinaryExpression(left, operator, right),
+                        : new BinaryExpression({ left: left, operatorToken: operator, right: right }),
                     dotToken: left.tokens.dot
                 });
             }
@@ -2263,7 +2267,7 @@ export class Parser {
         while (this.matchAny(TokenKind.And, TokenKind.Or)) {
             let operator = this.previous();
             let right = this.relational();
-            expr = new BinaryExpression(expr, operator, right);
+            expr = new BinaryExpression({ left: expr, operatorToken: operator, right: right });
         }
 
         return expr;
@@ -2284,7 +2288,7 @@ export class Parser {
         ) {
             let operator = this.previous();
             let right = this.additive();
-            expr = new BinaryExpression(expr, operator, right);
+            expr = new BinaryExpression({ left: expr, operatorToken: operator, right: right });
         }
 
         return expr;
@@ -2298,7 +2302,7 @@ export class Parser {
         while (this.matchAny(TokenKind.Plus, TokenKind.Minus)) {
             let operator = this.previous();
             let right = this.multiplicative();
-            expr = new BinaryExpression(expr, operator, right);
+            expr = new BinaryExpression({ left: expr, operatorToken: operator, right: right });
         }
 
         return expr;
@@ -2317,7 +2321,7 @@ export class Parser {
         )) {
             let operator = this.previous();
             let right = this.exponential();
-            expr = new BinaryExpression(expr, operator, right);
+            expr = new BinaryExpression({ left: expr, operatorToken: operator, right: right });
         }
 
         return expr;
@@ -2329,7 +2333,7 @@ export class Parser {
         while (this.match(TokenKind.Caret)) {
             let operator = this.previous();
             let right = this.prefixUnary();
-            expr = new BinaryExpression(expr, operator, right);
+            expr = new BinaryExpression({ left: expr, operatorToken: operator, right: right });
         }
 
         return expr;
@@ -2524,7 +2528,7 @@ export class Parser {
                 let operator = this.previous();
                 let right = this.getTypeExpressionPart(changedTokens);
                 if (right) {
-                    expr = new BinaryExpression(expr, operator, right);
+                    expr = new BinaryExpression({ left: expr, operatorToken: operator, right: right });
                 } else {
                     break;
                 }

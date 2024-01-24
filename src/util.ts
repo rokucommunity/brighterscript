@@ -1947,7 +1947,7 @@ export class Util {
         }
         if (isBinaryExpression(expression.parent)) {
             let currentExpr: AstNode = expression.parent;
-            while (isBinaryExpression(currentExpr) && currentExpr.operator.kind === TokenKind.Or) {
+            while (isBinaryExpression(currentExpr) && currentExpr.tokens.operator.kind === TokenKind.Or) {
                 currentExpr = currentExpr.parent;
             }
             return isTypeExpression(currentExpr) || isTypedArrayExpression(currentExpr);

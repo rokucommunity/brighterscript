@@ -33,14 +33,25 @@ import { createToken } from '../astUtils/creators';
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
 export class BinaryExpression extends Expression {
-    constructor(
-        public left: Expression,
-        public operator: Token,
-        public right: Expression
-    ) {
+    constructor(options: {
+        left: Expression;
+        operatorToken: Token;
+        right: Expression;
+    }) {
         super();
-        this.range = util.createRangeFromPositions(this.left.range.start, this.right.range.end);
+        this.tokens = {
+            operator: options.operatorToken
+        };
+        this.left = options.left;
+        this.right = options.right;
+        this.range = util.createBoundingRange(this.left, this.tokens.operator, this.right);
     }
+    public tokens: {
+        operator: Token;
+    };
+
+    public left: Expression;
+    public right: Expression;
 
     public readonly kind = AstNodeKind.BinaryExpression;
 
@@ -50,7 +61,7 @@ export class BinaryExpression extends Expression {
         return [
             state.sourceNode(this.left, this.left.transpile(state)),
             ' ',
-            state.transpileToken(this.operator),
+            state.transpileToken(this.tokens.operator),
             ' ',
             state.sourceNode(this.right, this.right.transpile(state))
         ];
@@ -65,7 +76,7 @@ export class BinaryExpression extends Expression {
 
 
     public getType(options: GetTypeOptions): BscType {
-        const operatorKind = this.operator.kind;
+        const operatorKind = this.tokens.operator.kind;
         if (options.flags & SymbolTypeFlag.typetime) {
             // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
             switch (operatorKind) {
@@ -76,7 +87,7 @@ export class BinaryExpression extends Expression {
         } else if (options.flags & SymbolTypeFlag.runtime) {
             return util.binaryOperatorResultType(
                 this.left.getType(options),
-                this.operator,
+                this.tokens.operator,
                 this.right.getType(options));
         }
         return DynamicType.instance;

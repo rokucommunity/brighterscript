@@ -196,7 +196,7 @@ describe('reflection', () => {
             leadingTrivia: []
         };
 
-        const binary = new BinaryExpression(expr, token, expr);
+        const binary = new BinaryExpression({ left: expr, operatorToken: token, right: expr });
         const call = new CallExpression(expr, token, token, []);
         const fun = new FunctionExpression([], block, token, token, token, token);
         const dottedGet = new DottedGetExpression({ obj: expr, nameToken: ident, dotToken: token });
@@ -219,7 +219,7 @@ describe('reflection', () => {
 
         it('isExpression', () => {
             expect(isExpression(binary)).to.be.true;
-            expect(isExpression(binary.operator as any)).to.be.false;
+            expect(isExpression(binary.tokens.operator as any)).to.be.false;
         });
         it('isBinaryExpression', () => {
             expect(isBinaryExpression(binary)).to.be.true;
