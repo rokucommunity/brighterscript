@@ -1,5 +1,5 @@
 import { createToken } from '../../astUtils/creators';
-import { isBrsFile, isDottedGetExpression, isLiteralExpression, isVariableExpression } from '../../astUtils/reflection';
+import { isBrsFile, isDottedGetExpression, isLiteralExpression, isUnaryExpression, isVariableExpression } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BeforeFileTranspileEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
@@ -25,7 +25,11 @@ export class BrsFilePreTranspileProcessor {
         const scope = this.event.program.getFirstScopeForFile(this.event.file);
         for (let expression of this.event.file.parser.references.expressions) {
             if (expression) {
-                this.processExpression(expression, scope);
+                if (isUnaryExpression(expression)) {
+                    this.processExpression(expression.right, scope);
+                } else {
+                    this.processExpression(expression, scope);
+                }
             }
         }
     }
@@ -34,23 +38,14 @@ export class BrsFilePreTranspileProcessor {
      * Given a string optionally separated by dots, find an enum related to it.
      * For example, all of these would return the enum: `SomeNamespace.SomeEnum.SomeMember`, SomeEnum.SomeMember, `SomeEnum`
      */
-    private getEnumInfo(name: string, containingNamespace: string, scope: Scope) {
-        //look for the enum directly
-        let result = scope?.getEnumFileLink(name, containingNamespace);
+    private getEnumInfo(name: string, containingNamespace: string, scope: Scope | undefined) {
 
-        if (result) {
+        //do we have an enum MEMBER reference? (i.e. SomeEnum.someMember or SomeNamespace.SomeEnum.SomeMember)
+        let memberLink = scope?.getEnumMemberFileLink(name, containingNamespace);
+        if (memberLink) {
+            const value = memberLink.item.getValue();
             return {
-                enum: result.item
-            };
-        }
-        //assume we've been given the enum.member syntax, so pop the member and try again
-        const parts = name.split('.');
-        const memberName = parts.pop();
-        result = scope?.getEnumMap().get(parts.join('.'));
-        if (result) {
-            const value = result.item.getMemberValue(memberName);
-            return {
-                enum: result.item,
+                enum: memberLink.item.parent,
                 value: new LiteralExpression(createToken(
                     //just use float literal for now...it will transpile properly with any literal value
                     value.startsWith('"') ? TokenKind.StringLiteral : TokenKind.FloatLiteral,
@@ -58,9 +53,19 @@ export class BrsFilePreTranspileProcessor {
                 ))
             };
         }
+
+        //do we have an enum reference? (i.e. SomeEnum or SomeNamespace.SomeEnum)
+        let enumLink = scope?.getEnumFileLink(name, containingNamespace);
+
+        if (enumLink) {
+            return {
+                enum: enumLink.item
+            };
+        }
+
     }
 
-    private processExpression(expression: Expression, scope: Scope) {
+    private processExpression(expression: Expression, scope: Scope | undefined) {
         let containingNamespace = this.event.file.getNamespaceStatementForPosition(expression.range.start)?.getName(ParseMode.BrighterScript);
 
         const parts = util.splitExpression(expression);

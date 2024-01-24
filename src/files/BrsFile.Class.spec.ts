@@ -73,6 +73,29 @@ describe('BrsFile BrighterScript classes', () => {
         ]);
     });
 
+    it('allows class named `optional`', () => {
+        program.setFile('source/main.bs', `
+            class optional
+                thing = 1
+            end class
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
+    it('supports optional fields', () => {
+        program.setFile('source/main.bs', `
+            class Movie
+                name as string
+                optional subtitles as string
+                public optional isRepeatEnabled as boolean
+                private optional wasPlayed
+            end class
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
     it('access modifier is option for override', () => {
         let file = program.setFile<BrsFile>({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
             class Animal
@@ -89,7 +112,7 @@ describe('BrsFile BrighterScript classes', () => {
         expectZeroDiagnostics(program);
         let duckClass = file.parser.references.classStatements.find(x => x.name.text.toLowerCase() === 'duck');
         expect(duckClass).to.exist;
-        expect(duckClass.memberMap['move']).to.exist;
+        expect(duckClass!.memberMap['move']).to.exist;
     });
 
     it('supports various namespace configurations', () => {
@@ -848,6 +871,154 @@ describe('BrsFile BrighterScript classes', () => {
                 end function
             `, 'trim', 'source/main.bs');
         });
+
+        it('works with enums as field initial values inside a namespace', () => {
+            testTranspile(`
+                namespace MyNS
+                    class HasEnumKlass
+                        enumValue = MyEnum.A
+                    end class
+                    enum MyEnum
+                        A = "A"
+                        B = "B"
+                    end enum
+                end namespace
+            `, `
+                function __MyNS_HasEnumKlass_builder()
+                    instance = {}
+                    instance.new = sub()
+                        m.enumValue = "A"
+                    end sub
+                    return instance
+                end function
+                function MyNS_HasEnumKlass()
+                    instance = __MyNS_HasEnumKlass_builder()
+                    instance.new()
+                    return instance
+                end function
+            `, 'trim', 'source/main.bs');
+        });
+
+        it('allows enums as super args inside a namespace', () => {
+            testTranspile(`
+                namespace MyNS
+                    class SubKlass extends SuperKlass
+                        sub new()
+                            super(MyEnum.B)
+                        end sub
+                    end class
+                    class SuperKlass
+                        sub new(enumVal)
+                            print enumVal
+                        end sub
+                    end class
+                    enum MyEnum
+                        A = "A"
+                        B = "B"
+                    end enum
+                end namespace
+            `, `
+                function __MyNS_SubKlass_builder()
+                    instance = __MyNS_SuperKlass_builder()
+                    instance.super0_new = instance.new
+                    instance.new = sub()
+                        m.super0_new("B")
+                    end sub
+                    return instance
+                end function
+                function MyNS_SubKlass()
+                    instance = __MyNS_SubKlass_builder()
+                    instance.new()
+                    return instance
+                end function
+                function __MyNS_SuperKlass_builder()
+                    instance = {}
+                    instance.new = sub(enumVal)
+                        print enumVal
+                    end sub
+                    return instance
+                end function
+                function MyNS_SuperKlass(enumVal)
+                    instance = __MyNS_SuperKlass_builder()
+                    instance.new(enumVal)
+                    return instance
+                end function
+            `, 'trim', 'source/main.bs');
+        });
+
+
+        it('works with enums as values referenced in a namespace directly', () => {
+            testTranspile(`
+                namespace MyNS
+                    class HasEnumKlass
+                        myArray = [true, true]
+                        sub new()
+                            m.myArray[MyEnum.A] = true
+                            m.myArray[MyEnum.B] = false
+                        end sub
+                    end class
+                    enum MyEnum
+                        A = 0
+                        B = 1
+                    end enum
+                end namespace
+            `, `
+                function __MyNS_HasEnumKlass_builder()
+                    instance = {}
+                    instance.new = sub()
+                        m.myArray = [
+                            true
+                            true
+                        ]
+                        m.myArray[0] = true
+                        m.myArray[1] = false
+                    end sub
+                    return instance
+                end function
+                function MyNS_HasEnumKlass()
+                    instance = __MyNS_HasEnumKlass_builder()
+                    instance.new()
+                    return instance
+                end function
+            `, 'trim', 'source/main.bs');
+        });
+
+        it('works with enums as values referenced in a namespace with namespace', () => {
+            testTranspile(`
+                namespace MyNS
+                    class HasEnumKlass
+                        myArray = [true, true]
+                        sub new()
+                            m.myArray[MyNS.MyEnum.A] = true
+                            m.myArray[MyNS.MyEnum.B] = false
+                        end sub
+                    end class
+                    enum MyEnum
+                        A = 0
+                        B = 1
+                    end enum
+                end namespace
+            `, `
+                function __MyNS_HasEnumKlass_builder()
+                    instance = {}
+                    instance.new = sub()
+                        m.myArray = [
+                            true
+                            true
+                        ]
+                        m.myArray[0] = true
+                        m.myArray[1] = false
+                    end sub
+                    return instance
+                end function
+                function MyNS_HasEnumKlass()
+                    instance = __MyNS_HasEnumKlass_builder()
+                    instance.new()
+                    return instance
+                end function
+            `, 'trim', 'source/main.bs');
+        });
+
     });
 
     it('detects using `new` keyword on non-classes', () => {
@@ -1523,6 +1694,80 @@ describe('BrsFile BrighterScript classes', () => {
             end class
         `);
         program.validate();
+    });
+
+    it('extending namespaced class transpiles properly', () => {
+        testTranspile(`
+            namespace App
+                class CoreClass
+                    sub new()
+                        print "CoreClass.new()"
+                    end sub
+                end class
+            end namespace
+            namespace App.Logic
+                class FirstClass extends App.CoreClass
+                end class
+                class SecondClass extends FirstClass
+                end class
+            end namespace
+            namespace App.OtherLogic
+                class FinalClass extends App.Logic.SecondClass
+                end class
+            end namespace
+        `, `
+            function __App_CoreClass_builder()
+                instance = {}
+                instance.new = sub()
+                    print "CoreClass.new()"
+                end sub
+                return instance
+            end function
+            function App_CoreClass()
+                instance = __App_CoreClass_builder()
+                instance.new()
+                return instance
+            end function
+            function __App_Logic_FirstClass_builder()
+                instance = __App_CoreClass_builder()
+                instance.super0_new = instance.new
+                instance.new = sub()
+                    m.super0_new()
+                end sub
+                return instance
+            end function
+            function App_Logic_FirstClass()
+                instance = __App_Logic_FirstClass_builder()
+                instance.new()
+                return instance
+            end function
+            function __App_Logic_SecondClass_builder()
+                instance = __App_Logic_FirstClass_builder()
+                instance.super1_new = instance.new
+                instance.new = sub()
+                    m.super1_new()
+                end sub
+                return instance
+            end function
+            function App_Logic_SecondClass()
+                instance = __App_Logic_SecondClass_builder()
+                instance.new()
+                return instance
+            end function
+            function __App_OtherLogic_FinalClass_builder()
+                instance = __App_Logic_SecondClass_builder()
+                instance.super2_new = instance.new
+                instance.new = sub()
+                    m.super2_new()
+                end sub
+                return instance
+            end function
+            function App_OtherLogic_FinalClass()
+                instance = __App_OtherLogic_FinalClass_builder()
+                instance.new()
+                return instance
+            end function
+        `);
     });
 
     it.skip('detects calling class constructors with too many parameters', () => {

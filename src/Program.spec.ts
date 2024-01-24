@@ -21,6 +21,7 @@ import { isBrsFile } from './astUtils/reflection';
 import type { LiteralExpression } from './parser/Expression';
 import type { AstEditor } from './astUtils/AstEditor';
 import { tempDir, rootDir, stagingDir } from './testHelpers.spec';
+import type { BsDiagnostic } from './interfaces';
 
 let sinon = sinonImport.createSandbox();
 
@@ -267,7 +268,7 @@ describe('Program', () => {
                 message: 'message',
                 file: undefined,
                 range: undefined
-            }];
+            }] as any as BsDiagnostic[];
             program.addDiagnostics(expected);
             const actual = (program as any).diagnostics;
             expect(actual).to.deep.equal(expected);
@@ -701,6 +702,92 @@ describe('Program', () => {
             }]);
         });
 
+        it('accepts libpkg .brs script reference', () => {
+            program.setFile('components/component1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="HeroScene" extends="Scene">
+                    <script type="text/brightscript" uri="libpkg:/components/component1.brs" />
+                </component>
+            `);
+            program.setFile('components/component1.brs', '');
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('accepts libpkg .bs script reference', () => {
+            program.setFile('components/component1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="HeroScene" extends="Scene">
+                    <script type="text/brightscript" uri="libpkg:/components/component1.bs" />
+                </component>
+            `);
+            program.setFile('components/component1.bs', '');
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not set function not found diagnostic for function in libpkg referenced script reference', () => {
+            program.setFile('components/component1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="HeroScene" extends="Scene">
+                    <script type="text/brightscript" uri="libpkg:/components/component1.brs" />
+                    <interface>
+                        <function name="isFound"/>
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/component1.brs', `
+                function isFound()
+                end function`
+            );
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not set function not found diagnostic for function in libpkg referenced .bs script reference', () => {
+            program.setFile('components/component1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="HeroScene" extends="Scene">
+                    <script type="text/brightscript" uri="libpkg:/components/component1.bs" />
+                    <interface>
+                        <function name="isFound"/>
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/component1.bs', `
+                function isFound()
+                end function`
+            );
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('sets function not found diagnostic for missing function in libpkg referenced script reference', () => {
+            program.setFile('components/component1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="HeroScene" extends="Scene">
+                    <script type="text/brightscript" uri="libpkg:/components/component1.brs" />
+                    <interface>
+                        <function name="isNotFound"/>
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/component1.brs', `
+                function isFound()
+                end function`
+            );
+
+            program.validate();
+
+            expectDiagnostics(program, [
+                DiagnosticMessages.xmlFunctionNotFound('isNotFound')
+            ]);
+        });
+
         it('adds warning instead of error on mismatched upper/lower case script import', () => {
             program.setFile('components/component1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -720,7 +807,7 @@ describe('Program', () => {
 
     describe('reloadFile', () => {
         it('picks up new files in a scope when an xml file is loaded', () => {
-            program.options.ignoreErrorCodes.push(1013);
+            program.options.ignoreErrorCodes!.push(1013);
             program.setFile('components/component1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="HeroScene" extends="Scene">
@@ -766,7 +853,7 @@ describe('Program', () => {
         });
 
         it('reloads referenced fles when xml file changes', () => {
-            program.options.ignoreErrorCodes.push(1013);
+            program.options.ignoreErrorCodes!.push(1013);
             program.setFile('components/component1.brs', '');
 
             let xmlFile = program.setFile('components/component1.xml', trim`
@@ -1735,19 +1822,19 @@ describe('Program', () => {
     });
 
     it('does not create map by default', async () => {
-        fsExtra.ensureDirSync(program.options.stagingDir);
+        fsExtra.ensureDirSync(program.options.stagingDir!);
         program.setFile('source/main.brs', `
             sub main()
             end sub
         `);
         program.validate();
-        await program.transpile([], program.options.stagingDir);
+        await program.transpile([], program.options.stagingDir!);
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/main.brs`)).is.true;
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/main.brs.map`)).is.false;
     });
 
     it('creates sourcemap for brs and xml files', async () => {
-        fsExtra.ensureDirSync(program.options.stagingDir);
+        fsExtra.ensureDirSync(program.options.stagingDir!);
         program.setFile('source/main.brs', `
             sub main()
             end sub
@@ -1770,27 +1857,27 @@ describe('Program', () => {
             dest: s`components/comp1.xml`
         }];
         program.options.sourceMap = true;
-        await program.transpile(filePaths, program.options.stagingDir);
+        await program.transpile(filePaths, program.options.stagingDir!);
 
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/main.brs.map`)).is.true;
         expect(fsExtra.pathExistsSync(s`${stagingDir}/components/comp1.xml.map`)).is.true;
     });
 
     it('copies the bslib.brs file', async () => {
-        fsExtra.ensureDirSync(program.options.stagingDir);
+        fsExtra.ensureDirSync(program.options.stagingDir!);
         program.validate();
 
-        await program.transpile([], program.options.stagingDir);
+        await program.transpile([], program.options.stagingDir!);
 
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/bslib.brs`)).is.true;
     });
 
     it('copies the bslib.brs file to optionally specified directory', async () => {
-        fsExtra.ensureDirSync(program.options.stagingDir);
+        fsExtra.ensureDirSync(program.options.stagingDir!);
         program.options.bslibDestinationDir = 'source/opt';
         program.validate();
 
-        await program.transpile([], program.options.stagingDir);
+        await program.transpile([], program.options.stagingDir!);
 
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/opt/bslib.brs`)).is.true;
     });
@@ -1873,7 +1960,7 @@ describe('Program', () => {
         }, {
             src: s`${rootDir}/source/main.bs`,
             dest: 'source/main.bs'
-        }], program.options.stagingDir);
+        }], program.options.stagingDir!);
 
         //entries should now be in alphabetic order
         expect(
@@ -1960,7 +2047,7 @@ describe('Program', () => {
                     print "hello world"
                 end sub
             `);
-            let literalExpression: LiteralExpression;
+            let literalExpression: LiteralExpression | undefined;
             //replace all strings with "goodbye world"
             program.plugins.add({
                 name: 'TestPlugin',
@@ -1989,7 +2076,7 @@ describe('Program', () => {
             );
 
             //our literalExpression should have been restored to its original value
-            expect(literalExpression.token.text).to.eql('"hello world"');
+            expect(literalExpression!.token.text).to.eql('"hello world"');
         });
 
         it('handles AstEditor for beforeProgramTranspile', async () => {
@@ -1998,7 +2085,7 @@ describe('Program', () => {
                     print "hello world"
                 end sub
             `);
-            let literalExpression: LiteralExpression;
+            let literalExpression: LiteralExpression | undefined;
             //replace all strings with "goodbye world"
             program.plugins.add({
                 name: 'TestPlugin',
@@ -2025,7 +2112,7 @@ describe('Program', () => {
             );
 
             //our literalExpression should have been restored to its original value
-            expect(literalExpression.token.text).to.eql('"hello world"');
+            expect(literalExpression!.token.text).to.eql('"hello world"');
         });
 
         it('copies bslib.brs when no ropm version was found', async () => {
@@ -2046,7 +2133,7 @@ describe('Program', () => {
                     print SOURCE_LINE_NUM
                 end sub
             `);
-            await program.transpile([], program.options.stagingDir);
+            await program.transpile([], program.options.stagingDir!);
             expect(trimMap(
                 fsExtra.readFileSync(s`${stagingDir}/source/logger.brs`).toString()
             )).to.eql(trim`
@@ -2062,7 +2149,7 @@ describe('Program', () => {
                     print "logInfo"
                 end sub
             `);
-            await program.transpile([], program.options.stagingDir);
+            await program.transpile([], program.options.stagingDir!);
             expect(trimMap(
                 fsExtra.readFileSync(s`${stagingDir}/source/logger.brs`).toString()
             )).to.eql(trim`
@@ -2078,7 +2165,7 @@ describe('Program', () => {
                 <component name="Component1" extends="Scene">
                 </component>
             `);
-            await program.transpile([], program.options.stagingDir);
+            await program.transpile([], program.options.stagingDir!);
             expect(trimMap(
                 fsExtra.readFileSync(s`${stagingDir}/components/Component1.xml`).toString()
             )).to.eql(trim`
@@ -2096,7 +2183,7 @@ describe('Program', () => {
                 <component name="Component1" extends="Scene">
                 </component>
             `);
-            await program.transpile([], program.options.stagingDir);
+            await program.transpile([], program.options.stagingDir!);
             expect(trimMap(
                 fsExtra.readFileSync(s`${stagingDir}/components/Component1.xml`).toString()
             )).to.eql(trim`
@@ -2157,6 +2244,51 @@ describe('Program', () => {
             ).to.eql(
                 s`${sourceRoot}/source/main.bs`
             );
+        });
+
+        it('does not publish files that are empty', async () => {
+            let sourceRoot = s`${tempDir}/sourceRootFolder`;
+            program = new Program({
+                rootDir: rootDir,
+                stagingDir: stagingDir,
+                sourceRoot: sourceRoot,
+                sourceMap: true,
+                pruneEmptyCodeFiles: true
+            });
+            program.setFile('source/types.bs', `
+                enum mainstyle
+                    dark = "dark"
+                    light = "light"
+                end enum
+            `);
+            program.setFile('source/main.bs', `
+                import "pkg:/source/types.bs"
+
+                sub main()
+                    ? "The night is " + mainstyle.dark + " and full of terror"
+                end sub
+            `);
+            await program.transpile([
+                {
+                    src: s`${rootDir}/source/main.bs`,
+                    dest: s`source/main.bs`
+                },
+                {
+                    src: s`${rootDir}/source/types.bs`,
+                    dest: s`source/types.bs`
+                }
+            ], stagingDir);
+
+            expect(trimMap(
+                fsExtra.readFileSync(s`${stagingDir}/source/main.brs`).toString()
+            )).to.eql(trim`
+                'import "pkg:/source/types.bs"
+
+                sub main()
+                    ? "The night is " + "dark" + " and full of terror"
+                end sub
+            `);
+            expect(fsExtra.pathExistsSync(s`${stagingDir}/source/types.brs`)).to.be.false;
         });
     });
 
@@ -2967,7 +3099,7 @@ describe('Program', () => {
         });
     });
 
-    describe('getManifest', () => {
+    describe('manifest', () => {
         beforeEach(() => {
             fsExtra.emptyDirSync(tempDir);
             fsExtra.writeFileSync(`${tempDir}/manifest`, trim`
@@ -2979,9 +3111,9 @@ describe('Program', () => {
                 supports_input_launch=1
                 bs_const=DEBUG=false
             `);
-            program.options = {
+            program.options = util.normalizeConfig({
                 rootDir: tempDir
-            };
+            });
         });
 
         afterEach(() => {
@@ -2989,7 +3121,28 @@ describe('Program', () => {
             program.dispose();
         });
 
-        it('loads the manifest', () => {
+        it('loads the manifest from project root', () => {
+            let manifest = program.getManifest();
+            testCommonManifestValues(manifest);
+            expect(manifest.get('bs_const')).to.equal('DEBUG=false');
+        });
+
+        it('loads the manifest from a FileObj', () => {
+            fsExtra.emptyDirSync(tempDir);
+            fsExtra.ensureDirSync(`${tempDir}/someDeepDir`);
+            fsExtra.writeFileSync(`${tempDir}/someDeepDir/manifest`, trim`
+                # Channel Details
+                title=sample manifest
+                major_version=2
+                minor_version=0
+                build_version=0
+                supports_input_launch=1
+                bs_const=DEBUG=false
+            `);
+            program.loadManifest({
+                src: `${tempDir}/someDeepDir/manifest`,
+                dest: 'manifest'
+            });
             let manifest = program.getManifest();
             testCommonManifestValues(manifest);
             expect(manifest.get('bs_const')).to.equal('DEBUG=false');

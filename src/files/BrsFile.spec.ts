@@ -1,7 +1,7 @@
 import { assert, expect } from '../chai-config.spec';
 import * as sinonImport from 'sinon';
 import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
-import type { Callable, CommentFlag, VariableDeclaration } from '../interfaces';
+import type { BsDiagnostic, Callable, CommentFlag, VariableDeclaration } from '../interfaces';
 import { Program } from '../Program';
 import { BooleanType } from '../types/BooleanType';
 import { DynamicType } from '../types/DynamicType';
@@ -100,6 +100,23 @@ describe('BrsFile', () => {
         }]);
     });
 
+    it('allows namespaces with the name `optional`', () => {
+        program.setFile('source/main.bs', `
+            namespace optional
+                namespace optional
+                end namespace
+            end namespace
+            namespace alpha
+                namespace optional
+                end namespace
+            end namespace
+            namespace alpha.beta.optional
+            end namespace
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
     it('supports the third parameter in CreateObject', () => {
         program.setFile('source/main.brs', `
             sub main()
@@ -139,10 +156,10 @@ describe('BrsFile', () => {
     });
 
     it('allows adding diagnostics', () => {
-        const expected = [{
+        const expected: BsDiagnostic[] = [{
             message: 'message',
-            file: undefined,
-            range: undefined
+            file: undefined as any,
+            range: undefined as any
         }];
         file.addDiagnostics(expected);
         expectDiagnostics(file, expected);
@@ -162,6 +179,66 @@ describe('BrsFile', () => {
             expect(file['getPartialVariableName'](file.parser.tokens[4])).to.equal('ModuleA.ModuleB');
             expect(file['getPartialVariableName'](file.parser.tokens[3])).to.equal('ModuleA.');
             expect(file['getPartialVariableName'](file.parser.tokens[2])).to.equal('ModuleA');
+        });
+    });
+
+    describe('canBePruned', () => {
+        it('returns false is target file has contains a function statement', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    print \`pkg:\`
+                end sub
+            `);
+            const file = program.getFile('source/main.brs');
+            expect(file.canBePruned).to.be.false;
+        });
+
+        it('returns false if target file contains a class statement', () => {
+            program.setFile('source/main.brs', `
+                class Animal
+                    public name as string
+                end class
+            `);
+            const file = program.getFile('source/main.brs');
+            expect(file.canBePruned).to.be.false;
+        });
+
+        it('returns false if target file contains a class statement', () => {
+            program.setFile('source/main.brs', `
+                namespace Vertibrates.Birds
+                    function GetDucks()
+                    end function
+                end namespace
+            `);
+            const file = program.getFile('source/main.brs');
+            expect(file.canBePruned).to.be.false;
+        });
+
+        it('returns true if target file contains only enum', () => {
+            program.setFile('source/main.brs', `
+                enum Direction
+                    up
+                    down
+                    left
+                    right
+                end enum
+            `);
+            const file = program.getFile('source/main.brs');
+            expect(file.canBePruned).to.be.true;
+        });
+
+        it('returns true if target file is empty', () => {
+            program.setFile('source/main.brs', '');
+            const file = program.getFile('source/main.brs');
+            expect(file.canBePruned).to.be.true;
+        });
+
+        it('returns true if target file only has comments', () => {
+            program.setFile('source/main.brs', `
+                ' this is an interesting comment
+            `);
+            const file = program.getFile('source/main.brs');
+            expect(file.canBePruned).to.be.true;
         });
     });
 
@@ -1317,10 +1394,10 @@ describe('BrsFile', () => {
             `);
             expect(file.callables.length).to.equal(2);
             expect(file.callables[0].name).to.equal('DoA');
-            expect(file.callables[0].nameRange.start.line).to.equal(1);
+            expect(file.callables[0].nameRange!.start.line).to.equal(1);
 
             expect(file.callables[1].name).to.equal('DoA');
-            expect(file.callables[1].nameRange.start.line).to.equal(5);
+            expect(file.callables[1].nameRange!.start.line).to.equal(5);
         });
 
         it('finds function call line and column numbers', () => {
@@ -2095,6 +2172,27 @@ describe('BrsFile', () => {
     });
 
     describe('transpile', () => {
+        it('transpilies libpkg:/ paths when encountered', () => {
+            program.setFile('source/lib.bs', `
+                import "libpkg:/source/numbers.bs"
+            `);
+            program.setFile('source/numbers.bs', `
+                sub test()
+                end sub
+            `);
+            testTranspile(`
+                <component name="TestButton" extends="Group">
+                    <script type="text/brightscript" uri="libpkg:/source/lib.bs"/>
+                </component>
+            `, `
+                <component name="TestButton" extends="Group">
+                    <script type="text/brightscript" uri="libpkg:/source/lib.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/numbers.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, undefined, 'components/TestButton.xml');
+        });
+
         it('excludes trailing commas in array literals', () => {
             testTranspile(`
                 sub main()
@@ -2314,7 +2412,7 @@ describe('BrsFile', () => {
             testTranspile(
                 'sub main()\n    name = "john \nend sub',
                 'sub main()\n    name = "john "\nend sub',
-                null,
+                null as any,
                 'source/main.bs',
                 false
             );
@@ -2542,7 +2640,7 @@ describe('BrsFile', () => {
                     person = {}
                     stuff = []
                 end sub
-        `, null, 'trim');
+        `, null as any, 'trim');
         });
 
         it('does not add leading or trailing newlines', () => {
@@ -2595,8 +2693,8 @@ describe('BrsFile', () => {
                         kind: token.kind,
                         start: Position.create(
                             //convert source-map 1-based line to token 0-based line
-                            originalPosition.line - 1,
-                            originalPosition.column
+                            originalPosition.line! - 1,
+                            originalPosition.column!
                         )
                     };
                 });
@@ -3381,7 +3479,7 @@ describe('BrsFile', () => {
             `);
             const parser = file['_parser'];
             //clear the private _parser instance
-            file['_parser'] = undefined;
+            file['_parser'] = undefined as any;
 
             //force the file to get a new instance of parser
             const newParser = file.parser;
@@ -3497,7 +3595,7 @@ describe('BrsFile', () => {
                 end sub
             `);
             program.validate();
-            sinon.stub(util, 'getAllDottedGetParts').returns(null);
+            sinon.stub(util, 'getAllDottedGetParts').returns(null as any);
             // print alpha.be|ta
             expect(program.getDefinition(file.srcPath, Position.create(2, 34))).to.eql([]);
         });

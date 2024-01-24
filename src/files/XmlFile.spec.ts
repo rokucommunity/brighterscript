@@ -59,13 +59,13 @@ describe('XmlFile', () => {
             program.plugins.add({
                 name: 'allows modifying the parsed XML model',
                 afterFileParse: () => {
-                    let child = file.parser.ast.component.children.children[0];
+                    let child = file.parser.ast.component!.children.children[0];
                     expect(child.attributes).to.have.lengthOf(4);
-                    child.setAttribute('text', undefined);
-                    expect(child.getAttribute('id').value.text).to.equal('one');
+                    child.setAttribute('text', undefined as any);
+                    expect(child.getAttribute('id')!.value.text).to.equal('one');
                     expect(child.attributes).to.have.lengthOf(3);
-                    child.setAttribute('text3', undefined);
-                    expect(child.getAttribute('id').value.text).to.equal('one');
+                    child.setAttribute('text3', undefined as any);
+                    expect(child.getAttribute('id')!.value.text).to.equal('one');
                     expect(child.attributes).to.have.lengthOf(2);
                 }
             });
@@ -489,10 +489,10 @@ describe('XmlFile', () => {
     });
 
     it('allows adding diagnostics', () => {
-        const expected = [{
+        const expected: BsDiagnostic[] = [{
             message: 'message',
-            file: undefined,
-            range: undefined
+            file: undefined as any,
+            range: undefined as any
         }];
         file.addDiagnostics(expected);
         expectDiagnostics(file, expected);
@@ -829,7 +829,7 @@ describe('XmlFile', () => {
                     <script uri="SimpleScene.brs" type="text/brightscript" />
                     <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
                 </component>
-            `, null, 'components/comp.xml');
+            `, null as any, 'components/comp.xml');
         });
 
         it('returns the XML unmodified if needsTranspiled is false', () => {
@@ -898,6 +898,92 @@ describe('XmlFile', () => {
             file.needsTranspiled = true;
             const code = file.transpile().code;
             expect(code.endsWith(`<!--//# sourceMappingURL=./SimpleScene.xml.map -->`)).to.be.true;
+        });
+
+        it('removes script imports if given file is not publishable', () => {
+            program.options.pruneEmptyCodeFiles = true;
+            program.setFile(`components/SimpleScene.bs`, `
+                enum simplescenetypes
+                    hero
+                    intro
+                end enum
+            `);
+
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component
+                    name="SimpleScene" extends="Scene"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:noNamespaceSchemaLocation="https://devtools.web.roku.com/schema/RokuSceneGraph.xsd"
+                >
+                    <script type="text/brightscript" uri="SimpleScene.bs"/>
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://devtools.web.roku.com/schema/RokuSceneGraph.xsd">
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/SimpleScene.xml');
+        });
+
+        it('removes extra imports found via dependencies if given file is not publishable', () => {
+            program.options.pruneEmptyCodeFiles = true;
+            program.setFile(`source/simplescenetypes.bs`, `
+                enum SimpleSceneTypes
+                    world = "world"
+                end enum
+            `);
+            program.setFile(`components/SimpleScene.bs`, `
+                import "pkg:/source/simplescenetypes.bs"
+
+                sub init()
+                    ? "Hello " + SimpleSceneTypes.world
+                end sub
+            `);
+
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component
+                    name="SimpleScene" extends="Scene"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:noNamespaceSchemaLocation="https://devtools.web.roku.com/schema/RokuSceneGraph.xsd"
+                >
+                    <script type="text/brightscript" uri="SimpleScene.bs"/>
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://devtools.web.roku.com/schema/RokuSceneGraph.xsd">
+                    <script type="text/brightscript" uri="SimpleScene.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/SimpleScene.xml');
+        });
+
+        it('removes imports of empty brightscript files', () => {
+            program.options.pruneEmptyCodeFiles = true;
+            program.setFile(`components/EmptyFile.brs`, '');
+            program.setFile(`components/SimpleScene.brs`, `
+                sub init()
+                    ? "Hello World"
+                end sub
+            `);
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component
+                    name="SimpleScene" extends="Scene"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:noNamespaceSchemaLocation="https://devtools.web.roku.com/schema/RokuSceneGraph.xsd"
+                >
+                    <script type="text/brightscript" uri="SimpleScene.brs"/>
+                    <script type="text/brightscript" uri="EmptyFile.brs"/>
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://devtools.web.roku.com/schema/RokuSceneGraph.xsd">
+                    <script type="text/brightscript" uri="SimpleScene.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/SimpleScene.xml');
         });
     });
 
@@ -1003,7 +1089,7 @@ describe('XmlFile', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            const scope = program.getComponentScope('ChildComponent');
+            const scope = program.getComponentScope('ChildComponent')!;
             expect([...scope.namespaceLookup.keys()].sort()).to.eql([
                 'lib',
                 'parent'
@@ -1214,7 +1300,7 @@ describe('XmlFile', () => {
                 <component name="comp1">
                 </component>
             `);
-            expect(program.getComponent('comp1').file.pkgPath).to.equal(comp2.pkgPath);
+            expect(program.getComponent('comp1')!.file.pkgPath).to.equal(comp2.pkgPath);
 
             //add comp1. it should become the main component with this name
             const comp1 = program.setFile('components/comp1.xml', trim`
@@ -1222,11 +1308,11 @@ describe('XmlFile', () => {
                 <component name="comp1" extends="Group">
                 </component>
             `);
-            expect(program.getComponent('comp1').file.pkgPath).to.equal(comp1.pkgPath);
+            expect(program.getComponent('comp1')!.file.pkgPath).to.equal(comp1.pkgPath);
 
             //remove comp1, comp2 should be the primary again
             program.removeFile(s`${rootDir}/components/comp1.xml`);
-            expect(program.getComponent('comp1').file.pkgPath).to.equal(comp2.pkgPath);
+            expect(program.getComponent('comp1')!.file.pkgPath).to.equal(comp2.pkgPath);
 
             //add comp3
             program.setFile('components/comp3.xml', trim`
@@ -1235,7 +1321,7 @@ describe('XmlFile', () => {
                 </component>
             `);
             //...the 2nd file should still be main
-            expect(program.getComponent('comp1').file.pkgPath).to.equal(comp2.pkgPath);
+            expect(program.getComponent('comp1')!.file.pkgPath).to.equal(comp2.pkgPath);
         });
     });
 });

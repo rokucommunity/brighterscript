@@ -23,15 +23,15 @@ import type { AstNode, Expression, Statement } from '../parser/AstNode';
 
 // File reflection
 
-export function isBrsFile(file: (BscFile | File)): file is BrsFile {
+export function isBrsFile(file: BscFile | File | undefined): file is BrsFile {
     return file?.constructor.name === 'BrsFile';
 }
 
-export function isXmlFile(file: (BscFile)): file is XmlFile {
+export function isXmlFile(file: BscFile | undefined): file is XmlFile {
     return file?.constructor.name === 'XmlFile';
 }
 
-export function isXmlScope(scope: (Scope)): scope is XmlScope {
+export function isXmlScope(scope: Scope | undefined): scope is XmlScope {
     return scope?.constructor.name === 'XmlScope';
 }
 

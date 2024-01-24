@@ -80,7 +80,7 @@ export class CallExpression extends Expression {
     }
 
     transpile(state: BrsTranspileState, nameOverride?: string) {
-        let result = [];
+        let result: Array<string | SourceNode> = [];
 
         //transpile the name
         if (nameOverride) {
@@ -130,7 +130,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         super();
         if (this.returnTypeToken) {
             this.returnType = util.tokenToBscType(this.returnTypeToken);
-        } else if (this.functionType.text.toLowerCase() === 'sub') {
+        } else if (this.functionType?.text.toLowerCase() === 'sub') {
             this.returnType = new VoidType();
         } else {
             this.returnType = DynamicType.instance;
@@ -829,9 +829,17 @@ export class UnaryExpression extends Expression {
     public readonly range: Range;
 
     transpile(state: BrsTranspileState) {
+        let separatingWhitespace: string;
+        if (isVariableExpression(this.right)) {
+            separatingWhitespace = this.right.name.leadingWhitespace;
+        } else if (isLiteralExpression(this.right)) {
+            separatingWhitespace = this.right.token.leadingWhitespace;
+        } else {
+            separatingWhitespace = ' ';
+        }
         return [
             state.transpileToken(this.operator),
-            ' ',
+            separatingWhitespace,
             ...this.right.transpile(state)
         ];
     }
@@ -1281,14 +1289,17 @@ export class AnnotationExpression extends Expression {
     ) {
         super();
         this.name = nameToken.text;
-        this.range = util.createBoundingRange(
-            atToken,
-            nameToken
+    }
+
+    public get range() {
+        return util.createBoundingRange(
+            this.atToken,
+            this.nameToken,
+            this.call
         );
     }
 
     public name: string;
-    public range: Range;
     public call: CallExpression;
 
     /**

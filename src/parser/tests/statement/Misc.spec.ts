@@ -5,6 +5,7 @@ import { DisallowedLocalIdentifiersText, TokenKind } from '../../../lexer/TokenK
 import { Range } from 'vscode-languageserver';
 import type { AAMemberExpression } from '../../Expression';
 import { expectZeroDiagnostics } from '../../../testHelpers.spec';
+import type { Statement } from '../../AstNode';
 
 describe('parser', () => {
     describe('`end` keyword', () => {
@@ -59,7 +60,7 @@ describe('parser', () => {
     });
 
     it('most reserved words are not allowed as local var identifiers', () => {
-        let statementList = [];
+        let statementList: Statement[][] = [];
         [...DisallowedLocalIdentifiersText].filter(x => x === 'if').forEach((disallowedIdentifier) => {
             //use the lexer to generate tokens because there are many different TokenKind types represented in this list
             let { tokens } = Lexer.scan(`

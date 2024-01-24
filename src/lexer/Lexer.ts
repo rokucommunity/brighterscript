@@ -597,12 +597,6 @@ export class Lexer {
                 let token = this.addToken(TokenKind.EscapedCharCodeLiteral) as Token & { charCode: number };
                 //store the char code
                 token.charCode = '"'.charCodeAt(0);
-
-                //move the location tracking to the next line
-                this.lineEnd++;
-                this.lineBegin = this.lineEnd;
-                this.columnEnd = 0;
-                this.columnBegin = this.columnEnd;
                 continue;
             }
 
@@ -616,7 +610,7 @@ export class Lexer {
                     this.scanToken();
                 }
                 if (this.check('}')) {
-                    this.current++;
+                    this.advance();
                     this.addToken(TokenKind.TemplateStringExpressionEnd);
                 } else {
 

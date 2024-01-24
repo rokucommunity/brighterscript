@@ -89,9 +89,9 @@ describe('BusyStatusTracker', () => {
         try {
             tracker.run((finalize) => {
                 expect(latestStatus).to.eql(BusyStatus.busy);
-                finalize();
+                finalize?.();
                 expect(latestStatus).to.eql(BusyStatus.idle);
-                finalize();
+                finalize?.();
                 expect(latestStatus).to.eql(BusyStatus.idle);
             });
         } catch { }
@@ -125,7 +125,7 @@ describe('BusyStatusTracker', () => {
     });
 
     it('supports unsubscribing from events', () => {
-        const changes = []; //contains every busy/idle status change
+        const changes: BusyStatus[] = []; //contains every busy/idle status change
         const disconnect = tracker.on('change', (status) => changes.push(status));
 
         expect(changes.length).to.eql(0);

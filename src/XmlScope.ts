@@ -27,7 +27,7 @@ export class XmlScope extends Scope {
      */
     public getParentScope() {
         return this.cache.getOrAdd('parentScope', () => {
-            let scope: Scope;
+            let scope: Scope | undefined;
             let parentComponentName = this.xmlFile.parentComponentName?.text;
             if (parentComponentName) {
                 scope = this.program.getComponentScope(parentComponentName);
@@ -35,7 +35,7 @@ export class XmlScope extends Scope {
             if (scope) {
                 return scope;
             } else {
-                return this.program.globalScope;
+                return this.program.globalScope ?? null;
             }
         });
     }
@@ -64,14 +64,14 @@ export class XmlScope extends Scope {
             } else if (!callableContainerMap.has(name.toLowerCase())) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.xmlFunctionNotFound(name),
-                    range: fun.getAttribute('name').value.range,
+                    range: fun.getAttribute('name')?.value.range,
                     file: this.xmlFile
                 });
             }
         }
         //validate fields
         for (const field of api.fields) {
-            const { id, type } = field;
+            const { id, type, onChange } = field;
             if (!id) {
                 this.diagnosticMissingAttribute(field, 'id');
             }
@@ -82,9 +82,18 @@ export class XmlScope extends Scope {
             } else if (!SGFieldTypes.includes(type.toLowerCase())) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.xmlInvalidFieldType(type),
-                    range: field.getAttribute('type').value.range,
+                    range: field.getAttribute('type')?.value.range,
                     file: this.xmlFile
                 });
+            }
+            if (onChange) {
+                if (!callableContainerMap.has(onChange.toLowerCase())) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.xmlFunctionNotFound(onChange),
+                        range: field.getAttribute('onchange')?.value.range,
+                        file: this.xmlFile
+                    });
+                }
             }
         }
     }

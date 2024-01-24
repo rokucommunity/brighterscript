@@ -46,7 +46,7 @@ describe('EnumStatement', () => {
         `, { mode: ParseMode.BrighterScript });
 
         expectZeroDiagnostics(parser);
-        expect(parser.ast.statements[0].annotations[0].name).to.eql('someAnnotation');
+        expect(parser.ast.statements[0].annotations![0].name).to.eql('someAnnotation');
     });
 
     it('constructs when missing enum name', () => {
@@ -202,6 +202,15 @@ describe('EnumStatement', () => {
     });
 
     describe('validation', () => {
+        it('allows enums named `optional`', () => {
+            program.setFile('source/main.bs', `
+                enum optional
+                    thing = 1
+                end enum
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
 
         it('catches duplicate enums from same file', () => {
             program.setFile('source/main.bs', `
@@ -438,7 +447,7 @@ describe('EnumStatement', () => {
         function expectMemberValueMap(code: string, expected: Record<string, string>) {
             const file = program.setFile<BrsFile>('source/lib.brs', code);
             const cancel = new CancellationTokenSource();
-            let firstEnum: EnumStatement;
+            let firstEnum: EnumStatement | undefined;
             file.ast.walk(statement => {
                 if (isEnumStatement(statement)) {
                     firstEnum = statement;
@@ -449,7 +458,7 @@ describe('EnumStatement', () => {
                 cancel: cancel.token
             });
             expect(firstEnum).to.exist;
-            const values = firstEnum.getMemberValueMap();
+            const values = firstEnum!.getMemberValueMap();
             expect(
                 [...values].reduce((prev, [key, value]) => {
                     prev[key] = value;
@@ -510,6 +519,24 @@ describe('EnumStatement', () => {
     });
 
     describe('transpile', () => {
+        it('supports non-namespaced enum from within a namespace', () => {
+            program.options.autoImportComponentScript = true;
+            testTranspile(`
+                namespace alpha
+                    sub test()
+                        print Direction.up
+                    end sub
+                end namespace
+                enum Direction
+                    up = "up"
+                end enum
+            `, `
+                sub alpha_test()
+                    print "up"
+                end sub
+            `);
+        });
+
         it('transpiles negative number', () => {
             testTranspile(`
                 sub main()
@@ -933,107 +960,139 @@ describe('EnumStatement', () => {
                 kind: CompletionItemKind.Enum
             }]);
         });
+    });
 
-        it('handles both sides of a logical expression', () => {
-            testTranspile(`
-                sub main()
-                    dir = m.direction = Direction.up
-                    dir = Direction.up = m.direction
-                end sub
-                enum Direction
-                    up = "up"
-                    down = "down"
-                end enum
-            `, `
-                sub main()
-                    dir = m.direction = "up"
-                    dir = "up" = m.direction
-                end sub
-            `);
-        });
+    it('transpiles simple enum in a unary expression', () => {
+        testTranspile(`
+            enum SomeEnum
+                foo = 1
+            end enum
+            sub main()
+                bar = -SomeEnum.foo
+            end sub
+        `, `
+            sub main()
+                bar = - 1
+            end sub
+        `, undefined, 'source/main.bs');
+    });
 
-        it('handles when found in boolean expressions', () => {
-            testTranspile(`
-                sub main()
-                    result = Direction.up = "up" or Direction.down = "down" and Direction.up = Direction.down
-                end sub
-                enum Direction
-                    up = "up"
-                    down = "down"
+    it('transpiles comples enum in a unary expression', () => {
+        testTranspile(`
+            namespace name.space
+                enum SomeEnum
+                    foo = 1
                 end enum
-            `, `
-                sub main()
-                    result = "up" = "up" or "down" = "down" and "up" = "down"
-                end sub
-            `);
-        });
+            end namespace
+            sub main()
+                bar = -name.space.SomeEnum.foo
+            end sub
+        `, `
+            sub main()
+                bar = - 1
+            end sub
+        `, undefined, 'source/main.bs');
+    });
 
-        it('replaces enum values in if statements', () => {
-            testTranspile(`
-                sub main()
-                    if m.direction = Direction.up
-                        print Direction.up
-                    end if
-                end sub
-                enum Direction
-                    up = "up"
-                    down = "down"
-                end enum
-            `, `
-                sub main()
-                    if m.direction = "up"
-                        print "up"
-                    end if
-                end sub
-            `);
-        });
+    it('handles both sides of a logical expression', () => {
+        testTranspile(`
+            sub main()
+                dir = m.direction = Direction.up
+                dir = Direction.up = m.direction
+            end sub
+            enum Direction
+                up = "up"
+                down = "down"
+            end enum
+        `, `
+            sub main()
+                dir = m.direction = "up"
+                dir = "up" = m.direction
+            end sub
+        `);
+    });
 
-        it('replaces enum values in function default parameter value expressions', () => {
-            testTranspile(`
-                sub speak(dir = Direction.up)
-                end sub
-                enum Direction
-                    up = "up"
-                end enum
-            `, `
-                sub speak(dir = "up")
-                end sub
-            `);
-        });
+    it('handles when found in boolean expressions', () => {
+        testTranspile(`
+            sub main()
+                result = Direction.up = "up" or Direction.down = "down" and Direction.up = Direction.down
+            end sub
+            enum Direction
+                up = "up"
+                down = "down"
+            end enum
+        `, `
+            sub main()
+                result = "up" = "up" or "down" = "down" and "up" = "down"
+            end sub
+        `);
+    });
 
-        it('replaces enum values in for loops', () => {
-            testTranspile(`
-                sub main()
-                    for i = Loop.start to Loop.end step Loop.step
-                    end for
-                end sub
-                enum Loop
-                    start = 0
-                    end = 10
-                    step = 1
-                end enum
-            `, `
-                sub main()
-                    for i = 0 to 10 step 1
-                    end for
-                end sub
-            `);
-        });
+    it('replaces enum values in if statements', () => {
+        testTranspile(`
+            sub main()
+                if m.direction = Direction.up
+                    print Direction.up
+                end if
+            end sub
+            enum Direction
+                up = "up"
+                down = "down"
+            end enum
+        `, `
+            sub main()
+                if m.direction = "up"
+                    print "up"
+                end if
+            end sub
+        `);
+    });
 
-        it('transpiles enum values when used in complex expressions', () => {
-            testTranspile(`
-                sub main()
-                    print Direction.up.toStr()
-                end sub
-                enum Direction
-                    up = "up"
-                    down = "down"
-                end enum
-            `, `
-                sub main()
-                    print "up".toStr()
-                end sub
-            `);
-        });
+    it('replaces enum values in function default parameter value expressions', () => {
+        testTranspile(`
+            sub speak(dir = Direction.up)
+            end sub
+            enum Direction
+                up = "up"
+            end enum
+        `, `
+            sub speak(dir = "up")
+            end sub
+        `);
+    });
+
+    it('replaces enum values in for loops', () => {
+        testTranspile(`
+            sub main()
+                for i = Loop.start to Loop.end step Loop.step
+                end for
+            end sub
+            enum Loop
+                start = 0
+                end = 10
+                step = 1
+            end enum
+        `, `
+            sub main()
+                for i = 0 to 10 step 1
+                end for
+            end sub
+        `);
+    });
+
+    it('transpiles enum values when used in complex expressions', () => {
+        testTranspile(`
+            sub main()
+                print Direction.up.toStr()
+            end sub
+            enum Direction
+                up = "up"
+                down = "down"
+            end enum
+        `, `
+            sub main()
+                print "up".toStr()
+            end sub
+        `);
     });
 });

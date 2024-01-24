@@ -181,7 +181,6 @@ export class Scope {
             let member = enumeration.item.findChild<EnumMemberStatement>((child) => isEnumMemberStatement(child) && child.name?.toLowerCase() === memberName);
             return member ? { item: member, file: enumeration.file } : undefined;
         }
-        return enumeration;
     }
 
     /**
@@ -370,8 +369,8 @@ export class Scope {
      * XmlScope overrides this to return the parent xml scope if available.
      * For globalScope this will return null.
      */
-    public getParentScope() {
-        let scope: Scope;
+    public getParentScope(): Scope | null {
+        let scope: Scope | undefined;
         //use the global scope if we didn't find a sope and this is not the global scope
         if (this.program.globalScope !== this) {
             scope = this.program.globalScope;
@@ -918,8 +917,8 @@ export class Scope {
     }
 
     private validateClasses() {
-        let validator = new BsClassValidator();
-        validator.validate(this);
+        let validator = new BsClassValidator(this);
+        validator.validate();
         this.diagnostics.push(...validator.diagnostics);
     }
 
@@ -1262,7 +1261,7 @@ export class Scope {
     }
 }
 
-interface NamespaceContainer {
+export interface NamespaceContainer {
     file: BscFile;
     fullName: string;
     nameRange: Range;

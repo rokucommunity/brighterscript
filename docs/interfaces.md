@@ -92,3 +92,44 @@ end interface
 
 ```
 </details>
+
+</details>
+
+## Methods
+Interfaces can describe complex methods as well
+```brighterscript
+interface Dog
+    sub barkAt(nemesis as Cat)
+end interface
+```
+
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+
+```BrightScript
+
+```
+</details>
+
+## Optional members
+
+Interfaces can include optional members. Optional members are denoted with the keyword `optional` before the name of fields, or before the `function` or `sub` keyword for methods. Interfaces with optional members will not incur a validation diagnostic if an object that is missing that member is passed to it, yet optional members will be included in completion results, and if referenced, they are inferred to be their declared type.
+
+```brighterscript
+interface Video
+    url as string
+    length as float
+    optional subtitleUrl as string
+    optional rating as string
+    optional genre as string
+end interface
+```
+
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+
+```BrightScript
+
+```
+
+</details>

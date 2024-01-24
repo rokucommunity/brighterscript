@@ -128,15 +128,15 @@ result = (function(__bsCondition, m)
         if __bsCondition then
             return m.increment()
         else
-            return - 1
+            return -1
         end if
     end function)(((function(__bsCondition, m)
             if __bsCondition then
                 return m.increment()
             else
-                return - 1
+                return -1
             end if
-        end function)(m.increment() = 1, m)) = - 1, m)
+        end function)(m.increment() = 1, m)) = -1, m)
 ```
 
 
