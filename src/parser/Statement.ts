@@ -3261,18 +3261,26 @@ export class ConstStatement extends Statement implements TypedefProvider {
 }
 
 export class ContinueStatement extends Statement {
-    constructor(
-        public tokens: {
-            continue: Token;
-            loopType: Token;
-        }
+    constructor(options: {
+        continueToken?: Token;
+        loopTypeToken: Token;
+    }
     ) {
         super();
+        this.tokens = {
+            continue: options.continueToken,
+            loopType: options.loopTypeToken
+        };
         this.range = util.createBoundingRange(
-            tokens.continue,
-            tokens.loopType
+            this.tokens.continue,
+            this.tokens.loopType
         );
     }
+
+    public tokens: {
+        continue?: Token;
+        loopType: Token;
+    };
 
     public readonly kind = AstNodeKind.ContinueStatement;
 

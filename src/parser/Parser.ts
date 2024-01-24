@@ -2076,8 +2076,8 @@ export class Parser {
      */
     private continueStatement() {
         return new ContinueStatement({
-            continue: this.advance(),
-            loopType: this.tryConsume(
+            continueToken: this.advance(),
+            loopTypeToken: this.tryConsume(
                 DiagnosticMessages.expectedToken(TokenKind.While, TokenKind.For),
                 TokenKind.While, TokenKind.For
             )
