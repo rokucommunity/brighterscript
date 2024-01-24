@@ -3178,17 +3178,28 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
 }
 
 export class ConstStatement extends Statement implements TypedefProvider {
-    public constructor(
-        public tokens: {
-            const: Token;
-            name: Identifier;
-            equals: Token;
-        },
-        public value: Expression
-    ) {
+    public constructor(options: {
+        constToken?: Token;
+        nameToken: Identifier;
+        equalsToken?: Token;
+        value: Expression;
+    }) {
         super();
+        this.tokens = {
+            const: options.constToken,
+            name: options.nameToken,
+            equals: options.equalsToken
+        };
+        this.value = options.value;
         this.range = util.createBoundingRange(this.tokens.const, this.tokens.name, this.tokens.equals, this.value);
     }
+
+    public tokens: {
+        const: Token;
+        name: Identifier;
+        equals: Token;
+    };
+    public value: Expression;
 
     public readonly kind = AstNodeKind.ConstStatement;
 
@@ -3228,11 +3239,11 @@ export class ConstStatement extends Statement implements TypedefProvider {
 
     getTypedef(state: BrsTranspileState): (string | SourceNode)[] {
         return [
-            state.tokenToSourceNode(this.tokens.const),
+            this.tokens.const ? state.tokenToSourceNode(this.tokens.const) : 'const',
             ' ',
             state.tokenToSourceNode(this.tokens.name),
             ' ',
-            state.tokenToSourceNode(this.tokens.equals),
+            this.tokens.equals ? state.tokenToSourceNode(this.tokens.equals) : '=',
             ' ',
             ...this.value.transpile(state)
         ];

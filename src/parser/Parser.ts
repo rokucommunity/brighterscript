@@ -1395,10 +1395,11 @@ export class Parser {
         const equalToken = this.consumeToken(TokenKind.Equal);
         const expression = this.expression();
         const statement = new ConstStatement({
-            const: constToken,
-            name: nameToken,
-            equals: equalToken
-        }, expression);
+            constToken: constToken,
+            nameToken: nameToken,
+            equalsToken: equalToken,
+            value: expression
+        });
         return statement;
     }
 
