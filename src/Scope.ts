@@ -913,15 +913,15 @@ export class Scope {
         //find all function parameters
         for (let func of file['_cachedLookups'].functionExpressions) {
             for (let param of func.parameters) {
-                let lowerParamName = param.name.text.toLowerCase();
+                let lowerParamName = param.tokens.name.text.toLowerCase();
                 let namespace = this.getNamespace(lowerParamName, param.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript).toLowerCase());
                 //see if the param matches any starting namespace part
                 if (namespace) {
                     this.diagnostics.push({
                         origin: DiagnosticOrigin.Scope,
                         file: file,
-                        ...DiagnosticMessages.parameterMayNotHaveSameNameAsNamespace(param.name.text),
-                        range: param.name.range,
+                        ...DiagnosticMessages.parameterMayNotHaveSameNameAsNamespace(param.tokens.name.text),
+                        range: param.tokens.name.range,
                         relatedInformation: [{
                             message: 'Namespace declared here',
                             location: util.createLocation(

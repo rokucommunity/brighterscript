@@ -863,7 +863,7 @@ export class Parser {
             params.reduce((haveFoundOptional: boolean, param: FunctionParameterExpression) => {
                 if (haveFoundOptional && !param.defaultValue) {
                     this.diagnostics.push({
-                        ...DiagnosticMessages.requiredParameterMayNotFollowOptionalParameter(param.name.text),
+                        ...DiagnosticMessages.requiredParameterMayNotFollowOptionalParameter(param.tokens.name.text),
                         range: param.range
                     });
                 }
@@ -960,13 +960,13 @@ export class Parser {
             [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
 
         }
-        return new FunctionParameterExpression(
-            name,
-            equalToken,
-            defaultValue,
-            asToken,
-            typeExpression
-        );
+        return new FunctionParameterExpression({
+            nameToken: name,
+            equalToken: equalToken,
+            defaultValue: defaultValue,
+            asToken: asToken,
+            typeExpression: typeExpression
+        });
     }
 
     private assignment(): AssignmentStatement {

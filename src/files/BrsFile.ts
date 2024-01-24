@@ -514,9 +514,9 @@ export class BrsFile implements BscFile {
             //add every parameter
             for (let param of func.parameters) {
                 scope.variableDeclarations.push({
-                    nameRange: param.name.range,
-                    lineIndex: param.name.range.start.line,
-                    name: param.name.text,
+                    nameRange: param.tokens.name.range,
+                    lineIndex: param.tokens.name.range.start.line,
+                    name: param.tokens.name.text,
                     getType: () => {
                         return param.getType({ flags: SymbolTypeFlag.typetime });
                     }
@@ -596,7 +596,7 @@ export class BrsFile implements BscFile {
                     const paramType = param.getType({ flags: SymbolTypeFlag.typetime });
 
                     let callableParam = {
-                        name: param.name?.text,
+                        name: param.tokens.name?.text,
                         type: paramType,
                         isOptional: !!param.defaultValue,
                         isRestArgument: false

@@ -1966,7 +1966,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
                 result.push(', ');
             }
             const param = params[i];
-            result.push(param.name.text);
+            result.push(param.tokens.name.text);
             if (param.typeExpression) {
                 result.push(
                     ' as ',
@@ -1998,7 +1998,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         const resultType = new TypedFunctionType(returnType);
         resultType.isSub = isSub;
         for (let param of this.params) {
-            resultType.addParameter(param.name.text, param.getType(options), !!param.defaultValue);
+            resultType.addParameter(param.tokens.name.text, param.getType(options), !!param.defaultValue);
         }
         if (options.typeChain) {
             // need Interface type for type chain
@@ -2394,7 +2394,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
                 result.push(', ');
             }
             result.push(
-                state.transpileToken(param.name)
+                state.transpileToken(param.tokens.name)
             );
             i++;
         }

@@ -144,7 +144,7 @@ export class BrsFileValidator {
                 }
             },
             FunctionParameterExpression: (node) => {
-                const paramName = node.name?.text;
+                const paramName = node.tokens.name?.text;
                 const symbolTable = node.findAncestor<FunctionExpression>(isFunctionExpression)?.body.getSymbolTable();
                 const nodeType = node.getType({ flags: SymbolTypeFlag.typetime });
                 symbolTable?.addSymbol(paramName, { definingNode: node }, nodeType, SymbolTypeFlag.runtime);

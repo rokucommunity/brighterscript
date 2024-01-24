@@ -1747,7 +1747,7 @@ export class Util {
                     nextPart = (nextPart as IndexedGetExpression).obj;
                     continue;
                 case AstNodeKind.FunctionParameterExpression:
-                    return [(nextPart as FunctionParameterExpression).name];
+                    return [(nextPart as FunctionParameterExpression).tokens.name];
                 case AstNodeKind.GroupingExpression:
                     parts.push(createIdentifier('()', nextPart.range));
                     break loop;

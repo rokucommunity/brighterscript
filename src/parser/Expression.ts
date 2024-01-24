@@ -373,7 +373,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         const resultType = new TypedFunctionType(returnType);
         resultType.isSub = isSub;
         for (let param of this.parameters) {
-            resultType.addParameter(param.name.text, param.getType({ ...options, typeChain: undefined }), !!param.defaultValue);
+            resultType.addParameter(param.tokens.name.text, param.getType({ ...options, typeChain: undefined }), !!param.defaultValue);
         }
         // Figure out this function's name if we can
         let funcName = '';
@@ -395,31 +395,48 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 }
 
 export class FunctionParameterExpression extends Expression {
-    constructor(
-        public name: Identifier,
-        public equalToken?: Token,
-        public defaultValue?: Expression,
-        public asToken?: Token,
-        public typeExpression?: TypeExpression
-    ) {
+    constructor(options: {
+        nameToken: Identifier;
+        equalToken?: Token;
+        defaultValue?: Expression;
+        asToken?: Token;
+        typeExpression?: TypeExpression;
+    }) {
         super();
+        this.tokens = {
+            name: options.nameToken,
+            equal: options.equalToken,
+            as: options.asToken
+        };
+        this.defaultValue = options.defaultValue;
+        this.typeExpression = options.typeExpression;
     }
 
     public readonly kind = AstNodeKind.FunctionParameterExpression;
+
+    public tokens: {
+        name: Identifier;
+        equal?: Token;
+        as?: Token;
+    };
+
+    public defaultValue?: Expression;
+    public typeExpression?: TypeExpression;
 
     public getType(options: GetTypeOptions) {
         const paramType = this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime, typeChain: undefined }) ??
             this.defaultValue?.getType({ ...options, flags: SymbolTypeFlag.runtime, typeChain: undefined }) ??
             DynamicType.instance;
-        options.typeChain?.push(new TypeChainEntry(this.name.text, paramType, options.data, this.range));
+        options.typeChain?.push(new TypeChainEntry(this.tokens.name.text, paramType, options.data, this.range));
         return paramType;
     }
 
     public get range(): Range {
         return util.createBoundingRange(
-            this.name,
-            this.asToken,
+            this.tokens.name,
+            this.tokens.as,
             this.typeExpression,
+            this.tokens.equal,
             this.defaultValue
         );
     }
@@ -427,7 +444,7 @@ export class FunctionParameterExpression extends Expression {
     public transpile(state: BrsTranspileState) {
         let result = [
             //name
-            state.transpileToken(this.name)
+            state.transpileToken(this.tokens.name)
         ] as any[];
         //default value
         if (this.defaultValue) {
@@ -435,9 +452,9 @@ export class FunctionParameterExpression extends Expression {
             result.push(this.defaultValue.transpile(state));
         }
         //type declaration
-        if (this.asToken && !state.options.removeParameterTypes) {
+        if (this.typeExpression && !state.options.removeParameterTypes) {
             result.push(' ');
-            result.push(state.transpileToken(this.asToken));
+            result.push(state.transpileToken(this.tokens.as, 'as'));
             result.push(' ');
             result.push(
                 ...(this.typeExpression?.transpile(state) ?? [])
@@ -450,14 +467,14 @@ export class FunctionParameterExpression extends Expression {
     public getTypedef(state: BrsTranspileState): TranspileResult {
         return [
             //name
-            this.name.text,
+            this.tokens.name.text,
             //default value
             ...(this.defaultValue ? [
                 ' = ',
                 ...this.defaultValue.transpile(state)
             ] : []),
             //type declaration
-            ...(this.asToken ? [
+            ...(this.typeExpression ? [
                 ' as ',
                 ...(this.typeExpression?.getTypedef(state) ?? [''])
             ] : [])

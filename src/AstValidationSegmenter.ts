@@ -112,7 +112,7 @@ export class AstValidationSegmenter {
                 assignedSymbols.add(stmt.tokens.name.text.toLowerCase());
             },
             FunctionParameterExpression: (expr) => {
-                assignedSymbols.add(expr.name.text.toLowerCase());
+                assignedSymbols.add(expr.tokens.name.text.toLowerCase());
             },
             VariableExpression: (expr) => {
                 if (!assignedSymbols.has(expr.tokens.name.text.toLowerCase())) {
