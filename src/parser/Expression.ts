@@ -795,15 +795,26 @@ export class EscapedCharCodeLiteralExpression extends Expression {
 }
 
 export class ArrayLiteralExpression extends Expression {
-    constructor(
-        readonly elements: Array<Expression | CommentStatement>,
-        readonly open: Token,
-        readonly close: Token,
-        readonly hasSpread = false
-    ) {
+    constructor(options: {
+        elements: Array<Expression | CommentStatement>;
+        openToken?: Token;
+        closeToken?: Token;
+    }) {
         super();
-        this.range = util.createBoundingRange(this.open, ...this.elements, this.close);
+        this.tokens = {
+            open: options.openToken,
+            close: options.closeToken
+        };
+        this.elements = options.elements;
+        this.range = util.createBoundingRange(this.tokens.open, ...this.elements, this.tokens.close);
     }
+
+    readonly elements: Array<Expression | CommentStatement>;
+
+    readonly tokens: {
+        open?: Token;
+        close?: Token;
+    };
 
     public readonly kind = AstNodeKind.ArrayLiteralExpression;
 
@@ -812,7 +823,7 @@ export class ArrayLiteralExpression extends Expression {
     transpile(state: BrsTranspileState) {
         let result = [];
         result.push(
-            state.transpileToken(this.open)
+            state.transpileToken(this.tokens.open, '[')
         );
         let hasChildren = this.elements.length > 0;
         state.blockDepth++;
@@ -823,7 +834,7 @@ export class ArrayLiteralExpression extends Expression {
 
             if (isCommentStatement(element)) {
                 //if the comment is on the same line as opening square or previous statement, don't add newline
-                if (util.linesTouch(this.open, element) || util.linesTouch(previousElement, element)) {
+                if (util.linesTouch(this.tokens.open, element) || util.linesTouch(previousElement, element)) {
                     result.push(' ');
                 } else {
                     result.push(
@@ -849,9 +860,9 @@ export class ArrayLiteralExpression extends Expression {
             result.push('\n');
             result.push(state.indent());
         }
-        if (this.close) {
+        if (this.tokens.close) {
             result.push(
-                state.transpileToken(this.close)
+                state.transpileToken(this.tokens.close)
             );
         }
         return result;
@@ -870,21 +881,36 @@ export class ArrayLiteralExpression extends Expression {
 }
 
 export class AAMemberExpression extends Expression {
-    constructor(
-        public keyToken: Token,
-        public colonToken: Token,
+    constructor(options: {
+        keyToken: Token;
+        colonToken?: Token;
         /** The expression evaluated to determine the member's initial value. */
-        public value: Expression
-    ) {
+        value: Expression;
+        commaToken?: Token;
+    }) {
         super();
-        this.range = util.createBoundingRange(this.keyToken, this.colonToken, this.value);
+        this.tokens = {
+            key: options.keyToken,
+            colon: options.colonToken,
+            comma: options.commaToken
+        };
+        this.value = options.value;
+        this.range = util.createBoundingRange(this.tokens.key, this.tokens.colon, this.value);
     }
 
     public readonly kind = AstNodeKind.AAMemberExpression;
 
     public range: Range;
 
-    public commaToken?: Token;
+    public tokens: {
+        key: Token;
+        colon?: Token;
+        comma?: Token;
+    };
+
+    /** The expression evaluated to determine the member's initial value. */
+    public value: Expression;
+
 
     transpile(state: BrsTranspileState) {
         //TODO move the logic from AALiteralExpression loop into this function
@@ -949,11 +975,11 @@ export class AALiteralExpression extends Expression {
             } else {
                 //key
                 result.push(
-                    state.transpileToken(element.keyToken)
+                    state.transpileToken(element.tokens.key)
                 );
                 //colon
                 result.push(
-                    state.transpileToken(element.colonToken),
+                    state.transpileToken(element.tokens.colon, ':'),
                     ' '
                 );
 
@@ -995,7 +1021,7 @@ export class AALiteralExpression extends Expression {
         const resultType = new AssociativeArrayType();
         for (const element of this.elements) {
             if (isAAMemberExpression(element)) {
-                resultType.addMember(element.keyToken.text, { definingNode: element }, element.getType(options), SymbolTypeFlag.runtime);
+                resultType.addMember(element.tokens.key.text, { definingNode: element }, element.getType(options), SymbolTypeFlag.runtime);
             }
         }
         return resultType;
@@ -1901,7 +1927,7 @@ function expressionToValue(expr: Expression, strict: boolean): ExpressionValue {
     if (isAALiteralExpression(expr)) {
         return expr.elements.reduce((acc, e) => {
             if (!isCommentStatement(e)) {
-                acc[e.keyToken.text] = expressionToValue(e.value, strict);
+                acc[e.tokens.key.text] = expressionToValue(e.value, strict);
             }
             return acc;
         }, {});

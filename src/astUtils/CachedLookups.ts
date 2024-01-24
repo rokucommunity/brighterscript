@@ -176,7 +176,7 @@ export class CachedLookups {
             } else {
                 for (const member of item.elements) {
                     if (!isCommentStatement(member)) {
-                        const name = member.keyToken.text;
+                        const name = member.tokens.key.text;
                         if (!name.startsWith('"')) {
                             propertyHints[name.toLowerCase()] = name;
                         }

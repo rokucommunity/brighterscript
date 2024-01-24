@@ -281,7 +281,7 @@ describe('parser', () => {
         let { statements, diagnostics } = Parser.parse(tokens);
         let element = ((statements as any)[0].func.body.statements[0].value.elements[0] as AAMemberExpression);
         expect(diagnostics[0]?.message).not.to.exist;
-        expect(element.keyToken.text).to.equal('"has-second-layer"');
+        expect(element.tokens.key.text).to.equal('"has-second-layer"');
     });
 
 });

@@ -2740,7 +2740,7 @@ export class Parser {
         }
 
         //this.consume("Expected newline or ':' after array literal", TokenKind.Newline, TokenKind.Colon, TokenKind.Eof);
-        return new ArrayLiteralExpression(elements, openingSquare, closingSquare);
+        return new ArrayLiteralExpression({ elements: elements, openToken: openingSquare, closeToken: closingSquare });
     }
 
     private aaLiteral() {
@@ -2784,18 +2784,18 @@ export class Parser {
                 } else {
                     let k = key();
                     let expr = this.expression();
-                    lastAAMember = new AAMemberExpression(
-                        k.keyToken,
-                        k.colonToken,
-                        expr
-                    );
+                    lastAAMember = new AAMemberExpression({
+                        keyToken: k.keyToken,
+                        colonToken: k.colonToken,
+                        value: expr
+                    });
                     members.push(lastAAMember);
                 }
 
                 while (this.matchAny(TokenKind.Comma, TokenKind.Newline, TokenKind.Colon, TokenKind.Comment)) {
                     // collect comma at end of expression
                     if (lastAAMember && this.checkPrevious(TokenKind.Comma)) {
-                        lastAAMember.commaToken = this.previous();
+                        lastAAMember.tokens.comma = this.previous();
                     }
 
                     //check for comment at the end of the current line
@@ -2818,11 +2818,11 @@ export class Parser {
                         }
                         let k = key();
                         let expr = this.expression();
-                        lastAAMember = new AAMemberExpression(
-                            k.keyToken,
-                            k.colonToken,
-                            expr
-                        );
+                        lastAAMember = new AAMemberExpression({
+                            keyToken: k.keyToken,
+                            colonToken: k.colonToken,
+                            value: expr
+                        });
                         members.push(lastAAMember);
                     }
                 }
