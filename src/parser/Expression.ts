@@ -560,27 +560,36 @@ export class DottedGetExpression extends Expression {
 }
 
 export class XmlAttributeGetExpression extends Expression {
-    constructor(
-        readonly obj: Expression,
-        readonly name: Identifier,
+    constructor(options: {
+        obj: Expression;
         /**
-         * Can either be `@`, or `?@` for optional chaining
+         * Can either be `@`, or `?@` for optional chaining - defaults to '@'
          */
-        readonly at: Token
-    ) {
+        atToken?: Token;
+        nameToken: Identifier;
+    }) {
         super();
-        this.range = util.createBoundingRange(this.obj, this.at, this.name);
+        this.obj = options.obj;
+        this.tokens = { at: options.atToken, name: options.nameToken };
+        this.range = util.createBoundingRange(this.obj, this.tokens.at, this.tokens.name);
     }
 
     public readonly kind = AstNodeKind.XmlAttributeGetExpression;
+
+    public tokens: {
+        name: Identifier;
+        at?: Token;
+    };
+
+    readonly obj: Expression;
 
     public readonly range: Range;
 
     transpile(state: BrsTranspileState) {
         return [
             ...this.obj.transpile(state),
-            state.transpileToken(this.at),
-            state.transpileToken(this.name)
+            state.transpileToken(this.tokens.at, '@'),
+            state.transpileToken(this.tokens.name)
         ];
     }
 

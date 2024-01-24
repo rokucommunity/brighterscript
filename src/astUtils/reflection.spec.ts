@@ -217,7 +217,7 @@ describe('reflection', () => {
             endToken: token
         });
         const dottedGet = new DottedGetExpression({ obj: expr, nameToken: ident, dotToken: token });
-        const xmlAttrGet = new XmlAttributeGetExpression(expr, ident, token);
+        const xmlAttrGet = new XmlAttributeGetExpression({ obj: expr, nameToken: ident, atToken: token });
         const indexedGet = new IndexedGetExpression(expr, expr, token, token);
         const grouping = new GroupingExpression({ left: token, right: token }, expr);
         const literal = createStringLiteral('test');

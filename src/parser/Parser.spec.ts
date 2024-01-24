@@ -85,7 +85,7 @@ describe('parser', () => {
         it('works for ?@', () => {
             const expression = getExpression<XmlAttributeGetExpression>(`value = someXml?@someAttr`);
             expect(expression).to.be.instanceOf(XmlAttributeGetExpression);
-            expect(expression.at.kind).to.eql(TokenKind.QuestionAt);
+            expect(expression.tokens.at.kind).to.eql(TokenKind.QuestionAt);
         });
 
         it('works for ?(', () => {
@@ -355,14 +355,14 @@ describe('parser', () => {
             let statements = (parser.statements[0] as FunctionStatement).func.body.statements as AssignmentStatement[];
             let first = statements[0].value as XmlAttributeGetExpression;
             expect(first).to.be.instanceof(XmlAttributeGetExpression);
-            expect(first.name.text).to.equal('firstName');
-            expect(first.at.text).to.equal('@');
+            expect(first.tokens.name.text).to.equal('firstName');
+            expect(first.tokens.at.text).to.equal('@');
             expect((first.obj as any).tokens.name.text).to.equal('personXml');
 
             let second = statements[1].value as XmlAttributeGetExpression;
             expect(second).to.be.instanceof(XmlAttributeGetExpression);
-            expect(second.name.text).to.equal('age');
-            expect(second.at.text).to.equal('@');
+            expect(second.tokens.name.text).to.equal('age');
+            expect(second.tokens.at.text).to.equal('@');
             expect((second.obj as any).tokens.name.text).to.equal('firstChild');
         });
 

@@ -2471,7 +2471,7 @@ export class Parser {
                 if (!name) {
                     break;
                 }
-                expr = new XmlAttributeGetExpression(expr, name as Identifier, dot);
+                expr = new XmlAttributeGetExpression({ obj: expr, nameToken: name as Identifier, atToken: dot });
                 //only allow a single `@` expression
                 break;
 
