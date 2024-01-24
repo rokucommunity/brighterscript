@@ -121,7 +121,7 @@ export class SignatureHelpUtil {
             key += param.name.text;
         }
 
-        let label = util.getTextForRange(lines, util.createRangeFromPositions(func.functionType.range.start, func.body.range.start)).trim();
+        let label = util.getTextForRange(lines, util.createRangeFromPositions(func.tokens.functionType?.range.start, func.body.range.start)).trim();
         if (namespaceName) {
             label = label.replace(/^(sub | function )/gim, `$1${namespaceName}.`);
         }

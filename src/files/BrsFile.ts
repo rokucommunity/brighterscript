@@ -605,7 +605,7 @@ export class BrsFile implements BscFile {
                 }
                 const funcType = statement.getType({ flags: SymbolTypeFlag.typetime });
                 callables.push({
-                    isSub: statement.func.functionType.text.toLowerCase() === 'sub',
+                    isSub: statement.func.tokens.functionType?.text.toLowerCase() === 'sub',
                     name: statement.tokens.name?.text,
                     nameRange: statement.tokens.name?.range,
                     file: this,

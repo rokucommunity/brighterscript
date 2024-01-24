@@ -105,7 +105,7 @@ export class BrsFileValidator {
                 //Namespace Types are added at the Scope level - This is handled when the SymbolTables get linked
             },
             FunctionStatement: (node) => {
-                this.validateDeclarationLocations(node, 'function', () => util.createBoundingRange(node.func.functionType, node.tokens.name));
+                this.validateDeclarationLocations(node, 'function', () => util.createBoundingRange(node.func.tokens.functionType, node.tokens.name));
                 const funcType = node.getType({ flags: SymbolTypeFlag.typetime });
 
                 if (node.tokens.name?.text) {

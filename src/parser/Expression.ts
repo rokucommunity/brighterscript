@@ -184,17 +184,27 @@ export class CallExpression extends Expression {
 }
 
 export class FunctionExpression extends Expression implements TypedefProvider {
-    constructor(
-        readonly parameters: FunctionParameterExpression[],
-        public body: Block,
-        readonly functionType: Token | null,
-        public end: Token,
-        readonly leftParen: Token,
-        readonly rightParen: Token,
-        readonly asToken?: Token,
-        public returnTypeExpression?: TypeExpression
-    ) {
+    constructor(options: {
+        functionTypeToken?: Token;
+        leftParenToken?: Token;
+        parameters?: FunctionParameterExpression[];
+        rightParenToken?: Token;
+        asToken?: Token;
+        returnTypeExpression?: TypeExpression;
+        body: Block;
+        endToken?: Token;
+    }) {
         super();
+        this.tokens = {
+            functionType: options.functionTypeToken,
+            leftParen: options.leftParenToken,
+            rightParen: options.rightParenToken,
+            as: options.asToken,
+            end: options.endToken
+        };
+        this.parameters = options.parameters ?? [];
+        this.body = options.body;
+        this.returnTypeExpression = options.returnTypeExpression;
 
         //if there's a body, and it doesn't have a SymbolTable, assign one
         if (this.body && !this.body.symbolTable) {
@@ -204,6 +214,18 @@ export class FunctionExpression extends Expression implements TypedefProvider {
     }
 
     public readonly kind = AstNodeKind.FunctionExpression;
+
+    readonly parameters: FunctionParameterExpression[];
+    public body: Block;
+    public returnTypeExpression?: TypeExpression;
+
+    readonly tokens: {
+        functionType?: Token;
+        end?: Token;
+        leftParen?: Token;
+        rightParen?: Token;
+        as?: Token;
+    };
 
     /**
      * The list of function calls that are declared within this function scope. This excludes CallExpressions
@@ -217,7 +239,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
     public functionStatement?: FunctionStatement;
 
     public getLeadingTrivia(): Token[] {
-        return this.functionType?.leadingTrivia ?? [];
+        return this.tokens.functionType?.leadingTrivia ?? [];
     }
 
     /**
@@ -226,12 +248,13 @@ export class FunctionExpression extends Expression implements TypedefProvider {
      */
     public get range() {
         return util.createBoundingRange(
-            this.functionType, this.leftParen,
+            this.tokens.functionType,
+            this.tokens.leftParen,
             ...this.parameters,
-            this.rightParen,
-            this.asToken,
+            this.tokens.rightParen,
+            this.tokens.as,
             this.returnTypeExpression,
-            this.end
+            this.tokens.end
         );
     }
 
@@ -239,7 +262,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         let results = [];
         //'function'|'sub'
         results.push(
-            state.transpileToken(this.functionType)
+            state.transpileToken(this.tokens.functionType, 'function')
         );
         //functionName?
         if (name) {
@@ -250,7 +273,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
         //leftParen
         results.push(
-            state.transpileToken(this.leftParen)
+            state.transpileToken(this.tokens.leftParen)
         );
         //parameters
         for (let i = 0; i < this.parameters.length; i++) {
@@ -264,14 +287,14 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
         //right paren
         results.push(
-            state.transpileToken(this.rightParen)
+            state.transpileToken(this.tokens.rightParen)
         );
         //as [Type]
-        if (this.asToken && !state.options.removeParameterTypes && this.returnTypeExpression) {
+        if (!state.options.removeParameterTypes && this.returnTypeExpression) {
             results.push(
                 ' ',
                 //as
-                state.transpileToken(this.asToken),
+                state.transpileToken(this.tokens.as, 'as'),
                 ' ',
                 //return type
                 ...this.returnTypeExpression.transpile(state)
@@ -287,7 +310,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         //'end sub'|'end function'
         results.push(
             state.indent(),
-            state.transpileToken(this.end)
+            state.transpileToken(this.tokens.end, `end ${this.tokens.functionType ?? 'function'}`)
         );
         return results;
     }
@@ -296,7 +319,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         let results = [
             new SourceNode(1, 0, null, [
                 //'function'|'sub'
-                this.functionType?.text,
+                this.tokens.functionType?.text ?? 'function',
                 //functionName?
                 ...(isFunctionStatement(this.parent) || isMethodStatement(this.parent) ? [' ', this.parent.tokens.name?.text ?? ''] : []),
                 //leftParen
@@ -312,14 +335,16 @@ export class FunctionExpression extends Expression implements TypedefProvider {
                 //right paren
                 ')',
                 //as <ReturnType>
-                ...(this.asToken ? [
-                    ' as ',
+                ...(this.returnTypeExpression ? [
+                    ' ',
+                    this.tokens.as?.text ?? 'as',
+                    ' ',
                     ...this.returnTypeExpression.getTypedef(state)
                 ] : []),
                 '\n',
                 state.indent(),
                 //'end sub'|'end function'
-                this.end.text
+                this.tokens.end?.text ?? `end ${this.tokens.functionType ?? 'function'}`
             ])
         ];
         return results;
@@ -339,7 +364,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
     public getType(options: GetTypeOptions): TypedFunctionType {
         //if there's a defined return type, use that
         let returnType = this.returnTypeExpression?.getType({ ...options, typeChain: undefined });
-        const isSub = this.functionType.kind === TokenKind.Sub;
+        const isSub = this.tokens.functionType?.kind === TokenKind.Sub;
         //if we don't have a return type and this is a sub, set the return type to `void`. else use `dynamic`
         if (!returnType) {
             returnType = isSub ? VoidType.instance : DynamicType.instance;

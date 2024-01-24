@@ -151,14 +151,14 @@ export function createBooleanLiteral(value: string, range?: Range) {
     return new LiteralExpression(createToken(value === 'true' ? TokenKind.True : TokenKind.False, value, range));
 }
 export function createFunctionExpression(kind: TokenKind.Sub | TokenKind.Function) {
-    return new FunctionExpression(
-        [],
-        new Block({ statements: [], startingRange: interpolatedRange }),
-        createToken(kind),
-        kind === TokenKind.Sub ? createToken(TokenKind.EndSub) : createToken(TokenKind.EndFunction),
-        createToken(TokenKind.LeftParen),
-        createToken(TokenKind.RightParen)
-    );
+    return new FunctionExpression({
+        parameters: [],
+        body: new Block({ statements: [], startingRange: interpolatedRange }),
+        functionTypeToken: createToken(kind),
+        endToken: kind === TokenKind.Sub ? createToken(TokenKind.EndSub) : createToken(TokenKind.EndFunction),
+        leftParenToken: createToken(TokenKind.LeftParen),
+        rightParenToken: createToken(TokenKind.RightParen)
+    });
 }
 
 export function createMethodStatement(name: string, kind: TokenKind.Sub | TokenKind.Function = TokenKind.Function, modifiers?: Token[]) {

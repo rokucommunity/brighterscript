@@ -873,16 +873,16 @@ export class Parser {
 
             this.consumeStatementSeparators(true);
 
-            let func = new FunctionExpression(
-                params,
-                undefined, //body
-                functionType,
-                undefined, //ending keyword
-                leftParen,
-                rightParen,
-                asToken,
-                typeExpression
-            );
+            let func = new FunctionExpression({
+                parameters: params,
+                body: undefined, //body
+                functionTypeToken: functionType,
+                endToken: undefined, //ending keyword
+                leftParenToken: leftParen,
+                rightParenToken: rightParen,
+                asToken: asToken,
+                returnTypeExpression: typeExpression
+            });
 
             //support ending the function with `end sub` OR `end function`
             func.body = this.block();
@@ -904,15 +904,15 @@ export class Parser {
             }
 
             // consume 'end sub' or 'end function'
-            func.end = this.advance();
+            func.tokens.end = this.advance();
             let expectedEndKind = isSub ? TokenKind.EndSub : TokenKind.EndFunction;
 
             //if `function` is ended with `end sub`, or `sub` is ended with `end function`, then
             //add an error but don't hard-fail so the AST can continue more gracefully
-            if (func.end.kind !== expectedEndKind) {
+            if (func.tokens.end.kind !== expectedEndKind) {
                 this.diagnostics.push({
-                    ...DiagnosticMessages.mismatchedEndCallableKeyword(functionTypeText, func.end.text),
-                    range: func.end.range
+                    ...DiagnosticMessages.mismatchedEndCallableKeyword(functionTypeText, func.tokens.end.text),
+                    range: func.tokens.end.range
                 });
             }
             func.callExpressions = this.callExpressions;

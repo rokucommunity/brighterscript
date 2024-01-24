@@ -34,7 +34,17 @@ describe('reflection', () => {
         const comment = new CommentStatement({ comments: [token] });
         const exitFor = new ExitForStatement({ exitFor: token });
         const exitWhile = new ExitWhileStatement({ exitWhile: token });
-        const funs = new FunctionStatement({ nameToken: ident, func: new FunctionExpression([], block, token, token, token, token) });
+        const funs = new FunctionStatement({
+            nameToken: ident,
+            func: new FunctionExpression({
+                parameters: [],
+                body: block,
+                functionTypeToken: token,
+                leftParenToken: token,
+                rightParenToken: token,
+                endToken: token
+            })
+        });
         const ifs = new IfStatement({ ifToken: token, condition: expr, thenBranch: block });
         const increment = new IncrementStatement({ value: expr, operatorToken: token });
         const print = new PrintStatement({ printToken: token, expressions: [] });
@@ -198,7 +208,14 @@ describe('reflection', () => {
 
         const binary = new BinaryExpression({ left: expr, operatorToken: token, right: expr });
         const call = new CallExpression({ callee: expr, openingParenToken: token, closingParenToken: token, args: [] });
-        const fun = new FunctionExpression([], block, token, token, token, token);
+        const fun = new FunctionExpression({
+            parameters: [],
+            body: block,
+            functionTypeToken: token,
+            leftParenToken: token,
+            rightParenToken: token,
+            endToken: token
+        });
         const dottedGet = new DottedGetExpression({ obj: expr, nameToken: ident, dotToken: token });
         const xmlAttrGet = new XmlAttributeGetExpression(expr, ident, token);
         const indexedGet = new IndexedGetExpression(expr, expr, token, token);
