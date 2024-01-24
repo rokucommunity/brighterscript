@@ -504,7 +504,7 @@ export class ProgramBuilder {
             }
 
             if (manifestFile) {
-                this.program!.loadManifest(manifestFile);
+                this.program!.loadManifest(manifestFile, false);
             }
 
             const loadFile = async (fileObj) => {
