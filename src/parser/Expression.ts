@@ -99,19 +99,31 @@ export class BinaryExpression extends Expression {
 export class CallExpression extends Expression {
     static MaximumArguments = 32;
 
-    constructor(
-        readonly callee: Expression,
-        /**
-         * Can either be `(`, or `?(` for optional chaining
-         */
-        readonly openingParen: Token,
-        readonly closingParen: Token,
-        readonly args: Expression[],
-        unused?: any
-    ) {
+    constructor(options: {
+        callee: Expression;
+        openingParenToken: Token;
+        args?: Expression[];
+        closingParenToken: Token;
+    }) {
         super();
-        this.range = util.createBoundingRange(this.callee, this.openingParen, ...args, this.closingParen);
+        this.tokens = {
+            openingParen: options.openingParenToken,
+            closingParen: options.closingParenToken
+        };
+        this.callee = options.callee;
+        this.args = options.args ?? [];
+        this.range = util.createBoundingRange(this.callee, this.tokens.openingParen, ...this.args, this.tokens.closingParen);
     }
+
+    readonly callee: Expression;
+    readonly args: Expression[];
+    public tokens: {
+        /**
+         * Can either be `(`, or `?(` for optional chaining - defaults to '('
+         */
+        readonly openingParen?: Token;
+        readonly closingParen?: Token;
+    };
 
     public readonly kind = AstNodeKind.CallExpression;
 
@@ -128,7 +140,7 @@ export class CallExpression extends Expression {
         }
 
         result.push(
-            state.transpileToken(this.openingParen)
+            state.transpileToken(this.tokens.openingParen, '(')
         );
         for (let i = 0; i < this.args.length; i++) {
             //add comma between args
@@ -138,9 +150,9 @@ export class CallExpression extends Expression {
             let arg = this.args[i];
             result.push(...arg.transpile(state));
         }
-        if (this.closingParen) {
+        if (this.tokens.closingParen) {
             result.push(
-                state.transpileToken(this.closingParen)
+                state.transpileToken(this.tokens.closingParen)
             );
         }
         return result;
@@ -1139,38 +1151,56 @@ export class NewExpression extends Expression {
 }
 
 export class CallfuncExpression extends Expression {
-    constructor(
-        readonly callee: Expression,
-        readonly operator: Token,
-        readonly methodName: Identifier,
-        readonly openingParen: Token,
-        readonly args: Expression[],
-        readonly closingParen: Token
-    ) {
+    constructor(options: {
+        callee: Expression;
+        operatorToken?: Token;
+        methodNameToken: Identifier;
+        openingParenToken?: Token;
+        args?: Expression[];
+        closingParenToken?: Token;
+    }) {
         super();
+        this.tokens = {
+            operator: options.operatorToken,
+            methodName: options.methodNameToken,
+            openingParen: options.openingParenToken,
+            closingParen: options.closingParenToken
+        };
+        this.callee = options.callee;
+        this.args = options.args ?? [];
+
         this.range = util.createBoundingRange(
-            callee,
-            operator,
-            methodName,
-            openingParen,
-            ...args,
-            closingParen
+            this.callee,
+            this.tokens.operator,
+            this.tokens.methodName,
+            this.tokens.openingParen,
+            ...this.args,
+            this.tokens.closingParen
         );
     }
+
+    readonly callee: Expression;
+    readonly args: Expression[];
+
+    readonly tokens: {
+        operator: Token;
+        methodName: Identifier;
+        openingParen?: Token;
+        closingParen?: Token;
+    };
 
     public readonly kind = AstNodeKind.CallfuncExpression;
 
     public readonly range: Range;
 
-
     public transpile(state: BrsTranspileState) {
         let result = [];
         result.push(
             ...this.callee.transpile(state),
-            state.sourceNode(this.operator, '.callfunc'),
-            state.transpileToken(this.openingParen),
+            state.sourceNode(this.tokens.operator, '.callfunc'),
+            state.transpileToken(this.tokens.openingParen, '('),
             //the name of the function
-            state.sourceNode(this.methodName, ['"', this.methodName.text, '"']),
+            state.sourceNode(this.tokens.methodName, ['"', this.tokens.methodName.text, '"']),
             ', '
         );
         //transpile args
@@ -1188,7 +1218,7 @@ export class CallfuncExpression extends Expression {
             }
         }
         result.push(
-            state.transpileToken(this.closingParen)
+            state.transpileToken(this.tokens.closingParen, ')')
         );
         return result;
     }
@@ -1206,9 +1236,9 @@ export class CallfuncExpression extends Expression {
         // It's nicer for CallExpression, because it's a call on any expression.
         const calleeType = this.callee.getType({ ...options, flags: SymbolTypeFlag.runtime });
         if (isComponentType(calleeType) || isReferenceType(calleeType)) {
-            const funcType = (calleeType as ComponentType).getCallFuncType?.(this.methodName.text, options);
+            const funcType = (calleeType as ComponentType).getCallFuncType?.(this.tokens.methodName.text, options);
             if (funcType) {
-                options.typeChain?.push(new TypeChainEntry(this.methodName.text, funcType, options.data, this.methodName.range, createToken(TokenKind.Callfunc)));
+                options.typeChain?.push(new TypeChainEntry(this.tokens.methodName.text, funcType, options.data, this.tokens.methodName.range, createToken(TokenKind.Callfunc)));
                 if (options.ignoreCall) {
                     result = funcType;
                 }

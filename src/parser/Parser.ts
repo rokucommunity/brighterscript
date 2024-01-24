@@ -2416,7 +2416,14 @@ export class Parser {
         let openParen = this.consume(DiagnosticMessages.expectedOpenParenToFollowCallfuncIdentifier(), TokenKind.LeftParen);
         let call = this.finishCall(openParen, callee, false);
 
-        return new CallfuncExpression(callee, operator, methodName as Identifier, openParen, call.args, call.closingParen);
+        return new CallfuncExpression({
+            callee: callee,
+            operatorToken: operator,
+            methodNameToken: methodName as Identifier,
+            openingParenToken: openParen,
+            args: call.args,
+            closingParenToken: call.tokens.closingParen
+        });
     }
 
     private call(): Expression {
@@ -2508,7 +2515,12 @@ export class Parser {
             TokenKind.RightParen
         );
 
-        let expression = new CallExpression(callee, openingParen, closingParen, args);
+        let expression = new CallExpression({
+            callee: callee,
+            openingParenToken: openingParen,
+            args: args,
+            closingParenToken: closingParen
+        });
         if (addToCallExpressionList) {
             this.callExpressions.push(expression);
         }

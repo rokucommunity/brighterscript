@@ -2597,8 +2597,8 @@ export class MethodStatement extends FunctionStatement {
 
         //this is a child class, and the constructor doesn't contain a call to super. Inject one
         const superCall = new ExpressionStatement({
-            expression: new CallExpression(
-                new VariableExpression({
+            expression: new CallExpression({
+                callee: new VariableExpression({
                     nameToken: {
                         kind: TokenKind.Identifier,
                         text: 'super',
@@ -2608,7 +2608,7 @@ export class MethodStatement extends FunctionStatement {
                         leadingTrivia: []
                     }
                 }),
-                {
+                openingParenToken: {
                     kind: TokenKind.LeftParen,
                     text: '(',
                     isReserved: false,
@@ -2616,7 +2616,7 @@ export class MethodStatement extends FunctionStatement {
                     leadingWhitespace: '',
                     leadingTrivia: []
                 },
-                {
+                closingParenToken: {
                     kind: TokenKind.RightParen,
                     text: ')',
                     isReserved: false,
@@ -2624,8 +2624,8 @@ export class MethodStatement extends FunctionStatement {
                     leadingWhitespace: '',
                     leadingTrivia: []
                 },
-                []
-            )
+                args: []
+            })
         });
         state.editor.arrayUnshift(this.func.body.statements, superCall);
     }

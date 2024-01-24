@@ -67,7 +67,7 @@ export class CallExpressionInfo {
             this.newExpression = callExpression.parent;
         }
         if (isCallfuncExpression(callExpression)) {
-            this.name = callExpression.methodName.text;
+            this.name = callExpression.tokens.methodName.text;
         } else if (isVariableExpression(callExpression.callee)) {
             this.name = callExpression.callee.tokens.name.text;
         } else if (isVariableExpression(callExpression)) {
@@ -91,7 +91,7 @@ export class CallExpressionInfo {
     }
 
     isPositionBetweenParentheses() {
-        let boundingRange = util.createBoundingRange(this.callExpression.openingParen, this.callExpression.closingParen);
+        let boundingRange = util.createBoundingRange(this.callExpression.tokens.openingParen, this.callExpression.tokens.closingParen);
         return util.rangeContains(boundingRange, this.position);
     }
 
@@ -111,7 +111,7 @@ export class CallExpressionInfo {
 
         if (!callExpression && isCallExpression(expression)) {
             //let's check to see if we are in a space, in the args of a valid CallExpression
-            let boundingRange = util.createBoundingRange(expression.openingParen, expression.closingParen);
+            let boundingRange = util.createBoundingRange(expression.tokens.openingParen, expression.tokens.closingParen);
             if (util.rangeContains(boundingRange, this.position)) {
                 callExpression = expression;
             }

@@ -60,7 +60,7 @@ export class BrsFileValidator {
                 if (node.args.length > 5) {
                     this.event.file.addDiagnostic({
                         ...DiagnosticMessages.callfuncHasToManyArgs(node.args.length),
-                        range: node.methodName.range
+                        range: node.tokens.methodName.range
                     });
                 }
             },

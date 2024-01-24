@@ -91,7 +91,7 @@ describe('parser', () => {
         it('works for ?(', () => {
             const expression = getExpression<CallExpression>(`value = person.getName?()`);
             expect(expression).to.be.instanceOf(CallExpression);
-            expect(expression.openingParen.kind).to.eql(TokenKind.QuestionLeftParen);
+            expect(expression.tokens.openingParen.kind).to.eql(TokenKind.QuestionLeftParen);
         });
 
         it('works for print statements using question mark', () => {
@@ -107,13 +107,13 @@ describe('parser', () => {
         it.skip('works for ?( in anonymous function', () => {
             const expression = getExpression<CallExpression>(`thing = (function() : end function)?()`);
             expect(expression).to.be.instanceOf(CallExpression);
-            expect(expression.openingParen.kind).to.eql(TokenKind.QuestionLeftParen);
+            expect(expression.tokens.openingParen.kind).to.eql(TokenKind.QuestionLeftParen);
         });
 
         it('works for ?( in new call', () => {
             const expression = getExpression<NewExpression>(`thing = new Person?()`, { parseMode: ParseMode.BrighterScript });
             expect(expression).to.be.instanceOf(NewExpression);
-            expect(expression.call.openingParen.kind).to.eql(TokenKind.QuestionLeftParen);
+            expect(expression.call.tokens.openingParen.kind).to.eql(TokenKind.QuestionLeftParen);
         });
 
         it('distinguishes between optional chaining and ternary expression', () => {

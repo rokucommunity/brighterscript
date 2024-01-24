@@ -170,13 +170,12 @@ export function createMethodStatement(name: string, kind: TokenKind.Sub | TokenK
 }
 
 export function createCall(callee: Expression, args?: Expression[]) {
-    return new CallExpression(
-        callee,
-        createToken(TokenKind.LeftParen, '('),
-        createToken(TokenKind.RightParen, ')'),
-        args || [],
-        []
-    );
+    return new CallExpression({
+        callee: callee,
+        openingParenToken: createToken(TokenKind.LeftParen, '('),
+        closingParenToken: createToken(TokenKind.RightParen, ')'),
+        args: args
+    });
 }
 
 export function createSGToken(text: string, range?: Range) {

@@ -197,7 +197,7 @@ describe('reflection', () => {
         };
 
         const binary = new BinaryExpression({ left: expr, operatorToken: token, right: expr });
-        const call = new CallExpression(expr, token, token, []);
+        const call = new CallExpression({ callee: expr, openingParenToken: token, closingParenToken: token, args: [] });
         const fun = new FunctionExpression([], block, token, token, token, token);
         const dottedGet = new DottedGetExpression({ obj: expr, nameToken: ident, dotToken: token });
         const xmlAttrGet = new XmlAttributeGetExpression(expr, ident, token);
@@ -211,7 +211,7 @@ describe('reflection', () => {
         const variable = new VariableExpression({ nameToken: ident });
         const sourceLit = new SourceLiteralExpression(token);
         const newx = new NewExpression(token, call);
-        const callfunc = new CallfuncExpression(expr, token, ident, token, [], token);
+        const callfunc = new CallfuncExpression({ callee: expr, operatorToken: token, methodNameToken: ident, openingParenToken: token, args: [], closingParenToken: token });
         const tplQuasi = new TemplateStringQuasiExpression([expr]);
         const tplString = new TemplateStringExpression(token, [tplQuasi], [], token);
         const taggedTpl = new TaggedTemplateStringExpression(ident, token, [tplQuasi], [], token);
