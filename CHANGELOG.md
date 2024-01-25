@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.65.18](https://github.com/rokucommunity/brighterscript/compare/v0.65.17...v0.65.18) - 2024-01-25
+### Changed
+ - Refactor bsconfig documentation ([#1024](https://github.com/rokucommunity/brighterscript/pull/1024))
+ - Prevent overwriting `Program._manifest` if already set on startup ([#1027](https://github.com/rokucommunity/brighterscript/pull/1027))
+ - Improving null safety: Add FinalizedBsConfig and tweak plugin events ([#1000](https://github.com/rokucommunity/brighterscript/pull/1000))
+
+
+
 ## [0.65.17](https://github.com/rokucommunity/brighterscript/compare/v0.65.16...0.65.17) - 2024-01-16
 ### Changed
  - add documentation on pruneEmptyCodeFiles to the README ([#1012](https://github.com/rokucommunity/brighterscript/pull/1012))
