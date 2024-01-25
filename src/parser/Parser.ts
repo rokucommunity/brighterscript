@@ -1484,7 +1484,13 @@ export class Parser {
             alternate = this.expression();
         } catch { }
 
-        return new TernaryExpression(test, questionMarkToken, consequent, colonToken, alternate);
+        return new TernaryExpression({
+            test: test,
+            questionMarkToken: questionMarkToken,
+            consequent: consequent,
+            colonToken: colonToken,
+            alternate: alternate
+        });
     }
 
     private nullCoalescingExpression(test: Expression): NullCoalescingExpression {

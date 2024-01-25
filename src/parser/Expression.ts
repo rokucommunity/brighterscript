@@ -1723,26 +1723,42 @@ export class AnnotationExpression extends Expression {
 }
 
 export class TernaryExpression extends Expression {
-    constructor(
-        readonly test: Expression,
-        readonly questionMarkToken: Token,
-        readonly consequent?: Expression,
-        readonly colonToken?: Token,
-        readonly alternate?: Expression
-    ) {
+    constructor(options: {
+        test: Expression;
+        questionMarkToken?: Token;
+        consequent?: Expression;
+        colonToken?: Token;
+        alternate?: Expression;
+    }) {
         super();
+        this.tokens = {
+            questionMark: options.questionMarkToken,
+            colon: options.colonToken
+        };
+        this.test = options.test;
+        this.consequent = options.consequent;
+        this.alternate = options.alternate;
         this.range = util.createBoundingRange(
-            test,
-            questionMarkToken,
-            consequent,
-            colonToken,
-            alternate
+            this.test,
+            this.tokens.questionMark,
+            this.consequent,
+            this.tokens.colon,
+            this.alternate
         );
     }
 
     public readonly kind = AstNodeKind.TernaryExpression;
 
     public range: Range;
+
+    readonly tokens: {
+        questionMark?: Token;
+        colon?: Token;
+    };
+
+    readonly test: Expression;
+    readonly consequent?: Expression;
+    readonly alternate?: Expression;
 
     transpile(state: BrsTranspileState) {
         let result = [];
@@ -1759,7 +1775,7 @@ export class TernaryExpression extends Expression {
         if (mutatingExpressions.length > 0) {
             result.push(
                 state.sourceNode(
-                    this.questionMarkToken,
+                    this.tokens.questionMark,
                     //write all the scope variables as parameters.
                     //TODO handle when there are more than 31 parameters
                     `(function(__bsCondition, ${allUniqueVarNames.join(', ')})`
@@ -1770,23 +1786,23 @@ export class TernaryExpression extends Expression {
                 state.sourceNode(this.test, `if __bsCondition then`),
                 state.newline,
                 state.indent(1),
-                state.sourceNode(this.consequent ?? this.questionMarkToken, 'return '),
-                ...this.consequent?.transpile(state) ?? [state.sourceNode(this.questionMarkToken, 'invalid')],
+                state.sourceNode(this.consequent ?? this.tokens.questionMark, 'return '),
+                ...this.consequent?.transpile(state) ?? [state.sourceNode(this.tokens.questionMark, 'invalid')],
                 state.newline,
                 state.indent(-1),
-                state.sourceNode(this.consequent ?? this.questionMarkToken, 'else'),
+                state.sourceNode(this.consequent ?? this.tokens.questionMark, 'else'),
                 state.newline,
                 state.indent(1),
-                state.sourceNode(this.consequent ?? this.questionMarkToken, 'return '),
-                ...this.alternate?.transpile(state) ?? [state.sourceNode(this.consequent ?? this.questionMarkToken, 'invalid')],
+                state.sourceNode(this.consequent ?? this.tokens.questionMark, 'return '),
+                ...this.alternate?.transpile(state) ?? [state.sourceNode(this.consequent ?? this.tokens.questionMark, 'invalid')],
                 state.newline,
                 state.indent(-1),
-                state.sourceNode(this.questionMarkToken, 'end if'),
+                state.sourceNode(this.tokens.questionMark, 'end if'),
                 state.newline,
                 state.indent(-1),
-                state.sourceNode(this.questionMarkToken, 'end function)('),
+                state.sourceNode(this.tokens.questionMark, 'end function)('),
                 ...this.test.transpile(state),
-                state.sourceNode(this.questionMarkToken, `, ${allUniqueVarNames.join(', ')})`)
+                state.sourceNode(this.tokens.questionMark, `, ${allUniqueVarNames.join(', ')})`)
             );
             state.blockDepth--;
         } else {
