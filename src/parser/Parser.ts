@@ -417,16 +417,16 @@ export class Parser {
             [asToken, returnTypeExpression] = this.consumeAsTokenAndTypeExpression();
         }
 
-        return new InterfaceMethodStatement(
-            functionType,
-            name,
-            leftParen,
-            params,
-            rightParen,
-            asToken,
-            returnTypeExpression,
-            optionalKeyword
-        );
+        return new InterfaceMethodStatement({
+            functionTypeToken: functionType,
+            nameToken: name,
+            leftParenToken: leftParen,
+            params: params,
+            rightParenToken: rightParen,
+            asToken: asToken,
+            returnTypeExpression: returnTypeExpression,
+            optionalToken: optionalKeyword
+        });
     }
 
     private interfaceDeclaration(): InterfaceStatement {
@@ -1497,13 +1497,17 @@ export class Parser {
         this.warnIfNotBrighterScriptMode('null coalescing operator');
         const questionQuestionToken = this.advance();
         const alternate = this.expression();
-        return new NullCoalescingExpression(test, questionQuestionToken, alternate);
+        return new NullCoalescingExpression({
+            consequent: test,
+            questionQuestionToken: questionQuestionToken,
+            alternate: alternate
+        });
     }
 
     private regexLiteralExpression() {
         this.warnIfNotBrighterScriptMode('regular expression literal');
         return new RegexLiteralExpression({
-            regexLiteral: this.advance()
+            regexLiteralToken: this.advance()
         });
     }
 
@@ -2245,7 +2249,7 @@ export class Parser {
                     // myVal = foo() as dynamic as string
                     [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
                     if (asToken && typeExpression) {
-                        expression = new TypeCastExpression(expression, asToken, typeExpression);
+                        expression = new TypeCastExpression({ obj: expression, asToken: asToken, typeExpression: typeExpression });
                     }
                 } else {
                     break;
@@ -2569,7 +2573,7 @@ export class Parser {
                 }
             }
             if (expr) {
-                return new TypeExpression(expr);
+                return new TypeExpression({ expression: expr });
             }
 
         } catch (error) {
@@ -2618,7 +2622,7 @@ export class Parser {
                 const leftBracket = this.advance();
                 if (this.check(TokenKind.RightSquareBracket)) {
                     const rightBracket = this.advance();
-                    expr = new TypedArrayExpression(expr, leftBracket, rightBracket);
+                    expr = new TypedArrayExpression({ innerType: expr, leftBracketToken: leftBracket, rightBracketToken: rightBracket });
                 }
             }
         }

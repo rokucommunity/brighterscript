@@ -191,12 +191,10 @@ export class AssignmentStatement extends Statement {
 }
 
 export class Block extends Statement {
-    constructor(
-        options: {
-            statements: Statement[];
-            startingRange: Range;
-        }
-    ) {
+    constructor(options: {
+        statements: Statement[];
+        startingRange: Range;
+    }) {
         super();
         this.statements = options.statements;
         this.startingRange = options.startingRange;
@@ -1876,23 +1874,27 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
     public transpile(state: BrsTranspileState): TranspileResult {
         throw new Error('Method not implemented.');
     }
-    constructor(
-        functionTypeToken: Token,
-        nameToken: Identifier,
-        leftParen: Token,
-        public params: FunctionParameterExpression[],
-        rightParen: Token,
-        asToken?: Token,
-        public returnTypeExpression?: TypeExpression,
-        optionalToken?: Token
-    ) {
+    constructor(options: {
+        functionTypeToken?: Token;
+        nameToken: Identifier;
+        leftParenToken?: Token;
+        params?: FunctionParameterExpression[];
+        rightParenToken?: Token;
+        asToken?: Token;
+        returnTypeExpression?: TypeExpression;
+        optionalToken?: Token;
+    }) {
         super();
-        this.tokens.optional = optionalToken;
-        this.tokens.functionType = functionTypeToken;
-        this.tokens.name = nameToken;
-        this.tokens.leftParen = leftParen;
-        this.tokens.rightParen = rightParen;
-        this.tokens.as = asToken;
+        this.tokens = {
+            optional: options.optionalToken,
+            functionType: options.functionTypeToken,
+            name: options.nameToken,
+            leftParen: options.leftParenToken,
+            rightParen: options.rightParenToken,
+            as: options.asToken
+        };
+        this.params = options.params ?? [];
+        this.returnTypeExpression = options.returnTypeExpression;
     }
 
     public readonly kind = AstNodeKind.InterfaceMethodStatement;
@@ -1916,14 +1918,17 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         return this.tokens.name.text;
     }
 
-    public tokens = {} as {
+    public tokens: {
         optional?: Token;
         functionType: Token;
         name: Identifier;
-        leftParen: Token;
-        rightParen: Token;
-        as: Token;
+        leftParen?: Token;
+        rightParen?: Token;
+        as?: Token;
     };
+
+    public params: FunctionParameterExpression[];
+    public returnTypeExpression?: TypeExpression;
 
     public get isOptional() {
         return !!this.tokens.optional;
@@ -1955,7 +1960,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
             );
         }
         result.push(
-            this.tokens.functionType.text,
+            this.tokens.functionType?.text ?? 'function',
             ' ',
             this.tokens.name.text,
             '('
@@ -1989,7 +1994,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
     public getType(options: GetTypeOptions): TypedFunctionType {
         //if there's a defined return type, use that
         let returnType = this.returnTypeExpression?.getType(options);
-        const isSub = this.tokens.functionType.kind === TokenKind.Sub;
+        const isSub = this.tokens.functionType?.kind === TokenKind.Sub || !returnType;
         //if we don't have a return type and this is a sub, set the return type to `void`. else use `dynamic`
         if (!returnType) {
             returnType = isSub ? VoidType.instance : DynamicType.instance;

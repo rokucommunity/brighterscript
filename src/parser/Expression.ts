@@ -1829,22 +1829,34 @@ export class TernaryExpression extends Expression {
 }
 
 export class NullCoalescingExpression extends Expression {
-    constructor(
-        public consequent: Expression,
-        public questionQuestionToken: Token,
-        public alternate: Expression
-    ) {
+    constructor(options: {
+        consequent: Expression;
+        questionQuestionToken?: Token;
+        alternate: Expression;
+    }) {
         super();
+        this.tokens = {
+            questionQuestion: options.questionQuestionToken
+        };
+        this.consequent = options.consequent;
+        this.alternate = options.alternate;
         this.range = util.createBoundingRange(
-            consequent,
-            questionQuestionToken,
-            alternate
+            this.consequent,
+            this.tokens.questionQuestion,
+            this.alternate
         );
     }
 
     public readonly kind = AstNodeKind.NullCoalescingExpression;
 
     public readonly range: Range;
+
+    public tokens: {
+        questionQuestion?: Token;
+    };
+
+    public consequent: Expression;
+    public alternate: Expression;
 
     transpile(state: BrsTranspileState) {
         let result = [];
@@ -1915,15 +1927,19 @@ export class NullCoalescingExpression extends Expression {
 }
 
 export class RegexLiteralExpression extends Expression {
-    public constructor(
-        public tokens: {
-            regexLiteral: Token;
-        }
-    ) {
+    constructor(options: {
+        regexLiteralToken: Token;
+    }) {
         super();
+        this.tokens = {
+            regexLiteral: options.regexLiteralToken
+        };
     }
 
     public readonly kind = AstNodeKind.RegexLiteralExpression;
+    public tokens: {
+        regexLiteral: Token;
+    };
 
     public get range() {
         return this.tokens?.regexLiteral?.range;
@@ -2005,17 +2021,23 @@ function numberExpressionToValue(expr: LiteralExpression, operator = '') {
 }
 
 export class TypeExpression extends Expression implements TypedefProvider {
-    constructor(
+    constructor(options: {
         /**
          * The standard AST expression that represents the type for this TypeExpression.
          */
-        public expression: Expression
-    ) {
+        expression: Expression;
+    }) {
         super();
-        this.range = expression?.range;
+        this.expression = options.expression;
+        this.range = this.expression?.range;
     }
 
     public readonly kind = AstNodeKind.TypeExpression;
+
+    /**
+       * The standard AST expression that represents the type for this TypeExpression.
+       */
+    public expression: Expression;
 
     public range: Range;
 
@@ -2050,20 +2072,33 @@ export class TypeExpression extends Expression implements TypedefProvider {
 }
 
 export class TypeCastExpression extends Expression {
-    constructor(
-        public obj: Expression,
-        public asToken?: Token,
-        public typeExpression?: TypeExpression
-    ) {
+    constructor(options: {
+        obj: Expression;
+        asToken?: Token;
+        typeExpression?: TypeExpression;
+    }) {
         super();
+        this.tokens = {
+            as: options.asToken
+        };
+        this.obj = options.obj;
+        this.typeExpression = options.typeExpression;
         this.range = util.createBoundingRange(
             this.obj,
-            this.asToken,
+            this.tokens.as,
             this.typeExpression
         );
     }
 
     public readonly kind = AstNodeKind.TypeCastExpression;
+
+    public obj: Expression;
+
+    public tokens: {
+        as?: Token;
+    };
+
+    public typeExpression?: TypeExpression;
 
     public range: Range;
 
@@ -2083,18 +2118,30 @@ export class TypeCastExpression extends Expression {
 }
 
 export class TypedArrayExpression extends Expression {
-    constructor(
-        public innerType: Expression,
-        public leftBracket: Token,
-        public rightBracket: Token
-    ) {
+    constructor(options: {
+        innerType: Expression;
+        leftBracketToken?: Token;
+        rightBracketToken?: Token;
+    }) {
         super();
+        this.tokens = {
+            leftBracket: options.leftBracketToken,
+            rightBracket: options.rightBracketToken
+        };
+        this.innerType = options.innerType;
         this.range = util.createBoundingRange(
             this.innerType,
-            this.leftBracket,
-            this.rightBracket
+            this.tokens.leftBracket,
+            this.tokens.rightBracket
         );
     }
+
+    public tokens: {
+        leftBracket?: Token;
+        rightBracket?: Token;
+    };
+
+    public innerType: Expression;
 
     public readonly kind = AstNodeKind.TypedArrayExpression;
 
