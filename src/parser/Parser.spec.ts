@@ -822,7 +822,7 @@ describe('parser', () => {
                 expectZeroDiagnostics(parser);
             });
 
-            it.only('converts aa literal property TokenKind to Identifier', () => {
+            it('converts aa literal property TokenKind to Identifier', () => {
                 const parser = parse(`
                     sub main()
                         person = {
@@ -842,7 +842,7 @@ describe('parser', () => {
                 });
 
                 expect(
-                    elements.map(x => x.tokens.key)
+                    elements.map(x => x.tokens.key.kind)
                 ).to.eql(
                     [TokenKind.Identifier, TokenKind.Identifier]
                 );
