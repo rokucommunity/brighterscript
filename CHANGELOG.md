@@ -138,6 +138,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.66.0-alpha.0](https://github.com/rokucommunity/brighterscript/compare/v0.65.1...v0.66.0-alpha.0) - 2023-06-09
 ### Changed
  - all the type tracking stuff!
+## [0.65.17](https://github.com/rokucommunity/brighterscript/compare/v0.65.16...0.65.17) - 2024-01-16
+### Changed
+ - add documentation on pruneEmptyCodeFiles to the README ([#1012](https://github.com/rokucommunity/brighterscript/pull/1012))
+ - assign .program to the builder BEFORE calling afterProgram ([#1011](https://github.com/rokucommunity/brighterscript/pull/1011))
+### Fixed
+ - properly handle `libpkg:/` prefix for script imports ([#1017](https://github.com/rokucommunity/brighterscript/pull/1017))
+
+
+
 ## [0.65.16](https://github.com/rokucommunity/brighterscript/compare/v0.65.15...v0.65.16) - 2024-01-08
 ### Added
  - Add `pruneEmptyCodeFiles` option to prevent publishing of empty files and exclude unnecessary script imports ([#997](https://github.com/rokucommunity/brighterscript/pull/997))

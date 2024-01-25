@@ -7,13 +7,14 @@ import { ProgramBuilder } from './ProgramBuilder';
 import { standardizePath as s, util } from './util';
 import { Logger, LogLevel } from './Logger';
 import * as diagnosticUtils from './diagnosticUtils';
-import { DiagnosticSeverity, Range } from 'vscode-languageserver';
+import { DiagnosticSeverity } from 'vscode-languageserver';
 import { BrsFile } from './files/BrsFile';
 import { expectZeroDiagnostics } from './testHelpers.spec';
 import type { BsConfig } from './BsConfig';
 import type { BscFile } from './files/BscFile';
-import type { BsDiagnostic } from './interfaces';
 import { tempDir, rootDir, stagingDir } from './testHelpers.spec';
+import { Deferred } from './deferred';
+import type { BsDiagnostic } from './interfaces';
 
 describe('ProgramBuilder', () => {
 
@@ -58,6 +59,21 @@ describe('ProgramBuilder', () => {
         expect(
             data.compare(newData)
         ).to.eql(0);
+    });
+
+    it('includes .program in the afterProgramCreate event', async () => {
+        builder = new ProgramBuilder();
+        const deferred = new Deferred<Program>();
+        builder.plugins.add({
+            name: 'test',
+            afterProgramCreate: () => {
+                deferred.resolve(builder.program);
+            }
+        });
+        builder['createProgram']();
+        expect(
+            await deferred.promise
+        ).to.exist;
     });
 
     describe('loadFiles', () => {
@@ -414,7 +430,7 @@ function createDiagnostic(
     const diagnostic = {
         code: code,
         message: message,
-        range: Range.create(startLine, startCol, endLine, endCol),
+        range: util.createRange(startLine, startCol, endLine, endCol),
         file: file,
         severity: severity
     };

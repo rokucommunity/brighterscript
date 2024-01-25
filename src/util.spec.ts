@@ -460,6 +460,16 @@ describe('util', () => {
             expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg:')).to.equal(null);
             expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg')).to.equal(s`components/pkg`);
         });
+
+        it('supports pkg:/ and libpkg:/', () => {
+            expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg:/source/lib.brs')).to.equal(s`source/lib.brs`);
+            expect(util.getPkgPathFromTarget('components/component1.xml', 'libpkg:/source/lib.brs')).to.equal(s`source/lib.brs`);
+        });
+
+        it('works case insensitive', () => {
+            expect(util.getPkgPathFromTarget('components/component1.xml', 'PKG:/source/lib.brs')).to.equal(s`source/lib.brs`);
+            expect(util.getPkgPathFromTarget('components/component1.xml', 'LIBPKG:/source/lib.brs')).to.equal(s`source/lib.brs`);
+        });
     });
 
     describe('getRelativePath', () => {

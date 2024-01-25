@@ -8,7 +8,7 @@ import type { DiagnosticRelatedInformation } from 'vscode-languageserver';
 import { type Diagnostic, type Position, type Range, type Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
-import type { BsConfig } from './BsConfig';
+import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, TypeChainEntry, TypeChainProcessResult } from './interfaces';
 import { BooleanType } from './types/BooleanType';
@@ -304,7 +304,7 @@ export class Util {
      * merge with bsconfig.json and the provided options.
      * @param config a bsconfig object to use as the baseline for the resulting config
      */
-    public normalizeAndResolveConfig(config: BsConfig) {
+    public normalizeAndResolveConfig(config: BsConfig | undefined): FinalizedBsConfig {
         let result = this.normalizeConfig({});
 
         if (config?.noProject) {
@@ -331,42 +331,57 @@ export class Util {
      * Set defaults for any missing items
      * @param config a bsconfig object to use as the baseline for the resulting config
      */
-    public normalizeConfig(config: BsConfig) {
-        config = config || {} as BsConfig;
-        config.cwd = config.cwd ?? process.cwd();
-        config.deploy = config.deploy === true ? true : false;
-        //use default files array from rokuDeploy
-        config.files = config.files ?? [...DefaultFiles];
-        config.createPackage = config.createPackage === false ? false : true;
-        let rootFolderName = path.basename(config.cwd);
-        config.outFile = config.outFile ?? `./out/${rootFolderName}.zip`;
-        config.sourceMap = config.sourceMap === true;
-        config.username = config.username ?? 'rokudev';
-        config.watch = config.watch === true ? true : false;
-        config.emitFullPaths = config.emitFullPaths === true ? true : false;
-        config.retainStagingDir = config.retainStagingDir ?? false;
-        config.copyToStaging = config.copyToStaging === false ? false : true;
-        config.ignoreErrorCodes = config.ignoreErrorCodes ?? [];
-        config.diagnosticSeverityOverrides = config.diagnosticSeverityOverrides ?? {};
-        config.diagnosticFilters = config.diagnosticFilters ?? [];
-        config.plugins = config.plugins ?? [];
-        config.pruneEmptyCodeFiles = config.pruneEmptyCodeFiles === true ? true : false;
-        config.autoImportComponentScript = config.autoImportComponentScript === true ? true : false;
-        config.showDiagnosticsInConsole = config.showDiagnosticsInConsole === false ? false : true;
-        config.sourceRoot = config.sourceRoot ? standardizePath(config.sourceRoot) : undefined;
-        config.allowBrighterScriptInBrightScript = config.allowBrighterScriptInBrightScript === true ? true : false;
-        config.emitDefinitions = config.emitDefinitions === true ? true : false;
-        config.removeParameterTypes = config.removeParameterTypes === true ? true : false;
+    public normalizeConfig(config: BsConfig | undefined): FinalizedBsConfig {
+        config = config ?? {} as BsConfig;
+
+        const cwd = config.cwd ?? process.cwd();
+        const rootFolderName = path.basename(cwd);
+        const retainStagingDir = (config.retainStagingDir ?? config.retainStagingDir) === true ? true : false;
+
+        let logLevel: LogLevel = LogLevel.log;
+
         if (typeof config.logLevel === 'string') {
-            config.logLevel = LogLevel[(config.logLevel as string).toLowerCase()];
+            logLevel = LogLevel[(config.logLevel as string).toLowerCase()] ?? LogLevel.log;
         }
-        config.logLevel = config.logLevel ?? LogLevel.log;
-        config.bslibDestinationDir = config.bslibDestinationDir ?? 'source';
-        if (config.bslibDestinationDir !== 'source') {
+
+        let bslibDestinationDir = config.bslibDestinationDir ?? 'source';
+        if (bslibDestinationDir !== 'source') {
             // strip leading and trailing slashes
-            config.bslibDestinationDir = config.bslibDestinationDir.replace(/^(\/*)(.*?)(\/*)$/, '$2');
+            bslibDestinationDir = bslibDestinationDir.replace(/^(\/*)(.*?)(\/*)$/, '$2');
         }
-        return config;
+
+        const configWithDefaults: Omit<FinalizedBsConfig, 'rootDir'> = {
+            cwd: cwd,
+            deploy: config.deploy === true ? true : false,
+            //use default files array from rokuDeploy
+            files: config.files ?? [...DefaultFiles],
+            createPackage: config.createPackage === false ? false : true,
+            outFile: config.outFile ?? `./out/${rootFolderName}.zip`,
+            sourceMap: config.sourceMap === true,
+            username: config.username ?? 'rokudev',
+            watch: config.watch === true ? true : false,
+            emitFullPaths: config.emitFullPaths === true ? true : false,
+            retainStagingDir: retainStagingDir,
+            copyToStaging: config.copyToStaging === false ? false : true,
+            ignoreErrorCodes: config.ignoreErrorCodes ?? [],
+            diagnosticSeverityOverrides: config.diagnosticSeverityOverrides ?? {},
+            diagnosticFilters: config.diagnosticFilters ?? [],
+            plugins: config.plugins ?? [],
+            pruneEmptyCodeFiles: config.pruneEmptyCodeFiles === true ? true : false,
+            autoImportComponentScript: config.autoImportComponentScript === true ? true : false,
+            showDiagnosticsInConsole: config.showDiagnosticsInConsole === false ? false : true,
+            sourceRoot: config.sourceRoot ? standardizePath(config.sourceRoot) : undefined,
+            allowBrighterScriptInBrightScript: config.allowBrighterScriptInBrightScript === true ? true : false,
+            emitDefinitions: config.emitDefinitions === true ? true : false,
+            removeParameterTypes: config.removeParameterTypes === true ? true : false,
+            logLevel: logLevel,
+            bslibDestinationDir: bslibDestinationDir
+        };
+
+        //mutate `config` in case anyone is holding a reference to the incomplete one
+        const merged: FinalizedBsConfig = Object.assign(config, configWithDefaults);
+
+        return merged;
     }
 
     /**
@@ -421,16 +436,20 @@ export class Util {
      * compute the pkg path for the target relative to the source file's location
      */
     public getPkgPathFromTarget(containingFilePathAbsolute: string, targetPath: string) {
-        //if the target starts with 'pkg:', it's an absolute path. Return as is
-        if (targetPath.startsWith('pkg:/')) {
-            targetPath = targetPath.substring(5);
+        // https://regex101.com/r/w7CG2N/1
+        const regexp = /^(?:pkg|libpkg):(\/)?/i;
+        const [fullScheme, slash] = regexp.exec(targetPath) ?? [];
+        //if the target starts with 'pkg:' or 'libpkg:' then it's an absolute path. Return as is
+        if (slash) {
+            targetPath = targetPath.substring(fullScheme.length);
             if (targetPath === '') {
                 return null;
             } else {
                 return path.normalize(targetPath);
             }
         }
-        if (targetPath === 'pkg:') {
+        //if the path is exactly `pkg:` or `libpkg:`
+        if (targetPath === fullScheme && !slash) {
             return null;
         }
 
@@ -572,7 +591,7 @@ export class Util {
      * Test if `position` is in `range`. If the position is at the edges, will return true.
      * Adapted from core vscode
      */
-    public rangeContains(range: Range, position: Position) {
+    public rangeContains(range: Range | undefined, position: Position | undefined) {
         return this.comparePositionToRange(position, range) === 0;
     }
 
@@ -759,7 +778,7 @@ export class Util {
     /**
      * Get the outDir from options, taking into account cwd and absolute outFile paths
      */
-    public getOutDir(options: BsConfig) {
+    public getOutDir(options: FinalizedBsConfig) {
         options = this.normalizeConfig(options);
         let cwd = path.normalize(options.cwd ? options.cwd : process.cwd());
         if (path.isAbsolute(options.outFile)) {
@@ -772,7 +791,7 @@ export class Util {
     /**
      * Get paths to all files on disc that match this project's source list
      */
-    public async getFilePaths(options: BsConfig) {
+    public async getFilePaths(options: FinalizedBsConfig) {
         let rootDir = this.getRootDir(options);
 
         let files = await rokuDeploy.getFilePaths(options.files, rootDir);

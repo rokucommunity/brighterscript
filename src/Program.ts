@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
 import type { CodeAction, Position, Range, SignatureInformation, Location } from 'vscode-languageserver';
-import type { BsConfig } from './BsConfig';
+import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { BrsFile, ProvidedSymbolInfo } from './files/BrsFile';
@@ -66,7 +66,7 @@ export class Program {
         /**
          * The root directory for this program
          */
-        public options: BsConfig,
+        options: BsConfig,
         logger?: Logger,
         plugins?: PluginInterface
     ) {
@@ -85,6 +85,7 @@ export class Program {
         this.fileFactory = new FileFactory(this);
     }
 
+    public options: FinalizedBsConfig;
     public logger: Logger;
 
     /**
@@ -212,7 +213,7 @@ export class Program {
      * A scope that contains all built-in global functions.
      * All scopes should directly or indirectly inherit from this scope
      */
-    public globalScope: Scope;
+    public globalScope: Scope = undefined as any;
 
     /**
      * Plugins which can provide extra diagnostics or transform AST
@@ -491,15 +492,15 @@ export class Program {
      * roku filesystem is case INsensitive, so find the scope by key case insensitive
      * @param scopeName xml scope names are their `destPath`. Source scope is stored with the key `"source"`
      */
-    public getScopeByName(scopeName: string): Scope {
+    public getScopeByName(scopeName: string): Scope | undefined {
         if (!scopeName) {
             return undefined;
         }
         //most scopes are xml file pkg paths. however, the ones that are not are single names like "global" and "scope",
         //so it's safe to run the standardizePkgPath method
-        scopeName = s`${scopeName.toLowerCase()}`;
-        let key = Object.keys(this.scopes).find(x => x.toLowerCase() === scopeName);
-        return this.scopes[key];
+        scopeName = s`${scopeName}`;
+        let key = Object.keys(this.scopes).find(x => x.toLowerCase() === scopeName.toLowerCase());
+        return this.scopes[key!];
     }
 
     /**
@@ -662,9 +663,9 @@ export class Program {
      * @param fileParam an object representing file paths
      * @param rootDir must be a pre-normalized path
      */
-    private getPaths(fileParam: string | FileObj, rootDir: string) {
-        let srcPath: string;
-        let destPath: string;
+    private getPaths(fileParam: string | FileObj | { srcPath?: string; pkgPath?: string }, rootDir: string) {
+        let srcPath: string | undefined;
+        let destPath: string | undefined;
 
         assert.ok(fileParam, 'fileParam is required');
 
@@ -794,7 +795,7 @@ export class Program {
                 this.plugins.emit('onScopeDispose', scopeDisposeEvent);
                 scope.dispose();
                 //notify dependencies of this scope that it has been removed
-                this.dependencyGraph.remove(scope.dependencyGraphKey);
+                this.dependencyGraph.remove(scope.dependencyGraphKey!);
                 delete this.scopes[file.destPath];
                 this.plugins.emit('afterScopeDispose', scopeDisposeEvent);
             }
@@ -1066,15 +1067,14 @@ export class Program {
      * @param file the file
      */
     public getScopesForFile(file: BscFile | string) {
-        if (typeof file === 'string') {
-            file = this.getFile(file);
-        }
+        const resolvedFile = typeof file === 'string' ? this.getFile(file) : file;
+
         let result = [] as Scope[];
-        if (file) {
+        if (resolvedFile) {
             for (let key in this.scopes) {
                 let scope = this.scopes[key];
 
-                if (scope.hasFile(file)) {
+                if (scope.hasFile(resolvedFile)) {
                     result.push(scope);
                 }
             }
@@ -1704,8 +1704,13 @@ export class Program {
     /**
      * Try to find and load the manifest into memory
      * @param manifestFileObj A pointer to a potential manifest file object found during loading
+     * @param replaceIfAlreadyLoaded should we overwrite the internal `_manifest` if it already exists
      */
-    public loadManifest(manifestFileObj?: FileObj) {
+    public loadManifest(manifestFileObj?: FileObj, replaceIfAlreadyLoaded = true) {
+        //if we already have a manifest instance, and should not replace...then don't replace
+        if (!replaceIfAlreadyLoaded && this._manifest) {
+            return;
+        }
         let manifestPath = manifestFileObj
             ? manifestFileObj.src
             : path.join(this.options.rootDir, 'manifest');

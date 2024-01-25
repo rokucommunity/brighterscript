@@ -32,7 +32,7 @@ export class XmlScope extends Scope {
      */
     public getParentScope() {
         return this.cache.getOrAdd('parentScope', () => {
-            let scope: Scope;
+            let scope: Scope | undefined;
             let parentComponentName = this.xmlFile.parentComponentName?.text;
             if (parentComponentName) {
                 scope = this.program.getComponentScope(parentComponentName);
@@ -40,7 +40,7 @@ export class XmlScope extends Scope {
             if (scope) {
                 return scope;
             } else {
-                return this.program.globalScope;
+                return this.program.globalScope ?? null;
             }
         });
     }
@@ -107,7 +107,7 @@ export class XmlScope extends Scope {
             } else if (!callableContainerMap.has(name.toLowerCase())) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.xmlFunctionNotFound(name),
-                    range: func.getAttribute('name').tokens.value.range,
+                    range: func.getAttribute('name')?.tokens.value.range,
                     file: this.xmlFile,
                     origin: DiagnosticOrigin.Scope
                 });
@@ -126,7 +126,7 @@ export class XmlScope extends Scope {
             } else if (!SGFieldTypes.includes(type.toLowerCase())) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.xmlInvalidFieldType(type),
-                    range: field.getAttribute('type').tokens.value.range,
+                    range: field.getAttribute('type')?.tokens.value.range,
                     file: this.xmlFile,
                     origin: DiagnosticOrigin.Scope
                 });
@@ -135,7 +135,7 @@ export class XmlScope extends Scope {
                 if (!callableContainerMap.has(onChange.toLowerCase())) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.xmlFunctionNotFound(onChange),
-                        range: field.getAttribute('onchange').tokens.value.range,
+                        range: field.getAttribute('onchange')?.tokens.value.range,
                         file: this.xmlFile,
                         origin: DiagnosticOrigin.Scope
                     });

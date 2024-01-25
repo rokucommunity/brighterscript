@@ -196,3 +196,22 @@ export interface BsConfig {
      */
     bslibDestinationDir?: string;
 }
+
+type OptionalBsConfigFields =
+    | '_ancestors'
+    | 'sourceRoot'
+    | 'project'
+    | 'manifest'
+    | 'noProject'
+    | 'extends'
+    | 'host'
+    | 'password'
+    | 'require'
+    | 'stagingDir'
+    | 'diagnosticLevel'
+    | 'rootDir'
+    | 'stagingDir';
+
+export type FinalizedBsConfig =
+    Omit<Required<BsConfig>, OptionalBsConfigFields>
+    & Pick<BsConfig, OptionalBsConfigFields>;
