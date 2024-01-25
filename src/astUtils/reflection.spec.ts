@@ -224,15 +224,15 @@ describe('reflection', () => {
         const escapedCarCode = new EscapedCharCodeLiteralExpression({ valueToken: charCode });
         const arrayLit = new ArrayLiteralExpression({ elements: [], openToken: token, closeToken: token });
         const aaLit = new AALiteralExpression({ elements: [], openToken: token, closeToken: token });
-        const unary = new UnaryExpression(token, expr);
+        const unary = new UnaryExpression({ operatorToken: token, right: expr });
         const variable = new VariableExpression({ nameToken: ident });
-        const sourceLit = new SourceLiteralExpression(token);
-        const newx = new NewExpression(token, call);
+        const sourceLit = new SourceLiteralExpression({ valueToken: token });
+        const newx = new NewExpression({ newKeywordToken: token, call: call });
         const callfunc = new CallfuncExpression({ callee: expr, operatorToken: token, methodNameToken: ident, openingParenToken: token, args: [], closingParenToken: token });
         const tplQuasi = new TemplateStringQuasiExpression({ expressions: [expr] });
         const tplString = new TemplateStringExpression({ openingBacktickToken: token, quasis: [tplQuasi], expressions: [], closingBacktickToken: token });
         const taggedTpl = new TaggedTemplateStringExpression({ tagNameToken: ident, openingBacktickToken: token, quasis: [tplQuasi], expressions: [], closingBacktickToken: token });
-        const annotation = new AnnotationExpression(token, token);
+        const annotation = new AnnotationExpression({ atToken: token, nameToken: token });
 
         it('isExpression', () => {
             expect(isExpression(binary)).to.be.true;

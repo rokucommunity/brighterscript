@@ -490,10 +490,10 @@ export class ScopeValidator {
             // operand is basically "any" type... ignore;
 
         } else if (isPrimitiveType(rightType)) {
-            const opResult = util.unaryOperatorResultType(unaryExpr.operator, rightTypeToTest);
+            const opResult = util.unaryOperatorResultType(unaryExpr.tokens.operator, rightTypeToTest);
             if (isDynamicType(opResult)) {
                 this.addMultiScopeDiagnostic({
-                    ...DiagnosticMessages.operatorTypeMismatch(unaryExpr.operator.text, rightType.toString()),
+                    ...DiagnosticMessages.operatorTypeMismatch(unaryExpr.tokens.operator.text, rightType.toString()),
                     range: unaryExpr.range,
                     file: file
                 });
@@ -501,7 +501,7 @@ export class ScopeValidator {
         } else {
             // rhs is not a primitive, so no binary operator is allowed
             this.addMultiScopeDiagnostic({
-                ...DiagnosticMessages.operatorTypeMismatch(unaryExpr.operator.text, rightType.toString()),
+                ...DiagnosticMessages.operatorTypeMismatch(unaryExpr.tokens.operator.text, rightType.toString()),
                 range: unaryExpr.range,
                 file: file
             });

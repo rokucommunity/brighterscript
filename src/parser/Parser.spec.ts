@@ -966,14 +966,14 @@ describe('parser', () => {
             let fn = statements[0] as FunctionStatement;
             expect(fn.annotations).to.exist;
             expect(fn.annotations![0]).to.be.instanceof(AnnotationExpression);
-            expect(fn.annotations![0].nameToken.text).to.equal('meta1');
+            expect(fn.annotations![0].tokens.name.text).to.equal('meta1');
             expect(fn.annotations![0].name).to.equal('meta1');
 
             expect(statements[1]).to.be.instanceof(FunctionStatement);
             fn = statements[1] as FunctionStatement;
             expect(fn.annotations).to.exist;
             expect(fn.annotations![0]).to.be.instanceof(AnnotationExpression);
-            expect(fn.annotations![0].nameToken.text).to.equal('meta2');
+            expect(fn.annotations![0].tokens.name.text).to.equal('meta2');
         });
 
         it('attaches annotations inside a function body', () => {
@@ -1019,7 +1019,7 @@ describe('parser', () => {
             let fn = statements[0] as FunctionStatement;
             expect(fn.annotations).to.exist;
             expect(fn.annotations![0]).to.be.instanceof(AnnotationExpression);
-            expect(fn.annotations![0].nameToken.text).to.equal('meta1');
+            expect(fn.annotations![0].tokens.name.text).to.equal('meta1');
             expect(fn.annotations![0].call).to.be.instanceof(CallExpression);
         });
 

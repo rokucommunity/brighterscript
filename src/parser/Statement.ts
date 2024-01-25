@@ -3001,7 +3001,7 @@ export class EnumStatement extends Statement implements TypedefProvider {
 
                 //simple unary expressions (like `-1`)
             } else if (isUnaryExpression(member.value) && isLiteralExpression(member.value.right)) {
-                result.set(member.name?.toLowerCase(), member.value.operator.text + member.value.right.tokens.value.text);
+                result.set(member.name?.toLowerCase(), member.value.tokens.operator.text + member.value.right.tokens.value.text);
 
                 //all other values
             } else {

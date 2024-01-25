@@ -1038,17 +1038,26 @@ export class AALiteralExpression extends Expression {
 }
 
 export class UnaryExpression extends Expression {
-    constructor(
-        public operator: Token,
-        public right: Expression
-    ) {
+    constructor(options: {
+        operatorToken: Token;
+        right: Expression;
+    }) {
         super();
-        this.range = util.createBoundingRange(this.operator, this.right);
+        this.tokens = {
+            operator: options.operatorToken
+        };
+        this.right = options.right;
+        this.range = util.createBoundingRange(this.tokens.operator, this.right);
     }
 
     public readonly kind = AstNodeKind.UnaryExpression;
 
     public readonly range: Range;
+
+    public tokens: {
+        operator: Token;
+    };
+    public right: Expression;
 
     transpile(state: BrsTranspileState) {
         let separatingWhitespace: string;
@@ -1060,7 +1069,7 @@ export class UnaryExpression extends Expression {
             separatingWhitespace = ' ';
         }
         return [
-            state.transpileToken(this.operator),
+            state.transpileToken(this.tokens.operator),
             separatingWhitespace,
             ...this.right.transpile(state)
         ];
@@ -1073,7 +1082,7 @@ export class UnaryExpression extends Expression {
     }
 
     getType(options: GetTypeOptions): BscType {
-        return util.unaryOperatorResultType(this.operator, this.right.getType(options));
+        return util.unaryOperatorResultType(this.tokens.operator, this.right.getType(options));
     }
 }
 
@@ -1140,16 +1149,23 @@ export class VariableExpression extends Expression {
 }
 
 export class SourceLiteralExpression extends Expression {
-    constructor(
-        readonly token: Token
-    ) {
+    constructor(options: {
+        valueToken: Token;
+    }) {
         super();
-        this.range = token?.range;
+        this.tokens = {
+            value: options.valueToken
+        };
+        this.range = this.tokens.value?.range;
     }
 
     public readonly range: Range;
 
     public readonly kind = AstNodeKind.SourceLiteralExpression;
+
+    readonly tokens: {
+        value: Token;
+    };
 
     /**
      * Find the index of the function in its parent
@@ -1170,7 +1186,7 @@ export class SourceLiteralExpression extends Expression {
     }
 
     private getFunctionName(state: BrsTranspileState, parseMode: ParseMode) {
-        let func = state.file.getFunctionScopeAtPosition(this.token.range.start).func;
+        let func = state.file.getFunctionScopeAtPosition(this.tokens.value.range.start).func;
         let nameParts = [];
         let parentFunction: FunctionExpression;
         while ((parentFunction = func.findAncestor<FunctionExpression>(isFunctionExpression))) {
@@ -1187,13 +1203,13 @@ export class SourceLiteralExpression extends Expression {
 
     transpile(state: BrsTranspileState) {
         let text: string;
-        switch (this.token.kind) {
+        switch (this.tokens.value.kind) {
             case TokenKind.SourceFilePathLiteral:
                 const pathUrl = fileUrl(state.srcPath);
                 text = `"${pathUrl.substring(0, 4)}" + "${pathUrl.substring(4)}"`;
                 break;
             case TokenKind.SourceLineNumLiteral:
-                text = `${this.token.range.start.line + 1}`;
+                text = `${this.tokens.value.range.start.line + 1}`;
                 break;
             case TokenKind.FunctionNameLiteral:
                 text = `"${this.getFunctionName(state, ParseMode.BrightScript)}"`;
@@ -1203,7 +1219,7 @@ export class SourceLiteralExpression extends Expression {
                 break;
             case TokenKind.SourceLocationLiteral:
                 const locationUrl = fileUrl(state.srcPath);
-                text = `"${locationUrl.substring(0, 4)}" + "${locationUrl.substring(4)}:${this.token.range.start.line + 1}"`;
+                text = `"${locationUrl.substring(0, 4)}" + "${locationUrl.substring(4)}:${this.tokens.value.range.start.line + 1}"`;
                 break;
             case TokenKind.PkgPathLiteral:
                 text = `"${util.sanitizePkgPath(state.file.pkgPath)}"`;
@@ -1214,7 +1230,7 @@ export class SourceLiteralExpression extends Expression {
             case TokenKind.LineNumLiteral:
             default:
                 //use the original text (because it looks like a variable)
-                text = this.token.text;
+                text = this.tokens.value.text;
                 break;
 
         }
@@ -1234,17 +1250,26 @@ export class SourceLiteralExpression extends Expression {
  * do more type checking.
  */
 export class NewExpression extends Expression {
-    constructor(
-        readonly newKeyword: Token,
-        readonly call: CallExpression
-    ) {
+    constructor(options: {
+        newKeywordToken?: Token;
+        call: CallExpression;
+    }) {
         super();
-        this.range = util.createBoundingRange(this.newKeyword, this.call);
+        this.tokens = {
+            newKeyword: options.newKeywordToken
+        };
+        this.call = options.call;
+        this.range = util.createBoundingRange(this.tokens.newKeyword, this.call);
     }
 
     public readonly kind = AstNodeKind.NewExpression;
 
     public readonly range: Range;
+
+    readonly tokens: {
+        newKeyword?: Token;
+    };
+    readonly call: CallExpression;
 
     /**
      * The name of the class to initialize (with optional namespace prefixed)
@@ -1633,20 +1658,31 @@ export class TaggedTemplateStringExpression extends Expression {
 }
 
 export class AnnotationExpression extends Expression {
-    constructor(
-        readonly atToken: Token,
-        readonly nameToken: Token
-    ) {
+    constructor(options: {
+        atToken?: Token;
+        nameToken: Token;
+        call?: CallExpression;
+    }) {
         super();
-        this.name = nameToken.text;
+        this.tokens = {
+            at: options.atToken,
+            name: options.nameToken
+        };
+        this.call = options.call;
+        this.name = this.tokens.name.text;
     }
 
     public readonly kind = AstNodeKind.AnnotationExpression;
 
+    readonly tokens: {
+        at: Token;
+        name: Token;
+    };
+
     public get range() {
         return util.createBoundingRange(
-            this.atToken,
-            this.nameToken,
+            this.tokens.at,
+            this.tokens.name,
             this.call
         );
     }
@@ -1667,7 +1703,7 @@ export class AnnotationExpression extends Expression {
     }
 
     public getLeadingTrivia(): Token[] {
-        return this.atToken.leadingTrivia;
+        return this.tokens.at?.leadingTrivia;
     }
 
     transpile(state: BrsTranspileState) {
@@ -1915,7 +1951,7 @@ function expressionToValue(expr: Expression, strict: boolean): ExpressionValue {
         return null;
     }
     if (isUnaryExpression(expr) && isLiteralNumber(expr.right)) {
-        return numberExpressionToValue(expr.right, expr.operator.text);
+        return numberExpressionToValue(expr.right, expr.tokens.operator.text);
     }
     if (isLiteralString(expr)) {
         //remove leading and trailing quotes

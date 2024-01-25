@@ -1440,7 +1440,7 @@ export class Parser {
         if (identifier) {
             identifier.kind = TokenKind.Identifier;
         }
-        let annotation = new AnnotationExpression(atToken, identifier);
+        let annotation = new AnnotationExpression({ atToken: atToken, nameToken: identifier });
         this.pendingAnnotations.push(annotation);
 
         //optional arguments
@@ -2356,14 +2356,14 @@ export class Parser {
             this.current++; //advance
             let operator = this.previous();
             let right = this.relational();
-            return new UnaryExpression(operator, right);
+            return new UnaryExpression({ operatorToken: operator, right: right });
         } else if (nextKind === TokenKind.Minus || nextKind === TokenKind.Plus) {
             this.current++; //advance
             let operator = this.previous();
             let right = (nextKind as any) === TokenKind.Not
                 ? this.boolean()
                 : this.prefixUnary();
-            return new UnaryExpression(operator, right);
+            return new UnaryExpression({ operatorToken: operator, right: right });
         }
         return this.call();
     }
@@ -2417,7 +2417,7 @@ export class Parser {
         let call = this.finishCall(leftParen, nameExpr);
         //pop the call from the  callExpressions list because this is technically something else
         this.callExpressions.pop();
-        let result = new NewExpression(newToken, call);
+        let result = new NewExpression({ newKeywordToken: newToken, call: call });
         return result;
     }
 
@@ -2636,7 +2636,7 @@ export class Parser {
 
             //capture source literals (LINE_NUM if brightscript, or a bunch of them if brighterscript)
             case this.matchAny(TokenKind.LineNumLiteral, ...(this.options.mode === ParseMode.BrightScript ? [] : BrighterScriptSourceLiterals)):
-                return new SourceLiteralExpression(this.previous());
+                return new SourceLiteralExpression({ valueToken: this.previous() });
 
             //template string
             case this.check(TokenKind.BackTick):
