@@ -2838,7 +2838,7 @@ export class Parser {
             closingBrace = this.previous();
         }
 
-        const aaExpr = new AALiteralExpression(members, openingBrace, closingBrace);
+        const aaExpr = new AALiteralExpression({ elements: members, openToken: openingBrace, closeToken: closingBrace });
         return aaExpr;
     }
 

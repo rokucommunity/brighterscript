@@ -928,14 +928,26 @@ export class AAMemberExpression extends Expression {
 }
 
 export class AALiteralExpression extends Expression {
-    constructor(
-        readonly elements: Array<AAMemberExpression | CommentStatement>,
-        readonly open: Token,
-        readonly close: Token
-    ) {
+    constructor(options: {
+        elements: Array<AAMemberExpression | CommentStatement>;
+        openToken?: Token;
+        closeToken?: Token;
+    }) {
         super();
-        this.range = util.createBoundingRange(this.open, ...this.elements, this.close);
+        this.tokens = {
+            open: options.openToken,
+            close: options.closeToken
+        };
+        this.elements = options.elements;
+        this.range = util.createBoundingRange(this.tokens.open, ...this.elements, this.tokens.close);
     }
+
+    readonly elements: Array<AAMemberExpression | CommentStatement>;
+    readonly tokens: {
+        open?: Token;
+        close?: Token;
+    };
+
 
     public readonly kind = AstNodeKind.AALiteralExpression;
 
@@ -945,11 +957,11 @@ export class AALiteralExpression extends Expression {
         let result = [];
         //open curly
         result.push(
-            state.transpileToken(this.open)
+            state.transpileToken(this.tokens.open, '{')
         );
         let hasChildren = this.elements.length > 0;
         //add newline if the object has children and the first child isn't a comment starting on the same line as opening curly
-        if (hasChildren && (isCommentStatement(this.elements[0]) === false || !util.linesTouch(this.elements[0], this.open))) {
+        if (hasChildren && (isCommentStatement(this.elements[0]) === false || !util.linesTouch(this.elements[0], this.tokens.open))) {
             result.push('\n');
         }
         state.blockDepth++;
@@ -960,7 +972,7 @@ export class AALiteralExpression extends Expression {
 
             //don't indent if comment is same-line
             if (isCommentStatement(element as any) &&
-                (util.linesTouch(this.open, element) || util.linesTouch(previousElement, element))
+                (util.linesTouch(this.tokens.open, element) || util.linesTouch(previousElement, element))
             ) {
                 result.push(' ');
 
@@ -1003,11 +1015,8 @@ export class AALiteralExpression extends Expression {
             result.push(state.indent());
         }
         //close curly
-        if (this.close) {
-            result.push(
-                state.transpileToken(this.close)
-            );
-        }
+        result.push(state.transpileToken(this.tokens.close, '}'));
+
         return result;
     }
 
