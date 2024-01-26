@@ -1543,6 +1543,60 @@ export class RegexLiteralExpression extends Expression {
     }
 }
 
+export class TypeExpression extends Expression implements TypedefProvider {
+    constructor(
+        /**
+         * The standard AST expression that represents the type for this TypeExpression.
+         */
+        public typeToken: Token
+    ) {
+        super();
+        this.range = typeToken?.range;
+    }
+
+
+    public range: Range;
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        return [util.tokenToBscType(this.typeToken)?.toTypeString() ?? 'dynamic'];
+    }
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+    }
+
+    getTypedef(state: TranspileState): (string | SourceNode)[] {
+        // TypeDefs should pass through any valid type names
+        return this.expression.transpile(state as BrsTranspileState);
+    }
+
+}
+
+export class TypeCastExpression extends Expression {
+    constructor(
+        public obj: Expression,
+        public asToken?: Token,
+        public typeExpression?: TypeExpression
+    ) {
+        super();
+        this.range = util.createBoundingRange(
+            this.obj,
+            this.asToken,
+            this.typeExpression
+        );
+    }
+
+    public range: Range;
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        return this.obj.transpile(state);
+    }
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'obj', visitor, options);
+            walk(this, 'typeExpression', visitor, options);
+        }
+    }
+}
+
 // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
 type ExpressionValue = string | number | boolean | Expression | ExpressionValue[] | { [key: string]: ExpressionValue };
 

@@ -2576,6 +2576,82 @@ export class Parser {
     }
 
     /**
+     * Creates a TypeExpression, which wraps standard ASTNodes that represent a BscType
+     */
+    private typeExpression(): TypeExpression {
+        const changedTokens: { token: Token; oldKind: TokenKind }[] = [];
+        try {
+            let expr: Expression = this.getTypeExpressionPart(changedTokens);
+            while (this.options.mode === ParseMode.BrighterScript && this.matchAny(TokenKind.Or)) {
+                // If we're in Brighterscript mode, allow union types with "or" between types
+                // TODO: Handle Union types in parens? eg. "(string or integer)"
+                let operator = this.previous();
+                let right = this.getTypeExpressionPart(changedTokens);
+                if (right) {
+                    expr = new BinaryExpression(expr, operator, right);
+                } else {
+                    break;
+                }
+            }
+            if (expr) {
+                return new TypeExpression(expr);
+            }
+
+        } catch (error) {
+            // Something went wrong - reset the kind to what it was previously
+            for (const changedToken of changedTokens) {
+                changedToken.token.kind = changedToken.oldKind;
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * Gets a single "part" of a type of a potential Union type
+     * Note: this does not NEED to be part of a union type, but the logic is the same
+     *
+     * @param changedTokens an array that is modified with any tokens that have been changed from their default kind to identifiers - eg. when a keyword is used as type
+     * @returns an expression that was successfully parsed
+     */
+    private getTypeExpressionPart(changedTokens: { token: Token; oldKind: TokenKind }[]) {
+        let expr: VariableExpression | DottedGetExpression | TypedArrayExpression;
+        if (this.checkAny(...DeclarableTypes)) {
+            // if this is just a type, just use directly
+            expr = new VariableExpression(this.advance() as Identifier);
+        } else {
+            if (this.checkAny(...AllowedTypeIdentifiers)) {
+                // Since the next token is allowed as a type identifier, change the kind
+                let nextToken = this.peek();
+                changedTokens.push({ token: nextToken, oldKind: nextToken.kind });
+                nextToken.kind = TokenKind.Identifier;
+            }
+            expr = this.identifyingExpression(AllowedTypeIdentifiers);
+        }
+
+        //Check if it has square brackets, thus making it an array
+        if (expr && this.check(TokenKind.LeftSquareBracket)) {
+            if (this.options.mode === ParseMode.BrightScript) {
+                // typed arrays not allowed in Brightscript
+                this.warnIfNotBrighterScriptMode('typed arrays');
+                return expr;
+            }
+
+            // Check if it is an array - that is, if it has `[]` after the type
+            // eg. `string[]` or `SomeKlass[]`
+            // This is while loop, so it supports multidimensional arrays (eg. integer[][])
+            while (this.check(TokenKind.LeftSquareBracket)) {
+                const leftBracket = this.advance();
+                if (this.check(TokenKind.RightSquareBracket)) {
+                    const rightBracket = this.advance();
+                    expr = new TypedArrayExpression(expr, leftBracket, rightBracket);
+                }
+            }
+        }
+
+        return expr;
+    }
+
+    /**
      * Tries to get the next token as a type
      * Allows for built-in types (double, string, etc.) or namespaced custom types in Brighterscript mode
      * Will return a token of whatever is next to be parsed
