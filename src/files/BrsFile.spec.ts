@@ -3662,6 +3662,18 @@ describe('BrsFile', () => {
             `);
         });
 
+        it('transpiles typed arrays in return types to dynamic', () => {
+            testTranspile(`
+                function main() as integer[]
+                    return []
+                end function
+            `, `
+                function main() as dynamic
+                    return []
+                end function
+            `);
+        });
+
         it('transpiles multi-dimension typed arrays to dynamic', () => {
             testTranspile(`
                 sub main(param1 as float[][][])
@@ -3828,7 +3840,7 @@ describe('BrsFile', () => {
         });
 
         it('allows extends on classes', () => {
-            const file = program.setFile<BrsFile>('source/main.bs', `
+            program.setFile<BrsFile>('source/main.bs', `
                 class MyBase
                     url as string
                 end class
