@@ -2801,6 +2801,24 @@ describe('Program', () => {
             expect(roSGNodeNodeType.isTypeCompatible(rowListType)).to.be.true;
             expect(roSGNodeNodeType.isTypeCompatible(taskType)).to.be.true;
         });
+
+        it('built-in objects have interfaces as members', () => {
+            const table = program.globalScope.symbolTable;
+            const opts = { flags: SymbolTypeFlag.typetime };
+            const labelType = table.getSymbolType('roSGNodeLabel', opts);
+            const registryType = table.getSymbolType('roRegistry', opts);
+
+            expectTypeToBe(labelType.getMemberType('ifSGNodeChildren', { flags: SymbolTypeFlag.runtime }), InterfaceType);
+            expectTypeToBe(registryType.getMemberType('ifRegistry', { flags: SymbolTypeFlag.runtime }), InterfaceType);
+        });
+
+        it('built-in interfaces do not have themselves as members', () => {
+            const table = program.globalScope.symbolTable;
+            const opts = { flags: SymbolTypeFlag.typetime };
+            const ifAAType = table.getSymbolType('ifAssociativeArray', opts);
+
+            expect(ifAAType.getMemberType('ifAssociativeArray', { flags: SymbolTypeFlag.runtime }).isResolvable()).to.be.false;
+        });
     });
 
     describe('manifest', () => {
