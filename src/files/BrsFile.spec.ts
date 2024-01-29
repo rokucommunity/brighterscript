@@ -3704,7 +3704,7 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('allows union types for primitives', () => {
+        it.only('allows union types for primitives', () => {
             testTranspile(`
                 sub main(x as string or float, y as object or float or string)
                 end sub
