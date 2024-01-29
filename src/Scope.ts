@@ -878,7 +878,9 @@ export class Scope {
                 // check if this custom type is in our class map
                 const returnTypeName = func.returnType.name;
                 const currentNamespaceName = func.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
-                if (!this.hasClass(returnTypeName, currentNamespaceName) && !this.hasInterface(returnTypeName) && !this.hasEnum(returnTypeName)) {
+                // check for built in types
+                const isBuiltInType = util.isBuiltInType(returnTypeName);
+                if (!isBuiltInType && !this.hasClass(returnTypeName, currentNamespaceName) && !this.hasInterface(returnTypeName) && !this.hasEnum(returnTypeName)) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.invalidFunctionReturnType(returnTypeName),
                         range: func.returnTypeToken.range,

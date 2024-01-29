@@ -3650,6 +3650,18 @@ describe('BrsFile', () => {
             `);
         });
 
+        it('transpiles typed arrays in return types to dynamic', () => {
+            testTranspile(`
+                function main() as integer[]
+                    return []
+                end function
+            `, `
+                function main() as dynamic
+                    return []
+                end function
+            `);
+        });
+
         it('transpiles multi-dimension typed arrays to dynamic', () => {
             testTranspile(`
                 sub main(param1 as float[][][])
@@ -3786,6 +3798,47 @@ describe('BrsFile', () => {
                 sub main(x as dynamic)
                 end sub
             `);
+        });
+
+        it('allows built-in types for return values', () => {
+            testTranspile(`
+                function makeLabel(text as string) as roSGNodeLabel
+                   label = createObject("roSGNode", "Label")
+                   label.text = text
+                end function
+            `, `
+                function makeLabel(text as string) as object
+                    label = createObject("roSGNode", "Label")
+                    label.text = text
+                end function
+            `);
+        });
+
+        it('allows extends on interfaces', () => {
+            testTranspile(`
+                interface MyBase
+                    url as string
+                end interface
+
+                interface MyExtends extends MyBase
+                    method as string
+                end interface
+            `, `
+            `);
+        });
+
+        it('allows extends on classes', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                class MyBase
+                    url as string
+                end class
+
+                class MyExtends extends MyBase
+                    method as string
+                end class
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
         });
 
     });
