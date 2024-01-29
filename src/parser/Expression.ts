@@ -10,7 +10,7 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isStringType, isTypeCastExpression, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
@@ -554,6 +554,9 @@ export class GroupingExpression extends Expression {
     public readonly range: Range;
 
     transpile(state: BrsTranspileState) {
+        if (isTypeCastExpression(this.expression)) {
+            return this.expression.transpile(state);
+        }
         return [
             state.transpileToken(this.tokens.left),
             ...this.expression.transpile(state),
@@ -1543,44 +1546,18 @@ export class RegexLiteralExpression extends Expression {
     }
 }
 
-export class TypeExpression extends Expression implements TypedefProvider {
-    constructor(
-        /**
-         * The standard AST expression that represents the type for this TypeExpression.
-         */
-        public typeToken: Token
-    ) {
-        super();
-        this.range = typeToken?.range;
-    }
-
-
-    public range: Range;
-
-    public transpile(state: BrsTranspileState): TranspileResult {
-        return [util.tokenToBscType(this.typeToken)?.toTypeString() ?? 'dynamic'];
-    }
-    public walk(visitor: WalkVisitor, options: WalkOptions) {
-    }
-
-    getTypedef(state: TranspileState): (string | SourceNode)[] {
-        // TypeDefs should pass through any valid type names
-        return this.expression.transpile(state as BrsTranspileState);
-    }
-
-}
 
 export class TypeCastExpression extends Expression {
     constructor(
         public obj: Expression,
-        public asToken?: Token,
-        public typeExpression?: TypeExpression
+        public asToken: Token,
+        public typeToken: Token
     ) {
         super();
         this.range = util.createBoundingRange(
             this.obj,
             this.asToken,
-            this.typeExpression
+            this.typeToken
         );
     }
 
@@ -1592,7 +1569,6 @@ export class TypeCastExpression extends Expression {
     public walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'obj', visitor, options);
-            walk(this, 'typeExpression', visitor, options);
         }
     }
 }

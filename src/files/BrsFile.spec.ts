@@ -3638,7 +3638,7 @@ describe('BrsFile', () => {
     });
 
 
-    describe.only('backporting v1 syntax changes', () => {
+    describe('backporting v1 syntax changes', () => {
 
         it('transpiles typed arrays to dynamic', () => {
             testTranspile(`
@@ -3666,7 +3666,6 @@ describe('BrsFile', () => {
                     print (myNode as roSGNode).id
                     print (myNode as roSGNode).getParent().id
                     myNode2 = myNode as roSgNode
-
                     print (myString as string).len()
                     print (myString as string).right(3)
                     myString2 = myString as string
@@ -3676,10 +3675,21 @@ describe('BrsFile', () => {
                     print myNode.id
                     print myNode.getParent().id
                     myNode2 = myNode
-
-                    print  myString.len()
+                    print myString.len()
                     print myString.right(3)
                     myString2 = myString
+                end sub
+            `);
+        });
+
+        it('allows and removes multiple typecasts in transpiled code', () => {
+            testTranspile(`
+                sub main(myNode)
+                    print ((myNode as roSGNode as roSGNodeLabel).text as string as ifStringOps).len()
+                end sub
+            `, `
+                sub main(myNode)
+                    print myNode.text.len()
                 end sub
             `);
         });
@@ -3689,7 +3699,7 @@ describe('BrsFile', () => {
                 sub main(x as roSGNode, y as roSGNodeEvent, z as ifArray)
                 end sub
             `, `
-                sub main(x as dynamic, y as dynamic, z as dynamic)
+                sub main(x as object, y as object, z as object)
                 end sub
             `);
         });
@@ -3699,12 +3709,12 @@ describe('BrsFile', () => {
                 sub main(x as roSGNodeGroup, y as roSGNodeRowList, z as roSGNodeCustomComponent)
                 end sub
             `, `
-                sub main(x as dynamic, y as dynamic, z as dynamic)
+                sub main(x as object, y as object, z as object)
                 end sub
             `);
         });
 
-        it.only('allows union types for primitives', () => {
+        it('allows union types for primitives', () => {
             testTranspile(`
                 sub main(x as string or float, y as object or float or string)
                 end sub
@@ -3749,6 +3759,28 @@ describe('BrsFile', () => {
                 end namespace
 
                 sub main(x as alpha.beta.IFaceA or alpha.beta.IFaceB)
+                end sub
+            `, `
+                sub main(x as dynamic)
+                end sub
+            `);
+        });
+
+        it('allows union types of arrays', () => {
+            testTranspile(`
+                namespace alpha.beta
+                    interface IFaceA
+                        name as string
+                        data as integer
+                    end interface
+
+                    interface IFaceB
+                        name as string
+                        value as float
+                    end interface
+                end namespace
+
+                sub main(x as alpha.beta.IFaceA[][] or alpha.beta.IFaceB[] or ifStringOps)
                 end sub
             `, `
                 sub main(x as dynamic)
