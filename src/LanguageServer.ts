@@ -1237,16 +1237,25 @@ export class LanguageServer {
     private async onReferences(params: ReferenceParams) {
         await this.waitAllProjectFirstRuns();
 
-        const position = params.position;
-        const srcPath = util.uriToPath(params.textDocument.uri);
-
-        const results = util.flatMap(
+        const references = util.flatMap(
             await Promise.all(this.getProjects().map(project => {
-                return project.builder.program.getReferences(srcPath, position);
+                return project.builder.program.getReferences({
+                    srcPath: util.uriToPath(params.textDocument.uri),
+                    position: params.position,
+                    includeDeclaration: params?.context?.includeDeclaration ?? true
+                });
             })),
             c => c ?? []
         );
-        return results.filter((r) => r);
+        //TODO filter to distinct locations
+        const result = references
+            //discard null results
+            .filter((r) => r)
+            .map(r => ({
+                uri: URI.file(r.srcPath).toString(),
+                range: r.range
+            }));
+        return result;
     }
 
     private onValidateSettled() {

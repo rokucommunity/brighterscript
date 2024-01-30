@@ -216,6 +216,21 @@ export interface CompilerPlugin {
      */
     afterProvideCompletions?: PluginHandler<AfterProvideCompletionsEvent>;
 
+
+    /**
+     * Emitted before the program starts collecting references
+     */
+    beforeProvideReferences?: PluginHandler<BeforeProvideReferencesEvent>;
+    /**
+     * Use this event to contribute references
+     */
+    provideReferences?: PluginHandler<ProvideReferencesEvent>;
+    /**
+     * Emitted after the program has finished collecting references, but before they are sent to the client
+     */
+    afterProvideReferences?: PluginHandler<AfterProvideReferencesEvent>;
+
+
     /**
      * Called before the `provideHover` hook. Use this if you need to prepare any of the in-memory objects before the `provideHover` gets called
      */
@@ -277,6 +292,46 @@ export interface ProvideCompletionsEvent<TFile extends BscFile = BscFile> {
 }
 export type BeforeProvideCompletionsEvent<TFile extends BscFile = BscFile> = ProvideCompletionsEvent<TFile>;
 export type AfterProvideCompletionsEvent<TFile extends BscFile = BscFile> = ProvideCompletionsEvent<TFile>;
+
+
+export interface ProvideReferencesEvent<TFile extends BscFile = BscFile> {
+    program: Program;
+    /**
+     * The file where the event was triggered
+     */
+    file: TFile;
+    /**
+     * The scopes that this file is currently loaded in.
+     * Some types of `references` only apply to current scopes, so this might be helpful.
+     * For others, these scopes can be ignored and `program.getScopes()` can be used instead
+     */
+    scopes: Scope[];
+    /**
+     * The position in the file where the cursor was located
+     */
+    position: Position;
+    /**
+     * Should the symbol's declaration be included in the results?
+     */
+    includeDeclaration: boolean;
+    /**
+     * The list of all locations that reference the symbol at the specified position
+     */
+    references: Reference[];
+}
+export type BeforeProvideReferencesEvent<TFile extends BscFile = BscFile> = ProvideReferencesEvent<TFile>;
+export type AfterProvideReferencesEvent<TFile extends BscFile = BscFile> = ProvideReferencesEvent<TFile>;
+export interface Reference {
+    /**
+     * The srcPath for the location being referenced
+     */
+    srcPath: string;
+    /**
+     * The range that the reference points to
+     */
+    range: Range;
+}
+
 
 export interface ProvideHoverEvent {
     program: Program;

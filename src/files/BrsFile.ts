@@ -1637,35 +1637,11 @@ export class BrsFile {
         return statement;
     }
 
+    /**
+     * @deprecated this is handled in the BscPlugin now
+     */
     public getReferences(position: Position) {
-
-        const callSiteToken = this.getTokenAt(position);
-
-        let locations = [] as Location[];
-
-        const searchFor = callSiteToken.text.toLowerCase();
-
-        const scopes = this.program.getScopesForFile(this);
-
-        for (const scope of scopes) {
-            const processedFiles = new Set<BrsFile>();
-            for (const file of scope.getAllFiles()) {
-                if (isXmlFile(file) || processedFiles.has(file)) {
-                    continue;
-                }
-                processedFiles.add(file);
-                file.ast.walk(createVisitor({
-                    VariableExpression: (e) => {
-                        if (e.name.text.toLowerCase() === searchFor) {
-                            locations.push(util.createLocation(util.pathToUri(file.srcPath), e.range));
-                        }
-                    }
-                }), {
-                    walkMode: WalkMode.visitExpressionsRecursive
-                });
-            }
-        }
-        return locations;
+        return [];
     }
 
     /**
