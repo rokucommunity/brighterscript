@@ -169,6 +169,11 @@ export class Program {
             this.globalScope.symbolTable.addSymbol(callable.name, { description: callable.shortDescription }, callable.type, SymbolTypeFlag.runtime);
         }
 
+        for (const ifaceData of Object.values(interfaces) as BRSInterfaceData[]) {
+            const nodeType = new InterfaceType(ifaceData.name);
+            nodeType.addBuiltInInterfaces();
+            this.globalScope.symbolTable.addSymbol(ifaceData.name, { description: ifaceData.description }, nodeType, SymbolTypeFlag.typetime);
+        }
 
         for (const nodeData of Object.values(nodes) as SGNodeData[]) {
             this.recursivelyAddNodeToSymbolTable(nodeData);
@@ -181,12 +186,6 @@ export class Program {
                 // we will add `roSGNode` as shorthand for `roSGNodeNode`, since all roSgNode components are SceneGraph nodes
                 this.globalScope.symbolTable.addSymbol(componentData.name, { description: componentData.description }, nodeType, SymbolTypeFlag.typetime);
             }
-        }
-
-        for (const ifaceData of Object.values(interfaces) as BRSInterfaceData[]) {
-            const nodeType = new InterfaceType(ifaceData.name);
-            nodeType.addBuiltInInterfaces();
-            this.globalScope.symbolTable.addSymbol(ifaceData.name, { description: ifaceData.description }, nodeType, SymbolTypeFlag.typetime);
         }
 
         for (const eventData of Object.values(events) as BRSEventData[]) {
