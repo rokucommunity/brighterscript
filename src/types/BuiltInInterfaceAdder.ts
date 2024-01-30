@@ -51,6 +51,15 @@ export class BuiltInInterfaceAdder {
         for (const iface of interfacesToLoop) {
             const lowerIfaceName = iface.name.toLowerCase();
             const ifaceData = (interfaces[lowerIfaceName] ?? events[lowerIfaceName]) as BRSInterfaceData;
+
+            if (builtInComponent.interfaces) {
+                // this type has interfaces - add them directly as members
+                const ifaceType = this.getLookupTable()?.getSymbolType(iface.name, { flags: SymbolTypeFlag.typetime });
+                if (ifaceType) {
+                    builtInMemberTable.addSymbol(iface.name, { completionPriority: 1 }, ifaceType, SymbolTypeFlag.runtime);
+                }
+            }
+
             for (const method of ifaceData.methods ?? []) {
                 const methodFuncType = this.buildMethodFromDocData(method, overrides, thisType);
                 builtInMemberTable.addSymbol(method.name, { description: method.description, completionPriority: 1 }, methodFuncType, SymbolTypeFlag.runtime);
