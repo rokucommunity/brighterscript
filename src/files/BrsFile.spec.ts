@@ -3636,4 +3636,222 @@ describe('BrsFile', () => {
             range: util.createRange(4, 12, 4, 24)
         }]);
     });
+
+
+    describe('backporting v1 syntax changes', () => {
+
+        it('transpiles typed arrays to dynamic', () => {
+            testTranspile(`
+                sub main(param1 as string[], param2 as SomeType[])
+                end sub
+            `, `
+                sub main(param1 as dynamic, param2 as dynamic)
+                end sub
+            `);
+        });
+
+        it('transpiles typed arrays in return types to dynamic', () => {
+            testTranspile(`
+                function main() as integer[]
+                    return []
+                end function
+            `, `
+                function main() as dynamic
+                    return []
+                end function
+            `);
+        });
+
+        it('transpiles typed arrays in return types to dynamic', () => {
+            testTranspile(`
+                function main() as integer[]
+                    return []
+                end function
+            `, `
+                function main() as dynamic
+                    return []
+                end function
+            `);
+        });
+
+        it('transpiles multi-dimension typed arrays to dynamic', () => {
+            testTranspile(`
+                sub main(param1 as float[][][])
+                end sub
+            `, `
+                sub main(param1 as dynamic)
+                end sub
+            `);
+        });
+
+        it('removes typecasts in transpiled code', () => {
+            testTranspile(`
+                sub main(myNode, myString)
+                    print (myNode as roSGNode).id
+                    print (myNode as roSGNode).getParent().id
+                    myNode2 = myNode as roSgNode
+                    print (myString as string).len()
+                    print (myString as string).right(3)
+                    myString2 = myString as string
+                end sub
+            `, `
+                sub main(myNode, myString)
+                    print myNode.id
+                    print myNode.getParent().id
+                    myNode2 = myNode
+                    print myString.len()
+                    print myString.right(3)
+                    myString2 = myString
+                end sub
+            `);
+        });
+
+        it('allows and removes multiple typecasts in transpiled code', () => {
+            testTranspile(`
+                sub main(myNode)
+                    print ((myNode as roSGNode as roSGNodeLabel).text as string as ifStringOps).len()
+                end sub
+            `, `
+                sub main(myNode)
+                    print myNode.text.len()
+                end sub
+            `);
+        });
+
+        it('allows built in objects as type names', () => {
+            testTranspile(`
+                sub main(x as roSGNode, y as roSGNodeEvent, z as ifArray)
+                end sub
+            `, `
+                sub main(x as object, y as object, z as object)
+                end sub
+            `);
+        });
+
+        it('allows component names as types names', () => {
+            testTranspile(`
+                sub main(x as roSGNodeGroup, y as roSGNodeRowList, z as roSGNodeCustomComponent)
+                end sub
+            `, `
+                sub main(x as object, y as object, z as object)
+                end sub
+            `);
+        });
+
+        it('allows union types for primitives', () => {
+            testTranspile(`
+                sub main(x as string or float, y as object or float or string)
+                end sub
+            `, `
+                sub main(x as dynamic, y as dynamic)
+                end sub
+            `);
+        });
+
+        it('allows union types for classes, interfaces', () => {
+            testTranspile(`
+                interface IFaceA
+                    name as string
+                    data as integer
+                end interface
+
+                interface IFaceB
+                    name as string
+                    value as float
+                end interface
+
+                sub main(x as IFaceA or IFaceB)
+                end sub
+            `, `
+                sub main(x as dynamic)
+                end sub
+            `);
+        });
+
+        it('allows union types for classes, interfaces', () => {
+            testTranspile(`
+                namespace alpha.beta
+                    interface IFaceA
+                        name as string
+                        data as integer
+                    end interface
+
+                    interface IFaceB
+                        name as string
+                        value as float
+                    end interface
+                end namespace
+
+                sub main(x as alpha.beta.IFaceA or alpha.beta.IFaceB)
+                end sub
+            `, `
+                sub main(x as dynamic)
+                end sub
+            `);
+        });
+
+        it('allows union types of arrays', () => {
+            testTranspile(`
+                namespace alpha.beta
+                    interface IFaceA
+                        name as string
+                        data as integer
+                    end interface
+
+                    interface IFaceB
+                        name as string
+                        value as float
+                    end interface
+                end namespace
+
+                sub main(x as alpha.beta.IFaceA[][] or alpha.beta.IFaceB[] or ifStringOps)
+                end sub
+            `, `
+                sub main(x as dynamic)
+                end sub
+            `);
+        });
+
+        it('allows built-in types for return values', () => {
+            testTranspile(`
+                function makeLabel(text as string) as roSGNodeLabel
+                   label = createObject("roSGNode", "Label")
+                   label.text = text
+                end function
+            `, `
+                function makeLabel(text as string) as object
+                    label = createObject("roSGNode", "Label")
+                    label.text = text
+                end function
+            `);
+        });
+
+        it('allows extends on interfaces', () => {
+            testTranspile(`
+                interface MyBase
+                    url as string
+                end interface
+
+                interface MyExtends extends MyBase
+                    method as string
+                end interface
+            `, `
+            `);
+        });
+
+        it('allows extends on classes', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                class MyBase
+                    url as string
+                end class
+
+                class MyExtends extends MyBase
+                    method as string
+                end class
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+    });
 });

@@ -83,6 +83,7 @@ import {
     TemplateStringExpression,
     TemplateStringQuasiExpression,
     TernaryExpression,
+    TypeCastExpression,
     UnaryExpression,
     VariableExpression,
     XmlAttributeGetExpression
@@ -1004,7 +1005,7 @@ export class Parser {
         // parse argument default value
         if (this.match(TokenKind.Equal)) {
             // it seems any expression is allowed here -- including ones that operate on other arguments!
-            defaultValue = this.expression();
+            defaultValue = this.expression(false);
         }
 
         let asToken = null;
@@ -2277,8 +2278,29 @@ export class Parser {
         this.pendingAnnotations = parentAnnotations;
     }
 
-    private expression(): Expression {
-        const expression = this.anonymousFunction();
+    private expression(findTypeCast = true): Expression {
+        let expression = this.anonymousFunction();
+        let asToken: Token;
+        let typeToken: Token;
+        if (findTypeCast) {
+            do {
+                if (this.check(TokenKind.As)) {
+                    this.warnIfNotBrighterScriptMode('type cast');
+                    // Check if this expression is wrapped in any type casts
+                    // allows for multiple casts:
+                    // myVal = foo() as dynamic as string
+
+                    asToken = this.advance();
+                    typeToken = this.typeToken();
+                    if (asToken && typeToken) {
+                        expression = new TypeCastExpression(expression, asToken, typeToken);
+                    }
+                } else {
+                    break;
+                }
+
+            } while (asToken && typeToken);
+        }
         this._references.expressions.add(expression);
         return expression;
     }
@@ -2579,27 +2601,54 @@ export class Parser {
      * Tries to get the next token as a type
      * Allows for built-in types (double, string, etc.) or namespaced custom types in Brighterscript mode
      * Will return a token of whatever is next to be parsed
+     * Will allow v1 type syntax (typed arrays, union types), but there is no validation on types used this way
      */
     private typeToken(): Token {
         let typeToken: Token;
+        let lookForUnions = true;
+        let isAUnion = false;
+        let resultToken;
+        while (lookForUnions) {
+            lookForUnions = false;
 
-        if (this.checkAny(...DeclarableTypes)) {
-            // Token is a built in type
-            typeToken = this.advance();
-        } else if (this.options.mode === ParseMode.BrighterScript) {
-            try {
-                // see if we can get a namespaced identifer
-                const qualifiedType = this.getNamespacedVariableNameExpression();
-                typeToken = createToken(TokenKind.Identifier, qualifiedType.getName(this.options.mode), qualifiedType.range);
-            } catch {
-                //could not get an identifier - just get whatever's next
+            if (this.checkAny(...DeclarableTypes)) {
+                // Token is a built in type
+                typeToken = this.advance();
+            } else if (this.options.mode === ParseMode.BrighterScript) {
+                try {
+                    // see if we can get a namespaced identifer
+                    const qualifiedType = this.getNamespacedVariableNameExpression();
+                    typeToken = createToken(TokenKind.Identifier, qualifiedType.getName(this.options.mode), qualifiedType.range);
+                } catch {
+                    //could not get an identifier - just get whatever's next
+                    typeToken = this.advance();
+                }
+            } else {
+                // just get whatever's next
                 typeToken = this.advance();
             }
-        } else {
-            // just get whatever's next
-            typeToken = this.advance();
+            resultToken = resultToken ?? typeToken;
+            if (resultToken && this.options.mode === ParseMode.BrighterScript) {
+                // check for brackets
+                while (this.check(TokenKind.LeftSquareBracket) && this.peekNext().kind === TokenKind.RightSquareBracket) {
+                    const leftBracket = this.advance();
+                    const rightBracket = this.advance();
+                    typeToken = createToken(TokenKind.Identifier, typeToken.text + leftBracket.text + rightBracket.text, util.createBoundingRange(typeToken, leftBracket, rightBracket));
+                    resultToken = createToken(TokenKind.Dynamic, null, typeToken.range);
+                }
+
+                if (this.check(TokenKind.Or)) {
+                    lookForUnions = true;
+                    let orToken = this.advance();
+                    resultToken = createToken(TokenKind.Dynamic, null, util.createBoundingRange(resultToken, typeToken, orToken));
+                    isAUnion = true;
+                }
+            }
         }
-        return typeToken;
+        if (isAUnion) {
+            resultToken = createToken(TokenKind.Dynamic, null, util.createBoundingRange(resultToken, typeToken));
+        }
+        return resultToken;
     }
 
     private primary(): Expression {
