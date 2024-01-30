@@ -451,8 +451,8 @@ export class XmlFile implements BscFile {
     /**
      * Walk up the ancestor chain and aggregate all of the script tag imports
      */
-    public getAncestorScriptTagImports() {
-        let result: FileReference[] = [];
+    public getAncestorScriptTagImports(): FileReference[] {
+        let result = [] as FileReference[];
         let parent = this.parentComponent;
         while (parent) {
             result.push(...parent.scriptTagImports);

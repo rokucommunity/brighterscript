@@ -1,7 +1,7 @@
 import * as debounce from 'debounce-promise';
 import * as path from 'path';
 import { rokuDeploy } from 'roku-deploy';
-import type { BsConfig } from './BsConfig';
+import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import type { BsDiagnostic, FileObj, FileResolver } from './interfaces';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
@@ -34,10 +34,10 @@ export class ProgramBuilder {
      */
     public allowConsoleClearing = true;
 
-    public options: BsConfig;
+    public options: FinalizedBsConfig = util.normalizeConfig({});
     private isRunning = false;
-    private watcher: Watcher;
-    public program: Program;
+    private watcher: Watcher | undefined;
+    public program: Program | undefined;
     public logger = new Logger();
     public plugins: PluginInterface = new PluginInterface([], { logger: this.logger });
     private fileResolvers = [] as FileResolver[];
@@ -69,7 +69,10 @@ export class ProgramBuilder {
     private staticDiagnostics = [] as BsDiagnostic[];
 
     public addDiagnostic(srcPath: string, diagnostic: Partial<BsDiagnostic>) {
-        let file: BscFile = this.program.getFile(srcPath);
+        if (!this.program) {
+            throw new Error('Cannot call `ProgramBuilder.addDiagnostic` before `ProgramBuilder.run()`');
+        }
+        let file: BscFile | undefined = this.program.getFile(srcPath);
         if (!file) {
             // eslint-disable-next-line @typescript-eslint/dot-notation
             const paths = this.program['getPaths'](srcPath, this.program.options.rootDir ?? this.options.rootDir);
@@ -123,7 +126,7 @@ export class ProgramBuilder {
         }
         this.logger.logLevel = this.options.logLevel as LogLevel;
 
-        this.program = this.createProgram();
+        this.createProgram();
 
         //parse every file in the entire project
         await this.loadFiles();
@@ -149,13 +152,14 @@ export class ProgramBuilder {
     }
 
     protected createProgram() {
-        const program = new Program(this.options, this.logger, this.plugins);
+        this.program = new Program(this.options, this.logger, this.plugins);
 
         this.plugins.emit('afterProgramCreate', {
             builder: this,
-            program: program
+            program: this.program
         });
-        return program;
+
+        return this.program;
     }
 
     protected loadPlugins() {
@@ -194,7 +198,7 @@ export class ProgramBuilder {
      * A handle for the watch mode interval that keeps the process alive.
      * We need this so we can clear it if the builder is disposed
      */
-    private watchInterval: NodeJS.Timer;
+    private watchInterval: NodeJS.Timer | undefined;
 
     public enableWatchMode() {
         this.watcher = new Watcher(this.options);
@@ -225,6 +229,9 @@ export class ProgramBuilder {
 
         //on any file watcher event
         this.watcher.on('all', async (event: string, thePath: string) => { //eslint-disable-line @typescript-eslint/no-misused-promises
+            if (!this.program) {
+                throw new Error('Internal invariant exception: somehow file watcher ran before `ProgramBuilder.run()`');
+            }
             thePath = s`${path.resolve(this.rootDir, thePath)}`;
             if (event === 'add' || event === 'change') {
                 const fileObj = {
@@ -252,6 +259,9 @@ export class ProgramBuilder {
      * The rootDir for this program.
      */
     public get rootDir() {
+        if (!this.program) {
+            throw new Error('Cannot access `ProgramBuilder.rootDir` until after `ProgramBuilder.run()`');
+        }
         return this.program.options.rootDir;
     }
 
@@ -431,15 +441,16 @@ export class ProgramBuilder {
 
             //remove files currently loaded in the program, we will transpile those instead (even if just for source maps)
             let filteredFileMap = [] as FileObj[];
+
             for (let fileEntry of fileMap) {
-                if (this.program.hasFile(fileEntry.src) === false) {
+                if (this.program!.hasFile(fileEntry.src) === false) {
                     filteredFileMap.push(fileEntry);
                 }
             }
 
             await this.logger.time(LogLevel.log, ['Building'], async () => {
                 //transpile any brighterscript files
-                await this.program.build();
+                await this.program!.build();
             });
         });
     }
@@ -497,12 +508,12 @@ export class ProgramBuilder {
 
             //load the manifest file first
             if (manifestFile) {
-                this.program.loadManifest(manifestFile);
+                this.program!.loadManifest(manifestFile, false);
             }
 
             const loadFile = async (fileObj) => {
                 try {
-                    this.program.setFile(fileObj, await this.getFileContents(fileObj.src));
+                    this.program!.setFile(fileObj, await this.getFileContents(fileObj.src));
                 } catch (e) {
                     this.logger.log(e); // log the error, but don't fail this process because the file might be fixable later
                 }

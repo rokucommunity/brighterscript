@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.25](https://github.com/rokucommunity/brighterscript/compare/v0.66.0-alpha.11...v1.0.0-alpha.25) - 2024-01-25
+### Changed
+ - renamed these releases to `v1.0.0-alpha.*`, which means we are now targeting a `v1.0.0` release
+ - Remove `Parser.references` ([#1021](https://github.com/rokucommunity/brighterscript/pull/1021))
+ - Fixes Compatibility checks for types defined recursively. ([#1015](https://github.com/rokucommunity/brighterscript/pull/1015))
+ - Renamed File interface to BscFile #1013
+ - Fix cross namespace collision detection ([#1008](https://github.com/rokucommunity/brighterscript/pull/1008))
+ - XML fields of type color can accept strings or integers ([#1016](https://github.com/rokucommunity/brighterscript/pull/1016))
+ - Updates the Member types for Component Fields ([#1014](https://github.com/rokucommunity/brighterscript/pull/1014))
+ - Adds missing Completion Items ([#1009](https://github.com/rokucommunity/brighterscript/pull/1009))
+ - Adds missing Completion Items ([#1009](https://github.com/rokucommunity/brighterscript/pull/1009))
+ - Adds a findChildren function on AstNode ([#1010](https://github.com/rokucommunity/brighterscript/pull/1010))
+ - Adds Diagnostics for Member Accessibility ([#1004](https://github.com/rokucommunity/brighterscript/pull/1004))
+ - Fixes transpiles of Typecasts wrapped in parens ([#998](https://github.com/rokucommunity/brighterscript/pull/998))
+
+
+
 ## [0.66.0-alpha.11](https://github.com/rokucommunity/brighterscript/compare/v0.66.0-alpha.10...v0.66.0-alpha.11) - 2023-12-21
 ### Changed
  - Make `roSGNode` and `roSGNodeNode` the same ([#984](https://github.com/rokucommunity/brighterscript/pull/984))
@@ -138,6 +155,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.66.0-alpha.0](https://github.com/rokucommunity/brighterscript/compare/v0.65.1...v0.66.0-alpha.0) - 2023-06-09
 ### Changed
  - all the type tracking stuff!
+## [0.65.18](https://github.com/rokucommunity/brighterscript/compare/v0.65.17...v0.65.18) - 2024-01-25
+### Changed
+ - Refactor bsconfig documentation ([#1024](https://github.com/rokucommunity/brighterscript/pull/1024))
+ - Prevent overwriting `Program._manifest` if already set on startup ([#1027](https://github.com/rokucommunity/brighterscript/pull/1027))
+ - Improving null safety: Add FinalizedBsConfig and tweak plugin events ([#1000](https://github.com/rokucommunity/brighterscript/pull/1000))
+
+
+
+## [0.65.17](https://github.com/rokucommunity/brighterscript/compare/v0.65.16...0.65.17) - 2024-01-16
+### Changed
+ - add documentation on pruneEmptyCodeFiles to the README ([#1012](https://github.com/rokucommunity/brighterscript/pull/1012))
+ - assign .program to the builder BEFORE calling afterProgram ([#1011](https://github.com/rokucommunity/brighterscript/pull/1011))
+### Fixed
+ - properly handle `libpkg:/` prefix for script imports ([#1017](https://github.com/rokucommunity/brighterscript/pull/1017))
+
+
+
 ## [0.65.16](https://github.com/rokucommunity/brighterscript/compare/v0.65.15...v0.65.16) - 2024-01-08
 ### Added
  - Add `pruneEmptyCodeFiles` option to prevent publishing of empty files and exclude unnecessary script imports ([#997](https://github.com/rokucommunity/brighterscript/pull/997))

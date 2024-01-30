@@ -714,6 +714,92 @@ describe('Program', () => {
             }]);
         });
 
+        it('accepts libpkg .brs script reference', () => {
+            program.setFile('components/component1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="HeroScene" extends="Scene">
+                    <script type="text/brightscript" uri="libpkg:/components/component1.brs" />
+                </component>
+            `);
+            program.setFile('components/component1.brs', '');
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('accepts libpkg .bs script reference', () => {
+            program.setFile('components/component1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="HeroScene" extends="Scene">
+                    <script type="text/brightscript" uri="libpkg:/components/component1.bs" />
+                </component>
+            `);
+            program.setFile('components/component1.bs', '');
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not set function not found diagnostic for function in libpkg referenced script reference', () => {
+            program.setFile('components/component1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="HeroScene" extends="Scene">
+                    <script type="text/brightscript" uri="libpkg:/components/component1.brs" />
+                    <interface>
+                        <function name="isFound"/>
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/component1.brs', `
+                function isFound()
+                end function`
+            );
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not set function not found diagnostic for function in libpkg referenced .bs script reference', () => {
+            program.setFile('components/component1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="HeroScene" extends="Scene">
+                    <script type="text/brightscript" uri="libpkg:/components/component1.bs" />
+                    <interface>
+                        <function name="isFound"/>
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/component1.bs', `
+                function isFound()
+                end function`
+            );
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('sets function not found diagnostic for missing function in libpkg referenced script reference', () => {
+            program.setFile('components/component1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="HeroScene" extends="Scene">
+                    <script type="text/brightscript" uri="libpkg:/components/component1.brs" />
+                    <interface>
+                        <function name="isNotFound"/>
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/component1.brs', `
+                function isFound()
+                end function`
+            );
+
+            program.validate();
+
+            expectDiagnostics(program, [
+                DiagnosticMessages.xmlFunctionNotFound('isNotFound')
+            ]);
+        });
+
         it('adds warning instead of error on mismatched upper/lower case script import', () => {
             program.setFile('components/component1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -2729,9 +2815,9 @@ describe('Program', () => {
                 supports_input_launch=1
                 bs_const=DEBUG=false
             `);
-            program.options = {
+            program.options = util.normalizeConfig({
                 rootDir: tempDir
-            };
+            });
         });
 
         afterEach(() => {
