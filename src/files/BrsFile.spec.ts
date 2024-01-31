@@ -2616,7 +2616,8 @@ describe('BrsFile', () => {
                 expectZeroDiagnostics(program);
             });
 
-            it('sets invalid on empty callfunc', async () => {
+            it('sets invalid on empty callfunc with legacyCallfuncHandling=true', async () => {
+                program.options.legacyCallfuncHandling = true;
                 await testTranspile(`
                     sub main()
                         node = invalid
@@ -2629,6 +2630,24 @@ describe('BrsFile', () => {
                         node = invalid
                         node.callfunc("doSomething", invalid)
                         m.top.node.callfunc("doSomething", invalid)
+                        m.top.node.callfunc("doSomething", 1)
+                    end sub
+                `);
+            });
+
+            it('empty callfunc allowed by default', async () => {
+                await testTranspile(`
+                    sub main()
+                        node = invalid
+                        node@.doSomething()
+                        m.top.node@.doSomething()
+                        m.top.node@.doSomething(1)
+                    end sub
+                `, `
+                    sub main()
+                        node = invalid
+                        node.callfunc("doSomething")
+                        m.top.node.callfunc("doSomething")
                         m.top.node.callfunc("doSomething", 1)
                     end sub
                 `);

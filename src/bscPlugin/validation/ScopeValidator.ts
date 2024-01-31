@@ -1,5 +1,5 @@
 import { URI } from 'vscode-uri';
-import { isAssignmentStatement, isBrsFile, isCallableType, isClassStatement, isClassType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isObjectType, isPrimitiveType, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
+import { isAssignmentStatement, isAssociativeArrayType, isBrsFile, isCallableType, isClassStatement, isClassType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isObjectType, isPrimitiveType, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -384,13 +384,19 @@ export class ScopeValidator {
      * Detect return statements with incompatible types vs. declared return type
      */
     private validateDottedSetStatement(file: BrsFile, dottedSetStmt: DottedSetStatement) {
-        const typeChainExpectedLHS = [];
+        const typeChainExpectedLHS = [] as TypeChainEntry[];
         const getTypeOpts = { flags: SymbolTypeFlag.runtime };
 
         const expectedLHSType = dottedSetStmt?.getType({ ...getTypeOpts, data: {}, typeChain: typeChainExpectedLHS });
         const actualRHSType = dottedSetStmt?.value?.getType(getTypeOpts);
         const compatibilityData: TypeCompatibilityData = {};
         const typeChainScan = util.processTypeChain(typeChainExpectedLHS);
+        // check if anything in typeChain is an AA - if so, just allow it
+        if (typeChainExpectedLHS.find(typeChainItem => isAssociativeArrayType(typeChainItem.type))) {
+            // something in the chain is an AA
+            // treat members as dynamic - they could have been set without the type system's knowledge
+            return;
+        }
         if (!expectedLHSType?.isResolvable()) {
             this.addMultiScopeDiagnostic({
                 file: file as BscFile,

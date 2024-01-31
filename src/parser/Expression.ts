@@ -1352,14 +1352,11 @@ export class CallfuncExpression extends Expression {
             state.sourceNode(this.tokens.operator, '.callfunc'),
             state.transpileToken(this.tokens.openingParen, '('),
             //the name of the function
-            state.sourceNode(this.tokens.methodName, ['"', this.tokens.methodName.text, '"']),
-            ', '
+            state.sourceNode(this.tokens.methodName, ['"', this.tokens.methodName.text, '"'])
         );
-        //transpile args
-        //callfunc with zero args never gets called, so pass invalid as the first parameter if there are no args
-        if (this.args.length === 0) {
-            result.push('invalid');
-        } else {
+        if (this.args?.length > 0) {
+            result.push(', ');
+            //transpile args
             for (let i = 0; i < this.args.length; i++) {
                 //add comma between args
                 if (i > 0) {
@@ -1368,7 +1365,10 @@ export class CallfuncExpression extends Expression {
                 let arg = this.args[i];
                 result.push(...arg.transpile(state));
             }
+        } else if (state.options.legacyCallfuncHandling) {
+            result.push(', ', 'invalid');
         }
+
         result.push(
             state.transpileToken(this.tokens.closingParen, ')')
         );
