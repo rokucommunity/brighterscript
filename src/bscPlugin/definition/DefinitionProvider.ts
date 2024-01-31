@@ -22,7 +22,7 @@ export class DefinitionProvider {
         } else if (isXmlFile(this.event.file)) {
             this.xmlFileGetDefinition(this.event.file);
         }
-        return this.event.result;
+        return this.event.definitions;
     }
 
     /**
@@ -55,7 +55,7 @@ export class DefinitionProvider {
             //find a constant with this name
             const constant = scope?.getConstFileLink(fullName, containingNamespace);
             if (constant) {
-                this.event.result.push(
+                this.event.definitions.push(
                     util.createLocation(
                         URI.file(constant.file.srcPath).toString(),
                         constant.item.tokens.name.range
@@ -67,7 +67,7 @@ export class DefinitionProvider {
 
                 const enumLink = scope.getEnumFileLink(fullName, containingNamespace);
                 if (enumLink) {
-                    this.event.result.push(
+                    this.event.definitions.push(
                         util.createLocation(
                             URI.file(enumLink.file.srcPath).toString(),
                             enumLink.item.tokens.name.range
@@ -77,7 +77,7 @@ export class DefinitionProvider {
                 }
                 const enumMemberLink = scope.getEnumMemberFileLink(fullName, containingNamespace);
                 if (enumMemberLink) {
-                    this.event.result.push(
+                    this.event.definitions.push(
                         util.createLocation(
                             URI.file(enumMemberLink.file.srcPath).toString(),
                             enumMemberLink.item.tokens.name.range
@@ -98,12 +98,12 @@ export class DefinitionProvider {
                 if (isXmlScope(scope)) {
                     const apiFunc = scope.xmlFile.ast?.component?.api?.functions?.find(x => x.name.toLowerCase() === textToSearchFor); // eslint-disable-line @typescript-eslint/no-loop-func
                     if (apiFunc) {
-                        this.event.result.push(
+                        this.event.definitions.push(
                             util.createLocation(util.pathToUri(scope.xmlFile.srcPath), apiFunc.range)
                         );
                         const callable = scope.getAllCallables().find((c) => c.callable.name.toLowerCase() === textToSearchFor); // eslint-disable-line @typescript-eslint/no-loop-func
                         if (callable) {
-                            this.event.result.push(
+                            this.event.definitions.push(
                                 util.createLocation(util.pathToUri((callable.callable.file as BrsFile).srcPath), callable.callable.functionStatement.name.range)
                             );
                         }
@@ -121,7 +121,7 @@ export class DefinitionProvider {
                 const nameParts = cs.parentClassName.getNameParts();
                 let extendedClass = file.getClassFileLink(nameParts[nameParts.length - 1], nameParts.slice(0, -1).join('.'));
                 if (extendedClass) {
-                    this.event.result.push(util.createLocation(util.pathToUri(extendedClass.file.srcPath), extendedClass.item.range));
+                    this.event.definitions.push(util.createLocation(util.pathToUri(extendedClass.file.srcPath), extendedClass.item.range));
                 }
             }
             return;
@@ -146,7 +146,7 @@ export class DefinitionProvider {
                 //we found a variable declaration with this token text!
                 if (varDeclaration.name.toLowerCase() === textToSearchFor) {
                     const uri = util.pathToUri(file.srcPath);
-                    this.event.result.push(util.createLocation(uri, varDeclaration.nameRange));
+                    this.event.definitions.push(util.createLocation(uri, varDeclaration.nameRange));
                 }
             }
             // eslint-disable-next-line @typescript-eslint/dot-notation
@@ -154,7 +154,7 @@ export class DefinitionProvider {
                 for (const label of functionScope.labelStatements) {
                     if (label.name.toLocaleLowerCase() === textToSearchFor) {
                         const uri = util.pathToUri(file.srcPath);
-                        this.event.result.push(util.createLocation(uri, label.nameRange));
+                        this.event.definitions.push(util.createLocation(uri, label.nameRange));
                     }
                 }
             }
@@ -170,10 +170,10 @@ export class DefinitionProvider {
                 filesSearched.add(file);
 
                 if (previousToken?.kind === TokenKind.Dot && file.parseMode === ParseMode.BrighterScript) {
-                    this.event.result.push(...file.getClassMemberDefinitions(textToSearchFor, file));
+                    this.event.definitions.push(...file.getClassMemberDefinitions(textToSearchFor, file));
                     const namespaceDefinition = this.brsFileGetDefinitionsForNamespace(token, file);
                     if (namespaceDefinition) {
-                        this.event.result.push(namespaceDefinition);
+                        this.event.definitions.push(namespaceDefinition);
                     }
                 }
 
@@ -181,7 +181,7 @@ export class DefinitionProvider {
                     FunctionStatement: (statement: FunctionStatement) => {
                         if (statement.getName(file.parseMode).toLowerCase() === textToSearchFor) {
                             const uri = util.pathToUri(file.srcPath);
-                            this.event.result.push(util.createLocation(uri, statement.range));
+                            this.event.definitions.push(util.createLocation(uri, statement.range));
                         }
                     }
                 }), {
@@ -239,7 +239,7 @@ export class DefinitionProvider {
             file.parentComponentName &&
             util.rangeContains(file.parentComponentName.range, this.event.position)
         ) {
-            this.event.result.push({
+            this.event.definitions.push({
                 range: util.createRange(0, 0, 0, 0),
                 uri: util.pathToUri(file.parentComponent.srcPath)
             });

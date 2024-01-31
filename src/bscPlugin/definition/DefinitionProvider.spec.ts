@@ -26,7 +26,7 @@ describe('DefinitionProvider', () => {
             program: program,
             file: undefined,
             position: util.createPosition(1, 2),
-            result: []
+            definitions: []
         }).process();
         expect(result).to.eql([]);
     });
@@ -44,7 +44,7 @@ describe('DefinitionProvider', () => {
             function clickCustomButton()
             end function
         `);
-        const main = program.setFile('source/main.brs', `
+        program.setFile('source/main.brs', `
             sub main()
                 m.customButton@.clickCustomButton()
             end sub

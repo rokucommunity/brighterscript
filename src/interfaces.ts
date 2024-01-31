@@ -329,9 +329,9 @@ export interface ProvideDefinitionEvent<TFile = BscFile> {
      */
     position: Position;
     /**
-     * The list of locations that represent the definition for the given file and position
+     * The list of locations for where the item at the file and position was defined
      */
-    result: Location[];
+    definitions: Location[];
 }
 export type BeforeProvideDefinitionEvent<TFile = BscFile> = ProvideDefinitionEvent<TFile>;
 export type AfterProvideDefinitionEvent<TFile = BscFile> = ProvideDefinitionEvent<TFile>;

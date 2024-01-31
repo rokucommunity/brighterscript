@@ -174,7 +174,7 @@ export class XmlScope extends Scope {
             program: this.program,
             file: file,
             position: position,
-            result: []
+            definitions: []
         }).process();
     }
 }

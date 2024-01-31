@@ -929,13 +929,13 @@ export class Program {
             program: this,
             file: file,
             position: position,
-            result: []
+            definitions: []
         };
 
         this.plugins.emit('beforeProvideDefinition', event);
         this.plugins.emit('provideDefinition', event);
         this.plugins.emit('afterProvideDefinition', event);
-        return event.result;
+        return event.definitions;
     }
 
     /**

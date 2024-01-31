@@ -1399,7 +1399,7 @@ export class BrsFile {
             program: this.program,
             file: this,
             position: position,
-            result: []
+            definitions: []
         }).process();
     }
 
