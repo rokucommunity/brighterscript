@@ -1211,6 +1211,7 @@ export class Scope {
 
     /**
      * Get the definition (where was this thing first defined) of the symbol under the position
+     * @deprecated use `DefinitionProvider.process()`
      */
     public getDefinition(file: BscFile, position: Position): Location[] {
         // Overridden in XMLScope. Brs files use implementation in BrsFile

@@ -4,10 +4,9 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import type { XmlFile } from './files/XmlFile';
 import type { BscFile, CallableContainerMap, FileReference } from './interfaces';
 import type { Program } from './Program';
-import util from './util';
-import { isXmlFile } from './astUtils/reflection';
 import { SGFieldTypes } from './parser/SGTypes';
 import type { SGTag } from './parser/SGTypes';
+import { DefinitionProvider } from './bscPlugin/definition/DefinitionProvider';
 
 export class XmlScope extends Scope {
     constructor(
@@ -168,21 +167,14 @@ export class XmlScope extends Scope {
 
     /**
      * Get the definition (where was this thing first defined) of the symbol under the position
+     * @deprecated use `DefinitionProvider.process()`
      */
     public getDefinition(file: BscFile, position: Position): Location[] {
-        let results = [] as Location[];
-        //if the position is within the file's parent component name
-        if (
-            isXmlFile(file) &&
-            file.parentComponent &&
-            file.parentComponentName &&
-            util.rangeContains(file.parentComponentName.range, position)
-        ) {
-            results.push({
-                range: util.createRange(0, 0, 0, 0),
-                uri: util.pathToUri(file.parentComponent.srcPath)
-            });
-        }
-        return results;
+        return new DefinitionProvider({
+            program: this.program,
+            file: file,
+            position: position,
+            definitions: []
+        }).process();
     }
 }
