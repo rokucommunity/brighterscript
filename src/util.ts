@@ -375,7 +375,8 @@ export class Util {
             emitDefinitions: config.emitDefinitions === true ? true : false,
             removeParameterTypes: config.removeParameterTypes === true ? true : false,
             logLevel: logLevel,
-            bslibDestinationDir: bslibDestinationDir
+            bslibDestinationDir: bslibDestinationDir,
+            legacyCallfuncHandling: config.legacyCallfuncHandling === true ? true : false
         };
 
         //mutate `config` in case anyone is holding a reference to the incomplete one

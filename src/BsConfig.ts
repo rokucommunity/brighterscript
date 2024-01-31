@@ -195,6 +195,12 @@ export interface BsConfig {
      * scripts inside `source` that depend on bslib.brs.  Defaults to `source`.
      */
     bslibDestinationDir?: string;
+
+    /* Legacy RokuOS versions required at least one argument in callfunc() invocations.
+     * Previous brighterscript versions handled this by inserting invalid as an argument when no other args are present.
+     * This is not necessary in modern RokuOS versions.
+     */
+    legacyCallfuncHandling?: boolean;
 }
 
 type OptionalBsConfigFields =
