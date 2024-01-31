@@ -44,17 +44,17 @@ describe('DefinitionProvider', () => {
             function clickCustomButton()
             end function
         `);
-        program.setFile('source/main.brs', `
+        const brsFile = program.setFile('source/main.brs', `
             sub main()
                 m.customButton@.clickCustomButton()
             end sub
         `);
         //   m.customButton@.click|CustomButon()
         expect(
-            program.getDefinition(customButtonXml.srcPath, util.createPosition(2, 37))
+            program.getDefinition(brsFile.srcPath, util.createPosition(2, 37))
         ).to.eql([{
-            uri: URI.file(customButtonBrs.srcPath).toString(),
-            range: util.createRange(4, 20, 4, 57)
+            uri: URI.file(customButtonXml.srcPath).toString(),
+            range: util.createRange(4, 21, 4, 57)
         }, {
             uri: URI.file(customButtonBrs.srcPath).toString(),
             range: util.createRange(1, 21, 1, 38)
