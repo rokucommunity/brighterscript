@@ -283,7 +283,7 @@
             "default": false
         },
         "legacyCallfuncHandling": {
-            "description": "Legacy RokuOS versions required at least a single argument in callfunc() invocations. Previous brighterscript versions handled this by inserting invalid as an argument when no other args are present. This is not necessary in modern RokuOS versions.",
+            "description": "Legacy RokuOS versions required at least one argument in callfunc() invocations. Previous brighterscript versions handled this by inserting invalid as an argument when no other args are present. This is not necessary in modern RokuOS versions.",
             "type": "boolean",
             "default": false
         }
