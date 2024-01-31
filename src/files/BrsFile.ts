@@ -1202,7 +1202,7 @@ export class BrsFile implements BscFile {
 
         let classToken = this.getTokenBefore(token, TokenKind.Class);
         if (classToken) {
-            let cs = this._cachedLookups.classStatements.find((cs) => cs.tokens.classKeyword.range === classToken.range);
+            let cs = this._cachedLookups.classStatements.find((cs) => cs.tokens.class.range === classToken.range);
             if (cs?.parentClassName) {
                 const nameParts = cs.parentClassName.getNameParts();
                 let extendedClass = this.getClassFileLink(nameParts[nameParts.length - 1], nameParts.slice(0, -1).join('.'));

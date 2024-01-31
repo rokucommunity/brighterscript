@@ -368,7 +368,7 @@ describe('parser class', () => {
         let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
         expect(diagnostics[0]?.message).to.not.exist;
         let stmt = (statements[1] as ClassStatement);
-        expect(stmt.tokens.extendsKeyword!.text).to.equal('extends');
+        expect(stmt.tokens.extends!.text).to.equal('extends');
         expect(stmt.parentClassName.getName()).to.equal('Person');
     });
 

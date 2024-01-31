@@ -75,7 +75,7 @@ export class BrsFileValidator {
                 node.parent.getSymbolTable()?.addSymbol(node.tokens.name.text, { definingNode: node }, nodeType, SymbolTypeFlag.typetime | SymbolTypeFlag.runtime);
             },
             ClassStatement: (node) => {
-                this.validateDeclarationLocations(node, 'class', () => util.createBoundingRange(node.tokens.classKeyword, node.tokens.name));
+                this.validateDeclarationLocations(node, 'class', () => util.createBoundingRange(node.tokens.class, node.tokens.name));
 
                 //register this class
                 const nodeType = node.getType({ flags: SymbolTypeFlag.typetime });

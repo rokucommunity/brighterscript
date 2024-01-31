@@ -2035,9 +2035,9 @@ export class ClassStatement extends Statement implements TypedefProvider {
         this.body = options.body ?? [];
         this.tokens = {
             name: options.name,
-            classKeyword: options.class,
+            class: options.class,
             endClass: options.endClass,
-            extendsKeyword: options.extends
+            extends: options.extends
         };
         this.parentClassName = options.parentClassName;
         this.symbolTable = new SymbolTable(`ClassStatement: '${this.tokens.name?.text}'`, () => this.parent?.getSymbolTable());
@@ -2063,13 +2063,13 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
 
     public tokens: {
-        classKeyword?: Token;
+        class?: Token;
         /**
          * The name of the class (without namespace prefix)
          */
         name: Identifier;
         endClass?: Token;
-        extendsKeyword?: Token;
+        extends?: Token;
     };
     readonly body: Statement[];
     readonly parentClassName: TypeExpression;
@@ -2093,7 +2093,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
     }
 
     public getLeadingTrivia(): Token[] {
-        return util.concatAnnotationLeadingTrivia(this, this.tokens.classKeyword?.leadingTrivia);
+        return util.concatAnnotationLeadingTrivia(this, this.tokens.class?.leadingTrivia);
     }
 
     public memberMap = {} as Record<string, MemberStatement>;
