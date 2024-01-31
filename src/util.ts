@@ -1075,6 +1075,7 @@ export class Util {
 
     /**
      *  Gets the bounding range of a bunch of ranges or objects that have ranges
+     *  TODO: this does a full iteration of the args. If the args were guaranteed to be in range order, we could optimize this
      */
     public createBoundingRange(...locatables: Array<{ range?: Range } | Range>): Range | undefined {
         let startPosition: Position | undefined;
