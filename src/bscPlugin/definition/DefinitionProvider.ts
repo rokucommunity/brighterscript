@@ -95,12 +95,18 @@ export class DefinitionProvider {
         if (previousToken?.kind === TokenKind.Callfunc) {
             for (const scope of this.event.program.getScopes()) {
                 //does this xml file declare this function in its interface?
-                if (isXmlScope(scope) && scope.xmlFile.ast.component.api.functions.find(x => x.name.toLowerCase() === textToSearchFor)) { // eslint-disable-line @typescript-eslint/no-loop-func
-                    const callable = scope.getAllCallables().find((c) => c.callable.name.toLowerCase() === textToSearchFor); // eslint-disable-line @typescript-eslint/no-loop-func
-                    if (callable) {
+                if (isXmlScope(scope)) {
+                    const apiFunc = scope.xmlFile.ast?.component?.api?.functions?.find(x => x.name.toLowerCase() === textToSearchFor); // eslint-disable-line @typescript-eslint/no-loop-func
+                    if (apiFunc) {
                         this.event.result.push(
-                            util.createLocation(util.pathToUri((callable.callable.file as BrsFile).srcPath), callable.callable.functionStatement.name.range)
+                            util.createLocation(util.pathToUri(scope.xmlFile.srcPath), apiFunc.range)
                         );
+                        const callable = scope.getAllCallables().find((c) => c.callable.name.toLowerCase() === textToSearchFor); // eslint-disable-line @typescript-eslint/no-loop-func
+                        if (callable) {
+                            this.event.result.push(
+                                util.createLocation(util.pathToUri((callable.callable.file as BrsFile).srcPath), callable.callable.functionStatement.name.range)
+                            );
+                        }
                     }
                 }
             }

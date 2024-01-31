@@ -32,7 +32,7 @@ describe('DefinitionProvider', () => {
     });
 
     it('handles callfuncs', () => {
-        program.setFile('components/CustomButton.xml', `
+        const customButtonXml = program.setFile('components/CustomButton.xml', `
             <component name="CustomButton" extends="Group">
                 <script uri="CustomButton.brs" />
                 <interface>
@@ -51,12 +51,32 @@ describe('DefinitionProvider', () => {
         `);
         //   m.customButton@.click|CustomButon()
         expect(
-            program.getDefinition(main.srcPath, util.createPosition(2, 37))
+            program.getDefinition(customButtonXml.srcPath, util.createPosition(2, 37))
         ).to.eql([{
+            uri: URI.file(customButtonBrs.srcPath).toString(),
+            range: util.createRange(4, 20, 4, 57)
+        }, {
             uri: URI.file(customButtonBrs.srcPath).toString(),
             range: util.createRange(1, 21, 1, 38)
         }]);
     });
+
+    it('handles callfuncs for xml file having no interface', () => {
+        program.setFile('components/CustomButton.xml', `
+            <component name="CustomButton" extends="Group">
+            </component>
+        `);
+        const main = program.setFile('source/main.brs', `
+            sub main()
+                m.customButton@.clickCustomButton()
+            end sub
+        `);
+        //   m.customButton@.click|CustomButon()
+        expect(
+            program.getDefinition(main.srcPath, util.createPosition(2, 37))
+        ).to.eql([]);
+    });
+
 
     it('handles goto', () => {
         const main = program.setFile('source/main.brs', `
