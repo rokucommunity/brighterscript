@@ -513,28 +513,48 @@ export class IndexedGetExpression extends Expression {
          */
         public openingSquare: Token,
         public closingSquare: Token,
-        public questionDotToken?: Token //  ? or ?.
+        public questionDotToken?: Token, //  ? or ?.
+        /**
+         * More indexes, separated by commas
+         */
+        public additionalIndexes?: Expression[]
     ) {
         super();
         this.range = util.createBoundingRange(this.obj, this.openingSquare, this.questionDotToken, this.openingSquare, this.index, this.closingSquare);
+        this.additionalIndexes ??= [];
     }
 
     public readonly range: Range;
 
     transpile(state: BrsTranspileState) {
-        return [
+        const result = [];
+        result.push(
             ...this.obj.transpile(state),
             this.questionDotToken ? state.transpileToken(this.questionDotToken) : '',
-            state.transpileToken(this.openingSquare),
-            ...(this.index?.transpile(state) ?? []),
+            state.transpileToken(this.openingSquare)
+        );
+        const indexes = [this.index, ...this.additionalIndexes ?? []];
+        for (let i = 0; i < indexes.length; i++) {
+            //add comma between indexes
+            if (i > 0) {
+                result.push(', ');
+            }
+            let index = indexes[i];
+            result.push(
+                ...(index?.transpile(state) ?? [])
+            );
+        }
+        result.push(
             this.closingSquare ? state.transpileToken(this.closingSquare) : ''
-        ];
+        );
+        return result;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'obj', visitor, options);
             walk(this, 'index', visitor, options);
+            walkArray(this.additionalIndexes, visitor, options, this);
         }
     }
 }
