@@ -196,7 +196,7 @@ export interface BsConfig {
      */
     bslibDestinationDir?: string;
 
-    /* Legacy RokuOS versions required at least a single argument in callfunc() invocations.
+    /* Legacy RokuOS versions required at least one argument in callfunc() invocations.
      * Previous brighterscript versions handled this by inserting invalid as an argument when no other args are present.
      * This is not necessary in modern RokuOS versions.
      */
