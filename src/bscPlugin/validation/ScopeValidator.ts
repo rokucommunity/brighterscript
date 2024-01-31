@@ -142,7 +142,7 @@ export class ScopeValidator {
             return false;
         }
         let assignmentAncestor: AssignmentStatement;
-        if (isAssignmentStatement(definingNode) && definingNode.tokens.equal.kind === TokenKind.Equal) {
+        if (isAssignmentStatement(definingNode) && definingNode.tokens.equals.kind === TokenKind.Equal) {
             // this symbol was defined in a "normal" assignment (eg. not a compound assignment)
             assignmentAncestor = definingNode;
             return assignmentAncestor?.tokens.name?.text.toLowerCase() === expression?.tokens.name?.text.toLowerCase();

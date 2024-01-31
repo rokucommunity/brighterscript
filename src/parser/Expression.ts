@@ -397,16 +397,16 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 export class FunctionParameterExpression extends Expression {
     constructor(options: {
         name: Identifier;
-        equalToken?: Token;
+        equals?: Token;
         defaultValue?: Expression;
-        asToken?: Token;
+        as?: Token;
         typeExpression?: TypeExpression;
     }) {
         super();
         this.tokens = {
             name: options.name,
-            equal: options.equalToken,
-            as: options.asToken
+            equals: options.equals,
+            as: options.as
         };
         this.defaultValue = options.defaultValue;
         this.typeExpression = options.typeExpression;
@@ -416,7 +416,7 @@ export class FunctionParameterExpression extends Expression {
 
     public tokens: {
         name: Identifier;
-        equal?: Token;
+        equals?: Token;
         as?: Token;
     };
 
@@ -436,7 +436,7 @@ export class FunctionParameterExpression extends Expression {
             this.tokens.name,
             this.tokens.as,
             this.typeExpression,
-            this.tokens.equal,
+            this.tokens.equals,
             this.defaultValue
         );
     }
@@ -497,12 +497,12 @@ export class DottedGetExpression extends Expression {
         /**
          * Can either be `.`, or `?.` for optional chaining - defaults in transpile to '.'
          */
-        dotToken?: Token;
+        dot?: Token;
     }) {
         super();
         this.tokens = {
             name: options.name,
-            dot: options.dotToken
+            dot: options.dot
         };
         this.obj = options.obj;
 
@@ -615,11 +615,11 @@ export class IndexedGetExpression extends Expression {
         this.tokens = {
             openingSquare: options.openingSquare,
             closingSquare: options.closingSquare,
-            questionDotToken: options.questionDot
+            questionDot: options.questionDot
         };
         this.obj = options.obj;
         this.index = options.index;
-        this.range = util.createBoundingRange(this.obj, this.tokens.openingSquare, this.tokens.questionDotToken, this.tokens.openingSquare, this.index, this.tokens.closingSquare);
+        this.range = util.createBoundingRange(this.obj, this.tokens.openingSquare, this.tokens.questionDot, this.tokens.openingSquare, this.index, this.tokens.closingSquare);
     }
 
     public readonly kind = AstNodeKind.IndexedGetExpression;
@@ -633,7 +633,7 @@ export class IndexedGetExpression extends Expression {
          */
         openingSquare?: Token;
         closingSquare?: Token;
-        questionDotToken?: Token; //  ? or ?.
+        questionDot?: Token; //  ? or ?.
     };
 
     public readonly range: Range;
@@ -641,7 +641,7 @@ export class IndexedGetExpression extends Expression {
     transpile(state: BrsTranspileState) {
         return [
             ...this.obj.transpile(state),
-            this.tokens.questionDotToken ? state.transpileToken(this.tokens.questionDotToken) : '',
+            this.tokens.questionDot ? state.transpileToken(this.tokens.questionDot) : '',
             state.transpileToken(this.tokens.openingSquare, '['),
             ...(this.index?.transpile(state) ?? []),
             state.transpileToken(this.tokens.closingSquare, ']')

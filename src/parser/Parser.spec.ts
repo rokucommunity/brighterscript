@@ -72,14 +72,14 @@ describe('parser', () => {
             const expression = getExpression<IndexedGetExpression>(`value = person?["name"]`, { matcher: isIndexedGetExpression });
             expect(expression).to.be.instanceOf(IndexedGetExpression);
             expect(expression.tokens.openingSquare.kind).to.eql(TokenKind.QuestionLeftSquare);
-            expect(expression.tokens.questionDotToken).not.to.exist;
+            expect(expression.tokens.questionDot).not.to.exist;
         });
 
         it('works for ?.[', () => {
             const expression = getExpression<IndexedGetExpression>(`value = person?.["name"]`, { matcher: isIndexedGetExpression });
             expect(expression).to.be.instanceOf(IndexedGetExpression);
             expect(expression.tokens.openingSquare.kind).to.eql(TokenKind.LeftSquareBracket);
-            expect(expression.tokens.questionDotToken?.kind).to.eql(TokenKind.QuestionDot);
+            expect(expression.tokens.questionDot?.kind).to.eql(TokenKind.QuestionDot);
         });
 
         it('works for ?@', () => {

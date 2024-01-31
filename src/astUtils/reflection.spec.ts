@@ -28,7 +28,7 @@ describe('reflection', () => {
         const expr = createStringLiteral('', range);
         const token = createToken(TokenKind.StringLiteral, '', range);
         const body = new Body({ statements: [] });
-        const assignment = new AssignmentStatement({ equal: undefined, name: ident, value: expr });
+        const assignment = new AssignmentStatement({ equals: undefined, name: ident, value: expr });
         const block = new Block({ statements: [], startingRange: range });
         const expression = new ExpressionStatement({ expression: expr });
         const comment = new CommentStatement({ comments: [token] });
@@ -216,7 +216,7 @@ describe('reflection', () => {
             rightParen: token,
             endFunctionType: token
         });
-        const dottedGet = new DottedGetExpression({ obj: expr, name: ident, dotToken: token });
+        const dottedGet = new DottedGetExpression({ obj: expr, name: ident, dot: token });
         const xmlAttrGet = new XmlAttributeGetExpression({ obj: expr, name: ident, at: token });
         const indexedGet = new IndexedGetExpression({ obj: expr, index: expr, openingSquare: token, closingSquare: token });
         const grouping = new GroupingExpression({ leftParen: token, rightParen: token, expression: expr });

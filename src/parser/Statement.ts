@@ -131,7 +131,7 @@ export class Body extends Statement implements TypedefProvider {
 export class AssignmentStatement extends Statement {
     constructor(options: {
         name: Identifier;
-        equal?: Token;
+        equals?: Token;
         value: Expression;
         as?: Token;
         typeExpression?: TypeExpression;
@@ -139,7 +139,7 @@ export class AssignmentStatement extends Statement {
         super();
         this.value = options.value;
         this.tokens = {
-            equal: options.equal,
+            equals: options.equals,
             name: options.name,
             as: options.as
         };
@@ -148,7 +148,7 @@ export class AssignmentStatement extends Statement {
     }
 
     public tokens: {
-        equal?: Token;
+        equals?: Token;
         name: Identifier;
         as?: Token;
     };
@@ -169,7 +169,7 @@ export class AssignmentStatement extends Statement {
             return [
                 state.transpileToken(this.tokens.name),
                 ' ',
-                state.transpileToken(this.tokens.equal ?? createToken(TokenKind.Equal)),
+                state.transpileToken(this.tokens.equals ?? createToken(TokenKind.Equal)),
                 ' ',
                 ...this.value.transpile(state)
             ];
@@ -2651,12 +2651,12 @@ export class MethodStatement extends FunctionStatement {
             thisQualifiedName.text = 'm.' + field.tokens.name.text;
             const fieldAssignment = field.initialValue
                 ? new AssignmentStatement({
-                    equal: field.tokens.equals,
+                    equals: field.tokens.equals,
                     name: thisQualifiedName,
                     value: field.initialValue
                 })
                 : new AssignmentStatement({
-                    equal: createToken(TokenKind.Equal, '=', field.tokens.name.range),
+                    equals: createToken(TokenKind.Equal, '=', field.tokens.name.range),
                     name: thisQualifiedName,
                     //if there is no initial value, set the initial value to `invalid`
                     value: createInvalidLiteral('invalid', field.tokens.name.range)
@@ -2681,7 +2681,7 @@ export class FieldStatement extends Statement implements TypedefProvider {
         name: Identifier;
         as?: Token;
         typeExpression?: TypeExpression;
-        equal?: Token;
+        equals?: Token;
         initialValue?: Expression;
         optional?: Token;
     }) {
@@ -2690,7 +2690,7 @@ export class FieldStatement extends Statement implements TypedefProvider {
             accessModifier: options.accessModifier,
             name: options.name,
             as: options.as,
-            equals: options.equal,
+            equals: options.equals,
             optional: options.optional
         };
         this.typeExpression = options.typeExpression;
@@ -3113,20 +3113,20 @@ export class EnumStatement extends Statement implements TypedefProvider {
 export class EnumMemberStatement extends Statement implements TypedefProvider {
     public constructor(options: {
         name: Identifier;
-        equal?: Token;
+        equals?: Token;
         value?: Expression;
     }) {
         super();
         this.tokens = {
             name: options.name,
-            equal: options.equal
+            equals: options.equals
         };
         this.value = options.value;
     }
 
     public tokens: {
         name: Identifier;
-        equal?: Token;
+        equals?: Token;
     };
     public value?: Expression;
 
@@ -3135,7 +3135,7 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
     public get range() {
         return util.createBoundingRange(
             this.tokens.name,
-            this.tokens.equal,
+            this.tokens.equals,
             this.value
         );
     }
@@ -3159,8 +3159,8 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
         const result = [
             this.tokens.name.text
         ] as TranspileResult;
-        if (this.tokens.equal) {
-            result.push(' ', this.tokens.equal.text, ' ');
+        if (this.tokens.equals) {
+            result.push(' ', this.tokens.equals.text, ' ');
             if (this.value) {
                 result.push(
                     ...this.value.transpile(state)
@@ -3189,14 +3189,14 @@ export class ConstStatement extends Statement implements TypedefProvider {
     public constructor(options: {
         const?: Token;
         name: Identifier;
-        equal?: Token;
+        equals?: Token;
         value: Expression;
     }) {
         super();
         this.tokens = {
             const: options.const,
             name: options.name,
-            equals: options.equal
+            equals: options.equals
         };
         this.value = options.value;
         this.range = util.createBoundingRange(this.tokens.const, this.tokens.name, this.tokens.equals, this.value);

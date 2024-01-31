@@ -17,18 +17,18 @@ export interface SGToken {
 }
 
 export class SGAttribute {
-    public constructor(
-        key: SGToken,
-        equals?: SGToken,
-        openingQuote?: SGToken,
-        value?: SGToken,
-        closingQuote?: SGToken
-    ) {
-        this.tokens.key = key;
-        this.tokens.equals = equals;
-        this.tokens.openingQuote = openingQuote;
-        this.tokens.value = value;
-        this.tokens.closingQuote = closingQuote;
+    public constructor(options: {
+        key: SGToken;
+        equals?: SGToken;
+        openingQuote?: SGToken;
+        value?: SGToken;
+        closingQuote?: SGToken;
+    }) {
+        this.tokens.key = options.key;
+        this.tokens.equals = options.equals;
+        this.tokens.openingQuote = options.openingQuote;
+        this.tokens.value = options.value;
+        this.tokens.closingQuote = options.closingQuote;
     }
 
     public tokens = {} as {
@@ -93,36 +93,36 @@ export class SGAttribute {
     }
 
     public clone() {
-        return new SGAttribute(
-            { ...this.tokens.key },
-            { ...this.tokens.equals },
-            { ...this.tokens.openingQuote },
-            { ...this.tokens.value },
-            { ...this.tokens.closingQuote }
-        );
+        return new SGAttribute({
+            key: { ...this.tokens.key },
+            equals: { ...this.tokens.equals },
+            openingQuote: { ...this.tokens.openingQuote },
+            value: { ...this.tokens.value },
+            closingQuote: { ...this.tokens.closingQuote }
+        });
     }
 }
 
 export class SGElement {
 
-    constructor(
-        startTagOpen: SGToken,
-        startTagName: SGToken,
-        attributes = [] as SGAttribute[],
-        startTagClose?: SGToken,
-        elements = [] as SGElement[],
-        endTagOpen?: SGToken,
-        endTagName?: SGToken,
-        endTagClose?: SGToken
-    ) {
-        this.tokens.startTagOpen = startTagOpen;
-        this.tokens.startTagName = startTagName;
-        this.attributes = attributes;
-        this.tokens.startTagClose = startTagClose;
-        this.elements = elements;
-        this.tokens.endTagOpen = endTagOpen;
-        this.tokens.endTagName = endTagName;
-        this.tokens.endTagClose = endTagClose;
+    constructor(options: {
+        startTagOpen: SGToken;
+        startTagName: SGToken;
+        attributes?: SGAttribute[];
+        startTagClose?: SGToken;
+        elements?: SGElement[];
+        endTagOpen?: SGToken;
+        endTagName?: SGToken;
+        endTagClose?: SGToken;
+    }) {
+        this.tokens.startTagOpen = options.startTagOpen;
+        this.tokens.startTagName = options.startTagName;
+        this.attributes = options.attributes ?? [];
+        this.tokens.startTagClose = options.startTagClose;
+        this.elements = options.elements ?? [];
+        this.tokens.endTagOpen = options.endTagOpen;
+        this.tokens.endTagName = options.endTagName;
+        this.tokens.endTagClose = options.endTagClose;
     }
 
     public tokens = {} as {

@@ -344,7 +344,7 @@ export class Parser {
         ) as Identifier;
         //look for `= SOME_EXPRESSION`
         if (this.check(TokenKind.Equal)) {
-            statement.tokens.equal = this.advance();
+            statement.tokens.equals = this.advance();
             statement.value = this.expression();
         }
         return statement;
@@ -763,7 +763,7 @@ export class Parser {
             name: name,
             as: asToken,
             typeExpression: fieldTypeExpression,
-            equal: equal,
+            equals: equal,
             initialValue: initialValue,
             optional: optionalKeyword
         });
@@ -966,9 +966,9 @@ export class Parser {
         }
         return new FunctionParameterExpression({
             name: name,
-            equalToken: equalToken,
+            equals: equalToken,
             defaultValue: defaultValue,
-            asToken: asToken,
+            as: asToken,
             typeExpression: typeExpression
         });
     }
@@ -1000,11 +1000,11 @@ export class Parser {
 
         let result: AssignmentStatement;
         if (operator.kind === TokenKind.Equal) {
-            result = new AssignmentStatement({ equal: operator, name: name, value: value, as: asToken, typeExpression: typeExpression });
+            result = new AssignmentStatement({ equals: operator, name: name, value: value, as: asToken, typeExpression: typeExpression });
         } else {
             const nameExpression = new VariableExpression({ name: name });
             result = new AssignmentStatement({
-                equal: operator,
+                equals: operator,
                 name: name,
                 value: new BinaryExpression({
                     left: nameExpression,
@@ -1396,7 +1396,7 @@ export class Parser {
                 }
                 // force it into an identifier so the AST makes some sense
                 identifier.kind = TokenKind.Identifier;
-                expr = new DottedGetExpression({ obj: expr, name: identifier, dotToken: dot });
+                expr = new DottedGetExpression({ obj: expr, name: identifier, dot: dot });
             }
         }
         return expr;
@@ -1437,7 +1437,7 @@ export class Parser {
         const statement = new ConstStatement({
             const: constToken,
             name: nameToken,
-            equal: equalToken,
+            equals: equalToken,
             value: expression
         });
         return statement;
@@ -2518,7 +2518,7 @@ export class Parser {
 
                     // force it into an identifier so the AST makes some sense
                     name.kind = TokenKind.Identifier;
-                    expr = new DottedGetExpression({ obj: expr, name: name as Identifier, dotToken: dot });
+                    expr = new DottedGetExpression({ obj: expr, name: name as Identifier, dot: dot });
                 }
 
             } else if (this.checkAny(TokenKind.At, TokenKind.QuestionAt)) {

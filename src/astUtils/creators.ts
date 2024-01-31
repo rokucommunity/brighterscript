@@ -116,7 +116,7 @@ export function createDottedIdentifier(path: string[], range?: Range): DottedGet
     return new DottedGetExpression({
         obj: obj,
         name: createToken(TokenKind.Identifier, ident, range),
-        dotToken: createToken(TokenKind.Dot, '.', range)
+        dot: createToken(TokenKind.Dot, '.', range)
     });
 }
 
