@@ -5,9 +5,10 @@ import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
-import { AssignmentStatement, DottedSetStatement, IndexedSetStatement } from '../../Statement';
+import type { IndexedSetStatement } from '../../Statement';
+import { AssignmentStatement } from '../../Statement';
 import { expectDiagnostics, expectDiagnosticsIncludes } from '../../../testHelpers.spec';
-import { isAssignmentStatement, isDottedGetExpression, isDottedSetStatement, isIndexedGetExpression, isIndexedSetStatement, isLiteralExpression, isVariableExpression } from '../../../astUtils/reflection';
+import { isAssignmentStatement, isDottedGetExpression, isIndexedGetExpression, isIndexedSetStatement, isLiteralExpression, isVariableExpression } from '../../../astUtils/reflection';
 import type { DottedGetExpression, IndexedGetExpression, VariableExpression } from '../../Expression';
 import { WalkMode } from '../../../astUtils/visitors';
 
