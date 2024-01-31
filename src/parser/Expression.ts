@@ -35,12 +35,12 @@ export type ExpressionVisitor = (expression: Expression, parent: Expression) => 
 export class BinaryExpression extends Expression {
     constructor(options: {
         left: Expression;
-        operatorToken: Token;
+        operator: Token;
         right: Expression;
     }) {
         super();
         this.tokens = {
-            operator: options.operatorToken
+            operator: options.operator
         };
         this.left = options.left;
         this.right = options.right;
@@ -101,14 +101,14 @@ export class CallExpression extends Expression {
 
     constructor(options: {
         callee: Expression;
-        openingParenToken: Token;
+        openingParen: Token;
         args?: Expression[];
-        closingParenToken: Token;
+        closingParen: Token;
     }) {
         super();
         this.tokens = {
-            openingParen: options.openingParenToken,
-            closingParen: options.closingParenToken
+            openingParen: options.openingParen,
+            closingParen: options.closingParen
         };
         this.callee = options.callee;
         this.args = options.args ?? [];
@@ -185,22 +185,22 @@ export class CallExpression extends Expression {
 
 export class FunctionExpression extends Expression implements TypedefProvider {
     constructor(options: {
-        functionTypeToken?: Token;
-        leftParenToken?: Token;
+        functionType?: Token;
+        leftParen?: Token;
         parameters?: FunctionParameterExpression[];
-        rightParenToken?: Token;
-        asToken?: Token;
+        rightParen?: Token;
+        as?: Token;
         returnTypeExpression?: TypeExpression;
         body: Block;
-        endToken?: Token;
+        endFunctionType?: Token;
     }) {
         super();
         this.tokens = {
-            functionType: options.functionTypeToken,
-            leftParen: options.leftParenToken,
-            rightParen: options.rightParenToken,
-            as: options.asToken,
-            end: options.endToken
+            functionType: options.functionType,
+            leftParen: options.leftParen,
+            rightParen: options.rightParen,
+            as: options.as,
+            endFunctionType: options.endFunctionType
         };
         this.parameters = options.parameters ?? [];
         this.body = options.body;
@@ -221,7 +221,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 
     readonly tokens: {
         functionType?: Token;
-        end?: Token;
+        endFunctionType?: Token;
         leftParen?: Token;
         rightParen?: Token;
         as?: Token;
@@ -254,7 +254,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             this.tokens.rightParen,
             this.tokens.as,
             this.returnTypeExpression,
-            this.tokens.end
+            this.tokens.endFunctionType
         );
     }
 
@@ -310,7 +310,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         //'end sub'|'end function'
         results.push(
             state.indent(),
-            state.transpileToken(this.tokens.end, `end ${this.tokens.functionType ?? 'function'}`)
+            state.transpileToken(this.tokens.endFunctionType, `end ${this.tokens.functionType ?? 'function'}`)
         );
         return results;
     }
@@ -344,7 +344,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
                 '\n',
                 state.indent(),
                 //'end sub'|'end function'
-                this.tokens.end?.text ?? `end ${this.tokens.functionType ?? 'function'}`
+                this.tokens.endFunctionType?.text ?? `end ${this.tokens.functionType ?? 'function'}`
             ])
         ];
         return results;
@@ -396,7 +396,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 
 export class FunctionParameterExpression extends Expression {
     constructor(options: {
-        nameToken: Identifier;
+        name: Identifier;
         equalToken?: Token;
         defaultValue?: Expression;
         asToken?: Token;
@@ -404,7 +404,7 @@ export class FunctionParameterExpression extends Expression {
     }) {
         super();
         this.tokens = {
-            name: options.nameToken,
+            name: options.name,
             equal: options.equalToken,
             as: options.asToken
         };
@@ -493,7 +493,7 @@ export class FunctionParameterExpression extends Expression {
 export class DottedGetExpression extends Expression {
     constructor(options: {
         obj: Expression;
-        nameToken: Identifier;
+        name: Identifier;
         /**
          * Can either be `.`, or `?.` for optional chaining - defaults in transpile to '.'
          */
@@ -501,7 +501,7 @@ export class DottedGetExpression extends Expression {
     }) {
         super();
         this.tokens = {
-            name: options.nameToken,
+            name: options.name,
             dot: options.dotToken
         };
         this.obj = options.obj;
@@ -565,12 +565,12 @@ export class XmlAttributeGetExpression extends Expression {
         /**
          * Can either be `@`, or `?@` for optional chaining - defaults to '@'
          */
-        atToken?: Token;
-        nameToken: Identifier;
+        at?: Token;
+        name: Identifier;
     }) {
         super();
         this.obj = options.obj;
-        this.tokens = { at: options.atToken, name: options.nameToken };
+        this.tokens = { at: options.at, name: options.name };
         this.range = util.createBoundingRange(this.obj, this.tokens.at, this.tokens.name);
     }
 
@@ -607,15 +607,15 @@ export class IndexedGetExpression extends Expression {
         /**
          * Can either be `[` or `?[`. If `?.[` is used, this will be `[` and `optionalChainingToken` will be `?.` - defaults to '[' in transpile
          */
-        openingSquareToken?: Token;
-        closingSquareToken?: Token;
-        questionDotToken?: Token;//  ? or ?.
+        openingSquare?: Token;
+        closingSquare?: Token;
+        questionDot?: Token;//  ? or ?.
     }) {
         super();
         this.tokens = {
-            openingSquare: options.openingSquareToken,
-            closingSquare: options.closingSquareToken,
-            questionDotToken: options.questionDotToken
+            openingSquare: options.openingSquare,
+            closingSquare: options.closingSquare,
+            questionDotToken: options.questionDot
         };
         this.obj = options.obj;
         this.index = options.index;
@@ -667,22 +667,22 @@ export class IndexedGetExpression extends Expression {
 
 export class GroupingExpression extends Expression {
     constructor(options: {
-        leftToken?: Token;
-        rightToken?: Token;
+        leftParen?: Token;
+        rightParen?: Token;
         expression: Expression;
     }) {
         super();
         this.tokens = {
-            right: options.rightToken,
-            left: options.leftToken
+            rightParen: options.rightParen,
+            leftParen: options.leftParen
         };
         this.expression = options.expression;
-        this.range = util.createBoundingRange(this.tokens.left, this.expression, this.tokens.right);
+        this.range = util.createBoundingRange(this.tokens.leftParen, this.expression, this.tokens.rightParen);
     }
 
     readonly tokens: {
-        left?: Token;
-        right?: Token;
+        leftParen?: Token;
+        rightParen?: Token;
     };
     public expression: Expression;
 
@@ -695,9 +695,9 @@ export class GroupingExpression extends Expression {
             return this.expression.transpile(state);
         }
         return [
-            state.transpileToken(this.tokens.left),
+            state.transpileToken(this.tokens.leftParen),
             ...this.expression.transpile(state),
-            state.transpileToken(this.tokens.right)
+            state.transpileToken(this.tokens.rightParen)
         ];
     }
 
@@ -714,11 +714,11 @@ export class GroupingExpression extends Expression {
 
 export class LiteralExpression extends Expression {
     constructor(options: {
-        valueToken: Token;
+        value: Token;
     }) {
         super();
         this.tokens = {
-            value: options.valueToken
+            value: options.value
         };
     }
 
@@ -768,10 +768,10 @@ export class LiteralExpression extends Expression {
  */
 export class EscapedCharCodeLiteralExpression extends Expression {
     constructor(options: {
-        valueToken: Token & { charCode: number };
+        value: Token & { charCode: number };
     }) {
         super();
-        this.tokens = { value: options.valueToken };
+        this.tokens = { value: options.value };
         this.range = this.tokens.value.range;
     }
 
@@ -797,13 +797,13 @@ export class EscapedCharCodeLiteralExpression extends Expression {
 export class ArrayLiteralExpression extends Expression {
     constructor(options: {
         elements: Array<Expression | CommentStatement>;
-        openToken?: Token;
-        closeToken?: Token;
+        open?: Token;
+        close?: Token;
     }) {
         super();
         this.tokens = {
-            open: options.openToken,
-            close: options.closeToken
+            open: options.open,
+            close: options.close
         };
         this.elements = options.elements;
         this.range = util.createBoundingRange(this.tokens.open, ...this.elements, this.tokens.close);
@@ -882,17 +882,17 @@ export class ArrayLiteralExpression extends Expression {
 
 export class AAMemberExpression extends Expression {
     constructor(options: {
-        keyToken: Token;
-        colonToken?: Token;
+        key: Token;
+        colon?: Token;
         /** The expression evaluated to determine the member's initial value. */
         value: Expression;
-        commaToken?: Token;
+        comma?: Token;
     }) {
         super();
         this.tokens = {
-            key: options.keyToken,
-            colon: options.colonToken,
-            comma: options.commaToken
+            key: options.key,
+            colon: options.colon,
+            comma: options.comma
         };
         this.value = options.value;
         this.range = util.createBoundingRange(this.tokens.key, this.tokens.colon, this.value);
@@ -930,13 +930,13 @@ export class AAMemberExpression extends Expression {
 export class AALiteralExpression extends Expression {
     constructor(options: {
         elements: Array<AAMemberExpression | CommentStatement>;
-        openToken?: Token;
-        closeToken?: Token;
+        open?: Token;
+        close?: Token;
     }) {
         super();
         this.tokens = {
-            open: options.openToken,
-            close: options.closeToken
+            open: options.open,
+            close: options.close
         };
         this.elements = options.elements;
         this.range = util.createBoundingRange(this.tokens.open, ...this.elements, this.tokens.close);
@@ -1039,12 +1039,12 @@ export class AALiteralExpression extends Expression {
 
 export class UnaryExpression extends Expression {
     constructor(options: {
-        operatorToken: Token;
+        operator: Token;
         right: Expression;
     }) {
         super();
         this.tokens = {
-            operator: options.operatorToken
+            operator: options.operator
         };
         this.right = options.right;
         this.range = util.createBoundingRange(this.tokens.operator, this.right);
@@ -1088,11 +1088,11 @@ export class UnaryExpression extends Expression {
 
 export class VariableExpression extends Expression {
     constructor(options: {
-        nameToken: Identifier;
+        name: Identifier;
     }) {
         super();
         this.tokens = {
-            name: options.nameToken
+            name: options.name
         };
         this.range = this.tokens.name?.range;
     }
@@ -1150,11 +1150,11 @@ export class VariableExpression extends Expression {
 
 export class SourceLiteralExpression extends Expression {
     constructor(options: {
-        valueToken: Token;
+        value: Token;
     }) {
         super();
         this.tokens = {
-            value: options.valueToken
+            value: options.value
         };
         this.range = this.tokens.value?.range;
     }
@@ -1251,15 +1251,15 @@ export class SourceLiteralExpression extends Expression {
  */
 export class NewExpression extends Expression {
     constructor(options: {
-        newKeywordToken?: Token;
+        new?: Token;
         call: CallExpression;
     }) {
         super();
         this.tokens = {
-            newKeyword: options.newKeywordToken
+            new: options.new
         };
         this.call = options.call;
-        this.range = util.createBoundingRange(this.tokens.newKeyword, this.call);
+        this.range = util.createBoundingRange(this.tokens.new, this.call);
     }
 
     public readonly kind = AstNodeKind.NewExpression;
@@ -1267,7 +1267,7 @@ export class NewExpression extends Expression {
     public readonly range: Range;
 
     readonly tokens: {
-        newKeyword?: Token;
+        new?: Token;
     };
     readonly call: CallExpression;
 
@@ -1305,18 +1305,18 @@ export class NewExpression extends Expression {
 export class CallfuncExpression extends Expression {
     constructor(options: {
         callee: Expression;
-        operatorToken?: Token;
-        methodNameToken: Identifier;
-        openingParenToken?: Token;
+        operator?: Token;
+        methodName: Identifier;
+        openingParen?: Token;
         args?: Expression[];
-        closingParenToken?: Token;
+        closingParen?: Token;
     }) {
         super();
         this.tokens = {
-            operator: options.operatorToken,
-            methodName: options.methodNameToken,
-            openingParen: options.openingParenToken,
-            closingParen: options.closingParenToken
+            operator: options.operator,
+            methodName: options.methodName,
+            openingParen: options.openingParen,
+            closingParen: options.closingParen
         };
         this.callee = options.callee;
         this.args = options.args ?? [];
@@ -1458,15 +1458,15 @@ export class TemplateStringQuasiExpression extends Expression {
 
 export class TemplateStringExpression extends Expression {
     constructor(options: {
-        openingBacktickToken?: Token;
+        openingBacktick?: Token;
         quasis: TemplateStringQuasiExpression[];
         expressions: Expression[];
-        closingBacktickToken?: Token;
+        closingBacktick?: Token;
     }) {
         super();
         this.tokens = {
-            openingBacktick: options.openingBacktickToken,
-            closingBacktick: options.closingBacktickToken
+            openingBacktick: options.openingBacktick,
+            closingBacktick: options.closingBacktick
         };
         this.quasis = options.quasis;
         this.expressions = options.expressions;
@@ -1563,17 +1563,17 @@ export class TemplateStringExpression extends Expression {
 
 export class TaggedTemplateStringExpression extends Expression {
     constructor(options: {
-        tagNameToken: Identifier;
-        openingBacktickToken?: Token;
+        tagName: Identifier;
+        openingBacktick?: Token;
         quasis: TemplateStringQuasiExpression[];
         expressions: Expression[];
-        closingBacktickToken?: Token;
+        closingBacktick?: Token;
     }) {
         super();
         this.tokens = {
-            tagName: options.tagNameToken,
-            openingBacktick: options.openingBacktickToken,
-            closingBacktick: options.closingBacktickToken
+            tagName: options.tagName,
+            openingBacktick: options.openingBacktick,
+            closingBacktick: options.closingBacktick
         };
         this.quasis = options.quasis;
         this.expressions = options.expressions;
@@ -1659,14 +1659,14 @@ export class TaggedTemplateStringExpression extends Expression {
 
 export class AnnotationExpression extends Expression {
     constructor(options: {
-        atToken?: Token;
-        nameToken: Token;
+        at?: Token;
+        name: Token;
         call?: CallExpression;
     }) {
         super();
         this.tokens = {
-            at: options.atToken,
-            name: options.nameToken
+            at: options.at,
+            name: options.name
         };
         this.call = options.call;
         this.name = this.tokens.name.text;
@@ -1725,15 +1725,15 @@ export class AnnotationExpression extends Expression {
 export class TernaryExpression extends Expression {
     constructor(options: {
         test: Expression;
-        questionMarkToken?: Token;
+        questionMark?: Token;
         consequent?: Expression;
-        colonToken?: Token;
+        colon?: Token;
         alternate?: Expression;
     }) {
         super();
         this.tokens = {
-            questionMark: options.questionMarkToken,
-            colon: options.colonToken
+            questionMark: options.questionMark,
+            colon: options.colon
         };
         this.test = options.test;
         this.consequent = options.consequent;
@@ -1831,12 +1831,12 @@ export class TernaryExpression extends Expression {
 export class NullCoalescingExpression extends Expression {
     constructor(options: {
         consequent: Expression;
-        questionQuestionToken?: Token;
+        questionQuestion?: Token;
         alternate: Expression;
     }) {
         super();
         this.tokens = {
-            questionQuestion: options.questionQuestionToken
+            questionQuestion: options.questionQuestion
         };
         this.consequent = options.consequent;
         this.alternate = options.alternate;
@@ -1928,11 +1928,11 @@ export class NullCoalescingExpression extends Expression {
 
 export class RegexLiteralExpression extends Expression {
     constructor(options: {
-        regexLiteralToken: Token;
+        regexLiteral: Token;
     }) {
         super();
         this.tokens = {
-            regexLiteral: options.regexLiteralToken
+            regexLiteral: options.regexLiteral
         };
     }
 
@@ -2074,12 +2074,12 @@ export class TypeExpression extends Expression implements TypedefProvider {
 export class TypeCastExpression extends Expression {
     constructor(options: {
         obj: Expression;
-        asToken?: Token;
+        as?: Token;
         typeExpression?: TypeExpression;
     }) {
         super();
         this.tokens = {
-            as: options.asToken
+            as: options.as
         };
         this.obj = options.obj;
         this.typeExpression = options.typeExpression;
@@ -2120,13 +2120,13 @@ export class TypeCastExpression extends Expression {
 export class TypedArrayExpression extends Expression {
     constructor(options: {
         innerType: Expression;
-        leftBracketToken?: Token;
-        rightBracketToken?: Token;
+        leftBracket?: Token;
+        rightBracket?: Token;
     }) {
         super();
         this.tokens = {
-            leftBracket: options.leftBracketToken,
-            rightBracket: options.rightBracketToken
+            leftBracket: options.leftBracket,
+            rightBracket: options.rightBracket
         };
         this.innerType = options.innerType;
         this.range = util.createBoundingRange(

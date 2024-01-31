@@ -30,7 +30,7 @@ describe('parser DimStatement', () => {
         const dimStatement = (parser.ast.statements[0] as DimStatement);
         //the statement should still exist and have null identifier
         expect(dimStatement).to.exist;
-        expect(dimStatement.tokens.identifier).to.not.exist;
+        expect(dimStatement.tokens.name).to.not.exist;
         expect(parser.diagnostics.map(x => x.message)).to.include(DiagnosticMessages.expectedIdentifierAfterKeyword('dim').message);
     });
 
@@ -67,8 +67,8 @@ function validatePass(text: string, dimStatementIndex: number, identifierText: s
     const dimStatement = (parser.ast.statements[dimStatementIndex] as DimStatement);
     expect(dimStatement).to.exist;
     expect(dimStatement.tokens.dim).to.exist;
-    expect(dimStatement.tokens.identifier).to.exist;
-    expect(dimStatement.tokens.identifier!.text).to.equal(identifierText);
+    expect(dimStatement.tokens.name).to.exist;
+    expect(dimStatement.tokens.name!.text).to.equal(identifierText);
     expect(dimStatement.tokens.openingSquare).to.exist;
     expect(dimStatement.dimensions).to.exist;
     expect(dimStatement.dimensions!.length).to.equal(dimensionsCount);

@@ -1996,6 +1996,34 @@ describe('ScopeValidator', () => {
             ]);
         });
 
+        it('allows an assignment to a variable when the declared type does match the rhs type', () => {
+            program.setFile('source/util.bs', `
+                sub setX(value)
+                    x as integer = value ' value is dynamic
+                end sub
+
+                sub setY()
+                    y as integer = len("hello") ' len returns an integer
+                end sub
+            `);
+            program.validate();
+            //should have errors
+            expectZeroDiagnostics(program);
+        });
+
+        it('validates an assignment to a variable when the declared type does not match the rhs type', () => {
+            program.setFile('source/util.bs', `
+                sub setLabelText(label as roSGNodeLabel)
+                    x as integer = label.text
+                end sub
+            `);
+            program.validate();
+            //should have errors
+            expectDiagnostics(program, [
+                DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+            ]);
+        });
+
     });
 
     describe('operatorTypeMismatch', () => {

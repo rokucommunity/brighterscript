@@ -130,28 +130,32 @@ export class Body extends Statement implements TypedefProvider {
 
 export class AssignmentStatement extends Statement {
     constructor(options: {
-        equalsToken?: Token;
-        nameToken: Identifier;
+        name: Identifier;
+        equal?: Token;
         value: Expression;
-        // TODO: add explicit typing to assignments
-        // asToken?: Token;
-        // typeExpression?: TypeExpression;
+        as?: Token;
+        typeExpression?: TypeExpression;
     }) {
         super();
         this.value = options.value;
         this.tokens = {
-            equals: options.equalsToken,
-            name: options.nameToken
+            equal: options.equal,
+            name: options.name,
+            as: options.as
         };
+        this.typeExpression = options.typeExpression;
         this.range = util.createBoundingRange(util.createBoundingRangeFromTokens(this.tokens), this.value);
     }
 
     public tokens: {
-        equals?: Token;
+        equal?: Token;
         name: Identifier;
+        as?: Token;
     };
 
     public value: Expression;
+
+    public typeExpression: TypeExpression;
 
     public readonly kind = AstNodeKind.AssignmentStatement;
 
@@ -165,7 +169,7 @@ export class AssignmentStatement extends Statement {
             return [
                 state.transpileToken(this.tokens.name),
                 ' ',
-                state.transpileToken(this.tokens.equals ?? createToken(TokenKind.Equal)),
+                state.transpileToken(this.tokens.equal ?? createToken(TokenKind.Equal)),
                 ' ',
                 ...this.value.transpile(state)
             ];
@@ -180,13 +184,12 @@ export class AssignmentStatement extends Statement {
     }
 
     getType(options: GetTypeOptions) {
-        // TODO: Do we still need this.typeExpression?
+        const variableType = this.typeExpression?.getType({ ...options, typeChain: undefined }) ?? this.value.getType({ ...options, typeChain: undefined });
 
         // Note: compound assignments (eg. +=) are internally dealt with via the RHS being a BinaryExpression
         // so this.value will be a BinaryExpression, and BinaryExpressions can figure out their own types
-        const rhs = this.value.getType({ ...options, typeChain: undefined });
-        options.typeChain?.push(new TypeChainEntry(this.tokens.name.text, rhs, options.data, this.tokens.name.range));
-        return rhs;
+        options.typeChain?.push(new TypeChainEntry(this.tokens.name.text, variableType, options.data, this.tokens.name.range));
+        return variableType;
     }
 }
 
@@ -393,12 +396,12 @@ export class ExitWhileStatement extends Statement {
 
 export class FunctionStatement extends Statement implements TypedefProvider {
     constructor(options: {
-        nameToken: Identifier;
+        name: Identifier;
         func: FunctionExpression;
     }) {
         super();
         this.tokens = {
-            name: options.nameToken
+            name: options.name
         };
         this.func = options.func;
         this.range = this.func.range;
@@ -472,10 +475,10 @@ export class FunctionStatement extends Statement implements TypedefProvider {
 
 export class IfStatement extends Statement {
     constructor(options: {
-        ifToken?: Token;
-        thenToken?: Token;
-        elseToken?: Token;
-        endIfToken?: Token;
+        if?: Token;
+        then?: Token;
+        else?: Token;
+        endIf?: Token;
 
         condition: Expression;
         thenBranch: Block;
@@ -489,10 +492,10 @@ export class IfStatement extends Statement {
         this.isInline = options.isInline;
 
         this.tokens = {
-            if: options.ifToken,
-            then: options.thenToken,
-            else: options.elseToken,
-            endIf: options.endIfToken
+            if: options.if,
+            then: options.then,
+            else: options.else,
+            endIf: options.endIf
         };
 
         this.range = util.createBoundingRange(
@@ -610,12 +613,12 @@ export class IfStatement extends Statement {
 export class IncrementStatement extends Statement {
     constructor(options: {
         value: Expression;
-        operatorToken: Token;
+        operator: Token;
     }) {
         super();
         this.value = options.value;
         this.tokens = {
-            operator: options.operatorToken
+            operator: options.operator
         };
         this.range = util.createBoundingRange(
             this.value,
@@ -665,12 +668,12 @@ export class PrintStatement extends Statement {
      * @param options.expressions an array of expressions or `PrintSeparator`s to be evaluated and printed.
      */
     constructor(options: {
-        printToken: Token;
+        print: Token;
         expressions: Array<Expression | PrintSeparatorTab | PrintSeparatorSpace>;
     }) {
         super();
         this.tokens = {
-            print: options.printToken
+            print: options.print
         };
         this.expressions = options.expressions;
         this.range = util.createBoundingRange(
@@ -718,32 +721,32 @@ export class PrintStatement extends Statement {
 
 export class DimStatement extends Statement {
     constructor(options: {
-        dimToken?: Token;
-        identifierToken: Identifier;
-        openingSquareToken?: Token;
+        dim?: Token;
+        name: Identifier;
+        openingSquare?: Token;
         dimensions: Expression[];
-        closingSquareToken?: Token;
+        closingSquare?: Token;
     }) {
         super();
         this.tokens = {
-            dim: options?.dimToken,
-            identifier: options.identifierToken,
-            openingSquare: options.openingSquareToken,
-            closingSquare: options.closingSquareToken
+            dim: options?.dim,
+            name: options.name,
+            openingSquare: options.openingSquare,
+            closingSquare: options.closingSquare
         };
         this.dimensions = options.dimensions;
         this.range = util.createBoundingRange(
-            options.dimToken,
-            options.identifierToken,
-            options.openingSquareToken,
+            options.dim,
+            options.name,
+            options.openingSquare,
             ...(this.dimensions ?? []),
-            options.closingSquareToken
+            options.closingSquare
         );
     }
 
     readonly tokens: {
         dim?: Token;
-        identifier: Identifier;
+        name: Identifier;
         openingSquare?: Token;
         closingSquare?: Token;
     };
@@ -757,7 +760,7 @@ export class DimStatement extends Statement {
         let result = [
             state.transpileToken(this.tokens.dim, 'dim'),
             ' ',
-            state.transpileToken(this.tokens.identifier),
+            state.transpileToken(this.tokens.name),
             state.transpileToken(this.tokens.openingSquare, '[')
         ];
         for (let i = 0; i < this.dimensions.length; i++) {
@@ -791,13 +794,13 @@ export class DimStatement extends Statement {
 
 export class GotoStatement extends Statement {
     constructor(options: {
-        gotoToken?: Token;
-        labelToken: Token;
+        goto?: Token;
+        label: Token;
     }) {
         super();
         this.tokens = {
-            goto: options.gotoToken,
-            label: options.labelToken
+            goto: options.goto,
+            label: options.label
         };
         this.range = util.createBoundingRange(
             this.tokens.goto,
@@ -829,21 +832,21 @@ export class GotoStatement extends Statement {
 
 export class LabelStatement extends Statement {
     constructor(options: {
-        identifierToken: Token;
-        colonToken?: Token;
+        name: Token;
+        colon?: Token;
     }) {
         super();
         this.tokens = {
-            identifier: options.identifierToken,
-            colon: options.colonToken
+            name: options.name,
+            colon: options.colon
         };
         this.range = util.createBoundingRange(
-            this.tokens.identifier,
+            this.tokens.name,
             this.tokens.colon
         );
     }
     readonly tokens: {
-        identifier: Token;
+        name: Token;
         colon: Token;
     };
     public readonly kind = AstNodeKind.LabelStatement;
@@ -851,12 +854,12 @@ export class LabelStatement extends Statement {
     public readonly range: Range;
 
     public getLeadingTrivia(): Token[] {
-        return util.concatAnnotationLeadingTrivia(this, this.tokens.identifier.leadingTrivia);
+        return util.concatAnnotationLeadingTrivia(this, this.tokens.name.leadingTrivia);
     }
 
     transpile(state: BrsTranspileState) {
         return [
-            state.transpileToken(this.tokens.identifier),
+            state.transpileToken(this.tokens.name),
             state.transpileToken(this.tokens.colon, ':')
 
         ];
@@ -869,12 +872,12 @@ export class LabelStatement extends Statement {
 
 export class ReturnStatement extends Statement {
     constructor(options?: {
-        returnToken?: Token;
+        return?: Token;
         value?: Expression;
     }) {
         super();
         this.tokens = {
-            return: options?.returnToken
+            return: options?.return
         };
         this.value = options?.value;
         this.range = util.createBoundingRange(
@@ -912,11 +915,11 @@ export class ReturnStatement extends Statement {
 
 export class EndStatement extends Statement {
     constructor(options?: {
-        endToken?: Token;
+        end?: Token;
     }) {
         super();
         this.tokens = {
-            end: options?.endToken
+            end: options?.end
         };
         this.range = this.tokens.end?.range;
     }
@@ -940,10 +943,10 @@ export class EndStatement extends Statement {
 
 export class StopStatement extends Statement {
     constructor(options?: {
-        stopToken?: Token;
+        stop?: Token;
     }) {
         super();
-        this.tokens = { stop: options?.stopToken };
+        this.tokens = { stop: options?.stop };
         this.range = this.tokens?.stop?.range;
     }
     readonly tokens: {
@@ -967,21 +970,21 @@ export class StopStatement extends Statement {
 
 export class ForStatement extends Statement {
     constructor(options: {
-        forToken?: Token;
+        for?: Token;
         counterDeclaration: AssignmentStatement;
-        toToken?: Token;
+        to?: Token;
         finalValue: Expression;
         body: Block;
-        endForToken?: Token;
-        stepToken?: Token;
+        endFor?: Token;
+        step?: Token;
         increment?: Expression;
     }) {
         super();
         this.tokens = {
-            for: options.forToken,
-            to: options.toToken,
-            endFor: options.endForToken,
-            step: options.stepToken
+            for: options.for,
+            to: options.to,
+            endFor: options.endFor,
+            step: options.step
         };
         this.counterDeclaration = options.counterDeclaration;
         this.finalValue = options.finalValue;
@@ -1077,19 +1080,19 @@ export class ForStatement extends Statement {
 
 export class ForEachStatement extends Statement {
     constructor(options: {
-        forEachToken?: Token;
-        itemToken: Token;
-        inToken?: Token;
+        forEach?: Token;
+        item: Token;
+        in?: Token;
         target: Expression;
         body: Block;
-        endForToken?: Token;
+        endFor?: Token;
     }) {
         super();
         this.tokens = {
-            forEach: options.forEachToken,
-            item: options.itemToken,
-            in: options.inToken,
-            endFor: options.endForToken
+            forEach: options.forEach,
+            item: options.item,
+            in: options.in,
+            endFor: options.endFor
         };
         this.body = options.body;
         this.target = options.target;
@@ -1164,15 +1167,15 @@ export class ForEachStatement extends Statement {
 
 export class WhileStatement extends Statement {
     constructor(options: {
-        whileToken?: Token;
-        endWhileToken?: Token;
+        while?: Token;
+        endWhile?: Token;
         condition: Expression;
         body: Block;
     }) {
         super();
         this.tokens = {
-            while: options.whileToken,
-            endWhile: options.endWhileToken
+            while: options.while,
+            endWhile: options.endWhile
         };
         this.body = options.body;
         this.condition = options.condition;
@@ -1236,14 +1239,14 @@ export class WhileStatement extends Statement {
 export class DottedSetStatement extends Statement {
     constructor(options: {
         obj: Expression;
-        nameToken: Identifier;
+        name: Identifier;
         value: Expression;
-        dotToken?: Token;
+        dot?: Token;
     }) {
         super();
         this.tokens = {
-            name: options.nameToken,
-            dot: options.dotToken
+            name: options.name,
+            dot: options.dot
         };
         this.obj = options.obj;
         this.value = options.value;
@@ -1304,13 +1307,13 @@ export class IndexedSetStatement extends Statement {
         obj: Expression;
         index: Expression;
         value: Expression;
-        openingSquareToken?: Token;
-        closingSquareToken?: Token;
+        openingSquare?: Token;
+        closingSquare?: Token;
     }) {
         super();
         this.tokens = {
-            openingSquare: options.openingSquareToken,
-            closingSquare: options.closingSquareToken
+            openingSquare: options.openingSquare,
+            closingSquare: options.closingSquare
         };
         this.obj = options.obj;
         this.index = options.index;
@@ -1369,13 +1372,13 @@ export class IndexedSetStatement extends Statement {
 
 export class LibraryStatement extends Statement implements TypedefProvider {
     constructor(options: {
-        libraryToken: Token;
-        filePathToken?: Token;
+        library: Token;
+        filePath?: Token;
     }) {
         super();
         this.tokens = {
-            library: options.libraryToken,
-            filePath: options.filePathToken
+            library: options.library,
+            filePath: options.filePath
         };
         this.range = util.createBoundingRange(
             this.tokens.library,
@@ -1417,15 +1420,15 @@ export class LibraryStatement extends Statement implements TypedefProvider {
 
 export class NamespaceStatement extends Statement implements TypedefProvider {
     constructor(options: {
-        keywordToken?: Token;
+        namespace?: Token;
         nameExpression: VariableExpression | DottedGetExpression;
         body: Body;
-        endKeywordToken?: Token;
+        endNamespace?: Token;
     }) {
         super();
         this.tokens = {
-            keyword: options.keywordToken,
-            endKeyword: options.endKeywordToken
+            namespace: options.namespace,
+            endNamespace: options.endNamespace
         };
         this.nameExpression = options.nameExpression;
         this.body = options.body;
@@ -1434,8 +1437,8 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     }
 
     readonly tokens: {
-        keyword?: Token;
-        endKeyword?: Token;
+        namespace?: Token;
+        endNamespace?: Token;
     };
 
     readonly nameExpression: VariableExpression | DottedGetExpression;
@@ -1456,10 +1459,10 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     public cacheRange() {
         if (!this._range) {
             this._range = util.createBoundingRange(
-                this.tokens.keyword,
+                this.tokens.namespace,
                 this.nameExpression,
                 this.body,
-                this.tokens.endKeyword
+                this.tokens.endNamespace
             ) ?? interpolatedRange;
         }
         return this._range;
@@ -1475,7 +1478,7 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     }
 
     public getLeadingTrivia(): Token[] {
-        return util.concatAnnotationLeadingTrivia(this, this.tokens.keyword?.leadingTrivia);
+        return util.concatAnnotationLeadingTrivia(this, this.tokens.namespace?.leadingTrivia);
     }
 
     public getNameParts() {
@@ -1530,13 +1533,13 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
 
 export class ImportStatement extends Statement implements TypedefProvider {
     constructor(options: {
-        importToken?: Token;
-        filePathToken: Token;
+        import?: Token;
+        filePath: Token;
     }) {
         super();
         this.tokens = {
-            import: options.importToken,
-            filePath: options.filePathToken
+            import: options.import,
+            filePath: options.filePath
         };
         this.range = util.createBoundingRange(
             this.tokens.import,
@@ -1596,19 +1599,19 @@ export class ImportStatement extends Statement implements TypedefProvider {
 
 export class InterfaceStatement extends Statement implements TypedefProvider {
     constructor(options: {
-        interfaceToken: Token;
-        nameToken: Identifier;
-        extendsToken?: Token;
+        interface: Token;
+        name: Identifier;
+        extends?: Token;
         parentInterfaceName?: TypeExpression;
         body: Statement[];
-        endInterfaceToken?: Token;
+        endInterface?: Token;
     }) {
         super();
         this.tokens = {
-            interface: options.interfaceToken,
-            name: options.nameToken,
-            extends: options.extendsToken,
-            endInterface: options.endInterfaceToken
+            interface: options.interface,
+            name: options.name,
+            extends: options.extends,
+            endInterface: options.endInterface
         };
         this.parentInterfaceName = options.parentInterfaceName;
         this.body = options.body;
@@ -1784,16 +1787,16 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
         throw new Error('Method not implemented.');
     }
     constructor(options: {
-        nameToken: Identifier;
-        asToken?: Token;
+        name: Identifier;
+        as?: Token;
         typeExpression?: TypeExpression;
-        optionalToken?: Token;
+        optional?: Token;
     }) {
         super();
         this.tokens = {
-            optional: options.optionalToken,
-            name: options.nameToken,
-            as: options.asToken
+            optional: options.optional,
+            name: options.name,
+            as: options.as
         };
         this.typeExpression = options.typeExpression;
         this.range = util.createBoundingRange(
@@ -1875,23 +1878,23 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         throw new Error('Method not implemented.');
     }
     constructor(options: {
-        functionTypeToken?: Token;
-        nameToken: Identifier;
-        leftParenToken?: Token;
+        functionType?: Token;
+        name: Identifier;
+        leftParen?: Token;
         params?: FunctionParameterExpression[];
-        rightParenToken?: Token;
-        asToken?: Token;
+        rightParen?: Token;
+        as?: Token;
         returnTypeExpression?: TypeExpression;
-        optionalToken?: Token;
+        optional?: Token;
     }) {
         super();
         this.tokens = {
-            optional: options.optionalToken,
-            functionType: options.functionTypeToken,
-            name: options.nameToken,
-            leftParen: options.leftParenToken,
-            rightParen: options.rightParenToken,
-            as: options.asToken
+            optional: options.optional,
+            functionType: options.functionType,
+            name: options.name,
+            leftParen: options.leftParen,
+            rightParen: options.rightParen,
+            as: options.as
         };
         this.params = options.params ?? [];
         this.returnTypeExpression = options.returnTypeExpression;
@@ -2018,23 +2021,23 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
 
 export class ClassStatement extends Statement implements TypedefProvider {
     constructor(options: {
-        classKeywordToken?: Token;
+        class?: Token;
         /**
          * The name of the class (without namespace prefix)
          */
-        nameToken: Identifier;
+        name: Identifier;
         body: Statement[];
-        endClassToken?: Token;
-        extendsKeywordToken?: Token;
+        endClass?: Token;
+        extends?: Token;
         parentClassName?: TypeExpression;
     }) {
         super();
         this.body = options.body ?? [];
         this.tokens = {
-            name: options.nameToken,
-            classKeyword: options.classKeywordToken,
-            endClass: options.endClassToken,
-            extendsKeyword: options.extendsKeywordToken
+            name: options.name,
+            classKeyword: options.class,
+            endClass: options.endClass,
+            extendsKeyword: options.extends
         };
         this.parentClassName = options.parentClassName;
         this.symbolTable = new SymbolTable(`ClassStatement: '${this.tokens.name?.text}'`, () => this.parent?.getSymbolTable());
@@ -2470,9 +2473,9 @@ export class MethodStatement extends FunctionStatement {
     constructor(
         options: {
             modifiers?: Token | Token[];
-            nameToken: Identifier;
+            name: Identifier;
             func: FunctionExpression;
-            overrideToken?: Token;
+            override?: Token;
         }
     ) {
         super(options);
@@ -2485,7 +2488,7 @@ export class MethodStatement extends FunctionStatement {
         }
         this.tokens = {
             ...this.tokens,
-            override: options.overrideToken
+            override: options.override
         };
         this.range = util.createBoundingRange(
             ...(this.modifiers),
@@ -2604,7 +2607,7 @@ export class MethodStatement extends FunctionStatement {
         const superCall = new ExpressionStatement({
             expression: new CallExpression({
                 callee: new VariableExpression({
-                    nameToken: {
+                    name: {
                         kind: TokenKind.Identifier,
                         text: 'super',
                         isReserved: false,
@@ -2613,7 +2616,7 @@ export class MethodStatement extends FunctionStatement {
                         leadingTrivia: []
                     }
                 }),
-                openingParenToken: {
+                openingParen: {
                     kind: TokenKind.LeftParen,
                     text: '(',
                     isReserved: false,
@@ -2621,7 +2624,7 @@ export class MethodStatement extends FunctionStatement {
                     leadingWhitespace: '',
                     leadingTrivia: []
                 },
-                closingParenToken: {
+                closingParen: {
                     kind: TokenKind.RightParen,
                     text: ')',
                     isReserved: false,
@@ -2648,13 +2651,13 @@ export class MethodStatement extends FunctionStatement {
             thisQualifiedName.text = 'm.' + field.tokens.name.text;
             const fieldAssignment = field.initialValue
                 ? new AssignmentStatement({
-                    equalsToken: field.tokens.equals,
-                    nameToken: thisQualifiedName,
+                    equal: field.tokens.equals,
+                    name: thisQualifiedName,
                     value: field.initialValue
                 })
                 : new AssignmentStatement({
-                    equalsToken: createToken(TokenKind.Equal, '=', field.tokens.name.range),
-                    nameToken: thisQualifiedName,
+                    equal: createToken(TokenKind.Equal, '=', field.tokens.name.range),
+                    name: thisQualifiedName,
                     //if there is no initial value, set the initial value to `invalid`
                     value: createInvalidLiteral('invalid', field.tokens.name.range)
                 });
@@ -2674,21 +2677,21 @@ export class MethodStatement extends FunctionStatement {
 
 export class FieldStatement extends Statement implements TypedefProvider {
     constructor(options: {
-        accessModifierToken?: Token;
-        nameToken: Identifier;
-        asToken?: Token;
+        accessModifier?: Token;
+        name: Identifier;
+        as?: Token;
         typeExpression?: TypeExpression;
-        equalsToken?: Token;
+        equal?: Token;
         initialValue?: Expression;
-        optionalToken?: Token;
+        optional?: Token;
     }) {
         super();
         this.tokens = {
-            accessModifier: options.accessModifierToken,
-            name: options.nameToken,
-            as: options.asToken,
-            equals: options.equalsToken,
-            optional: options.optionalToken
+            accessModifier: options.accessModifier,
+            name: options.name,
+            as: options.as,
+            equals: options.equal,
+            optional: options.optional
         };
         this.typeExpression = options.typeExpression;
         this.initialValue = options.initialValue;
@@ -2779,15 +2782,15 @@ export type MemberStatement = FieldStatement | MethodStatement;
 
 export class TryCatchStatement extends Statement {
     constructor(options?: {
-        tryToken?: Token;
-        endTryToken?: Token;
+        try?: Token;
+        endTry?: Token;
         tryBranch?: Block;
         catchStatement?: CatchStatement;
     }) {
         super();
         this.tokens = {
-            try: options.tryToken,
-            endTry: options.endTryToken
+            try: options.try,
+            endTry: options.endTry
         };
         this.tryBranch = options.tryBranch;
         this.catchStatement = options.catchStatement;
@@ -2834,14 +2837,14 @@ export class TryCatchStatement extends Statement {
 
 export class CatchStatement extends Statement {
     constructor(options?: {
-        catchToken?: Token;
-        exceptionVariableToken?: Identifier;
+        catch?: Token;
+        exceptionVariable?: Identifier;
         catchBranch?: Block;
     }) {
         super();
         this.tokens = {
-            catch: options?.catchToken,
-            exceptionVariable: options?.exceptionVariableToken
+            catch: options?.catch,
+            exceptionVariable: options?.exceptionVariable
         };
         this.catchBranch = options?.catchBranch;
         this.range = util.createBoundingRange(
@@ -2880,12 +2883,12 @@ export class CatchStatement extends Statement {
 
 export class ThrowStatement extends Statement {
     constructor(options?: {
-        throwToken?: Token;
+        throw?: Token;
         expression?: Expression;
     }) {
         super();
         this.tokens = {
-            throw: options.throwToken
+            throw: options.throw
         };
         this.expression = options.expression;
         this.range = util.createBoundingRange(
@@ -2932,16 +2935,16 @@ export class ThrowStatement extends Statement {
 
 export class EnumStatement extends Statement implements TypedefProvider {
     constructor(options: {
-        enumToken?: Token;
-        nameToken: Identifier;
-        endEnumToken?: Token;
+        enum?: Token;
+        name: Identifier;
+        endEnum?: Token;
         body: Array<EnumMemberStatement | CommentStatement>;
     }) {
         super();
         this.tokens = {
-            enum: options.enumToken,
-            name: options.nameToken,
-            endEnum: options.endEnumToken
+            enum: options.enum,
+            name: options.name,
+            endEnum: options.endEnum
         };
         this.body = this.body ?? [];
     }
@@ -3109,14 +3112,14 @@ export class EnumStatement extends Statement implements TypedefProvider {
 
 export class EnumMemberStatement extends Statement implements TypedefProvider {
     public constructor(options: {
-        nameToken: Identifier;
-        equalToken?: Token;
+        name: Identifier;
+        equal?: Token;
         value?: Expression;
     }) {
         super();
         this.tokens = {
-            name: options.nameToken,
-            equal: options.equalToken
+            name: options.name,
+            equal: options.equal
         };
         this.value = options.value;
     }
@@ -3184,16 +3187,16 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
 
 export class ConstStatement extends Statement implements TypedefProvider {
     public constructor(options: {
-        constToken?: Token;
-        nameToken: Identifier;
-        equalsToken?: Token;
+        const?: Token;
+        name: Identifier;
+        equal?: Token;
         value: Expression;
     }) {
         super();
         this.tokens = {
-            const: options.constToken,
-            name: options.nameToken,
-            equals: options.equalsToken
+            const: options.const,
+            name: options.name,
+            equals: options.equal
         };
         this.value = options.value;
         this.range = util.createBoundingRange(this.tokens.const, this.tokens.name, this.tokens.equals, this.value);
@@ -3267,14 +3270,14 @@ export class ConstStatement extends Statement implements TypedefProvider {
 
 export class ContinueStatement extends Statement {
     constructor(options: {
-        continueToken?: Token;
-        loopTypeToken: Token;
+        continue?: Token;
+        loopType: Token;
     }
     ) {
         super();
         this.tokens = {
-            continue: options.continueToken,
-            loopType: options.loopTypeToken
+            continue: options.continue,
+            loopType: options.loopType
         };
         this.range = util.createBoundingRange(
             this.tokens.continue,

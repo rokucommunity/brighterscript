@@ -101,7 +101,7 @@ export class BrsFileValidator {
                 node.parent.getSymbolTable()?.addSymbol(node.tokens.item.text, { definingNode: node }, loopVarType, SymbolTypeFlag.runtime);
             },
             NamespaceStatement: (node) => {
-                this.validateDeclarationLocations(node, 'namespace', () => util.createBoundingRange(node.tokens.keyword, node.nameExpression));
+                this.validateDeclarationLocations(node, 'namespace', () => util.createBoundingRange(node.tokens.namespace, node.nameExpression));
                 //Namespace Types are added at the Scope level - This is handled when the SymbolTables get linked
             },
             FunctionStatement: (node) => {
@@ -165,8 +165,8 @@ export class BrsFileValidator {
                 node.parent.getSymbolTable().addSymbol(node.tokens.exceptionVariable.text, { definingNode: node }, DynamicType.instance, SymbolTypeFlag.runtime);
             },
             DimStatement: (node) => {
-                if (node.tokens.identifier) {
-                    node.parent.getSymbolTable().addSymbol(node.tokens.identifier.text, { definingNode: node }, node.getType({ flags: SymbolTypeFlag.runtime }), SymbolTypeFlag.runtime);
+                if (node.tokens.name) {
+                    node.parent.getSymbolTable().addSymbol(node.tokens.name.text, { definingNode: node }, node.getType({ flags: SymbolTypeFlag.runtime }), SymbolTypeFlag.runtime);
                 }
             },
             ContinueStatement: (node) => {

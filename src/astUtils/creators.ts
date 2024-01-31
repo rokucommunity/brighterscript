@@ -107,7 +107,7 @@ export function createIdentifier(name: string, range?: Range): Identifier {
 }
 
 export function createVariableExpression(ident: string, range?: Range): VariableExpression {
-    return new VariableExpression({ nameToken: createToken(TokenKind.Identifier, ident, range) });
+    return new VariableExpression({ name: createToken(TokenKind.Identifier, ident, range) });
 }
 
 export function createDottedIdentifier(path: string[], range?: Range): DottedGetExpression {
@@ -115,7 +115,7 @@ export function createDottedIdentifier(path: string[], range?: Range): DottedGet
     const obj = path.length > 1 ? createDottedIdentifier(path, range) : createVariableExpression(path[0], range);
     return new DottedGetExpression({
         obj: obj,
-        nameToken: createToken(TokenKind.Identifier, ident, range),
+        name: createToken(TokenKind.Identifier, ident, range),
         dotToken: createToken(TokenKind.Dot, '.', range)
     });
 }
@@ -130,41 +130,41 @@ export function createStringLiteral(value: string, range?: Range) {
     if (!value.startsWith('"') && !value.endsWith('"')) {
         value = '"' + value + '"';
     }
-    return new LiteralExpression({ valueToken: createToken(TokenKind.StringLiteral, value, range) });
+    return new LiteralExpression({ value: createToken(TokenKind.StringLiteral, value, range) });
 }
 export function createIntegerLiteral(value: string, range?: Range) {
-    return new LiteralExpression({ valueToken: createToken(TokenKind.IntegerLiteral, value, range) });
+    return new LiteralExpression({ value: createToken(TokenKind.IntegerLiteral, value, range) });
 }
 export function createFloatLiteral(value: string, range?: Range) {
-    return new LiteralExpression({ valueToken: createToken(TokenKind.FloatLiteral, value, range) });
+    return new LiteralExpression({ value: createToken(TokenKind.FloatLiteral, value, range) });
 }
 export function createDoubleLiteral(value: string, range?: Range) {
-    return new LiteralExpression({ valueToken: createToken(TokenKind.DoubleLiteral, value, range) });
+    return new LiteralExpression({ value: createToken(TokenKind.DoubleLiteral, value, range) });
 }
 export function createLongIntegerLiteral(value: string, range?: Range) {
-    return new LiteralExpression({ valueToken: createToken(TokenKind.LongIntegerLiteral, value, range) });
+    return new LiteralExpression({ value: createToken(TokenKind.LongIntegerLiteral, value, range) });
 }
 export function createInvalidLiteral(value?: string, range?: Range) {
-    return new LiteralExpression({ valueToken: createToken(TokenKind.Invalid, value, range) });
+    return new LiteralExpression({ value: createToken(TokenKind.Invalid, value, range) });
 }
 export function createBooleanLiteral(value: string, range?: Range) {
-    return new LiteralExpression({ valueToken: createToken(value === 'true' ? TokenKind.True : TokenKind.False, value, range) });
+    return new LiteralExpression({ value: createToken(value === 'true' ? TokenKind.True : TokenKind.False, value, range) });
 }
 export function createFunctionExpression(kind: TokenKind.Sub | TokenKind.Function) {
     return new FunctionExpression({
         parameters: [],
         body: new Block({ statements: [], startingRange: interpolatedRange }),
-        functionTypeToken: createToken(kind),
-        endToken: kind === TokenKind.Sub ? createToken(TokenKind.EndSub) : createToken(TokenKind.EndFunction),
-        leftParenToken: createToken(TokenKind.LeftParen),
-        rightParenToken: createToken(TokenKind.RightParen)
+        functionType: createToken(kind),
+        endFunctionType: kind === TokenKind.Sub ? createToken(TokenKind.EndSub) : createToken(TokenKind.EndFunction),
+        leftParen: createToken(TokenKind.LeftParen),
+        rightParen: createToken(TokenKind.RightParen)
     });
 }
 
 export function createMethodStatement(name: string, kind: TokenKind.Sub | TokenKind.Function = TokenKind.Function, modifiers?: Token[]) {
     return new MethodStatement({
         modifiers: modifiers,
-        nameToken: createIdentifier(name),
+        name: createIdentifier(name),
         func: createFunctionExpression(kind)
     });
 }
@@ -172,8 +172,8 @@ export function createMethodStatement(name: string, kind: TokenKind.Sub | TokenK
 export function createCall(callee: Expression, args?: Expression[]) {
     return new CallExpression({
         callee: callee,
-        openingParenToken: createToken(TokenKind.LeftParen, '('),
-        closingParenToken: createToken(TokenKind.RightParen, ')'),
+        openingParen: createToken(TokenKind.LeftParen, '('),
+        closingParen: createToken(TokenKind.RightParen, ')'),
         args: args
     });
 }

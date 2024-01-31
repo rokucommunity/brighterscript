@@ -360,26 +360,30 @@ export class Parser {
         if (this.check(TokenKind.As)) {
             [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
         }
-        return new InterfaceFieldStatement({ nameToken: name, asToken: asToken, typeExpression: typeExpression, optionalToken: optionalKeyword });
+        return new InterfaceFieldStatement({ name: name, as: asToken, typeExpression: typeExpression, optional: optionalKeyword });
     }
 
-    private consumeAsTokenAndTypeExpression(): [Token, TypeExpression] {
+    private consumeAsTokenAndTypeExpression(ignoreDiagnostics = false): [Token, TypeExpression] {
         let asToken = this.consumeToken(TokenKind.As);
         let typeExpression: TypeExpression;
         if (asToken) {
             //if there's nothing after the `as`, add a diagnostic and continue
             if (this.checkEndOfStatement()) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.expectedIdentifierAfterKeyword(asToken.text),
-                    range: asToken.range
-                });
+                if (!ignoreDiagnostics) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.expectedIdentifierAfterKeyword(asToken.text),
+                        range: asToken.range
+                    });
+                }
                 //consume the statement separator
                 this.consumeStatementSeparators();
             } else if (this.peek().kind !== TokenKind.Identifier && !this.checkAny(...DeclarableTypes, ...AllowedTypeIdentifiers)) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.expectedIdentifierAfterKeyword(asToken.text),
-                    range: asToken.range
-                });
+                if (!ignoreDiagnostics) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.expectedIdentifierAfterKeyword(asToken.text),
+                        range: asToken.range
+                    });
+                }
             } else {
                 typeExpression = this.typeExpression();
             }
@@ -418,14 +422,14 @@ export class Parser {
         }
 
         return new InterfaceMethodStatement({
-            functionTypeToken: functionType,
-            nameToken: name,
-            leftParenToken: leftParen,
+            functionType: functionType,
+            name: name,
+            leftParen: leftParen,
             params: params,
-            rightParenToken: rightParen,
-            asToken: asToken,
+            rightParen: rightParen,
+            as: asToken,
             returnTypeExpression: returnTypeExpression,
-            optionalToken: optionalKeyword
+            optional: optionalKeyword
         });
     }
 
@@ -507,19 +511,19 @@ export class Parser {
         const endInterfaceToken = this.consumeToken(TokenKind.EndInterface);
 
         const statement = new InterfaceStatement({
-            interfaceToken: interfaceToken,
-            nameToken: nameToken,
-            extendsToken: extendsToken,
+            interface: interfaceToken,
+            name: nameToken,
+            extends: extendsToken,
             parentInterfaceName: parentInterfaceName,
             body: body,
-            endInterfaceToken: endInterfaceToken
+            endInterface: endInterfaceToken
         });
         this.exitAnnotationBlock(parentAnnotations);
         return statement;
     }
 
     private enumDeclaration(): EnumStatement {
-        const result = new EnumStatement({ nameToken: {} as any, body: [] });
+        const result = new EnumStatement({ name: {} as any, body: [] });
         this.warnIfNotBrighterScriptMode('enum declarations');
 
         const parentAnnotations = this.enterAnnotationBlock();
@@ -646,9 +650,9 @@ export class Parser {
 
                     decl = new MethodStatement({
                         modifiers: accessModifier,
-                        nameToken: funcDeclaration.tokens.name,
+                        name: funcDeclaration.tokens.name,
                         func: funcDeclaration.func,
-                        overrideToken: overrideKeyword
+                        override: overrideKeyword
                     });
 
                     //refer to this statement as parent of the expression
@@ -694,11 +698,11 @@ export class Parser {
         }
 
         const result = new ClassStatement({
-            classKeywordToken: classKeyword,
-            nameToken: className,
+            class: classKeyword,
+            name: className,
             body: body,
-            endClassToken: endingKeyword,
-            extendsKeywordToken: extendsKeyword,
+            endClass: endingKeyword,
+            extends: extendsKeyword,
             parentClassName: parentClassName
         });
 
@@ -755,13 +759,13 @@ export class Parser {
         }
 
         return new FieldStatement({
-            accessModifierToken: accessModifier,
-            nameToken: name,
-            asToken: asToken,
+            accessModifier: accessModifier,
+            name: name,
+            as: asToken,
             typeExpression: fieldTypeExpression,
-            equalsToken: equal,
+            equal: equal,
             initialValue: initialValue,
-            optionalToken: optionalKeyword
+            optional: optionalKeyword
         });
     }
 
@@ -876,11 +880,11 @@ export class Parser {
             let func = new FunctionExpression({
                 parameters: params,
                 body: undefined, //body
-                functionTypeToken: functionType,
-                endToken: undefined, //ending keyword
-                leftParenToken: leftParen,
-                rightParenToken: rightParen,
-                asToken: asToken,
+                functionType: functionType,
+                endFunctionType: undefined, //ending keyword
+                leftParen: leftParen,
+                rightParen: rightParen,
+                as: asToken,
                 returnTypeExpression: typeExpression
             });
 
@@ -904,15 +908,15 @@ export class Parser {
             }
 
             // consume 'end sub' or 'end function'
-            func.tokens.end = this.advance();
+            func.tokens.endFunctionType = this.advance();
             let expectedEndKind = isSub ? TokenKind.EndSub : TokenKind.EndFunction;
 
             //if `function` is ended with `end sub`, or `sub` is ended with `end function`, then
             //add an error but don't hard-fail so the AST can continue more gracefully
-            if (func.tokens.end.kind !== expectedEndKind) {
+            if (func.tokens.endFunctionType.kind !== expectedEndKind) {
                 this.diagnostics.push({
-                    ...DiagnosticMessages.mismatchedEndCallableKeyword(functionTypeText, func.tokens.end.text),
-                    range: func.tokens.end.range
+                    ...DiagnosticMessages.mismatchedEndCallableKeyword(functionTypeText, func.tokens.endFunctionType.text),
+                    range: func.tokens.endFunctionType.range
                 });
             }
             func.callExpressions = this.callExpressions;
@@ -920,7 +924,7 @@ export class Parser {
             if (isAnonymous) {
                 return func;
             } else {
-                let result = new FunctionStatement({ nameToken: name, func: func });
+                let result = new FunctionStatement({ name: name, func: func });
                 func.symbolTable.name += `: '${name?.text}'`;
                 func.functionStatement = result;
 
@@ -961,7 +965,7 @@ export class Parser {
 
         }
         return new FunctionParameterExpression({
-            nameToken: name,
+            name: name,
             equalToken: equalToken,
             defaultValue: defaultValue,
             asToken: asToken,
@@ -978,6 +982,16 @@ export class Parser {
                 range: name.range
             });
         }
+        let asToken: Token;
+        let typeExpression: TypeExpression;
+
+        //look for `as SOME_TYPE`
+        if (this.check(TokenKind.As)) {
+            this.warnIfNotBrighterScriptMode('typed assignment');
+
+            [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
+        }
+
         let operator = this.consume(
             DiagnosticMessages.expectedOperatorAfterIdentifier(AssignmentOperators, name.text),
             ...AssignmentOperators
@@ -986,17 +1000,19 @@ export class Parser {
 
         let result: AssignmentStatement;
         if (operator.kind === TokenKind.Equal) {
-            result = new AssignmentStatement({ equalsToken: operator, nameToken: name, value: value });
+            result = new AssignmentStatement({ equal: operator, name: name, value: value, as: asToken, typeExpression: typeExpression });
         } else {
-            const nameExpression = new VariableExpression({ nameToken: name });
+            const nameExpression = new VariableExpression({ name: name });
             result = new AssignmentStatement({
-                equalsToken: operator,
-                nameToken: name,
+                equal: operator,
+                name: name,
                 value: new BinaryExpression({
                     left: nameExpression,
-                    operatorToken: operator,
+                    operator: operator,
                     right: value
-                })
+                }),
+                as: asToken,
+                typeExpression: typeExpression
             });
         }
 
@@ -1107,10 +1123,30 @@ export class Parser {
         // `let`, (...) keyword. As such, we must check the token *after* an identifier to figure
         // out what to do with it.
         if (
-            this.checkAny(TokenKind.Identifier, ...this.allowedLocalIdentifiers) &&
-            this.checkAnyNext(...AssignmentOperators)
+            this.checkAny(TokenKind.Identifier, ...this.allowedLocalIdentifiers)
         ) {
-            return this.assignment();
+            if (this.checkAnyNext(...AssignmentOperators)) {
+                return this.assignment();
+            } else if (this.checkNext(TokenKind.As)) {
+                // may be a typed assignment
+                const backtrack = this.current;
+                let validTypeExpression = false;
+
+                try {
+                    // skip the identifier, and check for valid type expression
+                    this.advance();
+                    const parts = this.consumeAsTokenAndTypeExpression(true);
+                    validTypeExpression = !!(parts?.[0] && parts?.[1]);
+                } catch (e) {
+                    // ignore any errors
+                } finally {
+                    this.current = backtrack;
+                }
+                if (validTypeExpression) {
+                    // there is a valid 'as' and type expression
+                    return this.assignment();
+                }
+            }
         }
 
         //some BrighterScript keywords are allowed as a local identifiers, so we need to check for them AFTER the assignment check
@@ -1155,8 +1191,8 @@ export class Parser {
         }
 
         return new WhileStatement({
-            whileToken: whileKeyword,
-            endWhileToken: endWhile,
+            while: whileKeyword,
+            endWhile: endWhile,
             condition: condition,
             body: whileBlock
         });
@@ -1205,13 +1241,13 @@ export class Parser {
         // WARNING: BrightScript doesn't delete the loop initial value after a for/to loop! It just
         // stays around in scope with whatever value it was when the loop exited.
         return new ForStatement({
-            forToken: forToken,
+            for: forToken,
             counterDeclaration: initializer,
-            toToken: toToken,
+            to: toToken,
             finalValue: finalValue,
             body: body,
-            endForToken: endForToken,
-            stepToken: stepToken,
+            endFor: endForToken,
+            step: stepToken,
             increment: incrementExpression
         });
     }
@@ -1254,10 +1290,10 @@ export class Parser {
         let endFor = this.advance();
 
         return new ForEachStatement({
-            forEachToken: forEach,
-            inToken: maybeIn,
-            endForToken: endFor,
-            itemToken: name,
+            forEach: forEach,
+            in: maybeIn,
+            endFor: endFor,
+            item: name,
             target: target,
             body: body
         });
@@ -1293,7 +1329,7 @@ export class Parser {
 
         let name = this.identifyingExpression();
         //set the current namespace name
-        let result = new NamespaceStatement({ keywordToken: keyword, nameExpression: name, body: null });
+        let result = new NamespaceStatement({ namespace: keyword, nameExpression: name, body: null });
 
         this.globalTerminators.push([TokenKind.EndNamespace]);
         let body = this.body();
@@ -1313,7 +1349,7 @@ export class Parser {
         this.namespaceAndFunctionDepth--;
 
         result.body = body;
-        result.tokens.endKeyword = endKeyword;
+        result.tokens.endNamespace = endKeyword;
         //cache the range property so that plugins can't affect it
         result.cacheRange();
         result.body.symbolTable.name += `: namespace '${result.name}'`;
@@ -1336,7 +1372,7 @@ export class Parser {
         if (firstIdentifier) {
             // force it into an identifier so the AST makes some sense
             firstIdentifier.kind = TokenKind.Identifier;
-            const varExpr = new VariableExpression({ nameToken: firstIdentifier });
+            const varExpr = new VariableExpression({ name: firstIdentifier });
             expr = varExpr;
 
             //consume multiple dot identifiers (i.e. `Name.Space.Can.Have.Many.Parts`)
@@ -1360,7 +1396,7 @@ export class Parser {
                 }
                 // force it into an identifier so the AST makes some sense
                 identifier.kind = TokenKind.Identifier;
-                expr = new DottedGetExpression({ obj: expr, nameToken: identifier, dotToken: dot });
+                expr = new DottedGetExpression({ obj: expr, name: identifier, dotToken: dot });
             }
         }
         return expr;
@@ -1399,9 +1435,9 @@ export class Parser {
         const equalToken = this.consumeToken(TokenKind.Equal);
         const expression = this.expression();
         const statement = new ConstStatement({
-            constToken: constToken,
-            nameToken: nameToken,
-            equalsToken: equalToken,
+            const: constToken,
+            name: nameToken,
+            equal: equalToken,
             value: expression
         });
         return statement;
@@ -1409,9 +1445,9 @@ export class Parser {
 
     private libraryStatement(): LibraryStatement | undefined {
         let libStatement = new LibraryStatement({
-            libraryToken: this.advance(),
+            library: this.advance(),
             //grab the next token only if it's a string
-            filePathToken: this.tryConsume(
+            filePath: this.tryConsume(
                 DiagnosticMessages.expectedStringLiteralAfterKeyword('library'),
                 TokenKind.StringLiteral
             )
@@ -1423,9 +1459,9 @@ export class Parser {
     private importStatement() {
         this.warnIfNotBrighterScriptMode('import statements');
         let importStatement = new ImportStatement({
-            importToken: this.advance(),
+            import: this.advance(),
             //grab the next token only if it's a string
-            filePathToken: this.tryConsume(
+            filePath: this.tryConsume(
                 DiagnosticMessages.expectedStringLiteralAfterKeyword('import'),
                 TokenKind.StringLiteral
             )
@@ -1440,7 +1476,7 @@ export class Parser {
         if (identifier) {
             identifier.kind = TokenKind.Identifier;
         }
-        let annotation = new AnnotationExpression({ atToken: atToken, nameToken: identifier });
+        let annotation = new AnnotationExpression({ at: atToken, name: identifier });
         this.pendingAnnotations.push(annotation);
 
         //optional arguments
@@ -1486,9 +1522,9 @@ export class Parser {
 
         return new TernaryExpression({
             test: test,
-            questionMarkToken: questionMarkToken,
+            questionMark: questionMarkToken,
             consequent: consequent,
-            colonToken: colonToken,
+            colon: colonToken,
             alternate: alternate
         });
     }
@@ -1499,7 +1535,7 @@ export class Parser {
         const alternate = this.expression();
         return new NullCoalescingExpression({
             consequent: test,
-            questionQuestionToken: questionQuestionToken,
+            questionQuestion: questionQuestionToken,
             alternate: alternate
         });
     }
@@ -1507,7 +1543,7 @@ export class Parser {
     private regexLiteralExpression() {
         this.warnIfNotBrighterScriptMode('regular expression literal');
         return new RegexLiteralExpression({
-            regexLiteralToken: this.advance()
+            regexLiteral: this.advance()
         });
     }
 
@@ -1532,12 +1568,12 @@ export class Parser {
             if (next.kind === TokenKind.TemplateStringQuasi) {
                 //a quasi can actually be made up of multiple quasis when it includes char literals
                 currentQuasiExpressionParts.push(
-                    new LiteralExpression({ valueToken: next })
+                    new LiteralExpression({ value: next })
                 );
                 this.advance();
             } else if (next.kind === TokenKind.EscapedCharCodeLiteral) {
                 currentQuasiExpressionParts.push(
-                    new EscapedCharCodeLiteralExpression({ valueToken: next as Token & { charCode: number } })
+                    new EscapedCharCodeLiteralExpression({ value: next as Token & { charCode: number } })
                 );
                 this.advance();
             } else {
@@ -1582,18 +1618,18 @@ export class Parser {
             let closingBacktick = this.advance();
             if (isTagged) {
                 return new TaggedTemplateStringExpression({
-                    tagNameToken: tagName,
-                    openingBacktickToken: openingBacktick,
+                    tagName: tagName,
+                    openingBacktick: openingBacktick,
                     quasis: quasis,
                     expressions: expressions,
-                    closingBacktickToken: closingBacktick
+                    closingBacktick: closingBacktick
                 });
             } else {
                 return new TemplateStringExpression({
-                    openingBacktickToken: openingBacktick,
+                    openingBacktick: openingBacktick,
                     quasis: quasis,
                     expressions: expressions,
-                    closingBacktickToken: closingBacktick
+                    closingBacktick: closingBacktick
                 });
             }
         }
@@ -1602,7 +1638,7 @@ export class Parser {
     private tryCatchStatement(): TryCatchStatement {
         const tryToken = this.advance();
         const statement = new TryCatchStatement(
-            { tryToken: tryToken }
+            { try: tryToken }
         );
 
         //ensure statement separator
@@ -1622,7 +1658,7 @@ export class Parser {
             }
             return statement;
         }
-        const catchStmt = new CatchStatement({ catchToken: this.advance() });
+        const catchStmt = new CatchStatement({ catch: this.advance() });
         statement.catchStatement = catchStmt;
 
         const exceptionVarToken = this.tryConsume(DiagnosticMessages.missingExceptionVarToFollowCatch(), TokenKind.Identifier, ...this.allowedLocalIdentifiers);
@@ -1659,7 +1695,7 @@ export class Parser {
         } else {
             expression = this.expression();
         }
-        return new ThrowStatement({ throwToken: throwToken, expression: expression });
+        return new ThrowStatement({ throw: throwToken, expression: expression });
     }
 
     private dimStatement() {
@@ -1697,11 +1733,11 @@ export class Parser {
         }
         let rightSquareBracket = this.tryConsume(DiagnosticMessages.missingRightSquareBracketAfterDimIdentifier(), TokenKind.RightSquareBracket);
         return new DimStatement({
-            dimToken: dim,
-            identifierToken: identifier,
-            openingSquareToken: leftSquareBracket,
+            dim: dim,
+            name: identifier,
+            openingSquare: leftSquareBracket,
             dimensions: expressions,
-            closingSquareToken: rightSquareBracket
+            closingSquare: rightSquareBracket
         });
     }
 
@@ -1850,10 +1886,10 @@ export class Parser {
         }
 
         return new IfStatement({
-            ifToken: ifToken,
-            thenToken: thenToken,
-            endIfToken: endIfToken,
-            elseToken: elseToken,
+            if: ifToken,
+            then: thenToken,
+            endIf: endIfToken,
+            else: elseToken,
             condition: condition,
             thenBranch: thenBranch,
             elseBranch: elseBranch,
@@ -1972,7 +2008,7 @@ export class Parser {
                 throw this.lastDiagnosticAsError();
             }
 
-            const result = new IncrementStatement({ value: expr, operatorToken: operator });
+            const result = new IncrementStatement({ value: expr, operator: operator });
             return result;
         }
 
@@ -2008,18 +2044,18 @@ export class Parser {
                     index: left.index,
                     value: operator.kind === TokenKind.Equal
                         ? right
-                        : new BinaryExpression({ left: left, operatorToken: operator, right: right }),
-                    openingSquareToken: left.tokens.openingSquare,
-                    closingSquareToken: left.tokens.closingSquare
+                        : new BinaryExpression({ left: left, operator: operator, right: right }),
+                    openingSquare: left.tokens.openingSquare,
+                    closingSquare: left.tokens.closingSquare
                 });
             } else if (isDottedGetExpression(left)) {
                 return new DottedSetStatement({
                     obj: left.obj,
-                    nameToken: left.tokens.name,
+                    name: left.tokens.name,
                     value: operator.kind === TokenKind.Equal
                         ? right
-                        : new BinaryExpression({ left: left, operatorToken: operator, right: right }),
-                    dotToken: left.tokens.dot
+                        : new BinaryExpression({ left: left, operator: operator, right: right }),
+                    dot: left.tokens.dot
                 });
             }
         }
@@ -2058,7 +2094,7 @@ export class Parser {
             // TODO: error, expected value
         }
 
-        return new PrintStatement({ printToken: printKeyword, expressions: values });
+        return new PrintStatement({ print: printKeyword, expressions: values });
     }
 
     /**
@@ -2066,7 +2102,7 @@ export class Parser {
      * @returns an AST representation of a return statement.
      */
     private returnStatement(): ReturnStatement {
-        let options = { returnToken: this.previous() };
+        let options = { return: this.previous() };
 
         if (this.checkEndOfStatement()) {
             return new ReturnStatement(options);
@@ -2082,8 +2118,8 @@ export class Parser {
      */
     private labelStatement() {
         let options = {
-            identifierToken: this.advance(),
-            colonToken: this.advance()
+            name: this.advance(),
+            colon: this.advance()
         };
 
         //label must be alone on its line, this is probably not a label
@@ -2101,8 +2137,8 @@ export class Parser {
      */
     private continueStatement() {
         return new ContinueStatement({
-            continueToken: this.advance(),
-            loopTypeToken: this.tryConsume(
+            continue: this.advance(),
+            loopType: this.tryConsume(
                 DiagnosticMessages.expectedToken(TokenKind.While, TokenKind.For),
                 TokenKind.While, TokenKind.For
             )
@@ -2115,8 +2151,8 @@ export class Parser {
      */
     private gotoStatement() {
         let tokens = {
-            gotoToken: this.advance(),
-            labelToken: this.consume(
+            goto: this.advance(),
+            label: this.consume(
                 DiagnosticMessages.expectedLabelIdentifierAfterGotoKeyword(),
                 TokenKind.Identifier
             )
@@ -2130,7 +2166,7 @@ export class Parser {
      * @returns an AST representation of an `end` statement.
      */
     private endStatement() {
-        let options = { endToken: this.advance() };
+        let options = { end: this.advance() };
 
         return new EndStatement(options);
     }
@@ -2139,7 +2175,7 @@ export class Parser {
      * @returns an AST representation of a `stop` statement
      */
     private stopStatement() {
-        let options = { stopToken: this.advance() };
+        let options = { stop: this.advance() };
 
         return new StopStatement(options);
     }
@@ -2249,7 +2285,7 @@ export class Parser {
                     // myVal = foo() as dynamic as string
                     [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
                     if (asToken && typeExpression) {
-                        expression = new TypeCastExpression({ obj: expression, asToken: asToken, typeExpression: typeExpression });
+                        expression = new TypeCastExpression({ obj: expression, as: asToken, typeExpression: typeExpression });
                     }
                 } else {
                     break;
@@ -2288,7 +2324,7 @@ export class Parser {
         while (this.matchAny(TokenKind.And, TokenKind.Or)) {
             let operator = this.previous();
             let right = this.relational();
-            expr = new BinaryExpression({ left: expr, operatorToken: operator, right: right });
+            expr = new BinaryExpression({ left: expr, operator: operator, right: right });
         }
 
         return expr;
@@ -2309,7 +2345,7 @@ export class Parser {
         ) {
             let operator = this.previous();
             let right = this.additive();
-            expr = new BinaryExpression({ left: expr, operatorToken: operator, right: right });
+            expr = new BinaryExpression({ left: expr, operator: operator, right: right });
         }
 
         return expr;
@@ -2323,7 +2359,7 @@ export class Parser {
         while (this.matchAny(TokenKind.Plus, TokenKind.Minus)) {
             let operator = this.previous();
             let right = this.multiplicative();
-            expr = new BinaryExpression({ left: expr, operatorToken: operator, right: right });
+            expr = new BinaryExpression({ left: expr, operator: operator, right: right });
         }
 
         return expr;
@@ -2342,7 +2378,7 @@ export class Parser {
         )) {
             let operator = this.previous();
             let right = this.exponential();
-            expr = new BinaryExpression({ left: expr, operatorToken: operator, right: right });
+            expr = new BinaryExpression({ left: expr, operator: operator, right: right });
         }
 
         return expr;
@@ -2354,7 +2390,7 @@ export class Parser {
         while (this.match(TokenKind.Caret)) {
             let operator = this.previous();
             let right = this.prefixUnary();
-            expr = new BinaryExpression({ left: expr, operatorToken: operator, right: right });
+            expr = new BinaryExpression({ left: expr, operator: operator, right: right });
         }
 
         return expr;
@@ -2366,14 +2402,14 @@ export class Parser {
             this.current++; //advance
             let operator = this.previous();
             let right = this.relational();
-            return new UnaryExpression({ operatorToken: operator, right: right });
+            return new UnaryExpression({ operator: operator, right: right });
         } else if (nextKind === TokenKind.Minus || nextKind === TokenKind.Plus) {
             this.current++; //advance
             let operator = this.previous();
             let right = (nextKind as any) === TokenKind.Not
                 ? this.boolean()
                 : this.prefixUnary();
-            return new UnaryExpression({ operatorToken: operator, right: right });
+            return new UnaryExpression({ operator: operator, right: right });
         }
         return this.call();
     }
@@ -2399,9 +2435,9 @@ export class Parser {
         return new IndexedGetExpression({
             obj: expr,
             index: index,
-            openingSquareToken: openingSquare,
-            closingSquareToken: closingSquare,
-            questionDotToken: questionDotToken
+            openingSquare: openingSquare,
+            closingSquare: closingSquare,
+            questionDot: questionDotToken
         });
     }
 
@@ -2427,7 +2463,7 @@ export class Parser {
         let call = this.finishCall(leftParen, nameExpr);
         //pop the call from the  callExpressions list because this is technically something else
         this.callExpressions.pop();
-        let result = new NewExpression({ newKeywordToken: newToken, call: call });
+        let result = new NewExpression({ new: newToken, call: call });
         return result;
     }
 
@@ -2445,11 +2481,11 @@ export class Parser {
 
         return new CallfuncExpression({
             callee: callee,
-            operatorToken: operator,
-            methodNameToken: methodName as Identifier,
-            openingParenToken: openParen,
+            operator: operator,
+            methodName: methodName as Identifier,
+            openingParen: openParen,
             args: call.args,
-            closingParenToken: call.tokens.closingParen
+            closingParen: call.tokens.closingParen
         });
     }
 
@@ -2482,7 +2518,7 @@ export class Parser {
 
                     // force it into an identifier so the AST makes some sense
                     name.kind = TokenKind.Identifier;
-                    expr = new DottedGetExpression({ obj: expr, nameToken: name as Identifier, dotToken: dot });
+                    expr = new DottedGetExpression({ obj: expr, name: name as Identifier, dotToken: dot });
                 }
 
             } else if (this.checkAny(TokenKind.At, TokenKind.QuestionAt)) {
@@ -2498,7 +2534,7 @@ export class Parser {
                 if (!name) {
                     break;
                 }
-                expr = new XmlAttributeGetExpression({ obj: expr, nameToken: name as Identifier, atToken: dot });
+                expr = new XmlAttributeGetExpression({ obj: expr, name: name as Identifier, at: dot });
                 //only allow a single `@` expression
                 break;
 
@@ -2544,9 +2580,9 @@ export class Parser {
 
         let expression = new CallExpression({
             callee: callee,
-            openingParenToken: openingParen,
+            openingParen: openingParen,
             args: args,
-            closingParenToken: closingParen
+            closingParen: closingParen
         });
         if (addToCallExpressionList) {
             this.callExpressions.push(expression);
@@ -2567,7 +2603,7 @@ export class Parser {
                 let operator = this.previous();
                 let right = this.getTypeExpressionPart(changedTokens);
                 if (right) {
-                    expr = new BinaryExpression({ left: expr, operatorToken: operator, right: right });
+                    expr = new BinaryExpression({ left: expr, operator: operator, right: right });
                 } else {
                     break;
                 }
@@ -2596,7 +2632,7 @@ export class Parser {
         let expr: VariableExpression | DottedGetExpression | TypedArrayExpression;
         if (this.checkAny(...DeclarableTypes)) {
             // if this is just a type, just use directly
-            expr = new VariableExpression({ nameToken: this.advance() as Identifier });
+            expr = new VariableExpression({ name: this.advance() as Identifier });
         } else {
             if (this.checkAny(...AllowedTypeIdentifiers)) {
                 // Since the next token is allowed as a type identifier, change the kind
@@ -2622,7 +2658,7 @@ export class Parser {
                 const leftBracket = this.advance();
                 if (this.check(TokenKind.RightSquareBracket)) {
                     const rightBracket = this.advance();
-                    expr = new TypedArrayExpression({ innerType: expr, leftBracketToken: leftBracket, rightBracketToken: rightBracket });
+                    expr = new TypedArrayExpression({ innerType: expr, leftBracket: leftBracket, rightBracket: rightBracket });
                 }
             }
         }
@@ -2642,11 +2678,11 @@ export class Parser {
                 TokenKind.DoubleLiteral,
                 TokenKind.StringLiteral
             ):
-                return new LiteralExpression({ valueToken: this.previous() });
+                return new LiteralExpression({ value: this.previous() });
 
             //capture source literals (LINE_NUM if brightscript, or a bunch of them if brighterscript)
             case this.matchAny(TokenKind.LineNumLiteral, ...(this.options.mode === ParseMode.BrightScript ? [] : BrighterScriptSourceLiterals)):
-                return new SourceLiteralExpression({ valueToken: this.previous() });
+                return new SourceLiteralExpression({ value: this.previous() });
 
             //template string
             case this.check(TokenKind.BackTick):
@@ -2657,7 +2693,7 @@ export class Parser {
                 return this.templateString(true);
 
             case this.matchAny(TokenKind.Identifier, ...this.allowedLocalIdentifiers):
-                return new VariableExpression({ nameToken: this.previous() as Identifier });
+                return new VariableExpression({ name: this.previous() as Identifier });
 
             case this.match(TokenKind.LeftParen):
                 let left = this.previous();
@@ -2666,7 +2702,7 @@ export class Parser {
                     DiagnosticMessages.unmatchedLeftParenAfterExpression(),
                     TokenKind.RightParen
                 );
-                return new GroupingExpression({ leftToken: left, rightToken: right, expression: expr });
+                return new GroupingExpression({ leftParen: left, rightParen: right, expression: expr });
 
             case this.matchAny(TokenKind.LeftSquareBracket):
                 return this.arrayLiteral();
@@ -2678,7 +2714,7 @@ export class Parser {
                 let token = Object.assign(this.previous(), {
                     kind: TokenKind.Identifier
                 }) as Identifier;
-                return new VariableExpression({ nameToken: token });
+                return new VariableExpression({ name: token });
 
             case this.checkAny(TokenKind.Function, TokenKind.Sub):
                 return this.anonymousFunction();
@@ -2750,7 +2786,7 @@ export class Parser {
         }
 
         //this.consume("Expected newline or ':' after array literal", TokenKind.Newline, TokenKind.Colon, TokenKind.Eof);
-        return new ArrayLiteralExpression({ elements: elements, openToken: openingSquare, closeToken: closingSquare });
+        return new ArrayLiteralExpression({ elements: elements, open: openingSquare, close: closingSquare });
     }
 
     private aaLiteral() {
@@ -2795,8 +2831,8 @@ export class Parser {
                     let k = key();
                     let expr = this.expression();
                     lastAAMember = new AAMemberExpression({
-                        keyToken: k.keyToken,
-                        colonToken: k.colonToken,
+                        key: k.keyToken,
+                        colon: k.colonToken,
                         value: expr
                     });
                     members.push(lastAAMember);
@@ -2829,8 +2865,8 @@ export class Parser {
                         let k = key();
                         let expr = this.expression();
                         lastAAMember = new AAMemberExpression({
-                            keyToken: k.keyToken,
-                            colonToken: k.colonToken,
+                            key: k.keyToken,
+                            colon: k.colonToken,
                             value: expr
                         });
                         members.push(lastAAMember);
@@ -2848,7 +2884,7 @@ export class Parser {
             closingBrace = this.previous();
         }
 
-        const aaExpr = new AALiteralExpression({ elements: members, openToken: openingBrace, closeToken: closingBrace });
+        const aaExpr = new AALiteralExpression({ elements: members, open: openingBrace, close: closingBrace });
         return aaExpr;
     }
 

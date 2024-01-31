@@ -102,7 +102,7 @@ export class HoverProcessor {
                 firstToken = extraData.definingNode.tokens.interface;
                 declarationText = firstToken?.text ?? TokenKind.Interface;
             } else if (isNamespaceStatement(extraData.definingNode)) {
-                firstToken = extraData.definingNode.tokens.keyword;
+                firstToken = extraData.definingNode.tokens.namespace;
                 exprTypeString = extraData.definingNode.getName(ParseMode.BrighterScript);
                 declarationText = firstToken?.text ?? TokenKind.Namespace;
             } else if (isEnumStatement(extraData.definingNode)) {

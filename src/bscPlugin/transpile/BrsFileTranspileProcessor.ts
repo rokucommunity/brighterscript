@@ -78,7 +78,7 @@ export class BrsFilePreTranspileProcessor {
             return {
                 enum: result.item,
                 value: new LiteralExpression({
-                    valueToken: createToken(
+                    value: createToken(
                         //just use float literal for now...it will transpile properly with any literal value
                         value?.startsWith('"') ? TokenKind.StringLiteral : TokenKind.FloatLiteral,
                         value

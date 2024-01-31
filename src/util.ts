@@ -5,8 +5,8 @@ import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 import * as path from 'path';
 import { rokuDeploy, DefaultFiles, standardizePath as rokuDeployStandardizePath } from 'roku-deploy';
 import type { DiagnosticRelatedInformation } from 'vscode-languageserver';
-import { type Diagnostic, type Position, type Range, type Location } from 'vscode-languageserver';
-import { Range as RangeNamespace } from 'vscode-languageserver';
+import { type Diagnostic, type Position, type Location } from 'vscode-languageserver';
+import { Range } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
@@ -1082,7 +1082,7 @@ export class Util {
 
         for (let locatable of locatables) {
             //the range might be a getter, so access it exactly once
-            const locatableRange = RangeNamespace.is(locatable) ? locatable : locatable?.range;
+            const locatableRange = Range.is(locatable) ? locatable : locatable?.range;
             if (!locatableRange) {
                 continue;
             }

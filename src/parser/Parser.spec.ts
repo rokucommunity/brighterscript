@@ -1367,6 +1367,25 @@ describe('parser', () => {
             `, ParseMode.BrighterScript);
             expect(diagnostics[0]?.message).to.exist;
         });
+
+        it('allows declaring types on assignment in Brighterscript mode', () => {
+            let { diagnostics } = parse(`
+                sub foo()
+                    x as string = formatJson("some string")
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('does not allow declaring types on assignment in brightscript mode', () => {
+            let { diagnostics } = parse(`
+                sub foo()
+                    x as string = formatJson("some string")
+                end sub
+            `, ParseMode.BrightScript);
+            expect(diagnostics[0]?.message).to.exist;
+            expect(diagnostics[0]?.message).to.include('typed assignment');
+        });
     });
 
     describe('union types', () => {

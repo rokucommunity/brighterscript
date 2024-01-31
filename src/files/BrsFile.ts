@@ -534,7 +534,7 @@ export class BrsFile implements BscFile {
                     });
                 },
                 LabelStatement: (stmt) => {
-                    const { identifier } = stmt.tokens;
+                    const { name: identifier } = stmt.tokens;
                     scope.labelStatements.push({
                         nameRange: identifier.range,
                         lineIndex: identifier.range.start.line,

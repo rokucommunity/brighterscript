@@ -105,6 +105,9 @@ export class ScopeValidator {
                     },
                     UnaryExpression: (unaryExpr) => {
                         this.validateUnaryExpression(file, unaryExpr);
+                    },
+                    AssignmentStatement: (assignStmt) => {
+                        this.validateAssignmentStatement(file, assignStmt);
                     }
                 });
                 const segmentsToWalkForValidation = (thisFileHasChanges || !hasChangeInfo)
@@ -139,7 +142,7 @@ export class ScopeValidator {
             return false;
         }
         let assignmentAncestor: AssignmentStatement;
-        if (isAssignmentStatement(definingNode) && definingNode.tokens.equals.kind === TokenKind.Equal) {
+        if (isAssignmentStatement(definingNode) && definingNode.tokens.equal.kind === TokenKind.Equal) {
             // this symbol was defined in a "normal" assignment (eg. not a compound assignment)
             assignmentAncestor = definingNode;
             return assignmentAncestor?.tokens.name?.text.toLowerCase() === expression?.tokens.name?.text.toLowerCase();
@@ -407,6 +410,31 @@ export class ScopeValidator {
             });
         }
     }
+
+    /**
+     * Detect when declared type does not match rhs type
+     */
+    private validateAssignmentStatement(file: BrsFile, assignStmt: AssignmentStatement) {
+        if (!assignStmt?.typeExpression) {
+            // nothing to check
+            return;
+        }
+
+        const typeChainExpectedLHS = [];
+        const getTypeOpts = { flags: SymbolTypeFlag.runtime };
+        const expectedLHSType = assignStmt.typeExpression.getType({ ...getTypeOpts, data: {}, typeChain: typeChainExpectedLHS });
+        const actualRHSType = assignStmt.value?.getType(getTypeOpts);
+        const compatibilityData: TypeCompatibilityData = {};
+
+        if (!expectedLHSType?.isTypeCompatible(actualRHSType, compatibilityData)) {
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.assignmentTypeMismatch(actualRHSType.toString(), expectedLHSType.toString(), compatibilityData),
+                range: assignStmt.range,
+                file: file
+            });
+        }
+    }
+
     /**
      * Detect invalid use of a binary operator
      */

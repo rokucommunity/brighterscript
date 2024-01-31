@@ -216,8 +216,8 @@ describe('BrsFile', () => {
         expect(file.ownScriptImports).to.be.empty;
         file.parser.ast.statements.push(
             new ImportStatement({
-                importToken: createToken(TokenKind.Import),
-                filePathToken: createToken(TokenKind.StringLiteral, 'pkg:/source/lib.brs')
+                import: createToken(TokenKind.Import),
+                filePath: createToken(TokenKind.StringLiteral, 'pkg:/source/lib.brs')
             })
         );
         expect(file.ownScriptImports).to.be.empty;
