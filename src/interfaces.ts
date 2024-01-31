@@ -1,4 +1,4 @@
-import type { Range, Diagnostic, CodeAction, SemanticTokenTypes, SemanticTokenModifiers, Position, CompletionItem } from 'vscode-languageserver';
+import type { Range, Diagnostic, CodeAction, SemanticTokenTypes, SemanticTokenModifiers, Position, CompletionItem, Location } from 'vscode-languageserver';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -229,6 +229,21 @@ export interface CompilerPlugin {
      */
     afterProvideHover?: PluginHandler<AfterProvideHoverEvent>;
 
+    /**
+     * Called before the `provideDefinition` hook
+     */
+    beforeProvideDefinition?(event: BeforeProvideDefinitionEvent): any;
+    /**
+     * Provide one or more `Location`s where the symbol at the given position was originally defined
+     * @param event
+     */
+    provideDefinition?(event: ProvideDefinitionEvent): any;
+    /**
+     * Called after `provideDefinition`. Use this if you want to intercept or sanitize the definition data provided by bsc or other plugins
+     * @param event
+     */
+    afterProvideDefinition?(event: AfterProvideDefinitionEvent): any;
+
     onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
     //scope events
     afterScopeCreate?: (scope: Scope) => void;
@@ -302,6 +317,25 @@ export interface Hover {
 }
 export type BeforeProvideHoverEvent = ProvideHoverEvent;
 export type AfterProvideHoverEvent = ProvideHoverEvent;
+
+export interface ProvideDefinitionEvent<TFile = BscFile> {
+    program: Program;
+    /**
+     * The file that the getDefinition request was invoked in
+     */
+    file: TFile;
+    /**
+     * The position in the text document where the getDefinition request was invoked
+     */
+    position: Position;
+    /**
+     * The list of locations that represent the definition for the given file and position
+     */
+    result: Location[];
+}
+export type BeforeProvideDefinitionEvent<TFile = BscFile> = ProvideDefinitionEvent<TFile>;
+export type AfterProvideDefinitionEvent<TFile = BscFile> = ProvideDefinitionEvent<TFile>;
+
 
 export interface OnGetSemanticTokensEvent<T extends BscFile = BscFile> {
     /**
