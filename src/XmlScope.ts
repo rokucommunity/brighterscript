@@ -4,8 +4,6 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import type { XmlFile } from './files/XmlFile';
 import type { BscFile, CallableContainerMap, FileReference } from './interfaces';
 import type { Program } from './Program';
-import util from './util';
-import { isXmlFile } from './astUtils/reflection';
 import { SGFieldTypes } from './parser/SGTypes';
 import type { SGTag } from './parser/SGTypes';
 import { DefinitionProvider } from './bscPlugin/definition/DefinitionProvider';
