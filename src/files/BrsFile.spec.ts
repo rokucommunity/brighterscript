@@ -2582,6 +2582,40 @@ describe('BrsFile', () => {
             `);
         });
 
+        it('handles multi-index multi-dimensional arrays', () => {
+            testTranspile(`
+                sub main()
+                    myMultiArray = [[[[[[[[["hello"]]]]]]]]]
+                    myMultiArray[0][0][0][0][0][0][0][0][0] = "goodbye"
+                    print myMultiArray[0, 0, 0, 0, 0, 0, 0, 0, 0]
+                end sub
+            `, `
+                sub main()
+                    myMultiArray = [
+                        [
+                            [
+                                [
+                                    [
+                                        [
+                                            [
+                                                [
+                                                    [
+                                                        "hello"
+                                                    ]
+                                                ]
+                                            ]
+                                        ]
+                                    ]
+                                ]
+                            ]
+                        ]
+                    ]
+                    myMultiArray[0][0][0][0][0][0][0][0][0] = "goodbye"
+                    print myMultiArray[0, 0, 0, 0, 0, 0, 0, 0, 0]
+                end sub
+            `);
+        });
+
         it('transpiles calls to fully-qualified namespaced functions', () => {
             testTranspile(`
                 namespace NameA
@@ -3852,6 +3886,5 @@ describe('BrsFile', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
-
     });
 });

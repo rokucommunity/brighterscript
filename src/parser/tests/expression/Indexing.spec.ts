@@ -5,10 +5,11 @@ import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
-import { AssignmentStatement } from '../../Statement';
+import { AssignmentStatement, DottedSetStatement, IndexedSetStatement } from '../../Statement';
 import { expectDiagnostics, expectDiagnosticsIncludes } from '../../../testHelpers.spec';
-import { isAssignmentStatement, isDottedGetExpression, isIndexedGetExpression, isVariableExpression } from '../../../astUtils/reflection';
+import { isAssignmentStatement, isDottedGetExpression, isDottedSetStatement, isIndexedGetExpression, isIndexedSetStatement, isLiteralExpression, isVariableExpression } from '../../../astUtils/reflection';
 import type { DottedGetExpression, IndexedGetExpression, VariableExpression } from '../../Expression';
+import { WalkMode } from '../../../astUtils/visitors';
 
 
 describe('parser indexing', () => {
@@ -183,6 +184,32 @@ describe('parser indexing', () => {
                 Range.create(1, 4, 1, 10)
             ]);
         });
+    });
+
+    it('walks every index in the indexed get', () => {
+        const parser = Parser.parse(`
+            result = arr[0, 1, 2]
+        `);
+        const nodes = [];
+        parser.ast.findChild<AssignmentStatement>(isAssignmentStatement).value.walk((x) => {
+            if (isLiteralExpression(x)) {
+                nodes.push(x.token.text);
+            }
+        }, { walkMode: WalkMode.visitAllRecursive });
+        expect(nodes).to.eql(['0', '1', '2']);
+    });
+
+    it('walks every index in the indexed get', () => {
+        const parser = Parser.parse(`
+            arr[0, 1, 2] = "value"
+        `);
+        const nodes = [];
+        parser.ast.findChild<IndexedSetStatement>(isIndexedSetStatement).walk((x) => {
+            if (isLiteralExpression(x)) {
+                nodes.push(x.token.text);
+            }
+        }, { walkMode: WalkMode.visitAllRecursive });
+        expect(nodes).to.eql(['0', '1', '2', '"value"']);
     });
 
     describe('multi-level', () => {
