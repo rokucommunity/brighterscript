@@ -1597,6 +1597,56 @@ describe('ScopeValidator', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        it('allows setting a member of an overriden member of an aa', () => {
+            program.setFile('source/main.bs', `
+                sub makeAA()
+                    myAA = {}
+                    addItemsToAA(myAA)
+                    myAA.items.value = "other string"
+                end sub
+
+                sub addItemsToAA(someAA)
+                    someAA.items = {value: "some string"}
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows accessing a member of an overriden member of an aa', () => {
+            program.setFile('source/main.bs', `
+                sub makeAA()
+                    myAA = {}
+                    addItemsToAA(myAA)
+                    print myAA.items.value.len()
+                end sub
+
+                sub addItemsToAA(someAA)
+                    someAA.items = {value: "some string"}
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows using a member of an overriden member of an aa in a different way', () => {
+            program.setFile('source/main.bs', `
+                sub makeAA()
+                    myAA = {}
+                    addItemsToAA(myAA)
+                    for each item in myAA.items
+                        print item
+                    end for
+                end sub
+
+                sub addItemsToAA(someAA)
+                    someAA.items = [0, 1, 2, 3]
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('itemCannotBeUsedAsVariable', () => {
