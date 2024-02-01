@@ -57,7 +57,7 @@ describe('reflection', () => {
         const foreach = new ForEachStatement({ forEach: token, in: token, endFor: token, item: token, target: expr, body: block });
         const whiles = new WhileStatement({ while: token, endWhile: token, condition: expr, body: block });
         const dottedSet = new DottedSetStatement({ obj: expr, name: ident, value: expr });
-        const indexedSet = new IndexedSetStatement({ obj: expr, index: expr, value: expr, openingSquare: token, closingSquare: token, additionalIndexes: [] });
+        const indexedSet = new IndexedSetStatement({ obj: expr, indexes: [expr], value: expr, openingSquare: token, closingSquare: token });
         const library = new LibraryStatement({ library: token, filePath: token });
         const namespace = new NamespaceStatement({ namespace: token, nameExpression: createVariableExpression('a', range), body: body, endNamespace: token });
         const cls = new ClassStatement({ class: token, name: ident, body: [], endClass: token });
@@ -218,7 +218,7 @@ describe('reflection', () => {
         });
         const dottedGet = new DottedGetExpression({ obj: expr, name: ident, dot: token });
         const xmlAttrGet = new XmlAttributeGetExpression({ obj: expr, name: ident, at: token });
-        const indexedGet = new IndexedGetExpression({ obj: expr, index: expr, openingSquare: token, closingSquare: token, additionalIndexes: [] });
+        const indexedGet = new IndexedGetExpression({ obj: expr, indexes: [expr], openingSquare: token, closingSquare: token });
         const grouping = new GroupingExpression({ leftParen: token, rightParen: token, expression: expr });
         const literal = createStringLiteral('test');
         const escapedCarCode = new EscapedCharCodeLiteralExpression({ value: charCode });

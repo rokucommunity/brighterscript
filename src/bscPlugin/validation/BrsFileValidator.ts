@@ -405,7 +405,7 @@ export class BrsFileValidator {
                 if (isDottedSetStatement(parent)) {
                     range = util.createBoundingRange(parent.obj, parent.tokens.dot, parent.tokens.name);
                 } else if (isIndexedSetStatement(parent)) {
-                    range = util.createBoundingRange(parent.obj, parent.tokens.openingSquare, parent.index, parent.tokens.closingSquare);
+                    range = util.createBoundingRange(parent.obj, parent.tokens.openingSquare, ...parent.indexes, parent.tokens.closingSquare);
                 } else {
                     range = node.range;
                 }

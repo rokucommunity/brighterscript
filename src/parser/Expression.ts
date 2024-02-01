@@ -603,14 +603,13 @@ export class XmlAttributeGetExpression extends Expression {
 export class IndexedGetExpression extends Expression {
     constructor(options: {
         obj: Expression;
-        index: Expression;
+        indexes: Expression[];
         /**
          * Can either be `[` or `?[`. If `?.[` is used, this will be `[` and `optionalChainingToken` will be `?.` - defaults to '[' in transpile
          */
         openingSquare?: Token;
         closingSquare?: Token;
         questionDot?: Token;//  ? or ?.
-        additionalIndexes: Expression[];
     }) {
         super();
         this.tokens = {
@@ -619,16 +618,14 @@ export class IndexedGetExpression extends Expression {
             questionDot: options.questionDot
         };
         this.obj = options.obj;
-        this.index = options.index;
-        this.additionalIndexes = options.additionalIndexes;
-        this.range = util.createBoundingRange(this.obj, this.tokens.openingSquare, this.tokens.questionDot, this.tokens.openingSquare, this.index, ...this.additionalIndexes, this.tokens.closingSquare);
+        this.indexes = options.indexes;
+        this.range = util.createBoundingRange(this.obj, this.tokens.openingSquare, this.tokens.questionDot, this.tokens.openingSquare, ...this.indexes, this.tokens.closingSquare);
     }
 
     public readonly kind = AstNodeKind.IndexedGetExpression;
 
     public obj: Expression;
-    public index: Expression;
-    public additionalIndexes: Expression[];
+    public indexes: Expression[];
 
     public tokens: {
         /**
@@ -648,13 +645,12 @@ export class IndexedGetExpression extends Expression {
             this.tokens.questionDot ? state.transpileToken(this.tokens.questionDot) : '',
             state.transpileToken(this.tokens.openingSquare, '[')
         );
-        const indexes = [this.index, ...this.additionalIndexes];
-        for (let i = 0; i < indexes.length; i++) {
+        for (let i = 0; i < this.indexes.length; i++) {
             //add comma between indexes
             if (i > 0) {
                 result.push(', ');
             }
-            let index = indexes[i];
+            let index = this.indexes[i];
             result.push(
                 ...(index?.transpile(state) ?? [])
             );
@@ -668,8 +664,7 @@ export class IndexedGetExpression extends Expression {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'obj', visitor, options);
-            walk(this, 'index', visitor, options);
-            walkArray(this.additionalIndexes, visitor, options, this);
+            walkArray(this.indexes, visitor, options, this);
         }
     }
 
