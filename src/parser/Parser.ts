@@ -2041,13 +2041,12 @@ export class Parser {
             if (isIndexedGetExpression(left)) {
                 return new IndexedSetStatement({
                     obj: left.obj,
-                    index: left.index,
+                    indexes: left.indexes,
                     value: operator.kind === TokenKind.Equal
                         ? right
                         : new BinaryExpression({ left: left, operator: operator, right: right }),
                     openingSquare: left.tokens.openingSquare,
-                    closingSquare: left.tokens.closingSquare,
-                    additionalIndexes: left.additionalIndexes
+                    closingSquare: left.tokens.closingSquare
                 });
             } else if (isDottedGetExpression(left)) {
                 return new DottedSetStatement({
@@ -2449,11 +2448,10 @@ export class Parser {
 
         return new IndexedGetExpression({
             obj: expr,
-            index: indexes.shift(),
+            indexes: indexes,
             openingSquare: openingSquare,
             closingSquare: closingSquare,
-            questionDot: questionDotToken,
-            additionalIndexes: indexes
+            questionDot: questionDotToken
         });
     }
 

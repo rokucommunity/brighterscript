@@ -281,8 +281,8 @@ describe('parser indexing', () => {
             expect(isIndexedGetExpression(assignStmt.value)).to.be.true;
             const indexedGetExpr = assignStmt.value as IndexedGetExpression;
             expect((indexedGetExpr.obj as VariableExpression).tokens.name.text).to.equal('foo');
-            expect(isDottedGetExpression(indexedGetExpr.index)).to.be.true;
-            const dottedGetExpr = indexedGetExpr.index as DottedGetExpression;
+            expect(isDottedGetExpression(indexedGetExpr.indexes[0])).to.be.true;
+            const dottedGetExpr = indexedGetExpr.indexes[0] as DottedGetExpression;
             expect(dottedGetExpr.tokens.name.text).to.equal('baz');
             expect(isVariableExpression(dottedGetExpr.obj)).to.be.true;
         });
