@@ -664,7 +664,7 @@ export class PrintStatement extends Statement {
     /**
      * Creates a new internal representation of a BrightScript `print` statement.
      * @param options the options for this statement
-     * @param options.printToken a print token
+     * @param options.print a print token
      * @param options.expressions an array of expressions or `PrintSeparator`s to be evaluated and printed.
      */
     constructor(options: {
@@ -1309,6 +1309,7 @@ export class IndexedSetStatement extends Statement {
         value: Expression;
         openingSquare?: Token;
         closingSquare?: Token;
+        additionalIndexes: Expression[];
     }) {
         super();
         this.tokens = {
@@ -1317,11 +1318,13 @@ export class IndexedSetStatement extends Statement {
         };
         this.obj = options.obj;
         this.index = options.index;
+        this.additionalIndexes = options.additionalIndexes ?? [];
         this.value = options.value;
         this.range = util.createBoundingRange(
             this.obj,
             this.tokens.openingSquare,
             this.index,
+            ...this.additionalIndexes,
             this.tokens.closingSquare,
             this.value
         );
@@ -1333,6 +1336,7 @@ export class IndexedSetStatement extends Statement {
     };
     readonly obj: Expression;
     readonly index: Expression;
+    readonly additionalIndexes: Expression[];
     readonly value: Expression;
 
     public readonly kind = AstNodeKind.IndexedSetStatement;
@@ -1344,20 +1348,30 @@ export class IndexedSetStatement extends Statement {
         if (CompoundAssignmentOperators.includes((this.value as BinaryExpression)?.tokens?.operator?.kind)) {
             return this.value.transpile(state);
         } else {
-            return [
+            const result = [];
+            result.push(
                 //obj
                 ...this.obj.transpile(state),
                 //   [
-                state.transpileToken(this.tokens.openingSquare, '['),
-                //    index
-                ...this.index.transpile(state),
-                //         ]
-                state.transpileToken(this.tokens.closingSquare, ']'),
-                //           =
+                state.transpileToken(this.tokens.openingSquare)
+            );
+            const indexes = [this.index, ...this.additionalIndexes];
+            for (let i = 0; i < indexes.length; i++) {
+                //add comma between indexes
+                if (i > 0) {
+                    result.push(', ');
+                }
+                let index = indexes[i];
+                result.push(
+                    ...(index?.transpile(state) ?? [])
+                );
+            }
+            result.push(
+                state.transpileToken(this.tokens.closingSquare),
                 ' = ',
-                //             value
                 ...this.value.transpile(state)
-            ];
+            );
+            return result;
         }
     }
 
@@ -1365,6 +1379,7 @@ export class IndexedSetStatement extends Statement {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'obj', visitor, options);
             walk(this, 'index', visitor, options);
+            walkArray(this.additionalIndexes, visitor, options, this);
             walk(this, 'value', visitor, options);
         }
     }

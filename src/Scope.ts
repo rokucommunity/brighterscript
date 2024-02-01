@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/dot-notation */
-import type { Position, Location } from 'vscode-languageserver';
 import * as path from 'path';
 import chalk from 'chalk';
 import type { DiagnosticInfo } from './DiagnosticMessages';
@@ -1304,14 +1303,6 @@ export class Scope {
         let files = this.getOwnFiles();
         let hasFile = files.includes(file);
         return hasFile;
-    }
-
-    /**
-     * Get the definition (where was this thing first defined) of the symbol under the position
-     */
-    public getDefinition(file: BscFile, position: Position): Location[] {
-        // Overridden in XMLScope. Brs files use implementation in BrsFile
-        return [];
     }
 
     /**

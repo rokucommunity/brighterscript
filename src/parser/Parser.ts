@@ -2046,7 +2046,8 @@ export class Parser {
                         ? right
                         : new BinaryExpression({ left: left, operator: operator, right: right }),
                     openingSquare: left.tokens.openingSquare,
-                    closingSquare: left.tokens.closingSquare
+                    closingSquare: left.tokens.closingSquare,
+                    additionalIndexes: left.additionalIndexes
                 });
             } else if (isDottedGetExpression(left)) {
                 return new DottedSetStatement({
@@ -2417,27 +2418,42 @@ export class Parser {
     private indexedGet(expr: Expression) {
         let openingSquare = this.previous();
         let questionDotToken = this.getMatchingTokenAtOffset(-2, TokenKind.QuestionDot);
-        let index: Expression;
-        let closingSquare: Token;
+        let indexes: Expression[] = [];
+
+
+        //consume leading newlines
         while (this.match(TokenKind.Newline)) { }
+
         try {
-            index = this.expression();
+            indexes.push(
+                this.expression()
+            );
+            //consume additional indexes separated by commas
+            while (this.check(TokenKind.Comma)) {
+                //discard the comma
+                this.advance();
+                indexes.push(
+                    this.expression()
+                );
+            }
         } catch (error) {
             this.rethrowNonDiagnosticError(error);
         }
-
+        //consume trailing newlines
         while (this.match(TokenKind.Newline)) { }
-        closingSquare = this.tryConsume(
+
+        const closingSquare = this.tryConsume(
             DiagnosticMessages.expectedRightSquareBraceAfterArrayOrObjectIndex(),
             TokenKind.RightSquareBracket
         );
 
         return new IndexedGetExpression({
             obj: expr,
-            index: index,
+            index: indexes.shift(),
             openingSquare: openingSquare,
             closingSquare: closingSquare,
-            questionDot: questionDotToken
+            questionDot: questionDotToken,
+            additionalIndexes: indexes
         });
     }
 
@@ -3016,6 +3032,11 @@ export class Parser {
         return this.previous()?.kind === tokenKind;
     }
 
+    /**
+     * Check that the next token kind is the expected kind
+     * @param tokenKind the expected next kind
+     * @returns true if the next tokenKind is the expected value
+     */
     private check(tokenKind: TokenKind): boolean {
         const nextKind = this.peek().kind;
         if (nextKind === TokenKind.Eof) {

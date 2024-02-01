@@ -13,7 +13,7 @@ import { Lexer } from '../lexer/Lexer';
 import { TokenKind, AllowedLocalIdentifiers } from '../lexer/TokenKind';
 import { Parser, ParseMode } from '../parser/Parser';
 import type { FunctionExpression, VariableExpression } from '../parser/Expression';
-import type { ClassStatement, FunctionStatement, NamespaceStatement, MethodStatement, FieldStatement } from '../parser/Statement';
+import type { ClassStatement, NamespaceStatement, MethodStatement, FieldStatement } from '../parser/Statement';
 import type { Program } from '../Program';
 import { DynamicType } from '../types/DynamicType';
 import { standardizePath as s, util } from '../util';
@@ -25,18 +25,15 @@ import { isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionS
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
-import { URI } from 'vscode-uri';
-import type { Statement, AstNode } from '../parser/AstNode';
-import { type Expression } from '../parser/AstNode';
-import type { BscSymbol } from '../SymbolTable';
-import { SymbolTable, SymbolTypeFlag } from '../SymbolTable';
-import type { BscFile } from './BscFile';
-import { Editor } from '../astUtils/Editor';
+import type { AstNode, Expression, Statement } from '../parser/AstNode';
 import type { UnresolvedSymbol } from '../AstValidationSegmenter';
 import { AstValidationSegmenter } from '../AstValidationSegmenter';
+import type { BscSymbol } from '../SymbolTable';
+import { SymbolTypeFlag, SymbolTable } from '../SymbolTable';
 import type { BscFileLike } from '../astUtils/CachedLookups';
 import { CachedLookups } from '../astUtils/CachedLookups';
-
+import { Editor } from '../astUtils/Editor';
+import type { BscFile } from './BscFile';
 
 export type ProvidedSymbolMap = Map<SymbolTypeFlag, Map<string, BscSymbol>>;
 export type ChangedSymbolMap = Map<SymbolTypeFlag, Set<string>>;
@@ -45,7 +42,6 @@ export interface ProvidedSymbolInfo {
     symbolMap: ProvidedSymbolMap;
     changes: ChangedSymbolMap;
 }
-
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -763,44 +759,6 @@ export class BrsFile implements BscFile {
         }
     }
 
-    private getNamespaceDefinitions(token: Token, file: BrsFile): Location {
-        //BrightScript does not support namespaces, so return an empty list in that case
-        if (!token) {
-            return undefined;
-        }
-        let location;
-
-        const nameParts = this.getPartialVariableName(token, [TokenKind.New]).split('.');
-        const endName = nameParts[nameParts.length - 1].toLowerCase();
-        const namespaceName = nameParts.slice(0, -1).join('.').toLowerCase();
-
-        const statementHandler = (statement: NamespaceStatement) => {
-            if (!location && statement.getName(ParseMode.BrighterScript).toLowerCase() === namespaceName) {
-                const namespaceItemStatementHandler = (statement: ClassStatement | FunctionStatement) => {
-                    if (!location && statement.tokens.name.text.toLowerCase() === endName) {
-                        const uri = util.pathToUri(file.srcPath);
-                        location = util.createLocation(uri, statement.range);
-                    }
-                };
-
-                file.parser.ast.walk(createVisitor({
-                    ClassStatement: namespaceItemStatementHandler,
-                    FunctionStatement: namespaceItemStatementHandler
-                }), {
-                    walkMode: WalkMode.visitStatements
-                });
-
-            }
-        };
-
-        file.parser.ast.walk(createVisitor({
-            NamespaceStatement: statementHandler
-        }), {
-            walkMode: WalkMode.visitStatements
-        });
-
-        return location;
-    }
     /**
      * Given a current token, walk
      */
@@ -1096,186 +1054,6 @@ export class BrsFile implements BscFile {
         return symbols;
     }
 
-    /**
-     * Given a position in a file, if the position is sitting on some type of identifier,
-     * go to the definition of that identifier (where this thing was first defined)
-     */
-    public getDefinition(position: Position): Location[] {
-        let results: Location[] = [];
-
-        //get the token at the position
-        const token = this.getTokenAt(position);
-
-        // While certain other tokens are allowed as local variables (AllowedLocalIdentifiers: https://github.com/rokucommunity/brighterscript/blob/master/src/lexer/TokenKind.ts#L418), these are converted by the parser to TokenKind.Identifier by the time we retrieve the token using getTokenAt
-        let definitionTokenTypes = [
-            TokenKind.Identifier,
-            TokenKind.StringLiteral
-        ];
-
-        //throw out invalid tokens and the wrong kind of tokens
-        if (!token || !definitionTokenTypes.includes(token.kind)) {
-            return results;
-        }
-
-        const scopesForFile = this.program.getScopesForFile(this);
-        const [scope] = scopesForFile;
-
-        const expression = this.getClosestExpression(position);
-        if (scope && expression) {
-            scope.linkSymbolTable();
-            let containingNamespace = expression.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
-            const fullName = util.getAllDottedGetParts(expression)?.map(x => x.text).join('.');
-
-            //find a constant with this name
-            const constant = scope?.getConstFileLink(fullName, containingNamespace);
-            if (constant) {
-                results.push(
-                    util.createLocation(
-                        URI.file(constant.file.srcPath).toString(),
-                        constant.item.tokens.name.range
-                    )
-                );
-                return results;
-            }
-
-            if (isDottedGetExpression(expression) || isVariableExpression(expression)) {
-
-                const enumLink = scope.getEnumFileLink(fullName, containingNamespace);
-                if (enumLink) {
-                    results.push(
-                        util.createLocation(
-                            URI.file(enumLink.file.srcPath).toString(),
-                            enumLink.item.tokens.name.range
-                        )
-                    );
-                    return results;
-                }
-                const enumMemberLink = scope.getEnumMemberFileLink(fullName, containingNamespace);
-                if (enumMemberLink) {
-                    results.push(
-                        util.createLocation(
-                            URI.file(enumMemberLink.file.srcPath).toString(),
-                            enumMemberLink.item.tokens.name.range
-                        )
-                    );
-                    return results;
-                }
-
-                const interfaceFileLink = scope.getInterfaceFileLink(fullName, containingNamespace);
-                if (interfaceFileLink) {
-                    results.push(
-                        util.createLocation(
-                            URI.file(interfaceFileLink.file.srcPath).toString(),
-                            interfaceFileLink.item.tokens.name.range
-                        )
-                    );
-                    return results;
-                }
-
-                const classFileLink = scope.getClassFileLink(fullName, containingNamespace);
-                if (classFileLink) {
-                    results.push(
-                        util.createLocation(
-                            URI.file(classFileLink.file.srcPath).toString(),
-                            classFileLink.item.tokens.name.range
-                        )
-                    );
-                    return results;
-                }
-            }
-        }
-
-        let textToSearchFor = token.text.toLowerCase();
-
-        const previousToken = this.getTokenAt({ line: token.range.start.line, character: token.range.start.character });
-
-        if (previousToken?.kind === TokenKind.Callfunc) {
-            for (const scope of scopesForFile) {
-                //to only get functions defined in interface methods
-                const callable = scope.getAllCallables().find((c) => c.callable.name.toLowerCase() === textToSearchFor); // eslint-disable-line @typescript-eslint/no-loop-func
-                if (callable) {
-                    results.push(util.createLocation(util.pathToUri((callable.callable.file as BrsFile).srcPath), callable.callable.functionStatement.range));
-                }
-            }
-            return results;
-        }
-
-        let classToken = this.getTokenBefore(token, TokenKind.Class);
-        if (classToken) {
-            let cs = this._cachedLookups.classStatements.find((cs) => cs.tokens.class.range === classToken.range);
-            if (cs?.parentClassName) {
-                const nameParts = cs.parentClassName.getNameParts();
-                let extendedClass = this.getClassFileLink(nameParts[nameParts.length - 1], nameParts.slice(0, -1).join('.'));
-                if (extendedClass) {
-                    results.push(util.createLocation(util.pathToUri(extendedClass.file.srcPath), extendedClass.item.range));
-                }
-            }
-            return results;
-        }
-
-        if (token.kind === TokenKind.StringLiteral) {
-            // We need to strip off the quotes but only if present
-            const startIndex = textToSearchFor.startsWith('"') ? 1 : 0;
-
-            let endIndex = textToSearchFor.length;
-            if (textToSearchFor.endsWith('"')) {
-                endIndex--;
-            }
-            textToSearchFor = textToSearchFor.substring(startIndex, endIndex);
-        }
-
-        //look through local variables first, get the function scope for this position (if it exists)
-        const functionScope = this.getFunctionScopeAtPosition(position);
-        if (functionScope) {
-            //find any variable or label with this name
-            for (const varDeclaration of functionScope.variableDeclarations) {
-                //we found a variable declaration with this token text!
-                if (varDeclaration.name.toLowerCase() === textToSearchFor) {
-                    const uri = util.pathToUri(this.srcPath);
-                    results.push(util.createLocation(uri, varDeclaration.nameRange));
-                }
-            }
-            if (this.tokenFollows(token, TokenKind.Goto)) {
-                for (const label of functionScope.labelStatements) {
-                    if (label.name.toLocaleLowerCase() === textToSearchFor) {
-                        const uri = util.pathToUri(this.srcPath);
-                        results.push(util.createLocation(uri, label.nameRange));
-                    }
-                }
-            }
-        }
-
-        const filesSearched = new Set<BrsFile>();
-        //look through all files in scope for matches
-        for (const scope of scopesForFile) {
-            for (const file of scope.getAllFiles()) {
-                if (isBrsFile(file) && !filesSearched.has(file)) {
-                    filesSearched.add(file);
-
-                    if (previousToken?.kind === TokenKind.Dot && file.parseMode === ParseMode.BrighterScript) {
-                        results.push(...this.getClassMemberDefinitions(textToSearchFor, file));
-                        const namespaceDefinition = this.getNamespaceDefinitions(token, file);
-                        if (namespaceDefinition) {
-                            results.push(namespaceDefinition);
-                        }
-                    }
-                    const statementHandler = (statement: FunctionStatement) => {
-                        if (statement.getName(this.parseMode).toLowerCase() === textToSearchFor) {
-                            const uri = util.pathToUri(file.srcPath);
-                            results.push(util.createLocation(uri, statement.range));
-                        }
-                    };
-
-                    file.parser.ast.walk(createVisitor({
-                        FunctionStatement: statementHandler
-                    }), {
-                        walkMode: WalkMode.visitStatements
-                    });
-                }
-            }
-        }
-        return results;
-    }
 
     public getClassMemberDefinitions(textToSearchFor: string, file: BrsFile): Location[] {
         let results: Location[] = [];

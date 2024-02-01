@@ -2285,8 +2285,7 @@ describe('Scope', () => {
     describe('getDefinition', () => {
         it('returns empty list when there are no files', () => {
             let file = program.setFile('source/main.brs', '');
-            let scope = program.getScopeByName('source');
-            expect(scope.getDefinition(file, Position.create(0, 0))).to.be.lengthOf(0);
+            expect(program.getDefinition(file.srcPath, Position.create(0, 0))).to.be.lengthOf(0);
         });
     });
 

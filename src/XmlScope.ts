@@ -1,18 +1,16 @@
-import type { Location, Position } from 'vscode-languageserver';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { XmlFile } from './files/XmlFile';
 import { DiagnosticOrigin, type CallableContainerMap, type FileReference } from './interfaces';
 import type { Program } from './Program';
-import util from './util';
-import { isXmlFile } from './astUtils/reflection';
-import { SGFieldTypes } from './parser/SGTypes';
-import type { BscFile } from './files/BscFile';
 import type { SGElement } from './parser/SGTypes';
+import { SGFieldTypes } from './parser/SGTypes';
+import util from './util';
 import { SymbolTypeFlag } from './SymbolTable';
+import type { BscFile } from './files/BscFile';
+import { DynamicType } from './types';
 import type { BaseFunctionType } from './types/BaseFunctionType';
 import { ComponentType } from './types/ComponentType';
-import { DynamicType } from './types/DynamicType';
 
 export class XmlScope extends Scope {
     constructor(
@@ -211,25 +209,5 @@ export class XmlScope extends Scope {
             }
             return result;
         });
-    }
-
-    /**
-     * Get the definition (where was this thing first defined) of the symbol under the position
-     */
-    public getDefinition(file: BscFile, position: Position): Location[] {
-        let results = [] as Location[];
-        //if the position is within the file's parent component name
-        if (
-            isXmlFile(file) &&
-            file.parentComponent &&
-            file.parentComponentName &&
-            util.rangeContains(file.parentComponentName.range, position)
-        ) {
-            results.push({
-                range: util.createRange(0, 0, 0, 0),
-                uri: util.pathToUri(file.parentComponent.srcPath)
-            });
-        }
-        return results;
     }
 }

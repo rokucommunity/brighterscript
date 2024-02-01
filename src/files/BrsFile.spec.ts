@@ -2161,6 +2161,40 @@ describe('BrsFile', () => {
             `);
         });
 
+        it('handles multi-index multi-dimensional arrays', async () => {
+            await testTranspile(`
+                sub main()
+                    myMultiArray = [[[[[[[[["hello"]]]]]]]]]
+                    myMultiArray[0][0][0][0][0][0][0][0][0] = "goodbye"
+                    print myMultiArray[0, 0, 0, 0, 0, 0, 0, 0, 0]
+                end sub
+            `, `
+                sub main()
+                    myMultiArray = [
+                        [
+                            [
+                                [
+                                    [
+                                        [
+                                            [
+                                                [
+                                                    [
+                                                        "hello"
+                                                    ]
+                                                ]
+                                            ]
+                                        ]
+                                    ]
+                                ]
+                            ]
+                        ]
+                    ]
+                    myMultiArray[0][0][0][0][0][0][0][0][0] = "goodbye"
+                    print myMultiArray[0, 0, 0, 0, 0, 0, 0, 0, 0]
+                end sub
+            `);
+        });
+
         it('transpiles calls to fully-qualified namespaced functions', async () => {
             await testTranspile(`
                 namespace NameA

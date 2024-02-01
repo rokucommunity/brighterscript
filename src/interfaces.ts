@@ -1,4 +1,4 @@
-import type { Range, Diagnostic, CodeAction, SemanticTokenTypes, SemanticTokenModifiers, Position, CompletionItem } from 'vscode-languageserver';
+import type { Range, Diagnostic, CodeAction, SemanticTokenTypes, SemanticTokenModifiers, Position, CompletionItem, Location } from 'vscode-languageserver';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -275,6 +275,22 @@ export interface CompilerPlugin {
     afterScopeDispose?: PluginHandler<AfterScopeDisposeEvent>;
 
     beforeScopeValidate?: PluginHandler<BeforeScopeValidateEvent>;
+    /**
+     * Called before the `provideDefinition` hook
+     */
+    beforeProvideDefinition?(event: BeforeProvideDefinitionEvent): any;
+    /**
+     * Provide one or more `Location`s where the symbol at the given position was originally defined
+     * @param event
+     */
+    provideDefinition?(event: ProvideDefinitionEvent): any;
+    /**
+     * Called after `provideDefinition`. Use this if you want to intercept or sanitize the definition data provided by bsc or other plugins
+     * @param event
+     */
+    afterProvideDefinition?(event: AfterProvideDefinitionEvent): any;
+
+    //scope events
     onScopeValidate?: PluginHandler<OnScopeValidateEvent>;
     afterScopeValidate?: PluginHandler<BeforeScopeValidateEvent>;
 
@@ -512,6 +528,24 @@ export interface AfterFileParseEvent {
     program: Program;
     file: BscFile;
 }
+export interface ProvideDefinitionEvent<TFile = BscFile> {
+    program: Program;
+    /**
+     * The file that the getDefinition request was invoked in
+     */
+    file: TFile;
+    /**
+     * The position in the text document where the getDefinition request was invoked
+     */
+    position: Position;
+    /**
+     * The list of locations for where the item at the file and position was defined
+     */
+    definitions: Location[];
+}
+export type BeforeProvideDefinitionEvent<TFile = BscFile> = ProvideDefinitionEvent<TFile>;
+export type AfterProvideDefinitionEvent<TFile = BscFile> = ProvideDefinitionEvent<TFile>;
+
 
 export interface OnGetSemanticTokensEvent<T extends BscFile = BscFile> {
     /**

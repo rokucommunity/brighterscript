@@ -32,21 +32,18 @@ import { SourceNode } from 'source-map';
 import * as requireRelative from 'require-relative';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
-import type { AstNode } from './parser/AstNode';
-import { AstNodeKind, type Expression, type Statement } from './parser/AstNode';
-import { createIdentifier, createToken } from './astUtils/creators';
-import type { BscType } from './types/BscType';
-import type { AssignmentStatement } from './parser/Statement';
-import { FunctionType } from './types/FunctionType';
-import { ArrayType } from './types/ArrayType';
+import { AstNodeKind, type AstNode, type Expression, type Statement } from './parser/AstNode';
+import type { UnresolvedSymbol } from './AstValidationSegmenter';
 import type { SymbolTable } from './SymbolTable';
 import { SymbolTypeFlag } from './SymbolTable';
+import { createIdentifier, createToken } from './astUtils/creators';
+import { MAX_RELATED_INFOS_COUNT } from './diagnosticUtils';
+import type { BscType } from './types';
+import { unionTypeFactory, ArrayType, BinaryOperatorReferenceType } from './types';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { ComponentType } from './types/ComponentType';
-import { MAX_RELATED_INFOS_COUNT } from './diagnosticUtils';
-import { BinaryOperatorReferenceType } from './types/ReferenceType';
-import type { UnresolvedSymbol } from './AstValidationSegmenter';
-import { unionTypeFactory } from './types/UnionType';
+import { FunctionType } from './types/FunctionType';
+import type { AssignmentStatement } from './parser/Statement';
 
 export class Util {
     public clearConsole() {
@@ -1765,7 +1762,7 @@ export class Util {
                     parts.push((nextPart as LiteralExpression)?.tokens.value as Identifier);
                     break loop;
                 case AstNodeKind.IndexedGetExpression:
-                    nextPart = (nextPart as IndexedGetExpression).obj;
+                    nextPart = (nextPart as unknown as IndexedGetExpression).obj;
                     continue;
                 case AstNodeKind.FunctionParameterExpression:
                     return [(nextPart as FunctionParameterExpression).tokens.name];

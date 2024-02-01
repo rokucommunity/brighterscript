@@ -155,6 +155,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.66.0-alpha.0](https://github.com/rokucommunity/brighterscript/compare/v0.65.1...v0.66.0-alpha.0) - 2023-06-09
 ### Changed
  - all the type tracking stuff!
+## [0.65.21](https://github.com/rokucommunity/brighterscript/compare/v0.65.20...v0.65.21) - 2024-01-31
+### Fixed
+ - parsing issues with multi-index IndexedSet and IndexedGet ([#1050](https://github.com/rokucommunity/brighterscript/pull/1050))
+
+
+
+## [0.65.20](https://github.com/rokucommunity/brighterscript/compare/v0.65.19...v0.65.20) - 2024-01-30
+### Added
+ - plugin hooks for getDefinition ([#1045](https://github.com/rokucommunity/brighterscript/pull/1045))
+
+
+
+## [0.65.19](https://github.com/rokucommunity/brighterscript/compare/v0.65.18...v0.65.19) - 2024-01-30
+### Changed
+ - Backport v1 syntax changes ([#1034](https://github.com/rokucommunity/brighterscript/pull/1034))
+
+
+
 ## [0.65.18](https://github.com/rokucommunity/brighterscript/compare/v0.65.17...v0.65.18) - 2024-01-25
 ### Changed
  - Refactor bsconfig documentation ([#1024](https://github.com/rokucommunity/brighterscript/pull/1024))

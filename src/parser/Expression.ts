@@ -11,8 +11,10 @@ import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
 import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallExpression, isCallableType, isCallfuncExpression, isCommentStatement, isComponentType, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isReferenceType, isStringType, isTypeCastExpression, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
-import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
-import { TypeChainEntry } from '../interfaces';
+import type { GetTypeOptions } from '../interfaces';
+import { TypeChainEntry, type TranspileResult, type TypedefProvider } from '../interfaces';
+import { VoidType } from '../types/VoidType';
+import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import { SymbolTypeFlag } from '../SymbolTable';
 import { TypedFunctionType } from '../types/TypedFunctionType';
@@ -21,8 +23,6 @@ import { SymbolTable } from '../SymbolTable';
 import { SourceNode } from 'source-map';
 import type { TranspileState } from './TranspileState';
 import { StringType } from '../types/StringType';
-import { DynamicType } from '../types/DynamicType';
-import { VoidType } from '../types/VoidType';
 import { TypePropertyReferenceType } from '../types/ReferenceType';
 import { UnionType } from '../types/UnionType';
 import { ArrayType } from '../types';
@@ -610,6 +610,7 @@ export class IndexedGetExpression extends Expression {
         openingSquare?: Token;
         closingSquare?: Token;
         questionDot?: Token;//  ? or ?.
+        additionalIndexes: Expression[];
     }) {
         super();
         this.tokens = {
@@ -619,13 +620,15 @@ export class IndexedGetExpression extends Expression {
         };
         this.obj = options.obj;
         this.index = options.index;
-        this.range = util.createBoundingRange(this.obj, this.tokens.openingSquare, this.tokens.questionDot, this.tokens.openingSquare, this.index, this.tokens.closingSquare);
+        this.additionalIndexes = options.additionalIndexes;
+        this.range = util.createBoundingRange(this.obj, this.tokens.openingSquare, this.tokens.questionDot, this.tokens.openingSquare, this.index, ...this.additionalIndexes, this.tokens.closingSquare);
     }
 
     public readonly kind = AstNodeKind.IndexedGetExpression;
 
     public obj: Expression;
     public index: Expression;
+    public additionalIndexes: Expression[];
 
     public tokens: {
         /**
@@ -639,19 +642,34 @@ export class IndexedGetExpression extends Expression {
     public readonly range: Range;
 
     transpile(state: BrsTranspileState) {
-        return [
+        const result = [];
+        result.push(
             ...this.obj.transpile(state),
             this.tokens.questionDot ? state.transpileToken(this.tokens.questionDot) : '',
-            state.transpileToken(this.tokens.openingSquare, '['),
-            ...(this.index?.transpile(state) ?? []),
+            state.transpileToken(this.tokens.openingSquare, '[')
+        );
+        const indexes = [this.index, ...this.additionalIndexes];
+        for (let i = 0; i < indexes.length; i++) {
+            //add comma between indexes
+            if (i > 0) {
+                result.push(', ');
+            }
+            let index = indexes[i];
+            result.push(
+                ...(index?.transpile(state) ?? [])
+            );
+        }
+        result.push(
             state.transpileToken(this.tokens.closingSquare, ']')
-        ];
+        );
+        return result;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'obj', visitor, options);
             walk(this, 'index', visitor, options);
+            walkArray(this.additionalIndexes, visitor, options, this);
         }
     }
 
@@ -2035,8 +2053,8 @@ export class TypeExpression extends Expression implements TypedefProvider {
     public readonly kind = AstNodeKind.TypeExpression;
 
     /**
-       * The standard AST expression that represents the type for this TypeExpression.
-       */
+     * The standard AST expression that represents the type for this TypeExpression.
+     */
     public expression: Expression;
 
     public range: Range;
@@ -2068,7 +2086,6 @@ export class TypeExpression extends Expression implements TypedefProvider {
         //TODO: really, this code is only used to get Namespaces. It could be more clear.
         return util.getAllDottedGetParts(this.expression).map(x => x.text);
     }
-
 }
 
 export class TypeCastExpression extends Expression {
