@@ -130,7 +130,7 @@ export class Program {
                 try {
                     parentNode = this.recursivelyAddNodeToSymbolTable(parentNodeData);
                 } catch (error) {
-                    console.log(error, nodeData);
+                    this.logger.error(error, nodeData);
                 }
             }
             nodeType = new ComponentType(nodeData.name, parentNode);
