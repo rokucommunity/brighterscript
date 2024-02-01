@@ -176,7 +176,7 @@ export class CachedLookups {
             } else {
                 for (const member of item.elements) {
                     if (!isCommentStatement(member)) {
-                        const name = member.keyToken.text;
+                        const name = member.tokens.key.text;
                         if (!name.startsWith('"')) {
                             propertyHints[name.toLowerCase()] = name;
                         }
@@ -312,10 +312,10 @@ export class CachedLookups {
             },
             DottedGetExpression: e => {
                 visitVariableNameExpression(e);
-                addPropertyHints(e.name);
+                addPropertyHints(e.tokens.name);
             },
             DottedSetStatement: e => {
-                addPropertyHints(e.name);
+                addPropertyHints(e.tokens.name);
             },
             EnumStatement: e => {
                 enumStatements.push(e);

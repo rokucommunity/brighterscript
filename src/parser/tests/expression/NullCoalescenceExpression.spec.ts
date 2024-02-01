@@ -157,9 +157,9 @@ describe('NullCoalescingExpression', () => {
             expect(statements[0]).instanceof(AssignmentStatement);
             expect((statements[0] as AssignmentStatement).value).instanceof(AALiteralExpression);
             let literalExpression = (statements[0] as AssignmentStatement).value as AALiteralExpression;
-            expect((literalExpression.elements[0] as AAMemberExpression).keyToken.text).is.equal('"v1"');
+            expect((literalExpression.elements[0] as AAMemberExpression).tokens.key.text).is.equal('"v1"');
             expect((literalExpression.elements[0] as AAMemberExpression).value).instanceOf(NullCoalescingExpression);
-            expect((literalExpression.elements[1] as AAMemberExpression).keyToken.text).is.equal('"v2"');
+            expect((literalExpression.elements[1] as AAMemberExpression).tokens.key.text).is.equal('"v2"');
             expect((literalExpression.elements[1] as AAMemberExpression).value).instanceOf(LiteralExpression);
         });
 

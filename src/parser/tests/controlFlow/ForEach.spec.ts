@@ -28,9 +28,9 @@ describe('parser foreach loops', () => {
         let forEach = statements[0] as any;
         expect(forEach).to.be.instanceof(ForEachStatement);
 
-        expect(forEach.item).to.deep.include(identifier('word'));
+        expect(forEach.tokens.item).to.deep.include(identifier('word'));
         expect(forEach.target).to.be.instanceof(VariableExpression);
-        expect(forEach.target.name).to.deep.include(identifier('lipsum'));
+        expect(forEach.target.tokens.name).to.deep.include(identifier('lipsum'));
     });
 
     it('allows \'next\' to terminate loop', () => {

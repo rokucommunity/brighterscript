@@ -60,7 +60,7 @@ export class BrsFileValidator {
                 if (node.args.length > 5) {
                     this.event.file.addDiagnostic({
                         ...DiagnosticMessages.callfuncHasToManyArgs(node.args.length),
-                        range: node.methodName.range
+                        range: node.tokens.methodName.range
                     });
                 }
             },
@@ -75,18 +75,18 @@ export class BrsFileValidator {
                 node.parent.getSymbolTable()?.addSymbol(node.tokens.name.text, { definingNode: node }, nodeType, SymbolTypeFlag.typetime | SymbolTypeFlag.runtime);
             },
             ClassStatement: (node) => {
-                this.validateDeclarationLocations(node, 'class', () => util.createBoundingRange(node.classKeyword, node.name));
+                this.validateDeclarationLocations(node, 'class', () => util.createBoundingRange(node.tokens.class, node.tokens.name));
 
                 //register this class
                 const nodeType = node.getType({ flags: SymbolTypeFlag.typetime });
                 node.getSymbolTable().addSymbol('m', undefined, nodeType, SymbolTypeFlag.runtime);
                 // eslint-disable-next-line no-bitwise
-                node.parent.getSymbolTable()?.addSymbol(node.name?.text, { definingNode: node }, nodeType, SymbolTypeFlag.typetime | SymbolTypeFlag.runtime);
+                node.parent.getSymbolTable()?.addSymbol(node.tokens.name?.text, { definingNode: node }, nodeType, SymbolTypeFlag.typetime | SymbolTypeFlag.runtime);
             },
             AssignmentStatement: (node) => {
                 //register this variable
                 const nodeType = node.getType({ flags: SymbolTypeFlag.runtime });
-                node.parent.getSymbolTable()?.addSymbol(node.name.text, { definingNode: node }, nodeType, SymbolTypeFlag.runtime);
+                node.parent.getSymbolTable()?.addSymbol(node.tokens.name.text, { definingNode: node }, nodeType, SymbolTypeFlag.runtime);
             },
             DottedSetStatement: (node) => {
                 this.validateNoOptionalChainingInVarSet(node, [node.obj]);
@@ -98,19 +98,19 @@ export class BrsFileValidator {
                 //register the for loop variable
                 const loopTargetType = node.target.getType({ flags: SymbolTypeFlag.runtime });
                 const loopVarType = isArrayType(loopTargetType) ? loopTargetType.defaultType : DynamicType.instance;
-                node.parent.getSymbolTable()?.addSymbol(node.item.text, { definingNode: node }, loopVarType, SymbolTypeFlag.runtime);
+                node.parent.getSymbolTable()?.addSymbol(node.tokens.item.text, { definingNode: node }, loopVarType, SymbolTypeFlag.runtime);
             },
             NamespaceStatement: (node) => {
-                this.validateDeclarationLocations(node, 'namespace', () => util.createBoundingRange(node.keyword, node.nameExpression));
+                this.validateDeclarationLocations(node, 'namespace', () => util.createBoundingRange(node.tokens.namespace, node.nameExpression));
                 //Namespace Types are added at the Scope level - This is handled when the SymbolTables get linked
             },
             FunctionStatement: (node) => {
-                this.validateDeclarationLocations(node, 'function', () => util.createBoundingRange(node.func.functionType, node.name));
+                this.validateDeclarationLocations(node, 'function', () => util.createBoundingRange(node.func.tokens.functionType, node.tokens.name));
                 const funcType = node.getType({ flags: SymbolTypeFlag.typetime });
 
-                if (node.name?.text) {
+                if (node.tokens.name?.text) {
                     node.parent.getSymbolTable().addSymbol(
-                        node.name.text,
+                        node.tokens.name.text,
                         { definingNode: node },
                         funcType,
                         SymbolTypeFlag.runtime
@@ -121,7 +121,7 @@ export class BrsFileValidator {
                 //this function is declared inside a namespace
                 if (namespace) {
                     namespace.getSymbolTable().addSymbol(
-                        node.name?.text,
+                        node.tokens.name?.text,
                         { definingNode: node },
                         funcType,
                         SymbolTypeFlag.runtime
@@ -144,7 +144,7 @@ export class BrsFileValidator {
                 }
             },
             FunctionParameterExpression: (node) => {
-                const paramName = node.name?.text;
+                const paramName = node.tokens.name?.text;
                 const symbolTable = node.findAncestor<FunctionExpression>(isFunctionExpression)?.body.getSymbolTable();
                 const nodeType = node.getType({ flags: SymbolTypeFlag.typetime });
                 symbolTable?.addSymbol(paramName, { definingNode: node }, nodeType, SymbolTypeFlag.runtime);
@@ -162,11 +162,11 @@ export class BrsFileValidator {
                 node.parent.getSymbolTable().addSymbol(node.tokens.name.text, { definingNode: node }, nodeType, SymbolTypeFlag.runtime);
             },
             CatchStatement: (node) => {
-                node.parent.getSymbolTable().addSymbol(node.exceptionVariable.text, { definingNode: node }, DynamicType.instance, SymbolTypeFlag.runtime);
+                node.parent.getSymbolTable().addSymbol(node.tokens.exceptionVariable.text, { definingNode: node }, DynamicType.instance, SymbolTypeFlag.runtime);
             },
             DimStatement: (node) => {
-                if (node.identifier) {
-                    node.parent.getSymbolTable().addSymbol(node.identifier.text, { definingNode: node }, DynamicType.instance, SymbolTypeFlag.runtime);
+                if (node.tokens.name) {
+                    node.parent.getSymbolTable().addSymbol(node.tokens.name.text, { definingNode: node }, node.getType({ flags: SymbolTypeFlag.runtime }), SymbolTypeFlag.runtime);
                 }
             },
             ContinueStatement: (node) => {
@@ -202,7 +202,7 @@ export class BrsFileValidator {
     private validateEnumDeclaration(stmt: EnumStatement) {
         const members = stmt.getMembers();
         //the enum data type is based on the first member value
-        const enumValueKind = (members.find(x => x.value)?.value as LiteralExpression)?.token?.kind ?? TokenKind.IntegerLiteral;
+        const enumValueKind = (members.find(x => x.value)?.value as LiteralExpression)?.tokens?.value?.kind ?? TokenKind.IntegerLiteral;
         const memberNames = new Set<string>();
         for (const member of members) {
             const memberNameLower = member.name?.toLowerCase();
@@ -228,10 +228,10 @@ export class BrsFileValidator {
         let memberValueKind: TokenKind;
         let memberValue: Expression;
         if (isUnaryExpression(member.value)) {
-            memberValueKind = (member.value?.right as LiteralExpression)?.token?.kind;
+            memberValueKind = (member.value?.right as LiteralExpression)?.tokens?.value?.kind;
             memberValue = member.value?.right;
         } else {
-            memberValueKind = (member.value as LiteralExpression)?.token?.kind;
+            memberValueKind = (member.value as LiteralExpression)?.tokens?.value?.kind;
             memberValue = member.value;
         }
         const range = (memberValue ?? member)?.range;
@@ -368,7 +368,7 @@ export class BrsFileValidator {
                 validateLoopTypeMatch(node.tokens.while.kind);
                 return true;
             } else if (isForStatement(node)) {
-                validateLoopTypeMatch(node.forToken.kind);
+                validateLoopTypeMatch(node.tokens.for.kind);
                 return true;
             } else if (isForEachStatement(node)) {
                 validateLoopTypeMatch(node.tokens.forEach.kind);
@@ -394,18 +394,18 @@ export class BrsFileValidator {
             const node = nodes.shift();
             if (
                 // a?.b = true or a.b?.c = true
-                ((isDottedSetStatement(node) || isDottedGetExpression(node)) && node.dot?.kind === TokenKind.QuestionDot) ||
+                ((isDottedSetStatement(node) || isDottedGetExpression(node)) && node.tokens.dot?.kind === TokenKind.QuestionDot) ||
                 // a.b?[2] = true
-                (isIndexedGetExpression(node) && (node?.questionDotToken?.kind === TokenKind.QuestionDot || node.openingSquare?.kind === TokenKind.QuestionLeftSquare)) ||
+                (isIndexedGetExpression(node) && (node?.tokens.questionDot?.kind === TokenKind.QuestionDot || node.tokens.openingSquare?.kind === TokenKind.QuestionLeftSquare)) ||
                 // a?[1] = true
-                (isIndexedSetStatement(node) && node.openingSquare?.kind === TokenKind.QuestionLeftSquare)
+                (isIndexedSetStatement(node) && node.tokens.openingSquare?.kind === TokenKind.QuestionLeftSquare)
             ) {
                 //try to highlight the entire left-hand-side expression if possible
                 let range: Range;
                 if (isDottedSetStatement(parent)) {
-                    range = util.createBoundingRange(parent.obj, parent.dot, parent.name);
+                    range = util.createBoundingRange(parent.obj, parent.tokens.dot, parent.tokens.name);
                 } else if (isIndexedSetStatement(parent)) {
-                    range = util.createBoundingRange(parent.obj, parent.openingSquare, parent.index, parent.closingSquare);
+                    range = util.createBoundingRange(parent.obj, parent.tokens.openingSquare, parent.index, parent.tokens.closingSquare);
                 } else {
                     range = node.range;
                 }

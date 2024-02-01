@@ -27,34 +27,44 @@ describe('reflection', () => {
         const ident = createToken(TokenKind.Identifier, 'a', range);
         const expr = createStringLiteral('', range);
         const token = createToken(TokenKind.StringLiteral, '', range);
-        const body = new Body([]);
-        const assignment = new AssignmentStatement(undefined, ident, expr);
-        const block = new Block([], range);
-        const expression = new ExpressionStatement(expr);
-        const comment = new CommentStatement([token]);
+        const body = new Body({ statements: [] });
+        const assignment = new AssignmentStatement({ equals: undefined, name: ident, value: expr });
+        const block = new Block({ statements: [], startingRange: range });
+        const expression = new ExpressionStatement({ expression: expr });
+        const comment = new CommentStatement({ comments: [token] });
         const exitFor = new ExitForStatement({ exitFor: token });
         const exitWhile = new ExitWhileStatement({ exitWhile: token });
-        const funs = new FunctionStatement(ident, new FunctionExpression([], block, token, token, token, token));
-        const ifs = new IfStatement({ if: token }, expr, block);
-        const increment = new IncrementStatement(expr, token);
-        const print = new PrintStatement({ print: token }, []);
+        const funs = new FunctionStatement({
+            name: ident,
+            func: new FunctionExpression({
+                parameters: [],
+                body: block,
+                functionType: token,
+                leftParen: token,
+                rightParen: token,
+                endFunctionType: token
+            })
+        });
+        const ifs = new IfStatement({ if: token, condition: expr, thenBranch: block });
+        const increment = new IncrementStatement({ value: expr, operator: token });
+        const print = new PrintStatement({ print: token, expressions: [] });
         const gotos = new GotoStatement({ goto: token, label: token });
-        const labels = new LabelStatement({ identifier: ident, colon: token });
+        const labels = new LabelStatement({ name: ident, colon: token });
         const returns = new ReturnStatement({ return: token });
         const ends = new EndStatement({ end: token });
         const stop = new StopStatement({ stop: token });
-        const fors = new ForStatement(token, assignment, token, expr, block, token, token, expr);
-        const foreach = new ForEachStatement({ forEach: token, in: token, endFor: token }, token, expr, block);
-        const whiles = new WhileStatement({ while: token, endWhile: token }, expr, block);
-        const dottedSet = new DottedSetStatement(expr, ident, expr);
-        const indexedSet = new IndexedSetStatement(expr, expr, expr, token, token);
+        const fors = new ForStatement({ for: token, counterDeclaration: assignment, to: token, finalValue: expr, body: block, endFor: token, step: token, increment: expr });
+        const foreach = new ForEachStatement({ forEach: token, in: token, endFor: token, item: token, target: expr, body: block });
+        const whiles = new WhileStatement({ while: token, endWhile: token, condition: expr, body: block });
+        const dottedSet = new DottedSetStatement({ obj: expr, name: ident, value: expr });
+        const indexedSet = new IndexedSetStatement({ obj: expr, index: expr, value: expr, openingSquare: token, closingSquare: token });
         const library = new LibraryStatement({ library: token, filePath: token });
-        const namespace = new NamespaceStatement(token, createVariableExpression('a', range), body, token);
-        const cls = new ClassStatement(token, ident, [], token);
-        const imports = new ImportStatement(token, token);
-        const catchStmt = new CatchStatement({ catch: token }, ident, block);
-        const tryCatch = new TryCatchStatement({ try: token }, block, catchStmt);
-        const throwSt = new ThrowStatement(createToken(TokenKind.Throw));
+        const namespace = new NamespaceStatement({ namespace: token, nameExpression: createVariableExpression('a', range), body: body, endNamespace: token });
+        const cls = new ClassStatement({ class: token, name: ident, body: [], endClass: token });
+        const imports = new ImportStatement({ import: token, filePath: token });
+        const catchStmt = new CatchStatement({ catch: token, exceptionVariable: ident, catchBranch: block });
+        const tryCatch = new TryCatchStatement({ try: token, tryBranch: block, catchStatement: catchStmt });
+        const throwSt = new ThrowStatement({ throw: createToken(TokenKind.Throw) });
 
         it('isStatement', () => {
             expect(isStatement(library)).to.be.true;
@@ -185,7 +195,7 @@ describe('reflection', () => {
         const ident = createToken(TokenKind.Identifier, 'a', range);
         const expr = createStringLiteral('', range);
         const token = createToken(TokenKind.StringLiteral, '', range);
-        const block = new Block([], range);
+        const block = new Block({ statements: [], startingRange: range });
         const charCode: Token & { charCode: number } = {
             kind: TokenKind.EscapedCharCodeLiteral,
             text: '0',
@@ -196,30 +206,37 @@ describe('reflection', () => {
             leadingTrivia: []
         };
 
-        const binary = new BinaryExpression(expr, token, expr);
-        const call = new CallExpression(expr, token, token, []);
-        const fun = new FunctionExpression([], block, token, token, token, token);
-        const dottedGet = new DottedGetExpression(expr, ident, token);
-        const xmlAttrGet = new XmlAttributeGetExpression(expr, ident, token);
-        const indexedGet = new IndexedGetExpression(expr, expr, token, token);
-        const grouping = new GroupingExpression({ left: token, right: token }, expr);
+        const binary = new BinaryExpression({ left: expr, operator: token, right: expr });
+        const call = new CallExpression({ callee: expr, openingParen: token, closingParen: token, args: [] });
+        const fun = new FunctionExpression({
+            parameters: [],
+            body: block,
+            functionType: token,
+            leftParen: token,
+            rightParen: token,
+            endFunctionType: token
+        });
+        const dottedGet = new DottedGetExpression({ obj: expr, name: ident, dot: token });
+        const xmlAttrGet = new XmlAttributeGetExpression({ obj: expr, name: ident, at: token });
+        const indexedGet = new IndexedGetExpression({ obj: expr, index: expr, openingSquare: token, closingSquare: token });
+        const grouping = new GroupingExpression({ leftParen: token, rightParen: token, expression: expr });
         const literal = createStringLiteral('test');
-        const escapedCarCode = new EscapedCharCodeLiteralExpression(charCode);
-        const arrayLit = new ArrayLiteralExpression([], token, token);
-        const aaLit = new AALiteralExpression([], token, token);
-        const unary = new UnaryExpression(token, expr);
-        const variable = new VariableExpression(ident);
-        const sourceLit = new SourceLiteralExpression(token);
-        const newx = new NewExpression(token, call);
-        const callfunc = new CallfuncExpression(expr, token, ident, token, [], token);
-        const tplQuasi = new TemplateStringQuasiExpression([expr]);
-        const tplString = new TemplateStringExpression(token, [tplQuasi], [], token);
-        const taggedTpl = new TaggedTemplateStringExpression(ident, token, [tplQuasi], [], token);
-        const annotation = new AnnotationExpression(token, token);
+        const escapedCarCode = new EscapedCharCodeLiteralExpression({ value: charCode });
+        const arrayLit = new ArrayLiteralExpression({ elements: [], open: token, close: token });
+        const aaLit = new AALiteralExpression({ elements: [], open: token, close: token });
+        const unary = new UnaryExpression({ operator: token, right: expr });
+        const variable = new VariableExpression({ name: ident });
+        const sourceLit = new SourceLiteralExpression({ value: token });
+        const newx = new NewExpression({ new: token, call: call });
+        const callfunc = new CallfuncExpression({ callee: expr, operator: token, methodName: ident, openingParen: token, args: [], closingParen: token });
+        const tplQuasi = new TemplateStringQuasiExpression({ expressions: [expr] });
+        const tplString = new TemplateStringExpression({ openingBacktick: token, quasis: [tplQuasi], expressions: [], closingBacktick: token });
+        const taggedTpl = new TaggedTemplateStringExpression({ tagName: ident, openingBacktick: token, quasis: [tplQuasi], expressions: [], closingBacktick: token });
+        const annotation = new AnnotationExpression({ at: token, name: token });
 
         it('isExpression', () => {
             expect(isExpression(binary)).to.be.true;
-            expect(isExpression(binary.operator as any)).to.be.false;
+            expect(isExpression(binary.tokens.operator as any)).to.be.false;
         });
         it('isBinaryExpression', () => {
             expect(isBinaryExpression(binary)).to.be.true;

@@ -96,13 +96,13 @@ export class HoverProcessor {
         let firstToken: Token;
         if (extraData?.definingNode) {
             if (isClassStatement(extraData.definingNode)) {
-                firstToken = extraData.definingNode.classKeyword;
+                firstToken = extraData.definingNode.tokens.class;
                 declarationText = firstToken?.text ?? TokenKind.Class;
             } else if (isInterfaceStatement(extraData.definingNode)) {
                 firstToken = extraData.definingNode.tokens.interface;
                 declarationText = firstToken?.text ?? TokenKind.Interface;
             } else if (isNamespaceStatement(extraData.definingNode)) {
-                firstToken = extraData.definingNode.keyword;
+                firstToken = extraData.definingNode.tokens.namespace;
                 exprTypeString = extraData.definingNode.getName(ParseMode.BrighterScript);
                 declarationText = firstToken?.text ?? TokenKind.Namespace;
             } else if (isEnumStatement(extraData.definingNode)) {

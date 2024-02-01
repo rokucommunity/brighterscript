@@ -195,7 +195,7 @@ describe('parser associative array literals', () => {
             }
         `);
         const commas = ((statements[0] as AssignmentStatement).value as AALiteralExpression).elements
-            .map(s => !isCommentStatement(s) && !!s.commaToken);
+            .map(s => !isCommentStatement(s) && !!s.tokens.comma);
         expect(commas).to.deep.equal([
             true, // p1
             true, // p2

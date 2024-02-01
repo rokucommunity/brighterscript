@@ -1078,7 +1078,7 @@ describe('util', () => {
                     return 1
                 end function
             `);
-            const docs = util.getTokenDocumentation(tokens, (statements[1] as FunctionStatement).func.functionType);
+            const docs = util.getTokenDocumentation(tokens, (statements[1] as FunctionStatement).func.tokens.functionType);
             expect(docs).to.eql('This is a comment.\nit has two lines');
         });
 
@@ -1093,7 +1093,7 @@ describe('util', () => {
                     return num + 1
                 end function
             `);
-            const docs = util.getTokenDocumentation(tokens, (statements[1] as FunctionStatement).func.functionType);
+            const docs = util.getTokenDocumentation(tokens, (statements[1] as FunctionStatement).func.tokens.functionType);
             expect(docs).to.eql('Add 1 to a number\n\n\n_@public_\n\n_@param_ {integer} the number to add to\n\n_@return_ {integer} the result');
         });
     });

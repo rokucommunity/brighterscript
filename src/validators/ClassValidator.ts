@@ -104,7 +104,7 @@ export class BsClassValidator {
                 let superCall: CallExpression | undefined;
                 newMethod.func.body.walk(createVisitor({
                     VariableExpression: (expression, parent) => {
-                        const expressionNameLower = expression?.name?.text.toLowerCase();
+                        const expressionNameLower = expression?.tokens.name?.text.toLowerCase();
                         if (expressionNameLower === 'm') {
                             this.diagnostics.push({
                                 ...DiagnosticMessages.classConstructorIllegalUseOfMBeforeSuperCall(),
@@ -150,7 +150,7 @@ export class BsClassValidator {
                         ...DiagnosticMessages.circularReferenceDetected(
                             Array.from(names.values()).concat(className), this.scope.name),
                         file: cls.file,
-                        range: cls.name.range
+                        range: cls.tokens.name.range
                     });
                     break;
                 }
@@ -173,7 +173,7 @@ export class BsClassValidator {
             for (let statement of classStatement.body) {
                 if (isMethodStatement(statement) || isFieldStatement(statement)) {
                     let member = statement;
-                    let memberName = member.name;
+                    let memberName = member.tokens.name;
 
                     if (!memberName) {
                         continue;
@@ -238,9 +238,9 @@ export class BsClassValidator {
                             //is a method
                             isMethodStatement(member) &&
                             //does not have an override keyword
-                            !member.override &&
+                            !member.tokens.override &&
                             //is not the constructur function
-                            member.name.text.toLowerCase() !== 'new'
+                            member.tokens.name.text.toLowerCase() !== 'new'
                         ) {
                             this.diagnostics.push({
                                 ...DiagnosticMessages.missingOverrideKeyword(
@@ -259,8 +259,8 @@ export class BsClassValidator {
                         ) {
                             this.diagnostics.push({
                                 ...DiagnosticMessages.mismatchedOverriddenMemberVisibility(
-                                    classStatement.name.text,
-                                    ancestorAndMember.member.name?.text,
+                                    classStatement.tokens.name.text,
+                                    ancestorAndMember.member.tokens.name?.text,
                                     member.accessModifier?.text ?? 'public',
                                     ancestorAndMember.member.accessModifier?.text || 'public',
                                     ancestorAndMember.classStatement.getName(ParseMode.BrighterScript)

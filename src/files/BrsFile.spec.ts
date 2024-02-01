@@ -215,7 +215,10 @@ describe('BrsFile', () => {
         const file = program.setFile<BrsFile>('source/main.bs', ``);
         expect(file.ownScriptImports).to.be.empty;
         file.parser.ast.statements.push(
-            new ImportStatement(createToken(TokenKind.Import), createToken(TokenKind.StringLiteral, 'pkg:/source/lib.brs'))
+            new ImportStatement({
+                import: createToken(TokenKind.Import),
+                filePath: createToken(TokenKind.StringLiteral, 'pkg:/source/lib.brs')
+            })
         );
         expect(file.ownScriptImports).to.be.empty;
         file['_cachedLookups'].invalidate();

@@ -46,7 +46,7 @@ export class AstValidationSegmenter {
         if (!expression || isCommentStatement(expression)) {
             return false;
         }
-        if (isVariableExpression(expression) && expression.name.text.toLowerCase() === 'm') {
+        if (isVariableExpression(expression) && expression.tokens.name.text.toLowerCase() === 'm') {
             return false;
         }
         const flag = util.isInTypeExpression(expression) ? SymbolTypeFlag.typetime : SymbolTypeFlag.runtime;
@@ -109,13 +109,13 @@ export class AstValidationSegmenter {
 
         segment.walk(createVisitor({
             AssignmentStatement: (stmt) => {
-                assignedSymbols.add(stmt.name.text.toLowerCase());
+                assignedSymbols.add(stmt.tokens.name.text.toLowerCase());
             },
             FunctionParameterExpression: (expr) => {
-                assignedSymbols.add(expr.name.text.toLowerCase());
+                assignedSymbols.add(expr.tokens.name.text.toLowerCase());
             },
             VariableExpression: (expr) => {
-                if (!assignedSymbols.has(expr.name.text.toLowerCase())) {
+                if (!assignedSymbols.has(expr.tokens.name.text.toLowerCase())) {
                     const expressionIsUnresolved = this.checkExpressionForUnresolved(segment, expr, assignedSymbols);
                     foundUnresolvedInSegment = expressionIsUnresolved || foundUnresolvedInSegment;
                 }

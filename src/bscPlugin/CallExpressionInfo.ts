@@ -67,15 +67,15 @@ export class CallExpressionInfo {
             this.newExpression = callExpression.parent;
         }
         if (isCallfuncExpression(callExpression)) {
-            this.name = callExpression.methodName.text;
+            this.name = callExpression.tokens.methodName.text;
         } else if (isVariableExpression(callExpression.callee)) {
-            this.name = callExpression.callee.name.text;
+            this.name = callExpression.callee.tokens.name.text;
         } else if (isVariableExpression(callExpression)) {
-            this.name = (callExpression as VariableExpression).name.text;
+            this.name = (callExpression as VariableExpression).tokens.name.text;
         } else if (isDottedGetExpression(callExpression.callee)) {
-            this.name = callExpression.callee.name.text;
+            this.name = callExpression.callee.tokens.name.text;
             if (isDottedGetExpression(callExpression.callee) && isVariableExpression(callExpression.callee.obj)) {
-                this.isCallingMethodOnMyClass = callExpression.callee.obj.name.text === 'm';
+                this.isCallingMethodOnMyClass = callExpression.callee.obj.tokens.name.text === 'm';
 
             } else {
                 let parts = util.getAllDottedGetParts(callExpression.callee);
@@ -91,7 +91,7 @@ export class CallExpressionInfo {
     }
 
     isPositionBetweenParentheses() {
-        let boundingRange = util.createBoundingRange(this.callExpression.openingParen, this.callExpression.closingParen);
+        let boundingRange = util.createBoundingRange(this.callExpression.tokens.openingParen, this.callExpression.tokens.closingParen);
         return util.rangeContains(boundingRange, this.position);
     }
 
@@ -111,7 +111,7 @@ export class CallExpressionInfo {
 
         if (!callExpression && isCallExpression(expression)) {
             //let's check to see if we are in a space, in the args of a valid CallExpression
-            let boundingRange = util.createBoundingRange(expression.openingParen, expression.closingParen);
+            let boundingRange = util.createBoundingRange(expression.tokens.openingParen, expression.tokens.closingParen);
             if (util.rangeContains(boundingRange, this.position)) {
                 callExpression = expression;
             }

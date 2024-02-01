@@ -114,14 +114,14 @@ export class SignatureHelpUtil {
         const documentation = functionComments.join('').trim();
 
         const lines = util.splitIntoLines(file.fileContents);
-        let key = statement.name.text + documentation;
+        let key = statement.tokens.name.text + documentation;
         const params = [] as ParameterInformation[];
         for (const param of func.parameters) {
-            params.push(ParameterInformation.create(param.name.text));
-            key += param.name.text;
+            params.push(ParameterInformation.create(param.tokens.name.text));
+            key += param.tokens.name.text;
         }
 
-        let label = util.getTextForRange(lines, util.createRangeFromPositions(func.functionType.range.start, func.body.range.start)).trim();
+        let label = util.getTextForRange(lines, util.createRangeFromPositions(func.tokens.functionType?.range.start, func.body.range.start)).trim();
         if (namespaceName) {
             label = label.replace(/^(sub | function )/gim, `$1${namespaceName}.`);
         }

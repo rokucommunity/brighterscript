@@ -25,167 +25,6 @@ describe('parser', () => {
             diagnostics: []
         });
     });
-    /*
-        describe.skip('findReferences', () => {
-            it('gets called if references are missing', () => {
-                const parser = Parser.parse(`
-                    sub main()
-                    end sub
-
-                    sub UnusedFunction()
-                    end sub
-                `);
-                expect(parser.references.functionStatements.map(x => x.name.text)).to.eql([
-                    'main',
-                    'UnusedFunction'
-                ]);
-                //simulate a tree-shaking plugin by removing the `UnusedFunction`
-                parser.ast.statements.splice(1);
-                //tell the parser we modified the AST and need to regenerate references
-                parser.invalidateReferences();
-                expect(parser['_references']).not.to.exist;
-                //calling `references` automatically regenerates the references
-                expect(parser.references.functionStatements.map(x => x.name.text)).to.eql([
-                    'main'
-                ]);
-            });
-
-            function expressionsToStrings(expressions: Set<Expression>) {
-                return [...expressions.values()].map(x => {
-                    const file = new BrsFile({
-                        srcPath: '',
-                        destPath: '',
-                        program: new Program({} as any)
-                    });
-                    const state = new BrsTranspileState(file);
-                    return new SourceNode(null, null, null, x.transpile(state)).toString();
-                });
-            }
-
-            // eslint-disable-next-line func-names, prefer-arrow-callback
-            it('works for references.expressions', function () {
-                this.timeout(5000); // this test takes a long time on github
-                const parser = Parser.parse(`
-                    b += "plus-equal"
-                    a += 1 + 2
-                    b += getValue1() + getValue2()
-                    increment++
-                    decrement--
-                    some.node@.doCallfunc()
-                    bravo(3 + 4).jump(callMe())
-                    obj = {
-                        val1: someValue
-                    }
-                    arr = [
-                        one
-                    ]
-                    thing = alpha.bravo
-                    alpha.charlie()
-                    delta(alpha.delta)
-                    call1().a.b.call2()
-                    class Person
-                        name as string = "bob"
-                    end class
-                    function thing(p1 = name.space.getSomething())
-
-                    end function
-                `);
-                const expected = [
-                    '"plus-equal"',
-                    'b',
-                    'b += "plus-equal"',
-                    '1',
-                    '2',
-                    'a',
-                    'a += 1 + 2',
-                    'getValue1()',
-                    'getValue2()',
-                    'b',
-                    'b += getValue1() + getValue2()',
-                    'increment++',
-                    'decrement--',
-                    //currently the "toString" does a transpile, so that's why this is different.
-                    'some.node.callfunc("doCallfunc", invalid)',
-                    '3',
-                    '4',
-                    '3 + 4',
-                    'callMe()',
-                    'bravo(3 + 4).jump(callMe())',
-                    'someValue',
-                    '{\n    val1: someValue\n}',
-                    'one',
-                    '[\n    one\n]',
-                    'alpha.bravo',
-                    'alpha.charlie()',
-                    'alpha.delta',
-                    'delta(alpha.delta)',
-                    'call1().a.b.call2()',
-                    '"bob"',
-                    'name.space.getSomething()'
-                ];
-
-                expect(
-                    expressionsToStrings(parser.references.expressions)
-                ).to.eql(expected);
-
-                //tell the parser we modified the AST and need to regenerate references
-                parser.invalidateReferences();
-
-                expect(
-                    expressionsToStrings(parser.references.expressions).sort()
-                ).to.eql(expected.sort());
-            });
-
-            it('works for references.expressions', () => {
-                const parser = Parser.parse(`
-                    value = true or type(true) = "something" or Enums.A.Value = "value" and Enum1.Value = Name.Space.Enum2.Value
-                `);
-                const expected = [
-                    'true',
-                    'type(true)',
-                    '"something"',
-                    'true',
-                    'Enums.A.Value',
-                    '"value"',
-                    'Enum1.Value',
-                    'Name.Space.Enum2.Value',
-                    'true or type(true) = "something" or Enums.A.Value = "value" and Enum1.Value = Name.Space.Enum2.Value'
-                ];
-
-                expect(
-                    expressionsToStrings(parser.references.expressions)
-                ).to.eql(expected);
-
-                //tell the parser we modified the AST and need to regenerate references
-                parser.invalidateReferences();
-
-                expect(
-                    expressionsToStrings(parser.references.expressions).sort()
-                ).to.eql(expected.sort());
-            });
-
-            it('works for logical expression', () => {
-                const parser = Parser.parse(`
-                    value = Enums.A.Value = "value"
-                `);
-                const expected = [
-                    'Enums.A.Value',
-                    '"value"',
-                    'Enums.A.Value = "value"'
-                ];
-
-                expect(
-                    expressionsToStrings(parser.references.expressions)
-                ).to.eql(expected);
-
-                //tell the parser we modified the AST and need to regenerate references
-                parser.invalidateReferences();
-
-                expect(
-                    expressionsToStrings(parser.references.expressions).sort()
-                ).to.eql(expected.sort());
-            });
-        }); */
 
     describe('callfunc operator', () => {
         it('is not allowed in brightscript mode', () => {
@@ -226,33 +65,33 @@ describe('parser', () => {
         it('works for ?.', () => {
             const expression = getExpression<DottedGetExpression>(`value = person?.name`);
             expect(expression).to.be.instanceOf(DottedGetExpression);
-            expect(expression.dot.kind).to.eql(TokenKind.QuestionDot);
+            expect(expression.tokens.dot.kind).to.eql(TokenKind.QuestionDot);
         });
 
         it('works for ?[', () => {
             const expression = getExpression<IndexedGetExpression>(`value = person?["name"]`, { matcher: isIndexedGetExpression });
             expect(expression).to.be.instanceOf(IndexedGetExpression);
-            expect(expression.openingSquare.kind).to.eql(TokenKind.QuestionLeftSquare);
-            expect(expression.questionDotToken).not.to.exist;
+            expect(expression.tokens.openingSquare.kind).to.eql(TokenKind.QuestionLeftSquare);
+            expect(expression.tokens.questionDot).not.to.exist;
         });
 
         it('works for ?.[', () => {
             const expression = getExpression<IndexedGetExpression>(`value = person?.["name"]`, { matcher: isIndexedGetExpression });
             expect(expression).to.be.instanceOf(IndexedGetExpression);
-            expect(expression.openingSquare.kind).to.eql(TokenKind.LeftSquareBracket);
-            expect(expression.questionDotToken?.kind).to.eql(TokenKind.QuestionDot);
+            expect(expression.tokens.openingSquare.kind).to.eql(TokenKind.LeftSquareBracket);
+            expect(expression.tokens.questionDot?.kind).to.eql(TokenKind.QuestionDot);
         });
 
         it('works for ?@', () => {
             const expression = getExpression<XmlAttributeGetExpression>(`value = someXml?@someAttr`);
             expect(expression).to.be.instanceOf(XmlAttributeGetExpression);
-            expect(expression.at.kind).to.eql(TokenKind.QuestionAt);
+            expect(expression.tokens.at.kind).to.eql(TokenKind.QuestionAt);
         });
 
         it('works for ?(', () => {
             const expression = getExpression<CallExpression>(`value = person.getName?()`);
             expect(expression).to.be.instanceOf(CallExpression);
-            expect(expression.openingParen.kind).to.eql(TokenKind.QuestionLeftParen);
+            expect(expression.tokens.openingParen.kind).to.eql(TokenKind.QuestionLeftParen);
         });
 
         it('works for print statements using question mark', () => {
@@ -268,13 +107,13 @@ describe('parser', () => {
         it.skip('works for ?( in anonymous function', () => {
             const expression = getExpression<CallExpression>(`thing = (function() : end function)?()`);
             expect(expression).to.be.instanceOf(CallExpression);
-            expect(expression.openingParen.kind).to.eql(TokenKind.QuestionLeftParen);
+            expect(expression.tokens.openingParen.kind).to.eql(TokenKind.QuestionLeftParen);
         });
 
         it('works for ?( in new call', () => {
             const expression = getExpression<NewExpression>(`thing = new Person?()`, { parseMode: ParseMode.BrighterScript });
             expect(expression).to.be.instanceOf(NewExpression);
-            expect(expression.call.openingParen.kind).to.eql(TokenKind.QuestionLeftParen);
+            expect(expression.call.tokens.openingParen.kind).to.eql(TokenKind.QuestionLeftParen);
         });
 
         it('distinguishes between optional chaining and ternary expression', () => {
@@ -516,15 +355,15 @@ describe('parser', () => {
             let statements = (parser.statements[0] as FunctionStatement).func.body.statements as AssignmentStatement[];
             let first = statements[0].value as XmlAttributeGetExpression;
             expect(first).to.be.instanceof(XmlAttributeGetExpression);
-            expect(first.name.text).to.equal('firstName');
-            expect(first.at.text).to.equal('@');
-            expect((first.obj as any).name.text).to.equal('personXml');
+            expect(first.tokens.name.text).to.equal('firstName');
+            expect(first.tokens.at.text).to.equal('@');
+            expect((first.obj as any).tokens.name.text).to.equal('personXml');
 
             let second = statements[1].value as XmlAttributeGetExpression;
             expect(second).to.be.instanceof(XmlAttributeGetExpression);
-            expect(second.name.text).to.equal('age');
-            expect(second.at.text).to.equal('@');
-            expect((second.obj as any).name.text).to.equal('firstChild');
+            expect(second.tokens.name.text).to.equal('age');
+            expect(second.tokens.at.text).to.equal('@');
+            expect((second.obj as any).tokens.name.text).to.equal('firstChild');
         });
 
         it('does not allow chaining of @ symbols', () => {
@@ -661,7 +500,7 @@ describe('parser', () => {
 
                 expect(isExpressionStatement(stmt)).to.be.true;
                 expect(isVariableExpression((stmt).expression)).to.be.true;
-                expect(stmt.expression.name.text).to.equal('NameA');
+                expect(stmt.expression.tokens.name.text).to.equal('NameA');
             });
 
             it('adds unended call statements', () => {
@@ -675,7 +514,7 @@ describe('parser', () => {
 
                 expect(isExpressionStatement(stmt)).to.be.true;
                 expect(isCallExpression((stmt).expression)).to.be.true;
-                expect(stmt.expression.callee.name.text).to.equal('lcase');
+                expect(stmt.expression.callee.tokens.name.text).to.equal('lcase');
             });
 
             it('adds unended indexed get statements', () => {
@@ -691,7 +530,7 @@ describe('parser', () => {
 
                 expect(isExpressionStatement(stmt)).to.be.true;
                 expect(isIndexedGetExpression((stmt).expression)).to.be.true;
-                expect(stmt.expression.obj.name.text).to.equal('nums');
+                expect(stmt.expression.obj.tokens.name.text).to.equal('nums');
             });
 
             it('adds dotted gets', () => {
@@ -714,8 +553,8 @@ describe('parser', () => {
 
                 expect(isExpressionStatement(stmt)).to.be.true;
                 expect(isDottedGetExpression((stmt).expression)).to.be.true;
-                expect(stmt.expression.obj.name.text).to.equal('a');
-                expect(stmt.expression.name.text).to.equal('b');
+                expect(stmt.expression.obj.tokens.name.text).to.equal('a');
+                expect(stmt.expression.tokens.name.text).to.equal('b');
             });
 
             it('adds function statement with missing type after as', () => {
@@ -1003,7 +842,7 @@ describe('parser', () => {
                 });
 
                 expect(
-                    elements.map(x => x.keyToken.kind)
+                    elements.map(x => x.tokens.key.kind)
                 ).to.eql(
                     [TokenKind.Identifier, TokenKind.Identifier]
                 );
@@ -1127,14 +966,14 @@ describe('parser', () => {
             let fn = statements[0] as FunctionStatement;
             expect(fn.annotations).to.exist;
             expect(fn.annotations![0]).to.be.instanceof(AnnotationExpression);
-            expect(fn.annotations![0].nameToken.text).to.equal('meta1');
+            expect(fn.annotations![0].tokens.name.text).to.equal('meta1');
             expect(fn.annotations![0].name).to.equal('meta1');
 
             expect(statements[1]).to.be.instanceof(FunctionStatement);
             fn = statements[1] as FunctionStatement;
             expect(fn.annotations).to.exist;
             expect(fn.annotations![0]).to.be.instanceof(AnnotationExpression);
-            expect(fn.annotations![0].nameToken.text).to.equal('meta2');
+            expect(fn.annotations![0].tokens.name.text).to.equal('meta2');
         });
 
         it('attaches annotations inside a function body', () => {
@@ -1180,7 +1019,7 @@ describe('parser', () => {
             let fn = statements[0] as FunctionStatement;
             expect(fn.annotations).to.exist;
             expect(fn.annotations![0]).to.be.instanceof(AnnotationExpression);
-            expect(fn.annotations![0].nameToken.text).to.equal('meta1');
+            expect(fn.annotations![0].tokens.name.text).to.equal('meta1');
             expect(fn.annotations![0].call).to.be.instanceof(CallExpression);
         });
 
@@ -1527,6 +1366,25 @@ describe('parser', () => {
                 end sub
             `, ParseMode.BrighterScript);
             expect(diagnostics[0]?.message).to.exist;
+        });
+
+        it('allows declaring types on assignment in Brighterscript mode', () => {
+            let { diagnostics } = parse(`
+                sub foo()
+                    x as string = formatJson("some string")
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('does not allow declaring types on assignment in brightscript mode', () => {
+            let { diagnostics } = parse(`
+                sub foo()
+                    x as string = formatJson("some string")
+                end sub
+            `, ParseMode.BrightScript);
+            expect(diagnostics[0]?.message).to.exist;
+            expect(diagnostics[0]?.message).to.include('typed assignment');
         });
     });
 

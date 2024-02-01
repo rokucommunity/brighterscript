@@ -113,7 +113,7 @@ describe('BrsFile BrighterScript classes', () => {
         `);
         program.validate();
         expectZeroDiagnostics(program);
-        let duckClass = file.ast.findChildren<ClassStatement>(isClassStatement, { walkMode: WalkMode.visitStatements }).find(x => x.name.text.toLowerCase() === 'duck');
+        let duckClass = file.ast.findChildren<ClassStatement>(isClassStatement, { walkMode: WalkMode.visitStatements }).find(x => x.tokens.name.text.toLowerCase() === 'duck');
         expect(duckClass).to.exist;
         expect(duckClass!.memberMap['move']).to.exist;
     });
@@ -232,11 +232,11 @@ describe('BrsFile BrighterScript classes', () => {
                 end class
             `);
             expect(
-                (file.ast as any).statements[1].body[0].func.body.statements[0].expression.callee.name.text
+                (file.ast as any).statements[1].body[0].func.body.statements[0].expression.callee.tokens.name.text
             ).to.eql('super');
             await program.getTranspiledFileContents(file.srcPath);
             expect(
-                (file.ast as any).statements[1].body[0].func.body.statements[0].expression.callee.name.text
+                (file.ast as any).statements[1].body[0].func.body.statements[0].expression.callee.tokens.name.text
             ).to.eql('super');
         });
 

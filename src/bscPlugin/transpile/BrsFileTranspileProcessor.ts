@@ -30,8 +30,8 @@ export class BrsFilePreTranspileProcessor {
         file.ast.walk(createVisitor({
             FunctionStatement: (statement) => {
                 //add the bslib prefix
-                if (!statement.name.text.startsWith('bslib_')) {
-                    editor.setProperty(statement.name, 'text', `bslib_${statement.name.text}`);
+                if (!statement.tokens.name.text.startsWith('bslib_')) {
+                    editor.setProperty(statement.tokens.name, 'text', `bslib_${statement.tokens.name.text}`);
                 }
             }
         }), {
@@ -77,11 +77,13 @@ export class BrsFilePreTranspileProcessor {
             const value = result.item.getMemberValue(memberName);
             return {
                 enum: result.item,
-                value: new LiteralExpression(createToken(
-                    //just use float literal for now...it will transpile properly with any literal value
-                    value?.startsWith('"') ? TokenKind.StringLiteral : TokenKind.FloatLiteral,
-                    value
-                ))
+                value: new LiteralExpression({
+                    value: createToken(
+                        //just use float literal for now...it will transpile properly with any literal value
+                        value?.startsWith('"') ? TokenKind.StringLiteral : TokenKind.FloatLiteral,
+                        value
+                    )
+                })
             };
         }
     }
@@ -94,7 +96,7 @@ export class BrsFilePreTranspileProcessor {
         for (let part of parts) {
             let entityName: string;
             if (isVariableExpression(part) || isDottedGetExpression(part)) {
-                processedNames.push(part?.name?.text?.toLocaleLowerCase());
+                processedNames.push(part?.tokens.name?.text?.toLocaleLowerCase());
                 entityName = processedNames.join('.');
             } else {
                 return;

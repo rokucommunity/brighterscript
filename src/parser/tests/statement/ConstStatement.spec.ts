@@ -51,7 +51,7 @@ describe('ConstStatement', () => {
         });
         const value = statement.value as LiteralExpression;
         expect(value).to.be.instanceof(LiteralExpression);
-        expect(value.token?.text).to.eql('"abc"');
+        expect(value.tokens.value?.text).to.eql('"abc"');
         //ensure range is correct
         expect(statement.range).to.eql(util.createRange(0, 0, 0, 21));
     });

@@ -46,7 +46,7 @@ describe('parser library statements', () => {
         let assignment = statements[0].func.body.statements[0];
         expect(diagnostics).to.be.lengthOf(0);
         expect(assignment).to.be.instanceOf(AssignmentStatement);
-        expect(assignment.name.text).to.equal('library');
+        expect(assignment.tokens.name.text).to.equal('library');
     });
 
     it('does not prevent usage of `library` as object property name', () => {
@@ -59,7 +59,7 @@ describe('parser library statements', () => {
         `);
         const { statements, diagnostics } = Parser.parse(tokens) as any;
         //make sure the assignment is present in the function body
-        expect(statements[0].func.body.statements[0].value.elements[0].keyToken.text).to.equal('library');
+        expect(statements[0].func.body.statements[0].value.elements[0].tokens.key.text).to.equal('library');
         expect(diagnostics).to.be.lengthOf(0);
     });
 

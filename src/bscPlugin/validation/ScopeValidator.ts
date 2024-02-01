@@ -105,6 +105,9 @@ export class ScopeValidator {
                     },
                     UnaryExpression: (unaryExpr) => {
                         this.validateUnaryExpression(file, unaryExpr);
+                    },
+                    AssignmentStatement: (assignStmt) => {
+                        this.validateAssignmentStatement(file, assignStmt);
                     }
                 });
                 const segmentsToWalkForValidation = (thisFileHasChanges || !hasChangeInfo)
@@ -139,14 +142,14 @@ export class ScopeValidator {
             return false;
         }
         let assignmentAncestor: AssignmentStatement;
-        if (isAssignmentStatement(definingNode) && definingNode.equals.kind === TokenKind.Equal) {
+        if (isAssignmentStatement(definingNode) && definingNode.tokens.equals.kind === TokenKind.Equal) {
             // this symbol was defined in a "normal" assignment (eg. not a compound assignment)
             assignmentAncestor = definingNode;
-            return assignmentAncestor?.name?.text.toLowerCase() === expression?.name?.text.toLowerCase();
+            return assignmentAncestor?.tokens.name?.text.toLowerCase() === expression?.tokens.name?.text.toLowerCase();
         } else {
             assignmentAncestor = expression?.findAncestor(isAssignmentStatement);
         }
-        return assignmentAncestor?.name === expression?.name && isUnionType(exprType);
+        return assignmentAncestor?.tokens.name === expression?.tokens.name && isUnionType(exprType);
     }
 
     /**
@@ -216,13 +219,18 @@ export class ScopeValidator {
         if (callName !== 'createobject' || !isLiteralExpression(call?.args[0])) {
             return;
         }
-        const firstParamToken = (call?.args[0] as any)?.token;
+        const firstParamToken = (call?.args[0] as any)?.tokens?.value;
         const firstParamStringValue = firstParamToken?.text?.replace(/"/g, '');
+        if (!firstParamStringValue) {
+            return;
+        }
+        const firstParamStringValueLower = firstParamStringValue.toLowerCase();
+
         //if this is a `createObject('roSGNode'` call, only support known sg node types
-        if (firstParamStringValue?.toLowerCase() === 'rosgnode' && isLiteralExpression(call?.args[1])) {
-            const componentName: Token = (call?.args[1] as any)?.token;
+        if (firstParamStringValueLower === 'rosgnode' && isLiteralExpression(call?.args[1])) {
+            const componentName: Token = (call?.args[1] as any)?.tokens.value;
             //don't validate any components with a colon in their name (probably component libraries, but regular components can have them too).
-            if (componentName?.text?.includes(':')) {
+            if (!componentName || componentName?.text?.includes(':')) {
                 return;
             }
             //add diagnostic for unknown components
@@ -241,7 +249,7 @@ export class ScopeValidator {
                     range: call.range
                 });
             }
-        } else if (!platformComponentNames.has(firstParamStringValue.toLowerCase())) {
+        } else if (!platformComponentNames.has(firstParamStringValueLower)) {
             this.addDiagnosticOnce({
                 file: file as BscFile,
                 ...DiagnosticMessages.unknownBrightScriptComponent(firstParamStringValue),
@@ -250,9 +258,9 @@ export class ScopeValidator {
         } else {
             // This is valid brightscript component
             // Test for invalid arg counts
-            const brightScriptComponent: BRSComponentData = components[firstParamStringValue.toLowerCase()];
+            const brightScriptComponent: BRSComponentData = components[firstParamStringValueLower];
             // Valid arg counts for createObject are 1+ number of args for constructor
-            let validArgCounts = brightScriptComponent.constructors.map(cnstr => cnstr.params.length + 1);
+            let validArgCounts = brightScriptComponent?.constructors.map(cnstr => cnstr.params.length + 1);
             if (validArgCounts.length === 0) {
                 // no constructors for this component, so createObject only takes 1 arg
                 validArgCounts = [1];
@@ -267,7 +275,7 @@ export class ScopeValidator {
             }
 
             // Test for deprecation
-            if (brightScriptComponent.isDeprecated) {
+            if (brightScriptComponent?.isDeprecated) {
                 this.addDiagnosticOnce({
                     file: file as BscFile,
                     ...DiagnosticMessages.deprecatedBrightScriptComponent(firstParamStringValue, brightScriptComponent.deprecatedDescription),
@@ -408,6 +416,31 @@ export class ScopeValidator {
             });
         }
     }
+
+    /**
+     * Detect when declared type does not match rhs type
+     */
+    private validateAssignmentStatement(file: BrsFile, assignStmt: AssignmentStatement) {
+        if (!assignStmt?.typeExpression) {
+            // nothing to check
+            return;
+        }
+
+        const typeChainExpectedLHS = [];
+        const getTypeOpts = { flags: SymbolTypeFlag.runtime };
+        const expectedLHSType = assignStmt.typeExpression.getType({ ...getTypeOpts, data: {}, typeChain: typeChainExpectedLHS });
+        const actualRHSType = assignStmt.value?.getType(getTypeOpts);
+        const compatibilityData: TypeCompatibilityData = {};
+
+        if (!expectedLHSType?.isTypeCompatible(actualRHSType, compatibilityData)) {
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.assignmentTypeMismatch(actualRHSType.toString(), expectedLHSType.toString(), compatibilityData),
+                range: assignStmt.range,
+                file: file
+            });
+        }
+    }
+
     /**
      * Detect invalid use of a binary operator
      */
@@ -453,12 +486,12 @@ export class ScopeValidator {
             // one operand is basically "any" type... ignore;
             return;
         }
-        const opResult = util.binaryOperatorResultType(leftTypeToTest, binaryExpr.operator, rightTypeToTest);
+        const opResult = util.binaryOperatorResultType(leftTypeToTest, binaryExpr.tokens.operator, rightTypeToTest);
 
         if (isDynamicType(opResult)) {
             // if the result was dynamic, that means there wasn't a valid operation
             this.addMultiScopeDiagnostic({
-                ...DiagnosticMessages.operatorTypeMismatch(binaryExpr.operator.text, leftType.toString(), rightType.toString()),
+                ...DiagnosticMessages.operatorTypeMismatch(binaryExpr.tokens.operator.text, leftType.toString(), rightType.toString()),
                 range: binaryExpr.range,
                 file: file
             });
@@ -491,10 +524,10 @@ export class ScopeValidator {
             // operand is basically "any" type... ignore;
 
         } else if (isPrimitiveType(rightType)) {
-            const opResult = util.unaryOperatorResultType(unaryExpr.operator, rightTypeToTest);
+            const opResult = util.unaryOperatorResultType(unaryExpr.tokens.operator, rightTypeToTest);
             if (isDynamicType(opResult)) {
                 this.addMultiScopeDiagnostic({
-                    ...DiagnosticMessages.operatorTypeMismatch(unaryExpr.operator.text, rightType.toString()),
+                    ...DiagnosticMessages.operatorTypeMismatch(unaryExpr.tokens.operator.text, rightType.toString()),
                     range: unaryExpr.range,
                     file: file
                 });
@@ -502,7 +535,7 @@ export class ScopeValidator {
         } else {
             // rhs is not a primitive, so no binary operator is allowed
             this.addMultiScopeDiagnostic({
-                ...DiagnosticMessages.operatorTypeMismatch(unaryExpr.operator.text, rightType.toString()),
+                ...DiagnosticMessages.operatorTypeMismatch(unaryExpr.tokens.operator.text, rightType.toString()),
                 range: unaryExpr.range,
                 file: file
             });
@@ -516,7 +549,7 @@ export class ScopeValidator {
             return;
         }
         if (isVariableExpression(expression)) {
-            if (isAssignmentStatement(expression.parent) && expression.parent.name === expression.name) {
+            if (isAssignmentStatement(expression.parent) && expression.parent.tokens.name === expression.tokens.name) {
                 // Don't validate LHS of assignments
                 return;
             } else if (isNamespaceStatement(expression.parent)) {

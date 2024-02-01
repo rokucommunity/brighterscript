@@ -202,12 +202,12 @@ export class BrsFile implements BscFile {
             const result = [] as FileReference[];
             for (const statement of this._cachedLookups?.importStatements ?? []) {
                 //register import statements
-                if (isImportStatement(statement) && statement.filePathToken) {
+                if (isImportStatement(statement) && statement.tokens.filePath) {
                     result.push({
-                        filePathRange: statement.filePathToken.range,
+                        filePathRange: statement.tokens.filePath.range,
                         destPath: util.getPkgPathFromTarget(this.destPath, statement.filePath),
                         sourceFile: this,
-                        text: statement.filePathToken?.text
+                        text: statement.tokens.filePath.text
                     });
                 }
             }
@@ -514,9 +514,9 @@ export class BrsFile implements BscFile {
             //add every parameter
             for (let param of func.parameters) {
                 scope.variableDeclarations.push({
-                    nameRange: param.name.range,
-                    lineIndex: param.name.range.start.line,
-                    name: param.name.text,
+                    nameRange: param.tokens.name.range,
+                    lineIndex: param.tokens.name.range.start.line,
+                    name: param.tokens.name.text,
                     getType: () => {
                         return param.getType({ flags: SymbolTypeFlag.typetime });
                     }
@@ -527,14 +527,14 @@ export class BrsFile implements BscFile {
             func.body?.walk(createVisitor({
                 ForEachStatement: (stmt) => {
                     scope.variableDeclarations.push({
-                        nameRange: stmt.item.range,
-                        lineIndex: stmt.item.range.start.line,
-                        name: stmt.item.text,
+                        nameRange: stmt.tokens.item.range,
+                        lineIndex: stmt.tokens.item.range.start.line,
+                        name: stmt.tokens.item.text,
                         getType: () => DynamicType.instance //TODO: Infer types from array
                     });
                 },
                 LabelStatement: (stmt) => {
-                    const { identifier } = stmt.tokens;
+                    const { name: identifier } = stmt.tokens;
                     scope.labelStatements.push({
                         nameRange: identifier.range,
                         lineIndex: identifier.range.start.line,
@@ -563,10 +563,11 @@ export class BrsFile implements BscFile {
 
             //skip variable declarations that are outside of any scope
             if (scope) {
+                const variableName = statement.tokens.name;
                 scope.variableDeclarations.push({
-                    nameRange: statement.name.range,
-                    lineIndex: statement.name.range.start.line,
-                    name: statement.name.text,
+                    nameRange: variableName.range,
+                    lineIndex: variableName.range.start.line,
+                    name: variableName.text,
                     getType: () => {
                         return statement.getType({ flags: SymbolTypeFlag.runtime });
                     }
@@ -595,7 +596,7 @@ export class BrsFile implements BscFile {
                     const paramType = param.getType({ flags: SymbolTypeFlag.typetime });
 
                     let callableParam = {
-                        name: param.name?.text,
+                        name: param.tokens.name?.text,
                         type: paramType,
                         isOptional: !!param.defaultValue,
                         isRestArgument: false
@@ -604,9 +605,9 @@ export class BrsFile implements BscFile {
                 }
                 const funcType = statement.getType({ flags: SymbolTypeFlag.typetime });
                 callables.push({
-                    isSub: statement.func.functionType.text.toLowerCase() === 'sub',
-                    name: statement.name?.text,
-                    nameRange: statement.name?.range,
+                    isSub: statement.func.tokens.functionType?.text.toLowerCase() === 'sub',
+                    name: statement.tokens.name?.text,
+                    nameRange: statement.tokens.name?.range,
                     file: this,
                     params: params,
                     range: statement.func.range,
@@ -636,15 +637,14 @@ export class BrsFile implements BscFile {
                         //filter out method calls on method calls for now (i.e. getSomething().getSomethingElse())
                         (expression.callee as any).callee ||
                         //filter out callees without a name (immediately-invoked function expressions)
-                        !(expression.callee as any).name
+                        !(expression.callee as any).tokens?.name
                     ) {
                         continue;
                     }
-                    let functionName = (expression.callee as any).name.text;
-
                     //callee is the name of the function being called
                     let callee = expression.callee as VariableExpression;
 
+                    let functionName = callee.tokens.name.text;
                     let columnIndexBegin = callee.range.start.character;
                     let columnIndexEnd = callee.range.end.character;
 
@@ -657,18 +657,18 @@ export class BrsFile implements BscFile {
                             args.push({
                                 range: arg.range,
                                 type: arg.getType(),
-                                text: arg.token.text,
+                                text: arg.tokens.value.text,
                                 expression: arg,
                                 typeToken: undefined
                             });
 
                             //is variable being passed into argument
-                        } else if (arg.name) {
+                        } else if (arg.tokens?.name) {
                             args.push({
                                 range: arg.range,
                                 //TODO - look up the data type of the actual variable
                                 type: new DynamicType(),
-                                text: arg.name.text,
+                                text: arg.tokens.name.text,
                                 expression: arg,
                                 typeToken: undefined
                             });
@@ -777,7 +777,7 @@ export class BrsFile implements BscFile {
         const statementHandler = (statement: NamespaceStatement) => {
             if (!location && statement.getName(ParseMode.BrighterScript).toLowerCase() === namespaceName) {
                 const namespaceItemStatementHandler = (statement: ClassStatement | FunctionStatement) => {
-                    if (!location && statement.name.text.toLowerCase() === endName) {
+                    if (!location && statement.tokens.name.text.toLowerCase() === endName) {
                         const uri = util.pathToUri(file.srcPath);
                         location = util.createLocation(uri, statement.range);
                     }
@@ -903,7 +903,7 @@ export class BrsFile implements BscFile {
         }
 
         if (isVariableExpression(left)) {
-            let lowerName = left.name.text.toLowerCase();
+            let lowerName = left.tokens.name.text.toLowerCase();
             //find the first scope that contains this namespace
             let scopes = this.program.getScopesForFile(this);
             for (let scope of scopes) {
@@ -921,7 +921,7 @@ export class BrsFile implements BscFile {
     public calleeIsKnownNamespaceFunction(callee: Expression, namespaceName: string) {
         //if we have a variable and a namespace
         if (isVariableExpression(callee) && namespaceName) {
-            let lowerCalleeName = callee?.name?.text?.toLowerCase();
+            let lowerCalleeName = callee?.tokens.name?.text?.toLowerCase();
             if (lowerCalleeName) {
                 let scopes = this.program.getScopesForFile(this);
                 for (let scope of scopes) {
@@ -948,7 +948,7 @@ export class BrsFile implements BscFile {
                 return this.calleeIsKnownNamespaceFunction(callee, namespaceName);
             }
             let scopes = this.program.getScopesForFile(this);
-            let lowerCalleeName = callee?.name?.text?.toLowerCase();
+            let lowerCalleeName = callee?.tokens.name?.text?.toLowerCase();
             for (let scope of scopes) {
                 if (scope.getCallableByName(lowerCalleeName)) {
                     return true;
@@ -1054,7 +1054,7 @@ export class BrsFile implements BscFile {
             return;
         }
 
-        const name = isFieldStatement(statement) ? statement.name.text : statement.getName(ParseMode.BrighterScript);
+        const name = isFieldStatement(statement) ? statement.tokens.name.text : statement.getName(ParseMode.BrighterScript);
         return DocumentSymbol.create(name, '', symbolKind, statement.range, statement.range, children);
     }
 
@@ -1177,7 +1177,7 @@ export class BrsFile implements BscFile {
                     results.push(
                         util.createLocation(
                             URI.file(classFileLink.file.srcPath).toString(),
-                            classFileLink.item.name.range
+                            classFileLink.item.tokens.name.range
                         )
                     );
                     return results;
@@ -1202,7 +1202,7 @@ export class BrsFile implements BscFile {
 
         let classToken = this.getTokenBefore(token, TokenKind.Class);
         if (classToken) {
-            let cs = this._cachedLookups.classStatements.find((cs) => cs.classKeyword.range === classToken.range);
+            let cs = this._cachedLookups.classStatements.find((cs) => cs.tokens.class.range === classToken.range);
             if (cs?.parentClassName) {
                 const nameParts = cs.parentClassName.getNameParts();
                 let extendedClass = this.getClassFileLink(nameParts[nameParts.length - 1], nameParts.slice(0, -1).join('.'));
@@ -1286,7 +1286,7 @@ export class BrsFile implements BscFile {
             }
         };
         const fieldStatementHandler = (statement: FieldStatement) => {
-            if (statement.name.text.toLowerCase() === textToSearchFor) {
+            if (statement.tokens.name.text.toLowerCase() === textToSearchFor) {
                 results.push(util.createLocation(util.pathToUri(file.srcPath), statement.range));
             }
         };
@@ -1303,8 +1303,8 @@ export class BrsFile implements BscFile {
     public getClassMethod(classStatement: ClassStatement, name: string, walkParents = true): MethodStatement | undefined {
         //TODO - would like to write this with getClassHieararchy; but got stuck on working out the scopes to use... :(
         let statement;
-        const statementHandler = (e) => {
-            if (!statement && e.name.text.toLowerCase() === name.toLowerCase()) {
+        const statementHandler = (e: MethodStatement) => {
+            if (!statement && e.tokens.name.text.toLowerCase() === name.toLowerCase()) {
                 statement = e;
             }
         };
@@ -1345,7 +1345,7 @@ export class BrsFile implements BscFile {
                     processedFiles.add(file);
                     file.ast.walk(createVisitor({
                         VariableExpression: (e) => {
-                            if (e.name.text.toLowerCase() === searchFor) {
+                            if (e.tokens.name.text.toLowerCase() === searchFor) {
                                 locations.push(util.createLocation(util.pathToUri(file.srcPath), e.range));
                             }
                         }
@@ -1616,10 +1616,10 @@ export class BrsFile implements BscFile {
             ns.namespaceStatements.push(namespaceStatement);
             ns.statements.push(...namespaceStatement.body.statements);
             for (let statement of namespaceStatement.body.statements) {
-                if (isClassStatement(statement) && statement.name) {
-                    ns.classStatements.set(statement.name.text.toLowerCase(), statement);
-                } else if (isFunctionStatement(statement) && statement.name) {
-                    ns.functionStatements.set(statement.name.text.toLowerCase(), statement);
+                if (isClassStatement(statement) && statement.tokens.name) {
+                    ns.classStatements.set(statement.tokens.name.text.toLowerCase(), statement);
+                } else if (isFunctionStatement(statement) && statement.tokens.name) {
+                    ns.functionStatements.set(statement.tokens.name.text.toLowerCase(), statement);
                 } else if (isEnumStatement(statement) && statement.fullName) {
                     ns.enumStatements.set(statement.fullName.toLowerCase(), statement);
                 } else if (isConstStatement(statement) && statement.fullName) {

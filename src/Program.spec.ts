@@ -1302,7 +1302,7 @@ describe('Program', () => {
                 name: 'TestPlugin',
                 beforePrepareFile: (event) => {
                     const stmt = ((event.file as BrsFile).ast.statements[0] as FunctionStatement).func.body.statements[0] as PrintStatement;
-                    event.editor.setProperty((stmt.expressions[0] as LiteralExpression).token, 'text', '"hello there"');
+                    event.editor.setProperty((stmt.expressions[0] as LiteralExpression).tokens.value, 'text', '"hello there"');
                 },
                 afterPrepareFile: sinon.spy()
             });
@@ -1401,7 +1401,7 @@ describe('Program', () => {
                 name: 'TestPlugin',
                 beforePrepareFile: (event) => {
                     const stmt = ((event.file as BrsFile).ast.statements[0] as FunctionStatement).func.body.statements[0] as PrintStatement;
-                    event.editor.setProperty((stmt.expressions[0] as LiteralExpression).token, 'text', '"hello there"');
+                    event.editor.setProperty((stmt.expressions[0] as LiteralExpression).tokens.value, 'text', '"hello there"');
                 }
             });
             await program.build({
@@ -1432,7 +1432,7 @@ describe('Program', () => {
                         event.file.ast.walk(createVisitor({
                             LiteralExpression: (literal) => {
                                 literalExpression = literal;
-                                event.editor.setProperty(literal.token, 'text', '"goodbye world"');
+                                event.editor.setProperty(literal.tokens.value, 'text', '"goodbye world"');
                             }
                         }), {
                             walkMode: WalkMode.visitExpressionsRecursive
@@ -1454,7 +1454,7 @@ describe('Program', () => {
             );
 
             //our literalExpression should have been restored to its original value
-            expect(literalExpression!.token.text).to.eql('"hello world"');
+            expect(literalExpression!.tokens.value.text).to.eql('"hello world"');
         });
 
         it('handles Editor for beforeProgramTranspile', async () => {
@@ -1471,7 +1471,7 @@ describe('Program', () => {
                     file.ast.walk(createVisitor({
                         LiteralExpression: (literal) => {
                             literalExpression = literal;
-                            event.editor.setProperty(literal.token, 'text', '"goodbye world"');
+                            event.editor.setProperty(literal.tokens.value, 'text', '"goodbye world"');
                         }
                     }), {
                         walkMode: WalkMode.visitExpressionsRecursive
@@ -1492,7 +1492,7 @@ describe('Program', () => {
             );
 
             //our literalExpression should have been restored to its original value
-            expect(literalExpression!.token.text).to.eql('"hello world"');
+            expect(literalExpression!.tokens.value.text).to.eql('"hello world"');
         });
 
         it('copies the embedded version of bslib.brs when a version from ropm is not found', async () => {

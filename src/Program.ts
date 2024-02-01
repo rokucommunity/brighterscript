@@ -1102,7 +1102,7 @@ export class Program {
 
         function addToResults(statement: FunctionStatement | MethodStatement, file: BrsFile) {
             let parentNamespaceName = statement.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(originFile.parseMode)?.toLowerCase();
-            if (statement.name.text.toLowerCase() === lowerName && (!lowerNamespaceName || parentNamespaceName === lowerNamespaceName)) {
+            if (statement.tokens.name.text.toLowerCase() === lowerName && (!lowerNamespaceName || parentNamespaceName === lowerNamespaceName)) {
                 if (!results.has(statement)) {
                     results.set(statement, { item: statement, file: file as BrsFile });
                 }
@@ -1159,7 +1159,7 @@ export class Program {
 
             file.ast.walk(createVisitor({
                 FunctionStatement: (statement: FunctionStatement) => {
-                    if (funcNames.has(statement.name.text)) {
+                    if (funcNames.has(statement.tokens.name.text)) {
                         if (!results.has(statement)) {
                             results.set(statement, { item: statement, file: file });
                         }

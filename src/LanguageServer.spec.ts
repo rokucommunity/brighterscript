@@ -1098,7 +1098,7 @@ describe('LanguageServer', () => {
                             file.ast.walk(createVisitor({
                                 LiteralExpression: (expression) => {
                                     if (isLiteralString(expression)) {
-                                        editor.setProperty(expression.token, 'text', 'hello moon');
+                                        editor.setProperty(expression.tokens.value, 'text', 'hello moon');
                                     }
                                 }
                             }), {
