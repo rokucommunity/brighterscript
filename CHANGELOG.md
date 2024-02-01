@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.26](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.25...v1.0.0-alpha.26) - 2024-02-01
+### Changed
+ - Built-in Objects have their interfaces as members ([#1039](https://github.com/rokucommunity/brighterscript/1039))
+ - Do not do validation on dotted sets of AAs ([#1040](https://github.com/rokucommunity/brighterscript/1040))
+ - Changed adding invalid as arg to empty callfunc invocations by default ([#1043](https://github.com/rokucommunity/brighterscript/1043))
+ - Standardize AST Constructors ([#1025)](https://github.com/rokucommunity/brighterscript/1025)))
+ - Change Dotted Get/Set to single .indexes prop ([#1054](https://github.com/rokucommunity/brighterscript/1054))
+
+
+
 ## [1.0.0-alpha.25](https://github.com/rokucommunity/brighterscript/compare/v0.66.0-alpha.11...v1.0.0-alpha.25) - 2024-01-25
 ### Changed
  - renamed these releases to `v1.0.0-alpha.*`, which means we are now targeting a `v1.0.0` release
