@@ -1038,6 +1038,14 @@ export class Parser {
                 range: name.range
             });
         }
+        if (this.check(TokenKind.As)) {
+            // v1 syntax allows type declaration on lhs of assignment
+            this.warnIfNotBrighterScriptMode('typed assignment');
+
+            this.advance(); // skip 'as'
+            this.typeToken(); // skip typeToken;
+        }
+
         let operator = this.consume(
             DiagnosticMessages.expectedOperatorAfterIdentifier(AssignmentOperators, name.text),
             ...AssignmentOperators
@@ -1170,10 +1178,33 @@ export class Parser {
         // `let`, (...) keyword. As such, we must check the token *after* an identifier to figure
         // out what to do with it.
         if (
-            this.checkAny(TokenKind.Identifier, ...this.allowedLocalIdentifiers) &&
-            this.checkAnyNext(...AssignmentOperators)
+            this.checkAny(TokenKind.Identifier, ...this.allowedLocalIdentifiers)
         ) {
-            return this.assignment();
+            if (this.checkAnyNext(...AssignmentOperators)) {
+                return this.assignment();
+            } else if (this.checkNext(TokenKind.As)) {
+                // may be a typed assignment - this is v1 syntax
+                const backtrack = this.current;
+                let validTypeExpression = false;
+                try {
+                    // skip the identifier, and check for valid type expression
+                    this.advance();
+                    // skip the 'as'
+                    this.advance();
+                    // check if there is a valid type
+                    const typeToken = this.typeToken(true);
+                    const allowedNameKinds = [TokenKind.Identifier, ...DeclarableTypes, ...this.allowedLocalIdentifiers];
+                    validTypeExpression = allowedNameKinds.includes(typeToken.kind);
+                } catch (e) {
+                    // ignore any errors
+                } finally {
+                    this.current = backtrack;
+                }
+                if (validTypeExpression) {
+                    // there is a valid 'as' and type expression
+                    return this.assignment();
+                }
+            }
         }
 
         //some BrighterScript keywords are allowed as a local identifiers, so we need to check for them AFTER the assignment check
@@ -1388,13 +1419,21 @@ export class Parser {
     /**
      * Get an expression with identifiers separated by periods. Useful for namespaces and class extends
      */
-    private getNamespacedVariableNameExpression() {
-        let firstIdentifier = this.consume(
-            DiagnosticMessages.expectedIdentifierAfterKeyword(this.previous().text),
-            TokenKind.Identifier,
-            ...this.allowedLocalIdentifiers
-        ) as Identifier;
-
+    private getNamespacedVariableNameExpression(ignoreDiagnostics = false) {
+        let firstIdentifier: Identifier;
+        if (ignoreDiagnostics) {
+            if (this.checkAny(...this.allowedLocalIdentifiers)) {
+                firstIdentifier = this.advance() as Identifier;
+            } else {
+                throw new Error();
+            }
+        } else {
+            firstIdentifier = this.consume(
+                DiagnosticMessages.expectedIdentifierAfterKeyword(this.previous().text),
+                TokenKind.Identifier,
+                ...this.allowedLocalIdentifiers
+            ) as Identifier;
+        }
         let expr: DottedGetExpression | VariableExpression;
 
         if (firstIdentifier) {
@@ -2618,7 +2657,7 @@ export class Parser {
      * Will return a token of whatever is next to be parsed
      * Will allow v1 type syntax (typed arrays, union types), but there is no validation on types used this way
      */
-    private typeToken(): Token {
+    private typeToken(ignoreDiagnostics = false): Token {
         let typeToken: Token;
         let lookForUnions = true;
         let isAUnion = false;
@@ -2632,7 +2671,7 @@ export class Parser {
             } else if (this.options.mode === ParseMode.BrighterScript) {
                 try {
                     // see if we can get a namespaced identifer
-                    const qualifiedType = this.getNamespacedVariableNameExpression();
+                    const qualifiedType = this.getNamespacedVariableNameExpression(ignoreDiagnostics);
                     typeToken = createToken(TokenKind.Identifier, qualifiedType.getName(this.options.mode), qualifiedType.range);
                 } catch {
                     //could not get an identifier - just get whatever's next

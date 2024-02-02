@@ -324,7 +324,8 @@ export class BsClassValidator {
                             const namespace = classStatement.findAncestor<NamespaceStatement>(isNamespaceStatement);
                             const currentNamespaceName = namespace?.getName(ParseMode.BrighterScript);
                             //check if this custom type is in our class map
-                            if (!this.getClassByName(lowerFieldTypeName, currentNamespaceName) && !this.scope.hasInterface(lowerFieldTypeName) && !this.scope.hasEnum(lowerFieldTypeName)) {
+                            const isBuiltInType = util.isBuiltInType(lowerFieldTypeName);
+                            if (!isBuiltInType && !this.getClassByName(lowerFieldTypeName, currentNamespaceName) && !this.scope.hasInterface(lowerFieldTypeName) && !this.scope.hasEnum(lowerFieldTypeName)) {
                                 this.diagnostics.push({
                                     ...DiagnosticMessages.cannotFindType(fieldTypeName),
                                     range: statement.type?.range ?? statement.range,
