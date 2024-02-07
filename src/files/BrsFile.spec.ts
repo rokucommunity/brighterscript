@@ -3860,6 +3860,19 @@ describe('BrsFile', () => {
             `);
         });
 
+        it('allows built-in types for interface members', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                interface MyBase
+                    regex as roRegex
+                    node as roSGNodeLabel
+                    sub outputMatches(textInput as string)
+                    function getLabelParent() as roSGNode
+                end interface
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
         it('allows extends on interfaces', () => {
             testTranspile(`
                 interface MyBase
@@ -3885,6 +3898,46 @@ describe('BrsFile', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
+        });
+
+        it('allows built-in types for class members', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                class MyBase
+                    regex as roRegex
+                    node as roSGNodeLabel
+
+                    sub outputMatches(textInput as string)
+                        matches = m.regex.match(textInput)
+                        if matches.count() > 1
+                            m.node.text = matches[1]
+                        else
+                            m.node.text = "no match"
+                        end if
+                    end sub
+
+                    function getLabelParent() as roSGNode
+                        return m.node.getParent()
+                    end function
+                end class
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows types on lhs of assignments', () => {
+            testTranspile(`
+                sub foo(node as roSGNode)
+                    nodeParent as roSGNode = node.getParent()
+                    text as string = nodeParent.id
+                    print text
+                end sub
+            `, `
+                sub foo(node as object)
+                    nodeParent = node.getParent()
+                    text = nodeParent.id
+                    print text
+                end sub
+            `);
         });
     });
 });
