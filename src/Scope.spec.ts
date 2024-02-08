@@ -7,7 +7,7 @@ import { Program } from './Program';
 import PluginInterface from './PluginInterface';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, trim } from './testHelpers.spec';
 import { Logger } from './Logger';
-import { BrsFile } from './files/BrsFile';
+import type { BrsFile } from './files/BrsFile';
 import type { NamespaceStatement } from './parser/Statement';
 import type { CompilerPlugin, OnScopeValidateEvent } from './interfaces';
 import { DiagnosticOrigin } from './interfaces';
