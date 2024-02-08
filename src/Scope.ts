@@ -16,7 +16,7 @@ import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
-import { isBrsFile, isXmlFile, isEnumMemberStatement, isNamespaceStatement, isNamespaceType, isReferenceType, isCallableType } from './astUtils/reflection';
+import { isBrsFile, isXmlFile, isEnumMemberStatement, isNamespaceStatement, isNamespaceType, isReferenceType, isCallableType, isFunctionStatement } from './astUtils/reflection';
 import { SymbolTable, SymbolTypeFlag } from './SymbolTable';
 import type { BscFile } from './files/BscFile';
 import type { BscType } from './types/BscType';
@@ -856,6 +856,7 @@ export class Scope {
                 parentNSType = namespaceTypesKnown.get(nsContainer.parentNameLower);
                 if (!parentNSType) {
                     // we don't know about the parent namespace... uh, oh!
+                    this.program.logger.error(`Unable to find parent namespace type for namespace ${nsName}`);
                     break;
                 }
                 currentNSType = parentNSType.getMemberType(nsContainer.fullNameLower, getTypeOptions);
@@ -863,7 +864,7 @@ export class Scope {
                 currentNSType = this.symbolTable.getSymbolType(nsContainer.fullNameLower, getTypeOptions);
             }
             if (!isNamespaceType(currentNSType)) {
-                if (!currentNSType || isReferenceType(currentNSType)) {
+                if (!currentNSType || isReferenceType(currentNSType) || isCallableType(currentNSType)) {
                     currentNSType = existingNsStmt
                         ? existingNsStmt.getType(getTypeOptions)
                         : new NamespaceType(nsName);
@@ -876,7 +877,8 @@ export class Scope {
                         this.symbolsAddedDuringLinking.push({ symbolTable: this.symbolTable, name: nsContainer.lastPartName, flags: getTypeOptions.flags });
                     }
                 } else {
-                    break;
+                    this.program.logger.error(`Invalid existing type for namespace ${nsName} - ${currentNSType.toString()}`);
+                    continue;
                 }
             } else {
                 // Existing known namespace
@@ -1036,6 +1038,13 @@ export class Scope {
             if (isNamespaceStatement(link.item) && isNamespaceStatement(node)) {
                 // namespace can be declared multiple times
                 continue;
+            }
+            if (isFunctionStatement(link.item) || link.file?.destPath === 'global') {
+                // the thing found is a function OR from global (which is also a function)
+                if (isNamespaceStatement(node)) {
+                    // these are not callable functions in transpiled code - ignore them
+                    continue;
+                }
             }
 
             const thisNodeKindName = util.getAstNodeFriendlyName(node);
