@@ -1505,11 +1505,12 @@ export class BrsFile {
         state.editor.undoAll();
 
         if (this.program.options.sourceMap) {
-            return new SourceNode(null, null, null, [
+            const stagingFileName = path.basename(state.srcPath).replace(/\.bs$/, '.brs');
+            return new SourceNode(null, null, stagingFileName, [
                 transpileResult,
                 //add the sourcemap reference comment
-                `'//# sourceMappingURL=./${path.basename(state.srcPath)}.map`
-            ]).toStringWithSourceMap();
+                state.newline + `'//# sourceMappingURL=./${stagingFileName}.map`
+            ]).toStringWithSourceMap({ file: stagingFileName });
         } else {
             return {
                 code: transpileResult.toString(),

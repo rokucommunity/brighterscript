@@ -2681,6 +2681,28 @@ describe('BrsFile', () => {
             testTranspile(`function abc()\nend function`, undefined, 'none');
         });
 
+        it('generates proper sourcemap comment', () => {
+            program.options.sourceMap = true;
+            const file = program.setFile('source/main.bs', `
+                sub main()
+                end sub
+            `);
+            expect(file.transpile().code).to.eql(undent`
+                sub main()
+                end sub
+                '//# sourceMappingURL=./main.brs.map
+            `);
+        });
+
+        it('includes sourcemap.name property', () => {
+            program.options.sourceMap = true;
+            const file = program.setFile('source/main.bs', `
+                sub main()
+                end sub
+            `);
+            expect(file.transpile().map.toJSON().file).to.eql('main.brs');
+        });
+
         it('handles sourcemap edge case', async () => {
             let source =
                 'sub main()\n' +
