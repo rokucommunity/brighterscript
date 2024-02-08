@@ -16,7 +16,7 @@ import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
-import { isBrsFile, isXmlFile, isEnumMemberStatement, isNamespaceStatement, isNamespaceType, isReferenceType, isCallableType } from './astUtils/reflection';
+import { isBrsFile, isXmlFile, isEnumMemberStatement, isNamespaceStatement, isNamespaceType, isReferenceType, isCallableType, isFunctionStatement, isEnumStatement, isConstStatement, isInterfaceStatement } from './astUtils/reflection';
 import { SymbolTable, SymbolTypeFlag } from './SymbolTable';
 import type { BscFile } from './files/BscFile';
 import type { BscType } from './types/BscType';
@@ -24,7 +24,7 @@ import { NamespaceType } from './types/NamespaceType';
 import { referenceTypeFactory } from './types/ReferenceType';
 import { unionTypeFactory } from './types/UnionType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
-import { AstNodeKind, type AstNode, type Statement } from './parser/AstNode';
+import { type AstNode, type Statement } from './parser/AstNode';
 import { WalkMode, createVisitor } from './astUtils/visitors';
 import type { Token } from './lexer/Token';
 
@@ -67,6 +67,7 @@ export class Scope {
      * "namea", "namea.nameb", "namea.nameb.namec"
      */
     public get namespaceLookup() {
+
         let allFilesValidated = true;
         for (const file of this.getAllFiles()) {
             if (isBrsFile(file) && !file.hasTypedef) {
@@ -81,7 +82,6 @@ export class Scope {
             // Since the files have not been validated, all namespace info might not have been available
             return this.buildNamespaceLookup();
         }
-
         return this.cache.getOrAdd('namespaceLookup', () => this.buildNamespaceLookup());
     }
 
@@ -246,14 +246,19 @@ export class Scope {
         return result;
     }
 
-    public getAllFileLinks(name: string, containingNamespace?: string): FileLink<Statement>[] {
+    public getAllFileLinks(name: string, containingNamespace?: string, includeNameShadowsOutsideNamespace = false): FileLink<Statement>[] {
         let links: FileLink<Statement>[] = [];
 
-        links.push(this.getClassFileLink(name) ?? this.getClassFileLink(name, containingNamespace),
-            this.getInterfaceFileLink(name) ?? this.getInterfaceFileLink(name, containingNamespace),
-            this.getConstFileLink(name) ?? this.getConstFileLink(name, containingNamespace),
-            this.getEnumFileLink(name) ?? this.getEnumFileLink(name, containingNamespace));
-
+        links.push(this.getClassFileLink(name, containingNamespace),
+            this.getInterfaceFileLink(name, containingNamespace),
+            this.getConstFileLink(name, containingNamespace),
+            this.getEnumFileLink(name, containingNamespace));
+        if (includeNameShadowsOutsideNamespace && containingNamespace) {
+            links.push(this.getClassFileLink(name),
+                this.getInterfaceFileLink(name),
+                this.getConstFileLink(name),
+                this.getEnumFileLink(name));
+        }
 
         const nameSpaces = this.getNamespacesWithRoot(name, containingNamespace);
         if (nameSpaces?.length > 0) {
@@ -846,7 +851,6 @@ export class Scope {
 
         // eslint-disable-next-line no-bitwise
         let getTypeOptions = { flags: SymbolTypeFlag.runtime | SymbolTypeFlag.typetime };
-
         for (const [nsName, nsContainer] of this.namespaceLookup) {
             let currentNSType: BscType = null;
             let parentNSType: BscType = null;
@@ -856,6 +860,7 @@ export class Scope {
                 parentNSType = namespaceTypesKnown.get(nsContainer.parentNameLower);
                 if (!parentNSType) {
                     // we don't know about the parent namespace... uh, oh!
+                    this.program.logger.error(`Unable to find parent namespace type for namespace ${nsName}`);
                     break;
                 }
                 currentNSType = parentNSType.getMemberType(nsContainer.fullNameLower, getTypeOptions);
@@ -863,7 +868,7 @@ export class Scope {
                 currentNSType = this.symbolTable.getSymbolType(nsContainer.fullNameLower, getTypeOptions);
             }
             if (!isNamespaceType(currentNSType)) {
-                if (!currentNSType || isReferenceType(currentNSType)) {
+                if (!currentNSType || isReferenceType(currentNSType) || isCallableType(currentNSType)) {
                     currentNSType = existingNsStmt
                         ? existingNsStmt.getType(getTypeOptions)
                         : new NamespaceType(nsName);
@@ -876,7 +881,8 @@ export class Scope {
                         this.symbolsAddedDuringLinking.push({ symbolTable: this.symbolTable, name: nsContainer.lastPartName, flags: getTypeOptions.flags });
                     }
                 } else {
-                    break;
+                    this.program.logger.error(`Invalid existing type for namespace ${nsName} - ${currentNSType.toString()}`);
+                    continue;
                 }
             } else {
                 // Existing known namespace
@@ -1037,22 +1043,24 @@ export class Scope {
                 // namespace can be declared multiple times
                 continue;
             }
+            if (isFunctionStatement(link.item) || link.file?.destPath === 'global') {
+                // the thing found is a function OR from global (which is also a function)
+                if (isNamespaceStatement(node) ||
+                    isEnumStatement(node) ||
+                    isConstStatement(node) ||
+                    isInterfaceStatement(node)) {
+                    // these are not callable functions in transpiled code - ignore them
+                    continue;
+                }
+            }
 
             const thisNodeKindName = util.getAstNodeFriendlyName(node);
             const thatNodeKindName = link.file.srcPath === 'global' ? 'Global Function' : util.getAstNodeFriendlyName(link.item) ?? '';
 
             let thatNameRange = (link.item as any)?.tokens?.name?.range ?? link.item?.range;
 
-            // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
-            switch (link.item?.kind) {
-                case AstNodeKind.ClassStatement: {
-                    thatNameRange = (link.item as ClassStatement).tokens.name?.range;
-                    break;
-                }
-                case AstNodeKind.NamespaceStatement: {
-                    thatNameRange = (link.item as NamespaceStatement).getNameParts()?.[0]?.range;
-                    break;
-                }
+            if (isNamespaceStatement(link.item)) {
+                thatNameRange = (link.item as NamespaceStatement).getNameParts()?.[0]?.range;
             }
 
             const relatedInformation = thatNameRange ? [{

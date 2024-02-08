@@ -3300,6 +3300,7 @@ describe('Scope', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
     });
 
     describe('unlinkSymbolTable', () => {
@@ -3747,6 +3748,96 @@ describe('Scope', () => {
         });
 
     });
+
+    describe('shadowing', () => {
+        it.only('allows namespaces shadowing global function names', () => {
+            program.setFile<BrsFile>('source/file1.bs', `
+                namespace log
+                    sub doLog(x)
+                        ? x
+                    end sub
+                end namespace
+            `);
+            program.setFile<BrsFile>('source/file2.bs', `
+                sub foo()
+                    log.doLog("hello")
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it.only('allows enums shadowing global function names', () => {
+            program.setFile<BrsFile>('source/file1.bs', `
+                enum log
+                    debug = "DEBUG"
+                    error = "ERROR"
+                end enum
+            `);
+            program.setFile<BrsFile>('source/file2.bs', `
+                sub foo(message)
+                    print log.debug;" ";message
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it.only('allows interfaces shadowing global function names', () => {
+            program.setFile<BrsFile>('source/file1.bs', `
+                interface log
+                    abs
+                    function formatJson(input)
+                end interface
+            `);
+            program.setFile<BrsFile>('source/file2.bs', `
+                sub foo(logger as log)
+                    print logger.abs;" ";logger.formatJson("message")
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it.only('allows namespaced functions shadowing upper scope function names', () => {
+            program.setFile<BrsFile>('source/file.bs', `
+                namespace alpha
+                    sub log(input)
+                      print "in namespace"
+                    end sub
+
+                    sub test()
+                        log(44) ' prints "in namespace"
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it.only('allows namespaced functions shadowing upper scope function names', () => {
+            program.setFile<BrsFile>('source/file.bs', `
+                sub someFunc()
+                    print "outside"
+                end sub
+
+                namespace alpha
+                    sub someFunc()
+                      print "inside"
+                    end sub
+
+                    sub test()
+                        someFunc() ' prints "inside"
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+    });
+
 
     describe('performance', () => {
 
