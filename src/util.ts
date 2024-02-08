@@ -35,6 +35,7 @@ import * as requireRelative from 'require-relative';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
 import type { AstNode, Expression, Statement } from './parser/AstNode';
+import { components, events, interfaces } from './roku-types';
 
 export class Util {
     public clearConsole() {
@@ -1556,6 +1557,15 @@ export class Util {
         // we can use a typecast rather than actually transforming the data because SourceNode
         // accepts a more permissive type than its typedef states
         return new SourceNode(line, column, source, chunks as any, name);
+    }
+
+    public isBuiltInType(typeName: string) {
+        const typeNameLower = typeName.toLowerCase();
+        if (typeNameLower.startsWith('rosgnode')) {
+            // NOTE: this is unsafe and only used to avoid validation errors in backported v1 type syntax
+            return true;
+        }
+        return components[typeNameLower] || interfaces[typeNameLower] || events[typeNameLower];
     }
 }
 

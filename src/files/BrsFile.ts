@@ -14,7 +14,7 @@ import { Lexer } from '../lexer/Lexer';
 import { TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer/TokenKind';
 import { Parser, ParseMode } from '../parser/Parser';
 import type { FunctionExpression, VariableExpression } from '../parser/Expression';
-import type { ClassStatement, FunctionStatement, NamespaceStatement, AssignmentStatement, MethodStatement, FieldStatement } from '../parser/Statement';
+import type { ClassStatement, NamespaceStatement, AssignmentStatement, MethodStatement, FieldStatement } from '../parser/Statement';
 import type { Program } from '../Program';
 import { DynamicType } from '../types/DynamicType';
 import { FunctionType } from '../types/FunctionType';
@@ -29,8 +29,8 @@ import type { BscType } from '../types/BscType';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
-import { URI } from 'vscode-uri';
 import type { AstNode, Expression, Statement } from '../parser/AstNode';
+import { DefinitionProvider } from '../bscPlugin/definition/DefinitionProvider';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -1127,44 +1127,6 @@ export class BrsFile {
         return [...result.values()];
     }
 
-    private getNamespaceDefinitions(token: Token, file: BrsFile): Location {
-        //BrightScript does not support namespaces, so return an empty list in that case
-        if (!token) {
-            return undefined;
-        }
-        let location;
-
-        const nameParts = this.getPartialVariableName(token, [TokenKind.New]).split('.');
-        const endName = nameParts[nameParts.length - 1].toLowerCase();
-        const namespaceName = nameParts.slice(0, -1).join('.').toLowerCase();
-
-        const statementHandler = (statement: NamespaceStatement) => {
-            if (!location && statement.getName(ParseMode.BrighterScript).toLowerCase() === namespaceName) {
-                const namespaceItemStatementHandler = (statement: ClassStatement | FunctionStatement) => {
-                    if (!location && statement.name.text.toLowerCase() === endName) {
-                        const uri = util.pathToUri(file.srcPath);
-                        location = util.createLocation(uri, statement.range);
-                    }
-                };
-
-                file.parser.ast.walk(createVisitor({
-                    ClassStatement: namespaceItemStatementHandler,
-                    FunctionStatement: namespaceItemStatementHandler
-                }), {
-                    walkMode: WalkMode.visitStatements
-                });
-
-            }
-        };
-
-        file.parser.ast.walk(createVisitor({
-            NamespaceStatement: statementHandler
-        }), {
-            walkMode: WalkMode.visitStatements
-        });
-
-        return location;
-    }
     /**
      * Given a current token, walk
      */
@@ -1430,160 +1392,15 @@ export class BrsFile {
     /**
      * Given a position in a file, if the position is sitting on some type of identifier,
      * go to the definition of that identifier (where this thing was first defined)
+     * @deprecated use `DefinitionProvider.process()` instead
      */
     public getDefinition(position: Position): Location[] {
-        let results: Location[] = [];
-
-        //get the token at the position
-        const token = this.getTokenAt(position);
-
-        // While certain other tokens are allowed as local variables (AllowedLocalIdentifiers: https://github.com/rokucommunity/brighterscript/blob/master/src/lexer/TokenKind.ts#L418), these are converted by the parser to TokenKind.Identifier by the time we retrieve the token using getTokenAt
-        let definitionTokenTypes = [
-            TokenKind.Identifier,
-            TokenKind.StringLiteral
-        ];
-
-        //throw out invalid tokens and the wrong kind of tokens
-        if (!token || !definitionTokenTypes.includes(token.kind)) {
-            return results;
-        }
-
-        const scopesForFile = this.program.getScopesForFile(this);
-        const [scope] = scopesForFile;
-
-        const expression = this.getClosestExpression(position);
-        if (scope && expression) {
-            scope.linkSymbolTable();
-            let containingNamespace = expression.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
-            const fullName = util.getAllDottedGetParts(expression)?.map(x => x.text).join('.');
-
-            //find a constant with this name
-            const constant = scope?.getConstFileLink(fullName, containingNamespace);
-            if (constant) {
-                results.push(
-                    util.createLocation(
-                        URI.file(constant.file.srcPath).toString(),
-                        constant.item.tokens.name.range
-                    )
-                );
-                return results;
-            }
-            if (isDottedGetExpression(expression)) {
-
-                const enumLink = scope.getEnumFileLink(fullName, containingNamespace);
-                if (enumLink) {
-                    results.push(
-                        util.createLocation(
-                            URI.file(enumLink.file.srcPath).toString(),
-                            enumLink.item.tokens.name.range
-                        )
-                    );
-                    return results;
-                }
-                const enumMemberLink = scope.getEnumMemberFileLink(fullName, containingNamespace);
-                if (enumMemberLink) {
-                    results.push(
-                        util.createLocation(
-                            URI.file(enumMemberLink.file.srcPath).toString(),
-                            enumMemberLink.item.tokens.name.range
-                        )
-                    );
-                    return results;
-                }
-            }
-        }
-
-        let textToSearchFor = token.text.toLowerCase();
-
-        const previousToken = this.getTokenAt({ line: token.range.start.line, character: token.range.start.character });
-
-        if (previousToken?.kind === TokenKind.Callfunc) {
-            for (const scope of scopesForFile) {
-                //to only get functions defined in interface methods
-                const callable = scope.getAllCallables().find((c) => c.callable.name.toLowerCase() === textToSearchFor); // eslint-disable-line @typescript-eslint/no-loop-func
-                if (callable) {
-                    results.push(util.createLocation(util.pathToUri((callable.callable.file as BrsFile).srcPath), callable.callable.functionStatement.range));
-                }
-            }
-            return results;
-        }
-
-        let classToken = this.getTokenBefore(token, TokenKind.Class);
-        if (classToken) {
-            let cs = this.parser.references.classStatements.find((cs) => cs.classKeyword.range === classToken.range);
-            if (cs?.parentClassName) {
-                const nameParts = cs.parentClassName.getNameParts();
-                let extendedClass = this.getClassFileLink(nameParts[nameParts.length - 1], nameParts.slice(0, -1).join('.'));
-                if (extendedClass) {
-                    results.push(util.createLocation(util.pathToUri(extendedClass.file.srcPath), extendedClass.item.range));
-                }
-            }
-            return results;
-        }
-
-        if (token.kind === TokenKind.StringLiteral) {
-            // We need to strip off the quotes but only if present
-            const startIndex = textToSearchFor.startsWith('"') ? 1 : 0;
-
-            let endIndex = textToSearchFor.length;
-            if (textToSearchFor.endsWith('"')) {
-                endIndex--;
-            }
-            textToSearchFor = textToSearchFor.substring(startIndex, endIndex);
-        }
-
-        //look through local variables first, get the function scope for this position (if it exists)
-        const functionScope = this.getFunctionScopeAtPosition(position);
-        if (functionScope) {
-            //find any variable or label with this name
-            for (const varDeclaration of functionScope.variableDeclarations) {
-                //we found a variable declaration with this token text!
-                if (varDeclaration.name.toLowerCase() === textToSearchFor) {
-                    const uri = util.pathToUri(this.srcPath);
-                    results.push(util.createLocation(uri, varDeclaration.nameRange));
-                }
-            }
-            if (this.tokenFollows(token, TokenKind.Goto)) {
-                for (const label of functionScope.labelStatements) {
-                    if (label.name.toLocaleLowerCase() === textToSearchFor) {
-                        const uri = util.pathToUri(this.srcPath);
-                        results.push(util.createLocation(uri, label.nameRange));
-                    }
-                }
-            }
-        }
-
-        const filesSearched = new Set<BrsFile>();
-        //look through all files in scope for matches
-        for (const scope of scopesForFile) {
-            for (const file of scope.getAllFiles()) {
-                if (isXmlFile(file) || filesSearched.has(file)) {
-                    continue;
-                }
-                filesSearched.add(file);
-
-                if (previousToken?.kind === TokenKind.Dot && file.parseMode === ParseMode.BrighterScript) {
-                    results.push(...this.getClassMemberDefinitions(textToSearchFor, file));
-                    const namespaceDefinition = this.getNamespaceDefinitions(token, file);
-                    if (namespaceDefinition) {
-                        results.push(namespaceDefinition);
-                    }
-                }
-                const statementHandler = (statement: FunctionStatement) => {
-                    if (statement.getName(this.parseMode).toLowerCase() === textToSearchFor) {
-                        const uri = util.pathToUri(file.srcPath);
-                        results.push(util.createLocation(uri, statement.range));
-                    }
-                };
-
-                file.parser.ast.walk(createVisitor({
-                    FunctionStatement: statementHandler
-                }), {
-                    walkMode: WalkMode.visitStatements
-                });
-            }
-        }
-        return results;
+        return new DefinitionProvider({
+            program: this.program,
+            file: this,
+            position: position,
+            definitions: []
+        }).process();
     }
 
     public getClassMemberDefinitions(textToSearchFor: string, file: BrsFile): Location[] {
@@ -1688,11 +1505,12 @@ export class BrsFile {
         state.editor.undoAll();
 
         if (this.program.options.sourceMap) {
-            return new SourceNode(null, null, null, [
+            const stagingFileName = path.basename(state.srcPath).replace(/\.bs$/, '.brs');
+            return new SourceNode(null, null, stagingFileName, [
                 transpileResult,
                 //add the sourcemap reference comment
-                `'//# sourceMappingURL=./${path.basename(state.srcPath)}.map`
-            ]).toStringWithSourceMap();
+                state.newline + `'//# sourceMappingURL=./${stagingFileName}.map`
+            ]).toStringWithSourceMap({ file: stagingFileName });
         } else {
             return {
                 code: transpileResult.toString(),

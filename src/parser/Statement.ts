@@ -1042,7 +1042,8 @@ export class IndexedSetStatement extends Statement {
         readonly index: Expression,
         readonly value: Expression,
         readonly openingSquare: Token,
-        readonly closingSquare: Token
+        readonly closingSquare: Token,
+        readonly additionalIndexes?: Expression[]
     ) {
         super();
         this.range = util.createBoundingRange(
@@ -1052,6 +1053,7 @@ export class IndexedSetStatement extends Statement {
             closingSquare,
             value
         );
+        this.additionalIndexes ??= [];
     }
 
     public readonly range: Range | undefined;
@@ -1061,20 +1063,30 @@ export class IndexedSetStatement extends Statement {
         if (CompoundAssignmentOperators.includes((this.value as BinaryExpression)?.operator?.kind)) {
             return this.value.transpile(state);
         } else {
-            return [
+            const result = [];
+            result.push(
                 //obj
                 ...this.obj.transpile(state),
                 //   [
-                state.transpileToken(this.openingSquare),
-                //    index
-                ...this.index.transpile(state),
-                //         ]
+                state.transpileToken(this.openingSquare)
+            );
+            const indexes = [this.index, ...this.additionalIndexes ?? []];
+            for (let i = 0; i < indexes.length; i++) {
+                //add comma between indexes
+                if (i > 0) {
+                    result.push(', ');
+                }
+                let index = indexes[i];
+                result.push(
+                    ...(index?.transpile(state) ?? [])
+                );
+            }
+            result.push(
                 state.transpileToken(this.closingSquare),
-                //           =
                 ' = ',
-                //             value
                 ...this.value.transpile(state)
-            ];
+            );
+            return result;
         }
     }
 
@@ -1082,6 +1094,7 @@ export class IndexedSetStatement extends Statement {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'obj', visitor, options);
             walk(this, 'index', visitor, options);
+            walkArray(this.additionalIndexes, visitor, options, this);
             walk(this, 'value', visitor, options);
         }
     }

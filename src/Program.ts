@@ -8,7 +8,7 @@ import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover } from './interfaces';
+import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -919,22 +919,23 @@ export class Program {
      * Given a position in a file, if the position is sitting on some type of identifier,
      * go to the definition of that identifier (where this thing was first defined)
      */
-    public getDefinition(srcPath: string, position: Position) {
+    public getDefinition(srcPath: string, position: Position): Location[] {
         let file = this.getFile(srcPath);
         if (!file) {
             return [];
         }
 
-        if (isBrsFile(file)) {
-            return file.getDefinition(position);
-        } else {
-            let results = [] as Location[];
-            const scopes = this.getScopesForFile(file);
-            for (const scope of scopes) {
-                results = results.concat(...scope.getDefinition(file, position));
-            }
-            return results;
-        }
+        const event: ProvideDefinitionEvent = {
+            program: this,
+            file: file,
+            position: position,
+            definitions: []
+        };
+
+        this.plugins.emit('beforeProvideDefinition', event);
+        this.plugins.emit('provideDefinition', event);
+        this.plugins.emit('afterProvideDefinition', event);
+        return event.definitions;
     }
 
     /**
