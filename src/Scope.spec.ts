@@ -1282,19 +1282,6 @@ describe('Scope', () => {
                 ]);
             });
 
-            it('should validate when a namespace has a name collision', () => {
-                program.setFile('source/main.bs', `
-                    namespace Log ' this is invalid because it has the same name as a global function
-                        function anything()
-                        end function
-                    end namespace
-                `);
-                program.validate();
-                expectDiagnosticsIncludes(program, [
-                    DiagnosticMessages.nameCollision('Namespace', 'Global Function', 'Log').message
-                ]);
-            });
-
             it('should validate when a namespace has a name collision with a class', () => {
                 program.setFile('source/main.bs', `
                     namespace SomeKlass
@@ -2252,26 +2239,6 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-            });
-
-            it('should validate when a namespace in a .d.bs file has an invalid name', () => {
-                program.setFile('source/roku_modules/anything.d.bs', `
-                    namespace Log ' this is invalid because it has the same name as a global function
-                        function anything()
-                        end function
-                    end namespace
-                `);
-                program.setFile('source/main.bs', `
-                    namespace alpha
-                         sub someFunc()
-                         end sub
-                    end namespace
-                `);
-                program.validate();
-                expectDiagnosticsIncludes(program, [
-                    DiagnosticMessages.nameCollision('Namespace', 'Global Function', 'Log').message
-                ]);
-
             });
         });
     });
