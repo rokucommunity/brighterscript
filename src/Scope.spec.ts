@@ -7,7 +7,7 @@ import { Program } from './Program';
 import PluginInterface from './PluginInterface';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, trim } from './testHelpers.spec';
 import { Logger } from './Logger';
-import type { BrsFile } from './files/BrsFile';
+import { BrsFile } from './files/BrsFile';
 import type { NamespaceStatement } from './parser/Statement';
 import type { CompilerPlugin, OnScopeValidateEvent } from './interfaces';
 import { DiagnosticOrigin } from './interfaces';
@@ -3296,6 +3296,48 @@ describe('Scope', () => {
                         end function
                     end class
                 end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+
+        it('namespaces can shadow global functions', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                namespace log ' shadows built-in function "log"
+                    sub doPrint(x)
+                        print x
+                    end sub
+                end namespace
+
+                sub main()
+                    log.doPrint("hello")
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('namespaces shadowing global functions do not break other stuff', () => {
+            program.setFile('source/roku_modules/anything.d.bs', `
+                namespace log ' shadows built-in function "log"
+                    sub doPrint(x)
+                        print x
+                    end sub
+                end namespace
+            `);
+            program.setFile<BrsFile>('source/main.bs', `
+                sub main()
+                    log.doPrint("hello")
+                    anotherNs.foo()
+                end sub
+            `);
+            program.setFile<BrsFile>('source/zzzz.bs', `
+                namespace anotherNs
+                   sub foo()
+                        print 1234
+                    end sub
+               end namespace
             `);
             program.validate();
             expectZeroDiagnostics(program);
