@@ -11,7 +11,7 @@ import type { BrsFile } from './files/BrsFile';
 import type { NamespaceStatement } from './parser/Statement';
 import type { CompilerPlugin, OnScopeValidateEvent } from './interfaces';
 import { DiagnosticOrigin } from './interfaces';
-import { SymbolTypeFlag } from './SymbolTable';
+import { SymbolTypeFlag } from './SymbolTableFlag';
 import { EnumMemberType, EnumType } from './types/EnumType';
 import { ClassType } from './types/ClassType';
 import { BooleanType } from './types/BooleanType';

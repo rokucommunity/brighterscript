@@ -11,7 +11,7 @@ import SGParser from '../parser/SGParser';
 import chalk from 'chalk';
 import { Cache } from '../Cache';
 import type { DependencyGraph } from '../DependencyGraph';
-import { type SGToken } from '../parser/SGTypes';
+import type { SGToken } from '../parser/SGTypes';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import type { IToken, TokenType } from 'chevrotain';
 import { TranspileState } from '../parser/TranspileState';

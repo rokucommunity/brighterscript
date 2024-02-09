@@ -3,7 +3,7 @@ import { ParseMode } from '../../Parser';
 import { parse } from '../../Parser.spec';
 import { expectTypeToBe, expectZeroDiagnostics } from '../../../testHelpers.spec';
 import { isFunctionStatement, isReferenceType, isTypeExpression } from '../../../astUtils/reflection';
-import { SymbolTypeFlag } from '../../../SymbolTable';
+import { SymbolTypeFlag } from '../../../SymbolTableFlag';
 import { IntegerType } from '../../../types/IntegerType';
 import { StringType } from '../../../types/StringType';
 import { UnionType } from '../../../types/UnionType';

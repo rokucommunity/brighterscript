@@ -13,7 +13,7 @@ import { TypeChainEntry } from './interfaces';
 import { NamespaceType } from './types/NamespaceType';
 import { ClassType } from './types/ClassType';
 import { ReferenceType } from './types/ReferenceType';
-import { SymbolTypeFlag } from './SymbolTable';
+import { SymbolTypeFlag } from './SymbolTableFlag';
 import { BooleanType, DoubleType, DynamicType, FloatType, IntegerType, InvalidType, LongIntegerType, StringType, TypedFunctionType, VoidType } from './types';
 import { TokenKind } from './lexer/TokenKind';
 import { createToken } from './astUtils/creators';

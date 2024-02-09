@@ -1,11 +1,11 @@
 import type { DottedGetExpression, TypeExpression, VariableExpression } from './parser/Expression';
-import { SymbolTypeFlag } from './SymbolTable';
+import { SymbolTypeFlag } from './SymbolTableFlag';
 import { isBody, isClassStatement, isCommentStatement, isInterfaceStatement, isNamespaceStatement, isVariableExpression } from './astUtils/reflection';
 import { ChildrenSkipper, WalkMode, createVisitor } from './astUtils/visitors';
 import type { GetTypeOptions, TypeChainEntry } from './interfaces';
 import type { AstNode } from './parser/AstNode';
 import { util } from './util';
-import type { NamespaceStatement } from '.';
+import type { NamespaceStatement } from './parser/Statement';
 
 // eslint-disable-next-line no-bitwise
 export const InsideSegmentWalkMode = WalkMode.visitStatements | WalkMode.visitExpressions | WalkMode.recurseChildFunctions;

@@ -2,7 +2,7 @@ import { expect } from '../../../chai-config.spec';
 import { Parser } from '../../Parser';
 import { TryCatchStatement } from '../../Statement';
 import { isFunctionExpression } from '../../../astUtils/reflection';
-import type { FunctionExpression } from '../../..';
+import type { FunctionExpression } from '../../Expression';
 
 describe('parser try/catch', () => {
     it('can parse try catch statements', () => {

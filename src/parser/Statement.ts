@@ -10,8 +10,9 @@ import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
 import { isCallExpression, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFieldStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypedefProvider, isUnaryExpression, isVoidType } from '../astUtils/reflection';
-import { TypeChainEntry, type GetTypeOptions, type TranspileResult, type TypedefProvider } from '../interfaces';
-import { SymbolTypeFlag } from '../SymbolTable';
+import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
+import { TypeChainEntry } from '../interfaces';
+import { SymbolTypeFlag } from '../SymbolTableFlag';
 import { createInvalidLiteral, createMethodStatement, createToken, interpolatedRange } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
 import type { SourceNode } from 'source-map';
@@ -27,7 +28,7 @@ import { InterfaceType } from '../types/InterfaceType';
 import type { BscType } from '../types/BscType';
 import { VoidType } from '../types/VoidType';
 import { TypedFunctionType } from '../types/TypedFunctionType';
-import { ArrayType } from '../types';
+import { ArrayType } from '../types/ArrayType';
 
 export class EmptyStatement extends Statement {
     constructor(options?: { range?: Range }
