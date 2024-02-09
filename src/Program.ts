@@ -8,7 +8,7 @@ import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent } from './interfaces';
+import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -1017,14 +1017,25 @@ export class Program {
         return signatureHelpUtil.getSignatureHelpItems(callExpressionInfo);
     }
 
-    public getReferences(srcPath: string, position: Position) {
+    public getReferences(srcPath: string, position: Position): Location[] {
         //find the file
         let file = this.getFile(srcPath);
         if (!file) {
             return null;
         }
 
-        return file.getReferences(position);
+        const event: ProvideReferencesEvent = {
+            program: this,
+            file: file,
+            position: position,
+            references: []
+        };
+
+        this.plugins.emit('beforeProvideReferences', event);
+        this.plugins.emit('provideReferences', event);
+        this.plugins.emit('afterProvideReferences', event);
+
+        return event.references;
     }
 
     /**
