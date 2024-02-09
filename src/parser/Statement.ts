@@ -68,21 +68,21 @@ export class Body extends Statement implements TypedefProvider {
                 //this is the first statement. do nothing related to spacing and newlines
 
                 //if comment is on same line as prior sibling
-            } else if (isCommentStatement(statement) && previousStatement && statement.range.start.line === previousStatement.range.end.line) {
+            } else if (isCommentStatement(statement) && previousStatement && statement.range?.start.line === previousStatement.range?.end.line) {
                 result.push(
                     ' '
                 );
 
                 //add double newline if this is a comment, and next is a function
             } else if (isCommentStatement(statement) && nextStatement && isFunctionStatement(nextStatement)) {
-                result.push('\n\n');
+                result.push(state.newline, state.newline);
 
                 //add double newline if is function not preceeded by a comment
             } else if (isFunctionStatement(statement) && previousStatement && !(isCommentStatement(previousStatement))) {
-                result.push('\n\n');
+                result.push(state.newline, state.newline);
             } else {
                 //separate statements by a single newline
-                result.push('\n');
+                result.push(state.newline);
             }
 
             result.push(...statement.transpile(state));
@@ -260,7 +260,7 @@ export class CommentStatement extends Statement implements Expression, TypedefPr
             );
             //add newline for all except final comment
             if (i < this.comments.length - 1) {
-                result.push('\n');
+                result.push(state.newline);
             }
         }
         return result;
@@ -1236,13 +1236,15 @@ export class ImportStatement extends Statement implements TypedefProvider {
         if (this.filePathToken) {
             //remove quotes
             this.filePath = this.filePathToken.text.replace(/"/g, '');
-            //adjust the range to exclude the quotes
-            this.filePathToken.range = util.createRange(
-                this.filePathToken.range.start.line,
-                this.filePathToken.range.start.character + 1,
-                this.filePathToken.range.end.line,
-                this.filePathToken.range.end.character - 1
-            );
+            if (this.filePathToken.range) {
+                //adjust the range to exclude the quotes
+                this.filePathToken.range = util.createRange(
+                    this.filePathToken.range.start.line,
+                    this.filePathToken.range.start.character + 1,
+                    this.filePathToken.range.end.line,
+                    this.filePathToken.range.end.character - 1
+                );
+            }
         }
     }
     public filePath: string;

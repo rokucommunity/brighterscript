@@ -843,7 +843,10 @@ export class Util {
      * Get a location object back by extracting location information from other objects that contain location
      */
     public getRange(startObj: { range: Range }, endObj: { range: Range }): Range {
-        return util.createRangeFromPositions(startObj.range.start, endObj.range.end);
+        if (!startObj?.range || !endObj?.range) {
+            return undefined;
+        }
+        return util.createRangeFromPositions(startObj.range?.start, endObj.range?.end);
     }
 
     /**
@@ -862,10 +865,10 @@ export class Util {
      */
     public linesTouch(first: { range: Range }, second: { range: Range }) {
         if (first && second && (
-            first.range.start.line === second.range.start.line ||
-            first.range.start.line === second.range.end.line ||
-            first.range.end.line === second.range.start.line ||
-            first.range.end.line === second.range.end.line
+            first.range?.start.line === second.range?.start.line ||
+            first.range?.start.line === second.range?.end.line ||
+            first.range?.end.line === second.range?.start.line ||
+            first.range?.end.line === second.range?.end.line
         )) {
             return true;
         } else {

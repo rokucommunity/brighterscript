@@ -16,8 +16,8 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import util, { standardizePath as s } from '../util';
 import PluginInterface from '../PluginInterface';
-import { expectCompletionsIncludes, expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile, trim } from '../testHelpers.spec';
-import { ParseMode } from '../parser/Parser';
+import { expectCompletionsIncludes, expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
+import { ParseMode, Parser } from '../parser/Parser';
 import { Logger } from '../Logger';
 import { ImportStatement } from '../parser/Statement';
 import { createToken } from '../astUtils/creators';
@@ -2172,6 +2172,84 @@ describe('BrsFile', () => {
     });
 
     describe('transpile', () => {
+        describe.only('null tokens', () => {
+            it('succeeds when token locations are omitted', () => {
+                doTest(`
+                    library "something" 'comment before func
+                    sub main() 'comment before print
+                        print "hello" 'comment after print
+                        num = 1
+                        num++
+                        num += 2
+                        test(num)
+                        for i = 0 to 10 step 1
+                            exit for
+                        end for
+                        while true
+                            exit while
+                        end while
+                        if true then
+                            print 1
+                        else if true
+                            print 1
+                        else
+                            print 1
+                        end if
+                        dim thing[1, 2]
+                        label1:
+                        goto label1
+                        end
+                        stop
+                        stuff = [
+                            1
+                            2
+                            3
+                        ]
+                        for each item in stuff
+                            print item
+                        end for
+                        m.thing = 1
+                        m.thing += 1
+                        m[1] = 1
+                        m[1] += 1
+                        m[1, 2] = 2
+                    end sub
+
+                    sub test(p1)
+                        return p1
+                    end sub
+                `);
+            });
+
+            it('works for bs content', () => {
+                program.setFile('source/lib.bs', ``);
+                doTest(`
+                    import "pkg:/source/lib.bs"
+                    namespace alpha
+                        function beta()
+                        end function
+                    end namespace
+                `, `
+                    'import "pkg:/source/lib.bs"
+                    function alpha_beta()
+                    end function
+                `);
+            });
+            function doTest(source: string, expected = source) {
+                const file = program.setFile<BrsFile>('source/main.bs', '');
+                //override the parser with our locationless parser
+                file['_parser'] = Parser.parse(source, { mode: ParseMode.BrighterScript, trackLocations: false });
+                program.validate();
+                expectZeroDiagnostics(program);
+                const result = file.transpile();
+                expect(
+                    trimMap(undent(result.code))
+                ).to.eql(
+                    undent(expected)
+                );
+            }
+        });
+
         it('transpilies libpkg:/ paths when encountered', () => {
             program.setFile('source/lib.bs', `
                 import "libpkg:/source/numbers.bs"
