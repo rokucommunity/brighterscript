@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.65.22](https://github.com/rokucommunity/brighterscript/compare/v0.65.21...0.65.22) - 2024-02-09
+### Added
+ - support for `provideReferences` in plugins ([#1066](https://github.com/rokucommunity/brighterscript/pull/1066))
+ - allow v1 syntax: built-in types for class member types and type declarations on lhs ([#1059](https://github.com/rokucommunity/brighterscript/pull/1059))
+### Changed
+ - fix sourcemap comment and add `file` prop to map ([#1064](https://github.com/rokucommunity/brighterscript/pull/1064))
+ - move `coveralls-next` to a devDependency since it's not needed at runtime ([#1051](https://github.com/rokucommunity/brighterscript/pull/1051))
+
+
+
 ## [0.65.21](https://github.com/rokucommunity/brighterscript/compare/v0.65.20...v0.65.21) - 2024-01-31
 ### Fixed
  - parsing issues with multi-index IndexedSet and IndexedGet ([#1050](https://github.com/rokucommunity/brighterscript/pull/1050))
