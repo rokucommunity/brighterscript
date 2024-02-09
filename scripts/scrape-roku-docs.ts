@@ -798,7 +798,7 @@ class Runner {
             interfaces: {}
         });
 
-        //Override ifSGNodeDict.callFunc - the
+        // Override ifSGNodeDict.callFunc
         fixMethod(this.result.interfaces.ifsgnodedict, 'callfunc', {
             // Taken from: https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsgnodedict.md#callfunc
             description: `callFunc() is a synchronized interface on roSGNode. It will always execute in the component's owning ScriptEngine and thread (by rendezvous if necessary), and it will always use the m and m.top of the owning component. Any context from the caller can be passed via one or more method parameters, which may be of any type (previously, callFunc() only supported a single associative array parameter).\n\nTo call the function, use the \`callFunc\` field with the required method signature. A return value, if any, can be an object that is similarly arbitrary. The method being called must determine how to interpret the parameters included in the \`callFunc\` field.`,
@@ -834,6 +834,14 @@ class Runner {
 
 function fixOverloadedMethod(iface: RokuInterface, funcName: string) {
     const originalOverloads = iface.methods.filter(method => method.name.toLowerCase() === funcName.toLowerCase());
+    if (originalOverloads.length === 0) {
+        console.error('Could not fix overloaded method - no methods', funcName);
+        return;
+    } else if (originalOverloads.length === 1) {
+        console.log('No need to fix overloaded method - just one method', funcName);
+        return;
+    }
+
     const descriptions: string[] = [];
     const returnDescriptions: string[] = [];
     const returnTypes: string[] = [];
@@ -908,8 +916,12 @@ function fixOverloadedMethod(iface: RokuInterface, funcName: string) {
 
 
 function fixMethod(iface: RokuInterface, funcName: string, mergeData: Func) {
-    const original = iface.methods.find(method => method.name.toLowerCase() === funcName.toLowerCase());
-    deepmerge(original, mergeData);
+    const index = iface?.methods.findIndex(method => method.name.toLowerCase() === funcName.toLowerCase());
+    if (index >= 0) {
+        iface.methods[index] = deepmerge(iface.methods[index], mergeData);
+    } else {
+        console.error('Could not fix method', funcName);
+    }
 }
 
 let cache: Record<string, string>;
