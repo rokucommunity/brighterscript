@@ -791,12 +791,6 @@ export function typeCompatibilityMessage(actualTypeString: string, expectedTypeS
     return message;
 }
 
-/**
- *  NOTE: There is a circular reference in the scraper script if `SymbolTypeFlag` is imported, so hard coded values are used here
- *  SEE: `src/SymbolTables.ts`
- *   private = 8,
- *   protected = 16,
- */
 function accessModifierNameFromFlag(accessModifierFlag: SymbolTypeFlag) {
     let result = TokenKind.Public;
     // eslint-disable-next-line no-bitwise
