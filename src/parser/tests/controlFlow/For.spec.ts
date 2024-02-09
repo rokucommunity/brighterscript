@@ -4,7 +4,7 @@ import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
 import type { FunctionStatement } from '../../Statement';
-import { type ForStatement } from '../../Statement';
+import type { ForStatement } from '../../Statement';
 import { LiteralExpression } from '../../Expression';
 import { isFunctionStatement } from '../../../astUtils/reflection';
 

@@ -2,7 +2,7 @@ import { expect } from './chai-config.spec';
 import { Range } from 'vscode-languageserver';
 import { CommentFlagProcessor } from './CommentFlagProcessor';
 import { Lexer } from './lexer/Lexer';
-import type { BscFile } from '.';
+import type { BscFile } from './files/BscFile';
 
 describe('CommentFlagProcessor', () => {
     let processor: CommentFlagProcessor;
