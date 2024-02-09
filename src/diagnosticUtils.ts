@@ -2,7 +2,7 @@ import type { Chalk } from 'chalk';
 import chalk from 'chalk';
 import type { BsConfig } from './BsConfig';
 import { DiagnosticSeverity } from 'vscode-languageserver';
-import type { BsDiagnostic } from '.';
+import type { BsDiagnostic } from './interfaces';
 import type { Range } from 'vscode-languageserver';
 
 export const MAX_RELATED_INFOS_COUNT = 3;

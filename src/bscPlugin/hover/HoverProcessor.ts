@@ -12,7 +12,7 @@ import { SymbolTypeFlag } from '../../SymbolTable';
 import type { AstNode, Expression } from '../../parser/AstNode';
 import type { Scope } from '../../Scope';
 import type { FunctionScope } from '../../FunctionScope';
-import type { BscType } from '../../types';
+import type { BscType } from '../../types/BscType';
 
 const fence = (code: string) => util.mdFence(code, 'brightscript');
 

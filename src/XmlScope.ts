@@ -8,7 +8,7 @@ import { SGFieldTypes } from './parser/SGTypes';
 import util from './util';
 import { SymbolTypeFlag } from './SymbolTable';
 import type { BscFile } from './files/BscFile';
-import { DynamicType } from './types';
+import { DynamicType } from './types/DynamicType';
 import type { BaseFunctionType } from './types/BaseFunctionType';
 import { ComponentType } from './types/ComponentType';
 

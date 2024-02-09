@@ -1,6 +1,5 @@
 import type { GetSymbolTypeOptions, SymbolTableProvider } from '../SymbolTable';
-import { SymbolTypeFlag } from '../SymbolTable';
-import { SymbolTable } from '../SymbolTable';
+import { SymbolTypeFlag, SymbolTable } from '../SymbolTable';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import type { ExtraSymbolData, TypeCompatibilityData } from '../interfaces';
 import { isArrayType, isInheritableType, isReferenceType } from '../astUtils/reflection';

@@ -27,7 +27,7 @@ import { InterfaceType } from '../types/InterfaceType';
 import type { BscType } from '../types/BscType';
 import { VoidType } from '../types/VoidType';
 import { TypedFunctionType } from '../types/TypedFunctionType';
-import { ArrayType } from '../types';
+import { ArrayType } from '../types/ArrayType';
 
 export class EmptyStatement extends Statement {
     constructor(options?: { range?: Range }

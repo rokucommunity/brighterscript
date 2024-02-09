@@ -16,7 +16,7 @@ import * as he from 'he';
 import * as deepmerge from 'deepmerge';
 import { NodeHtmlMarkdown } from 'node-html-markdown';
 import { isVariableExpression } from '../src/astUtils/reflection';
-import { SymbolTypeFlag } from '../src';
+import { SymbolTypeFlag } from '../src/SymbolTable';
 
 type Token = marked.Token;
 
@@ -293,7 +293,7 @@ class Runner {
                         } as Signature;
                         const call = (statements[0] as ExpressionStatement).expression as CallExpression;
                         //only scan createObject calls for our own name
-                        if ((call.args[0] as LiteralExpression)?.token?.text === `"${component.name}"`) {
+                        if ((call.args[0] as LiteralExpression)?.tokens?.value.text === `"${component.name}"`) {
                             //skip the first arg because that's the name of the component
                             for (let i = 1; i < call.args.length; i++) {
                                 const arg = call.args[i];
@@ -720,7 +720,7 @@ class Runner {
         if (statements.length > 0) {
             const func = statements[0] as FunctionStatement;
             const signature = {
-                name: func.name?.text,
+                name: func.tokens.name?.text,
                 params: [],
                 returnType: func.func.returnTypeExpression?.getType({ flags: SymbolTypeFlag.typetime })?.toTypeString() ?? 'Void'
             } as Func;

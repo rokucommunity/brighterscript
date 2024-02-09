@@ -25,7 +25,7 @@ import type { TranspileState } from './TranspileState';
 import { StringType } from '../types/StringType';
 import { TypePropertyReferenceType } from '../types/ReferenceType';
 import { UnionType } from '../types/UnionType';
-import { ArrayType } from '../types';
+import { ArrayType } from '../types/ArrayType';
 import { AssociativeArrayType } from '../types/AssociativeArrayType';
 import type { ComponentType } from '../types/ComponentType';
 import { createToken } from '../astUtils/creators';
