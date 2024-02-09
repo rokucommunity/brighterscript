@@ -24,13 +24,14 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isCallExpression, isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isFieldStatement, isEnumStatement, isConstStatement } from '../astUtils/reflection';
+import { isCallExpression, isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isImportStatement, isFieldStatement, isEnumStatement, isConstStatement } from '../astUtils/reflection';
 import type { BscType } from '../types/BscType';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import type { AstNode, Expression, Statement } from '../parser/AstNode';
 import { DefinitionProvider } from '../bscPlugin/definition/DefinitionProvider';
+import { ReferencesProvider } from '../bscPlugin/references/ReferencesProvider';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -1454,35 +1455,18 @@ export class BrsFile {
         return statement;
     }
 
-    public getReferences(position: Position) {
-
-        const callSiteToken = this.getTokenAt(position);
-
-        let locations = [] as Location[];
-
-        const searchFor = callSiteToken.text.toLowerCase();
-
-        const scopes = this.program.getScopesForFile(this);
-
-        for (const scope of scopes) {
-            const processedFiles = new Set<BrsFile>();
-            for (const file of scope.getAllFiles()) {
-                if (isXmlFile(file) || processedFiles.has(file)) {
-                    continue;
-                }
-                processedFiles.add(file);
-                file.ast.walk(createVisitor({
-                    VariableExpression: (e) => {
-                        if (e.name.text.toLowerCase() === searchFor) {
-                            locations.push(util.createLocation(util.pathToUri(file.srcPath), e.range));
-                        }
-                    }
-                }), {
-                    walkMode: WalkMode.visitExpressionsRecursive
-                });
-            }
-        }
-        return locations;
+    /**
+     * Given a position in a file, if the position is sitting on some type of identifier,
+     * look up all references of that identifier (every place that identifier is used across the whole app)
+     * @deprecated use `ReferencesProvider.process()` instead
+     */
+    public getReferences(position: Position): Location[] {
+        return new ReferencesProvider({
+            program: this.program,
+            file: this,
+            position: position,
+            references: []
+        }).process();
     }
 
     /**
