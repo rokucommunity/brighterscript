@@ -16,7 +16,7 @@ import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
-import { SymbolTypeFlag } from '../SymbolTable';
+import { SymbolTypeFlag } from '../SymbolTableFlag';
 import { TypedFunctionType } from '../types/TypedFunctionType';
 import { AstNodeKind, Expression } from './AstNode';
 import { SymbolTable } from '../SymbolTable';

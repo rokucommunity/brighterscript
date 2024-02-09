@@ -8,7 +8,7 @@ import { TokenKind } from '../../lexer/TokenKind';
 import { BrsTranspileState } from '../../parser/BrsTranspileState';
 import { ParseMode } from '../../parser/Parser';
 import util from '../../util';
-import { SymbolTypeFlag } from '../../SymbolTable';
+import { SymbolTypeFlag } from '../../SymbolTableFlag';
 import type { AstNode, Expression } from '../../parser/AstNode';
 import type { Scope } from '../../Scope';
 import type { FunctionScope } from '../../FunctionScope';

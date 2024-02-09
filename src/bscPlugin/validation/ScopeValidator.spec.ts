@@ -8,7 +8,7 @@ import { IntegerType } from '../../types/IntegerType';
 import { StringType } from '../../types/StringType';
 import type { BrsFile } from '../../files/BrsFile';
 import { FloatType } from '../../types';
-import { SymbolTypeFlag } from '../../SymbolTable';
+import { SymbolTypeFlag } from '../../SymbolTableFlag';
 
 describe('ScopeValidator', () => {
 

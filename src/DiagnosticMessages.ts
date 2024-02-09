@@ -3,7 +3,7 @@ import { DiagnosticSeverity } from 'vscode-languageserver';
 import type { BsDiagnostic, TypeCompatibilityData } from './interfaces';
 import { TokenKind } from './lexer/TokenKind';
 import util from './util';
-import { SymbolTypeFlag } from './SymbolTable';
+import { SymbolTypeFlag } from './SymbolTableFlag';
 
 /**
  * An object that keeps track of all possible error messages.
@@ -791,10 +791,16 @@ export function typeCompatibilityMessage(actualTypeString: string, expectedTypeS
     return message;
 }
 
-export function accessModifierNameFromFlag(accessModifierFlag: SymbolTypeFlag) {
+/**
+ *  NOTE: There is a circular reference in the Scrapper script if SymbolTypeFlag is imported, so hard coded values are used here
+ *  SEE: `src/SymbolTables.ts`
+ *   private = 8,
+ *   protected = 16,
+ */
+function accessModifierNameFromFlag(accessModifierFlag: SymbolTypeFlag) {
     let result = TokenKind.Public;
     // eslint-disable-next-line no-bitwise
-    if (accessModifierFlag & SymbolTypeFlag.private) {
+    if (accessModifierFlag & SymbolTypeFlag.private) { //
         result = TokenKind.Private;
         // eslint-disable-next-line no-bitwise
     } else if (accessModifierFlag & SymbolTypeFlag.protected) {
@@ -803,7 +809,7 @@ export function accessModifierNameFromFlag(accessModifierFlag: SymbolTypeFlag) {
     return result.toLowerCase();
 }
 
-export function accessModifierAdditionalInfo(accessModifierFlag: SymbolTypeFlag, className: string) {
+function accessModifierAdditionalInfo(accessModifierFlag: SymbolTypeFlag, className: string) {
     // eslint-disable-next-line no-bitwise
     if (accessModifierFlag & SymbolTypeFlag.private) {
         return ` and only accessible from within class '${className}'`;

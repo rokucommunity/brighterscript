@@ -7,7 +7,7 @@ import type { Program } from './Program';
 import type { SGElement } from './parser/SGTypes';
 import { SGFieldTypes } from './parser/SGTypes';
 import util from './util';
-import { SymbolTypeFlag } from './SymbolTable';
+import { SymbolTypeFlag } from './SymbolTableFlag';
 import type { BscFile } from './files/BscFile';
 import { DynamicType } from './types/DynamicType';
 import type { BaseFunctionType } from './types/BaseFunctionType';

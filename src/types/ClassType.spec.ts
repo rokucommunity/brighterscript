@@ -6,7 +6,7 @@ import { expectTypeToBe } from '../testHelpers.spec';
 import { ReferenceType } from './ReferenceType';
 import { isReferenceType } from '../astUtils/reflection';
 import { IntegerType } from './IntegerType';
-import { SymbolTypeFlag } from '../SymbolTable';
+import { SymbolTypeFlag } from '../SymbolTableFlag';
 
 describe('ClassType', () => {
 

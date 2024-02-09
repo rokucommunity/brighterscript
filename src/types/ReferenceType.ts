@@ -1,6 +1,6 @@
 import type { GetTypeOptions, TypeChainEntry, TypeCompatibilityData } from '../interfaces';
 import type { GetSymbolTypeOptions, SymbolTypeGetterProvider } from '../SymbolTable';
-import type { SymbolTypeFlag } from '../SymbolTable';
+import type { SymbolTypeFlag } from '../SymbolTableFlag';
 import { isAnyReferenceType, isComponentType, isDynamicType, isReferenceType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
