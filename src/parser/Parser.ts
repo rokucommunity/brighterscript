@@ -336,17 +336,19 @@ export class Parser {
     }
 
     private enumMemberStatement() {
-        const statement = new EnumMemberStatement({} as any);
-        statement.tokens.name = this.consume(
+        const name = this.consume(
             DiagnosticMessages.expectedClassFieldIdentifier(),
             TokenKind.Identifier,
             ...AllowedProperties
         ) as Identifier;
+        let equalsToken: Token;
+        let value: Expression;
         //look for `= SOME_EXPRESSION`
         if (this.check(TokenKind.Equal)) {
-            statement.tokens.equals = this.advance();
-            statement.value = this.expression();
+            equalsToken = this.advance();
+            value = this.expression();
         }
+        const statement = new EnumMemberStatement({ name: name, equals: equalsToken, value: value });
         return statement;
     }
 
@@ -523,19 +525,19 @@ export class Parser {
     }
 
     private enumDeclaration(): EnumStatement {
-        const result = new EnumStatement({ name: {} as any, body: [] });
+        const enumToken = this.consume(
+            DiagnosticMessages.expectedKeyword(TokenKind.Enum),
+            TokenKind.Enum
+        );
+        const nameToken = this.tryIdentifier(...this.allowedLocalIdentifiers);
+
         this.warnIfNotBrighterScriptMode('enum declarations');
 
         const parentAnnotations = this.enterAnnotationBlock();
 
-        result.tokens.enum = this.consume(
-            DiagnosticMessages.expectedKeyword(TokenKind.Enum),
-            TokenKind.Enum
-        );
-
-        result.tokens.name = this.tryIdentifier(...this.allowedLocalIdentifiers);
-
         this.consumeStatementSeparators();
+
+        const body: (EnumMemberStatement | CommentStatement)[] = [];
         //gather up all members
         while (this.checkAny(TokenKind.Comment, TokenKind.Identifier, TokenKind.At, ...AllowedProperties)) {
             try {
@@ -557,7 +559,7 @@ export class Parser {
 
                 if (decl) {
                     this.consumePendingAnnotations(decl);
-                    result.body.push(decl);
+                    body.push(decl);
                 } else {
                     //we didn't find a declaration...flag tokens until next line
                     this.flagUntil(TokenKind.Newline, TokenKind.Colon, TokenKind.Eof);
@@ -576,7 +578,14 @@ export class Parser {
         }
 
         //consume the final `end interface` token
-        result.tokens.endEnum = this.consumeToken(TokenKind.EndEnum);
+        const endEnumToken = this.consumeToken(TokenKind.EndEnum);
+
+        const result = new EnumStatement({
+            enum: enumToken,
+            name: nameToken,
+            body: body,
+            endEnum: endEnumToken
+        });
 
         this.exitAnnotationBlock(parentAnnotations);
         return result;

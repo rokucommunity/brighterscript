@@ -39,7 +39,7 @@ export class EmptyStatement extends Statement {
     /**
      * Create a negative range to indicate this is an interpolated location
      */
-    public range: Range;
+    public readonly range: Range;
 
     public readonly kind = AstNodeKind.EmptyStatement;
 
@@ -62,10 +62,10 @@ export class Body extends Statement implements TypedefProvider {
         this.statements = options?.statements ?? [];
     }
 
-    public statements: Statement[] = [];
+    public readonly statements: Statement[] = [];
     public readonly kind = AstNodeKind.Body;
 
-    public symbolTable = new SymbolTable('Body', () => this.parent?.getSymbolTable());
+    public readonly symbolTable = new SymbolTable('Body', () => this.parent?.getSymbolTable());
 
     public get range() {
         //this needs to be a getter because the body has its statements pushed to it after being constructed
@@ -148,15 +148,15 @@ export class AssignmentStatement extends Statement {
         this.range = util.createBoundingRange(util.createBoundingRangeFromTokens(this.tokens), this.value);
     }
 
-    public tokens: {
-        equals?: Token;
-        name: Identifier;
-        as?: Token;
+    public readonly tokens: {
+        readonly equals?: Token;
+        readonly name: Identifier;
+        readonly as?: Token;
     };
 
-    public value: Expression;
+    public readonly value: Expression;
 
-    public typeExpression: TypeExpression;
+    public readonly typeExpression: TypeExpression;
 
     public readonly kind = AstNodeKind.AssignmentStatement;
 
@@ -295,13 +295,13 @@ export class CommentStatement extends Statement implements Expression, TypedefPr
         }
     }
 
-    public tokens: {
-        comments: Token[];
+    public readonly tokens: {
+        readonly comments: Token[];
     };
 
     public readonly kind = AstNodeKind.CommentStatement;
 
-    public range: Range;
+    public readonly range: Range;
 
     get text() {
         return this.tokens.comments.map(x => x.text).join('\n');
@@ -345,8 +345,8 @@ export class ExitForStatement extends Statement {
         this.range = this.tokens.exitFor?.range;
     }
 
-    readonly tokens: {
-        exitFor?: Token;
+    public readonly tokens: {
+        readonly exitFor?: Token;
     };
 
     public readonly kind = AstNodeKind.ExitForStatement;
@@ -376,8 +376,8 @@ export class ExitWhileStatement extends Statement {
         this.range = this.tokens.exitWhile?.range;
     }
 
-    readonly tokens: {
-        exitWhile?: Token;
+    public readonly tokens: {
+        readonly exitWhile?: Token;
     };
 
     public readonly kind = AstNodeKind.ExitWhileStatement;
@@ -408,10 +408,10 @@ export class FunctionStatement extends Statement implements TypedefProvider {
         this.range = this.func.range;
     }
 
-    public tokens: {
-        name: Identifier;
+    public readonly tokens: {
+        readonly name: Identifier;
     };
-    public func: FunctionExpression;
+    public readonly func: FunctionExpression;
 
     public readonly kind = AstNodeKind.FunctionStatement as AstNodeKind;
 
@@ -508,15 +508,15 @@ export class IfStatement extends Statement {
     }
 
     readonly tokens: {
-        if?: Token;
-        then?: Token;
-        else?: Token;
-        endIf?: Token;
+        readonly if?: Token;
+        readonly then?: Token;
+        readonly else?: Token;
+        readonly endIf?: Token;
     };
-    readonly condition: Expression;
-    readonly thenBranch: Block;
-    readonly elseBranch?: IfStatement | Block;
-    readonly isInline?: boolean;
+    public readonly condition: Expression;
+    public readonly thenBranch: Block;
+    public readonly elseBranch?: IfStatement | Block;
+    public readonly isInline?: boolean;
 
     public readonly kind = AstNodeKind.IfStatement;
 
@@ -627,8 +627,10 @@ export class IncrementStatement extends Statement {
         );
     }
 
-    readonly value: Expression;
-    readonly tokens: { operator: Token };
+    public readonly value: Expression;
+    public readonly tokens: {
+        readonly operator: Token;
+    };
 
     public readonly kind = AstNodeKind.IncrementStatement;
 
@@ -682,10 +684,10 @@ export class PrintStatement extends Statement {
             ...(this.expressions ?? [])
         );
     }
-    readonly tokens: {
-        print: Token;
+    public readonly tokens: {
+        readonly print: Token;
     };
-    readonly expressions: Array<Expression | PrintSeparatorTab | PrintSeparatorSpace>;
+    public readonly expressions: Array<Expression | PrintSeparatorTab | PrintSeparatorSpace>;
     public readonly kind = AstNodeKind.PrintStatement;
 
     public readonly range: Range;
@@ -745,17 +747,17 @@ export class DimStatement extends Statement {
         );
     }
 
-    readonly tokens: {
-        dim?: Token;
-        name: Identifier;
-        openingSquare?: Token;
-        closingSquare?: Token;
+    public readonly tokens: {
+        readonly dim?: Token;
+        readonly name: Identifier;
+        readonly openingSquare?: Token;
+        readonly closingSquare?: Token;
     };
-    public dimensions: Expression[];
+    public readonly dimensions: Expression[];
 
     public readonly kind = AstNodeKind.DimStatement;
 
-    public range: Range;
+    public readonly range: Range;
 
     public transpile(state: BrsTranspileState) {
         let result = [
@@ -809,9 +811,9 @@ export class GotoStatement extends Statement {
         );
     }
 
-    readonly tokens: {
-        goto?: Token;
-        label: Token;
+    public readonly tokens: {
+        readonly goto?: Token;
+        readonly label: Token;
     };
 
     public readonly kind = AstNodeKind.GotoStatement;
@@ -846,9 +848,9 @@ export class LabelStatement extends Statement {
             this.tokens.colon
         );
     }
-    readonly tokens: {
-        name: Token;
-        colon: Token;
+    public readonly tokens: {
+        readonly name: Token;
+        readonly colon: Token;
     };
     public readonly kind = AstNodeKind.LabelStatement;
 
@@ -887,10 +889,10 @@ export class ReturnStatement extends Statement {
         );
     }
 
-    readonly tokens: {
-        return: Token;
+    public readonly tokens: {
+        readonly return?: Token;
     };
-    readonly value?: Expression;
+    public readonly value?: Expression;
     public readonly kind = AstNodeKind.ReturnStatement;
 
     public readonly range: Range;
@@ -924,8 +926,8 @@ export class EndStatement extends Statement {
         };
         this.range = this.tokens.end?.range;
     }
-    readonly tokens: {
-        end?: Token;
+    public readonly tokens: {
+        readonly end?: Token;
     };
     public readonly kind = AstNodeKind.EndStatement;
 
@@ -950,8 +952,8 @@ export class StopStatement extends Statement {
         this.tokens = { stop: options?.stop };
         this.range = this.tokens?.stop?.range;
     }
-    readonly tokens: {
-        stop?: Token;
+    public readonly tokens: {
+        readonly stop?: Token;
     };
 
     public readonly kind = AstNodeKind.StopStatement;
@@ -1004,17 +1006,17 @@ export class ForStatement extends Statement {
         );
     }
 
-    readonly tokens: {
-        for?: Token;
-        to?: Token;
-        endFor?: Token;
-        step?: Token;
+    public readonly tokens: {
+        readonly for?: Token;
+        readonly to?: Token;
+        readonly endFor?: Token;
+        readonly step?: Token;
     };
 
-    public counterDeclaration: AssignmentStatement;
-    public finalValue: Expression;
-    public body: Block;
-    public increment?: Expression;
+    public readonly counterDeclaration: AssignmentStatement;
+    public readonly finalValue: Expression;
+    public readonly body: Block;
+    public readonly increment?: Expression;
 
     public readonly kind = AstNodeKind.ForStatement;
 
@@ -1108,14 +1110,14 @@ export class ForEachStatement extends Statement {
         );
     }
 
-    readonly tokens: {
-        forEach?: Token;
-        item: Token;
-        in?: Token;
-        endFor?: Token;
+    public readonly tokens: {
+        readonly forEach?: Token;
+        readonly item: Token;
+        readonly in?: Token;
+        readonly endFor?: Token;
     };
-    readonly body: Block;
-    readonly target: Expression;
+    public readonly body: Block;
+    public readonly target: Expression;
 
     public readonly kind = AstNodeKind.ForEachStatement;
 
@@ -1188,12 +1190,12 @@ export class WhileStatement extends Statement {
         );
     }
 
-    readonly tokens: {
-        while?: Token;
-        endWhile?: Token;
+    public readonly tokens: {
+        readonly while?: Token;
+        readonly endWhile?: Token;
     };
-    readonly condition: Expression;
-    readonly body: Block;
+    public readonly condition: Expression;
+    public readonly body: Block;
 
     public readonly kind = AstNodeKind.WhileStatement;
 
@@ -1258,13 +1260,13 @@ export class DottedSetStatement extends Statement {
             this.value
         );
     }
-    readonly tokens: {
-        name: Identifier;
-        dot?: Token;
+    public readonly tokens: {
+        readonly name: Identifier;
+        readonly dot?: Token;
     };
 
-    readonly obj: Expression;
-    readonly value: Expression;
+    public readonly obj: Expression;
+    public readonly value: Expression;
 
     public readonly kind = AstNodeKind.DottedSetStatement;
 
@@ -1328,13 +1330,13 @@ export class IndexedSetStatement extends Statement {
         );
     }
 
-    readonly tokens: {
-        openingSquare?: Token;
-        closingSquare?: Token;
+    public readonly tokens: {
+        readonly openingSquare?: Token;
+        readonly closingSquare?: Token;
     };
-    readonly obj: Expression;
-    readonly indexes: Expression[];
-    readonly value: Expression;
+    public readonly obj: Expression;
+    public readonly indexes: Expression[];
+    public readonly value: Expression;
 
     public readonly kind = AstNodeKind.IndexedSetStatement;
 
@@ -1395,9 +1397,9 @@ export class LibraryStatement extends Statement implements TypedefProvider {
             this.tokens.filePath
         );
     }
-    readonly tokens: {
-        library: Token;
-        filePath?: Token;
+    public readonly tokens: {
+        readonly library: Token;
+        readonly filePath?: Token;
     };
 
     public readonly kind = AstNodeKind.LibraryStatement;
@@ -1446,13 +1448,13 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         this.symbolTable = new SymbolTable(`NamespaceStatement: '${this.name}'`, () => this.parent?.getSymbolTable());
     }
 
-    readonly tokens: {
-        namespace?: Token;
-        endNamespace?: Token;
+    public readonly tokens: {
+        readonly namespace?: Token;
+        readonly endNamespace?: Token;
     };
 
-    readonly nameExpression: VariableExpression | DottedGetExpression;
-    public body: Body;
+    public readonly nameExpression: VariableExpression | DottedGetExpression;
+    public readonly body: Body;
 
     public readonly kind = AstNodeKind.NamespaceStatement;
 
@@ -1568,16 +1570,16 @@ export class ImportStatement extends Statement implements TypedefProvider {
         }
     }
 
-    readonly tokens: {
-        import?: Token;
-        filePath: Token;
+    public readonly tokens: {
+        readonly import?: Token;
+        readonly filePath: Token;
     };
 
     public readonly kind = AstNodeKind.ImportStatement;
 
-    public range: Range;
+    public readonly range: Range;
 
-    public filePath: string;
+    public readonly filePath: string;
 
     transpile(state: BrsTranspileState) {
         //The xml files are responsible for adding the additional script imports, but
@@ -1634,19 +1636,19 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
             this.tokens.endInterface
         );
     }
-    public parentInterfaceName?: TypeExpression;
-    public body: Statement[];
+    public readonly parentInterfaceName?: TypeExpression;
+    public readonly body: Statement[];
 
     public readonly kind = AstNodeKind.InterfaceStatement;
 
-    public tokens = {} as {
-        interface?: Token;
-        name: Identifier;
-        extends?: Token;
-        endInterface?: Token;
+    public readonly tokens = {} as {
+        readonly interface?: Token;
+        readonly name: Identifier;
+        readonly extends?: Token;
+        readonly endInterface?: Token;
     };
 
-    public range: Range;
+    public readonly range: Range;
 
     public get fields(): InterfaceFieldStatement[] {
         return this.body.filter(x => isInterfaceFieldStatement(x)) as InterfaceFieldStatement[];
@@ -1819,14 +1821,14 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
 
     public readonly kind = AstNodeKind.InterfaceFieldStatement;
 
-    public typeExpression?: TypeExpression;
+    public readonly typeExpression?: TypeExpression;
 
-    public range: Range;
+    public readonly range: Range;
 
-    public tokens: {
-        name: Identifier;
-        as: Token;
-        optional?: Token;
+    public readonly tokens: {
+        readonly name: Identifier;
+        readonly as: Token;
+        readonly optional?: Token;
     };
 
     public getLeadingTrivia(): Token[] {
@@ -1931,17 +1933,17 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         return this.tokens.name.text;
     }
 
-    public tokens: {
-        optional?: Token;
-        functionType: Token;
-        name: Identifier;
-        leftParen?: Token;
-        rightParen?: Token;
-        as?: Token;
+    public readonly tokens: {
+        readonly optional?: Token;
+        readonly functionType: Token;
+        readonly name: Identifier;
+        readonly leftParen?: Token;
+        readonly rightParen?: Token;
+        readonly as?: Token;
     };
 
-    public params: FunctionParameterExpression[];
-    public returnTypeExpression?: TypeExpression;
+    public readonly params: FunctionParameterExpression[];
+    public readonly returnTypeExpression?: TypeExpression;
 
     public get isOptional() {
         return !!this.tokens.optional;
@@ -2072,17 +2074,17 @@ export class ClassStatement extends Statement implements TypedefProvider {
     public readonly kind = AstNodeKind.ClassStatement;
 
 
-    public tokens: {
-        class?: Token;
+    public readonly tokens: {
+        readonly class?: Token;
         /**
          * The name of the class (without namespace prefix)
          */
-        name: Identifier;
-        endClass?: Token;
-        extends?: Token;
+        readonly name: Identifier;
+        readonly endClass?: Token;
+        readonly extends?: Token;
     };
-    readonly body: Statement[];
-    readonly parentClassName: TypeExpression;
+    public readonly body: Statement[];
+    public readonly parentClassName: TypeExpression;
 
 
     public getName(parseMode: ParseMode) {
@@ -2106,9 +2108,9 @@ export class ClassStatement extends Statement implements TypedefProvider {
         return util.concatAnnotationLeadingTrivia(this, this.tokens.class?.leadingTrivia);
     }
 
-    public memberMap = {} as Record<string, MemberStatement>;
-    public methods = [] as MethodStatement[];
-    public fields = [] as FieldStatement[];
+    public readonly memberMap = {} as Record<string, MemberStatement>;
+    public readonly methods = [] as MethodStatement[];
+    public readonly fields = [] as FieldStatement[];
 
     public readonly range: Range;
 
@@ -2509,11 +2511,11 @@ export class MethodStatement extends FunctionStatement {
 
     public readonly kind = AstNodeKind.MethodStatement as AstNodeKind;
 
-    public modifiers: Token[] = [];
+    public readonly modifiers: Token[] = [];
 
-    readonly tokens: {
-        name: Identifier;
-        override?: Token;
+    public readonly tokens: {
+        readonly name: Identifier;
+        readonly override?: Token;
     };
 
     public get accessModifier() {
@@ -2713,16 +2715,16 @@ export class FieldStatement extends Statement implements TypedefProvider {
         );
     }
 
-    readonly tokens: {
-        accessModifier?: Token;
-        name: Identifier;
-        as?: Token;
-        equals?: Token;
-        optional?: Token;
+    public readonly tokens: {
+        readonly accessModifier?: Token;
+        readonly name: Identifier;
+        readonly as?: Token;
+        readonly equals?: Token;
+        readonly optional?: Token;
     };
 
-    public typeExpression?: TypeExpression;
-    public initialValue?: Expression;
+    public readonly typeExpression?: TypeExpression;
+    public readonly initialValue?: Expression;
 
     public readonly kind = AstNodeKind.FieldStatement;
 
@@ -2812,13 +2814,13 @@ export class TryCatchStatement extends Statement {
         );
     }
 
-    readonly tokens: {
-        try?: Token;
-        endTry?: Token;
+    public readonly tokens: {
+        readonly try?: Token;
+        readonly endTry?: Token;
     };
 
-    public tryBranch: Block;
-    public catchStatement: CatchStatement;
+    public readonly tryBranch: Block;
+    public readonly catchStatement: CatchStatement;
 
     public readonly kind = AstNodeKind.TryCatchStatement;
 
@@ -2864,16 +2866,16 @@ export class CatchStatement extends Statement {
         );
     }
 
-    readonly tokens: {
-        catch?: Token;
-        exceptionVariable?: Identifier;
+    public readonly tokens: {
+        readonly catch?: Token;
+        readonly exceptionVariable?: Identifier;
     };
 
-    public catchBranch?: Block;
+    public readonly catchBranch?: Block;
 
     public readonly kind = AstNodeKind.CatchStatement;
 
-    public range: Range;
+    public readonly range: Range;
 
     public transpile(state: BrsTranspileState): TranspileResult {
         return [
@@ -2907,14 +2909,14 @@ export class ThrowStatement extends Statement {
         );
     }
 
-    readonly tokens: {
-        throw?: Token;
+    public readonly tokens: {
+        readonly throw?: Token;
     };
-    public expression?: Expression;
+    public readonly expression?: Expression;
 
     public readonly kind = AstNodeKind.ThrowStatement;
 
-    public range: Range;
+    public readonly range: Range;
 
     public transpile(state: BrsTranspileState) {
         const result = [
@@ -2956,19 +2958,18 @@ export class EnumStatement extends Statement implements TypedefProvider {
             name: options.name,
             endEnum: options.endEnum
         };
+        this.symbolTable = new SymbolTable('Enum');
         this.body = this.body ?? [];
     }
 
-    public tokens: {
-        enum?: Token;
-        name: Identifier;
-        endEnum?: Token;
+    public readonly tokens: {
+        readonly enum?: Token;
+        readonly name: Identifier;
+        readonly endEnum?: Token;
     };
-    public body: Array<EnumMemberStatement | CommentStatement>;
+    public readonly body: Array<EnumMemberStatement | CommentStatement>;
 
     public readonly kind = AstNodeKind.EnumStatement;
-
-    public symbolTable = new SymbolTable('Enum');
 
     public get range(): Range {
         return util.createBoundingRange(
@@ -3134,11 +3135,11 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
         this.value = options.value;
     }
 
-    public tokens: {
-        name: Identifier;
-        equals?: Token;
+    public readonly tokens: {
+        readonly name: Identifier;
+        readonly equals?: Token;
     };
-    public value?: Expression;
+    public readonly value?: Expression;
 
     public readonly kind = AstNodeKind.EnumMemberStatement;
 
@@ -3212,16 +3213,16 @@ export class ConstStatement extends Statement implements TypedefProvider {
         this.range = util.createBoundingRange(this.tokens.const, this.tokens.name, this.tokens.equals, this.value);
     }
 
-    public tokens: {
-        const: Token;
-        name: Identifier;
-        equals: Token;
+    public readonly tokens: {
+        readonly const: Token;
+        readonly name: Identifier;
+        readonly equals: Token;
     };
-    public value: Expression;
+    public readonly value: Expression;
 
     public readonly kind = AstNodeKind.ConstStatement;
 
-    public range: Range;
+    public readonly range: Range;
 
     public get name() {
         return this.tokens.name.text;
@@ -3295,14 +3296,14 @@ export class ContinueStatement extends Statement {
         );
     }
 
-    public tokens: {
-        continue?: Token;
-        loopType: Token;
+    public readonly tokens: {
+        readonly continue?: Token;
+        readonly loopType: Token;
     };
 
     public readonly kind = AstNodeKind.ContinueStatement;
 
-    public range: Range;
+    public readonly range: Range;
 
     transpile(state: BrsTranspileState) {
         return [
