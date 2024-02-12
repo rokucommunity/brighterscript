@@ -241,7 +241,7 @@ export class XmlFile implements BscFile {
             return this._needsTranspiled;
         }
         return !!(
-            this.editor?.hasChanges || this.ast.componentElement?.scriptElements?.some(
+            this.editor?.hasChanges || this.ast.component?.scriptElements?.some(
                 script => script.type?.indexOf('brighterscript') > 0 || script.uri?.endsWith('.bs')
             )
         );

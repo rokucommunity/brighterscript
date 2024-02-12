@@ -12,7 +12,7 @@ export class XmlFileValidator {
 
     public process() {
         util.validateTooDeepFile(this.event.file);
-        if (this.event.file.parser.ast.rootElement) {
+        if (this.event.file.parser.ast.root) {
             this.validateComponent(this.event.file.parser.ast);
         } else {
             //skip empty XML
@@ -20,7 +20,7 @@ export class XmlFileValidator {
     }
 
     private validateComponent(ast: SGAst) {
-        const { rootElement, componentElement } = ast;
+        const { root: rootElement, component: componentElement } = ast;
         if (!componentElement) {
             //not a SG component
             this.event.file.diagnostics.push({

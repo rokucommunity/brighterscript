@@ -72,9 +72,9 @@ describe('SGParser', () => {
         `, undefined, 'components/file.xml');
 
         const { ast } = file.parser;
-        expect(ast.prologElement).to.exist;
-        expect(ast.componentElement).to.exist;
-        expect(ast.rootElement).to.equal(ast.componentElement);
+        expect(ast.prolog).to.exist;
+        expect(ast.component).to.exist;
+        expect(ast.root).to.equal(ast.component);
     });
 
     it('does not crash when missing tag name', () => {

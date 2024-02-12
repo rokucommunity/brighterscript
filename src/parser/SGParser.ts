@@ -51,7 +51,7 @@ export default class SGParser {
     private findReferences() {
         this._references = this.emptySGReferences();
 
-        const { componentElement } = this.ast;
+        const { component: componentElement } = this.ast;
         if (!componentElement) {
             return;
         }
@@ -122,7 +122,7 @@ export default class SGParser {
         }
 
         if (isSGComponent(root)) {
-            this.ast = new SGAst(prolog, root, root);
+            this.ast = new SGAst({ prolog: prolog, root: root, component: root });
         } else {
             if (root) {
                 //error: not a component
@@ -131,7 +131,7 @@ export default class SGParser {
                     range: root.tokens.startTagName.range
                 });
             }
-            this.ast = new SGAst(prolog, root);
+            this.ast = new SGAst({ prolog: prolog, root: root });
         }
     }
 
@@ -141,15 +141,15 @@ export default class SGParser {
         let prolog: SGProlog;
         if (cstProlog?.[0]) {
             const ctx = cstProlog[0].children;
-            prolog = new SGProlog(
+            prolog = new SGProlog({
                 // <?
-                this.createPartialToken(ctx.XMLDeclOpen[0], 0, 2),
+                startTagOpen: this.createPartialToken(ctx.XMLDeclOpen[0], 0, 2),
                 // xml
-                this.createPartialToken(ctx.XMLDeclOpen[0], 2, 3),
-                this.mapAttributes(ctx.attribute),
+                startTagName: this.createPartialToken(ctx.XMLDeclOpen[0], 2, 3),
+                attributes: this.mapAttributes(ctx.attribute),
                 // ?>
-                this.mapToken(ctx.SPECIAL_CLOSE[0])
-            );
+                startTagClose: this.mapToken(ctx.SPECIAL_CLOSE[0])
+            });
         }
 
         let root: SGElement;
@@ -174,15 +174,24 @@ export default class SGParser {
 
         const content = children.content?.[0];
 
-        let childrenContent: SGElement[];
+        let constructorOptions = {
+            startTagOpen: startTagOpen,
+            startTagName: startTagName,
+            attributes: attributes,
+            startTagClose: startTagClose,
+            elements: [],
+            endTagOpen: endTagOpen,
+            endTagName: endTagName,
+            endTagClose: endTagClose
+        };
 
         switch (startTagName.text) {
             case 'component':
-                childrenContent = this.mapElements(content, ['interface', 'script', 'children', 'customization']);
-                return new SGComponent(startTagOpen, startTagName, attributes, startTagClose, childrenContent, endTagOpen, endTagName, endTagClose);
+                constructorOptions.elements = this.mapElements(content, ['interface', 'script', 'children', 'customization']);
+                return new SGComponent(constructorOptions);
             case 'interface':
-                childrenContent = this.mapElements(content, ['field', 'function']);
-                return new SGInterface(startTagOpen, startTagName, attributes, startTagClose, childrenContent, endTagOpen, endTagName, endTagClose);
+                constructorOptions.elements = this.mapElements(content, ['field', 'function']);
+                return new SGInterface(constructorOptions);
             case 'field':
                 if (this.hasElements(content)) {
                     this.diagnostics.push({
@@ -190,7 +199,7 @@ export default class SGParser {
                         ...DiagnosticMessages.xmlUnexpectedChildren(startTagName.text)
                     });
                 }
-                return new SGInterfaceField(startTagOpen, startTagName, attributes, startTagClose, childrenContent, endTagOpen, endTagName, endTagClose);
+                return new SGInterfaceField(constructorOptions);
             case 'function':
                 if (this.hasElements(content)) {
                     this.diagnostics.push({
@@ -198,7 +207,7 @@ export default class SGParser {
                         ...DiagnosticMessages.xmlUnexpectedChildren(startTagName.text)
                     });
                 }
-                return new SGInterfaceFunction(startTagOpen, startTagName, attributes, startTagClose, childrenContent, endTagOpen, endTagName, endTagClose);
+                return new SGInterfaceFunction(constructorOptions);
             case 'script':
                 if (this.hasElements(content)) {
                     this.diagnostics.push({
@@ -206,35 +215,35 @@ export default class SGParser {
                         ...DiagnosticMessages.xmlUnexpectedChildren(startTagName.text)
                     });
                 }
-                const script = new SGScript(startTagOpen, startTagName, attributes, startTagClose, childrenContent, endTagOpen, endTagName, endTagClose);
+                const script = new SGScript(constructorOptions);
                 script.cdata = this.getCdata(content);
                 return script;
             case 'children':
-                childrenContent = this.mapNodes(content);
-                return new SGChildren(startTagOpen, startTagName, attributes, startTagClose, childrenContent, endTagOpen, endTagName, endTagClose);
+                constructorOptions.elements = this.mapNodes(content);
+                return new SGChildren(constructorOptions);
             default:
-                childrenContent = this.mapNodes(content);
-                return new SGNode(startTagOpen, startTagName, attributes, startTagClose, childrenContent, endTagOpen, endTagName, endTagClose);
+                constructorOptions.elements = this.mapNodes(content);
+                return new SGNode(constructorOptions);
         }
     }
 
     mapNode({ children }: ElementCstNode): SGNode {
-        return new SGNode(
+        return new SGNode({
             //<
-            this.mapToken(children.OPEN[0]),
+            startTagOpen: this.mapToken(children.OPEN[0]),
             // TagName
-            this.mapToken(children.Name[0]),
-            this.mapAttributes(children.attribute),
+            startTagName: this.mapToken(children.Name[0]),
+            attributes: this.mapAttributes(children.attribute),
             // > or />
-            this.mapToken((children.SLASH_CLOSE ?? children.START_CLOSE)[0]),
-            this.mapNodes(children.content?.[0]),
+            startTagClose: this.mapToken((children.SLASH_CLOSE ?? children.START_CLOSE)[0]),
+            elements: this.mapNodes(children.content?.[0]),
             // </
-            this.mapToken(children.SLASH_OPEN?.[0]),
+            endTagOpen: this.mapToken(children.SLASH_OPEN?.[0]),
             // TagName
-            this.mapToken(children.END_NAME?.[0]),
+            endTagName: this.mapToken(children.END_NAME?.[0]),
             // >
-            this.mapToken(children.END?.[0])
-        );
+            endTagClose: this.mapToken(children.END?.[0])
+        });
     }
 
     mapElements(content: ContentCstNode, allow: string[]): SGElement[] {
@@ -305,7 +314,7 @@ export default class SGParser {
             for (let i = 0; i < attributes.length; i++) {
 
                 const children = attributes[i].children;
-                const attr = new SGAttribute(this.mapToken(children.Name[0]));
+                const attr = new SGAttribute({ key: this.mapToken(children.Name[0]) });
 
                 if (children.EQUALS) {
                     attr.tokens.equals = this.mapToken(children.EQUALS[0]);

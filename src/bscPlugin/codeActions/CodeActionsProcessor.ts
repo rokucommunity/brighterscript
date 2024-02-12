@@ -101,7 +101,7 @@ export class CodeActionsProcessor {
 
     private addMissingExtends(diagnostic: DiagnosticMessageType<'xmlComponentMissingExtendsAttribute'>) {
         const srcPath = this.event.file.srcPath;
-        const { componentElement } = (this.event.file as XmlFile).parser.ast;
+        const { component: componentElement } = (this.event.file as XmlFile).parser.ast;
         //inject new attribute after the final attribute, or after the `<component` if there are no attributes
         const pos = (componentElement.attributes[componentElement.attributes.length - 1] ?? componentElement.tokens.startTagName).range.end;
         this.event.codeActions.push(

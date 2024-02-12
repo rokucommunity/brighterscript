@@ -189,13 +189,13 @@ export function createSGToken(text: string, range?: Range) {
  * Create an SGAttribute without any ranges
  */
 export function createSGAttribute(keyName: string, value: string) {
-    return new SGAttribute(
-        { text: keyName },
-        { text: '=' },
-        { text: '"' },
-        { text: value },
-        { text: '"' }
-    );
+    return new SGAttribute({
+        key: { text: keyName },
+        equals: { text: '=' },
+        openingQuote: { text: '"' },
+        value: { text: value },
+        closingQuote: { text: '"' }
+    });
 }
 
 export function createSGInterfaceField(id: string, attributes: { type?: string; alias?: string; value?: string; onChange?: string; alwaysNotify?: string } = {}) {
@@ -207,12 +207,12 @@ export function createSGInterfaceField(id: string, attributes: { type?: string; 
             createSGAttribute(key, attributes[key])
         );
     }
-    return new SGInterfaceField(
-        { text: '<' },
-        { text: 'field' },
-        attrs,
-        { text: '/>' }
-    );
+    return new SGInterfaceField({
+        startTagOpen: { text: '<' },
+        startTagName: { text: 'field' },
+        attributes: attrs,
+        startTagClose: { text: '/>' }
+    });
 }
 
 export function createSGComponent(name: string, parentName?: string) {
@@ -224,38 +224,38 @@ export function createSGComponent(name: string, parentName?: string) {
             createSGAttribute('extends', parentName)
         );
     }
-    return new SGComponent(
-        { text: '<' },
-        { text: 'component' },
-        attributes,
-        { text: '>' },
-        [],
-        { text: '</' },
-        { text: 'component' },
-        { text: '>' }
-    );
+    return new SGComponent({
+        startTagOpen: { text: '<' },
+        startTagName: { text: 'component' },
+        attributes: attributes,
+        startTagClose: { text: '>' },
+        elements: [],
+        endTagOpen: { text: '</' },
+        endTagName: { text: 'component' },
+        endTagClose: { text: '>' }
+    });
 }
 
 export function createSGInterfaceFunction(functionName: string) {
-    return new SGInterfaceFunction(
-        { text: '<' },
-        { text: 'function' },
-        [createSGAttribute('name', functionName)],
-        { text: '/>' }
-    );
+    return new SGInterfaceFunction({
+        startTagOpen: { text: '<' },
+        startTagName: { text: 'function' },
+        attributes: [createSGAttribute('name', functionName)],
+        startTagClose: { text: '/>' }
+    });
 }
 
 export function createSGInterface() {
-    return new SGInterface(
-        { text: '<' },
-        { text: 'interface' },
-        [],
-        { text: '>' },
-        [],
-        { text: '</' },
-        { text: 'interface' },
-        { text: '>' }
-    );
+    return new SGInterface({
+        startTagOpen: { text: '<' },
+        startTagName: { text: 'interface' },
+        attributes: [],
+        startTagClose: { text: '>' },
+        elements: [],
+        endTagOpen: { text: '</' },
+        endTagName: { text: 'interface' },
+        endTagClose: { text: '>' }
+    });
 }
 
 export function createSGScript(attributes: { type?: string; uri?: string }) {
@@ -265,10 +265,10 @@ export function createSGScript(attributes: { type?: string; uri?: string }) {
             createSGAttribute(key, attributes[key])
         );
     }
-    return new SGScript(
-        { text: '<' },
-        { text: 'script' },
-        attrs,
-        { text: '/>' }
-    );
+    return new SGScript({
+        startTagOpen: { text: '<' },
+        startTagName: { text: 'script' },
+        attributes: attrs,
+        startTagClose: { text: '/>' }
+    });
 }

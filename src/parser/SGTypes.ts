@@ -17,22 +17,24 @@ export interface SGToken {
 }
 
 export class SGAttribute {
-    public constructor(
-        key: SGToken,
-        equals?: SGToken,
-        openingQuote?: SGToken,
-        value?: SGToken,
-        closingQuote?: SGToken
-    ) {
-        this.tokens.key = key;
-        this.tokens.equals = equals;
-        this.tokens.openingQuote = openingQuote;
-        this.tokens.value = value;
-        this.tokens.closingQuote = closingQuote;
+    public constructor(options: {
+        key: SGToken;
+        equals?: SGToken;
+        openingQuote?: SGToken;
+        value?: SGToken;
+        closingQuote?: SGToken;
+    }) {
+        this.tokens = {
+            key: options.key,
+            equals: options.equals,
+            openingQuote: options.openingQuote,
+            value: options.value,
+            closingQuote: options.closingQuote
+        };
     }
 
-    public tokens = {} as {
-        key: SGToken;
+    public readonly tokens: {
+        readonly key: SGToken;
         equals?: SGToken;
         openingQuote?: SGToken;
         value?: SGToken;
@@ -93,74 +95,70 @@ export class SGAttribute {
     }
 
     public clone() {
-        return new SGAttribute(
-            { ...this.tokens.key },
-            { ...this.tokens.equals },
-            { ...this.tokens.openingQuote },
-            { ...this.tokens.value },
-            { ...this.tokens.closingQuote }
-        );
+        return new SGAttribute(this.tokens);
     }
 }
 
 export class SGElement {
 
-    constructor(
-        startTagOpen: SGToken,
-        startTagName: SGToken,
-        attributes = [] as SGAttribute[],
-        startTagClose?: SGToken,
-        elements = [] as SGElement[],
-        endTagOpen?: SGToken,
-        endTagName?: SGToken,
-        endTagClose?: SGToken
-    ) {
-        this.tokens.startTagOpen = startTagOpen;
-        this.tokens.startTagName = startTagName;
-        this.attributes = attributes;
-        this.tokens.startTagClose = startTagClose;
-        this.elements = elements;
-        this.tokens.endTagOpen = endTagOpen;
-        this.tokens.endTagName = endTagName;
-        this.tokens.endTagClose = endTagClose;
+    constructor(options: {
+        startTagOpen?: SGToken;
+        startTagName: SGToken;
+        attributes?: SGAttribute[];
+        startTagClose?: SGToken;
+        elements?: SGElement[];
+        endTagOpen?: SGToken;
+        endTagName?: SGToken;
+        endTagClose?: SGToken;
+    }) {
+        this.tokens = {
+            startTagOpen: options.startTagOpen,
+            startTagName: options.startTagName,
+            startTagClose: options.startTagClose,
+            endTagOpen: options.endTagOpen,
+            endTagName: options.endTagName,
+            endTagClose: options.endTagClose
+        };
+        this.attributes = options.attributes ?? [];
+        this.elements = options.elements ?? [];
     }
 
-    public tokens = {} as {
+    public readonly tokens: {
         /**
          * The first portion of the startTag. (i.e. `<` or `<?`)
          */
-        startTagOpen: SGToken;
+        readonly startTagOpen?: SGToken;
         /**
          * The name of the opening tag (i.e. CoolTag in `<CoolTag>`).
          */
-        startTagName: SGToken;
+        readonly startTagName: SGToken;
         /**
-         * The last bit of the startTag (i.e. `/>` for self-closing, `?>` for xml prologue, or `>` for tag with children)
+         * The last bit of the startTag (i.e. `/>` for self-closing, `?>` for xml prolog, or `>` for tag with children)
          */
-        startTagClose?: SGToken;
+        readonly startTagClose?: SGToken;
         /**
          * The endTag opening char `<`
          */
-        endTagOpen?: SGToken;
+        readonly endTagOpen?: SGToken;
         /**
          * The name of the ending tag (i.e. CoolTag in `</CoolTag>`)
          */
-        endTagName?: SGToken;
+        readonly endTagName?: SGToken;
         /**
          * The endTag closing char `>`
          */
-        endTagClose?: SGToken;
+        readonly endTagClose?: SGToken;
     };
 
     /**
      * Array of attributes found on this tag
      */
-    public attributes = [] as SGAttribute[];
+    public readonly attributes = [] as SGAttribute[];
 
     /**
      * The array of direct children AST elements of this AST node
      */
-    public elements = [] as SGElement[];
+    public readonly elements = [] as SGElement[];
 
     public get range() {
         if (!this._range) {
@@ -861,25 +859,32 @@ export interface SGReferences {
 
 export class SGAst {
 
-    constructor(
-        public prologElement?: SGProlog,
-        public rootElement?: SGElement,
-        public componentElement?: SGComponent
-    ) {
+    constructor(options: {
+        prolog?: SGProlog;
+        root?: SGElement;
+        component?: SGComponent;
+    } = {}) {
+        this.prolog = options.prolog;
+        this.root = options.root;
+        this.component = options.component;
     }
+
+    public readonly prolog?: SGProlog;
+    public readonly root?: SGElement;
+    public readonly component?: SGComponent;
 
     public transpile(state: TranspileState): SourceNode {
         const chunks = [] as SourceNode[];
         //write XML prolog
-        if (this.prologElement) {
+        if (this.prolog) {
             chunks.push(
-                this.prologElement.transpile(state)
+                this.prolog.transpile(state)
             );
         }
-        if (this.componentElement) {
+        if (this.component) {
             //write content
             chunks.push(
-                this.componentElement.transpile(state)
+                this.component.transpile(state)
             );
         }
         return new SourceNode(null, null, null, chunks);
