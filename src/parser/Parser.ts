@@ -886,49 +886,44 @@ export class Parser {
 
             this.consumeStatementSeparators(true);
 
+
+            //support ending the function with `end sub` OR `end function`
+            let body = this.block();
+            //if the parser was unable to produce a block, make an empty one so the AST makes some sense...
+
+            // consume 'end sub' or 'end function'
+            const endFunctionType = this.advance();
+            let expectedEndKind = isSub ? TokenKind.EndSub : TokenKind.EndFunction;
+
+            //if `function` is ended with `end sub`, or `sub` is ended with `end function`, then
+            //add an error but don't hard-fail so the AST can continue more gracefully
+            if (endFunctionType.kind !== expectedEndKind) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.mismatchedEndCallableKeyword(functionTypeText, endFunctionType.text),
+                    range: endFunctionType.range
+                });
+            }
+
+            if (!body) {
+                body = new Block({
+                    statements: [],
+                    startingRange: util.createBoundingRange(
+                        functionType, name, leftParen, ...params, rightParen, asToken, typeExpression, endFunctionType)
+                });
+            }
+
+            body.symbolTable = new SymbolTable(`Block: Function '${name?.text ?? ''}'`, () => func.getSymbolTable());
+
             let func = new FunctionExpression({
                 parameters: params,
-                body: undefined, //body
+                body: body,
                 functionType: functionType,
-                endFunctionType: undefined, //ending keyword
+                endFunctionType: endFunctionType,
                 leftParen: leftParen,
                 rightParen: rightParen,
                 as: asToken,
                 returnTypeExpression: typeExpression
             });
-
-            //support ending the function with `end sub` OR `end function`
-            func.body = this.block();
-            //if the parser was unable to produce a block, make an empty one so the AST makes some sense...
-            if (!func.body) {
-                func.body = new Block({
-                    statements: [],
-                    startingRange: util.createRangeFromPositions(func.range.start, func.range.start)
-                });
-            }
-            func.body.symbolTable = new SymbolTable(`Block: Function '${name?.text ?? ''}'`, () => func.getSymbolTable());
-
-            if (!func.body) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.callableBlockMissingEndKeyword(functionTypeText),
-                    range: this.peek().range
-                });
-                throw this.lastDiagnosticAsError();
-            }
-
-            // consume 'end sub' or 'end function'
-            func.tokens.endFunctionType = this.advance();
-            let expectedEndKind = isSub ? TokenKind.EndSub : TokenKind.EndFunction;
-
-            //if `function` is ended with `end sub`, or `sub` is ended with `end function`, then
-            //add an error but don't hard-fail so the AST can continue more gracefully
-            if (func.tokens.endFunctionType.kind !== expectedEndKind) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.mismatchedEndCallableKeyword(functionTypeText, func.tokens.endFunctionType.text),
-                    range: func.tokens.endFunctionType.range
-                });
-            }
-            func.callExpressions = this.callExpressions;
 
             if (isAnonymous) {
                 return func;
@@ -1338,7 +1333,6 @@ export class Parser {
 
         let name = this.identifyingExpression();
         //set the current namespace name
-        let result = new NamespaceStatement({ namespace: keyword, nameExpression: name, body: null });
 
         this.globalTerminators.push([TokenKind.EndNamespace]);
         let body = this.body();
@@ -1357,8 +1351,13 @@ export class Parser {
 
         this.namespaceAndFunctionDepth--;
 
-        result.body = body;
-        result.tokens.endNamespace = endKeyword;
+        let result = new NamespaceStatement({
+            namespace: keyword,
+            nameExpression: name,
+            body: body,
+            endNamespace: endKeyword
+        });
+
         //cache the range property so that plugins can't affect it
         result.cacheRange();
         result.body.symbolTable.name += `: namespace '${result.name}'`;
@@ -1470,7 +1469,7 @@ export class Parser {
         let importStatement = new ImportStatement({
             import: this.advance(),
             //grab the next token only if it's a string
-            filePath: this.tryConsume(
+            path: this.tryConsume(
                 DiagnosticMessages.expectedStringLiteralAfterKeyword('import'),
                 TokenKind.StringLiteral
             )
@@ -1646,14 +1645,12 @@ export class Parser {
 
     private tryCatchStatement(): TryCatchStatement {
         const tryToken = this.advance();
-        const statement = new TryCatchStatement(
-            { try: tryToken }
-        );
-
+        let endTryToken: Token;
+        let catchStmt: CatchStatement;
         //ensure statement separator
         this.consumeStatementSeparators();
 
-        statement.tryBranch = this.block(TokenKind.Catch, TokenKind.EndTry);
+        let tryBranch = this.block(TokenKind.Catch, TokenKind.EndTry);
 
         const peek = this.peek();
         if (peek.kind !== TokenKind.Catch) {
@@ -1661,35 +1658,38 @@ export class Parser {
                 ...DiagnosticMessages.expectedCatchBlockInTryCatch(),
                 range: this.peek().range
             });
-            //gracefully handle end-try
-            if (peek.kind === TokenKind.EndTry) {
-                statement.tokens.endTry = this.advance();
+        } else {
+            const catchToken = this.advance();
+            const exceptionVarToken = this.tryConsume(DiagnosticMessages.missingExceptionVarToFollowCatch(), TokenKind.Identifier, ...this.allowedLocalIdentifiers) as Identifier;
+            if (exceptionVarToken) {
+                // force it into an identifier so the AST makes some sense
+                exceptionVarToken.kind = TokenKind.Identifier;
             }
-            return statement;
+            //ensure statement sepatator
+            this.consumeStatementSeparators();
+            const catchBranch = this.block(TokenKind.EndTry);
+            catchStmt = new CatchStatement({
+                catch: catchToken,
+                exceptionVariable: exceptionVarToken,
+                catchBranch: catchBranch
+            });
         }
-        const catchStmt = new CatchStatement({ catch: this.advance() });
-        statement.catchStatement = catchStmt;
-
-        const exceptionVarToken = this.tryConsume(DiagnosticMessages.missingExceptionVarToFollowCatch(), TokenKind.Identifier, ...this.allowedLocalIdentifiers);
-        if (exceptionVarToken) {
-            // force it into an identifier so the AST makes some sense
-            exceptionVarToken.kind = TokenKind.Identifier;
-            catchStmt.tokens.exceptionVariable = exceptionVarToken as Identifier;
-        }
-
-        //ensure statement sepatator
-        this.consumeStatementSeparators();
-
-        catchStmt.catchBranch = this.block(TokenKind.EndTry);
-
         if (this.peek().kind !== TokenKind.EndTry) {
             this.diagnostics.push({
                 ...DiagnosticMessages.expectedEndTryToTerminateTryCatch(),
                 range: this.peek().range
             });
         } else {
-            statement.tokens.endTry = this.advance();
+            endTryToken = this.advance();
         }
+
+        const statement = new TryCatchStatement({
+            try: tryToken,
+            tryBranch: tryBranch,
+            catchStatement: catchStmt,
+            endTry: endTryToken
+        }
+        );
         return statement;
     }
 
@@ -2864,7 +2864,7 @@ export class Parser {
                 while (this.matchAny(TokenKind.Comma, TokenKind.Newline, TokenKind.Colon, TokenKind.Comment)) {
                     // collect comma at end of expression
                     if (lastAAMember && this.checkPrevious(TokenKind.Comma)) {
-                        lastAAMember.tokens.comma = this.previous();
+                        (lastAAMember.tokens as any).comma = this.previous();
                     }
 
                     //check for comment at the end of the current line

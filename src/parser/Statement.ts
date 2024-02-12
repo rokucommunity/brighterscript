@@ -203,7 +203,7 @@ export class Block extends Statement {
         this.statements = options.statements;
         this.startingRange = options.startingRange;
         this.range = util.createBoundingRange(
-            { range: this.startingRange },
+            this.startingRange,
             ...(this.statements ?? [])
         );
     }
@@ -1546,33 +1546,33 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
 export class ImportStatement extends Statement implements TypedefProvider {
     constructor(options: {
         import?: Token;
-        filePath: Token;
+        path: Token;
     }) {
         super();
         this.tokens = {
             import: options.import,
-            filePath: options.filePath
+            path: options.path
         };
         this.range = util.createBoundingRange(
             this.tokens.import,
-            this.tokens.filePath
+            this.tokens.path
         );
-        if (this.tokens.filePath) {
+        if (this.tokens.path) {
             //remove quotes
-            this.filePath = this.tokens.filePath.text.replace(/"/g, '');
+            this.filePath = this.tokens.path.text.replace(/"/g, '');
             //adjust the range to exclude the quotes
-            this.tokens.filePath.range = util.createRange(
-                this.tokens.filePath.range.start.line,
-                this.tokens.filePath.range.start.character + 1,
-                this.tokens.filePath.range.end.line,
-                this.tokens.filePath.range.end.character - 1
+            this.tokens.path.range = util.createRange(
+                this.tokens.path.range.start.line,
+                this.tokens.path.range.start.character + 1,
+                this.tokens.path.range.end.line,
+                this.tokens.path.range.end.character - 1
             );
         }
     }
 
     public readonly tokens: {
         readonly import?: Token;
-        readonly filePath: Token;
+        readonly path: Token;
     };
 
     public readonly kind = AstNodeKind.ImportStatement;
@@ -1588,7 +1588,7 @@ export class ImportStatement extends Statement implements TypedefProvider {
             `'`,
             state.transpileToken(this.tokens.import, 'import'),
             ' ',
-            state.transpileToken(this.tokens.filePath)
+            state.transpileToken(this.tokens.path)
         ];
     }
 
@@ -1600,7 +1600,7 @@ export class ImportStatement extends Statement implements TypedefProvider {
             this.tokens.import?.text ?? 'import',
             ' ',
             //replace any `.bs` extension with `.brs`
-            this.tokens.filePath.text.replace(/\.bs"?$/i, '.brs"')
+            this.tokens.path.text.replace(/\.bs"?$/i, '.brs"')
         ];
     }
 
@@ -2959,7 +2959,7 @@ export class EnumStatement extends Statement implements TypedefProvider {
             endEnum: options.endEnum
         };
         this.symbolTable = new SymbolTable('Enum');
-        this.body = this.body ?? [];
+        this.body = options.body ?? [];
     }
 
     public readonly tokens: {

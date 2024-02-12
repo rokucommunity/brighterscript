@@ -3,7 +3,7 @@ import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
 import type { Location, Position, Range } from 'vscode-languageserver';
 import { DiagnosticCodeMap, diagnosticCodes } from '../DiagnosticMessages';
-import type { Callable, BsDiagnostic, FileReference, FunctionCall, CommentFlag, SerializedCodeFile } from '../interfaces';
+import type { Callable, BsDiagnostic, FileReference, CommentFlag, SerializedCodeFile } from '../interfaces';
 import type { Program } from '../Program';
 import util from '../util';
 import { standardizePath as s } from '../util';
@@ -210,9 +210,6 @@ export class XmlFile implements BscFile {
 
     //TODO implement the xml CDATA parsing, which would populate this list
     public callables = [] as Callable[];
-
-    //TODO implement the xml CDATA parsing, which would populate this list
-    public functionCalls = [] as FunctionCall[];
 
     public functionScopes = [] as FunctionScope[];
 

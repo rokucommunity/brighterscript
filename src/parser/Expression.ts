@@ -228,15 +228,9 @@ export class FunctionExpression extends Expression implements TypedefProvider {
     };
 
     /**
-     * The list of function calls that are declared within this function scope. This excludes CallExpressions
-     * declared in child functions
-     */
-    public readonly callExpressions = [] as CallExpression[];
-
-    /**
      * If this function is part of a FunctionStatement, this will be set. Otherwise this will be undefined
      */
-    public readonly functionStatement?: FunctionStatement;
+    public functionStatement?: FunctionStatement;
 
     public getLeadingTrivia(): Token[] {
         return this.tokens.functionType?.leadingTrivia ?? [];
@@ -1700,7 +1694,7 @@ export class AnnotationExpression extends Expression {
 
     public readonly name: string;
 
-    public readonly call: CallExpression;
+    public call: CallExpression;
 
     /**
      * Convert annotation arguments to JavaScript types

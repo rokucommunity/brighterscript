@@ -631,7 +631,7 @@ describe('Scope', () => {
                 end function
             `);
             program.validate();
-            expectDiagnostics(program, [
+            expectDiagnosticsIncludes(program, [
                 DiagnosticMessages.cannotFindName('param2'),
                 DiagnosticMessages.cannotFindName('name2'),
                 DiagnosticMessages.cannotFindName('item2'),

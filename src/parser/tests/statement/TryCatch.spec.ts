@@ -3,6 +3,8 @@ import { Parser } from '../../Parser';
 import { TryCatchStatement } from '../../Statement';
 import { isFunctionExpression } from '../../../astUtils/reflection';
 import type { FunctionExpression } from '../../Expression';
+import { expectDiagnosticsIncludes } from '../../../testHelpers.spec';
+import { DiagnosticMessages } from '../../../DiagnosticMessages';
 
 describe('parser try/catch', () => {
     it('can parse try catch statements', () => {
@@ -142,7 +144,9 @@ describe('parser try/catch', () => {
                 end try
             end sub
         `);
-        expect(parser.diagnostics).to.be.lengthOf(1);
+        expectDiagnosticsIncludes(parser, [
+            DiagnosticMessages.expectedCatchBlockInTryCatch().message
+        ]);
     });
 
     it('recovers from missing catch and end-try when reaching function boundary', () => {
@@ -153,6 +157,9 @@ describe('parser try/catch', () => {
                     print "error"
             end sub
         `);
-        expect(parser.diagnostics).to.be.lengthOf(1);
+        expectDiagnosticsIncludes(parser, [
+            DiagnosticMessages.expectedCatchBlockInTryCatch().message,
+            DiagnosticMessages.expectedEndTryToTerminateTryCatch().message
+        ]);
     });
 });

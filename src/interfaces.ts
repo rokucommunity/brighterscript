@@ -2,7 +2,6 @@ import type { Range, Diagnostic, CodeAction, SemanticTokenTypes, SemanticTokenMo
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
-import type { FunctionScope } from './FunctionScope';
 import type { TypedFunctionType } from './types/TypedFunctionType';
 import type { ParseMode } from './parser/Parser';
 import type { Program } from './Program';
@@ -19,7 +18,6 @@ import type { FileFactory } from './files/Factory';
 import type { LazyFileData } from './files/LazyFileData';
 import type { SymbolTable } from './SymbolTable';
 import type { SymbolTypeFlag } from './SymbolTableFlag';
-import type { CallExpression } from './parser/Expression';
 import { createToken } from './astUtils/creators';
 import { TokenKind } from './lexer/TokenKind';
 
@@ -78,30 +76,6 @@ export interface Callable {
      * Gives access to the whole statement if you need more data than provided by the interface
      */
     functionStatement: FunctionStatement;
-}
-
-export interface FunctionCall {
-    /**
-     * The full range of this function call (from the start of the function name to its closing paren)
-     */
-    range: Range;
-    expression: CallExpression;
-    functionScope: FunctionScope;
-    file: BscFile;
-    name: string;
-    args: CallableArg[];
-    nameRange: Range;
-}
-
-/**
- * An argument for an expression call.
- */
-export interface CallableArg {
-    text: string;
-    type: BscType;
-    typeToken: Token;
-    range: Range;
-    expression: Expression;
 }
 
 export interface CallableParam {
