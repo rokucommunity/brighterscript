@@ -6,6 +6,8 @@ import { expectZeroDiagnostics, rootDir, trim } from '../../testHelpers.spec';
 let sinon = createSandbox();
 
 const fence = (code: string) => util.mdFence(code, 'brightscript');
+const commentSep = `\n***\n`;
+
 
 describe('HoverProcessor', () => {
     let program: Program;
@@ -331,7 +333,6 @@ describe('HoverProcessor', () => {
                 end sub
             `);
             program.validate();
-            let commentSep = `\n***\n`;
 
             // gu|y as Person
             let hover = program.getHover('source/main.bs', util.createPosition(7, 60))[0];
@@ -423,7 +424,6 @@ describe('HoverProcessor', () => {
                 end sub
             `);
             program.validate();
-            let commentSep = `\n***\n`;
             //    print lc|ase("HELLO")
             let hover = program.getHover(mainFile.srcPath, util.createPosition(2, 29))[0];
             expect(hover.contents).to.eql([`${fence('function lcase(s as string) as string')}${commentSep}Converts the string to all lower case.`]);
@@ -517,6 +517,70 @@ describe('HoverProcessor', () => {
             let hover = program.getHover(file.srcPath, util.createPosition(6, 24))[0];
             expect(hover?.contents).eql([fence('myFloat as float')]);
 
+        });
+
+        it('should provide correct hover for members of classes', () => {
+            let file = program.setFile('source/main.bs', `
+                class SomeKlass
+                    name as string
+                    other as OtherKlass
+                    myLabel as roSGNodeLabel
+                end class
+
+                class OtherKlass
+                    size as integer
+                end class
+            `);
+            program.validate();
+            //     na|me as string
+            let hover = program.getHover(file.srcPath, util.createPosition(2, 24))[0];
+            expect(hover?.contents).eql([fence('SomeKlass.name as string')]);
+            //    ot|her as OtherKlass
+            hover = program.getHover(file.srcPath, util.createPosition(3, 24))[0];
+            expect(hover?.contents).eql([fence('SomeKlass.other as OtherKlass')]);
+            //     my|Label as RoSGNodeLabel
+            hover = program.getHover(file.srcPath, util.createPosition(4, 24))[0];
+            expect(hover?.contents).eql([fence('SomeKlass.myLabel as roSGNodeLabel')]);
+        });
+
+        it('should provide correct hover for members of interfaces', () => {
+            let file = program.setFile('source/main.bs', `
+                interface SomeIFace
+                    name as string
+                    other as OtherIFace
+                    myLabel as roSGNodeLabel
+                end interface
+
+                interface OtherIFace
+                    size as integer
+                end interface
+            `);
+            program.validate();
+            //     na|me as string
+            let hover = program.getHover(file.srcPath, util.createPosition(2, 24))[0];
+            expect(hover?.contents).eql([fence('SomeIFace.name as string')]);
+            //    ot|her as OtherIFace
+            hover = program.getHover(file.srcPath, util.createPosition(3, 24))[0];
+            expect(hover?.contents).eql([fence('SomeIFace.other as OtherIFace')]);
+            //     my|Label as RoSGNodeLabel
+            hover = program.getHover(file.srcPath, util.createPosition(4, 24))[0];
+            expect(hover?.contents).eql([fence('SomeIFace.myLabel as roSGNodeLabel')]);
+        });
+
+        it('should include leading trivia of member field hover', () => {
+            let file = program.setFile('source/main.bs', `
+                interface SomeIFace
+                    ' Some description
+                    name as string
+                    other as OtherIFace
+                    myLabel as roSGNodeLabel
+                end interface
+            `);
+            program.validate();
+
+            //     na|me as string
+            let hover = program.getHover(file.srcPath, util.createPosition(3, 24))[0];
+            expect(hover?.contents).to.eql([`${fence('SomeIFace.name as string')}${commentSep}Some description`]);
         });
     });
 
