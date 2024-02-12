@@ -1,5 +1,5 @@
 import { SourceNode } from 'source-map';
-import { isBrsFile, isCallfuncExpression, isClassStatement, isEnumStatement, isEnumType, isInheritableType, isInterfaceStatement, isMemberField, isNamespaceStatement, isNamespaceType, isNewExpression, isTypedFunctionType, isXmlFile } from '../../astUtils/reflection';
+import { isBrsFile, isCallfuncExpression, isClassStatement, isEnumMemberStatement, isEnumStatement, isEnumType, isInheritableType, isInterfaceStatement, isMemberField, isNamespaceStatement, isNamespaceType, isNewExpression, isTypedFunctionType, isXmlFile } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
 import type { ExtraSymbolData, Hover, ProvideHoverEvent, TypeChainEntry } from '../../interfaces';
@@ -13,7 +13,7 @@ import type { AstNode, Expression } from '../../parser/AstNode';
 import type { Scope } from '../../Scope';
 import type { FunctionScope } from '../../FunctionScope';
 import type { BscType } from '../../types/BscType';
-import type { ClassStatement, FieldStatement, InterfaceFieldStatement, InterfaceStatement } from '../../parser/Statement';
+import type { ClassStatement, EnumStatement, FieldStatement, InterfaceFieldStatement, InterfaceStatement } from '../../parser/Statement';
 
 const fence = (code: string) => util.mdFence(code, 'brightscript');
 
@@ -169,6 +169,9 @@ export class HoverProcessor {
                 } else if (isMemberField(expression)) {
                     hoverContent = this.getMemberHover(expression, exprType);
                     descriptionNode = expression;
+                } else if (isEnumMemberStatement(expression)) {
+                    hoverContent = fence(`${(expression.parent as EnumStatement)?.name}.${expression.tokens.name.text} as ${exprType.toString()}`.trim());
+                    descriptionNode = expression;
                 } else if (isNamespaceType(exprType) ||
                     isEnumType(expression.getType({ flags: SymbolTypeFlag.typetime }))) {
                     hoverContent = this.getCustomTypeHover(exprType, extraData);
@@ -185,7 +188,7 @@ export class HoverProcessor {
                     modifiers.push(TokenKind.Optional);
                 }
                 if (modifiers.length > 0) {
-                    hoverContent += `\n*(${modifiers.join(', ').toLowerCase()})*`;
+                    hoverContent += `\n * (${modifiers.join(', ').toLowerCase()})* `;
                 }
 
                 if (descriptionNode) {

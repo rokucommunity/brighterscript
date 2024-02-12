@@ -582,6 +582,20 @@ describe('HoverProcessor', () => {
             let hover = program.getHover(file.srcPath, util.createPosition(3, 24))[0];
             expect(hover?.contents).to.eql([`${fence('SomeIFace.name as string')}${commentSep}Some description`]);
         });
+
+        it('should include leading trivia of enum member field hover', () => {
+            let file = program.setFile('source/main.bs', `
+                enum Direction
+                    ' Go Up
+                    up  = "up"
+                    down =  "down"
+                end enum
+            `);
+            program.validate();
+            //    u|p  = "up"
+            let hover = program.getHover(file.srcPath, util.createPosition(3, 22))[0];
+            expect(hover?.contents).to.eql([`${fence('Direction.up as Direction')}${commentSep}Go Up`]);
+        });
     });
 
     describe('callFunc', () => {
