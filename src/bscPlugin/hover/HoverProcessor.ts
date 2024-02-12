@@ -1,5 +1,5 @@
 import { SourceNode } from 'source-map';
-import { isBrsFile, isCallfuncExpression, isClassStatement, isEnumStatement, isEnumType, isInheritableType, isInterfaceStatement, isNamespaceStatement, isNamespaceType, isNewExpression, isTypedFunctionType, isXmlFile } from '../../astUtils/reflection';
+import { isBrsFile, isCallfuncExpression, isClassStatement, isEnumMemberStatement, isEnumStatement, isEnumType, isInheritableType, isInterfaceStatement, isMemberField, isNamespaceStatement, isNamespaceType, isNewExpression, isTypedFunctionType, isXmlFile } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
 import type { ExtraSymbolData, Hover, ProvideHoverEvent, TypeChainEntry } from '../../interfaces';
@@ -13,6 +13,7 @@ import type { AstNode, Expression } from '../../parser/AstNode';
 import type { Scope } from '../../Scope';
 import type { FunctionScope } from '../../FunctionScope';
 import type { BscType } from '../../types/BscType';
+import type { ClassStatement, EnumStatement, FieldStatement, InterfaceFieldStatement, InterfaceStatement } from '../../parser/Statement';
 
 const fence = (code: string) => util.mdFence(code, 'brightscript');
 
@@ -116,6 +117,14 @@ export class HoverProcessor {
         return result;
     }
 
+    private getMemberHover(memberExpression: FieldStatement | InterfaceFieldStatement, expressionType: BscType) {
+        let nameText = `${(memberExpression.parent as ClassStatement | InterfaceStatement)?.getName(ParseMode.BrighterScript)}.${memberExpression.tokens.name.text}`;
+        let exprTypeString = expressionType.toString();
+        const innerText = `${nameText} as ${exprTypeString}`.trim();
+        let result = fence(innerText);
+        return result;
+    }
+
     private getBrsFileHover(file: BrsFile): Hover {
         //get the token at the position
         let token = file.getTokenAt(this.event.position);
@@ -154,8 +163,15 @@ export class HoverProcessor {
                 const exprNameString = !processedTypeChain.containsDynamic ? fullName : token.text;
                 const useCustomTypeHover = isInTypeExpression || expression?.findAncestor(isNewExpression);
                 let hoverContent = '';
+                let descriptionNode;
                 if (useCustomTypeHover && isInheritableType(exprType)) {
                     hoverContent = this.getCustomTypeHover(exprType, extraData);
+                } else if (isMemberField(expression)) {
+                    hoverContent = this.getMemberHover(expression, exprType);
+                    descriptionNode = expression;
+                } else if (isEnumMemberStatement(expression)) {
+                    hoverContent = fence(`${(expression.parent as EnumStatement)?.name}.${expression.tokens.name.text} as ${exprType.toString()}`.trim());
+                    descriptionNode = expression;
                 } else if (isNamespaceType(exprType) ||
                     isEnumType(expression.getType({ flags: SymbolTypeFlag.typetime }))) {
                     hoverContent = this.getCustomTypeHover(exprType, extraData);
@@ -172,10 +188,12 @@ export class HoverProcessor {
                     modifiers.push(TokenKind.Optional);
                 }
                 if (modifiers.length > 0) {
-                    hoverContent += `\n*(${modifiers.join(', ').toLowerCase()})*`;
+                    hoverContent += `\n * (${modifiers.join(', ').toLowerCase()})* `;
                 }
 
-                if (extraData.description) {
+                if (descriptionNode) {
+                    hoverContent = this.buildContentsWithDocsFromExpression(hoverContent, descriptionNode);
+                } else if (extraData.description) {
                     hoverContent = this.buildContentsWithDocsFromDescription(hoverContent, extraData.description);
                 } else if (extraData.definingNode) {
                     hoverContent = this.buildContentsWithDocsFromExpression(hoverContent, extraData.definingNode);

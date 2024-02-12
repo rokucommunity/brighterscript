@@ -158,6 +158,13 @@ export function isInterfaceMethodStatement(element: AstNode | undefined): elemen
 export function isInterfaceFieldStatement(element: AstNode | undefined): element is InterfaceFieldStatement {
     return element?.kind === AstNodeKind.InterfaceFieldStatement;
 }
+export function isMemberField(element: AstNode | undefined): element is InterfaceFieldStatement | FieldStatement {
+    return isFieldStatement(element) || isInterfaceFieldStatement(element);
+}
+export function isMemberMethod(element: AstNode | undefined): element is InterfaceMethodStatement | MethodStatement {
+    return isMethodStatement(element) || isInterfaceMethodStatement(element);
+}
+
 export function isEnumStatement(element: AstNode | undefined): element is EnumStatement {
     return element?.kind === AstNodeKind.EnumStatement;
 }
