@@ -98,7 +98,7 @@ export abstract class InheritableType extends BscType {
                 return true;
             }
             //check non-namespaced version
-            if (myLowerName.split('.').reverse()[0] === lowerTargetName) {
+            if (myLowerName.split('.').pop() === lowerTargetName) {
                 return true;
             }
         }

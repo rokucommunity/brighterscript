@@ -1725,6 +1725,40 @@ describe('ScopeValidator', () => {
                 DiagnosticMessages.itemCannotBeUsedAsVariable('namespace')
             ]);
         });
+
+        it('validates when a class member is accessed from a class directly', () => {
+            program.setFile('source/util.bs', `
+                class Klass
+                      name as string
+                end class
+
+                sub doStuff()
+                    print klass.name ' only valid use of "Klass" is as a constructor: "new Klass()"
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.itemCannotBeUsedAsVariable('Klass')
+            ]);
+        });
+
+        it('validates when a class member is accessed from a class directly when class has a namespace', () => {
+            program.setFile('source/util.bs', `
+                namespace Alpha
+                    class Klass
+                        name as string
+                    end class
+                end namespace
+
+                sub doStuff()
+                    print alpha.klass.name ' only valid use of "Klass" is as a constructor: "new Klass()"
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.itemCannotBeUsedAsVariable('Alpha.Klass')
+            ]);
+        });
     });
 
     describe('returnTypeMismatch', () => {
