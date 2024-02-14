@@ -118,7 +118,7 @@ export class DefinitionProvider {
             for (const scope of this.event.program.getScopes()) {
                 //does this xml file declare this function in its interface?
                 if (isXmlScope(scope)) {
-                    const apiFunc = scope.xmlFile.ast?.component?.interfaceElement?.functions?.find(x => x.name.toLowerCase() === textToSearchFor); // eslint-disable-line @typescript-eslint/no-loop-func
+                    const apiFunc = scope.xmlFile.ast?.componentElement?.interfaceElement?.functions?.find(x => x.name.toLowerCase() === textToSearchFor); // eslint-disable-line @typescript-eslint/no-loop-func
                     if (apiFunc) {
                         this.event.definitions.push(
                             util.createLocation(util.pathToUri(scope.xmlFile.srcPath), apiFunc.getAttribute('name').tokens.value.range)

@@ -21,7 +21,7 @@ export class XmlFilePreTranspileProcessor {
         this.injectScriptImports();
 
         //transform any brighterscript `type` attributes to `brightscript`
-        for (const script of this.event.file.ast?.component?.scriptElements ?? []) {
+        for (const script of this.event.file.ast?.componentElement?.scriptElements ?? []) {
             const type = script.getAttribute('type');
             if (/text\/brighterscript/i.test(type?.value)) {
                 this.event.editor.setProperty(
@@ -57,7 +57,7 @@ export class XmlFilePreTranspileProcessor {
 
         // eslint-disable-next-line @typescript-eslint/dot-notation
         const [, publishableScripts] = this.checkScriptsForPublishableImports([
-            ...this.event.file.ast.component?.scriptElements ?? [],
+            ...this.event.file.ast.componentElement?.scriptElements ?? [],
             ...extraImportScripts
         ]);
 
@@ -68,7 +68,7 @@ export class XmlFilePreTranspileProcessor {
             publishableScripts.push(bslib);
         }
 
-        const elements = this.event.file.ast.component.elements;
+        const elements = this.event.file.ast.componentElement.elements;
         //remove any unreferenced scripts
         let set = new Set(publishableScripts);
         for (let i = elements.length - 1; i >= 0; i--) {
@@ -83,7 +83,7 @@ export class XmlFilePreTranspileProcessor {
         }
 
         //add new scripts after the LAST `<script>` tag that was created explicitly by the user, or at the top of the component if it has no scripts
-        let lastScriptIndex = util.findLastIndex(this.event.file.ast.component.elements, x => x.tokens.startTagName.text.toLowerCase() === 'script');
+        let lastScriptIndex = util.findLastIndex(this.event.file.ast.componentElement.elements, x => x.tokens.startTagName.text.toLowerCase() === 'script');
         lastScriptIndex = lastScriptIndex >= 0
             ? lastScriptIndex + 1
             : 0;

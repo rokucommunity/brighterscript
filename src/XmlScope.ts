@@ -45,7 +45,7 @@ export class XmlScope extends Scope {
     }
 
     public getComponentType() {
-        let componentElement = this.xmlFile.ast.component;
+        let componentElement = this.xmlFile.ast.componentElement;
         if (!componentElement?.name) {
             return;
         }
@@ -93,10 +93,10 @@ export class XmlScope extends Scope {
     }
 
     private diagnosticValidateInterface(callableContainerMap: CallableContainerMap) {
-        if (!this.xmlFile.parser.ast?.component?.interfaceElement) {
+        if (!this.xmlFile.parser.ast?.componentElement?.interfaceElement) {
             return;
         }
-        const iface = this.xmlFile.parser.ast.component.interfaceElement;
+        const iface = this.xmlFile.parser.ast.componentElement.interfaceElement;
 
         //validate functions
         for (const func of iface.functions) {

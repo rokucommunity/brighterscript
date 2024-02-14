@@ -2,12 +2,6 @@ import { SourceNode } from 'source-map';
 import type { Range } from 'vscode-languageserver';
 import { createSGAttribute, createSGInterface, createSGInterfaceField, createSGInterfaceFunction } from '../astUtils/creators';
 import type { FileReference } from '../interfaces';
-import { BooleanType } from '../types/BooleanType';
-import { DynamicType } from '../types/DynamicType';
-import { FloatType } from '../types/FloatType';
-import { IntegerType } from '../types/IntegerType';
-import { LongIntegerType } from '../types/LongIntegerType';
-import { StringType } from '../types/StringType';
 import util from '../util';
 import type { TranspileState } from './TranspileState';
 
@@ -486,32 +480,6 @@ export enum SGFieldType {
 }
 export const SGFieldTypes = Object.keys(SGFieldType);
 
-export function getBscTypeFromSGFieldType(sgFieldType: string) {
-    switch (sgFieldType) {
-        case SGFieldType.integer:
-        case SGFieldType.int: {
-            return new IntegerType();
-        }
-        case SGFieldType.longinteger: {
-            return new LongIntegerType();
-        }
-        case SGFieldType.float: {
-            return new FloatType();
-        }
-        case SGFieldType.string:
-        case SGFieldType.str: {
-            return new StringType();
-        }
-        case SGFieldType.boolean:
-        case SGFieldType.bool: {
-            return new BooleanType();
-        }
-        default: {
-            return new DynamicType();
-        }
-    }
-}
-
 export class SGInterfaceFunction extends SGElement {
     get name() {
         return this.getAttributeValue('name');
@@ -860,31 +828,31 @@ export interface SGReferences {
 export class SGAst {
 
     constructor(options: {
-        prolog?: SGProlog;
-        root?: SGElement;
-        component?: SGComponent;
+        prologElement?: SGProlog;
+        rootElement?: SGElement;
+        componentElement?: SGComponent;
     } = {}) {
-        this.prolog = options.prolog;
-        this.root = options.root;
-        this.component = options.component;
+        this.prologElement = options.prologElement;
+        this.rootElement = options.rootElement;
+        this.componentElement = options.componentElement;
     }
 
-    public readonly prolog?: SGProlog;
-    public readonly root?: SGElement;
-    public readonly component?: SGComponent;
+    public readonly prologElement?: SGProlog;
+    public readonly rootElement?: SGElement;
+    public readonly componentElement?: SGComponent;
 
     public transpile(state: TranspileState): SourceNode {
         const chunks = [] as SourceNode[];
         //write XML prolog
-        if (this.prolog) {
+        if (this.prologElement) {
             chunks.push(
-                this.prolog.transpile(state)
+                this.prologElement.transpile(state)
             );
         }
-        if (this.component) {
+        if (this.componentElement) {
             //write content
             chunks.push(
-                this.component.transpile(state)
+                this.componentElement.transpile(state)
             );
         }
         return new SourceNode(null, null, null, chunks);

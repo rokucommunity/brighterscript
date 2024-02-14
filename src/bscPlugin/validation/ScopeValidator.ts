@@ -790,7 +790,7 @@ export class ScopeValidator {
                 message: `In component scope '${this.event.scope?.xmlFile?.componentName?.text}'`,
                 location: util.createLocation(
                     URI.file(this.event.scope.xmlFile.srcPath).toString(),
-                    this.event.scope?.xmlFile?.ast?.component?.getAttribute('name')?.tokens?.value?.range ?? util.createRange(0, 0, 0, 10)
+                    this.event.scope?.xmlFile?.ast?.componentElement?.getAttribute('name')?.tokens?.value?.range ?? util.createRange(0, 0, 0, 10)
                 )
             });
         } else {

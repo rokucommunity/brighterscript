@@ -51,7 +51,7 @@ export default class SGParser {
     private findReferences() {
         this._references = this.emptySGReferences();
 
-        const { component: componentElement } = this.ast;
+        const { componentElement } = this.ast;
         if (!componentElement) {
             return;
         }
@@ -122,7 +122,7 @@ export default class SGParser {
         }
 
         if (isSGComponent(root)) {
-            this.ast = new SGAst({ prolog: prolog, root: root, component: root });
+            this.ast = new SGAst({ prologElement: prolog, rootElement: root, componentElement: root });
         } else {
             if (root) {
                 //error: not a component
@@ -131,7 +131,7 @@ export default class SGParser {
                     range: root.tokens.startTagName.range
                 });
             }
-            this.ast = new SGAst({ prolog: prolog, root: root });
+            this.ast = new SGAst({ prologElement: prolog, rootElement: root });
         }
     }
 
