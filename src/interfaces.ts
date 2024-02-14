@@ -857,3 +857,10 @@ export interface NamespaceContainer {
     namespaces?: Map<string, NamespaceContainer>;
     symbolTable: SymbolTable;
 }
+
+/**
+ * Use Writable<T> to remove readonly flag from properties in T
+ * Be careful!
+ */
+export type Writeable<T> = { -readonly [P in keyof T]: T[P] };
+export type DeepWriteable<T> = { -readonly [P in keyof T]: DeepWriteable<T[P]> };

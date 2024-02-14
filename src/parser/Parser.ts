@@ -95,7 +95,7 @@ import { Logger } from '../Logger';
 import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression } from '../astUtils/reflection';
 import { createStringLiteral } from '../astUtils/creators';
 import type { Expression, Statement } from './AstNode';
-import { SymbolTable } from '../SymbolTable';
+import type { DeepWriteable } from '../interfaces';
 
 export class Parser {
     /**
@@ -537,7 +537,7 @@ export class Parser {
 
         this.consumeStatementSeparators();
 
-        const body: (EnumMemberStatement | CommentStatement)[] = [];
+        const body: Array<EnumMemberStatement | CommentStatement> = [];
         //gather up all members
         while (this.checkAny(TokenKind.Comment, TokenKind.Identifier, TokenKind.At, ...AllowedProperties)) {
             try {
@@ -663,9 +663,6 @@ export class Parser {
                         func: funcDeclaration.func,
                         override: overrideKeyword
                     });
-
-                    //refer to this statement as parent of the expression
-                    funcDeclaration.func.functionStatement = decl as MethodStatement;
 
                     //fields
                 } else if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
@@ -912,8 +909,6 @@ export class Parser {
                 });
             }
 
-            body.symbolTable = new SymbolTable(`Block: Function '${name?.text ?? ''}'`, () => func.getSymbolTable());
-
             let func = new FunctionExpression({
                 parameters: params,
                 body: body,
@@ -929,9 +924,6 @@ export class Parser {
                 return func;
             } else {
                 let result = new FunctionStatement({ name: name, func: func });
-                func.symbolTable.name += `: '${name?.text}'`;
-                func.functionStatement = result;
-
                 return result;
             }
         } finally {
@@ -2864,7 +2856,7 @@ export class Parser {
                 while (this.matchAny(TokenKind.Comma, TokenKind.Newline, TokenKind.Colon, TokenKind.Comment)) {
                     // collect comma at end of expression
                     if (lastAAMember && this.checkPrevious(TokenKind.Comma)) {
-                        (lastAAMember.tokens as any).comma = this.previous();
+                        (lastAAMember as DeepWriteable<AAMemberExpression>).tokens.comma = this.previous();
                     }
 
                     //check for comment at the end of the current line

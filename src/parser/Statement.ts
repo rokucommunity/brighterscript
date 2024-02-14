@@ -253,6 +253,7 @@ export class Block extends Statement {
             walkArray(this.statements, visitor, options, this);
         }
     }
+
 }
 
 export class ExpressionStatement extends Statement {
@@ -405,6 +406,9 @@ export class FunctionStatement extends Statement implements TypedefProvider {
             name: options.name
         };
         this.func = options.func;
+        this.func.symbolTable.name += `: '${this.tokens.name?.text}'`;
+        this.func.functionStatement = this;
+
         this.range = this.func.range;
     }
 
