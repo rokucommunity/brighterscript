@@ -1775,6 +1775,44 @@ describe('ScopeValidator', () => {
                 DiagnosticMessages.expressionIsNotConstructable('someKlass')
             ]);
         });
+
+        it('allows when a class name is used as field name', () => {
+            program.setFile('source/util.bs', `
+                class Klass
+                    name as string
+                end class
+
+                class OtherKlass
+                    klass as Klass
+
+                    sub foo()
+                        print m.klass.name
+                    end sub
+                end class
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows when a class name from a namespace is used as field name', () => {
+            program.setFile('source/util.bs', `
+                namespace Alpha
+                    class Klass
+                        name as string
+                    end class
+                end namespace
+
+                class OtherKlass
+                    klass as Alpha.Klass
+
+                    sub foo()
+                        m.klass = new Alpha.Klass()
+                    end sub
+                end class
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('returnTypeMismatch', () => {

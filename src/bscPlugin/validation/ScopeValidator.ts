@@ -1,5 +1,5 @@
 import { URI } from 'vscode-uri';
-import { isAssignmentStatement, isAssociativeArrayType, isBrsFile, isCallableType, isClassStatement, isClassType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isObjectType, isPrimitiveType, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
+import { isAssignmentStatement, isAssociativeArrayType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isObjectType, isPrimitiveType, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -613,16 +613,19 @@ export class ScopeValidator {
         if (isUsedAsType) {
             return;
         }
+        const containingNamespaceName = expression.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
 
-        const classUsedAsVarEntry = this.checkTypeChainForClassUsedAsVar(typeChain);
-        if (classUsedAsVarEntry) {
+        if (!(isCallExpression(expression.parent) && isNewExpression(expression.parent?.parent))) {
+            const classUsedAsVarEntry = this.checkTypeChainForClassUsedAsVar(typeChain, containingNamespaceName);
+            if (classUsedAsVarEntry) {
 
-            this.addMultiScopeDiagnostic({
-                ...DiagnosticMessages.itemCannotBeUsedAsVariable(classUsedAsVarEntry.toString()),
-                range: expression.range,
-                file: file
-            });
-            return;
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.itemCannotBeUsedAsVariable(classUsedAsVarEntry.toString()),
+                    range: expression.range,
+                    file: file
+                });
+                return;
+            }
         }
 
         const lastTypeInfo = typeChain[typeChain.length - 1];
@@ -666,18 +669,30 @@ export class ScopeValidator {
         }
     }
 
-    private checkTypeChainForClassUsedAsVar(typeChain: TypeChainEntry[]) {
+    private checkTypeChainForClassUsedAsVar(typeChain: TypeChainEntry[], containingNamespaceName: string) {
         const ignoreKinds = [AstNodeKind.TypeCastExpression, AstNodeKind.NewExpression];
-        const classUsedAsVarIndex = typeChain.findIndex(tce => {
-            if (!tce.kind || ignoreKinds.includes(tce.kind)) {
-                return false;
+        let lowerNameSoFar = '';
+        let classUsedAsVar;
+        let isFirst = true;
+        for (let i = 0; i < typeChain.length - 1; i++) { // do not look at final entry - we CAN use the constructor as a variable
+            const tce = typeChain[i];
+
+            lowerNameSoFar += `${lowerNameSoFar ? '.' : ''}${tce.name.toLowerCase()}`;
+            if (!isNamespaceType(tce.type)) {
+                if (isFirst && containingNamespaceName) {
+                    lowerNameSoFar = `${containingNamespaceName.toLowerCase()}.${lowerNameSoFar}`;
+                }
+                if (!tce.kind || ignoreKinds.includes(tce.kind)) {
+                    break;
+                } else if (isClassType(tce.type) && lowerNameSoFar.toLowerCase() === tce.type.name.toLowerCase()) {
+                    classUsedAsVar = tce.type;
+                }
+                break;
             }
-            return isClassType(tce.type) && tce.name.toLowerCase() === tce.type.name.split('.').pop()?.toLowerCase();
-        });
-        if (classUsedAsVarIndex >= 0 && classUsedAsVarIndex < typeChain.length - 1) {
-            return typeChain[classUsedAsVarIndex].type;
+            isFirst = false;
         }
-        return undefined;
+
+        return classUsedAsVar;
     }
 
     /**
@@ -762,7 +777,7 @@ export class ScopeValidator {
      * for diagnostics where scope isn't important. (i.e. CreateObject validations)
      */
     private addDiagnosticOnce(diagnostic: BsDiagnostic) {
-        this.onceCache.getOrAdd(`${diagnostic.code}-${diagnostic.message}-${util.rangeToString(diagnostic.range)}`, () => {
+        this.onceCache.getOrAdd(`${diagnostic.code} -${diagnostic.message} -${util.rangeToString(diagnostic.range)} `, () => {
             const diagnosticWithOrigin = { ...diagnostic } as BsDiagnosticWithOrigin;
             if (!diagnosticWithOrigin.origin) {
                 // diagnostic does not have origin.
@@ -793,7 +808,7 @@ export class ScopeValidator {
      * Add a diagnostic (to the first scope) that will have `relatedInformation` for each affected scope
      */
     private addMultiScopeDiagnostic(diagnostic: BsDiagnostic) {
-        diagnostic = this.multiScopeCache.getOrAdd(`${diagnostic.file?.srcPath}-${diagnostic.code}-${diagnostic.message}-${util.rangeToString(diagnostic.range)}`, () => {
+        diagnostic = this.multiScopeCache.getOrAdd(`${diagnostic.file?.srcPath} -${diagnostic.code} -${diagnostic.message} -${util.rangeToString(diagnostic.range)} `, () => {
 
             if (!diagnostic.relatedInformation) {
                 diagnostic.relatedInformation = [];
