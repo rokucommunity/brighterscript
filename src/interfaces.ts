@@ -8,7 +8,7 @@ import type { ParseMode } from './parser/Parser';
 import type { Program } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
 import type { ClassStatement, ConstStatement, EnumStatement, FunctionStatement, NamespaceStatement } from './parser/Statement';
-import type { AstNode, Expression, Statement } from './parser/AstNode';
+import type { AstNode, AstNodeKind, Expression, Statement } from './parser/AstNode';
 import type { TranspileState } from './parser/TranspileState';
 import type { SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
@@ -821,16 +821,32 @@ export interface GetTypeOptions {
 }
 
 export class TypeChainEntry {
-    public data: ExtraSymbolData;
-    constructor(public name: string, public type: BscType, data: ExtraSymbolData, public range: Range, public separatorToken: Token = createToken(TokenKind.Dot)) {
-        if (data) {
-            // make a copy of this data
-            this.data = { ...data };
-        }
+    constructor(options: {
+        name: string;
+        type: BscType;
+        data: ExtraSymbolData;
+        range: Range;
+        separatorToken?: Token;
+        kind?: AstNodeKind;
+    }) {
+        this.name = options.name;
+        // make a copy of this data
+        this.data = { ...options.data };
+        this.type = options.type;
+        this.range = options.range;
+        this.separatorToken = options.separatorToken ?? createToken(TokenKind.Dot);
+        this.kind = options.kind;
     }
     get isResolved() {
         return this.type?.isResolvable();
     }
+
+    public readonly name: string;
+    public readonly type: BscType;
+    public readonly data: ExtraSymbolData;
+    public readonly range: Range;
+    public readonly separatorToken: Token;
+    public kind: AstNodeKind;
 }
 
 export interface TypeChainProcessResult {
