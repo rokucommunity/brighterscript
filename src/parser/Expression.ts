@@ -383,7 +383,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         if (funcName) {
             resultType.setName(funcName);
         }
-        options.typeChain?.push(new TypeChainEntry(funcName, resultType, options.data, this.range));
+        options.typeChain?.push(new TypeChainEntry({ name: funcName, type: resultType, data: options.data, range: this.range, kind: this.kind }));
         return resultType;
     }
 }
@@ -421,7 +421,7 @@ export class FunctionParameterExpression extends Expression {
         const paramType = this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime, typeChain: undefined }) ??
             this.defaultValue?.getType({ ...options, flags: SymbolTypeFlag.runtime, typeChain: undefined }) ??
             DynamicType.instance;
-        options.typeChain?.push(new TypeChainEntry(this.tokens.name.text, paramType, options.data, this.range));
+        options.typeChain?.push(new TypeChainEntry({ name: this.tokens.name.text, type: paramType, data: options.data, range: this.range, kind: this.kind }));
         return paramType;
     }
 
@@ -537,7 +537,13 @@ export class DottedGetExpression extends Expression {
     getType(options: GetTypeOptions) {
         const objType = this.obj?.getType(options);
         const result = objType?.getMemberType(this.tokens.name?.text, options);
-        options.typeChain?.push(new TypeChainEntry(this.tokens.name?.text, result, options.data, this.tokens.name?.range ?? this.range));
+        options.typeChain?.push(new TypeChainEntry({
+            name: this.tokens.name?.text,
+            type: result,
+            data: options.data,
+            range: this.tokens.name?.range ?? this.range,
+            kind: this.kind
+        }));
         if (result || options.flags & SymbolTypeFlag.typetime) {
             // All types should be known at typetime
             return result;
@@ -1148,7 +1154,7 @@ export class VariableExpression extends Expression {
             const symbolTable = this.getSymbolTable();
             resultType = symbolTable?.getSymbolType(nameKey, { ...options, fullName: nameKey, tableProvider: () => this.getSymbolTable() });
         }
-        options.typeChain?.push(new TypeChainEntry(nameKey, resultType, options.data, this.range));
+        options.typeChain?.push(new TypeChainEntry({ name: nameKey, type: resultType, data: options.data, range: this.range, kind: this.kind }));
         return resultType;
     }
 }
@@ -1303,7 +1309,15 @@ export class NewExpression extends Expression {
     }
 
     getType(options: GetTypeOptions) {
-        return this.call.getType(options);
+        const result = this.call.getType(options);
+        if (options.typeChain) {
+            // modify last typechain entry to show it is a new ...()
+            const lastEntry = options.typeChain[options.typeChain.length - 1];
+            if (lastEntry) {
+                lastEntry.kind = this.kind;
+            }
+        }
+        return result;
     }
 }
 
@@ -1395,7 +1409,13 @@ export class CallfuncExpression extends Expression {
         if (isComponentType(calleeType) || isReferenceType(calleeType)) {
             const funcType = (calleeType as ComponentType).getCallFuncType?.(this.tokens.methodName.text, options);
             if (funcType) {
-                options.typeChain?.push(new TypeChainEntry(this.tokens.methodName.text, funcType, options.data, this.tokens.methodName.range, createToken(TokenKind.Callfunc)));
+                options.typeChain?.push(new TypeChainEntry({
+                    name: this.tokens.methodName.text,
+                    type: funcType,
+                    data: options.data, range: this.tokens.methodName.range,
+                    separatorToken: createToken(TokenKind.Callfunc),
+                    kind: this.kind
+                }));
                 if (options.ignoreCall) {
                     result = funcType;
                 }
@@ -2117,7 +2137,15 @@ export class TypeCastExpression extends Expression {
     }
 
     public getType(options: GetTypeOptions): BscType {
-        return this.typeExpression.getType(options);
+        const result = this.typeExpression.getType(options);
+        if (options.typeChain) {
+            // modify last typechain entry to show it is a typecast
+            const lastEntry = options.typeChain[options.typeChain.length - 1];
+            if (lastEntry) {
+                lastEntry.kind = this.kind;
+            }
+        }
+        return result;
     }
 }
 

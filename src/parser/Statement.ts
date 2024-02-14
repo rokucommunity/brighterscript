@@ -189,7 +189,7 @@ export class AssignmentStatement extends Statement {
 
         // Note: compound assignments (eg. +=) are internally dealt with via the RHS being a BinaryExpression
         // so this.value will be a BinaryExpression, and BinaryExpressions can figure out their own types
-        options.typeChain?.push(new TypeChainEntry(this.tokens.name.text, variableType, options.data, this.tokens.name.range));
+        options.typeChain?.push(new TypeChainEntry({ name: this.tokens.name.text, type: variableType, data: options.data, range: this.tokens.name.range, kind: this.kind }));
         return variableType;
     }
 }
@@ -1300,7 +1300,12 @@ export class DottedSetStatement extends Statement {
     getType(options: GetTypeOptions) {
         const objType = this.obj?.getType(options);
         const result = objType?.getMemberType(this.tokens.name?.text, options);
-        options.typeChain?.push(new TypeChainEntry(this.tokens.name?.text, result, options.data, this.tokens.name?.range ?? this.range));
+        options.typeChain?.push(new TypeChainEntry({
+            name: this.tokens.name?.text,
+            type: result, data: options.data,
+            range: this.tokens.name?.range ?? this.range,
+            kind: this.kind
+        }));
         return result;
     }
 }
@@ -1789,7 +1794,13 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
             const flag = statement.isOptional ? SymbolTypeFlag.runtime | SymbolTypeFlag.optional : SymbolTypeFlag.runtime;
             resultType.addMember(statement?.tokens.name?.text, { definingNode: statement }, memberType, flag);
         }
-        options.typeChain?.push(new TypeChainEntry(this.getName(ParseMode.BrighterScript), resultType, options.data, this.range));
+        options.typeChain?.push(new TypeChainEntry({
+            name: this.getName(ParseMode.BrighterScript),
+            type: resultType,
+            data: options.data,
+            range: this.range,
+            kind: this.kind
+        }));
         return resultType;
     }
 }
@@ -2026,7 +2037,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         }
         let funcName = this.getName(ParseMode.BrighterScript);
         resultType.setName(funcName);
-        options.typeChain?.push(new TypeChainEntry(resultType.name, resultType, options.data, this.range));
+        options.typeChain?.push(new TypeChainEntry({ name: resultType.name, type: resultType, data: options.data, range: this.range, kind: this.kind }));
         return resultType;
     }
 }
@@ -2471,7 +2482,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
             }
             resultType.addMember(statement?.tokens.name?.text, { definingNode: statement }, fieldType, flag);
         }
-        options.typeChain?.push(new TypeChainEntry(resultType.name, resultType, options.data, this.range));
+        options.typeChain?.push(new TypeChainEntry({ name: resultType.name, type: resultType, data: options.data, range: this.range, kind: this.kind }));
         return resultType;
     }
 }
