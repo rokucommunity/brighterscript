@@ -7,12 +7,12 @@ import chalk from 'chalk';
 import * as path from 'path';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
-import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference, FileLink, SerializedCodeFile, NamespaceContainer } from '../interfaces';
+import type { Callable, CallableParam, CommentFlag, BsDiagnostic, FileReference, FileLink, SerializedCodeFile, NamespaceContainer } from '../interfaces';
 import type { Token } from '../lexer/Token';
 import { Lexer } from '../lexer/Lexer';
 import { TokenKind, AllowedLocalIdentifiers } from '../lexer/TokenKind';
 import { Parser, ParseMode } from '../parser/Parser';
-import type { FunctionExpression, VariableExpression } from '../parser/Expression';
+import type { FunctionExpression } from '../parser/Expression';
 import type { ClassStatement, NamespaceStatement, MethodStatement, FieldStatement } from '../parser/Statement';
 import type { Program } from '../Program';
 import { DynamicType } from '../types/DynamicType';
@@ -21,7 +21,7 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isImportStatement, isFieldStatement, isFunctionExpression, isBrsFile, isEnumStatement, isConstStatement, isAnyReferenceType } from '../astUtils/reflection';
+import { isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionStatement, isNamespaceStatement, isVariableExpression, isImportStatement, isFieldStatement, isFunctionExpression, isBrsFile, isEnumStatement, isConstStatement, isAnyReferenceType } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
@@ -199,12 +199,12 @@ export class BrsFile implements BscFile {
             const result = [] as FileReference[];
             for (const statement of this._cachedLookups?.importStatements ?? []) {
                 //register import statements
-                if (isImportStatement(statement) && statement.tokens.filePath) {
+                if (isImportStatement(statement) && statement.tokens.path) {
                     result.push({
-                        filePathRange: statement.tokens.filePath.range,
+                        filePathRange: statement.tokens.path.range,
                         destPath: util.getPkgPathFromTarget(this.destPath, statement.filePath),
                         sourceFile: this,
-                        text: statement.tokens.filePath.text
+                        text: statement.tokens.path.text
                     });
                 }
             }
@@ -619,103 +619,6 @@ export class BrsFile implements BscFile {
         });
 
 
-    }
-
-    get functionCalls(): FunctionCall[] {
-        return this.cache.getOrAdd(`BrsFile_functionCalls`, () => {
-            const functionCalls = [];
-            //for every function in the file
-            for (let func of this._cachedLookups.functionExpressions) {
-                //for all function calls in this function
-                for (let expression of func.callExpressions) {
-                    if (
-                        //filter out dotted function invocations (i.e. object.doSomething()) (not currently supported. TODO support it)
-                        (expression.callee as any).obj ||
-                        //filter out method calls on method calls for now (i.e. getSomething().getSomethingElse())
-                        (expression.callee as any).callee ||
-                        //filter out callees without a name (immediately-invoked function expressions)
-                        !(expression.callee as any).tokens?.name
-                    ) {
-                        continue;
-                    }
-                    //callee is the name of the function being called
-                    let callee = expression.callee as VariableExpression;
-
-                    let functionName = callee.tokens.name.text;
-                    let columnIndexBegin = callee.range.start.character;
-                    let columnIndexEnd = callee.range.end.character;
-
-                    let args = [] as CallableArg[];
-                    //TODO convert if stmts to use instanceof instead
-                    for (let arg of expression.args as any) {
-
-                        //is a literal parameter value
-                        if (isLiteralExpression(arg)) {
-                            args.push({
-                                range: arg.range,
-                                type: arg.getType(),
-                                text: arg.tokens.value.text,
-                                expression: arg,
-                                typeToken: undefined
-                            });
-
-                            //is variable being passed into argument
-                        } else if (arg.tokens?.name) {
-                            args.push({
-                                range: arg.range,
-                                //TODO - look up the data type of the actual variable
-                                type: new DynamicType(),
-                                text: arg.tokens.name.text,
-                                expression: arg,
-                                typeToken: undefined
-                            });
-
-                        } else if (arg.value) {
-                            let text = '';
-                            /* istanbul ignore next: TODO figure out why value is undefined sometimes */
-                            if (arg.value.value) {
-                                text = arg.value.value.toString();
-                            }
-                            let callableArg = {
-                                range: arg.range,
-                                //TODO not sure what to do here
-                                type: new DynamicType(), // util.valueKindToBrsType(arg.value.kind),
-                                text: text,
-                                expression: arg,
-                                typeToken: undefined
-                            };
-                            //wrap the value in quotes because that's how it appears in the code
-                            if (isStringType(callableArg.type)) {
-                                callableArg.text = '"' + callableArg.text + '"';
-                            }
-                            args.push(callableArg);
-
-                        } else {
-                            args.push({
-                                range: arg.range,
-                                type: new DynamicType(),
-                                //TODO get text from other types of args
-                                text: '',
-                                expression: arg,
-                                typeToken: undefined
-                            });
-                        }
-                    }
-                    let functionCall: FunctionCall = {
-                        range: expression.range,
-                        functionScope: this.getFunctionScopeAtPosition(callee.range.start),
-                        file: this,
-                        name: functionName,
-                        nameRange: util.createRange(callee.range.start.line, columnIndexBegin, callee.range.start.line, columnIndexEnd),
-                        //TODO keep track of parameters
-                        args: args,
-                        expression: expression
-                    };
-                    functionCalls.push(functionCall);
-                }
-            }
-            return functionCalls;
-        });
     }
 
     /**

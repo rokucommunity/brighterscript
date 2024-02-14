@@ -3,7 +3,6 @@ import * as sinonImport from 'sinon';
 import { Position, Range } from 'vscode-languageserver';
 import type { BsDiagnostic, Callable, CommentFlag, VariableDeclaration } from '../interfaces';
 import { Program } from '../Program';
-import { BooleanType } from '../types/BooleanType';
 import { DynamicType } from '../types/DynamicType';
 import { TypedFunctionType } from '../types/TypedFunctionType';
 import { IntegerType } from '../types/IntegerType';
@@ -217,7 +216,7 @@ describe('BrsFile', () => {
         file.parser.ast.statements.push(
             new ImportStatement({
                 import: createToken(TokenKind.Import),
-                filePath: createToken(TokenKind.StringLiteral, 'pkg:/source/lib.brs')
+                path: createToken(TokenKind.StringLiteral, 'pkg:/source/lib.brs')
             })
         );
         expect(file.ownScriptImports).to.be.empty;
@@ -1222,29 +1221,6 @@ describe('BrsFile', () => {
             expect(file.callables[1].nameRange!.start.line).to.equal(5);
         });
 
-        it('finds function call line and column numbers', () => {
-            let file = new BrsFile({
-                srcPath: 'absolute_path/file.brs',
-                destPath: 'relative_path/file.brs',
-                program: program
-            });
-            file.parse(`
-                function DoA()
-                    DoB("a")
-                end function
-                function DoB(a as string)
-                    DoC()
-                end function
-            `);
-            expect(file.functionCalls.length).to.equal(2);
-
-            expect(file.functionCalls[0].range).to.eql(Range.create(2, 20, 2, 28));
-            expect(file.functionCalls[0].nameRange).to.eql(Range.create(2, 20, 2, 23));
-
-            expect(file.functionCalls[1].range).to.eql(Range.create(5, 20, 5, 25));
-            expect(file.functionCalls[1].nameRange).to.eql(Range.create(5, 20, 5, 23));
-        });
-
         it('finds function calls that are unfinished', () => {
             let file = new BrsFile({
                 srcPath: 'absolute_path/file.brs',
@@ -1266,13 +1242,6 @@ describe('BrsFile', () => {
                 DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
                 DiagnosticMessages.expectedNewlineOrColon()
             ]);
-            expect(file.functionCalls.length).to.equal(2);
-
-            expect(file.functionCalls[0].range).to.eql(Range.create(2, 20, 2, 27));
-            expect(file.functionCalls[0].nameRange).to.eql(Range.create(2, 20, 2, 23));
-
-            expect(file.functionCalls[1].range).to.eql(Range.create(5, 20, 5, 24));
-            expect(file.functionCalls[1].nameRange).to.eql(Range.create(5, 20, 5, 23));
         });
 
         it('sanitizes brs errors', () => {
@@ -1460,83 +1429,6 @@ describe('BrsFile', () => {
                 isRestArgument: false
             });
             expect(callable.params[2].type).instanceof(StringType);
-        });
-    });
-
-    describe('findCallableInvocations', () => {
-        it('finds arguments with literal values', () => {
-            let file = new BrsFile({
-                srcPath: 'absolute_path/file.brs',
-                destPath: 'relative_path/file.brs',
-                program: program
-            });
-            file.parse(`
-                function Sum()
-                    DoSomething("name", 12, true)
-                end function
-            `);
-            expect(file.functionCalls.length).to.equal(1);
-
-            const argsMap = file.functionCalls[0].args.map(arg => {
-                // disregard arg.expression, etc.
-                return { type: arg.type, range: arg.range, text: arg.text };
-            });
-            expect(argsMap).to.eql([{
-                type: StringType.instance,
-                range: util.createRange(2, 32, 2, 38),
-                text: '"name"'
-            }, {
-                type: IntegerType.instance,
-                range: util.createRange(2, 40, 2, 42),
-                text: '12'
-            }, {
-                type: BooleanType.instance,
-                range: util.createRange(2, 44, 2, 48),
-                text: 'true'
-            }]);
-        });
-
-        it('finds function calls nested inside statements', () => {
-            program.setFile(`source/main.brs`, `
-                sub main()
-                    if true then
-                        DoesNotExist(1, 2)
-                    end if
-                end sub
-            `);
-            program.validate();
-            expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('DoesNotExist')
-            ]);
-        });
-
-        it('finds arguments with variable values', () => {
-            let file = new BrsFile({
-                srcPath: 'absolute_path/file.brs',
-                destPath: 'relative_path/file.brs',
-                program: program
-            });
-            file.parse(`
-                function Sum()
-                    count = 1
-                    name = "John"
-                    isAlive = true
-                    DoSomething(count, name, isAlive)
-                end function
-            `);
-            expect(file.functionCalls.length).to.equal(1);
-            expect(file.functionCalls[0].args[0]).deep.include({
-                type: new DynamicType(),
-                text: 'count'
-            });
-            expect(file.functionCalls[0].args[1]).deep.include({
-                type: new DynamicType(),
-                text: 'name'
-            });
-            expect(file.functionCalls[0].args[2]).deep.include({
-                type: new DynamicType(),
-                text: 'isAlive'
-            });
         });
     });
 
