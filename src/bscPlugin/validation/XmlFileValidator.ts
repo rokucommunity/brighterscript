@@ -20,7 +20,7 @@ export class XmlFileValidator {
     }
 
     private validateComponent(ast: SGAst) {
-        const { rootElement: rootElement, componentElement: componentElement } = ast;
+        const { rootElement, componentElement } = ast;
         if (!componentElement) {
             //not a SG component
             this.event.file.diagnostics.push({
