@@ -1729,7 +1729,7 @@ describe('ScopeValidator', () => {
         it('validates when a class member is accessed from a class directly', () => {
             program.setFile('source/util.bs', `
                 class Klass
-                      name as string
+                    name as string
                 end class
 
                 sub doStuff()
@@ -1757,6 +1757,22 @@ describe('ScopeValidator', () => {
             program.validate();
             expectDiagnostics(program, [
                 DiagnosticMessages.itemCannotBeUsedAsVariable('Alpha.Klass')
+            ]);
+        });
+
+        it('validates when new is is used on a class instance', () => {
+            program.setFile('source/util.bs', `
+                class Klass
+                    name as string
+                end class
+
+                sub doStuff(someKlass as Klass)
+                    print new someKlass()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.expressionIsNotConstructable('someKlass')
             ]);
         });
     });

@@ -8,7 +8,6 @@ import type { CallableContainer, BsDiagnosticWithOrigin, FileReference, Callable
 import type { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
 import type { NamespaceStatement, ClassStatement, EnumStatement, InterfaceStatement, EnumMemberStatement, ConstStatement } from './parser/Statement';
-import type { NewExpression } from './parser/Expression';
 import { ParseMode } from './parser/Parser';
 import { util } from './util';
 import { globalCallableMap } from './globalCallables';
@@ -1086,19 +1085,6 @@ export class Scope {
 
     }
 
-
-    public getNewExpressions() {
-        let result = [] as AugmentedNewExpression[];
-        this.enumerateBrsFiles((file) => {
-            let expressions = file['_cachedLookups'].newExpressions as AugmentedNewExpression[];
-            for (let expression of expressions) {
-                expression.file = file;
-                result.push(expression);
-            }
-        });
-        return result;
-    }
-
     private validateClasses() {
         let validator = new BsClassValidator(this);
         validator.validate();
@@ -1331,8 +1317,4 @@ export class Scope {
         }
         return items;
     }
-}
-
-interface AugmentedNewExpression extends NewExpression {
-    file: BscFile;
 }

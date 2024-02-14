@@ -13,7 +13,7 @@ import type { BRSComponentData } from '../../roku-types';
 import type { Token } from '../../lexer/Token';
 import { AstNodeKind, type AstNode } from '../../parser/AstNode';
 import type { Expression } from '../../parser/AstNode';
-import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression } from '../../parser/Expression';
+import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression } from '../../parser/Expression';
 import { CallExpression } from '../../parser/Expression';
 import { createVisitor } from '../../astUtils/visitors';
 import type { BscType } from '../../types/BscType';
@@ -108,6 +108,9 @@ export class ScopeValidator {
                     },
                     AssignmentStatement: (assignStmt) => {
                         this.validateAssignmentStatement(file, assignStmt);
+                    },
+                    NewExpression: (newExpr) => {
+                        this.validateNewExpression(file, newExpr);
                     }
                 });
                 const segmentsToWalkForValidation = (thisFileHasChanges || !hasChangeInfo)
@@ -730,6 +733,28 @@ export class ScopeValidator {
             }
         }
         return true;
+    }
+
+    /**
+     * Find all "new" statements in the program,
+     * and make sure we can find a class with that name
+     */
+    private validateNewExpression(file: BrsFile, newExpression: NewExpression) {
+        let potentialClassName = newExpression.className.getName(ParseMode.BrighterScript);
+        const namespaceName = newExpression.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
+        let newableClass = this.event.scope.getClass(potentialClassName, namespaceName);
+
+        if (!newableClass) {
+            //try and find functions with this name.
+            let fullName = util.getFullyQualifiedClassName(potentialClassName, namespaceName);
+
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.expressionIsNotConstructable(fullName),
+                file: file,
+                range: newExpression.className.range
+            });
+
+        }
     }
 
     /**
