@@ -11,7 +11,7 @@ import util from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
 import type { Token } from '../../lexer/Token';
-import type { AstNode } from '../../parser/AstNode';
+import { AstNodeKind, type AstNode } from '../../parser/AstNode';
 import type { Expression } from '../../parser/AstNode';
 import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression } from '../../parser/Expression';
 import { CallExpression } from '../../parser/Expression';
@@ -610,6 +610,18 @@ export class ScopeValidator {
         if (isUsedAsType) {
             return;
         }
+
+        const classUsedAsVarEntry = this.checkTypeChainForClassUsedAsVar(typeChain);
+        if (classUsedAsVarEntry) {
+
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.itemCannotBeUsedAsVariable(classUsedAsVarEntry.toString()),
+                range: expression.range,
+                file: file
+            });
+            return;
+        }
+
         const lastTypeInfo = typeChain[typeChain.length - 1];
         const parentTypeInfo = typeChain[typeChain.length - 2];
 
@@ -649,6 +661,20 @@ export class ScopeValidator {
                 });
             }
         }
+    }
+
+    private checkTypeChainForClassUsedAsVar(typeChain: TypeChainEntry[]) {
+        const ignoreKinds = [AstNodeKind.TypeCastExpression, AstNodeKind.NewExpression];
+        const classUsedAsVarIndex = typeChain.findIndex(tce => {
+            if (!tce.kind || ignoreKinds.includes(tce.kind)) {
+                return false;
+            }
+            return isClassType(tce.type) && tce.name.toLowerCase() === tce.type.name.split('.').pop()?.toLowerCase();
+        });
+        if (classUsedAsVarIndex >= 0 && classUsedAsVarIndex < typeChain.length - 1) {
+            return typeChain[classUsedAsVarIndex].type;
+        }
+        return undefined;
     }
 
     /**
