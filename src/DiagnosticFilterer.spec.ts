@@ -1,7 +1,7 @@
 import { expect } from './chai-config.spec';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
 import type { BsDiagnostic } from './interfaces';
-import { standardizePath as s } from './util';
+import util, { standardizePath as s } from './util';
 import { createSandbox } from 'sinon';
 const sinon = createSandbox();
 let rootDir = s`${process.cwd()}/rootDir`;
@@ -9,7 +9,7 @@ let rootDir = s`${process.cwd()}/rootDir`;
 describe('DiagnosticFilterer', () => {
 
     let filterer: DiagnosticFilterer;
-    let options = {
+    let options = util.normalizeConfig({
         rootDir: rootDir,
         diagnosticFilters: [
             //ignore these codes globally
@@ -21,7 +21,7 @@ describe('DiagnosticFilterer', () => {
             //ignore specific codes for main.brs
             { src: 'source/main.brs', codes: [4] }
         ]
-    };
+    });
 
     afterEach(() => {
         sinon.restore();
