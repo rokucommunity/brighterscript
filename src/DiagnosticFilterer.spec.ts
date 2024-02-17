@@ -6,7 +6,7 @@ import { createSandbox } from 'sinon';
 const sinon = createSandbox();
 let rootDir = s`${process.cwd()}/rootDir`;
 
-describe('DiagnosticFilterer', () => {
+describe.only('DiagnosticFilterer', () => {
 
     let filterer: DiagnosticFilterer;
     let options = util.normalizeConfig({
@@ -109,7 +109,7 @@ describe('DiagnosticFilterer', () => {
                 filterer.getDiagnosticFilters({
                     diagnosticFilters: [1, 2, 3]
                 })
-            ).to.eql([{ codes: [1, 2, 3] }]);
+            ).to.eql([{ codes: [1, 2, 3], isNegative: false }]);
         });
 
         it('handles standard diagnostic filters', () => {
@@ -117,7 +117,7 @@ describe('DiagnosticFilterer', () => {
                 filterer.getDiagnosticFilters({
                     diagnosticFilters: [{ src: 'file.brs', codes: [1, 2, 'X3'] }]
                 })
-            ).to.eql([{ src: 'file.brs', codes: [1, 2, 'X3'] }]);
+            ).to.eql([{ src: 'file.brs', codes: [1, 2, 'X3'], isNegative: false }]);
         });
 
         it('handles string-only diagnostic filter object', () => {
@@ -125,14 +125,14 @@ describe('DiagnosticFilterer', () => {
                 filterer.getDiagnosticFilters({
                     diagnosticFilters: [{ src: 'file.brs' }]
                 })
-            ).to.eql([{ src: 'file.brs' }]);
+            ).to.eql([{ src: 'file.brs', isNegative: false }]);
         });
 
         it('handles code-only diagnostic filter object', () => {
             expect(filterer.getDiagnosticFilters({
                 diagnosticFilters: [{ codes: [1, 2, 'X3'] }]
             })).to.eql([
-                { codes: [1, 2, 'X3'] }
+                { codes: [1, 2, 'X3'], isNegative: false }
             ]);
         });
 
@@ -141,14 +141,14 @@ describe('DiagnosticFilterer', () => {
                 filterer.getDiagnosticFilters({
                     diagnosticFilters: ['file.brs']
                 })
-            ).to.eql([{ src: 'file.brs' }]);
+            ).to.eql([{ src: 'file.brs', isNegative: false }]);
         });
 
         it('converts ignoreErrorCodes to diagnosticFilters', () => {
             expect(filterer.getDiagnosticFilters({
                 ignoreErrorCodes: [1, 2, 'X3']
             })).to.eql([
-                { codes: [1, 2, 'X3'] }
+                { codes: [1, 2, 'X3'], isNegative: false }
             ]);
         });
     });

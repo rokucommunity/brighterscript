@@ -137,10 +137,9 @@ export class DiagnosticFilterer {
         }
     }
 
-    public getDiagnosticFilters(config1: BsConfig) {
-
-        let globalIgnoreCodes: (number | string)[] = [...config1.ignoreErrorCodes ?? []];
-        let diagnosticFilters = [...config1.diagnosticFilters ?? []];
+    public getDiagnosticFilters(config: BsConfig) {
+        let globalIgnoreCodes: (number | string)[] = [...config.ignoreErrorCodes ?? []];
+        let diagnosticFilters = [...config.diagnosticFilters ?? []];
 
         let result: NormalizedFilter[] = [];
 
@@ -158,6 +157,11 @@ export class DiagnosticFilterer {
                     src: trimmedFilter,
                     isNegative: isNegative
                 });
+                continue;
+            }
+
+            //filter out bad inputs
+            if (!filter || typeof filter !== 'object') {
                 continue;
             }
 
