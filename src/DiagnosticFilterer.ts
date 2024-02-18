@@ -28,7 +28,7 @@ export class DiagnosticFilterer {
     /**
      * Filter a list of diagnostics based on the provided filters
      */
-    public filter(options: FinalizedBsConfig, diagnostics: BsDiagnostic[]) {
+    public filter(options: BsConfig, diagnostics: BsDiagnostic[]) {
         this.filters = this.getDiagnosticFilters(options);
         this.rootDir = options.rootDir;
 
