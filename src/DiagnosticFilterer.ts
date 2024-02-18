@@ -1,7 +1,7 @@
 import type { BsDiagnostic } from './interfaces';
 import * as path from 'path';
 import * as minimatch from 'minimatch';
-import type { BsConfig, FinalizedBsConfig } from './BsConfig';
+import type { BsConfig } from './BsConfig';
 import { standardizePath as s } from './util';
 
 interface DiagnosticWithSuppression {
