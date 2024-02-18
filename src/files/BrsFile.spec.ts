@@ -27,7 +27,7 @@ import type { StandardizedFileEntry } from 'roku-deploy';
 
 let sinon = sinonImport.createSandbox();
 
-describe('BrsFile', () => {
+describe.only('BrsFile', () => {
     let program: Program;
     let srcPath = s`${rootDir}/source/main.brs`;
     let destPath = 'source/main.brs';

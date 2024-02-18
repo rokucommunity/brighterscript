@@ -470,9 +470,11 @@ export class BrsFile implements BscFile {
         const processor = new CommentFlagProcessor(this, ['rem', `'`], diagnosticCodes, [DiagnosticCodeMap.unknownDiagnosticCode]);
 
         this.commentFlags = [];
-        for (let token of tokens) {
-            if (token.kind === TokenKind.Comment) {
-                processor.tryAdd(token.text, token.range);
+        for (let lexerToken of tokens) {
+            for (let triviaToken of lexerToken.leadingTrivia ?? []) {
+                if (triviaToken.kind === TokenKind.Comment) {
+                    processor.tryAdd(triviaToken.text, triviaToken.range);
+                }
             }
         }
         this.commentFlags.push(...processor.commentFlags);

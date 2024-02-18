@@ -4,7 +4,7 @@ import { Parser } from '../../Parser';
 import { Lexer } from '../../../lexer/Lexer';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, rangeMatch, token } from '../Parser.spec';
-import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement } from '../../../astUtils/reflection';
+import { isBlock, isFunctionStatement, isIfStatement } from '../../../astUtils/reflection';
 import type { Block, FunctionStatement, IfStatement } from '../../Statement';
 
 describe('parser if statements', () => {
@@ -100,7 +100,7 @@ describe('parser if statements', () => {
             assert.fail('Missing single-line if inside if-then');
         }
         expect(ifs.elseBranch).to.exist;
-        if (!isBlock(ifs.elseBranch) || !isCommentStatement(ifs.elseBranch.statements[0])) {
+        if (!isBlock(ifs.elseBranch)) {
             assert.fail('Missing comment inside else branch');
         }
     });
