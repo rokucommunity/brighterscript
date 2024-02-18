@@ -131,7 +131,7 @@ export class DiagnosticFilterer {
             let fileDiagnostics = this.byFile[filePath];
             for (const diagnostic of fileDiagnostics) {
                 if (filter.codes.includes(diagnostic.diagnostic.code!)) {
-                    diagnostic.isSuppressed = true;
+                    diagnostic.isSuppressed = isSuppressing;
                 }
             }
         }
@@ -143,9 +143,21 @@ export class DiagnosticFilterer {
 
         let result: NormalizedFilter[] = [];
 
+        //include a filter for all global ignore codes
+        //this comes first, because negative patterns will override ignoreErrorCodes
+        if (globalIgnoreCodes.length > 0) {
+            result.push({
+                codes: globalIgnoreCodes,
+                isNegative: false
+            });
+        }
+
         for (let filter of diagnosticFilters) {
             if (typeof filter === 'number') {
-                globalIgnoreCodes.push(filter);
+                result.push({
+                    codes: [filter],
+                    isNegative: false
+                });
                 continue;
             }
 
@@ -165,9 +177,12 @@ export class DiagnosticFilterer {
                 continue;
             }
 
-            //if this is a code-only filter, add them to the globalCodes array (and skip adding it now)
+            //code-only filter
             if ('codes' in filter && !('src' in filter) && Array.isArray(filter.codes)) {
-                globalIgnoreCodes.push(...filter.codes);
+                result.push({
+                    codes: filter.codes,
+                    isNegative: false
+                });
                 continue;
             }
 
@@ -188,13 +203,6 @@ export class DiagnosticFilterer {
                     });
                 }
             }
-        }
-        //include a filter for all global ignore codes
-        if (globalIgnoreCodes.length > 0) {
-            result.push({
-                codes: globalIgnoreCodes,
-                isNegative: false
-            });
         }
         return result;
     }
