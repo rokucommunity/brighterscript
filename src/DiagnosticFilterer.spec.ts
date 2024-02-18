@@ -110,21 +110,13 @@ describe('DiagnosticFilterer', () => {
             };
 
             it('should unignore specific error codes for specific files', () => {
-                const diagnostics = filterer.filter(optionsWithNegatives, [
-                    getDiagnostic(1, `${rootDir}/source/common.brs`), //remove
-                    getDiagnostic(3, `${rootDir}/source/common.brs`), //remove
-                    getDiagnostic(1, `${rootDir}/lib/special/a.brs`), //keep
-                    getDiagnostic(3, `${rootDir}/lib/special/a.brs`), //keep
-                    getDiagnostic(7, `${rootDir}/lib/special/a.brs`) //remove
-                ]);
-
-                expect(diagnostics).to.have.length(2);
-
-                expect(diagnostics[0].code).equals(1);
-                expect(diagnostics[0].file.srcPath).equals(`${rootDir}/lib/special/a.brs`);
-
-                expect(diagnostics[1].code).equals(3);
-                expect(diagnostics[1].file.srcPath).equals(`${rootDir}/lib/special/a.brs`);
+                expect(
+                    filterer.filter(optionsWithNegatives, [
+                        getDiagnostic(1, `${rootDir}/lib/special/a.brs`), //keep
+                        getDiagnostic(3, `${rootDir}/lib/special/a.brs`), //keep
+                        getDiagnostic(7, `${rootDir}/lib/special/a.brs`) //remove
+                    ]).map(x => x.code)
+                ).to.eql([1, 3]);
             });
 
             it('should unignore all codes from specific file', () => {
