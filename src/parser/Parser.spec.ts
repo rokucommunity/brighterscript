@@ -8,7 +8,7 @@ import type { AssignmentStatement, ClassStatement, InterfaceStatement, ReturnSta
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isClassStatement, isCommentStatement, isDottedGetExpression, isExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypeCastExpression, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isClassStatement, isDottedGetExpression, isExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypeCastExpression, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import { expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics } from '../testHelpers.spec';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { Expression, Statement } from './AstNode';
@@ -569,19 +569,19 @@ describe('parser', () => {
         });
 
         describe('comments', () => {
-            it('combines multi-line comments', () => {
+            it('does not include comments', () => {
                 let { tokens } = Lexer.scan(`
                     'line 1
                     'line 2
                     'line 3
                 `);
                 let { diagnostics, statements } = Parser.parse(tokens) as any;
-                expect(diagnostics).to.be.lengthOf(0, 'Error count should be 0');
+                expectZeroDiagnostics(diagnostics);
 
-                expect(statements[0].text).to.equal(`'line 1\n'line 2\n'line 3`);
+                expect(statements.length).to.equal(0);
             });
 
-            it('does not combile comments separated by newlines', () => {
+            it('does matter if comments separated by newlines', () => {
                 let { tokens } = Lexer.scan(`
                     'line 1
 
@@ -590,13 +590,8 @@ describe('parser', () => {
                     'line 3
                 `);
                 let { diagnostics, statements } = Parser.parse(tokens) as any;
-                expect(diagnostics).to.be.lengthOf(0, 'Error count should be 0');
-
-                expect(statements).to.be.lengthOf(3);
-
-                expect(statements[0].text).to.equal(`'line 1`);
-                expect(statements[1].text).to.equal(`'line 2`);
-                expect(statements[2].text).to.equal(`'line 3`);
+                expectZeroDiagnostics(diagnostics);
+                expect(statements).to.be.lengthOf(0);
             });
 
             it('works after print statement', () => {
@@ -606,12 +601,12 @@ describe('parser', () => {
                     end sub
                 `);
                 let { diagnostics, statements } = Parser.parse(tokens);
-                expect(diagnostics).to.be.lengthOf(0, 'Error count should be 0');
+                expectZeroDiagnostics(diagnostics);
 
-                expect((statements as any)[0].func.body.statements[1].text).to.equal(`'comment 1`);
+                expect((statements[0] as FunctionStatement).func.body.statements.length).to.equal(1);
             });
 
-            it('declaration-level', () => {
+            it('declaration-level should be set as leading trivia', () => {
                 let { tokens } = Lexer.scan(`
                     'comment 1
                     function a()
@@ -620,8 +615,7 @@ describe('parser', () => {
                 `);
                 let { diagnostics, statements } = Parser.parse(tokens);
                 expect(diagnostics).to.be.lengthOf(0, 'Error count should be 0');
-                expect((statements as any)[0].text).to.equal(`'comment 1`);
-                expect((statements as any)[2].text).to.equal(`'comment 2`);
+                expect(statements[0].getLeadingTrivia()[2].text).to.equal(`'comment 1`);
             });
 
             it('works in aa literal as its own statement', () => {
@@ -642,10 +636,9 @@ describe('parser', () => {
                         DoSomething(name) 'comment 1
                     end sub
                 `);
-                let { diagnostics, statements } = Parser.parse(tokens) as any;
+                let { diagnostics } = Parser.parse(tokens) as any;
                 expect(diagnostics).to.be.lengthOf(0, 'Should have zero diagnostics');
 
-                expect(statements[0].func.body.statements[2].text).to.equal(`'comment 1`);
             });
 
             it('function', () => {
@@ -659,10 +652,7 @@ describe('parser', () => {
                 let { diagnostics, statements } = Parser.parse(tokens) as any;
                 expect(diagnostics).to.be.lengthOf(0, 'Should have zero diagnostics');
 
-                expect(statements[0].func.body.statements[0].text).to.equal(`'comment 1`);
-                expect(statements[0].func.body.statements[1].text).to.equal(`'comment 2`);
-                expect(statements[0].func.body.statements[3].text).to.equal(`'comment 3`);
-                expect(statements[1].text).to.equal(`'comment 4`);
+                expect(statements[0].func.body.statements[0].getLeadingTrivia().filter(x => x.kind === TokenKind.Comment).map(x => x.text)).members([`'comment 1`, `'comment 2`]);
             });
 
             it('if statement`', () => {
@@ -689,21 +679,15 @@ describe('parser', () => {
                 if (isFunctionStatement(fnSmt)) {
                     let ifStmt = fnSmt.func.body.statements[0];
                     if (isIfStatement(ifStmt)) {
-                        expectCommentWithText(ifStmt.thenBranch.statements[0], `'comment 1`);
-                        expectCommentWithText(ifStmt.thenBranch.statements[1], `'comment 2`);
-                        expectCommentWithText(ifStmt.thenBranch.statements[3], `'comment 3`);
+                        expectCommentWithText(ifStmt.thenBranch.statements[0], `'comment 1\n'comment 2`);
 
                         let elseIfBranch = ifStmt.elseBranch!;
                         if (isIfStatement(elseIfBranch)) {
-                            expectCommentWithText(elseIfBranch.thenBranch.statements[0], `'comment 4`);
-                            expectCommentWithText(elseIfBranch.thenBranch.statements[1], `'comment 5`);
-                            expectCommentWithText(elseIfBranch.thenBranch.statements[3], `'comment 6`);
+                            expectCommentWithText(elseIfBranch.thenBranch.statements[0], `'comment 4\n'comment 5`);
 
                             let elseBranch = elseIfBranch.elseBranch!;
                             if (isBlock(elseBranch)) {
-                                expectCommentWithText(elseBranch.statements[0], `'comment 7`);
-                                expectCommentWithText(elseBranch.statements[1], `'comment 8`);
-                                expectCommentWithText(elseBranch.statements[3], `'comment 9`);
+                                expectCommentWithText(elseBranch.statements[0], `'comment 7\n'comment 8`);
                             } else {
                                 failStatementType(elseBranch, 'Block');
                             }
@@ -711,7 +695,6 @@ describe('parser', () => {
                         } else {
                             failStatementType(elseIfBranch, 'If');
                         }
-                        expectCommentWithText(fnSmt.func.body.statements[1], `'comment 10`);
                     } else {
                         failStatementType(ifStmt, 'If');
                     }
@@ -734,11 +717,7 @@ describe('parser', () => {
                 expect(diagnostics).to.be.lengthOf(0, 'Error count should be zero');
                 let stmt = statements[0].func.body.statements[0];
 
-                expect(stmt.body.statements[0].text).to.equal(`'comment 1`);
-                expect(stmt.body.statements[1].text).to.equal(`'comment 2`);
-                expect(stmt.body.statements[3].text).to.equal(`'comment 3`);
-
-                expect(statements[0].func.body.statements[1].text).to.equal(`'comment 4`);
+                expectCommentWithText(stmt.body.statements[0], `'comment 1\n'comment 2`);
             });
 
             it('for', () => {
@@ -755,11 +734,7 @@ describe('parser', () => {
                 expect(diagnostics).to.be.lengthOf(0, 'Error count should be zero');
                 let stmt = statements[0].func.body.statements[0];
 
-                expect(stmt.body.statements[0].text).to.equal(`'comment 1`);
-                expect(stmt.body.statements[1].text).to.equal(`'comment 2`);
-                expect(stmt.body.statements[3].text).to.equal(`'comment 3`);
-
-                expect(statements[0].func.body.statements[1].text).to.equal(`'comment 4`);
+                expectCommentWithText(stmt.body.statements[0], `'comment 1\n'comment 2`);
             });
 
             it('for each', () => {
@@ -776,11 +751,7 @@ describe('parser', () => {
                 expect(diagnostics).to.be.lengthOf(0, 'Error count should be zero');
                 let stmt = statements[0].func.body.statements[0];
 
-                expect(stmt.body.statements[0].text).to.equal(`'comment 1`);
-                expect(stmt.body.statements[1].text).to.equal(`'comment 2`);
-                expect(stmt.body.statements[3].text).to.equal(`'comment 3`);
-
-                expect(statements[0].func.body.statements[1].text).to.equal(`'comment 4`);
+                expectCommentWithText(stmt.body.statements[0], `'comment 1\n'comment 2`);
             });
 
         });
@@ -1905,8 +1876,9 @@ export function rangeToArray(range: Range) {
 }
 
 function expectCommentWithText(stat: Statement, text: string) {
-    if (isCommentStatement(stat)) {
-        expect(stat.text).to.equal(text);
+    const trivia = stat.getLeadingTrivia();
+    if (trivia) {
+        expect(trivia.filter(tok => tok.kind === TokenKind.Comment).map(t => t.text).join('\n')).to.equal(text);
     } else {
         failStatementType(stat, 'Comment');
     }

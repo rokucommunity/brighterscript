@@ -9,7 +9,7 @@ import { rangeToArray } from '../parser/Parser.spec';
 import { Range } from 'vscode-languageserver';
 import util from '../util';
 
-describe.only('lexer', () => {
+describe('lexer', () => {
     it('recognizes the `const` keyword', () => {
         let { tokens } = Lexer.scan('const');
         expect(tokens.map(x => x.kind)).to.eql([
@@ -326,21 +326,7 @@ describe.only('lexer', () => {
                 Range.create(3, 0, 3, 1) //  /n
             ]);
         });
-        it('finds correct location for comment after if statement', () => {
-            let { tokens } = Lexer.scan(`
-                sub a()
-                    if true then
-                        print false
-                    else if true then
-                        print "true"
-                    else
-                        print "else"
-                    end if 'comment
-                end sub
-            `);
-            let comments = tokens.filter(x => x.kind === TokenKind.Comment);
-            expect(comments).to.be.lengthOf(0);
-        });
+
         it('ignores everything after `\'`', () => {
             let { tokens } = Lexer.scan('= \' (');
             expect(tokens.map(t => t.kind)).to.deep.equal([TokenKind.Equal, TokenKind.Eof]);

@@ -1581,7 +1581,7 @@ export class Util {
     }
 
 
-    public concatAnnotationLeadingTrivia(stmt: Statement, otherTrivia: Token[]): Token[] {
+    public concatAnnotationLeadingTrivia(stmt: Statement, otherTrivia: Token[] = []): Token[] {
         return [...(stmt.annotations?.map(anno => anno.getLeadingTrivia()).flat() ?? []), ...otherTrivia];
     }
 

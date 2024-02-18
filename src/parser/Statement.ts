@@ -9,14 +9,13 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
-import { isCallExpression, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFieldStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypedefProvider, isUnaryExpression, isVoidType } from '../astUtils/reflection';
+import { isCallExpression, isEnumMemberStatement, isExpression, isExpressionStatement, isFieldStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypedefProvider, isUnaryExpression, isVoidType } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import { SymbolTypeFlag } from '../SymbolTableFlag';
 import { createInvalidLiteral, createMethodStatement, createToken, interpolatedRange } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
 import type { SourceNode } from 'source-map';
-import type { TranspileState } from './TranspileState';
 import { SymbolTable } from '../SymbolTable';
 import type { Expression } from './AstNode';
 import { AstNodeKind } from './AstNode';
@@ -79,23 +78,12 @@ export class Body extends Statement implements TypedefProvider {
         for (let i = 0; i < this.statements.length; i++) {
             let statement = this.statements[i];
             let previousStatement = this.statements[i - 1];
-            let nextStatement = this.statements[i + 1];
 
             if (!previousStatement) {
                 //this is the first statement. do nothing related to spacing and newlines
 
-                //if comment is on same line as prior sibling
-            } else if (isCommentStatement(statement) && previousStatement && statement.range.start.line === previousStatement.range.end.line) {
-                result.push(
-                    ' '
-                );
-
-                //add double newline if this is a comment, and next is a function
-            } else if (isCommentStatement(statement) && nextStatement && isFunctionStatement(nextStatement)) {
-                result.push('\n\n');
-
                 //add double newline if is function not preceeded by a comment
-            } else if (isFunctionStatement(statement) && previousStatement && !(isCommentStatement(previousStatement))) {
+            } else if (isFunctionStatement(statement) && previousStatement) {
                 result.push('\n\n');
             } else {
                 //separate statements by a single newline
@@ -192,6 +180,10 @@ export class AssignmentStatement extends Statement {
         options.typeChain?.push(new TypeChainEntry({ name: this.tokens.name.text, type: variableType, data: options.data, range: this.tokens.name.range, kind: this.kind }));
         return variableType;
     }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.name.leadingTrivia ?? [];
+    }
 }
 
 export class Block extends Statement {
@@ -218,24 +210,13 @@ export class Block extends Statement {
     transpile(state: BrsTranspileState) {
         state.blockDepth++;
         let results = [] as TranspileResult;
-        for (let i = 0; i < this.statements.length; i++) {
-            let previousStatement = this.statements[i - 1];
-            let statement = this.statements[i];
-
-            //if comment is on same line as parent
-            if (isCommentStatement(statement) &&
-                (util.linesTouch(state.lineage[0], statement) || util.linesTouch(previousStatement, statement))
-            ) {
-                results.push(' ');
-
-                //is not a comment
-            } else {
-                //add a newline and indent
-                results.push(
-                    state.newline,
-                    state.indent()
-                );
-            }
+        for (let statement of this.statements) {
+            //is not a comment
+            //add a newline and indent
+            results.push(
+                state.newline,
+                state.indent()
+            );
 
             //push block onto parent list
             state.lineage.unshift(this);
@@ -280,60 +261,6 @@ export class ExpressionStatement extends Statement {
     }
 }
 
-export class CommentStatement extends Statement implements Expression, TypedefProvider {
-    constructor(options: {
-        comments: Token[];
-    }) {
-        super();
-        this.visitMode = InternalWalkMode.visitStatements | InternalWalkMode.visitExpressions;
-        this.tokens = {
-            comments: options.comments
-        };
-        if (this.tokens.comments?.length > 0) {
-            this.range = util.createBoundingRange(
-                ...this.tokens.comments
-            );
-        }
-    }
-
-    public readonly tokens: {
-        readonly comments: Token[];
-    };
-
-    public readonly kind = AstNodeKind.CommentStatement;
-
-    public readonly range: Range;
-
-    get text() {
-        return this.tokens.comments.map(x => x.text).join('\n');
-    }
-
-    transpile(state: BrsTranspileState) {
-        let result = [];
-        for (let i = 0; i < this.tokens.comments.length; i++) {
-            let comment = this.tokens.comments[i];
-            if (i > 0) {
-                result.push(state.indent());
-            }
-            result.push(
-                state.transpileToken(comment)
-            );
-            //add newline for all except final comment
-            if (i < this.tokens.comments.length - 1) {
-                result.push('\n');
-            }
-        }
-        return result;
-    }
-
-    public getTypedef(state: TranspileState) {
-        return this.transpile(state as BrsTranspileState);
-    }
-
-    walk(visitor: WalkVisitor, options: WalkOptions) {
-        //nothing to walk
-    }
-}
 
 export class ExitForStatement extends Statement {
     constructor(options?: {
@@ -362,6 +289,10 @@ export class ExitForStatement extends Statement {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.exitFor?.leadingTrivia ?? [];
     }
 
 }
@@ -393,6 +324,10 @@ export class ExitWhileStatement extends Statement {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.exitWhile?.leadingTrivia ?? [];
     }
 }
 
@@ -613,6 +548,10 @@ export class IfStatement extends Statement {
             walk(this, 'elseBranch', visitor, options);
         }
     }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.if?.leadingTrivia ?? [];
+    }
 }
 
 export class IncrementStatement extends Statement {
@@ -651,6 +590,10 @@ export class IncrementStatement extends Statement {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'value', visitor, options);
         }
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.value?.getLeadingTrivia() ?? [];
     }
 }
 
@@ -723,6 +666,10 @@ export class PrintStatement extends Statement {
             //sometimes we have semicolon Tokens in the expressions list (should probably fix that...), so only walk the actual expressions
             walkArray(this.expressions, visitor, options, this, (item) => isExpression(item as any));
         }
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.print?.leadingTrivia ?? [];
     }
 }
 
@@ -2860,6 +2807,10 @@ export class TryCatchStatement extends Statement {
             walk(this, 'catchStatement', visitor, options);
         }
     }
+
+    public getLeadingTrivia(): Token[] {
+        return this.tokens.try?.leadingTrivia ?? [];
+    }
 }
 
 export class CatchStatement extends Statement {
@@ -2905,6 +2856,10 @@ export class CatchStatement extends Statement {
         if (this.catchBranch && options.walkMode & InternalWalkMode.walkStatements) {
             walk(this, 'catchBranch', visitor, options);
         }
+    }
+
+    public getLeadingTrivia(): Token[] {
+        return this.tokens.catch?.leadingTrivia ?? [];
     }
 }
 
@@ -2957,6 +2912,10 @@ export class ThrowStatement extends Statement {
             walk(this, 'expression', visitor, options);
         }
     }
+
+    public getLeadingTrivia(): Token[] {
+        return this.tokens.throw?.leadingTrivia ?? [];
+    }
 }
 
 
@@ -2965,7 +2924,7 @@ export class EnumStatement extends Statement implements TypedefProvider {
         enum?: Token;
         name: Identifier;
         endEnum?: Token;
-        body: Array<EnumMemberStatement | CommentStatement>;
+        body: Array<EnumMemberStatement>;
     }) {
         super();
         this.tokens = {
@@ -2982,7 +2941,7 @@ export class EnumStatement extends Statement implements TypedefProvider {
         readonly name: Identifier;
         readonly endEnum?: Token;
     };
-    public readonly body: Array<EnumMemberStatement | CommentStatement>;
+    public readonly body: Array<EnumMemberStatement>;
 
     public readonly kind = AstNodeKind.EnumStatement;
 
@@ -3006,7 +2965,7 @@ export class EnumStatement extends Statement implements TypedefProvider {
     }
 
     public getLeadingTrivia(): Token[] {
-        return util.concatAnnotationLeadingTrivia(this, this.tokens.enum.leadingTrivia);
+        return util.concatAnnotationLeadingTrivia(this, this.tokens.enum?.leadingTrivia);
     }
 
     /**
@@ -3244,7 +3203,7 @@ export class ConstStatement extends Statement implements TypedefProvider {
     }
 
     public getLeadingTrivia(): Token[] {
-        return util.concatAnnotationLeadingTrivia(this, this.tokens.const.leadingTrivia);
+        return util.concatAnnotationLeadingTrivia(this, this.tokens.const?.leadingTrivia);
     }
 
     /**
@@ -3329,5 +3288,9 @@ export class ContinueStatement extends Statement {
     }
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
+    }
+
+    public getLeadingTrivia(): Token[] {
+        return this.tokens.continue?.leadingTrivia ?? [];
     }
 }

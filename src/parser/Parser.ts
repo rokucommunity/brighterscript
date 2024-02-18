@@ -25,7 +25,6 @@ import {
     ContinueStatement,
     ClassStatement,
     ConstStatement,
-    CommentStatement,
     DimStatement,
     DottedSetStatement,
     EndStatement,
@@ -289,10 +288,6 @@ export class Parser {
                 return this.annotationExpression();
             }
 
-            if (this.check(TokenKind.Comment)) {
-                return this.commentStatement();
-            }
-
             //catch certain global terminators to prevent unnecessary lookahead (i.e. like `end namespace`, no need to continue)
             if (this.checkAny(...this.peekGlobalTerminators())) {
                 return;
@@ -485,9 +480,6 @@ export class Parser {
                 } else if (this.checkAny(TokenKind.Function, TokenKind.Sub) && this.checkAnyNext(TokenKind.Identifier, ...AllowedProperties)) {
                     decl = this.interfaceMethodStatement(optionalKeyword);
 
-                    //comments
-                } else if (this.check(TokenKind.Comment)) {
-                    decl = this.commentStatement();
                 }
                 if (decl) {
                     this.consumePendingAnnotations(decl);
@@ -537,11 +529,11 @@ export class Parser {
 
         this.consumeStatementSeparators();
 
-        const body: Array<EnumMemberStatement | CommentStatement> = [];
+        const body: Array<EnumMemberStatement> = [];
         //gather up all members
         while (this.checkAny(TokenKind.Comment, TokenKind.Identifier, TokenKind.At, ...AllowedProperties)) {
             try {
-                let decl: EnumMemberStatement | CommentStatement;
+                let decl: EnumMemberStatement;
 
                 //collect leading annotations
                 if (this.check(TokenKind.At)) {
@@ -551,10 +543,6 @@ export class Parser {
                 //members
                 if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
                     decl = this.enumMemberStatement();
-
-                    //comments
-                } else if (this.check(TokenKind.Comment)) {
-                    decl = this.commentStatement();
                 }
 
                 if (decl) {
@@ -677,9 +665,6 @@ export class Parser {
                         });
                     }
 
-                    //comments
-                } else if (this.check(TokenKind.Comment)) {
-                    decl = this.commentStatement();
                 }
 
                 if (decl) {
@@ -1299,22 +1284,6 @@ export class Parser {
         let keyword = this.advance();
 
         return new ExitForStatement({ exitFor: keyword });
-    }
-
-    private commentStatement() {
-        //if this comment is on the same line as the previous statement,
-        //then this comment should be treated as a single-line comment
-        let prev = this.previous();
-        if (prev?.range.end.line === this.peek().range.start.line) {
-            return new CommentStatement({ comments: [this.advance()] });
-        } else {
-            let comments = [this.advance()];
-            while (this.check(TokenKind.Newline) && this.checkNext(TokenKind.Comment)) {
-                this.advance();
-                comments.push(this.advance());
-            }
-            return new CommentStatement({ comments: comments });
-        }
     }
 
     private namespaceStatement(): NamespaceStatement | undefined {
@@ -2737,9 +2706,6 @@ export class Parser {
             case this.check(TokenKind.RegexLiteral):
                 return this.regexLiteralExpression();
 
-            case this.check(TokenKind.Comment):
-                return new CommentStatement({ comments: [this.advance()] });
-
             default:
                 //if we found an expected terminator, don't throw a diagnostic...just return undefined
                 if (this.checkAny(...this.peekGlobalTerminators())) {
@@ -2757,13 +2723,8 @@ export class Parser {
     }
 
     private arrayLiteral() {
-        let elements: Array<Expression | CommentStatement> = [];
+        let elements: Array<Expression> = [];
         let openingSquare = this.previous();
-
-        //add any comment found right after the opening square
-        if (this.check(TokenKind.Comment)) {
-            elements.push(new CommentStatement({ comments: [this.advance()] }));
-        }
 
         while (this.match(TokenKind.Newline)) {
         }
@@ -2774,10 +2735,7 @@ export class Parser {
                 elements.push(this.expression());
 
                 while (this.matchAny(TokenKind.Comma, TokenKind.Newline, TokenKind.Comment)) {
-                    if (this.checkPrevious(TokenKind.Comment) || this.check(TokenKind.Comment)) {
-                        let comment = this.check(TokenKind.Comment) ? this.advance() : this.previous();
-                        elements.push(new CommentStatement({ comments: [comment] }));
-                    }
+
                     while (this.match(TokenKind.Newline)) {
 
                     }
@@ -2806,7 +2764,7 @@ export class Parser {
 
     private aaLiteral() {
         let openingBrace = this.previous();
-        let members: Array<AAMemberExpression | CommentStatement> = [];
+        let members: Array<AAMemberExpression> = [];
 
         let key = () => {
             let result = {
@@ -2839,10 +2797,26 @@ export class Parser {
         if (!this.match(TokenKind.RightCurlyBrace)) {
             let lastAAMember: AAMemberExpression;
             try {
-                if (this.check(TokenKind.Comment)) {
-                    lastAAMember = null;
-                    members.push(new CommentStatement({ comments: [this.advance()] }));
-                } else {
+                let k = key();
+                let expr = this.expression();
+                lastAAMember = new AAMemberExpression({
+                    key: k.keyToken,
+                    colon: k.colonToken,
+                    value: expr
+                });
+                members.push(lastAAMember);
+
+                while (this.matchAny(TokenKind.Comma, TokenKind.Newline, TokenKind.Colon, TokenKind.Comment)) {
+                    // collect comma at end of expression
+                    if (lastAAMember && this.checkPrevious(TokenKind.Comma)) {
+                        (lastAAMember as DeepWriteable<AAMemberExpression>).tokens.comma = this.previous();
+                    }
+
+                    this.consumeStatementSeparators(true);
+
+                    if (this.check(TokenKind.RightCurlyBrace)) {
+                        break;
+                    }
                     let k = key();
                     let expr = this.expression();
                     lastAAMember = new AAMemberExpression({
@@ -2851,41 +2825,7 @@ export class Parser {
                         value: expr
                     });
                     members.push(lastAAMember);
-                }
 
-                while (this.matchAny(TokenKind.Comma, TokenKind.Newline, TokenKind.Colon, TokenKind.Comment)) {
-                    // collect comma at end of expression
-                    if (lastAAMember && this.checkPrevious(TokenKind.Comma)) {
-                        (lastAAMember as DeepWriteable<AAMemberExpression>).tokens.comma = this.previous();
-                    }
-
-                    //check for comment at the end of the current line
-                    if (this.check(TokenKind.Comment) || this.checkPrevious(TokenKind.Comment)) {
-                        let token = this.checkPrevious(TokenKind.Comment) ? this.previous() : this.advance();
-                        members.push(new CommentStatement({ comments: [token] }));
-                    } else {
-                        this.consumeStatementSeparators(true);
-
-                        //check for a comment on its own line
-                        if (this.check(TokenKind.Comment) || this.checkPrevious(TokenKind.Comment)) {
-                            let token = this.checkPrevious(TokenKind.Comment) ? this.previous() : this.advance();
-                            lastAAMember = null;
-                            members.push(new CommentStatement({ comments: [token] }));
-                            continue;
-                        }
-
-                        if (this.check(TokenKind.RightCurlyBrace)) {
-                            break;
-                        }
-                        let k = key();
-                        let expr = this.expression();
-                        lastAAMember = new AAMemberExpression({
-                            key: k.keyToken,
-                            colon: k.colonToken,
-                            value: expr
-                        });
-                        members.push(lastAAMember);
-                    }
                 }
             } catch (error: any) {
                 this.rethrowNonDiagnosticError(error);

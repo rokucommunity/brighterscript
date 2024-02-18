@@ -1,7 +1,7 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
-import type { Block, CommentStatement, FunctionStatement, NamespaceStatement } from './Statement';
+import type { Block, FunctionStatement, NamespaceStatement } from './Statement';
 import type { Range } from 'vscode-languageserver';
 import util from '../util';
 import type { BrsTranspileState } from './BrsTranspileState';
@@ -10,7 +10,7 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallExpression, isCallableType, isCallfuncExpression, isCommentStatement, isComponentType, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isReferenceType, isStringType, isTypeCastExpression, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallExpression, isCallableType, isCallfuncExpression, isComponentType, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isReferenceType, isStringType, isTypeCastExpression, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
@@ -809,7 +809,7 @@ export class EscapedCharCodeLiteralExpression extends Expression {
 
 export class ArrayLiteralExpression extends Expression {
     constructor(options: {
-        elements: Array<Expression | CommentStatement>;
+        elements: Array<Expression>;
         open?: Token;
         close?: Token;
     }) {
@@ -822,7 +822,7 @@ export class ArrayLiteralExpression extends Expression {
         this.range = util.createBoundingRange(this.tokens.open, ...this.elements, this.tokens.close);
     }
 
-    public readonly elements: Array<Expression | CommentStatement>;
+    public readonly elements: Array<Expression>;
 
     public readonly tokens: {
         readonly open?: Token;
@@ -841,31 +841,13 @@ export class ArrayLiteralExpression extends Expression {
         let hasChildren = this.elements.length > 0;
         state.blockDepth++;
 
-        for (let i = 0; i < this.elements.length; i++) {
-            let previousElement = this.elements[i - 1];
-            let element = this.elements[i];
+        for (let element of this.elements) {
+            result.push('\n');
 
-            if (isCommentStatement(element)) {
-                //if the comment is on the same line as opening square or previous statement, don't add newline
-                if (util.linesTouch(this.tokens.open, element) || util.linesTouch(previousElement, element)) {
-                    result.push(' ');
-                } else {
-                    result.push(
-                        '\n',
-                        state.indent()
-                    );
-                }
-                state.lineage.unshift(this);
-                result.push(element.transpile(state));
-                state.lineage.shift();
-            } else {
-                result.push('\n');
-
-                result.push(
-                    state.indent(),
-                    ...element.transpile(state)
-                );
-            }
+            result.push(
+                state.indent(),
+                ...element.transpile(state)
+            );
         }
         state.blockDepth--;
         //add a newline between open and close if there are elements
@@ -888,7 +870,7 @@ export class ArrayLiteralExpression extends Expression {
     }
 
     getType(options: GetTypeOptions): BscType {
-        const innerTypes = this.elements.filter(x => !isCommentStatement(x)).map(expr => expr.getType(options));
+        const innerTypes = this.elements.map(expr => expr.getType(options));
         return new ArrayType(...innerTypes);
     }
 }
@@ -941,7 +923,7 @@ export class AAMemberExpression extends Expression {
 
 export class AALiteralExpression extends Expression {
     constructor(options: {
-        elements: Array<AAMemberExpression | CommentStatement>;
+        elements: Array<AAMemberExpression>;
         open?: Token;
         close?: Token;
     }) {
@@ -954,7 +936,7 @@ export class AALiteralExpression extends Expression {
         this.range = util.createBoundingRange(this.tokens.open, ...this.elements, this.tokens.close);
     }
 
-    public readonly elements: Array<AAMemberExpression | CommentStatement>;
+    public readonly elements: Array<AAMemberExpression>;
     public readonly tokens: {
         readonly open?: Token;
         readonly close?: Token;
@@ -972,52 +954,36 @@ export class AALiteralExpression extends Expression {
         );
         let hasChildren = this.elements.length > 0;
         //add newline if the object has children and the first child isn't a comment starting on the same line as opening curly
-        if (hasChildren && (isCommentStatement(this.elements[0]) === false || !util.linesTouch(this.elements[0], this.tokens.open))) {
+        if (hasChildren && !util.linesTouch(this.elements[0], this.tokens.open)) {
             result.push('\n');
         }
         state.blockDepth++;
         for (let i = 0; i < this.elements.length; i++) {
             let element = this.elements[i];
-            let previousElement = this.elements[i - 1];
             let nextElement = this.elements[i + 1];
 
-            //don't indent if comment is same-line
-            if (isCommentStatement(element as any) &&
-                (util.linesTouch(this.tokens.open, element) || util.linesTouch(previousElement, element))
-            ) {
-                result.push(' ');
 
-                //indent line
-            } else {
-                result.push(state.indent());
-            }
+            //indent line
 
-            //render comments
-            if (isCommentStatement(element)) {
-                result.push(...element.transpile(state));
-            } else {
-                //key
-                result.push(
-                    state.transpileToken(element.tokens.key)
-                );
-                //colon
-                result.push(
-                    state.transpileToken(element.tokens.colon, ':'),
-                    ' '
-                );
-
-                //value
-                result.push(...element.value.transpile(state));
-            }
+            result.push(state.indent());
 
 
-            //if next element is a same-line comment, skip the newline
-            if (nextElement && isCommentStatement(nextElement) && nextElement.range.start.line === element.range.start.line) {
+            //key
+            result.push(
+                state.transpileToken(element.tokens.key)
+            );
+            //colon
+            result.push(
+                state.transpileToken(element.tokens.colon, ':'),
+                ' '
+            );
 
-                //add a newline between statements
-            } else {
-                result.push('\n');
-            }
+            //value
+            result.push(...element.value.transpile(state));
+
+            //add a newline between statements
+            result.push('\n');
+
         }
         state.blockDepth--;
 
@@ -2023,14 +1989,11 @@ function expressionToValue(expr: Expression, strict: boolean): ExpressionValue {
     }
     if (isArrayLiteralExpression(expr)) {
         return expr.elements
-            .filter(e => !isCommentStatement(e))
             .map(e => expressionToValue(e, strict));
     }
     if (isAALiteralExpression(expr)) {
         return expr.elements.reduce((acc, e) => {
-            if (!isCommentStatement(e)) {
-                acc[e.tokens.key.text] = expressionToValue(e.value, strict);
-            }
+            acc[e.tokens.key.text] = expressionToValue(e.value, strict);
             return acc;
         }, {});
     }
