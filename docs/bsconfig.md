@@ -101,7 +101,7 @@ A negative pattern can be used to un-ignore some files or codes which were previ
 ]
 ```
 
-A specific error code can be unignored globally by using a pattern which matches everything. For example,
+A specific error code can be unignored in multiple places by using a pattern which matches everything under `rootDir`. For example,
 
 ```jsonc
 "diagnosticFilters": [
