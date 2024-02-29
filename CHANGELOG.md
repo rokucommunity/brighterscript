@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.65.23](https://github.com/rokucommunity/brighterscript/compare/v0.65.22...v0.65.23) - 2024-02-29
+### Changed
+ - upgrade to [roku-deploy@3.11.3](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3113---2024-02-29). Notable changes since 3.11.2:
+     - Retry the convertToSquahsfs request given the HPE_INVALID_CONSTANT error ([roku-deploy#145](https://github.com/rokucommunity/roku-deploy/pull/145))
+### Fixed
+ - empty interfaces break the parser ([#1082](https://github.com/rokucommunity/brighterscript/pull/1082))
+
+
 ## [0.65.22](https://github.com/rokucommunity/brighterscript/compare/v0.65.21...0.65.22) - 2024-02-09
 ### Added
  - support for `provideReferences` in plugins ([#1066](https://github.com/rokucommunity/brighterscript/pull/1066))
