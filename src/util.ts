@@ -24,7 +24,7 @@ import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
 import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionParameterExpression, IndexedGetExpression, LiteralExpression, NewExpression, TypeExpression, VariableExpression, XmlAttributeGetExpression } from './parser/Expression';
 import { Logger, LogLevel } from './Logger';
-import type { Identifier, Locatable, Token } from './lexer/Token';
+import { isToken, type Identifier, type Locatable, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
 import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLongIntegerType, isNumberType, isStringType, isTypeExpression, isTypedArrayExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
@@ -2060,6 +2060,25 @@ export class Util {
 
     public getAstNodeFriendlyName(node: AstNode) {
         return node?.kind.replace(/Statement|Expression/g, '');
+    }
+
+
+    public hasLeadingComments(input: Token | AstNode) {
+        const leadingTrivia = isToken(input) ? input?.leadingTrivia : input?.getLeadingTrivia() ?? [];
+        return !!leadingTrivia.find(t => t.kind === TokenKind.Comment);
+    }
+
+    public getLeadingComments(input: Token | AstNode) {
+        const leadingTrivia = isToken(input) ? input?.leadingTrivia : input?.getLeadingTrivia() ?? [];
+        return leadingTrivia.filter(t => t.kind === TokenKind.Comment);
+    }
+
+    public isLeadingCommentOnSameLine(line: { range: Range }, input: Token | AstNode) {
+        const leadingCommentRange = this.getLeadingComments(input)?.[0];
+        if (leadingCommentRange) {
+            return this.linesTouch(line, leadingCommentRange);
+        }
+        return false;
     }
 }
 

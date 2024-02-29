@@ -78,12 +78,23 @@ export class Body extends Statement implements TypedefProvider {
         for (let i = 0; i < this.statements.length; i++) {
             let statement = this.statements[i];
             let previousStatement = this.statements[i - 1];
+            let nextStatement = this.statements[i + 1];
 
-            if (!previousStatement) {
-                //this is the first statement. do nothing related to spacing and newlines
+            ///if (!previousStatement) {
+            //this is the first statement. do nothing related to spacing and newlines
+
+            //if comment is on same line as prior sibling
+            if (util.hasLeadingComments(statement) && previousStatement && util.getLeadingComments(statement)?.[0]?.range.start.line === previousStatement.range.end.line) {
+                result.push(
+                    ' '
+                );
+
+                //add double newline if this is a comment, and next is a function
+            } else if (util.hasLeadingComments(statement) && nextStatement && isFunctionStatement(nextStatement)) {
+                result.push('\n\n');
 
                 //add double newline if is function not preceeded by a comment
-            } else if (isFunctionStatement(statement) && previousStatement) {
+            } else if (isFunctionStatement(statement) && previousStatement && !util.hasLeadingComments(statement)) {
                 result.push('\n\n');
             } else {
                 //separate statements by a single newline
@@ -156,9 +167,9 @@ export class AssignmentStatement extends Statement {
             return this.value.transpile(state);
         } else {
             return [
-                state.transpileToken(this.tokens.name),
+                ...state.transpileToken(this.tokens.name),
                 ' ',
-                state.transpileToken(this.tokens.equals ?? createToken(TokenKind.Equal)),
+                ...state.transpileToken(this.tokens.equals ?? createToken(TokenKind.Equal)),
                 ' ',
                 ...this.value.transpile(state)
             ];
@@ -210,13 +221,24 @@ export class Block extends Statement {
     transpile(state: BrsTranspileState) {
         state.blockDepth++;
         let results = [] as TranspileResult;
-        for (let statement of this.statements) {
+        for (let i = 0; i < this.statements.length; i++) {
+            let previousStatement = this.statements[i - 1];
+            let statement = this.statements[i];
             //is not a comment
-            //add a newline and indent
-            results.push(
-                state.newline,
-                state.indent()
-            );
+            //if comment is on same line as parent
+            if (util.isLeadingCommentOnSameLine(state.lineage[0], statement) ||
+                util.isLeadingCommentOnSameLine(previousStatement, statement)
+            ) {
+                results.push(' ');
+
+                //is not a comment
+            } else {
+                //add a newline and indent
+                results.push(
+                    state.newline,
+                    state.indent()
+                );
+            }
 
             //push block onto parent list
             state.lineage.unshift(this);
@@ -282,9 +304,7 @@ export class ExitForStatement extends Statement {
     public readonly range: Range;
 
     transpile(state: BrsTranspileState) {
-        return [
-            this.tokens.exitFor ? state.transpileToken(this.tokens.exitFor) : 'exit for'
-        ];
+        return this.tokens.exitFor ? state.transpileToken(this.tokens.exitFor) : ['exit for'];
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -317,9 +337,7 @@ export class ExitWhileStatement extends Statement {
     public readonly range: Range;
 
     transpile(state: BrsTranspileState) {
-        return [
-            this.tokens.exitWhile ? state.transpileToken(this.tokens.exitWhile) : 'exit while'
-        ];
+        return this.tokens.exitWhile ? state.transpileToken(this.tokens.exitWhile) : ['exit while'];
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -472,7 +490,7 @@ export class IfStatement extends Statement {
         if (this.tokens.then) {
             results.push(' ');
             results.push(
-                state.transpileToken(this.tokens.then)
+                ...state.transpileToken(this.tokens.then)
             );
         }
         state.lineage.unshift(this);
@@ -490,7 +508,7 @@ export class IfStatement extends Statement {
             //else
             results.push(
                 state.indent(),
-                state.transpileToken(this.tokens.else)
+                ...state.transpileToken(this.tokens.else)
             );
         }
 
@@ -529,7 +547,7 @@ export class IfStatement extends Statement {
         results.push(state.indent());
         if (this.tokens.endIf) {
             results.push(
-                state.transpileToken(this.tokens.endIf)
+                ...state.transpileToken(this.tokens.endIf)
             );
         } else {
             results.push('end if');
@@ -582,7 +600,7 @@ export class IncrementStatement extends Statement {
     transpile(state: BrsTranspileState) {
         return [
             ...this.value.transpile(state),
-            state.transpileToken(this.tokens.operator)
+            ...state.transpileToken(this.tokens.operator)
         ];
     }
 
@@ -641,7 +659,7 @@ export class PrintStatement extends Statement {
 
     transpile(state: BrsTranspileState) {
         let result = [
-            state.transpileToken(this.tokens.print),
+            ...state.transpileToken(this.tokens.print),
             ' '
         ];
         for (let i = 0; i < this.expressions.length; i++) {
@@ -712,10 +730,10 @@ export class DimStatement extends Statement {
 
     public transpile(state: BrsTranspileState) {
         let result = [
-            state.transpileToken(this.tokens.dim, 'dim'),
+            ...state.transpileToken(this.tokens.dim, 'dim'),
             ' ',
-            state.transpileToken(this.tokens.name),
-            state.transpileToken(this.tokens.openingSquare, '[')
+            ...state.transpileToken(this.tokens.name),
+            ...state.transpileToken(this.tokens.openingSquare, '[')
         ];
         for (let i = 0; i < this.dimensions.length; i++) {
             if (i > 0) {
@@ -773,9 +791,9 @@ export class GotoStatement extends Statement {
 
     transpile(state: BrsTranspileState) {
         return [
-            state.transpileToken(this.tokens.goto, 'goto'),
+            ...state.transpileToken(this.tokens.goto, 'goto'),
             ' ',
-            state.transpileToken(this.tokens.label)
+            ...state.transpileToken(this.tokens.label)
         ];
     }
 
@@ -813,8 +831,8 @@ export class LabelStatement extends Statement {
 
     transpile(state: BrsTranspileState) {
         return [
-            state.transpileToken(this.tokens.name),
-            state.transpileToken(this.tokens.colon, ':')
+            ...state.transpileToken(this.tokens.name),
+            ...state.transpileToken(this.tokens.colon, ':')
 
         ];
     }
@@ -851,7 +869,7 @@ export class ReturnStatement extends Statement {
     transpile(state: BrsTranspileState) {
         let result = [];
         result.push(
-            state.transpileToken(this.tokens.return, 'return')
+            ...state.transpileToken(this.tokens.return, 'return')
         );
         if (this.value) {
             result.push(' ');
@@ -886,7 +904,7 @@ export class EndStatement extends Statement {
 
     transpile(state: BrsTranspileState) {
         return [
-            state.transpileToken(this.tokens.end, 'end')
+            ...state.transpileToken(this.tokens.end, 'end')
         ];
     }
 
@@ -913,7 +931,7 @@ export class StopStatement extends Statement {
 
     transpile(state: BrsTranspileState) {
         return [
-            state.transpileToken(this.tokens.stop, 'stop')
+            ...state.transpileToken(this.tokens.stop, 'stop')
         ];
     }
 
@@ -977,7 +995,7 @@ export class ForStatement extends Statement {
         let result = [];
         //for
         result.push(
-            state.transpileToken(this.tokens.for, 'for'),
+            ...state.transpileToken(this.tokens.for, 'for'),
             ' '
         );
         //i=1
@@ -987,7 +1005,7 @@ export class ForStatement extends Statement {
         );
         //to
         result.push(
-            state.transpileToken(this.tokens.to, 'to'),
+            ...state.transpileToken(this.tokens.to, 'to'),
             ' '
         );
         //final value
@@ -996,7 +1014,7 @@ export class ForStatement extends Statement {
         if (this.increment) {
             result.push(
                 ' ',
-                state.transpileToken(this.tokens.step, 'step'),
+                ...state.transpileToken(this.tokens.step, 'step'),
                 ' ',
                 this.increment.transpile(state)
             );
@@ -1012,7 +1030,7 @@ export class ForStatement extends Statement {
         //end for
         result.push(
             state.indent(),
-            state.transpileToken(this.tokens.endFor, 'end for')
+            ...state.transpileToken(this.tokens.endFor, 'end for')
         );
 
         return result;
@@ -1078,17 +1096,17 @@ export class ForEachStatement extends Statement {
         let result = [];
         //for each
         result.push(
-            state.transpileToken(this.tokens.forEach, 'for each'),
+            ...state.transpileToken(this.tokens.forEach, 'for each'),
             ' '
         );
         //item
         result.push(
-            state.transpileToken(this.tokens.item),
+            ...state.transpileToken(this.tokens.item),
             ' '
         );
         //in
         result.push(
-            state.transpileToken(this.tokens.in, 'in'),
+            ...state.transpileToken(this.tokens.in, 'in'),
             ' '
         );
         //target
@@ -1104,7 +1122,7 @@ export class ForEachStatement extends Statement {
         //end for
         result.push(
             state.indent(),
-            state.transpileToken(this.tokens.endFor, 'end for')
+            ...state.transpileToken(this.tokens.endFor, 'end for')
         );
         return result;
     }
@@ -1156,7 +1174,7 @@ export class WhileStatement extends Statement {
         let result = [];
         //while
         result.push(
-            state.transpileToken(this.tokens.while, 'while'),
+            ...state.transpileToken(this.tokens.while, 'while'),
             ' '
         );
         //condition
@@ -1174,7 +1192,7 @@ export class WhileStatement extends Statement {
         //end while
         result.push(
             state.indent(),
-            state.transpileToken(this.tokens.endWhile, 'end while')
+            ...state.transpileToken(this.tokens.endWhile, 'end while')
         );
 
         return result;
@@ -1233,7 +1251,7 @@ export class DottedSetStatement extends Statement {
                 ...this.obj.transpile(state),
                 this.tokens.dot ? state.tokenToSourceNode(this.tokens.dot) : '.',
                 //name
-                state.transpileToken(this.tokens.name),
+                ...state.transpileToken(this.tokens.name),
                 ' = ',
                 //right-hand-side of assignment
                 ...this.value.transpile(state)
@@ -1308,7 +1326,7 @@ export class IndexedSetStatement extends Statement {
                 //obj
                 ...this.obj.transpile(state),
                 //   [
-                state.transpileToken(this.tokens.openingSquare)
+                ...state.transpileToken(this.tokens.openingSquare)
             );
             for (let i = 0; i < this.indexes.length; i++) {
                 //add comma between indexes
@@ -1321,7 +1339,7 @@ export class IndexedSetStatement extends Statement {
                 );
             }
             result.push(
-                state.transpileToken(this.tokens.closingSquare),
+                ...state.transpileToken(this.tokens.closingSquare),
                 ' = ',
                 ...this.value.transpile(state)
             );
@@ -1365,13 +1383,13 @@ export class LibraryStatement extends Statement implements TypedefProvider {
     transpile(state: BrsTranspileState) {
         let result = [];
         result.push(
-            state.transpileToken(this.tokens.library)
+            ...state.transpileToken(this.tokens.library)
         );
         //there will be a parse error if file path is missing, but let's prevent a runtime error just in case
         if (this.tokens.filePath) {
             result.push(
                 ' ',
-                state.transpileToken(this.tokens.filePath)
+                ...state.transpileToken(this.tokens.filePath)
             );
         }
         return result;
@@ -1542,9 +1560,9 @@ export class ImportStatement extends Statement implements TypedefProvider {
         //add the import statement as a comment just for debugging purposes
         return [
             `'`,
-            state.transpileToken(this.tokens.import, 'import'),
+            ...state.transpileToken(this.tokens.import, 'import'),
             ' ',
-            state.transpileToken(this.tokens.path)
+            ...state.transpileToken(this.tokens.path)
         ];
     }
 
@@ -2307,7 +2325,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
                 state.classStatement = this;
                 result.push(
                     'instance.',
-                    state.transpileToken(statement.tokens.name),
+                    ...state.transpileToken(statement.tokens.name),
                     ' = ',
                     ...statement.transpile(state),
                     state.newline,
@@ -2376,7 +2394,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
                 result.push(', ');
             }
             result.push(
-                state.transpileToken(param.tokens.name)
+                ...state.transpileToken(param.tokens.name)
             );
             i++;
         }
@@ -2790,14 +2808,14 @@ export class TryCatchStatement extends Statement {
 
     public transpile(state: BrsTranspileState): TranspileResult {
         return [
-            state.transpileToken(this.tokens.try, 'try'),
+            ...state.transpileToken(this.tokens.try, 'try'),
             ...this.tryBranch.transpile(state),
             state.newline,
             state.indent(),
             ...(this.catchStatement?.transpile(state) ?? ['catch']),
             state.newline,
             state.indent(),
-            state.transpileToken(this.tokens.endTry, 'end try')
+            ...state.transpileToken(this.tokens.endTry, 'end try')
         ];
     }
 
@@ -2845,7 +2863,7 @@ export class CatchStatement extends Statement {
 
     public transpile(state: BrsTranspileState): TranspileResult {
         return [
-            state.transpileToken(this.tokens.catch, 'catch'),
+            ...state.transpileToken(this.tokens.catch, 'catch'),
             ' ',
             this.tokens.exceptionVariable?.text ?? 'e',
             ...(this.catchBranch?.transpile(state) ?? [])
@@ -2890,7 +2908,7 @@ export class ThrowStatement extends Statement {
 
     public transpile(state: BrsTranspileState) {
         const result = [
-            state.transpileToken(this.tokens.throw, 'throw'),
+            ...state.transpileToken(this.tokens.throw, 'throw'),
             ' '
         ];
 

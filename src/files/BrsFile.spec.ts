@@ -2114,7 +2114,7 @@ describe.only('BrsFile', () => {
             `, 'trim', 'source/main.bs');
         });
 
-        it('keeps end-of-line comments with their line', async () => {
+        it.only('keeps end-of-line comments with their line', async () => {
             await testTranspile(`
                 function DoSomething() 'comment 1
                     name = "bob" 'comment 2

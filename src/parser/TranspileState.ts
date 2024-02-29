@@ -1,6 +1,16 @@
 import { SourceNode } from 'source-map';
 import type { Range } from 'vscode-languageserver';
 import type { BsConfig } from '../BsConfig';
+import { TokenKind } from '../lexer/TokenKind';
+
+
+interface TranspileToken {
+    range?: Range;
+    text: string;
+    kind?: TokenKind;
+    leadingWhitespace?: string;
+    leadingTrivia?: Array<TranspileToken>;
+}
 
 /**
  * Holds the state of a transpile operation as it works its way through the transpile process
@@ -70,7 +80,7 @@ export class TranspileState {
      * because the entire token is passed by reference, instead of the raw string being copied to the parameter,
      * only to then be copied again for the SourceNode constructor
      */
-    public tokenToSourceNode(token: { range?: Range; text: string }) {
+    public tokenToSourceNode(token: TranspileToken) {
         return new SourceNode(
             //convert 0-based range line to 1-based SourceNode line
             token.range ? token.range.start.line + 1 : null,
@@ -81,21 +91,36 @@ export class TranspileState {
         );
     }
 
+    public transpileLeadingComments(token: TranspileToken) {
+        const leadingCommentsSourceNodes = [];
+        const leadingTrivia = (token?.leadingTrivia ?? []);
+        const justComments = leadingTrivia.filter(t => t.kind === TokenKind.Comment);
+        for (const commentToken of justComments) {
+            leadingCommentsSourceNodes.push(this.tokenToSourceNode(commentToken));
+            leadingCommentsSourceNodes.push('\n');
+            leadingCommentsSourceNodes.push(this.indent());
+        }
+        return leadingCommentsSourceNodes;
+    }
+
+
     /**
      * Create a SourceNode from a token, accounting for missing range and multi-line text
      */
-    public transpileToken(token: { range?: Range; text: string }, defaultValue?: string) {
+    public transpileToken(token: TranspileToken, defaultValue?: string) {
         if (!token && defaultValue !== undefined) {
-            return new SourceNode(null, null, null, defaultValue);
+            return [new SourceNode(null, null, null, defaultValue)];
         }
+        const leadingCommentsSourceNodes = this.transpileLeadingComments(token);
+
         if (!token.range) {
-            return new SourceNode(null, null, null, token.text);
+            return [new SourceNode(null, null, null, [...leadingCommentsSourceNodes, token.text])];
         }
         //split multi-line text
         if (token.range.end.line > token.range.start.line) {
             const lines = token.text.split(/\r?\n/g);
             const code = [
-                this.sourceNode(token, lines[0])
+                this.sourceNode(token, [...leadingCommentsSourceNodes, lines[0]])
             ] as Array<string | SourceNode>;
             for (let i = 1; i < lines.length; i++) {
                 code.push(
@@ -110,9 +135,9 @@ export class TranspileState {
                     )
                 );
             }
-            return new SourceNode(null, null, null, code);
+            return [new SourceNode(null, null, null, code)];
         } else {
-            return this.tokenToSourceNode(token);
+            return [...leadingCommentsSourceNodes, this.tokenToSourceNode(token)];
         }
     }
 }

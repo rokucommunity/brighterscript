@@ -61,7 +61,7 @@ export class BinaryExpression extends Expression {
         return [
             state.sourceNode(this.left, this.left.transpile(state)),
             ' ',
-            state.transpileToken(this.tokens.operator),
+            ...state.transpileToken(this.tokens.operator),
             ' ',
             state.sourceNode(this.right, this.right.transpile(state))
         ];
@@ -140,7 +140,7 @@ export class CallExpression extends Expression {
         }
 
         result.push(
-            state.transpileToken(this.tokens.openingParen, '(')
+            ...state.transpileToken(this.tokens.openingParen, '(')
         );
         for (let i = 0; i < this.args.length; i++) {
             //add comma between args
@@ -152,7 +152,7 @@ export class CallExpression extends Expression {
         }
         if (this.tokens.closingParen) {
             result.push(
-                state.transpileToken(this.tokens.closingParen)
+                ...state.transpileToken(this.tokens.closingParen)
             );
         }
         return result;
@@ -256,18 +256,18 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         let results = [];
         //'function'|'sub'
         results.push(
-            state.transpileToken(this.tokens.functionType, 'function')
+            ...state.transpileToken(this.tokens.functionType, 'function')
         );
         //functionName?
         if (name) {
             results.push(
                 ' ',
-                state.transpileToken(name)
+                ...state.transpileToken(name)
             );
         }
         //leftParen
         results.push(
-            state.transpileToken(this.tokens.leftParen)
+            ...state.transpileToken(this.tokens.leftParen)
         );
         //parameters
         for (let i = 0; i < this.parameters.length; i++) {
@@ -281,14 +281,14 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
         //right paren
         results.push(
-            state.transpileToken(this.tokens.rightParen)
+            ...state.transpileToken(this.tokens.rightParen)
         );
         //as [Type]
         if (!state.options.removeParameterTypes && this.returnTypeExpression) {
             results.push(
                 ' ',
                 //as
-                state.transpileToken(this.tokens.as, 'as'),
+                ...state.transpileToken(this.tokens.as, 'as'),
                 ' ',
                 //return type
                 ...this.returnTypeExpression.transpile(state)
@@ -300,11 +300,15 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             state.lineage.shift();
             results.push(...body);
         }
-        results.push('\n');
+        if (!util.isLeadingCommentOnSameLine(this.body, this.tokens.endFunctionType)) {
+            results.push('\n');
+        } else {
+            results.push(' ');
+        }
         //'end sub'|'end function'
         results.push(
             state.indent(),
-            state.transpileToken(this.tokens.endFunctionType, `end ${this.tokens.functionType ?? 'function'}`)
+            ...state.transpileToken(this.tokens.endFunctionType, `end ${this.tokens.functionType ?? 'function'}`)
         );
         return results;
     }
@@ -438,7 +442,7 @@ export class FunctionParameterExpression extends Expression {
     public transpile(state: BrsTranspileState) {
         let result = [
             //name
-            state.transpileToken(this.tokens.name)
+            ...state.transpileToken(this.tokens.name)
         ] as any[];
         //default value
         if (this.defaultValue) {
@@ -522,8 +526,8 @@ export class DottedGetExpression extends Expression {
         } else {
             return [
                 ...this.obj.transpile(state),
-                state.transpileToken(this.tokens.dot, '.'),
-                state.transpileToken(this.tokens.name)
+                ...state.transpileToken(this.tokens.dot, '.'),
+                ...state.transpileToken(this.tokens.name)
             ];
         }
     }
@@ -588,8 +592,8 @@ export class XmlAttributeGetExpression extends Expression {
     transpile(state: BrsTranspileState) {
         return [
             ...this.obj.transpile(state),
-            state.transpileToken(this.tokens.at, '@'),
-            state.transpileToken(this.tokens.name)
+            ...state.transpileToken(this.tokens.at, '@'),
+            ...state.transpileToken(this.tokens.name)
         ];
     }
 
@@ -643,7 +647,7 @@ export class IndexedGetExpression extends Expression {
         result.push(
             ...this.obj.transpile(state),
             this.tokens.questionDot ? state.transpileToken(this.tokens.questionDot) : '',
-            state.transpileToken(this.tokens.openingSquare, '[')
+            ...state.transpileToken(this.tokens.openingSquare, '[')
         );
         for (let i = 0; i < this.indexes.length; i++) {
             //add comma between indexes
@@ -656,7 +660,7 @@ export class IndexedGetExpression extends Expression {
             );
         }
         result.push(
-            state.transpileToken(this.tokens.closingSquare, ']')
+            ...state.transpileToken(this.tokens.closingSquare, ']')
         );
         return result;
     }
@@ -708,9 +712,9 @@ export class GroupingExpression extends Expression {
             return this.expression.transpile(state);
         }
         return [
-            state.transpileToken(this.tokens.leftParen),
+            ...state.transpileToken(this.tokens.leftParen),
             ...this.expression.transpile(state),
-            state.transpileToken(this.tokens.rightParen)
+            ...state.transpileToken(this.tokens.rightParen)
         ];
     }
 
@@ -836,7 +840,7 @@ export class ArrayLiteralExpression extends Expression {
     transpile(state: BrsTranspileState) {
         let result = [];
         result.push(
-            state.transpileToken(this.tokens.open, '[')
+            ...state.transpileToken(this.tokens.open, '[')
         );
         let hasChildren = this.elements.length > 0;
         state.blockDepth++;
@@ -857,7 +861,7 @@ export class ArrayLiteralExpression extends Expression {
         }
         if (this.tokens.close) {
             result.push(
-                state.transpileToken(this.tokens.close)
+                ...state.transpileToken(this.tokens.close)
             );
         }
         return result;
@@ -950,7 +954,7 @@ export class AALiteralExpression extends Expression {
         let result = [];
         //open curly
         result.push(
-            state.transpileToken(this.tokens.open, '{')
+            ...state.transpileToken(this.tokens.open, '{')
         );
         let hasChildren = this.elements.length > 0;
         //add newline if the object has children and the first child isn't a comment starting on the same line as opening curly
@@ -958,10 +962,8 @@ export class AALiteralExpression extends Expression {
             result.push('\n');
         }
         state.blockDepth++;
-        for (let i = 0; i < this.elements.length; i++) {
-            let element = this.elements[i];
-            let nextElement = this.elements[i + 1];
-
+        for (let element of this.elements) { // for (let i = 0; i < this.elements.length; i++) {
+            //  let element = this.elements[i];
 
             //indent line
 
@@ -970,11 +972,11 @@ export class AALiteralExpression extends Expression {
 
             //key
             result.push(
-                state.transpileToken(element.tokens.key)
+                ...state.transpileToken(element.tokens.key)
             );
             //colon
             result.push(
-                state.transpileToken(element.tokens.colon, ':'),
+                ...state.transpileToken(element.tokens.colon, ':'),
                 ' '
             );
 
@@ -1046,7 +1048,7 @@ export class UnaryExpression extends Expression {
             separatingWhitespace = ' ';
         }
         return [
-            state.transpileToken(this.tokens.operator),
+            ...state.transpileToken(this.tokens.operator),
             separatingWhitespace,
             ...this.right.transpile(state)
         ];
@@ -1102,7 +1104,7 @@ export class VariableExpression extends Expression {
             //transpile  normally
         } else {
             result.push(
-                state.transpileToken(this.tokens.name)
+                ...state.transpileToken(this.tokens.name)
             );
         }
         return result;
@@ -1335,7 +1337,7 @@ export class CallfuncExpression extends Expression {
         result.push(
             ...this.callee.transpile(state),
             state.sourceNode(this.tokens.operator, '.callfunc'),
-            state.transpileToken(this.tokens.openingParen, '('),
+            ...state.transpileToken(this.tokens.openingParen, '('),
             //the name of the function
             state.sourceNode(this.tokens.methodName, ['"', this.tokens.methodName.text, '"'])
         );
@@ -1355,7 +1357,7 @@ export class CallfuncExpression extends Expression {
         }
 
         result.push(
-            state.transpileToken(this.tokens.closingParen, ')')
+            ...state.transpileToken(this.tokens.closingParen, ')')
         );
         return result;
     }
@@ -1594,7 +1596,7 @@ export class TaggedTemplateStringExpression extends Expression {
     transpile(state: BrsTranspileState) {
         let result = [];
         result.push(
-            state.transpileToken(this.tokens.tagName),
+            ...state.transpileToken(this.tokens.tagName),
             '(['
         );
 

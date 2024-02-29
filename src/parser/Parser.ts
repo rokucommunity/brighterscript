@@ -112,6 +112,8 @@ export class Parser {
      */
     public ast = new Body({ statements: [] });
 
+    public eofToken: Token;
+
     public get statements() {
         return this.ast.statements;
     }
@@ -191,6 +193,7 @@ export class Parser {
         this.pendingAnnotations = [];
 
         this.ast = this.body();
+        this.eofToken = this.isAtEnd() ? this.peek() : undefined;
         //now that we've built the AST, link every node to its parent
         this.ast.link();
         return this;

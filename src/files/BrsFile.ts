@@ -1071,7 +1071,18 @@ export class BrsFile implements BscFile {
         let transpileResult: SourceNode | undefined;
 
         if (this.needsTranspiled) {
-            transpileResult = new SourceNode(null, null, state.srcPath, this.ast.transpile(state));
+            const astTranspile = this.ast.transpile(state);
+            const trailingComments = [];
+            if (util.hasLeadingComments(this.parser.eofToken)) {
+                if (util.isLeadingCommentOnSameLine(this.ast.statements[this.ast.statements.length - 1], this.parser.eofToken)) {
+                    trailingComments.push(' ');
+                } else {
+                    trailingComments.push('\n');
+                }
+                trailingComments.push(...state.transpileLeadingComments(this.parser.eofToken));
+            }
+
+            transpileResult = new SourceNode(null, null, state.srcPath, [...astTranspile, ...trailingComments]);
         } else if (this.program.options.sourceMap) {
             //emit code as-is with a simple map to the original file location
             transpileResult = util.simpleMap(state.srcPath, this.fileContents);
