@@ -822,9 +822,11 @@ describe('BrsFile BrighterScript classes', () => {
                     smokey = Animal("Smokey")
                     smokey.move(1)
                     '> Bear moved 1 meters
+
                     donald = Duck("Donald")
                     donald.move(2)
                     '> Waddling...\\nDonald moved 2 meters
+
                     dewey = BabyDuck("Dewey")
                     dewey.move(3)
                     '> Waddling...\\nDewey moved 2 meters\\nFell over...I'm new at this
