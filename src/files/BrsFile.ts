@@ -251,6 +251,17 @@ export class BrsFile implements BscFile {
     }
 
     /**
+     * Get the token at the specified position, or the next token
+     */
+    public getCurrentOrNextTokenAt(position: Position) {
+        for (let token of this.parser.tokens) {
+            if (util.comparePositionToRange(position, token.range) < 0) {
+                return token;
+            }
+        }
+    }
+
+    /**
      * Walk the AST and find the expression that this token is most specifically contained within
      */
     public getClosestExpression(position: Position) {
@@ -738,9 +749,9 @@ export class BrsFile implements BscFile {
         return false;
     }
 
-    public getTokensUntil(currentToken: Token, tokenKind: TokenKind, direction: -1 | 1 = -1) {
+    public getTokensUntil(currentToken: Token, tokenKind: TokenKind, direction: -1 | 1 = 1) {
         let tokens = [];
-        for (let i = this.parser.tokens.indexOf(currentToken); direction === -1 ? i >= 0 : i === this.parser.tokens.length; i += direction) {
+        for (let i = this.parser.tokens.indexOf(currentToken); direction === -1 ? i >= 0 : i < this.parser.tokens.length; i += direction) {
             currentToken = this.parser.tokens[i];
             if (currentToken.kind === TokenKind.Newline || currentToken.kind === tokenKind) {
                 break;
@@ -748,6 +759,16 @@ export class BrsFile implements BscFile {
             tokens.push(currentToken);
         }
         return tokens;
+    }
+
+    public getNextTokenByPredicate(currentToken: Token, test: (Token) => boolean, direction: -1 | 1 = 1) {
+        for (let i = this.parser.tokens.indexOf(currentToken); direction === -1 ? i >= 0 : i < this.parser.tokens.length; i += direction) {
+            currentToken = this.parser.tokens[i];
+            if (test(currentToken)) {
+                return currentToken;
+            }
+        }
+        return undefined;
     }
 
     public getPreviousToken(token: Token) {

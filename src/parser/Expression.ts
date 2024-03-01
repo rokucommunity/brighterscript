@@ -93,6 +93,9 @@ export class BinaryExpression extends Expression {
         return DynamicType.instance;
     }
 
+    getLeadingTrivia(): Token[] {
+        return this.left.getLeadingTrivia();
+    }
 }
 
 
@@ -180,6 +183,10 @@ export class CallExpression extends Expression {
             return (calleeType as any).returnType;
         }
         return new TypePropertyReferenceType(calleeType, 'returnType');
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.callee.getLeadingTrivia();
     }
 }
 
@@ -294,32 +301,18 @@ export class FunctionExpression extends Expression implements TypedefProvider {
                 ...this.returnTypeExpression.transpile(state)
             );
         }
+        let hasBody = false;
         if (includeBody) {
             state.lineage.unshift(this);
             let body = this.body.transpile(state);
+            hasBody = body.length > 0;
             state.lineage.shift();
             results.push(...body);
         }
 
-        if (util.hasLeadingComments(this.tokens.endFunctionType)) {
-            // add comments before `end sub|function` - they should be indented
-            if (util.isLeadingCommentOnSameLine(this.body, this.tokens.endFunctionType)) {
-                state.blockDepth++;
-                results.push(' ');
-            } else {
-                results.push(state.newline);
-                results.push(state.indent(1));
-            }
-            results.push(...state.transpileToken({ ...this.tokens.endFunctionType, text: '' }));
-            state.blockDepth--;
-        } else {
-            results.push(state.newline);
-        }
-
-        //'end sub'|'end function'
+        const lastLocatable = hasBody ? this.body : this.returnTypeExpression ?? this.tokens.leftParen ?? this.tokens.functionType;
         results.push(
-            state.indent(),
-            ...state.transpileToken({ ...this.tokens.endFunctionType, leadingTrivia: [] }, `end ${this.tokens.functionType ?? 'function'}`)
+            ...state.transpileEndBlockToken(lastLocatable, this.tokens.endFunctionType, `end ${this.tokens.functionType ?? 'function'}`)
         );
         return results;
     }
@@ -497,6 +490,10 @@ export class FunctionParameterExpression extends Expression {
             walk(this, 'typeExpression', visitor, options);
         }
     }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.name.leadingTrivia ?? [];
+    }
 }
 
 export class DottedGetExpression extends Expression {
@@ -572,6 +569,10 @@ export class DottedGetExpression extends Expression {
         return util.getAllDottedGetPartsAsString(this, parseMode);
     }
 
+    getLeadingTrivia(): Token[] {
+        return this.obj.getLeadingTrivia();
+    }
+
 }
 
 export class XmlAttributeGetExpression extends Expression {
@@ -612,6 +613,10 @@ export class XmlAttributeGetExpression extends Expression {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'obj', visitor, options);
         }
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.obj.getLeadingTrivia();
     }
 }
 
@@ -691,6 +696,10 @@ export class IndexedGetExpression extends Expression {
         }
         return super.getType(options);
     }
+
+    getLeadingTrivia(): Token[] {
+        return this.obj.getLeadingTrivia();
+    }
 }
 
 export class GroupingExpression extends Expression {
@@ -738,6 +747,10 @@ export class GroupingExpression extends Expression {
     getType(options: GetTypeOptions) {
         return this.expression.getType(options);
     }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.leftParen?.leadingTrivia ?? [];
+    }
 }
 
 export class LiteralExpression extends Expression {
@@ -781,12 +794,16 @@ export class LiteralExpression extends Expression {
         }
 
         return [
-            state.sourceNode(this, text)
+            ...state.transpileToken({ ...this.tokens.value, text: text })
         ];
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.value.leadingTrivia ?? [];
     }
 }
 
@@ -856,25 +873,27 @@ export class ArrayLiteralExpression extends Expression {
         let hasChildren = this.elements.length > 0;
         state.blockDepth++;
 
-        for (let element of this.elements) {
-            result.push('\n');
+        for (let i = 0; i < this.elements.length; i++) {
+            let previousElement = this.elements[i - 1];
+            let element = this.elements[i];
 
+            if (util.isLeadingCommentOnSameLine(previousElement ?? this.tokens.open, element)) {
+                result.push(' ');
+            } else {
+                result.push(
+                    '\n',
+                    state.indent()
+                );
+            }
             result.push(
-                state.indent(),
                 ...element.transpile(state)
             );
         }
         state.blockDepth--;
         //add a newline between open and close if there are elements
-        if (hasChildren) {
-            result.push('\n');
-            result.push(state.indent());
-        }
-        if (this.tokens.close) {
-            result.push(
-                ...state.transpileToken(this.tokens.close)
-            );
-        }
+        const lastLocatable = this.elements[this.elements.length - 1] ?? this.tokens.open;
+        result.push(...state.transpileEndBlockToken(lastLocatable, this.tokens.close, ']', hasChildren));
+
         return result;
     }
 
@@ -887,6 +906,9 @@ export class ArrayLiteralExpression extends Expression {
     getType(options: GetTypeOptions): BscType {
         const innerTypes = this.elements.map(expr => expr.getType(options));
         return new ArrayType(...innerTypes);
+    }
+    getLeadingTrivia(): Token[] {
+        return this.tokens.open.leadingTrivia ?? [];
     }
 }
 
@@ -934,7 +956,7 @@ export class AAMemberExpression extends Expression {
         return this.value.getType(options);
     }
 
-    public getLeadingTrivia(): Token[] {
+    getLeadingTrivia(): Token[] {
         return this.tokens.key.leadingTrivia ?? [];
     }
 
@@ -1011,28 +1033,8 @@ export class AALiteralExpression extends Expression {
         }
         state.blockDepth--;
 
-        if (util.hasLeadingComments(this.tokens.close)) {
-            const lastElement = this.elements[this.elements.length - 1] ?? this.tokens.open;
-            // add comments before `}` - they should be indented
-            if (util.isLeadingCommentOnSameLine(lastElement, this.tokens.close)) {
-                state.blockDepth++;
-                result.push(' ');
-            } else {
-                result.push(state.newline);
-                result.push(state.indent(1));
-            }
-            result.push(...state.transpileToken({ ...this.tokens.close, text: '' }));
-            state.blockDepth--;
-        } else if (hasChildren) {
-            result.push(state.newline);
-        }
-
-        //only indent the closing curly if we have children
-        if (hasChildren) {
-            result.push(state.indent());
-        }
-        //close curly
-        result.push(state.transpileToken({ ...this.tokens.close, leadingTrivia: [] }, '}'));
+        const lastElement = this.elements[this.elements.length - 1] ?? this.tokens.open;
+        result.push(...state.transpileEndBlockToken(lastElement, this.tokens.close, '}', hasChildren));
 
         return result;
     }
@@ -1173,7 +1175,7 @@ export class VariableExpression extends Expression {
         return resultType;
     }
 
-    public getLeadingTrivia(): Token[] {
+    getLeadingTrivia(): Token[] {
         return this.tokens.name.leadingTrivia ?? [];
     }
 }
@@ -1460,6 +1462,10 @@ export class CallfuncExpression extends Expression {
         }
 
         return result;
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.callee.getLeadingTrivia();
     }
 }
 
@@ -1755,7 +1761,7 @@ export class AnnotationExpression extends Expression {
     }
 
     public getLeadingTrivia(): Token[] {
-        return this.tokens.at?.leadingTrivia;
+        return this.tokens.at?.leadingTrivia ?? [];
     }
 
     transpile(state: BrsTranspileState) {
@@ -1878,6 +1884,10 @@ export class TernaryExpression extends Expression {
             walk(this, 'alternate', visitor, options);
         }
     }
+
+    getLeadingTrivia(): Token[] {
+        return this.test.getLeadingTrivia();
+    }
 }
 
 export class NullCoalescingExpression extends Expression {
@@ -1976,6 +1986,10 @@ export class NullCoalescingExpression extends Expression {
             walk(this, 'alternate', visitor, options);
         }
     }
+
+    getLeadingTrivia(): Token[] {
+        return this.consequent.getLeadingTrivia();
+    }
 }
 
 export class RegexLiteralExpression extends Expression {
@@ -2024,6 +2038,10 @@ export class RegexLiteralExpression extends Expression {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.regexLiteral?.leadingTrivia ?? [];
     }
 }
 

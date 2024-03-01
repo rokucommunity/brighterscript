@@ -2,15 +2,8 @@ import { SourceNode } from 'source-map';
 import type { Range } from 'vscode-languageserver';
 import type { BsConfig } from '../BsConfig';
 import { TokenKind } from '../lexer/TokenKind';
-
-
-interface TranspileToken {
-    range?: Range;
-    text: string;
-    kind?: TokenKind;
-    leadingWhitespace?: string;
-    leadingTrivia?: Array<TranspileToken>;
-}
+import type { Token } from '../lexer/Token';
+import util from '../util';
 
 /**
  * Holds the state of a transpile operation as it works its way through the transpile process
@@ -80,7 +73,7 @@ export class TranspileState {
      * because the entire token is passed by reference, instead of the raw string being copied to the parameter,
      * only to then be copied again for the SourceNode constructor
      */
-    public tokenToSourceNode(token: TranspileToken) {
+    public tokenToSourceNode(token: Token) {
         return new SourceNode(
             //convert 0-based range line to 1-based SourceNode line
             token.range ? token.range.start.line + 1 : null,
@@ -91,7 +84,7 @@ export class TranspileState {
         );
     }
 
-    public transpileLeadingComments(token: TranspileToken) {
+    public transpileLeadingComments(token: Token) {
         const leadingCommentsSourceNodes = [];
         const leadingTrivia = (token?.leadingTrivia ?? []);
         const justComments = leadingTrivia.filter(t => t.kind === TokenKind.Comment || t.kind === TokenKind.Newline);
@@ -130,7 +123,7 @@ export class TranspileState {
     /**
      * Create a SourceNode from a token, accounting for missing range and multi-line text
      */
-    public transpileToken(token: TranspileToken, defaultValue?: string) {
+    public transpileToken(token: Token, defaultValue?: string) {
         if (!token && defaultValue !== undefined) {
             return [new SourceNode(null, null, null, defaultValue)];
         }
@@ -162,5 +155,27 @@ export class TranspileState {
         } else {
             return [...leadingCommentsSourceNodes, this.tokenToSourceNode(token)];
         }
+    }
+
+    public transpileEndBlockToken(previousLocatable: { range: Range }, endToken: Token, defaultValue: string, alwaysAddNewlineBeforeEndToken = true) {
+        const result = [];
+
+        if (util.hasLeadingComments(endToken)) {
+            // add comments before `end token` - they should be indented
+            if (util.isLeadingCommentOnSameLine(previousLocatable, endToken)) {
+                this.blockDepth++;
+                result.push(' ');
+            } else {
+                result.push(this.newline);
+                result.push(this.indent(1));
+            }
+            result.push(...this.transpileToken({ ...endToken, text: '' }));
+            this.blockDepth--;
+            result.push(this.indent());
+        } else if (alwaysAddNewlineBeforeEndToken) {
+            result.push(this.newline, this.indent());
+        }
+        result.push(this.transpileToken({ ...endToken, leadingTrivia: [] }, defaultValue));
+        return result;
     }
 }

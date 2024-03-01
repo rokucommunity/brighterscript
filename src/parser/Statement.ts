@@ -280,6 +280,10 @@ export class ExpressionStatement extends Statement {
             walk(this, 'expression', visitor, options);
         }
     }
+
+    getLeadingTrivia(): Token[] {
+        return this.expression.getLeadingTrivia();
+    }
 }
 
 
@@ -500,18 +504,11 @@ export class IfStatement extends Statement {
         if (thenNodes.length > 0) {
             results.push(thenNodes);
         }
-        results.push('\n');
-
         //else branch
-        if (this.tokens.else) {
-            //else
-            results.push(
-                state.indent(),
-                ...state.transpileToken(this.tokens.else)
-            );
-        }
-
         if (this.elseBranch) {
+            //else
+            results.push(...state.transpileEndBlockToken(this.thenBranch, this.tokens.else, 'else'));
+
             if (isIfStatement(this.elseBranch)) {
                 //chained elseif
                 state.lineage.unshift(this.elseBranch);
@@ -538,19 +535,12 @@ export class IfStatement extends Statement {
                 if (body.length > 0) {
                     results.push(...body);
                 }
-                results.push('\n');
             }
         }
 
         //end if
-        results.push(state.indent());
-        if (this.tokens.endIf) {
-            results.push(
-                ...state.transpileToken(this.tokens.endIf)
-            );
-        } else {
-            results.push('end if');
-        }
+        results.push(...state.transpileEndBlockToken(this.elseBranch ?? this.thenBranch, this.tokens.endIf, 'end if'));
+
         return results;
     }
 
@@ -761,6 +751,10 @@ export class DimStatement extends Statement {
         }
         return type;
     }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.dim?.leadingTrivia ?? [];
+    }
 }
 
 export class GotoStatement extends Statement {
@@ -798,6 +792,10 @@ export class GotoStatement extends Statement {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.goto?.leadingTrivia ?? [];
     }
 }
 
@@ -882,6 +880,10 @@ export class ReturnStatement extends Statement {
             walk(this, 'value', visitor, options);
         }
     }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.return?.leadingTrivia ?? [];
+    }
 }
 
 export class EndStatement extends Statement {
@@ -910,6 +912,10 @@ export class EndStatement extends Statement {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
     }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.end?.leadingTrivia ?? [];
+    }
 }
 
 export class StopStatement extends Statement {
@@ -936,6 +942,10 @@ export class StopStatement extends Statement {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.stop?.leadingTrivia ?? [];
     }
 }
 
@@ -1023,14 +1033,8 @@ export class ForStatement extends Statement {
         result.push(...this.body.transpile(state));
         state.lineage.shift();
 
-        // add new line before "end for"
-        result.push('\n');
-
         //end for
-        result.push(
-            state.indent(),
-            ...state.transpileToken(this.tokens.endFor, 'end for')
-        );
+        result.push(...state.transpileEndBlockToken(this.body, this.tokens.endFor, 'end for'));
 
         return result;
     }
@@ -1046,6 +1050,10 @@ export class ForStatement extends Statement {
         if (options.walkMode & InternalWalkMode.walkStatements) {
             walk(this, 'body', visitor, options);
         }
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.for?.leadingTrivia ?? [];
     }
 }
 
@@ -1115,14 +1123,9 @@ export class ForEachStatement extends Statement {
         result.push(...this.body.transpile(state));
         state.lineage.shift();
 
-        // add new line before "end for"
-        result.push('\n');
-
         //end for
-        result.push(
-            state.indent(),
-            ...state.transpileToken(this.tokens.endFor, 'end for')
-        );
+        result.push(...state.transpileEndBlockToken(this.body, this.tokens.endFor, 'end for'));
+
         return result;
     }
 
@@ -1133,6 +1136,10 @@ export class ForEachStatement extends Statement {
         if (options.walkMode & InternalWalkMode.walkStatements) {
             walk(this, 'body', visitor, options);
         }
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.forEach?.leadingTrivia ?? [];
     }
 }
 
@@ -1185,14 +1192,8 @@ export class WhileStatement extends Statement {
         result.push(...this.body.transpile(state));
         state.lineage.shift();
 
-        //trailing newline only if we have body statements
-        result.push('\n');
-
         //end while
-        result.push(
-            state.indent(),
-            ...state.transpileToken(this.tokens.endWhile, 'end while')
-        );
+        result.push(...state.transpileEndBlockToken(this.body, this.tokens.endWhile, 'end while'));
 
         return result;
     }
@@ -1204,6 +1205,10 @@ export class WhileStatement extends Statement {
         if (options.walkMode & InternalWalkMode.walkStatements) {
             walk(this, 'body', visitor, options);
         }
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.while?.leadingTrivia ?? [];
     }
 }
 
@@ -1275,6 +1280,10 @@ export class DottedSetStatement extends Statement {
             kind: this.kind
         }));
         return result;
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.obj.getLeadingTrivia();
     }
 }
 
@@ -1353,6 +1362,10 @@ export class IndexedSetStatement extends Statement {
             walk(this, 'value', visitor, options);
         }
     }
+
+    getLeadingTrivia(): Token[] {
+        return this.obj.getLeadingTrivia();
+    }
 }
 
 export class LibraryStatement extends Statement implements TypedefProvider {
@@ -1400,6 +1413,10 @@ export class LibraryStatement extends Statement implements TypedefProvider {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.library?.leadingTrivia ?? [];
     }
 }
 
@@ -1579,6 +1596,10 @@ export class ImportStatement extends Statement implements TypedefProvider {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.import?.leadingTrivia ?? [];
     }
 }
 

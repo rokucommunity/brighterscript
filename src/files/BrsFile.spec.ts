@@ -27,7 +27,7 @@ import type { StandardizedFileEntry } from 'roku-deploy';
 
 let sinon = sinonImport.createSandbox();
 
-describe.only('BrsFile', () => {
+describe('BrsFile', () => {
     let program: Program;
     let srcPath = s`${rootDir}/source/main.brs`;
     let destPath = 'source/main.brs';
@@ -2347,6 +2347,17 @@ describe.only('BrsFile', () => {
 
                 'a function that does something
                 sub foo2()
+                end sub
+            `);
+        });
+
+
+        it('keeps comment in correct place in empty function', async () => {
+            await testTranspile(`
+                sub noop1()
+                end sub
+
+                sub noop2() 'comment in empty function
                 end sub
             `);
         });
