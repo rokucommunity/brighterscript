@@ -300,15 +300,26 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             state.lineage.shift();
             results.push(...body);
         }
-        if (!util.isLeadingCommentOnSameLine(this.body, this.tokens.endFunctionType)) {
-            results.push('\n');
+
+        if (util.hasLeadingComments(this.tokens.endFunctionType)) {
+            // add comments before `end sub|function` - they should be indented
+            if (util.isLeadingCommentOnSameLine(this.body, this.tokens.endFunctionType)) {
+                state.blockDepth++;
+                results.push(' ');
+            } else {
+                results.push(state.newline);
+                results.push(state.indent(1));
+            }
+            results.push(...state.transpileToken({ ...this.tokens.endFunctionType, text: '' }));
+            state.blockDepth--;
         } else {
-            results.push(' ');
+            results.push(state.newline);
         }
+
         //'end sub'|'end function'
         results.push(
             state.indent(),
-            ...state.transpileToken(this.tokens.endFunctionType, `end ${this.tokens.functionType ?? 'function'}`)
+            ...state.transpileToken({ ...this.tokens.endFunctionType, leadingTrivia: [] }, `end ${this.tokens.functionType ?? 'function'}`)
         );
         return results;
     }
@@ -923,6 +934,10 @@ export class AAMemberExpression extends Expression {
         return this.value.getType(options);
     }
 
+    public getLeadingTrivia(): Token[] {
+        return this.tokens.key.leadingTrivia ?? [];
+    }
+
 }
 
 export class AALiteralExpression extends Expression {
@@ -958,43 +973,66 @@ export class AALiteralExpression extends Expression {
         );
         let hasChildren = this.elements.length > 0;
         //add newline if the object has children and the first child isn't a comment starting on the same line as opening curly
-        if (hasChildren && !util.linesTouch(this.elements[0], this.tokens.open)) {
+        if (hasChildren && !util.isLeadingCommentOnSameLine(this.tokens.open, this.elements[0])) {
             result.push('\n');
         }
         state.blockDepth++;
-        for (let element of this.elements) { // for (let i = 0; i < this.elements.length; i++) {
-            //  let element = this.elements[i];
+        for (let i = 0; i < this.elements.length; i++) {
+            let element = this.elements[i];
+            let previousElement = this.elements[i - 1];
+            let nextElement = this.elements[i + 1];
 
-            //indent line
-
-            result.push(state.indent());
-
+            //don't indent if comment is same-line
+            if (util.isLeadingCommentOnSameLine(this.tokens.open, element) ||
+                util.isLeadingCommentOnSameLine(previousElement, element)) {
+                result.push(' ');
+            } else {
+                //indent line
+                result.push(state.indent());
+            }
 
             //key
             result.push(
-                ...state.transpileToken(element.tokens.key)
+                state.transpileToken(element.tokens.key)
             );
             //colon
             result.push(
-                ...state.transpileToken(element.tokens.colon, ':'),
+                state.transpileToken(element.tokens.colon, ':'),
                 ' '
             );
-
             //value
             result.push(...element.value.transpile(state));
 
-            //add a newline between statements
-            result.push('\n');
-
+            //if next element is a same-line comment, skip the newline
+            if (nextElement && !util.isLeadingCommentOnSameLine(element, nextElement)) {
+                //add a newline between statements
+                result.push('\n');
+            }
         }
         state.blockDepth--;
+
+        if (util.hasLeadingComments(this.tokens.close)) {
+            const lastElement = this.elements[this.elements.length - 1] ?? this.tokens.open;
+            // add comments before `}` - they should be indented
+            if (util.isLeadingCommentOnSameLine(lastElement, this.tokens.close)) {
+                state.blockDepth++;
+                result.push(' ');
+            } else {
+                result.push(state.newline);
+                result.push(state.indent(1));
+            }
+            result.push(...state.transpileToken({ ...this.tokens.close, text: '' }));
+            state.blockDepth--;
+        } else if (hasChildren) {
+            result.push(state.newline);
+        }
 
         //only indent the closing curly if we have children
         if (hasChildren) {
             result.push(state.indent());
         }
         //close curly
-        result.push(state.transpileToken(this.tokens.close, '}'));
+        result.push(state.transpileToken({ ...this.tokens.close, leadingTrivia: [] }, '}'));
 
         return result;
     }
@@ -1014,6 +1052,11 @@ export class AALiteralExpression extends Expression {
         }
         return resultType;
     }
+
+    public getLeadingTrivia(): Token[] {
+        return this.tokens.open.leadingTrivia ?? [];
+    }
+
 }
 
 export class UnaryExpression extends Expression {
@@ -1062,6 +1105,10 @@ export class UnaryExpression extends Expression {
 
     getType(options: GetTypeOptions): BscType {
         return util.unaryOperatorResultType(this.tokens.operator, this.right.getType(options));
+    }
+
+    public getLeadingTrivia(): Token[] {
+        return this.tokens.operator.leadingTrivia ?? [];
     }
 }
 
@@ -1124,6 +1171,10 @@ export class VariableExpression extends Expression {
         }
         options.typeChain?.push(new TypeChainEntry({ name: nameKey, type: resultType, data: options.data, range: this.range, kind: this.kind }));
         return resultType;
+    }
+
+    public getLeadingTrivia(): Token[] {
+        return this.tokens.name.leadingTrivia ?? [];
     }
 }
 
@@ -1221,6 +1272,10 @@ export class SourceLiteralExpression extends Expression {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
     }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.value.leadingTrivia ?? [];
+    }
 }
 
 /**
@@ -1286,6 +1341,10 @@ export class NewExpression extends Expression {
             }
         }
         return result;
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.new.leadingTrivia ?? [];
     }
 }
 

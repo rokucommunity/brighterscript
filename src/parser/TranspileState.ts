@@ -94,12 +94,35 @@ export class TranspileState {
     public transpileLeadingComments(token: TranspileToken) {
         const leadingCommentsSourceNodes = [];
         const leadingTrivia = (token?.leadingTrivia ?? []);
-        const justComments = leadingTrivia.filter(t => t.kind === TokenKind.Comment);
+        const justComments = leadingTrivia.filter(t => t.kind === TokenKind.Comment || t.kind === TokenKind.Newline);
+        let newLinesSinceComment = 0;
+
+        let transpiledCommentAlready = false;
         for (const commentToken of justComments) {
-            leadingCommentsSourceNodes.push(this.tokenToSourceNode(commentToken));
-            leadingCommentsSourceNodes.push('\n');
+            if (commentToken.kind === TokenKind.Newline && !transpiledCommentAlready) {
+                continue;
+            }
+            if (commentToken.kind === TokenKind.Comment) {
+                if (leadingCommentsSourceNodes.length > 0) {
+                    leadingCommentsSourceNodes.push(this.indent());
+                }
+                leadingCommentsSourceNodes.push(this.tokenToSourceNode(commentToken));
+                newLinesSinceComment = 0;
+            } else {
+                newLinesSinceComment++;
+            }
+
+            if (newLinesSinceComment === 1 || newLinesSinceComment === 2) {
+                //new line that is not touching a previous new line
+                leadingCommentsSourceNodes.push(this.newline);
+            }
+            transpiledCommentAlready = true;
+        }
+        if (leadingCommentsSourceNodes.length > 0 && token.text) {
+            // indent in preparation for next text
             leadingCommentsSourceNodes.push(this.indent());
         }
+
         return leadingCommentsSourceNodes;
     }
 

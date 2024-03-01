@@ -2114,7 +2114,7 @@ describe.only('BrsFile', () => {
             `, 'trim', 'source/main.bs');
         });
 
-        it.only('keeps end-of-line comments with their line', async () => {
+        it('keeps end-of-line comments with their line', async () => {
             await testTranspile(`
                 function DoSomething() 'comment 1
                     name = "bob" 'comment 2
@@ -2127,6 +2127,7 @@ describe.only('BrsFile', () => {
                 function DoSomething()
                     'lots of empty white space
                     'that will be removed during transpile
+                    'since there are newlines below this comment one newline will be preserved
 
 
 
@@ -2135,6 +2136,8 @@ describe.only('BrsFile', () => {
                 function DoSomething()
                     'lots of empty white space
                     'that will be removed during transpile
+                    'since there are newlines below this comment one newline will be preserved
+
                 end function
             `);
         });
@@ -2333,6 +2336,17 @@ describe.only('BrsFile', () => {
                         name: "child" 'comment
                         'comment
                     }
+                end sub
+            `);
+        });
+
+        it('keeps spaces in between comments when a statement ends in a comment ', async () => {
+            await testTranspile(`
+                sub foo()
+                end sub 'comment
+
+                'a function that does something
+                sub foo2()
                 end sub
             `);
         });

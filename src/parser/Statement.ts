@@ -80,15 +80,14 @@ export class Body extends Statement implements TypedefProvider {
             let previousStatement = this.statements[i - 1];
             let nextStatement = this.statements[i + 1];
 
-            ///if (!previousStatement) {
-            //this is the first statement. do nothing related to spacing and newlines
+            if (!previousStatement) {
+                //this is the first statement. do nothing related to spacing and newlines
 
-            //if comment is on same line as prior sibling
-            if (util.hasLeadingComments(statement) && previousStatement && util.getLeadingComments(statement)?.[0]?.range.start.line === previousStatement.range.end.line) {
+                //if comment is on same line as prior sibling
+            } else if (util.hasLeadingComments(statement) && previousStatement && util.getLeadingComments(statement)?.[0]?.range.start.line === previousStatement.range.end.line) {
                 result.push(
                     ' '
                 );
-
                 //add double newline if this is a comment, and next is a function
             } else if (util.hasLeadingComments(statement) && nextStatement && isFunctionStatement(nextStatement)) {
                 result.push('\n\n');
