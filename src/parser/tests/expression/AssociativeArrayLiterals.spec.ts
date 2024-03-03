@@ -199,10 +199,8 @@ describe('parser associative array literals', () => {
         expect(commas).to.deep.equal([
             true, // p1
             true, // p2
-            false, // comment
             false, // p3
             false, // p4
-            false, // comment
             true // p5
         ]);
     });

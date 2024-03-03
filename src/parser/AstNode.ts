@@ -224,7 +224,6 @@ export enum AstNodeKind {
     EmptyStatement = 'EmptyStatement',
     AssignmentStatement = 'AssignmentStatement',
     ExpressionStatement = 'ExpressionStatement',
-    CommentStatement = 'CommentStatement',
     ExitForStatement = 'ExitForStatement',
     ExitWhileStatement = 'ExitWhileStatement',
     FunctionStatement = 'FunctionStatement',

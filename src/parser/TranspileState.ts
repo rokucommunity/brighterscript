@@ -5,6 +5,15 @@ import { TokenKind } from '../lexer/TokenKind';
 import type { Token } from '../lexer/Token';
 import util from '../util';
 
+
+interface TranspileToken {
+    range?: Range;
+    text: string;
+    kind?: TokenKind;
+    leadingWhitespace?: string;
+    leadingTrivia?: Array<TranspileToken>;
+}
+
 /**
  * Holds the state of a transpile operation as it works its way through the transpile process
  */
@@ -73,7 +82,7 @@ export class TranspileState {
      * because the entire token is passed by reference, instead of the raw string being copied to the parameter,
      * only to then be copied again for the SourceNode constructor
      */
-    public tokenToSourceNode(token: Token) {
+    public tokenToSourceNode(token: TranspileToken) {
         return new SourceNode(
             //convert 0-based range line to 1-based SourceNode line
             token.range ? token.range.start.line + 1 : null,
@@ -84,7 +93,7 @@ export class TranspileState {
         );
     }
 
-    public transpileLeadingComments(token: Token) {
+    public transpileLeadingComments(token: TranspileToken) {
         const leadingCommentsSourceNodes = [];
         const leadingTrivia = (token?.leadingTrivia ?? []);
         const justComments = leadingTrivia.filter(t => t.kind === TokenKind.Comment || t.kind === TokenKind.Newline);
@@ -123,7 +132,7 @@ export class TranspileState {
     /**
      * Create a SourceNode from a token, accounting for missing range and multi-line text
      */
-    public transpileToken(token: Token, defaultValue?: string) {
+    public transpileToken(token: TranspileToken, defaultValue?: string): Array<SourceNode | string> {
         if (!token && defaultValue !== undefined) {
             return [new SourceNode(null, null, null, defaultValue)];
         }

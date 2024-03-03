@@ -75,14 +75,14 @@ export class SGAttribute {
 
     public transpile(state: TranspileState) {
         const result = [
-            state.transpileToken(this.tokens.key)
+            ...state.transpileToken(this.tokens.key)
         ];
         if (this.tokens.value) {
             result.push(
-                state.transpileToken(this.tokens.equals, '='),
-                state.transpileToken(this.tokens.openingQuote, '"'),
-                state.transpileToken(this.tokens.value),
-                state.transpileToken(this.tokens.closingQuote, '"')
+                ...state.transpileToken(this.tokens.equals, '='),
+                ...state.transpileToken(this.tokens.openingQuote, '"'),
+                ...state.transpileToken(this.tokens.value),
+                ...state.transpileToken(this.tokens.closingQuote, '"')
             );
         }
         return new SourceNode(null, null, null, result);
@@ -291,8 +291,8 @@ export class SGElement {
 
     public transpile(state: TranspileState) {
         return new SourceNode(null, null, null, [
-            state.transpileToken(this.tokens.startTagOpen, '<'), // <
-            state.transpileToken(this.tokens.startTagName),
+            ...state.transpileToken(this.tokens.startTagOpen, '<'), // <
+            ...state.transpileToken(this.tokens.startTagName),
             this.transpileAttributes(state, this.attributes),
             this.transpileBody(state)
         ]);
@@ -302,12 +302,12 @@ export class SGElement {
         if (this.isSelfClosing) {
             return new SourceNode(null, null, null, [
                 ' ',
-                state.transpileToken(this.tokens.startTagClose, '/>'),
+                ...state.transpileToken(this.tokens.startTagClose, '/>'),
                 state.newline
             ]);
         } else {
             const chunks = [
-                state.transpileToken(this.tokens.startTagClose, '>'),
+                ...state.transpileToken(this.tokens.startTagClose, '>'),
                 state.newline
             ];
             state.blockDepth++;
@@ -320,9 +320,9 @@ export class SGElement {
             state.blockDepth--;
             chunks.push(
                 state.indentText,
-                state.transpileToken(this.tokens.endTagOpen, '</'),
-                state.transpileToken(this.tokens.endTagName ?? this.tokens.startTagName),
-                state.transpileToken(this.tokens.endTagClose, '>'),
+                ...state.transpileToken(this.tokens.endTagOpen, '</'),
+                ...state.transpileToken(this.tokens.endTagName ?? this.tokens.startTagName),
+                ...state.transpileToken(this.tokens.endTagClose, '>'),
                 state.newline
             );
             return new SourceNode(null, null, null, chunks);
@@ -368,7 +368,7 @@ export class SGScript extends SGElement {
         if (this.cdata) {
             return new SourceNode(null, null, null, [
                 '>',
-                state.transpileToken(this.cdata),
+                ...state.transpileToken(this.cdata),
                 '</',
                 this.tokens.startTagName.text,
                 '>',

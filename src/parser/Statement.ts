@@ -407,6 +407,13 @@ export class FunctionStatement extends Statement implements TypedefProvider {
 
     getTypedef(state: BrsTranspileState) {
         let result = [];
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
         for (let annotation of this.annotations ?? []) {
             result.push(
                 ...annotation.getTypedef(state),
@@ -732,7 +739,7 @@ export class DimStatement extends Statement {
                 ...this.dimensions[i].transpile(state)
             );
         }
-        result.push(state.transpileToken(this.tokens.closingSquare, ']'));
+        result.push(...state.transpileToken(this.tokens.closingSquare, ']'));
         return result;
     }
 
@@ -1498,11 +1505,19 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     }
 
     getTypedef(state: BrsTranspileState) {
-        let result = [
-            'namespace ',
+        let result = [];
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
+
+        result.push('namespace ',
             ...this.getName(ParseMode.BrighterScript),
             state.newline
-        ];
+        );
         state.blockDepth++;
         result.push(
             ...this.body.getTypedef(state)
@@ -1710,6 +1725,13 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
 
     getTypedef(state: BrsTranspileState) {
         const result = [] as TranspileResult;
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
         for (let annotation of this.annotations ?? []) {
             result.push(
                 ...annotation.getTypedef(state),
@@ -1851,6 +1873,13 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
 
     getTypedef(state: BrsTranspileState): (string | SourceNode)[] {
         const result = [] as TranspileResult;
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
         for (let annotation of this.annotations ?? []) {
             result.push(
                 ...annotation.getTypedef(state),
@@ -1961,6 +1990,13 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
 
     getTypedef(state: BrsTranspileState) {
         const result = [] as TranspileResult;
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
         for (let annotation of this.annotations ?? []) {
             result.push(
                 ...annotation.getTypedef(state),
@@ -2129,6 +2165,13 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
     getTypedef(state: BrsTranspileState) {
         const result = [] as TranspileResult;
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
         for (let annotation of this.annotations ?? []) {
             result.push(
                 ...annotation.getTypedef(state),
@@ -2569,6 +2612,13 @@ export class MethodStatement extends FunctionStatement {
 
     getTypedef(state: BrsTranspileState) {
         const result = [] as Array<string | SourceNode>;
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
         for (let annotation of this.annotations ?? []) {
             result.push(
                 ...annotation.getTypedef(state),
@@ -2754,6 +2804,13 @@ export class FieldStatement extends Statement implements TypedefProvider {
     getTypedef(state: BrsTranspileState) {
         const result = [];
         if (this.tokens.name) {
+            for (let comment of util.getLeadingComments(this) ?? []) {
+                result.push(
+                    comment.text,
+                    state.newline,
+                    state.indent()
+                );
+            }
             for (let annotation of this.annotations ?? []) {
                 result.push(
                     ...annotation.getTypedef(state),
@@ -3080,6 +3137,13 @@ export class EnumStatement extends Statement implements TypedefProvider {
 
     getTypedef(state: BrsTranspileState) {
         const result = [] as TranspileResult;
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
         for (let annotation of this.annotations ?? []) {
             result.push(
                 ...annotation.getTypedef(state),
@@ -3179,9 +3243,15 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
     }
 
     getTypedef(state: BrsTranspileState): (string | SourceNode)[] {
-        const result = [
-            this.tokens.name.text
-        ] as TranspileResult;
+        const result = [];
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
+        result.push(this.tokens.name.text);
         if (this.tokens.equals) {
             result.push(' ', this.tokens.equals.text, ' ');
             if (this.value) {
@@ -3269,7 +3339,15 @@ export class ConstStatement extends Statement implements TypedefProvider {
     }
 
     getTypedef(state: BrsTranspileState): (string | SourceNode)[] {
-        return [
+        const result = [];
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
+        result.push(
             this.tokens.const ? state.tokenToSourceNode(this.tokens.const) : 'const',
             ' ',
             state.tokenToSourceNode(this.tokens.name),
@@ -3277,7 +3355,8 @@ export class ConstStatement extends Statement implements TypedefProvider {
             this.tokens.equals ? state.tokenToSourceNode(this.tokens.equals) : '=',
             ' ',
             ...this.value.transpile(state)
-        ];
+        );
+        return result;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {

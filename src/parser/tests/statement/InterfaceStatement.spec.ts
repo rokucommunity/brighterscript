@@ -84,7 +84,6 @@ describe('InterfaceStatement', () => {
                 prop as dynamic
             end interface
         `, `
-            'this comment was throwing exception during transpile
         `);
     });
 

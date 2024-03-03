@@ -3011,7 +3011,8 @@ export class Parser {
     }
 
     private isAtEnd(): boolean {
-        return this.peek().kind === TokenKind.Eof;
+        const peekToken = this.peek();
+        return !peekToken || peekToken.kind === TokenKind.Eof;
     }
 
     private peekNext(): Token {
