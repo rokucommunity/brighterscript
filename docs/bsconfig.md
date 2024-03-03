@@ -75,7 +75,7 @@ Type: `Array<string | number | {src: string; codes: number[]}`
 A list of filters used to hide diagnostics.
 
 - A `string` value should be a relative-to-root-dir or absolute file path or glob pattern of the files that should be excluded. Any file matching this pattern will have all diagnostics supressed. These file paths refer to the location of the source files pre-compilation and are relative to [`rootDir`](#rootdir). Absolute file paths may be used as well.
-    - A file glob may be previxed with `!` to make it a negative pattern which "un-ignores" the files it matches. (See examples below).
+    - A file glob may be prefixed with `!` to make it a negative pattern which "un-ignores" the files it matches. (See examples below).
 - A `number` value should be a diagnostic code. This will supress all diagnostics with that code for the whole project.
 - An object can also be provided to filter specific diagnostic codes for a file pattern. For example,
 
