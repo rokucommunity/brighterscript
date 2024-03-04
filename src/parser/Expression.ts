@@ -29,7 +29,9 @@ export class BinaryExpression extends Expression {
         public right: Expression
     ) {
         super();
-        this.range = util.createRangeFromPositionsOptional(this.left.range?.start, this.right.range?.end);
+        this.range = this.left.range && this.right.range
+            ? util.createRangeFromPositions(this.left.range.start, this.right.range.end)
+            : undefined;
     }
 
     public readonly range: Range | undefined;

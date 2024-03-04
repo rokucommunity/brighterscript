@@ -989,21 +989,6 @@ export class Util {
     }
 
     /**
-     * Create a `Range` from two potentially-undefined `Position`s
-     */
-    public createRangeFromPositionsOptional(startPosition: Position | undefined, endPosition: Position | undefined): Range | undefined {
-        if (startPosition && endPosition) {
-            return this.createRangeFromPositions(startPosition, endPosition);
-        } else if (startPosition) {
-            return this.createRangeFromPositions(startPosition, startPosition);
-        } else if (endPosition) {
-            return this.createRangeFromPositions(endPosition, endPosition);
-        }
-
-        return undefined;
-    }
-
-    /**
      * Given a list of ranges, create a range that starts with the first non-null lefthand range, and ends with the first non-null
      * righthand range. Returns undefined if none of the items have a range.
      */
