@@ -12,7 +12,7 @@ import { isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, i
 import { expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics } from '../testHelpers.spec';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { Expression, Statement } from './AstNode';
-import { SymbolTypeFlag } from '../SymbolTable';
+import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { IntegerType } from '../types/IntegerType';
 import { FloatType } from '../types/FloatType';
 import { StringType } from '../types/StringType';

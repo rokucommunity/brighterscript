@@ -2,12 +2,6 @@ import { SourceNode } from 'source-map';
 import type { Range } from 'vscode-languageserver';
 import { createSGAttribute, createSGInterface, createSGInterfaceField, createSGInterfaceFunction } from '../astUtils/creators';
 import type { FileReference } from '../interfaces';
-import { BooleanType } from '../types/BooleanType';
-import { DynamicType } from '../types/DynamicType';
-import { FloatType } from '../types/FloatType';
-import { IntegerType } from '../types/IntegerType';
-import { LongIntegerType } from '../types/LongIntegerType';
-import { StringType } from '../types/StringType';
 import util from '../util';
 import type { TranspileState } from './TranspileState';
 
@@ -17,22 +11,24 @@ export interface SGToken {
 }
 
 export class SGAttribute {
-    public constructor(
-        key: SGToken,
-        equals?: SGToken,
-        openingQuote?: SGToken,
-        value?: SGToken,
-        closingQuote?: SGToken
-    ) {
-        this.tokens.key = key;
-        this.tokens.equals = equals;
-        this.tokens.openingQuote = openingQuote;
-        this.tokens.value = value;
-        this.tokens.closingQuote = closingQuote;
+    public constructor(options: {
+        key: SGToken;
+        equals?: SGToken;
+        openingQuote?: SGToken;
+        value?: SGToken;
+        closingQuote?: SGToken;
+    }) {
+        this.tokens = {
+            key: options.key,
+            equals: options.equals,
+            openingQuote: options.openingQuote,
+            value: options.value,
+            closingQuote: options.closingQuote
+        };
     }
 
-    public tokens = {} as {
-        key: SGToken;
+    public readonly tokens: {
+        readonly key: SGToken;
         equals?: SGToken;
         openingQuote?: SGToken;
         value?: SGToken;
@@ -93,74 +89,70 @@ export class SGAttribute {
     }
 
     public clone() {
-        return new SGAttribute(
-            { ...this.tokens.key },
-            { ...this.tokens.equals },
-            { ...this.tokens.openingQuote },
-            { ...this.tokens.value },
-            { ...this.tokens.closingQuote }
-        );
+        return new SGAttribute(this.tokens);
     }
 }
 
 export class SGElement {
 
-    constructor(
-        startTagOpen: SGToken,
-        startTagName: SGToken,
-        attributes = [] as SGAttribute[],
-        startTagClose?: SGToken,
-        elements = [] as SGElement[],
-        endTagOpen?: SGToken,
-        endTagName?: SGToken,
-        endTagClose?: SGToken
-    ) {
-        this.tokens.startTagOpen = startTagOpen;
-        this.tokens.startTagName = startTagName;
-        this.attributes = attributes;
-        this.tokens.startTagClose = startTagClose;
-        this.elements = elements;
-        this.tokens.endTagOpen = endTagOpen;
-        this.tokens.endTagName = endTagName;
-        this.tokens.endTagClose = endTagClose;
+    constructor(options: {
+        startTagOpen?: SGToken;
+        startTagName: SGToken;
+        attributes?: SGAttribute[];
+        startTagClose?: SGToken;
+        elements?: SGElement[];
+        endTagOpen?: SGToken;
+        endTagName?: SGToken;
+        endTagClose?: SGToken;
+    }) {
+        this.tokens = {
+            startTagOpen: options.startTagOpen,
+            startTagName: options.startTagName,
+            startTagClose: options.startTagClose,
+            endTagOpen: options.endTagOpen,
+            endTagName: options.endTagName,
+            endTagClose: options.endTagClose
+        };
+        this.attributes = options.attributes ?? [];
+        this.elements = options.elements ?? [];
     }
 
-    public tokens = {} as {
+    public readonly tokens: {
         /**
          * The first portion of the startTag. (i.e. `<` or `<?`)
          */
-        startTagOpen: SGToken;
+        readonly startTagOpen?: SGToken;
         /**
          * The name of the opening tag (i.e. CoolTag in `<CoolTag>`).
          */
-        startTagName: SGToken;
+        readonly startTagName: SGToken;
         /**
-         * The last bit of the startTag (i.e. `/>` for self-closing, `?>` for xml prologue, or `>` for tag with children)
+         * The last bit of the startTag (i.e. `/>` for self-closing, `?>` for xml prolog, or `>` for tag with children)
          */
-        startTagClose?: SGToken;
+        readonly startTagClose?: SGToken;
         /**
          * The endTag opening char `<`
          */
-        endTagOpen?: SGToken;
+        readonly endTagOpen?: SGToken;
         /**
          * The name of the ending tag (i.e. CoolTag in `</CoolTag>`)
          */
-        endTagName?: SGToken;
+        readonly endTagName?: SGToken;
         /**
          * The endTag closing char `>`
          */
-        endTagClose?: SGToken;
+        readonly endTagClose?: SGToken;
     };
 
     /**
      * Array of attributes found on this tag
      */
-    public attributes = [] as SGAttribute[];
+    public readonly attributes = [] as SGAttribute[];
 
     /**
      * The array of direct children AST elements of this AST node
      */
-    public elements = [] as SGElement[];
+    public readonly elements = [] as SGElement[];
 
     public get range() {
         if (!this._range) {
@@ -487,32 +479,6 @@ export enum SGFieldType {
     rect2darray = 'rect2darray'
 }
 export const SGFieldTypes = Object.keys(SGFieldType);
-
-export function getBscTypeFromSGFieldType(sgFieldType: string) {
-    switch (sgFieldType) {
-        case SGFieldType.integer:
-        case SGFieldType.int: {
-            return new IntegerType();
-        }
-        case SGFieldType.longinteger: {
-            return new LongIntegerType();
-        }
-        case SGFieldType.float: {
-            return new FloatType();
-        }
-        case SGFieldType.string:
-        case SGFieldType.str: {
-            return new StringType();
-        }
-        case SGFieldType.boolean:
-        case SGFieldType.bool: {
-            return new BooleanType();
-        }
-        default: {
-            return new DynamicType();
-        }
-    }
-}
 
 export class SGInterfaceFunction extends SGElement {
     get name() {
@@ -861,12 +827,19 @@ export interface SGReferences {
 
 export class SGAst {
 
-    constructor(
-        public prologElement?: SGProlog,
-        public rootElement?: SGElement,
-        public componentElement?: SGComponent
-    ) {
+    constructor(options: {
+        prologElement?: SGProlog;
+        rootElement?: SGElement;
+        componentElement?: SGComponent;
+    } = {}) {
+        this.prologElement = options.prologElement;
+        this.rootElement = options.rootElement;
+        this.componentElement = options.componentElement;
     }
+
+    public readonly prologElement?: SGProlog;
+    public readonly rootElement?: SGElement;
+    public readonly componentElement?: SGComponent;
 
     public transpile(state: TranspileState): SourceNode {
         const chunks = [] as SourceNode[];

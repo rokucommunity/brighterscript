@@ -7,12 +7,12 @@ import { InterfaceType } from './InterfaceType';
 import { ObjectType } from './ObjectType';
 import { StringType } from './StringType';
 import type { ReferenceType } from './ReferenceType';
-import { SymbolTypeFlag } from '../SymbolTable';
+import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { AssociativeArrayType } from './AssociativeArrayType';
 import { ArrayType } from './ArrayType';
 import { BooleanType } from './BooleanType';
 import { typeCompatibilityMessage } from '../DiagnosticMessages';
-import type { TypeCompatibilityData } from '..';
+import type { TypeCompatibilityData } from '../interfaces';
 
 describe('InterfaceType', () => {
     describe('toJSString', () => {

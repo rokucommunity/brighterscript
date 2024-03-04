@@ -3,7 +3,7 @@ import { components, events, interfaces, nodes } from '../roku-types';
 import { Cache } from '../Cache';
 import type { TypedFunctionType } from './TypedFunctionType';
 import type { SymbolTable } from '../SymbolTable';
-import { SymbolTypeFlag } from '../SymbolTable';
+import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import type { BscType } from './BscType';
 import { isArrayType, isAssociativeArrayType, isBooleanType, isCallableType, isComponentType, isDoubleType, isEnumMemberType, isFloatType, isIntegerType, isInterfaceType, isInvalidType, isLongIntegerType, isStringType } from '../astUtils/reflection';
 import type { ComponentType } from './ComponentType';

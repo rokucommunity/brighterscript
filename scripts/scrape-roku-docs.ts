@@ -16,7 +16,11 @@ import * as he from 'he';
 import * as deepmerge from 'deepmerge';
 import { NodeHtmlMarkdown } from 'node-html-markdown';
 import { isVariableExpression } from '../src/astUtils/reflection';
-import { SymbolTypeFlag } from '../src';
+import { SymbolTable } from '../src/SymbolTable';
+import { SymbolTypeFlag } from '../src/SymbolTableFlag';
+import { referenceTypeFactory } from '../src/types/ReferenceType';
+import { unionTypeFactory } from '../src/types/UnionType';
+
 
 type Token = marked.Token;
 
@@ -49,6 +53,9 @@ class Runner {
     public async run() {
         const outPath = s`${__dirname}/../src/roku-types/data.json`;
         fsExtra.removeSync(outPath);
+
+        SymbolTable.referenceTypeFactory = referenceTypeFactory;
+        SymbolTable.unionTypeFactory = unionTypeFactory;
         loadCache();
         //load the base level roku docs data
         await this.loadReferences();
@@ -293,7 +300,7 @@ class Runner {
                         } as Signature;
                         const call = (statements[0] as ExpressionStatement).expression as CallExpression;
                         //only scan createObject calls for our own name
-                        if ((call.args[0] as LiteralExpression)?.token?.text === `"${component.name}"`) {
+                        if ((call.args[0] as LiteralExpression)?.tokens?.value.text === `"${component.name}"`) {
                             //skip the first arg because that's the name of the component
                             for (let i = 1; i < call.args.length; i++) {
                                 const arg = call.args[i];
@@ -360,9 +367,9 @@ class Runner {
     /* Gets a param based on text in the docs
      * Docs for some components do not have valid brightscript in the createObject example:
      *  - it looks like C code
-     *   Eg: CreateObject("roRegion", Object bitmap, Integer x, Integer y,Integer width, Integer height)
+     *   Eg: CreateObject("roRegion', Object bitmap, Integer x, Integer y,Integer width, Integer height)
      *  - or, they forget the "as"
-     *   Eg: CreateObject("roArray",  size As Integer, resizeAs Boolean)
+     *   Eg: CreateObject("roArray',  size As Integer, resizeAs Boolean)
      * */
     private getParamFromMarkdown(foundParam: string, defaultParamName: string) {
         // make an array of at the words in each group, removing "as" if it exists
@@ -720,7 +727,7 @@ class Runner {
         if (statements.length > 0) {
             const func = statements[0] as FunctionStatement;
             const signature = {
-                name: func.name?.text,
+                name: func.tokens.name?.text,
                 params: [],
                 returnType: func.func.returnTypeExpression?.getType({ flags: SymbolTypeFlag.typetime })?.toTypeString() ?? 'Void'
             } as Func;
@@ -757,25 +764,26 @@ class Runner {
     private mergeOverrides() {
         this.result = deepmerge(this.result, {
             nodes: {
-                node: {
-                    // Taken from: https://developer.roku.com/en-ca/docs/developer-program/core-concepts/handling-application-events.md#functional-fields
-                    methods: [
+                rsgpalette: {
+                    availableSince: '9.4',
+                    description: 'Extends [Node](https://developer.roku.com/docs/references/scenegraph/node.md\n\nThe **RSGPalette** node allows developers to specify a named set of color values that can be shared among nodes that support RSGPalette colors.\n\nNodes that support RSGPalette colors include a **palette** field, which can be set to an **RSGPalette** node to override the default colors used by the node. The specific palette values used by those nodes are defined in each node\'s documentation.\n\nIf a node that supports a palette does not set its **palette** filed, the RSGPalette is inherited from ancestor nodes in the scene graph. Specifically, the node looks up the scene graph until it finds a **PaletteGroup** node with its **palette** field set. This may be found in the **Scene** itself.\n\nIf no node in the scene graph has its **palette** field set, the keyboard uses the default palette (gray background/white text).\n\nCurrently, the **RSGPalette** node is typically used in channels that customize the colors of the dynamic keyboard nodes. In this case, the channel assigns the RSGPalette node to the **palette** field of the [DynamicKeyboardBase](https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/dynamic-keyboard-base.md\"DynamicKeyboardBase\") node and lets the keyboard\'s **DynamicKeyGrid** and **VoiceTextEditBox** inherit that RSGPalette.\n\n> The colors in the RSGPalette do not cascade. If a child node overrides its parent\'s RSGPalette node, that RSGPalette should specify values for all the colors used by the node. Unspecified values will use the system default colors.',
+                    events: [],
+                    extends: {
+                        name: 'Node',
+                        url: 'https://developer.roku.com/docs/references/scenegraph/node.md'
+                    },
+                    fields: [
                         {
-                            description: `callFunc() is a synchronized interface on roSGNode. It will always execute in the component's owning ScriptEngine and thread (by rendezvous if necessary), and it will always use the m and m.top of the owning component. Any context from the caller can be passed via one or more method parameters, which may be of any type (previously, callFunc() only supported a single associative array parameter).\n\nTo call the function, use the \`callFunc\` field with the required method signature. A return value, if any, can be an object that is similarly arbitrary. The method being called must determine how to interpret the parameters included in the \`callFunc\` field.`,
-                            name: 'callFunc',
-                            params: [
-                                {
-                                    default: null,
-                                    description: 'The function name to call.',
-                                    isRequired: true,
-                                    name: 'functionName',
-                                    type: 'String'
-                                }
-                            ],
-                            isVariadic: true,
-                            returnType: 'Dynamic'
+                            accessPermission: 'READ_WRITE',
+                            default: 'not specified',
+                            description: 'Specifies an associative array of color name/color key-value pairs. For example: \\`\\`\\` { PrimaryTextColor: 0x111111FF, FocusColor: 0x0000FFFF } \\`\\`\\` .',
+                            name: 'colors',
+                            type: 'associative array'
                         }
-                    ]
+                    ],
+                    interfaces: [],
+                    name: 'RSGPalette',
+                    url: 'https://developer.roku.com/en-ca/docs/references/scenegraph/scene.md'
                 }
             },
             components: {
@@ -790,6 +798,24 @@ class Runner {
             interfaces: {}
         });
 
+        // Override ifSGNodeDict.callFunc
+        fixMethod(this.result.interfaces.ifsgnodedict, 'callfunc', {
+            // Taken from: https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsgnodedict.md#callfunc
+            description: `callFunc() is a synchronized interface on roSGNode. It will always execute in the component's owning ScriptEngine and thread (by rendezvous if necessary), and it will always use the m and m.top of the owning component. Any context from the caller can be passed via one or more method parameters, which may be of any type (previously, callFunc() only supported a single associative array parameter).\n\nTo call the function, use the \`callFunc\` field with the required method signature. A return value, if any, can be an object that is similarly arbitrary. The method being called must determine how to interpret the parameters included in the \`callFunc\` field.`,
+            name: 'callFunc',
+            params: [
+                {
+                    default: null,
+                    description: 'The function name to call.',
+                    isRequired: true,
+                    name: 'functionName',
+                    type: 'String'
+                }
+            ],
+            isVariadic: true,
+            returnType: 'Dynamic',
+            returnDescription: 'An arbitrary object'
+        });
 
         // fix ifStringOp overloads
         fixOverloadedMethod(this.result.interfaces.ifstringops, 'instr');
@@ -808,6 +834,14 @@ class Runner {
 
 function fixOverloadedMethod(iface: RokuInterface, funcName: string) {
     const originalOverloads = iface.methods.filter(method => method.name.toLowerCase() === funcName.toLowerCase());
+    if (originalOverloads.length === 0) {
+        console.error('Could not fix overloaded method - no methods', funcName);
+        return;
+    } else if (originalOverloads.length === 1) {
+        console.log('No need to fix overloaded method - just one method', funcName);
+        return;
+    }
+
     const descriptions: string[] = [];
     const returnDescriptions: string[] = [];
     const returnTypes: string[] = [];
@@ -878,6 +912,16 @@ function fixOverloadedMethod(iface: RokuInterface, funcName: string) {
     iface.methods = iface.methods.filter(method => method.name.toLowerCase() !== funcName.toLowerCase());
     // add to list
     iface.methods.push(mergedFunc);
+}
+
+
+function fixMethod(iface: RokuInterface, funcName: string, mergeData: Func) {
+    const index = iface?.methods.findIndex(method => method.name.toLowerCase() === funcName.toLowerCase());
+    if (index >= 0) {
+        iface.methods[index] = deepmerge(iface.methods[index], mergeData);
+    } else {
+        console.error('Could not fix method', funcName);
+    }
 }
 
 let cache: Record<string, string>;
@@ -978,7 +1022,7 @@ function objectKeySorter(key, value) {
  */
 function chooseMoreSpecificType(typeOne: string | string[] = 'dynamic', typeTwo: string | string[] = 'dynamic'): string | string[] {
 
-    // deals with issue where it says "roScreen or roBitmap", etc
+    // deals with issue where it says "roScreen or roBitmap', etc
     // also when there is a problematic space, eg "roAssoc Array"
     const splitRegex = /,|\sor\s/;
     if (typeof typeOne === 'string') {
@@ -1009,7 +1053,7 @@ function chooseMoreSpecificType(typeOne: string | string[] = 'dynamic', typeTwo:
     } else if (typeOneArray.length === 1 && typeTwoArray.length === 1) {
         // both have one type
         if (typeOneArray[0].toLowerCase() === 'object' && typeTwoArray[0].toLowerCase().startsWith('ro')) {
-            // the first type is "Object", but is more specific in second type
+            // the first type is "Object', but is more specific in second type
             return getSingle(typeTwoArray);
         }
         if (typeTwoArray[0].toLowerCase() === 'object') {

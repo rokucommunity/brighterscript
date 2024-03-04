@@ -1,4 +1,4 @@
-import type { AALiteralExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionExpression, NewExpression, VariableExpression } from '../parser/Expression';
+import type { AALiteralExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionExpression, VariableExpression } from '../parser/Expression';
 import type { AssignmentStatement, ClassStatement, ConstStatement, EnumStatement, FunctionStatement, ImportStatement, InterfaceStatement, LibraryStatement, NamespaceStatement } from '../parser/Statement';
 import { Cache } from '../Cache';
 import { WalkMode, createVisitor } from './visitors';
@@ -68,10 +68,6 @@ export class CachedLookups {
      */
     get expressions(): Set<Expression> {
         return this.getFromCache<Set<Expression>>('expressions');
-    }
-
-    get newExpressions(): NewExpression[] {
-        return this.getFromCache<Array<NewExpression>>('newExpressions');
     }
 
     get classStatements(): ClassStatement[] {
@@ -166,7 +162,6 @@ export class CachedLookups {
         const importStatements: ImportStatement[] = [];
         const functionStatements: FunctionStatement[] = [];
         const functionExpressions: FunctionExpression[] = [];
-        const newExpressions: NewExpression[] = [];
 
         const propertyHints: Record<string, string> = {};
         const addPropertyHints = (item: Token | AALiteralExpression) => {
@@ -266,12 +261,6 @@ export class CachedLookups {
                     functionExpressions.push(expression);
                 }
             },
-            NewExpression: e => {
-                newExpressions.push(e);
-                for (const p of e.call.args) {
-                    expressions.add(p);
-                }
-            },
             ExpressionStatement: s => {
                 expressions.add(s.expression);
             },
@@ -348,7 +337,6 @@ export class CachedLookups {
         this.cache.set('importStatements', importStatements);
         this.cache.set('functionStatements', functionStatements);
         this.cache.set('functionExpressions', functionExpressions);
-        this.cache.set('newExpressions', newExpressions);
         this.cache.set('propertyHints', propertyHints);
     }
 }

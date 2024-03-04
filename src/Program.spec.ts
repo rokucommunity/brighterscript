@@ -21,7 +21,7 @@ import * as path from 'path';
 import type { SinonSpy } from 'sinon';
 import { createSandbox } from 'sinon';
 import type { AfterFileAddEvent, AfterFileRemoveEvent, AfterProvideFileEvent, BeforeFileAddEvent, BeforeFileRemoveEvent, BeforeProvideFileEvent, CompilerPlugin, ProvideFileEvent } from './interfaces';
-import { SymbolTypeFlag } from './SymbolTable';
+import { SymbolTypeFlag } from './SymbolTypeFlag';
 import { StringType } from './types/StringType';
 import { TypedFunctionType } from './types/TypedFunctionType';
 import { DynamicType } from './types/DynamicType';

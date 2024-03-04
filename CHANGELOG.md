@@ -6,13 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.27](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.26...v1.0.0-alpha.27) - 2024-02-27
+### Added
+ - Validation when trying to access a class member directly on a class name ([#1073](https://github.com/rokucommunity/brighterscript/pull/1073))
+### Changed
+ - Make All AST Props Readonly ([#1069](https://github.com/rokucommunity/brighterscript/pull/1069))
+ - Modifies all SG AST constructors to use named properties in objects ([#1070](https://github.com/rokucommunity/brighterscript/pull/1070))
+### Fixed
+ - If a namespace shadows a function, still allow processing to continue ([#1063](https://github.com/rokucommunity/brighterscript/pull/1063))
+ - Simplify the plugin method signatures. ([#1067](https://github.com/rokucommunity/brighterscript/pull/1067))
+ - Add rsgpalette to scraped docs ([#1065](https://github.com/rokucommunity/brighterscript/pull/1065))
+ - Member hovers for classes, interfaces and enums ([#1071](https://github.com/rokucommunity/brighterscript/pull/1071))
+ - Calling `new` on a non-class constructor ([#1075](https://github.com/rokucommunity/brighterscript/pull/1075))
+ - Bad diagnostic on using class name as field name ([#1076](https://github.com/rokucommunity/brighterscript/pull/1076))
+
+
+
 ## [1.0.0-alpha.26](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.25...v1.0.0-alpha.26) - 2024-02-01
 ### Changed
- - Built-in Objects have their interfaces as members ([#1039](https://github.com/rokucommunity/brighterscript/1039))
- - Do not do validation on dotted sets of AAs ([#1040](https://github.com/rokucommunity/brighterscript/1040))
- - Changed adding invalid as arg to empty callfunc invocations by default ([#1043](https://github.com/rokucommunity/brighterscript/1043))
- - Standardize AST Constructors ([#1025)](https://github.com/rokucommunity/brighterscript/1025)))
- - Change Dotted Get/Set to single .indexes prop ([#1054](https://github.com/rokucommunity/brighterscript/1054))
+ - Built-in Objects have their interfaces as members ([#1039](https://github.com/rokucommunity/brighterscript/pull/1039))
+ - Do not do validation on dotted sets of AAs ([#1040](https://github.com/rokucommunity/brighterscript/pull/1040))
+ - Changed adding invalid as arg to empty callfunc invocations by default ([#1043](https://github.com/rokucommunity/brighterscript/pull/1043))
+ - Standardize AST Constructors ([#1025)](https://github.com/rokucommunity/brighterscript/pull/1025))
+ - Change Dotted Get/Set to single .indexes prop ([#1054](https://github.com/rokucommunity/brighterscript/pull/1054))
 
 
 

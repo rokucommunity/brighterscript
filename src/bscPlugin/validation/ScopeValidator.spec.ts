@@ -8,7 +8,7 @@ import { IntegerType } from '../../types/IntegerType';
 import { StringType } from '../../types/StringType';
 import type { BrsFile } from '../../files/BrsFile';
 import { FloatType } from '../../types';
-import { SymbolTypeFlag } from '../../SymbolTable';
+import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 
 describe('ScopeValidator', () => {
 
@@ -1724,6 +1724,94 @@ describe('ScopeValidator', () => {
             expectDiagnostics(program, [
                 DiagnosticMessages.itemCannotBeUsedAsVariable('namespace')
             ]);
+        });
+
+        it('validates when a class member is accessed from a class directly', () => {
+            program.setFile('source/util.bs', `
+                class Klass
+                    name as string
+                end class
+
+                sub doStuff()
+                    print klass.name ' only valid use of "Klass" is as a constructor: "new Klass()"
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.itemCannotBeUsedAsVariable('Klass')
+            ]);
+        });
+
+        it('validates when a class member is accessed from a class directly when class has a namespace', () => {
+            program.setFile('source/util.bs', `
+                namespace Alpha
+                    class Klass
+                        name as string
+                    end class
+                end namespace
+
+                sub doStuff()
+                    print alpha.klass.name ' only valid use of "Klass" is as a constructor: "new Klass()"
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.itemCannotBeUsedAsVariable('Alpha.Klass')
+            ]);
+        });
+
+        it('validates when new is is used on a class instance', () => {
+            program.setFile('source/util.bs', `
+                class Klass
+                    name as string
+                end class
+
+                sub doStuff(someKlass as Klass)
+                    print new someKlass()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.expressionIsNotConstructable('someKlass')
+            ]);
+        });
+
+        it('allows when a class name is used as field name', () => {
+            program.setFile('source/util.bs', `
+                class Klass
+                    name as string
+                end class
+
+                class OtherKlass
+                    klass as Klass
+
+                    sub foo()
+                        print m.klass.name
+                    end sub
+                end class
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows when a class name from a namespace is used as field name', () => {
+            program.setFile('source/util.bs', `
+                namespace Alpha
+                    class Klass
+                        name as string
+                    end class
+                end namespace
+
+                class OtherKlass
+                    klass as Alpha.Klass
+
+                    sub foo()
+                        m.klass = new Alpha.Klass()
+                    end sub
+                end class
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
         });
     });
 

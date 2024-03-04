@@ -5,15 +5,7 @@ import type { ReferenceType } from './types/ReferenceType';
 import type { UnionType } from './types/UnionType';
 import { getUniqueType } from './types/helpers';
 import { isAnyReferenceType, isReferenceType } from './astUtils/reflection';
-
-export enum SymbolTypeFlag {
-    runtime = 1,
-    typetime = 2,
-    optional = 4,
-    private = 8,
-    protected = 16,
-    postTranspile = 32
-}
+import type { SymbolTypeFlag } from './SymbolTypeFlag';
 
 /**
  * Stores the types associated with variables and functions in the Brighterscript code

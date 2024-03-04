@@ -3,7 +3,7 @@ import { DiagnosticSeverity } from 'vscode-languageserver';
 import type { BsDiagnostic, TypeCompatibilityData } from './interfaces';
 import { TokenKind } from './lexer/TokenKind';
 import util from './util';
-import { SymbolTypeFlag } from './SymbolTable';
+import { SymbolTypeFlag } from './SymbolTypeFlag';
 
 /**
  * An object that keeps track of all possible error messages.
@@ -791,7 +791,7 @@ export function typeCompatibilityMessage(actualTypeString: string, expectedTypeS
     return message;
 }
 
-export function accessModifierNameFromFlag(accessModifierFlag: SymbolTypeFlag) {
+function accessModifierNameFromFlag(accessModifierFlag: SymbolTypeFlag) {
     let result = TokenKind.Public;
     // eslint-disable-next-line no-bitwise
     if (accessModifierFlag & SymbolTypeFlag.private) {
@@ -803,7 +803,7 @@ export function accessModifierNameFromFlag(accessModifierFlag: SymbolTypeFlag) {
     return result.toLowerCase();
 }
 
-export function accessModifierAdditionalInfo(accessModifierFlag: SymbolTypeFlag, className: string) {
+function accessModifierAdditionalInfo(accessModifierFlag: SymbolTypeFlag, className: string) {
     // eslint-disable-next-line no-bitwise
     if (accessModifierFlag & SymbolTypeFlag.private) {
         return ` and only accessible from within class '${className}'`;

@@ -8,7 +8,7 @@ import { standardizePath as s, util } from './util';
 let rootDir = s`${process.cwd()}/rootDir`;
 import { createSandbox } from 'sinon';
 import { ComponentType } from './types/ComponentType';
-import { SymbolTypeFlag } from './SymbolTable';
+import { SymbolTypeFlag } from './SymbolTypeFlag';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { ArrayType, BooleanType, DoubleType, DynamicType, FloatType, IntegerType, StringType, TypedFunctionType, UnionType } from './types';
 const sinon = createSandbox();

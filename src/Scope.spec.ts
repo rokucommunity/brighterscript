@@ -11,7 +11,7 @@ import type { BrsFile } from './files/BrsFile';
 import type { NamespaceStatement } from './parser/Statement';
 import type { CompilerPlugin, OnScopeValidateEvent } from './interfaces';
 import { DiagnosticOrigin } from './interfaces';
-import { SymbolTypeFlag } from './SymbolTable';
+import { SymbolTypeFlag } from './SymbolTypeFlag';
 import { EnumMemberType, EnumType } from './types/EnumType';
 import { ClassType } from './types/ClassType';
 import { BooleanType } from './types/BooleanType';
@@ -631,7 +631,7 @@ describe('Scope', () => {
                 end function
             `);
             program.validate();
-            expectDiagnostics(program, [
+            expectDiagnosticsIncludes(program, [
                 DiagnosticMessages.cannotFindName('param2'),
                 DiagnosticMessages.cannotFindName('name2'),
                 DiagnosticMessages.cannotFindName('item2'),
@@ -1279,19 +1279,6 @@ describe('Scope', () => {
                 expectDiagnosticsIncludes(program, [
                     DiagnosticMessages.nameCollision('Class', 'Global Function', 'Log').message,
                     DiagnosticMessages.nameCollision('Interface', 'Global Function', 'Lcase').message
-                ]);
-            });
-
-            it('should validate when a namespace has a name collision', () => {
-                program.setFile('source/main.bs', `
-                    namespace Log ' this is invalid because it has the same name as a global function
-                        function anything()
-                        end function
-                    end namespace
-                `);
-                program.validate();
-                expectDiagnosticsIncludes(program, [
-                    DiagnosticMessages.nameCollision('Namespace', 'Global Function', 'Log').message
                 ]);
             });
 
@@ -2252,26 +2239,6 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-            });
-
-            it('should validate when a namespace in a .d.bs file has an invalid name', () => {
-                program.setFile('source/roku_modules/anything.d.bs', `
-                    namespace Log ' this is invalid because it has the same name as a global function
-                        function anything()
-                        end function
-                    end namespace
-                `);
-                program.setFile('source/main.bs', `
-                    namespace alpha
-                         sub someFunc()
-                         end sub
-                    end namespace
-                `);
-                program.validate();
-                expectDiagnosticsIncludes(program, [
-                    DiagnosticMessages.nameCollision('Namespace', 'Global Function', 'Log').message
-                ]);
-
             });
         });
     });
@@ -3301,6 +3268,47 @@ describe('Scope', () => {
             expectZeroDiagnostics(program);
         });
 
+
+        it('namespaces can shadow global functions', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                namespace log ' shadows built-in function "log"
+                    sub doPrint(x)
+                        print x
+                    end sub
+                end namespace
+
+                sub main()
+                    log.doPrint("hello")
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('namespaces shadowing global functions do not break other stuff', () => {
+            program.setFile('source/roku_modules/anything.d.bs', `
+                namespace log ' shadows built-in function "log"
+                    sub doPrint(x)
+                        print x
+                    end sub
+                end namespace
+            `);
+            program.setFile<BrsFile>('source/main.bs', `
+                sub main()
+                    log.doPrint("hello")
+                    anotherNs.foo()
+                end sub
+            `);
+            program.setFile<BrsFile>('source/zzzz.bs', `
+                namespace anotherNs
+                   sub foo()
+                        print 1234
+                    end sub
+               end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('unlinkSymbolTable', () => {

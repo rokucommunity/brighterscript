@@ -1,6 +1,6 @@
 import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
 import { isInheritableType, isReferenceType } from '../astUtils/reflection';
-import { SymbolTypeFlag } from '../SymbolTable';
+import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { BscType } from './BscType';
 import type { ReferenceType } from './ReferenceType';
 
@@ -98,7 +98,7 @@ export abstract class InheritableType extends BscType {
                 return true;
             }
             //check non-namespaced version
-            if (myLowerName.split('.').reverse()[0] === lowerTargetName) {
+            if (myLowerName.split('.').pop() === lowerTargetName) {
                 return true;
             }
         }

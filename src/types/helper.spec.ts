@@ -9,7 +9,7 @@ import { StringType } from './StringType';
 import { UnionType, unionTypeFactory } from './UnionType';
 import { findTypeIntersection, findTypeUnion, getUniqueType, getUniqueTypesFromArray } from './helpers';
 import { InterfaceType } from './InterfaceType';
-import { SymbolTypeFlag } from '../SymbolTable';
+import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { DoubleType } from './DoubleType';
 import { BooleanType } from './BooleanType';
 import { EnumType, EnumMemberType } from './EnumType';

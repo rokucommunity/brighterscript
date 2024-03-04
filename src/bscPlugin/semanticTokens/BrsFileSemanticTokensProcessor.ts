@@ -8,7 +8,7 @@ import type { Locatable } from '../../lexer/Token';
 import { ParseMode } from '../../parser/Parser';
 import type { NamespaceStatement } from '../../parser/Statement';
 import util from '../../util';
-import { SymbolTypeFlag } from '../../SymbolTable';
+import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import type { BscType } from '../../types/BscType';
 
 export class BrsFileSemanticTokensProcessor {

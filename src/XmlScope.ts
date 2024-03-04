@@ -1,14 +1,15 @@
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { XmlFile } from './files/XmlFile';
-import { DiagnosticOrigin, type CallableContainerMap, type FileReference } from './interfaces';
+import type { CallableContainerMap, FileReference } from './interfaces';
+import { DiagnosticOrigin } from './interfaces';
 import type { Program } from './Program';
 import type { SGElement } from './parser/SGTypes';
 import { SGFieldTypes } from './parser/SGTypes';
 import util from './util';
-import { SymbolTypeFlag } from './SymbolTable';
+import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { BscFile } from './files/BscFile';
-import { DynamicType } from './types';
+import { DynamicType } from './types/DynamicType';
 import type { BaseFunctionType } from './types/BaseFunctionType';
 import { ComponentType } from './types/ComponentType';
 

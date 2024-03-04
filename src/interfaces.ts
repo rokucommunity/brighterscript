@@ -2,13 +2,12 @@ import type { Range, Diagnostic, CodeAction, SemanticTokenTypes, SemanticTokenMo
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
-import type { FunctionScope } from './FunctionScope';
 import type { TypedFunctionType } from './types/TypedFunctionType';
 import type { ParseMode } from './parser/Parser';
 import type { Program } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
 import type { ClassStatement, ConstStatement, EnumStatement, FunctionStatement, NamespaceStatement } from './parser/Statement';
-import type { AstNode, Expression, Statement } from './parser/AstNode';
+import type { AstNode, AstNodeKind, Expression, Statement } from './parser/AstNode';
 import type { TranspileState } from './parser/TranspileState';
 import type { SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
@@ -17,8 +16,8 @@ import type { Identifier, Token } from './lexer/Token';
 import type { BscFile } from './files/BscFile';
 import type { FileFactory } from './files/Factory';
 import type { LazyFileData } from './files/LazyFileData';
-import type { SymbolTable, SymbolTypeFlag } from './SymbolTable';
-import type { CallExpression } from './parser/Expression';
+import type { SymbolTable } from './SymbolTable';
+import type { SymbolTypeFlag } from './SymbolTypeFlag';
 import { createToken } from './astUtils/creators';
 import { TokenKind } from './lexer/TokenKind';
 
@@ -77,30 +76,6 @@ export interface Callable {
      * Gives access to the whole statement if you need more data than provided by the interface
      */
     functionStatement: FunctionStatement;
-}
-
-export interface FunctionCall {
-    /**
-     * The full range of this function call (from the start of the function name to its closing paren)
-     */
-    range: Range;
-    expression: CallExpression;
-    functionScope: FunctionScope;
-    file: BscFile;
-    name: string;
-    args: CallableArg[];
-    nameRange: Range;
-}
-
-/**
- * An argument for an expression call.
- */
-export interface CallableArg {
-    text: string;
-    type: BscType;
-    typeToken: Token;
-    range: Range;
-    expression: Expression;
 }
 
 export interface CallableParam {
@@ -199,82 +174,82 @@ export interface CompilerPlugin {
     /**
      * Called before a new program is created
      */
-    beforeProgramCreate?: PluginHandler<BeforeProgramCreateEvent>;
+    beforeProgramCreate?(event: BeforeProgramCreateEvent): any;
     /**
      * Called after a new program is created
      */
-    afterProgramCreate?: PluginHandler<AfterProgramCreateEvent>;
+    afterProgramCreate?(event: AfterProgramCreateEvent): any;
 
 
     /**
      * Called before the program gets prepared for building
      */
-    beforePrepareProgram?: PluginHandler<BeforePrepareProgramEvent>;
+    beforePrepareProgram?(event: BeforePrepareProgramEvent): any;
     /**
      * Called when the program gets prepared for building
      */
-    prepareProgram?: PluginHandler<PrepareProgramEvent>;
+    prepareProgram?(event: PrepareProgramEvent): any;
     /**
      * Called after the program gets prepared for building
      */
-    afterPrepareProgram?: PluginHandler<AfterPrepareProgramEvent>;
+    afterPrepareProgram?(event: AfterPrepareProgramEvent): any;
 
 
     /**
      * Called before the entire program is validated
      */
-    beforeProgramValidate?: PluginHandler<BeforeProgramValidateEvent>;
+    beforeProgramValidate?(event: BeforeProgramValidateEvent): any;
     /**
      * Called before the entire program is validated
      */
-    onProgramValidate?: PluginHandler<OnProgramValidateEvent>;
+    onProgramValidate?(event: OnProgramValidateEvent): any;
     /**
      * Called after the program has been validated
      */
-    afterProgramValidate?: PluginHandler<AfterProgramValidateEvent>;
+    afterProgramValidate?(event: AfterProgramValidateEvent): any;
 
     /**
      * Called right before the program is disposed/destroyed
      */
-    beforeProgramDispose?: PluginHandler<BeforeProgramDisposeEvent>;
+    beforeProgramDispose?(event: BeforeProgramDisposeEvent): any;
 
     /**
      * Emitted before the program starts collecting completions
      */
-    beforeProvideCompletions?: PluginHandler<BeforeProvideCompletionsEvent>;
+    beforeProvideCompletions?(event: BeforeProvideCompletionsEvent): any;
     /**
      * Use this event to contribute completions
      */
-    provideCompletions?: PluginHandler<ProvideCompletionsEvent>;
+    provideCompletions?(event: ProvideCompletionsEvent): any;
     /**
      * Emitted after the program has finished collecting completions, but before they are sent to the client
      */
-    afterProvideCompletions?: PluginHandler<AfterProvideCompletionsEvent>;
+    afterProvideCompletions?(event: AfterProvideCompletionsEvent): any;
 
 
     /**
      * Called before the `provideHover` hook. Use this if you need to prepare any of the in-memory objects before the `provideHover` gets called
      */
-    beforeProvideHover?: PluginHandler<BeforeProvideHoverEvent>;
+    beforeProvideHover?(event: BeforeProvideHoverEvent): any;
     /**
      * Called when bsc looks for hover information. Use this if your plugin wants to contribute hover information.
      */
-    provideHover?: PluginHandler<ProvideHoverEvent>;
+    provideHover?(event: ProvideHoverEvent): any;
     /**
      * Called after the `provideHover` hook. Use this if you want to intercept or sanitize the hover data (even from other plugins) before it gets sent to the client.
      */
-    afterProvideHover?: PluginHandler<AfterProvideHoverEvent>;
+    afterProvideHover?(event: AfterProvideHoverEvent): any;
 
     /**
      * Called after a scope was created
      */
-    afterScopeCreate?: PluginHandler<AfterScopeCreateEvent>;
+    afterScopeCreate?(event: AfterScopeCreateEvent): any;
 
-    beforeScopeDispose?: PluginHandler<BeforeScopeDisposeEvent>;
-    onScopeDispose?: PluginHandler<OnScopeDisposeEvent>;
-    afterScopeDispose?: PluginHandler<AfterScopeDisposeEvent>;
+    beforeScopeDispose?(event: BeforeScopeDisposeEvent): any;
+    onScopeDispose?(event: OnScopeDisposeEvent): any;
+    afterScopeDispose?(event: AfterScopeDisposeEvent): any;
 
-    beforeScopeValidate?: PluginHandler<BeforeScopeValidateEvent>;
+    beforeScopeValidate?(event: BeforeScopeValidateEvent): any;
     /**
      * Called before the `provideDefinition` hook
      */
@@ -291,140 +266,139 @@ export interface CompilerPlugin {
     afterProvideDefinition?(event: AfterProvideDefinitionEvent): any;
 
     //scope events
-    onScopeValidate?: PluginHandler<OnScopeValidateEvent>;
-    afterScopeValidate?: PluginHandler<BeforeScopeValidateEvent>;
+    onScopeValidate?(event: OnScopeValidateEvent): any;
+    afterScopeValidate?(event: BeforeScopeValidateEvent): any;
 
-    onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
-    onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
+    onGetCodeActions?(event: OnGetCodeActionsEvent): any;
+    onGetSemanticTokens?(event: OnGetSemanticTokensEvent): any;
 
 
     /**
      * Called before plugins are asked to provide files to the program. (excludes virtual files produced by `provideFile` events).
      * Call the `setFileData()` method to override the file contents.
      */
-    beforeProvideFile?: PluginHandler<BeforeProvideFileEvent>;
+    beforeProvideFile?(event: BeforeProvideFileEvent): any;
     /**
      * Give plugins the opportunity to handle processing a file. (excludes virtual files produced by `provideFile` events)
      */
-    provideFile?: PluginHandler<ProvideFileEvent>;
+    provideFile?(event: ProvideFileEvent): any;
     /**
      * Called after a file was added to the program. (excludes virtual files produced by `provideFile` events)
      */
-    afterProvideFile?: PluginHandler<AfterProvideFileEvent>;
+    afterProvideFile?(event: AfterProvideFileEvent): any;
 
 
     /**
      * Called before a file is added to the program.
      * Includes physical files as well as any virtual files produced by `provideFile` events
      */
-    beforeFileAdd?: PluginHandler<BeforeFileAddEvent>;
+    beforeFileAdd?(event: BeforeFileAddEvent): any;
     /**
      * Called after a file has been added to the program.
      * Includes physical files as well as any virtual files produced by `provideFile` events
      */
-    afterFileAdd?: PluginHandler<AfterFileAddEvent>;
+    afterFileAdd?(event: AfterFileAddEvent): any;
 
     /**
      * Called before a file is removed from the program. This includes physical and virtual files
      */
-    beforeFileRemove?: PluginHandler<BeforeFileRemoveEvent>;
+    beforeFileRemove?(event: BeforeFileRemoveEvent): any;
     /**
      * Called after a file has been removed from the program. This includes physical and virtual files
      */
-    afterFileRemove?: PluginHandler<AfterFileRemoveEvent>;
+    afterFileRemove?(event: AfterFileRemoveEvent): any;
 
 
     /**
      * Called before each file is validated
      */
-    beforeFileValidate?: PluginHandler<BeforeFileValidateEvent>;
+    beforeFileValidate?(event: BeforeFileValidateEvent): any;
     /**
      * Called during the file validation process. If your plugin contributes file validations, this is a good place to contribute them.
      */
-    onFileValidate?: PluginHandler<OnFileValidateEvent>;
+    onFileValidate?(event: OnFileValidateEvent): any;
     /**
      * Called after each file is validated
      */
-    afterFileValidate?: PluginHandler<AfterFileValidateEvent>;
+    afterFileValidate?(event: AfterFileValidateEvent): any;
 
 
     /**
      * Called right before the program builds (i.e. generates the code and puts it in the stagingDir
      */
-    beforeBuildProgram?: PluginHandler<BeforeBuildProgramEvent>;
+    beforeBuildProgram?(event: BeforeBuildProgramEvent): any;
     /**
      * Called right after the program builds (i.e. generates the code and puts it in the stagingDir
      */
-    afterBuildProgram?: PluginHandler<AfterBuildProgramEvent>;
+    afterBuildProgram?(event: AfterBuildProgramEvent): any;
 
 
     /**
      * Before preparing the file for building
      */
-    beforePrepareFile?: PluginHandler<BeforePrepareFileEvent>;
+    beforePrepareFile?(event: BeforePrepareFileEvent): any;
     /**
      * Prepare the file for building
      */
-    prepareFile?: PluginHandler<PrepareFileEvent>;
+    prepareFile?(event: PrepareFileEvent): any;
     /**
      * After preparing the file for building
      */
-    afterPrepareFile?: PluginHandler<AfterPrepareFileEvent>;
+    afterPrepareFile?(event: AfterPrepareFileEvent): any;
 
 
     /**
      * Before the program turns all file objects into their final buffers
      */
-    beforeSerializeProgram?: PluginHandler<BeforeSerializeProgramEvent>;
+    beforeSerializeProgram?(event: BeforeSerializeProgramEvent): any;
     /**
      * Emitted right at the start of the program turning all file objects into their final buffers
      */
-    onSerializeProgram?: PluginHandler<OnSerializeProgramEvent>;
+    onSerializeProgram?(event: OnSerializeProgramEvent): any;
     /**
      * After the program turns all file objects into their final buffers
      */
-    afterSerializeProgram?: PluginHandler<AfterSerializeProgramEvent>;
+    afterSerializeProgram?(event: AfterSerializeProgramEvent): any;
 
 
     /**
      * Before turning the file into its final contents
      */
-    beforeSerializeFile?: PluginHandler<BeforeSerializeFileEvent>;
+    beforeSerializeFile?(event: BeforeSerializeFileEvent): any;
     /**
      * Turn the file into its final contents (i.e. transpile a bs file, compress a jpeg, etc)
      */
-    serializeFile?: PluginHandler<SerializeFileEvent>;
+    serializeFile?(event: SerializeFileEvent): any;
     /**
      * After turning the file into its final contents
      */
-    afterSerializeFile?: PluginHandler<AfterSerializeFileEvent>;
+    afterSerializeFile?(event: AfterSerializeFileEvent): any;
 
 
     /**
      * Called before any files are written
      */
-    beforeWriteProgram?: PluginHandler<BeforeWriteProgramEvent>;
+    beforeWriteProgram?(event: BeforeWriteProgramEvent): any;
     /**
      * Called after all files are written
      */
-    afterWriteProgram?: PluginHandler<AfterWriteProgramEvent>;
+    afterWriteProgram?(event: AfterWriteProgramEvent): any;
 
 
     /**
      * Before a file is written to disk. These are raw files that contain the final output. One `File` may produce several of these
      */
-    beforeWriteFile?: PluginHandler<BeforeWriteFileEvent>;
+    beforeWriteFile?(event: BeforeWriteFileEvent): any;
     /**
      * Called when a file should be persisted (usually writing to storage). These are raw files that contain the final output. One `File` may produce several of these.
      * When a plugin has handled a file, it should be pushed to the `handledFiles` set so future plugins don't write the file multiple times
      */
-    writeFile?: PluginHandler<WriteFileEvent>;
+    writeFile?(event: WriteFileEvent): any;
     /**
      * Before a file is written to disk. These are raw files that contain the final output. One `File` may produce several of these
      */
-    afterWriteFile?: PluginHandler<AfterWriteFileEvent>;
+    afterWriteFile?(event: AfterWriteFileEvent): any;
 }
-export type PluginHandler<T, R = void> = (event: T) => R;
 
 export interface OnGetCodeActionsEvent<TFile extends BscFile = BscFile> {
     program: Program;
@@ -821,16 +795,32 @@ export interface GetTypeOptions {
 }
 
 export class TypeChainEntry {
-    public data: ExtraSymbolData;
-    constructor(public name: string, public type: BscType, data: ExtraSymbolData, public range: Range, public separatorToken: Token = createToken(TokenKind.Dot)) {
-        if (data) {
-            // make a copy of this data
-            this.data = { ...data };
-        }
+    constructor(options: {
+        name: string;
+        type: BscType;
+        data: ExtraSymbolData;
+        range: Range;
+        separatorToken?: Token;
+        kind?: AstNodeKind;
+    }) {
+        this.name = options.name;
+        // make a copy of this data
+        this.data = { ...options.data };
+        this.type = options.type;
+        this.range = options.range;
+        this.separatorToken = options.separatorToken ?? createToken(TokenKind.Dot);
+        this.kind = options.kind;
     }
     get isResolved() {
         return this.type?.isResolvable();
     }
+
+    public readonly name: string;
+    public readonly type: BscType;
+    public readonly data: ExtraSymbolData;
+    public readonly range: Range;
+    public readonly separatorToken: Token;
+    public kind: AstNodeKind;
 }
 
 export interface TypeChainProcessResult {
@@ -867,3 +857,10 @@ export interface NamespaceContainer {
     namespaces?: Map<string, NamespaceContainer>;
     symbolTable: SymbolTable;
 }
+
+/**
+ * Use Writable<T> to remove readonly flag from properties in T
+ * Be careful!
+ */
+export type Writeable<T> = { -readonly [P in keyof T]: T[P] };
+export type DeepWriteable<T> = { -readonly [P in keyof T]: DeepWriteable<T[P]> };

@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import { SymbolTable } from '../SymbolTable';
-import { SymbolTypeFlag } from '../SymbolTable';
+import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { expectTypeToBe } from '../testHelpers.spec';
 import { DynamicType } from './DynamicType';
 import { IntegerType } from './IntegerType';

@@ -5,7 +5,8 @@ import { ReferenceType } from './ReferenceType';
 import { findTypeUnion, getUniqueType, isEnumTypeCompatible } from './helpers';
 import { BscTypeKind } from './BscTypeKind';
 import type { TypeCacheEntry } from '../SymbolTable';
-import { SymbolTable, SymbolTypeFlag } from '../SymbolTable';
+import { SymbolTable } from '../SymbolTable';
+import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 
 export function unionTypeFactory(types: BscType[]) {

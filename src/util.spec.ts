@@ -13,7 +13,7 @@ import { TypeChainEntry } from './interfaces';
 import { NamespaceType } from './types/NamespaceType';
 import { ClassType } from './types/ClassType';
 import { ReferenceType } from './types/ReferenceType';
-import { SymbolTypeFlag } from './SymbolTable';
+import { SymbolTypeFlag } from './SymbolTypeFlag';
 import { BooleanType, DoubleType, DynamicType, FloatType, IntegerType, InvalidType, LongIntegerType, StringType, TypedFunctionType, VoidType } from './types';
 import { TokenKind } from './lexer/TokenKind';
 import { createToken } from './astUtils/creators';
@@ -933,9 +933,9 @@ describe('util', () => {
     describe('processTypeChain', () => {
         it('should  find the correct details in a list of type resolutions', () => {
             const chain = [
-                new TypeChainEntry('AlphaNamespace', new NamespaceType('Alpha'), { flags: SymbolTypeFlag.runtime }, util.createRange(1, 1, 2, 2)),
-                new TypeChainEntry('BetaProp', new ClassType('Beta'), { flags: SymbolTypeFlag.runtime }, util.createRange(2, 2, 3, 3)),
-                new TypeChainEntry('CharlieProp', new ReferenceType('Charlie', 'Alpha.Beta.CharlieProp', SymbolTypeFlag.runtime, () => null), { flags: SymbolTypeFlag.runtime }, util.createRange(3, 3, 4, 4))
+                new TypeChainEntry({ name: 'AlphaNamespace', type: new NamespaceType('Alpha'), data: { flags: SymbolTypeFlag.runtime }, range: util.createRange(1, 1, 2, 2) }),
+                new TypeChainEntry({ name: 'BetaProp', type: new ClassType('Beta'), data: { flags: SymbolTypeFlag.runtime }, range: util.createRange(2, 2, 3, 3) }),
+                new TypeChainEntry({ name: 'CharlieProp', type: new ReferenceType('Charlie', 'Alpha.Beta.CharlieProp', SymbolTypeFlag.runtime, () => null), data: { flags: SymbolTypeFlag.runtime }, range: util.createRange(3, 3, 4, 4) })
             ];
 
             const result = util.processTypeChain(chain);
@@ -948,8 +948,8 @@ describe('util', () => {
 
         it('respects the separatorToken', () => {
             const chain = [
-                new TypeChainEntry('roSGNodeCustom', new ComponentType('Custom'), { flags: SymbolTypeFlag.runtime }, util.createRange(1, 1, 2, 2)),
-                new TypeChainEntry('someCallFunc', new TypedFunctionType(VoidType.instance), { flags: SymbolTypeFlag.runtime }, util.createRange(2, 2, 3, 3), createToken(TokenKind.Callfunc))
+                new TypeChainEntry({ name: 'roSGNodeCustom', type: new ComponentType('Custom'), data: { flags: SymbolTypeFlag.runtime }, range: util.createRange(1, 1, 2, 2) }),
+                new TypeChainEntry({ name: 'someCallFunc', type: new TypedFunctionType(VoidType.instance), data: { flags: SymbolTypeFlag.runtime }, range: util.createRange(2, 2, 3, 3), separatorToken: createToken(TokenKind.Callfunc) })
             ];
 
             const result = util.processTypeChain(chain);

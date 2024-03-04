@@ -1201,7 +1201,7 @@ describe('BrsFile BrighterScript classes', () => {
         `);
         program.validate();
         expectDiagnostics(program, [
-            DiagnosticMessages.expressionIsNotConstructable('sub')
+            DiagnosticMessages.expressionIsNotConstructable('quack')
         ]);
     });
 
@@ -1599,8 +1599,9 @@ describe('BrsFile BrighterScript classes', () => {
             end sub
         `);
         program.validate();
-        expectDiagnostics(program, [
-            DiagnosticMessages.cannotFindName('Duck')
+        expectDiagnosticsIncludes(program, [
+            DiagnosticMessages.cannotFindName('Duck'),
+            DiagnosticMessages.expressionIsNotConstructable('Duck')
         ]);
     });
 

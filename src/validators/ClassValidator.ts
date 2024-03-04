@@ -4,7 +4,6 @@ import type { CallExpression } from '../parser/Expression';
 import { ParseMode } from '../parser/Parser';
 import type { ClassStatement, MethodStatement, NamespaceStatement } from '../parser/Statement';
 import { CancellationTokenSource } from 'vscode-languageserver';
-import util from '../util';
 import { isCallExpression, isFieldStatement, isMethodStatement, isNamespaceStatement } from '../astUtils/reflection';
 import type { BsDiagnostic } from '../interfaces';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
@@ -12,7 +11,7 @@ import type { BrsFile } from '../files/BrsFile';
 import { TokenKind } from '../lexer/TokenKind';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
-import { SymbolTypeFlag } from '../SymbolTable';
+import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import type { BscFile } from '../files/BscFile';
 
 export class BsClassValidator {
@@ -34,59 +33,8 @@ export class BsClassValidator {
         this.detectCircularReferences();
         this.validateMemberCollisions();
         this.verifyChildConstructor();
-        this.verifyNewExpressions();
 
         this.cleanUp();
-    }
-
-    /**
-     * Given a class name optionally prefixed with a namespace name, find the class that matches
-     */
-    private getClassByName(className: string, namespaceName?: string) {
-        let fullName = util.getFullyQualifiedClassName(className, namespaceName);
-        let cls = this.classes.get(fullName.toLowerCase());
-        //if we couldn't find the class by its full namespaced name, look for a global class with that name
-        if (!cls) {
-            cls = this.classes.get(className.toLowerCase());
-        }
-        return cls;
-    }
-
-
-    /**
-     * Find all "new" statements in the program,
-     * and make sure we can find a class with that name
-     */
-    private verifyNewExpressions() {
-        this.scope.enumerateBrsFiles((file) => {
-            // eslint-disable-next-line @typescript-eslint/dot-notation
-            let newExpressions = file['_cachedLookups'].newExpressions;
-            for (let newExpression of newExpressions) {
-                let className = newExpression.className.getName(ParseMode.BrighterScript);
-                const namespaceName = newExpression.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
-                let newableClass = this.getClassByName(
-                    className,
-                    namespaceName
-                );
-
-                if (!newableClass) {
-                    //try and find functions with this name.
-                    let fullName = util.getFullyQualifiedClassName(className, namespaceName);
-                    let callable = this.scope.getCallableByName(fullName);
-                    //if we found a callable with this name, the user used a "new" keyword in front of a function. add error
-                    if (callable) {
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.expressionIsNotConstructable(callable.isSub ? 'sub' : 'function'),
-                            file: file,
-                            range: newExpression.className.range
-                        });
-
-                    } else {
-                        //could not find a class with this name (handled by ScopeValidator)
-                    }
-                }
-            }
-        });
     }
 
     private verifyChildConstructor() {

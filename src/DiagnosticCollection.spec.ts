@@ -1,4 +1,4 @@
-import type { BsDiagnostic } from '.';
+import type { BsDiagnostic } from './interfaces';
 import { DiagnosticCollection } from './DiagnosticCollection';
 import type { Project } from './LanguageServer';
 import type { ProgramBuilder } from './ProgramBuilder';

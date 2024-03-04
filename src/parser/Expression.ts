@@ -11,12 +11,12 @@ import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
 import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallExpression, isCallableType, isCallfuncExpression, isCommentStatement, isComponentType, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isReferenceType, isStringType, isTypeCastExpression, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
-import type { GetTypeOptions } from '../interfaces';
-import { TypeChainEntry, type TranspileResult, type TypedefProvider } from '../interfaces';
+import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
+import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
-import { SymbolTypeFlag } from '../SymbolTable';
+import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { TypedFunctionType } from '../types/TypedFunctionType';
 import { AstNodeKind, Expression } from './AstNode';
 import { SymbolTable } from '../SymbolTable';
@@ -25,7 +25,7 @@ import type { TranspileState } from './TranspileState';
 import { StringType } from '../types/StringType';
 import { TypePropertyReferenceType } from '../types/ReferenceType';
 import { UnionType } from '../types/UnionType';
-import { ArrayType } from '../types';
+import { ArrayType } from '../types/ArrayType';
 import { AssociativeArrayType } from '../types/AssociativeArrayType';
 import type { ComponentType } from '../types/ComponentType';
 import { createToken } from '../astUtils/creators';
@@ -46,12 +46,12 @@ export class BinaryExpression extends Expression {
         this.right = options.right;
         this.range = util.createBoundingRange(this.left, this.tokens.operator, this.right);
     }
-    public tokens: {
-        operator: Token;
+    readonly tokens: {
+        readonly operator: Token;
     };
 
-    public left: Expression;
-    public right: Expression;
+    public readonly left: Expression;
+    public readonly right: Expression;
 
     public readonly kind = AstNodeKind.BinaryExpression;
 
@@ -117,7 +117,7 @@ export class CallExpression extends Expression {
 
     readonly callee: Expression;
     readonly args: Expression[];
-    public tokens: {
+    readonly tokens: {
         /**
          * Can either be `(`, or `?(` for optional chaining - defaults to '('
          */
@@ -208,7 +208,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 
         //if there's a body, and it doesn't have a SymbolTable, assign one
         if (this.body && !this.body.symbolTable) {
-            this.body.symbolTable = new SymbolTable(`Function Body`);
+            this.body.symbolTable = new SymbolTable(`Block`, () => this.getSymbolTable());
         }
         this.symbolTable = new SymbolTable('FunctionExpression', () => this.parent?.getSymbolTable());
     }
@@ -216,22 +216,16 @@ export class FunctionExpression extends Expression implements TypedefProvider {
     public readonly kind = AstNodeKind.FunctionExpression;
 
     readonly parameters: FunctionParameterExpression[];
-    public body: Block;
-    public returnTypeExpression?: TypeExpression;
+    public readonly body: Block;
+    public readonly returnTypeExpression?: TypeExpression;
 
     readonly tokens: {
-        functionType?: Token;
-        endFunctionType?: Token;
-        leftParen?: Token;
-        rightParen?: Token;
-        as?: Token;
+        readonly functionType?: Token;
+        readonly endFunctionType?: Token;
+        readonly leftParen?: Token;
+        readonly rightParen?: Token;
+        readonly as?: Token;
     };
-
-    /**
-     * The list of function calls that are declared within this function scope. This excludes CallExpressions
-     * declared in child functions
-     */
-    public callExpressions = [] as CallExpression[];
 
     /**
      * If this function is part of a FunctionStatement, this will be set. Otherwise this will be undefined
@@ -389,7 +383,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         if (funcName) {
             resultType.setName(funcName);
         }
-        options.typeChain?.push(new TypeChainEntry(funcName, resultType, options.data, this.range));
+        options.typeChain?.push(new TypeChainEntry({ name: funcName, type: resultType, data: options.data, range: this.range, kind: this.kind }));
         return resultType;
     }
 }
@@ -414,20 +408,20 @@ export class FunctionParameterExpression extends Expression {
 
     public readonly kind = AstNodeKind.FunctionParameterExpression;
 
-    public tokens: {
-        name: Identifier;
-        equals?: Token;
-        as?: Token;
+    readonly tokens: {
+        readonly name: Identifier;
+        readonly equals?: Token;
+        readonly as?: Token;
     };
 
-    public defaultValue?: Expression;
-    public typeExpression?: TypeExpression;
+    public readonly defaultValue?: Expression;
+    public readonly typeExpression?: TypeExpression;
 
     public getType(options: GetTypeOptions) {
         const paramType = this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime, typeChain: undefined }) ??
             this.defaultValue?.getType({ ...options, flags: SymbolTypeFlag.runtime, typeChain: undefined }) ??
             DynamicType.instance;
-        options.typeChain?.push(new TypeChainEntry(this.tokens.name.text, paramType, options.data, this.range));
+        options.typeChain?.push(new TypeChainEntry({ name: this.tokens.name.text, type: paramType, data: options.data, range: this.range, kind: this.kind }));
         return paramType;
     }
 
@@ -510,8 +504,8 @@ export class DottedGetExpression extends Expression {
     }
 
     readonly tokens: {
-        name: Identifier;
-        dot?: Token;
+        readonly name: Identifier;
+        readonly dot?: Token;
     };
     readonly obj: Expression;
 
@@ -543,7 +537,13 @@ export class DottedGetExpression extends Expression {
     getType(options: GetTypeOptions) {
         const objType = this.obj?.getType(options);
         const result = objType?.getMemberType(this.tokens.name?.text, options);
-        options.typeChain?.push(new TypeChainEntry(this.tokens.name?.text, result, options.data, this.tokens.name?.range ?? this.range));
+        options.typeChain?.push(new TypeChainEntry({
+            name: this.tokens.name?.text,
+            type: result,
+            data: options.data,
+            range: this.tokens.name?.range ?? this.range,
+            kind: this.kind
+        }));
         if (result || options.flags & SymbolTypeFlag.typetime) {
             // All types should be known at typetime
             return result;
@@ -576,12 +576,12 @@ export class XmlAttributeGetExpression extends Expression {
 
     public readonly kind = AstNodeKind.XmlAttributeGetExpression;
 
-    public tokens: {
+    public readonly tokens: {
         name: Identifier;
         at?: Token;
     };
 
-    readonly obj: Expression;
+    public readonly obj: Expression;
 
     public readonly range: Range;
 
@@ -624,16 +624,16 @@ export class IndexedGetExpression extends Expression {
 
     public readonly kind = AstNodeKind.IndexedGetExpression;
 
-    public obj: Expression;
-    public indexes: Expression[];
+    public readonly obj: Expression;
+    public readonly indexes: Expression[];
 
-    public tokens: {
+    readonly tokens: {
         /**
          * Can either be `[` or `?[`. If `?.[` is used, this will be `[` and `optionalChainingToken` will be `?.` - defaults to '[' in transpile
          */
-        openingSquare?: Token;
-        closingSquare?: Token;
-        questionDot?: Token; //  ? or ?.
+        readonly openingSquare?: Token;
+        readonly closingSquare?: Token;
+        readonly questionDot?: Token; //  ? or ?.
     };
 
     public readonly range: Range;
@@ -693,11 +693,11 @@ export class GroupingExpression extends Expression {
         this.range = util.createBoundingRange(this.tokens.leftParen, this.expression, this.tokens.rightParen);
     }
 
-    readonly tokens: {
-        leftParen?: Token;
-        rightParen?: Token;
+    public readonly tokens: {
+        readonly leftParen?: Token;
+        readonly rightParen?: Token;
     };
-    public expression: Expression;
+    public readonly expression: Expression;
 
     public readonly kind = AstNodeKind.GroupingExpression;
 
@@ -735,8 +735,8 @@ export class LiteralExpression extends Expression {
         };
     }
 
-    public tokens: {
-        value: Token;
+    public readonly tokens: {
+        readonly value: Token;
     };
 
     public readonly kind = AstNodeKind.LiteralExpression;
@@ -790,11 +790,11 @@ export class EscapedCharCodeLiteralExpression extends Expression {
 
     public readonly kind = AstNodeKind.EscapedCharCodeLiteralExpression;
 
-    public tokens: {
-        value: Token & { charCode: number };
+    public readonly tokens: {
+        readonly value: Token & { charCode: number };
     };
 
-    readonly range: Range;
+    public readonly range: Range;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -822,11 +822,11 @@ export class ArrayLiteralExpression extends Expression {
         this.range = util.createBoundingRange(this.tokens.open, ...this.elements, this.tokens.close);
     }
 
-    readonly elements: Array<Expression | CommentStatement>;
+    public readonly elements: Array<Expression | CommentStatement>;
 
-    readonly tokens: {
-        open?: Token;
-        close?: Token;
+    public readonly tokens: {
+        readonly open?: Token;
+        readonly close?: Token;
     };
 
     public readonly kind = AstNodeKind.ArrayLiteralExpression;
@@ -913,17 +913,16 @@ export class AAMemberExpression extends Expression {
 
     public readonly kind = AstNodeKind.AAMemberExpression;
 
-    public range: Range;
+    public readonly range: Range;
 
-    public tokens: {
-        key: Token;
-        colon?: Token;
-        comma?: Token;
+    public readonly tokens: {
+        readonly key: Token;
+        readonly colon?: Token;
+        readonly comma?: Token;
     };
 
     /** The expression evaluated to determine the member's initial value. */
-    public value: Expression;
-
+    public readonly value: Expression;
 
     transpile(state: BrsTranspileState) {
         //TODO move the logic from AALiteralExpression loop into this function
@@ -955,12 +954,11 @@ export class AALiteralExpression extends Expression {
         this.range = util.createBoundingRange(this.tokens.open, ...this.elements, this.tokens.close);
     }
 
-    readonly elements: Array<AAMemberExpression | CommentStatement>;
-    readonly tokens: {
-        open?: Token;
-        close?: Token;
+    public readonly elements: Array<AAMemberExpression | CommentStatement>;
+    public readonly tokens: {
+        readonly open?: Token;
+        readonly close?: Token;
     };
-
 
     public readonly kind = AstNodeKind.AALiteralExpression;
 
@@ -1067,10 +1065,10 @@ export class UnaryExpression extends Expression {
 
     public readonly range: Range;
 
-    public tokens: {
-        operator: Token;
+    public readonly tokens: {
+        readonly operator: Token;
     };
-    public right: Expression;
+    public readonly right: Expression;
 
     transpile(state: BrsTranspileState) {
         let separatingWhitespace: string;
@@ -1110,8 +1108,8 @@ export class VariableExpression extends Expression {
         this.range = this.tokens.name?.range;
     }
 
-    readonly tokens: {
-        name: Identifier;
+    public readonly tokens: {
+        readonly name: Identifier;
     };
 
     public readonly kind = AstNodeKind.VariableExpression;
@@ -1156,7 +1154,7 @@ export class VariableExpression extends Expression {
             const symbolTable = this.getSymbolTable();
             resultType = symbolTable?.getSymbolType(nameKey, { ...options, fullName: nameKey, tableProvider: () => this.getSymbolTable() });
         }
-        options.typeChain?.push(new TypeChainEntry(nameKey, resultType, options.data, this.range));
+        options.typeChain?.push(new TypeChainEntry({ name: nameKey, type: resultType, data: options.data, range: this.range, kind: this.kind }));
         return resultType;
     }
 }
@@ -1176,8 +1174,8 @@ export class SourceLiteralExpression extends Expression {
 
     public readonly kind = AstNodeKind.SourceLiteralExpression;
 
-    readonly tokens: {
-        value: Token;
+    public readonly tokens: {
+        readonly value: Token;
     };
 
     /**
@@ -1279,10 +1277,10 @@ export class NewExpression extends Expression {
 
     public readonly range: Range;
 
-    readonly tokens: {
-        new?: Token;
+    public readonly tokens: {
+        readonly new?: Token;
     };
-    readonly call: CallExpression;
+    public readonly call: CallExpression;
 
     /**
      * The name of the class to initialize (with optional namespace prefixed)
@@ -1311,7 +1309,15 @@ export class NewExpression extends Expression {
     }
 
     getType(options: GetTypeOptions) {
-        return this.call.getType(options);
+        const result = this.call.getType(options);
+        if (options.typeChain) {
+            // modify last typechain entry to show it is a new ...()
+            const lastEntry = options.typeChain[options.typeChain.length - 1];
+            if (lastEntry) {
+                lastEntry.kind = this.kind;
+            }
+        }
+        return result;
     }
 }
 
@@ -1344,14 +1350,14 @@ export class CallfuncExpression extends Expression {
         );
     }
 
-    readonly callee: Expression;
-    readonly args: Expression[];
+    public readonly callee: Expression;
+    public readonly args: Expression[];
 
-    readonly tokens: {
-        operator: Token;
-        methodName: Identifier;
-        openingParen?: Token;
-        closingParen?: Token;
+    public readonly tokens: {
+        readonly operator: Token;
+        readonly methodName: Identifier;
+        readonly openingParen?: Token;
+        readonly closingParen?: Token;
     };
 
     public readonly kind = AstNodeKind.CallfuncExpression;
@@ -1403,7 +1409,13 @@ export class CallfuncExpression extends Expression {
         if (isComponentType(calleeType) || isReferenceType(calleeType)) {
             const funcType = (calleeType as ComponentType).getCallFuncType?.(this.tokens.methodName.text, options);
             if (funcType) {
-                options.typeChain?.push(new TypeChainEntry(this.tokens.methodName.text, funcType, options.data, this.tokens.methodName.range, createToken(TokenKind.Callfunc)));
+                options.typeChain?.push(new TypeChainEntry({
+                    name: this.tokens.methodName.text,
+                    type: funcType,
+                    data: options.data, range: this.tokens.methodName.range,
+                    separatorToken: createToken(TokenKind.Callfunc),
+                    kind: this.kind
+                }));
                 if (options.ignoreCall) {
                     result = funcType;
                 }
@@ -1439,7 +1451,7 @@ export class TemplateStringQuasiExpression extends Expression {
         );
     }
 
-    readonly expressions: Array<LiteralExpression | EscapedCharCodeLiteralExpression>;
+    public readonly expressions: Array<LiteralExpression | EscapedCharCodeLiteralExpression>;
     public readonly kind = AstNodeKind.TemplateStringQuasiExpression;
 
     readonly range: Range;
@@ -1493,12 +1505,12 @@ export class TemplateStringExpression extends Expression {
 
     public readonly kind = AstNodeKind.TemplateStringExpression;
 
-    readonly tokens: {
-        openingBacktick?: Token;
-        closingBacktick?: Token;
+    public readonly tokens: {
+        readonly openingBacktick?: Token;
+        readonly closingBacktick?: Token;
     };
-    readonly quasis: TemplateStringQuasiExpression[];
-    readonly expressions: Expression[];
+    public readonly quasis: TemplateStringQuasiExpression[];
+    public readonly expressions: Expression[];
 
     public readonly range: Range;
 
@@ -1602,14 +1614,14 @@ export class TaggedTemplateStringExpression extends Expression {
 
     public readonly kind = AstNodeKind.TaggedTemplateStringExpression;
 
-    public tokens: {
-        tagName: Identifier;
-        openingBacktick?: Token;
-        closingBacktick?: Token;
+    public readonly tokens: {
+        readonly tagName: Identifier;
+        readonly openingBacktick?: Token;
+        readonly closingBacktick?: Token;
     };
 
-    readonly quasis: TemplateStringQuasiExpression[];
-    readonly expressions: Expression[];
+    public readonly quasis: TemplateStringQuasiExpression[];
+    public readonly expressions: Expression[];
 
     public readonly range: Range;
 
@@ -1687,9 +1699,9 @@ export class AnnotationExpression extends Expression {
 
     public readonly kind = AstNodeKind.AnnotationExpression;
 
-    readonly tokens: {
-        at: Token;
-        name: Token;
+    public readonly tokens: {
+        readonly at: Token;
+        readonly name: Token;
     };
 
     public get range() {
@@ -1700,7 +1712,7 @@ export class AnnotationExpression extends Expression {
         );
     }
 
-    public name: string;
+    public readonly name: string;
 
     public call: CallExpression;
 
@@ -1762,16 +1774,16 @@ export class TernaryExpression extends Expression {
 
     public readonly kind = AstNodeKind.TernaryExpression;
 
-    public range: Range;
+    public readonly range: Range;
 
-    readonly tokens: {
-        questionMark?: Token;
-        colon?: Token;
+    public readonly tokens: {
+        readonly questionMark?: Token;
+        readonly colon?: Token;
     };
 
-    readonly test: Expression;
-    readonly consequent?: Expression;
-    readonly alternate?: Expression;
+    public readonly test: Expression;
+    public readonly consequent?: Expression;
+    public readonly alternate?: Expression;
 
     transpile(state: BrsTranspileState) {
         let result = [];
@@ -1864,12 +1876,12 @@ export class NullCoalescingExpression extends Expression {
 
     public readonly range: Range;
 
-    public tokens: {
-        questionQuestion?: Token;
+    public readonly tokens: {
+        readonly questionQuestion?: Token;
     };
 
-    public consequent: Expression;
-    public alternate: Expression;
+    public readonly consequent: Expression;
+    public readonly alternate: Expression;
 
     transpile(state: BrsTranspileState) {
         let result = [];
@@ -1950,8 +1962,8 @@ export class RegexLiteralExpression extends Expression {
     }
 
     public readonly kind = AstNodeKind.RegexLiteralExpression;
-    public tokens: {
-        regexLiteral: Token;
+    public readonly tokens: {
+        readonly regexLiteral: Token;
     };
 
     public get range() {
@@ -2050,9 +2062,9 @@ export class TypeExpression extends Expression implements TypedefProvider {
     /**
      * The standard AST expression that represents the type for this TypeExpression.
      */
-    public expression: Expression;
+    public readonly expression: Expression;
 
-    public range: Range;
+    public readonly range: Range;
 
     public transpile(state: BrsTranspileState): TranspileResult {
         return [this.getType({ flags: SymbolTypeFlag.typetime }).toTypeString()];
@@ -2104,15 +2116,15 @@ export class TypeCastExpression extends Expression {
 
     public readonly kind = AstNodeKind.TypeCastExpression;
 
-    public obj: Expression;
+    public readonly obj: Expression;
 
-    public tokens: {
-        as?: Token;
+    public readonly tokens: {
+        readonly as?: Token;
     };
 
     public typeExpression?: TypeExpression;
 
-    public range: Range;
+    public readonly range: Range;
 
     public transpile(state: BrsTranspileState): TranspileResult {
         return this.obj.transpile(state);
@@ -2125,7 +2137,15 @@ export class TypeCastExpression extends Expression {
     }
 
     public getType(options: GetTypeOptions): BscType {
-        return this.typeExpression.getType(options);
+        const result = this.typeExpression.getType(options);
+        if (options.typeChain) {
+            // modify last typechain entry to show it is a typecast
+            const lastEntry = options.typeChain[options.typeChain.length - 1];
+            if (lastEntry) {
+                lastEntry.kind = this.kind;
+            }
+        }
+        return result;
     }
 }
 
@@ -2148,16 +2168,16 @@ export class TypedArrayExpression extends Expression {
         );
     }
 
-    public tokens: {
-        leftBracket?: Token;
-        rightBracket?: Token;
+    public readonly tokens: {
+        readonly leftBracket?: Token;
+        readonly rightBracket?: Token;
     };
 
-    public innerType: Expression;
+    public readonly innerType: Expression;
 
     public readonly kind = AstNodeKind.TypedArrayExpression;
 
-    public range: Range;
+    public readonly range: Range;
 
     public transpile(state: BrsTranspileState): TranspileResult {
         return [this.getType({ flags: SymbolTypeFlag.typetime }).toTypeString()];

@@ -1,22 +1,22 @@
 import { URI } from 'vscode-uri';
-import { isAssignmentStatement, isAssociativeArrayType, isBrsFile, isCallableType, isClassStatement, isClassType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isObjectType, isPrimitiveType, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
+import { isAssignmentStatement, isAssociativeArrayType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isObjectType, isPrimitiveType, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import { DiagnosticOrigin } from '../../interfaces';
 import type { BsDiagnostic, BsDiagnosticWithOrigin, ExtraSymbolData, OnScopeValidateEvent, TypeChainEntry, TypeCompatibilityData } from '../../interfaces';
-import { SymbolTypeFlag } from '../../SymbolTable';
+import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import type { AssignmentStatement, ClassStatement, DottedSetStatement, EnumStatement, NamespaceStatement, ReturnStatement } from '../../parser/Statement';
 import util from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
 import type { Token } from '../../lexer/Token';
-import type { AstNode } from '../../parser/AstNode';
+import { AstNodeKind, type AstNode } from '../../parser/AstNode';
 import type { Expression } from '../../parser/AstNode';
-import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression } from '../../parser/Expression';
+import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression } from '../../parser/Expression';
 import { CallExpression } from '../../parser/Expression';
 import { createVisitor } from '../../astUtils/visitors';
-import type { BscType } from '../../types';
+import type { BscType } from '../../types/BscType';
 import type { BscFile } from '../../files/BscFile';
 import { InsideSegmentWalkMode } from '../../AstValidationSegmenter';
 import { TokenKind } from '../../lexer/TokenKind';
@@ -108,6 +108,9 @@ export class ScopeValidator {
                     },
                     AssignmentStatement: (assignStmt) => {
                         this.validateAssignmentStatement(file, assignStmt);
+                    },
+                    NewExpression: (newExpr) => {
+                        this.validateNewExpression(file, newExpr);
                     }
                 });
                 const segmentsToWalkForValidation = (thisFileHasChanges || !hasChangeInfo)
@@ -610,6 +613,21 @@ export class ScopeValidator {
         if (isUsedAsType) {
             return;
         }
+        const containingNamespaceName = expression.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
+
+        if (!(isCallExpression(expression.parent) && isNewExpression(expression.parent?.parent))) {
+            const classUsedAsVarEntry = this.checkTypeChainForClassUsedAsVar(typeChain, containingNamespaceName);
+            if (classUsedAsVarEntry) {
+
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.itemCannotBeUsedAsVariable(classUsedAsVarEntry.toString()),
+                    range: expression.range,
+                    file: file
+                });
+                return;
+            }
+        }
+
         const lastTypeInfo = typeChain[typeChain.length - 1];
         const parentTypeInfo = typeChain[typeChain.length - 2];
 
@@ -649,6 +667,32 @@ export class ScopeValidator {
                 });
             }
         }
+    }
+
+    private checkTypeChainForClassUsedAsVar(typeChain: TypeChainEntry[], containingNamespaceName: string) {
+        const ignoreKinds = [AstNodeKind.TypeCastExpression, AstNodeKind.NewExpression];
+        let lowerNameSoFar = '';
+        let classUsedAsVar;
+        let isFirst = true;
+        for (let i = 0; i < typeChain.length - 1; i++) { // do not look at final entry - we CAN use the constructor as a variable
+            const tce = typeChain[i];
+
+            lowerNameSoFar += `${lowerNameSoFar ? '.' : ''}${tce.name.toLowerCase()}`;
+            if (!isNamespaceType(tce.type)) {
+                if (isFirst && containingNamespaceName) {
+                    lowerNameSoFar = `${containingNamespaceName.toLowerCase()}.${lowerNameSoFar}`;
+                }
+                if (!tce.kind || ignoreKinds.includes(tce.kind)) {
+                    break;
+                } else if (isClassType(tce.type) && lowerNameSoFar.toLowerCase() === tce.type.name.toLowerCase()) {
+                    classUsedAsVar = tce.type;
+                }
+                break;
+            }
+            isFirst = false;
+        }
+
+        return classUsedAsVar;
     }
 
     /**
@@ -707,11 +751,33 @@ export class ScopeValidator {
     }
 
     /**
+     * Find all "new" statements in the program,
+     * and make sure we can find a class with that name
+     */
+    private validateNewExpression(file: BrsFile, newExpression: NewExpression) {
+        let potentialClassName = newExpression.className.getName(ParseMode.BrighterScript);
+        const namespaceName = newExpression.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
+        let newableClass = this.event.scope.getClass(potentialClassName, namespaceName);
+
+        if (!newableClass) {
+            //try and find functions with this name.
+            let fullName = util.getFullyQualifiedClassName(potentialClassName, namespaceName);
+
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.expressionIsNotConstructable(fullName),
+                file: file,
+                range: newExpression.className.range
+            });
+
+        }
+    }
+
+    /**
      * Adds a diagnostic to the first scope for this key. Prevents duplicate diagnostics
      * for diagnostics where scope isn't important. (i.e. CreateObject validations)
      */
     private addDiagnosticOnce(diagnostic: BsDiagnostic) {
-        this.onceCache.getOrAdd(`${diagnostic.code}-${diagnostic.message}-${util.rangeToString(diagnostic.range)}`, () => {
+        this.onceCache.getOrAdd(`${diagnostic.code} -${diagnostic.message} -${util.rangeToString(diagnostic.range)} `, () => {
             const diagnosticWithOrigin = { ...diagnostic } as BsDiagnosticWithOrigin;
             if (!diagnosticWithOrigin.origin) {
                 // diagnostic does not have origin.
@@ -742,7 +808,7 @@ export class ScopeValidator {
      * Add a diagnostic (to the first scope) that will have `relatedInformation` for each affected scope
      */
     private addMultiScopeDiagnostic(diagnostic: BsDiagnostic) {
-        diagnostic = this.multiScopeCache.getOrAdd(`${diagnostic.file?.srcPath}-${diagnostic.code}-${diagnostic.message}-${util.rangeToString(diagnostic.range)}`, () => {
+        diagnostic = this.multiScopeCache.getOrAdd(`${diagnostic.file?.srcPath} -${diagnostic.code} -${diagnostic.message} -${util.rangeToString(diagnostic.range)} `, () => {
 
             if (!diagnostic.relatedInformation) {
                 diagnostic.relatedInformation = [];
