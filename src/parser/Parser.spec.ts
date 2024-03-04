@@ -53,7 +53,7 @@ describe('parser', () => {
             return [...expressions.values()].map(x => {
                 const file = new BrsFile('', '', new Program({} as any));
                 const state = new BrsTranspileState(file);
-                return new SourceNode(null, null, null, x.transpile(state)).toString();
+                return new SourceNode(null, null, null, x.transpile(state) as any).toString();
             });
         }
 
