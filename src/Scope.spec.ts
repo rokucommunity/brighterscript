@@ -30,7 +30,7 @@ import { InterfaceType } from './types/InterfaceType';
 import { ComponentType } from './types/ComponentType';
 import * as path from 'path';
 
-describe('Scope', () => {
+describe.only('Scope', () => {
     let sinon = sinonImport.createSandbox();
     let rootDir = process.cwd();
     let program: Program;
@@ -145,7 +145,7 @@ describe('Scope', () => {
         ]);
     });
 
-    it('does flag namespaced const and un-namespaced function collision', () => {
+    it('does not flag namespaced const and un-namespaced function collision', () => {
         program.setFile('source/main.bs', `
             namespace alpha
                 const options = {}
@@ -155,9 +155,7 @@ describe('Scope', () => {
             end sub
         `);
         program.validate();
-        expectDiagnostics(program, [
-            DiagnosticMessages.nameCollision('Const', 'Function', 'options').message
-        ]);
+        expectZeroDiagnostics(program);
     });
 
     it('flags parameter with same name as namespace', () => {
@@ -1265,7 +1263,7 @@ describe('Scope', () => {
         });
 
         describe('name collisions', () => {
-            it('should validate when class and interfaces have name collisions', () => {
+            it('should validate when class have name collisions with global function', () => {
                 program.setFile('source/main.bs', `
                     class Log
                     end class
@@ -1278,8 +1276,18 @@ describe('Scope', () => {
                 program.validate();
                 expectDiagnosticsIncludes(program, [
                     DiagnosticMessages.nameCollision('Class', 'Global Function', 'Log').message,
-                    DiagnosticMessages.nameCollision('Interface', 'Global Function', 'Lcase').message
                 ]);
+            });
+
+            it('should not validate when interfaces have name collisions with global function', () => {
+                program.setFile('source/main.bs', `
+                    interface Lcase
+                        name as string
+                    end interface
+
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
             });
 
             it('should validate when a namespace has a name collision with a class', () => {
@@ -1342,7 +1350,7 @@ describe('Scope', () => {
                 ]);
             });
 
-            it('should validate when a const has a name collision with something else', () => {
+            it('should not validate when a const has a name collision with something else in different namespace', () => {
                 program.setFile('source/main.bs', `
                     namespace SomeEnum
                         const MY_CONST = "hello"
@@ -1350,6 +1358,20 @@ describe('Scope', () => {
 
                     function MY_CONST()
                     end function
+                `);
+                program.validate();
+                let diagnostics = program.getDiagnostics();
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('should validate when a const has a name collision with something else in same namespace', () => {
+                program.setFile('source/main.bs', `
+                    namespace SomeEnum
+                        const MY_CONST = "hello"
+
+                        function MY_CONST()
+                        end function
+                    end namespace
                 `);
                 program.validate();
                 let diagnostics = program.getDiagnostics();
@@ -3758,7 +3780,7 @@ describe('Scope', () => {
     });
 
     describe('shadowing', () => {
-        it.only('allows namespaces shadowing global function names', () => {
+        it('allows namespaces shadowing global function names', () => {
             program.setFile<BrsFile>('source/file1.bs', `
                 namespace log
                     sub doLog(x)
@@ -3776,7 +3798,7 @@ describe('Scope', () => {
             expectZeroDiagnostics(program);
         });
 
-        it.only('allows enums shadowing global function names', () => {
+        it('allows enums shadowing global function names', () => {
             program.setFile<BrsFile>('source/file1.bs', `
                 enum log
                     debug = "DEBUG"
@@ -3793,7 +3815,7 @@ describe('Scope', () => {
             expectZeroDiagnostics(program);
         });
 
-        it.only('allows interfaces shadowing global function names', () => {
+        it('allows interfaces shadowing global function names', () => {
             program.setFile<BrsFile>('source/file1.bs', `
                 interface log
                     abs
@@ -3809,7 +3831,89 @@ describe('Scope', () => {
             expectZeroDiagnostics(program);
         });
 
-        it.only('allows namespaced functions shadowing upper scope function names', () => {
+        it('allows consts shadowing global function names', () => {
+            program.setFile<BrsFile>('source/file1.bs', `
+                const log = "hello"   ' const shadows global function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+
+        it('disallows enum/const shadowing', () => {
+            program.setFile<BrsFile>('source/file1.bs', `
+                enum SomeName
+                    opt1
+                    opt2
+                end enum
+
+                const SomeName = "hello"    ' const and enum have same name
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.nameCollision('Enum', 'Const', 'SomeName').message,
+                DiagnosticMessages.nameCollision('Const', 'Enum', 'SomeName').message
+            ]);
+        });
+
+        it('disallows enum/namespace shadowing', () => {
+            program.setFile<BrsFile>('source/file1.bs', `
+                enum SomeName
+                    opt1
+                    opt2
+                end enum
+
+                namespace SomeName
+                    sub foo()
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.nameCollision('Enum', 'Namespace', 'SomeName').message,
+                DiagnosticMessages.nameCollision('Namespace', 'Enum', 'SomeName').message
+            ]);
+        });
+
+        it('disallows interface/namespace shadowing', () => {
+            program.setFile<BrsFile>('source/file1.bs', `
+                interface SomeName  ' interface has same name as namespace
+                    opt1
+                    opt2
+                end interface
+
+                namespace SomeName
+                    sub foo()
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.nameCollision('Interface', 'Namespace', 'SomeName').message,
+                DiagnosticMessages.nameCollision('Namespace', 'Interface', 'SomeName').message
+            ]);
+        });
+
+        it('disallows class/namespace shadowing', () => {
+            program.setFile<BrsFile>('source/file1.bs', `
+                class SomeName  ' class has same name as namespace
+                    opt1
+                    opt2
+                end class
+
+                namespace SomeName
+                    sub foo()
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.nameCollision('Class', 'Namespace', 'SomeName').message,
+                DiagnosticMessages.nameCollision('Namespace', 'Class', 'SomeName').message
+            ]);
+        });
+
+        it('allows namespaced functions shadowing upper scope function names', () => {
             program.setFile<BrsFile>('source/file.bs', `
                 namespace alpha
                     sub log(input)
@@ -3825,7 +3929,7 @@ describe('Scope', () => {
             expectZeroDiagnostics(program);
         });
 
-        it.only('allows namespaced functions shadowing upper scope function names', () => {
+        it('allows namespaced functions shadowing upper scope function names', () => {
             program.setFile<BrsFile>('source/file.bs', `
                 sub someFunc()
                     print "outside"
@@ -3844,6 +3948,54 @@ describe('Scope', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        it('disallows class/global function shadowing', () => {
+            program.setFile<BrsFile>('source/file.bs', `
+                class log  ' class shadows global function
+                    sub foo()
+                    end sub
+                end class
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.nameCollision('Class', 'Global Function', 'log')
+            ]);
+        });
+
+        it('disallows class/local function shadowing', () => {
+            program.setFile<BrsFile>('source/file.bs', `
+                function someName()
+                end function
+
+                class SomeName  ' class shadows local function
+                    sub foo()
+                    end sub
+                end class
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.functionCannotHaveSameNameAsClass('someName'),
+                DiagnosticMessages.nameCollision('Class', 'Function', 'SomeName')
+            ]);
+        });
+
+
+        it('allows function having same name as class in namespace', () => {
+            program.setFile<BrsFile>('source/file.bs', `
+                function someName()
+                end function
+
+                namespace alpha
+                    class SomeName  ' class in namespace shadows function in upper scope
+                        sub foo()
+                        end sub
+                    end class
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
     });
 
 

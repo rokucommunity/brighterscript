@@ -271,7 +271,7 @@ export class Scope {
         const fullNameLower = (containingNamespace ? `${containingNamespace}.${name}` : name).toLowerCase();
         const callable = this.getCallableByName(name);
         if (callable) {
-            if (!callable.hasNamespace || callable.getName(ParseMode.BrighterScript).toLowerCase() === fullNameLower) {
+            if ((!callable.hasNamespace && includeNameShadowsOutsideNamespace) || callable.getName(ParseMode.BrighterScript).toLowerCase() === fullNameLower) {
                 // this callable has no namespace, or has same namespace
                 links.push({ item: callable.functionStatement, file: callable.file as BrsFile });
             }
@@ -882,7 +882,7 @@ export class Scope {
                         this.symbolsAddedDuringLinking.push({ symbolTable: this.symbolTable, name: nsContainer.lastPartName, flags: getTypeOptions.flags });
                     }
                 } else {
-                    this.program.logger.error(`Invalid existing type for namespace ${nsName} - ${currentNSType.toString()}`);
+                    // Something else already used the name this namespace is using.
                     continue;
                 }
             } else {
@@ -1034,6 +1034,7 @@ export class Scope {
         const nameRange = nameIdentifier.range;
 
         const containingNamespace = node.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
+        const containingNamespaceLower = containingNamespace?.toLowerCase();
         const links = this.getAllFileLinks(name, containingNamespace);
         for (let link of links) {
             if (!link || link.item === node) {
@@ -1045,13 +1046,17 @@ export class Scope {
                 continue;
             }
             if (isFunctionStatement(link.item) || link.file?.destPath === 'global') {
-                // the thing found is a function OR from global (which is also a function)
-                if (isNamespaceStatement(node) ||
-                    isEnumStatement(node) ||
-                    isConstStatement(node) ||
-                    isInterfaceStatement(node)) {
-                    // these are not callable functions in transpiled code - ignore them
-                    continue;
+                const linkItemNamespaceLower = link.item?.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript)?.toLowerCase();
+                if (!(containingNamespaceLower && linkItemNamespaceLower) || linkItemNamespaceLower !== containingNamespaceLower) {
+
+                    // the thing found is a function OR from global (which is also a function)
+                    if (isNamespaceStatement(node) ||
+                        isEnumStatement(node) ||
+                        isConstStatement(node) ||
+                        isInterfaceStatement(node)) {
+                        // these are not callable functions in transpiled code - ignore them
+                        continue;
+                    }
                 }
             }
 
