@@ -892,6 +892,12 @@ export class Lexer {
      */
     private preProcessedConditional() {
         this.advance(); // advance past the leading #
+
+        //consume whitespace
+        while (this.check(' ', '\t')) {
+            this.advance();
+        }
+
         while (isAlphaNumeric(this.peek())) {
             this.advance();
         }
@@ -925,7 +931,7 @@ export class Lexer {
             this.current = endOfFirstWord;
         }
 
-        switch (text) {
+        switch (text.replace(/[\s\t]+/g, '')) {
             case '#if':
                 this.addToken(TokenKind.HashIf);
                 return;
@@ -950,12 +956,16 @@ export class Lexer {
                     this.whitespace();
                 }
 
-                while (!this.isAtEnd() && !this.check('\n')) {
+                let hasErrorMessage = false;
+                while (!this.isAtEnd() && !this.check('\r') && !this.check('\n')) {
+                    hasErrorMessage = true;
                     this.advance();
                 }
 
-                // grab all text since we found #error as one token
-                this.addToken(TokenKind.HashErrorMessage);
+                if (hasErrorMessage) {
+                    // grab all text since we found #error as one token
+                    this.addToken(TokenKind.HashErrorMessage);
+                }
 
                 this.start = this.current;
                 return;
