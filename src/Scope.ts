@@ -1142,29 +1142,52 @@ export class Scope {
                 });
             }
         } else if (callableContainerMap.has(lowerVarName)) {
+            const callable = callableContainerMap.get(lowerVarName);
             //is same name as a callable
             if (varIsFunction()) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.localVarFunctionShadowsParentFunction('scope'),
                     range: varDeclaration.nameRange,
                     file: file,
-                    origin: DiagnosticOrigin.Scope
+                    origin: DiagnosticOrigin.Scope,
+                    relatedInformation: [{
+                        message: 'Function declared here',
+                        location: util.createLocation(
+                            URI.file(callable[0].callable.file.srcPath).toString(),
+                            callable[0].callable.nameRange
+                        )
+                    }]
                 });
             } else {
                 this.diagnostics.push({
                     ...DiagnosticMessages.localVarShadowedByScopedFunction(),
                     range: varDeclaration.nameRange,
                     file: file,
-                    origin: DiagnosticOrigin.Scope
+                    origin: DiagnosticOrigin.Scope,
+                    relatedInformation: [{
+                        message: 'Function declared here',
+                        location: util.createLocation(
+                            URI.file(callable[0].callable.file.srcPath).toString(),
+                            callable[0].callable.nameRange
+                        )
+                    }]
                 });
             }
             //has the same name as an in-scope class
         } else if (classMap.has(lowerVarName)) {
+            const classStmtLink = classMap.get(lowerVarName);
             this.diagnostics.push({
-                ...DiagnosticMessages.localVarSameNameAsClass(classMap.get(lowerVarName)?.item.getName(ParseMode.BrighterScript)),
+                ...DiagnosticMessages.localVarSameNameAsClass(classStmtLink?.item?.getName(ParseMode.BrighterScript)),
                 range: varDeclaration.nameRange,
                 file: file,
-                origin: DiagnosticOrigin.Scope
+                origin: DiagnosticOrigin.Scope,
+                relatedInformation: [{
+                    message: 'Class declared here',
+                    location: util.createLocation(
+                        URI.file(classStmtLink.file.srcPath).toString(),
+                        classStmtLink?.item.tokens.name.range
+                    )
+                }]
             });
         }
     }
