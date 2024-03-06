@@ -7,18 +7,18 @@ import { Cache } from '../../Cache';
 import * as path from 'path';
 import { util } from '../../util';
 import type { ProvideFileEvent } from '../../interfaces';
-import { isDottedGetExpression, isFieldStatement, isMethodStatement, isVariableExpression } from '../../astUtils/reflection';
+import { isDottedGetExpression, isFieldStatement, isMethodStatement, isVariableExpression, isLiteralExpression, isTemplateStringExpression, isAnnotationExpression } from '../../astUtils/reflection';
 import { createFunctionStatement, createFunctionExpression, createDottedSetStatement, createVariableExpression } from '../../astUtils/creators';
 import type { Statement } from '../../parser/AstNode';
 import { TokenKind } from '../../lexer/TokenKind';
 import { VariableExpression } from '../../parser/Expression';
+import type { AnnotationExpression } from '../../parser/Expression';
 
 export class ComponentStatementProvider {
     constructor(
         private event: ProvideFileEvent
     ) {
     }
-
 
     /**
      * Create virtual files for every component statement found in this physical file
@@ -27,7 +27,7 @@ export class ComponentStatementProvider {
         const cache = new Cache<string, string>();
         file.ast.walk(createVisitor({
             ComponentStatement: (node) => {
-                //force the desetPath for this component to be within the `pkg:/components` folder
+                //force the destPath for this component to be within the `pkg:/components` folder
                 const destDir = cache.getOrAdd(file.srcPath, () => {
                     return path.dirname(file.destPath).replace(/^(.+?)(?=[\/\\]|$)/, (match: string, firstDirName: string) => {
                         return 'components';
@@ -56,31 +56,91 @@ export class ComponentStatementProvider {
 
                 //declare interface field
             } else if (isFieldStatement(member) && member.accessModifier?.text.toLowerCase() === 'public') {
-                return `<field id="${member.name.text}" type="${member.typeExpression.getName()}" />`;
+                return this.generateTagWithAttributes('field', {
+                    id: member.name.text,
+                    type: member.typeExpression.getName(),
+                    alias: this.getAnnotationValue(member.annotations?.filter(x => x.name.toLowerCase() === 'alias')),
+                    onChange: this.getAnnotationValue(member.annotations?.filter(x => x.name.toLowerCase() === 'onchange')),
+                    alwaysNotify: this.getAnnotationValue(member.annotations?.filter(x => x.name.toLowerCase() === 'alwaysnotify')) === 'true' ? 'true' : ''
+                }, true);
             } else {
                 return '';
             }
         }).filter(x => !!x);
 
+        let componentChildren = '';
+        const template = statement.annotations?.find(x => x.name.toLowerCase() === 'template');
+        if (isAnnotationExpression(template)) {
+            // TODO: Better strip of component and children elements.
+            componentChildren = `<children>${this.getAnnotationValue([template]).replaceAll('<component>', '').replaceAll('</component>', '').replaceAll('<children>', '').replaceAll('</children>', '')}</children>`;
+        }
+
+        let componentAttributes = {
+            name: name,
+            extends: statement.getParentName(ParseMode.BrightScript) ?? 'Group',
+            initialFocus: ''
+        };
+        const initialFocus = statement.annotations?.find(x => x.name.toLowerCase() === 'initialfocus');
+        if (isAnnotationExpression(initialFocus)) {
+            componentAttributes.initialFocus = this.getAnnotationValue([initialFocus]);
+        }
         xmlFile.parse(undent`
-            <component name="${name}" extends="${statement.getParentName(ParseMode.BrightScript) ?? 'Group'}">
+            ${this.generateTagWithAttributes('component', componentAttributes)};
                 <script uri="${util.sanitizePkgPath(file.destPath)}" />
                 <script uri="${util.sanitizePkgPath(codebehindFile.destPath)}" />
                 ${interfaceMembers.length > 0 ? '<interface>' : ''}
                     ${interfaceMembers.join('\n                    ')}
                 ${interfaceMembers.length > 0 ? '</interface>' : ''}
+                ${componentChildren}
             </component>
         `);
 
-
         this.event.files.push(xmlFile);
+    }
+
+    private generateTagWithAttributes(identifier = '' as string, attributes = {} as Record<string, any>, closeEnd = false as boolean) {
+        let tag = `<${identifier}`;
+        Object.keys(attributes).forEach(attribute => {
+            let value = attributes[attribute];
+            // Only add a attribute if the value is not empty.
+            if (value !== '') {
+                tag += ` ${attribute}="${attributes[attribute]}"`;
+            }
+        });
+        tag += closeEnd ? ' />': ' >';
+        return tag;
+    }
+
+    private getAnnotationValue(annotations: AnnotationExpression[]) {
+        let response = [];
+        if (annotations !== undefined) {
+            for (const annotation of annotations) {
+                let args = annotation?.call?.args[0];
+                if (isVariableExpression(args) || isDottedGetExpression(args)) {
+                    response.push(args.name.text);
+                } else if (isLiteralExpression(args)) {
+                    let values = args?.token?.text.replaceAll('\"', '').replaceAll(' ', '').split(',');
+                    response = response.concat(values);
+                } else if (isTemplateStringExpression(args)) {
+                    let textOutput = '';
+                    args.quasis[0]?.expressions?.forEach((a: { token: { text: string } }) => {
+                        textOutput += a.token.text;
+                    });
+                    response.push(textOutput);
+                }
+            }
+
+            response = response.filter((item, index) => response.indexOf(item) === index);
+        }
+        return response.join(', ');
     }
 
     private registerCodebehind(name: string, statement: ComponentStatement, destDir: string) {
         //create the codebehind file
         const file = this.event.fileFactory.BrsFile({
             srcPath: `virtual:/${destDir}/${name}.codebehind.bs`,
-            destPath: `${destDir}/${name}.codebehind.brs`
+            destPath: `${destDir}/${name}.codebehind.bs`,
+            pkgPath: `${destDir}/${name}.codebehind.brs`
         });
         const initStatements: Statement[] = [];
         let initFunc: FunctionStatement;
@@ -121,7 +181,7 @@ export class ComponentStatementProvider {
             initFunc.func.body.statements.unshift(...initStatements);
         }
 
-        //TODO these are hacks that we need until scope has been refactored to leverate the AST directly
+        //TODO these are hacks that we need until scope has been refactored to leverage the AST directly
         file.parser.invalidateReferences();
         // eslint-disable-next-line @typescript-eslint/dot-notation
         file['findCallables']();

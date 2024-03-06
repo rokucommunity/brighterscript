@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/await-thenable */
 import util, { standardizePath as s } from '../../../util';
 import { Program } from '../../../Program';
 import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile, stagingDir, tempDir } from '../../../testHelpers.spec';
@@ -193,6 +194,7 @@ describe('ComponentStatement', () => {
             end component
         `);
 
+        // eslint-disable-next-line @typescript-eslint/await-thenable
         await testTranspile(program.getFile('components/MainScene.xml'), `
             <component name="MainScene" extends="Group">
                 <script uri="pkg:/components/MainScene.brs" type="text/brightscript" />
@@ -245,7 +247,7 @@ describe('ComponentStatement', () => {
             </component>
         `);
 
-        await testTranspile(program.getFile('components/MainScene.codebehind.brs'), `
+        await testTranspile(program.getFile('components/MainScene.codebehind.bs'), `
             sub init()
                 print "MainScene"
             end sub
@@ -277,7 +279,7 @@ describe('ComponentStatement', () => {
             </component>
         `);
 
-        await testTranspile(program.getFile('components/ZombieKeyboard.codebehind.brs'), `
+        await testTranspile(program.getFile('components/ZombieKeyboard.codebehind.bs'), `
             sub EnableVoiceMode(isEnabled as boolean)
                 m.top.voiceModeEnabled = isEnabled
             end sub
@@ -299,7 +301,7 @@ describe('ComponentStatement', () => {
             </component>
         `);
 
-        await testTranspile(program.getFile('components/ZombieKeyboard.codebehind.brs'), `
+        await testTranspile(program.getFile('components/ZombieKeyboard.codebehind.bs'), `
             sub init()
                 m.isEnabled = true
             end sub
@@ -316,7 +318,7 @@ describe('ComponentStatement', () => {
             end component
         `);
 
-        await testTranspile(program.getFile('components/ZombieKeyboard.codebehind.brs'), `
+        await testTranspile(program.getFile('components/ZombieKeyboard.codebehind.bs'), `
             sub init()
                 m.isEnabled = true
                 'test
@@ -336,7 +338,7 @@ describe('ComponentStatement', () => {
             end component
         `);
 
-        await testTranspile(program.getFile('components/ZombieKeyboard.codebehind.brs'), `
+        await testTranspile(program.getFile('components/ZombieKeyboard.codebehind.bs'), `
             sub init()
                 'test
             end sub
@@ -359,7 +361,7 @@ describe('ComponentStatement', () => {
             end component
         `);
 
-        await testTranspile(program.getFile('components/ZombieKeyboard.codebehind.brs'), `
+        await testTranspile(program.getFile('components/ZombieKeyboard.codebehind.bs'), `
             sub init()
                 doSomething()
             end sub
@@ -367,6 +369,142 @@ describe('ComponentStatement', () => {
             sub doSomething()
                 print "do something"
             end sub
+        `);
+    });
+
+    it('includes xml template', async () => {
+        program.setFile('components/ZombieKeyboard.bs', `
+            @template(\`
+                <label />
+            \`)
+            component ZombieKeyboard
+            end component
+        `);
+        expectZeroDiagnostics(program);
+
+        expect(
+            program.getFile('components/ZombieKeyboard.codebehind.bs')
+        ).to.exist;
+
+        await testTranspile(program.getFile('components/ZombieKeyboard.xml'), `
+            <component name="ZombieKeyboard" extends="Group">
+                <script uri="pkg:/components/ZombieKeyboard.brs" type="text/brightscript" />
+                <script uri="pkg:/components/ZombieKeyboard.codebehind.brs" type="text/brightscript" />
+                <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                <children>
+                    <label />
+                </children>
+            </component>
+        `);
+    });
+
+    it('support initialFocus annotation', async () => {
+        program.setFile('components/ZombieKeyboard.bs', `
+            @template(\`
+                <label id="theLabel" />
+            \`)
+            @initialFocus(m.theLabel)
+            component ZombieKeyboard
+            end component
+        `);
+
+
+        await testTranspile(program.getFile('components/ZombieKeyboard.xml'), `
+            <component name="ZombieKeyboard" extends="Group" initialFocus="theLabel">
+                <script uri="pkg:/components/ZombieKeyboard.brs" type="text/brightscript" />
+                <script uri="pkg:/components/ZombieKeyboard.codebehind.brs" type="text/brightscript" />
+                <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                <children>
+                    <label id="theLabel" />
+                </children>
+            </component>
+        `);
+
+        await testTranspile(program.getFile('components/ZombieKeyboard.codebehind.bs'), ``);
+    });
+
+    it('support alwaysNotify annotations on interface fields', async () => {
+        program.setFile('components/ZombieKeyboard.bs', `
+            component ZombieKeyboard
+                @alwaysNotify(true)
+                public testField as string
+            end component
+        `);
+
+        await testTranspile(program.getFile('components/ZombieKeyboard.xml'), `
+            <component name="ZombieKeyboard" extends="Group">
+                <script uri="pkg:/components/ZombieKeyboard.brs" type="text/brightscript" />
+                <script uri="pkg:/components/ZombieKeyboard.codebehind.brs" type="text/brightscript" />
+                <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                <interface>
+                    <field id="testField" type="string" alwaysNotify="true" />
+                </interface>
+            </component>
+        `);
+
+        await testTranspile(program.getFile('components/ZombieKeyboard.codebehind.bs'), ``);
+    });
+
+    it('support alias annotations on interface fields', async () => {
+        program.setFile('components/ZombieKeyboard.bs', `
+            @template(\`
+                <label id="theLabel" />
+                <label id="theOtherLabel" />
+            \`)
+            component ZombieKeyboard
+                @alias("theLabel.text")
+                @alias("theOtherLabel.text")
+                @alias("theOtherLabel.text", "theLabel.text")
+                @alias("theLabel.text", "theOtherLabel.text")
+                public testField as string
+            end component
+        `);
+
+        await testTranspile(program.getFile('components/ZombieKeyboard.xml'), `
+            <component name="ZombieKeyboard" extends="Group">
+                <script uri="pkg:/components/ZombieKeyboard.brs" type="text/brightscript" />
+                <script uri="pkg:/components/ZombieKeyboard.codebehind.brs" type="text/brightscript" />
+                <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                <interface>
+                    <field id="testField" type="string" alias="theLabel.text, theOtherLabel.text" />
+                </interface>
+                <children>
+                    <label id="theLabel" />
+                    <label id="theOtherLabel" />
+                </children>
+            </component>
+        `);
+
+        await testTranspile(program.getFile('components/ZombieKeyboard.codebehind.bs'), ``);
+    });
+
+    it('support onChange annotations on interface fields', async () => {
+        program.setFile('components/ZombieKeyboard.bs', `
+            component ZombieKeyboard
+                @onChange(m.doSomething)
+                public testField as string
+
+                private sub doSomething()
+                    print "do something"
+                end sub
+            end component
+        `);
+
+        await testTranspile(program.getFile('components/ZombieKeyboard.codebehind.bs'), `
+            sub doSomething()
+                print "do something"
+            end sub
+        `);
+
+        await testTranspile(program.getFile('components/ZombieKeyboard.xml'), `
+            <component name="ZombieKeyboard" extends="Group">
+                <script uri="pkg:/components/ZombieKeyboard.brs" type="text/brightscript" />
+                <script uri="pkg:/components/ZombieKeyboard.codebehind.brs" type="text/brightscript" />
+                <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                <interface>
+                    <field id="testField" type="string" onChange="doSomething" />
+                </interface>
+            </component>
         `);
     });
 });
