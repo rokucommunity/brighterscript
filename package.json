@@ -19,7 +19,8 @@
     "benchmark": "cd ./benchmarks && ts-node ./index.ts",
     "scrape-roku-docs": "ts-node scripts/scrape-roku-docs.ts",
     "rescrape-roku-docs": "rm scripts/.cache.json && ts-node scripts/scrape-roku-docs.ts",
-    "null-check": "tsc -p tsconfig-null-safe.json"
+    "null-check": "tsc -p tsconfig-null-safe.json",
+    "create-test-package": "ts-node scripts/create-test-package.ts"
   },
   "mocha": {
     "spec": "src/**/*.spec.ts",
@@ -93,6 +94,7 @@
     "benchmark": "^2.1.4",
     "chai": "^4.2.0",
     "chai-files": "^1.4.0",
+    "clipboardy": "^2.3.0",
     "coveralls-next": "^4.2.0",
     "deepmerge": "^4.2.2",
     "eslint": "^8.16.0",
