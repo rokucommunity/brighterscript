@@ -111,7 +111,10 @@ authStatus = user <> invalid ? "logged in" : "not logged in"
 
 ## [Union Types](union-types.md)
 ```brighterscript
-sub log(data as string or number)
+sub logData(data as string or number)
     print data.toStr()
 end sub
 ```
+
+## [Variable Shadowing](variable-shadowing.md)
+Name resolution rules for various types of shadowing.
