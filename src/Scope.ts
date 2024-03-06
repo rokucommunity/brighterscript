@@ -4,10 +4,10 @@ import chalk from 'chalk';
 import type { DiagnosticInfo } from './DiagnosticMessages';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { DiagnosticOrigin } from './interfaces';
-import type { CallableContainer, BsDiagnosticWithOrigin, FileReference, CallableContainerMap, FileLink, Callable, NamespaceContainer, ScopeValidationOptions, BsDiagnostic } from './interfaces';
+import type { CallableContainer, BsDiagnosticWithOrigin, FileReference, FileLink, Callable, NamespaceContainer, ScopeValidationOptions, BsDiagnostic } from './interfaces';
 import type { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
-import type { NamespaceStatement, ClassStatement, EnumStatement, InterfaceStatement, EnumMemberStatement, ConstStatement } from './parser/Statement';
+import { type NamespaceStatement, type ClassStatement, type EnumStatement, type InterfaceStatement, type EnumMemberStatement, type ConstStatement } from './parser/Statement';
 import { ParseMode } from './parser/Parser';
 import { util } from './util';
 import { globalCallableMap } from './globalCallables';
@@ -28,6 +28,7 @@ import { AssociativeArrayType } from './types/AssociativeArrayType';
 import type { AstNode, Statement } from './parser/AstNode';
 import { WalkMode, createVisitor } from './astUtils/visitors';
 import type { Token } from './lexer/Token';
+import type { Range } from 'vscode-languageserver';
 
 /**
  * Assign some few factories to the SymbolTable to prevent cyclical imports. This file seems like the most intuitive place to do the linking
@@ -598,6 +599,37 @@ export class Scope {
         });
     }
 
+    public getCallableContainerMap() {
+        return this.cache.getOrAdd('callableContainerMap', () => {
+            let callables = this.getAllCallables();
+
+            //sort the callables by filepath and then method name, so the errors will be consistent
+            // eslint-disable-next-line prefer-arrow-callback
+            callables = callables.sort((a, b) => {
+                const pathA = a.callable.file.srcPath;
+                const pathB = b.callable.file.srcPath;
+                //sort by path
+                if (pathA < pathB) {
+                    return -1;
+                } else if (pathA > pathB) {
+                    return 1;
+                }
+                //sort by function name
+                const funcA = b.callable.name;
+                const funcB = b.callable.name;
+                if (funcA < funcB) {
+                    return -1;
+                } else if (funcA > funcB) {
+                    return 1;
+                }
+                return 0;
+            });
+
+            //get a list of all callables, indexed by their lower case names
+            return util.getCallableContainersByLowerName(callables);
+        });
+    }
+
     /**
      * Iterate over Brs files not shadowed by typedefs
      */
@@ -713,32 +745,7 @@ export class Scope {
             //clear the scope's errors list (we will populate them from this method)
             this.clearScopeLevelDiagnostics();
 
-            let callables = this.getAllCallables();
 
-            //sort the callables by filepath and then method name, so the errors will be consistent
-            // eslint-disable-next-line prefer-arrow-callback
-            callables = callables.sort((a, b) => {
-                const pathA = a.callable.file.srcPath;
-                const pathB = b.callable.file.srcPath;
-                //sort by path
-                if (pathA < pathB) {
-                    return -1;
-                } else if (pathA > pathB) {
-                    return 1;
-                }
-                //sort by function name
-                const funcA = b.callable.name;
-                const funcB = b.callable.name;
-                if (funcA < funcB) {
-                    return -1;
-                } else if (funcA > funcB) {
-                    return 1;
-                }
-                return 0;
-            });
-
-            //get a list of all callables, indexed by their lower case names
-            let callableContainerMap = util.getCallableContainersByLowerName(callables);
             //Since statements from files are shared across multiple scopes, we need to link those statements to the current scope
             this.linkSymbolTable();
             const scopeValidateEvent = {
@@ -749,7 +756,7 @@ export class Scope {
             };
             this.program.plugins.emit('beforeScopeValidate', scopeValidateEvent);
             this.program.plugins.emit('onScopeValidate', scopeValidateEvent);
-            this._validate(callableContainerMap);
+            this._validate();
             this.program.plugins.emit('afterScopeValidate', scopeValidateEvent);
             //unlink all symbol tables from this scope (so they don't accidentally stick around)
             this.unlinkSymbolTable();
@@ -758,9 +765,9 @@ export class Scope {
         });
     }
 
-    protected _validate(callableContainerMap: CallableContainerMap) {
+    protected _validate() {
         //find all duplicate function declarations
-        this.diagnosticFindDuplicateFunctionDeclarations(callableContainerMap);
+        this.diagnosticFindDuplicateFunctionDeclarations();
 
         //detect missing and incorrect-case script imports
         this.diagnosticValidateScriptImportPaths();
@@ -770,7 +777,6 @@ export class Scope {
 
         //do many per-file checks
         this.enumerateBrsFiles((file) => {
-            this.diagnosticDetectShadowedLocalVars(file, callableContainerMap);
             this.diagnosticDetectFunctionCollisions(file);
             this.detectVariableNamespaceCollisions(file);
             this.detectNameCollisions(file);
@@ -1019,9 +1025,24 @@ export class Scope {
             },
             EnumStatement: (enumStmt) => {
                 this.validateNameCollision(file, enumStmt, enumStmt.tokens.name);
+            },
+            AssignmentStatement: (assignStmt) => {
+                // Note: this also includes For statements
+                this.detectShadowedLocalVar(file, {
+                    name: assignStmt.tokens.name.text,
+                    type: assignStmt.getType({ flags: SymbolTypeFlag.runtime }),
+                    nameRange: assignStmt.tokens.name.range
+                });
+            },
+            ForEachStatement: (forEachStmt) => {
+                this.detectShadowedLocalVar(file, {
+                    name: forEachStmt.tokens.item.text,
+                    type: forEachStmt.getType({ flags: SymbolTypeFlag.runtime }),
+                    nameRange: forEachStmt.tokens.item.range
+                });
             }
         }), {
-            walkMode: WalkMode.visitStatements
+            walkMode: WalkMode.visitAllRecursive
         });
     }
 
@@ -1096,71 +1117,65 @@ export class Scope {
         }));
     }
 
-    /**
-     * Detect local variables (function scope) that have the same name as scope calls
-     */
-    private diagnosticDetectShadowedLocalVars(file: BrsFile, callableContainerMap: CallableContainerMap) {
+
+    private detectShadowedLocalVar(file: BrsFile, varDeclaration: { name: string; type: BscType; nameRange: Range }) {
+        const varName = varDeclaration.name;
+        const lowerVarName = varName.toLowerCase();
         const classMap = this.getClassMap();
-        //loop through every function scope
-        for (let funcScope of file.functionScopes) {
-            //every var declaration in this function scope
-            for (let varDeclaration of funcScope.variableDeclarations) {
-                const varName = varDeclaration.name;
-                const lowerVarName = varName.toLowerCase();
+        const callableContainerMap = this.getCallableContainerMap();
 
-                const varIsFunction = () => {
-                    return isCallableType(varDeclaration.getType());
-                };
+        const varIsFunction = () => {
+            return isCallableType(varDeclaration.type);
+        };
 
-                if (
-                    //has same name as stdlib
-                    globalCallableMap.has(lowerVarName)
-                ) {
-                    //local var function with same name as stdlib function
-                    if (varIsFunction()) {
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.localVarFunctionShadowsParentFunction('stdlib'),
-                            range: varDeclaration.nameRange,
-                            file: file,
-                            origin: DiagnosticOrigin.Scope
-                        });
-                    }
-                } else if (callableContainerMap.has(lowerVarName)) {
-                    //is same name as a callable
-                    if (varIsFunction()) {
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.localVarFunctionShadowsParentFunction('scope'),
-                            range: varDeclaration.nameRange,
-                            file: file,
-                            origin: DiagnosticOrigin.Scope
-                        });
-                    } else {
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.localVarShadowedByScopedFunction(),
-                            range: varDeclaration.nameRange,
-                            file: file,
-                            origin: DiagnosticOrigin.Scope
-                        });
-                    }
-                    //has the same name as an in-scope class
-                } else if (classMap.has(lowerVarName)) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.localVarSameNameAsClass(classMap.get(lowerVarName)?.item.getName(ParseMode.BrighterScript)),
-                        range: varDeclaration.nameRange,
-                        file: file,
-                        origin: DiagnosticOrigin.Scope
-                    });
-                }
+        if (
+            //has same name as stdlib
+            globalCallableMap.has(lowerVarName)
+        ) {
+            //local var function with same name as stdlib function
+            if (varIsFunction()) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.localVarFunctionShadowsParentFunction('stdlib'),
+                    range: varDeclaration.nameRange,
+                    file: file,
+                    origin: DiagnosticOrigin.Scope
+                });
             }
+        } else if (callableContainerMap.has(lowerVarName)) {
+            //is same name as a callable
+            if (varIsFunction()) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.localVarFunctionShadowsParentFunction('scope'),
+                    range: varDeclaration.nameRange,
+                    file: file,
+                    origin: DiagnosticOrigin.Scope
+                });
+            } else {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.localVarShadowedByScopedFunction(),
+                    range: varDeclaration.nameRange,
+                    file: file,
+                    origin: DiagnosticOrigin.Scope
+                });
+            }
+            //has the same name as an in-scope class
+        } else if (classMap.has(lowerVarName)) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.localVarSameNameAsClass(classMap.get(lowerVarName)?.item.getName(ParseMode.BrighterScript)),
+                range: varDeclaration.nameRange,
+                file: file,
+                origin: DiagnosticOrigin.Scope
+            });
         }
     }
 
     /**
      * Create diagnostics for any duplicate function declarations
      */
-    private diagnosticFindDuplicateFunctionDeclarations(callableContainersByLowerName: CallableContainerMap) {
+    private diagnosticFindDuplicateFunctionDeclarations() {
+
         //for each list of callables with the same name
-        for (let [lowerName, callableContainers] of callableContainersByLowerName) {
+        for (let [lowerName, callableContainers] of this.getCallableContainerMap()) {
 
             let globalCallables = [] as CallableContainer[];
             let nonGlobalCallables = [] as CallableContainer[];

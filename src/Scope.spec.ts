@@ -3996,6 +3996,55 @@ describe('Scope', () => {
             expectZeroDiagnostics(program);
         });
 
+        it('allows class in namespace having same name as global function', () => {
+            program.setFile<BrsFile>('source/file.bs', `
+                namespace alpha
+                    class log ' class in namespace shadows global function
+                        text = "hello"
+                    end class
+
+                    sub foo()
+                       myLog = new Log()
+                       print myLog.text ' prints "hello"
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('disallows reusing a class name as "for each" variable in a function', () => {
+            program.setFile<BrsFile>('source/file.bs', `
+                class Person
+                    name as string
+                end class
+
+                sub foo(people as Person[])
+                    for each person in people
+                        print person.name
+                    end for
+                end sub
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, DiagnosticMessages.localVarSameNameAsClass('Person').message);
+        });
+
+        it('disallows reusing a class name as "for each" variable in a method', () => {
+            program.setFile<BrsFile>('source/file.bs', `
+                class Person
+                    name as string
+                    children as Person[]
+
+                    sub test()
+                        for each person in m.children
+                            print person.name
+                        end for
+                    end sub
+                end class
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, DiagnosticMessages.localVarSameNameAsClass('Person').message);
+        });
     });
 
 
