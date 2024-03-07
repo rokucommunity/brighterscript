@@ -2278,11 +2278,9 @@ describe('BrsFile', () => {
                         two = 2
                         print \`1\${two}\${3}\n\`
                         print (1 as integer)
-                        print SOURCE_FILE_PATH
                         print SOURCE_LINE_NUM
                         print FUNCTION_NAME
                         print SOURCE_FUNCTION_NAME
-                        print SOURCE_LOCATION
                         print PKG_LOCATION
                         print PKG_PATH
                         print LINE_NUM
@@ -2334,11 +2332,9 @@ describe('BrsFile', () => {
                         two = 2
                         print ("1" + bslib_toString(two) + bslib_toString(3) + chr(10))
                         print 1
-                        print "file" + ":///c:/projects/roku/brighterscript9__null_range/.tmp/rootDir/source/main.bs"
                         print -1
                         print "test"
                         print "test"
-                        print "file" + ":///c:/projects/roku/brighterscript9__null_range/.tmp/rootDir/source/main.bs:-1"
                         print "pkg:/source/main.brs:" + str(LINE_NUM)
                         print "pkg:/source/main.brs"
                         print LINE_NUM
@@ -2396,6 +2392,22 @@ describe('BrsFile', () => {
                         return instance
                     end function
                 `);
+            });
+
+            it('handles source literals properly', () => {
+                const fsPath = rootDir.replace(/\\/g, '/');
+                doTest(`
+                    sub test()
+                        print SOURCE_FILE_PATH
+                        print SOURCE_LOCATION
+                    end sub
+                `, `
+                    sub test()
+                        print "file" + ":///${fsPath}/source/main.bs"
+                        print "file" + ":///${fsPath}/source/main.bs:-1"
+                    end sub
+                `);
+
             });
             function doTest(source: string, expected = source) {
                 const file = program.setFile<BrsFile>('source/main.bs', '');
