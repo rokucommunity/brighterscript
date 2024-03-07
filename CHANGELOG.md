@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.65.25](https://github.com/rokucommunity/brighterscript/compare/v0.65.24...v0.65.25) - 2024-03-07
+### Added
+ - Allow negative patterns in diagnostic filters ([#1078](https://github.com/rokucommunity/brighterscript/pull/1078))
+ - Support when tokens have null ranges ([#1072](https://github.com/rokucommunity/brighterscript/pull/1072))
+ - Support whitespace in conditional compile keywords ([#1090](https://github.com/rokucommunity/brighterscript/pull/1090))
+### Changed
+ - Add `create-test-package` command for easier tgz testing ([#1088](https://github.com/rokucommunity/brighterscript/pull/1088))
+ - Bump ip from 2.0.0 to 2.0.1 in /benchmarks ([#1079](https://github.com/rokucommunity/brighterscript/pull/1079))
+ - Reduce null safety issues in Statement and Expression subclasses ([#1033](https://github.com/rokucommunity/brighterscript/pull/1033))
+
+
+
 ## [0.65.24](https://github.com/rokucommunity/brighterscript/compare/v0.65.23...v0.65.24) - 2024-03-01
 ### Changed
  - upgrade to [roku-deploy@3.12.0](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3120---2024-03-01). Notable changes since 3.11.3:
