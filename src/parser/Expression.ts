@@ -1,7 +1,7 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
-import type { Block, CommentStatement, FunctionStatement, NamespaceStatement } from './Statement';
+import { Block, CommentStatement, FunctionStatement, NamespaceStatement } from './Statement';
 import type { Range } from 'vscode-languageserver';
 import util from '../util';
 import type { BrsTranspileState } from './BrsTranspileState';
@@ -926,7 +926,7 @@ export class SourceLiteralExpression extends Expression {
     public readonly range: Range;
 
     private getFunctionName(state: BrsTranspileState, parseMode: ParseMode) {
-        let func = state.file.getFunctionScopeAtPosition(this.token.range.start).func;
+        let func = this.findAncestor<FunctionExpression>(isFunctionExpression);
         let nameParts = [];
         while (func.parentFunction) {
             let index = func.parentFunction.childFunctionExpressions.indexOf(func);
@@ -948,7 +948,7 @@ export class SourceLiteralExpression extends Expression {
                 text = `"${pathUrl.substring(0, 4)}" + "${pathUrl.substring(4)}"`;
                 break;
             case TokenKind.SourceLineNumLiteral:
-                text = `${this.token.range.start.line + 1}`;
+                text = `${(this.token.range?.start?.line ?? -2) + 1}`;
                 break;
             case TokenKind.FunctionNameLiteral:
                 text = `"${this.getFunctionName(state, ParseMode.BrightScript)}"`;
@@ -958,7 +958,7 @@ export class SourceLiteralExpression extends Expression {
                 break;
             case TokenKind.SourceLocationLiteral:
                 const locationUrl = fileUrl(state.srcPath);
-                text = `"${locationUrl.substring(0, 4)}" + "${locationUrl.substring(4)}:${this.token.range.start.line + 1}"`;
+                text = `"${locationUrl.substring(0, 4)}" + "${locationUrl.substring(4)}:${(this.token.range?.start?.line ?? -2) + 1}"`;
                 break;
             case TokenKind.PkgPathLiteral:
                 let pkgPath1 = `pkg:/${state.file.pkgPath}`

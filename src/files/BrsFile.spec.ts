@@ -2172,15 +2172,25 @@ describe('BrsFile', () => {
     });
 
     describe('transpile', () => {
-        describe.only('null tokens', () => {
+        describe('null tokens', () => {
             it('succeeds when token locations are omitted', () => {
                 doTest(`
                     library "something" 'comment before func
-                    sub main() 'comment before print
+                    sub main(arg0, arg1 as string, arg2 = invalid) 'comment before print
+                        aa = { 'comment
+                            one: 1
+                            "two": 2
+                        }
+                        arr = [ 'comment
+                            1 'comment
+                            2
+                        ]
+                        val = +3
                         print "hello" 'comment after print
                         num = 1
                         num++
                         num += 2
+                        num = +num
                         test(num)
                         for i = 0 to 10 step 1
                             exit for
@@ -2213,6 +2223,17 @@ describe('BrsFile', () => {
                         m[1] = 1
                         m[1] += 1
                         m[1, 2] = 2
+                        try
+                            print m.b.c
+                        catch e
+                            print e
+                        end try
+                        throw "crash"
+                        for i = 0 to 10
+                            continue
+                        end for
+                        print m@name
+                        print (1 + 2)
                     end sub
 
                     sub test(p1)
@@ -2225,13 +2246,126 @@ describe('BrsFile', () => {
                 program.setFile('source/lib.bs', ``);
                 doTest(`
                     import "pkg:/source/lib.bs"
+                    @annotation()
+                    sub test()
+                        two = 2
+                        print \`1\${two}\${3}\n\`
+                        print (1 as integer)
+                        print SOURCE_FILE_PATH
+                        print SOURCE_LINE_NUM
+                        print FUNCTION_NAME
+                        print SOURCE_FUNCTION_NAME
+                        print SOURCE_LOCATION
+                        print PKG_LOCATION
+                        print PKG_PATH
+                        print LINE_NUM
+                        print new Person()
+                        m@.someCallfunc()
+                        m@.someCallfunc(1, 2)
+                        print tag\`stuff\${LINE_NUM}\${LINE_NUM}\`
+                        print 1 = 1 ? 1 : 2
+                        print 1 = 1 ? m.one : m.two
+                        print 1 ?? 2
+                        print m.one ?? m.two
+                        print /123/gi
+                    end sub
+                    function tag(param1, param2)
+                    end function
+                    const a = 1
                     namespace alpha
                         function beta()
+                            throw "An error has occurred"
+                        end function
+                        function charlie()
                         end function
                     end namespace
+                    sub test()
+                        ' alpha.charlie()
+                    end sub
+
+                    enum Direction
+                        up = "up"
+                    end enum
+
+                    class Person
+                        name as string
+                        sub new()
+                            print m.name
+                        end sub
+
+                        sub test()
+                        end sub
+                    end class
+
+                    interface Beta
+                        name as string
+                    end interface
                 `, `
                     'import "pkg:/source/lib.bs"
+
+                    sub test()
+                        two = 2
+                        print ("1" + bslib_toString(two) + bslib_toString(3) + chr(10))
+                        print 1
+                        print "file" + ":///c:/projects/roku/brighterscript9__null_range/.tmp/rootDir/source/main.bs"
+                        print -1
+                        print "test"
+                        print "test"
+                        print "file" + ":///c:/projects/roku/brighterscript9__null_range/.tmp/rootDir/source/main.bs:-1"
+                        print "pkg:/source/main.brs:" + str(LINE_NUM)
+                        print "pkg:/source/main.brs"
+                        print LINE_NUM
+                        print Person()
+                        m.callfunc("someCallfunc", invalid)
+                        m.callfunc("someCallfunc", 1, 2)
+                        print tag(["stuff", "", ""], [LINE_NUM, LINE_NUM])
+                        print bslib_ternary(1 = 1, 1, 2)
+                        print (function(__bsCondition, m)
+                                if __bsCondition then
+                                    return m.one
+                                else
+                                    return m.two
+                                end if
+                            end function)(1 = 1, m)
+                        print bslib_coalesce(1, 2)
+                        print (function(m)
+                                __bsConsequent = m.one
+                                if __bsConsequent <> invalid then
+                                    return __bsConsequent
+                                else
+                                    return m.two
+                                end if
+                            end function)(m)
+                        print CreateObject("roRegex", "123", "gi")
+                    end sub
+
+                    function tag(param1, param2)
+                    end function
+
                     function alpha_beta()
+                        throw "An error has occurred"
+                    end function
+
+                    function alpha_charlie()
+                    end function
+
+                    sub test() ' alpha.charlie()
+                    end sub
+
+                    function __Person_builder()
+                        instance = {}
+                        instance.new = sub()
+                            m.name = invalid
+                            print m.name
+                        end sub
+                        instance.test = sub()
+                        end sub
+                        return instance
+                    end function
+                    function Person()
+                        instance = __Person_builder()
+                        instance.new()
+                        return instance
                     end function
                 `);
             });
@@ -2239,6 +2373,7 @@ describe('BrsFile', () => {
                 const file = program.setFile<BrsFile>('source/main.bs', '');
                 //override the parser with our locationless parser
                 file['_parser'] = Parser.parse(source, { mode: ParseMode.BrighterScript, trackLocations: false });
+                program.getScopesForFile(file).forEach(x => x['cache'].clear());
                 program.validate();
                 expectZeroDiagnostics(program);
                 const result = file.transpile();
