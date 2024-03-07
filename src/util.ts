@@ -843,7 +843,10 @@ export class Util {
      * Get a location object back by extracting location information from other objects that contain location
      */
     public getRange(startObj: { range: Range }, endObj: { range: Range }): Range {
-        return util.createRangeFromPositions(startObj.range.start, endObj.range.end);
+        if (!startObj?.range || !endObj?.range) {
+            return undefined;
+        }
+        return util.createRangeFromPositions(startObj.range?.start, endObj.range?.end);
     }
 
     /**

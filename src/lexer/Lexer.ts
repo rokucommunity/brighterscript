@@ -102,7 +102,9 @@ export class Lexer {
             kind: TokenKind.Eof,
             isReserved: false,
             text: '',
-            range: util.createRange(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd + 1),
+            range: this.options.trackLocations
+                ? util.createRange(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd + 1)
+                : undefined,
             leadingWhitespace: this.leadingWhitespace
         });
         this.leadingWhitespace = '';
@@ -113,10 +115,10 @@ export class Lexer {
      * Fill in missing/invalid options with defaults
      */
     private sanitizeOptions(options: ScanOptions) {
-        return {
-            includeWhitespace: false,
-            ...options
-        } as ScanOptions;
+        options ??= {};
+        options.includeWhitespace ??= false;
+        options.trackLocations ??= true;
+        return options;
     }
 
     /**
@@ -1064,17 +1066,27 @@ export class Lexer {
     }
 
     /**
-     * Creates a `TokenLocation` at the lexer's current position for the provided `text`.
-     * @returns the range of `text` as a `TokenLocation`
+     * Creates a `Range` at the lexer's current position
+     * @returns the range of `text`
      */
     private rangeOf(): Range {
-        return util.createRange(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd);
+        if (this.options.trackLocations) {
+            return util.createRange(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd);
+        } else {
+            return undefined;
+        }
     }
 }
 
 export interface ScanOptions {
     /**
      * If true, the whitespace tokens are included. If false, they are discarded
+     * @default false
      */
-    includeWhitespace: boolean;
+    includeWhitespace?: boolean;
+    /**
+     * Should locations be tracked. If false, the `range` property will be omitted
+     * @default true
+     */
+    trackLocations?: boolean;
 }

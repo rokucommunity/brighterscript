@@ -481,7 +481,7 @@ export class BrsFile {
             for (let param of func.parameters) {
                 scope.variableDeclarations.push({
                     nameRange: param.name.range,
-                    lineIndex: param.name.range.start.line,
+                    lineIndex: param.name.range?.start.line,
                     name: param.name.text,
                     type: param.type
                 });
@@ -492,7 +492,7 @@ export class BrsFile {
                 ForEachStatement: (stmt) => {
                     scope.variableDeclarations.push({
                         nameRange: stmt.item.range,
-                        lineIndex: stmt.item.range.start.line,
+                        lineIndex: stmt.item.range?.start.line,
                         name: stmt.item.text,
                         type: new DynamicType()
                     });
@@ -501,7 +501,7 @@ export class BrsFile {
                     const { identifier } = stmt.tokens;
                     scope.labelStatements.push({
                         nameRange: identifier.range,
-                        lineIndex: identifier.range.start.line,
+                        lineIndex: identifier.range?.start.line,
                         name: identifier.text
                     });
                 }
@@ -527,7 +527,7 @@ export class BrsFile {
             if (scope) {
                 scope.variableDeclarations.push({
                     nameRange: statement.name.range,
-                    lineIndex: statement.name.range.start.line,
+                    lineIndex: statement.name.range?.start.line,
                     name: statement.name.text,
                     type: this.getBscTypeFromAssignment(statement, scope)
                 });

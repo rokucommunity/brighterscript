@@ -5,7 +5,7 @@ import { FunctionExpression, NamespacedVariableNameExpression, BinaryExpression,
 import type { Token } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
 import { isPrintStatement, isIfStatement, isBody, isAssignmentStatement, isBlock, isExpressionStatement, isCommentStatement, isExitForStatement, isExitWhileStatement, isFunctionStatement, isIncrementStatement, isGotoStatement, isLabelStatement, isReturnStatement, isEndStatement, isStopStatement, isForStatement, isForEachStatement, isWhileStatement, isDottedSetStatement, isIndexedSetStatement, isLibraryStatement, isNamespaceStatement, isImportStatement, isExpression, isBinaryExpression, isCallExpression, isFunctionExpression, isNamespacedVariableNameExpression, isDottedGetExpression, isXmlAttributeGetExpression, isIndexedGetExpression, isGroupingExpression, isLiteralExpression, isEscapedCharCodeLiteralExpression, isArrayLiteralExpression, isAALiteralExpression, isUnaryExpression, isVariableExpression, isSourceLiteralExpression, isNewExpression, isCallfuncExpression, isTemplateStringQuasiExpression, isTemplateStringExpression, isTaggedTemplateStringExpression, isBrsFile, isXmlFile, isClassStatement, isStatement, isAnnotationExpression, isTryCatchStatement, isCatchStatement, isThrowStatement } from './reflection';
-import { createToken, createStringLiteral, interpolatedRange as range } from './creators';
+import { createToken, createStringLiteral } from './creators';
 import { Program } from '../Program';
 import { BrsFile } from '../files/BrsFile';
 import { XmlFile } from '../files/XmlFile';
@@ -25,12 +25,12 @@ describe('reflection', () => {
     });
 
     describe('Statements', () => {
-        const ident = createToken(TokenKind.Identifier, 'a', range);
-        const expr = createStringLiteral('', range);
-        const token = createToken(TokenKind.StringLiteral, '', range);
+        const ident = createToken(TokenKind.Identifier, 'a');
+        const expr = createStringLiteral('');
+        const token = createToken(TokenKind.StringLiteral, '');
         const body = new Body([]);
         const assignment = new AssignmentStatement(undefined, ident, expr);
-        const block = new Block([], range);
+        const block = new Block([]);
         const expression = new ExpressionStatement(expr);
         const comment = new CommentStatement([token]);
         const exitFor = new ExitForStatement({ exitFor: token });
@@ -50,7 +50,7 @@ describe('reflection', () => {
         const dottedSet = new DottedSetStatement(expr, ident, expr);
         const indexedSet = new IndexedSetStatement(expr, expr, expr, token, token);
         const library = new LibraryStatement({ library: token, filePath: token });
-        const namespace = new NamespaceStatement(token, new NamespacedVariableNameExpression(createVariableExpression('a', range)), body, token);
+        const namespace = new NamespaceStatement(token, new NamespacedVariableNameExpression(createVariableExpression('a')), body, token);
         const cls = new ClassStatement(token, ident, [], token);
         const imports = new ImportStatement(token, token);
         const catchStmt = new CatchStatement({ catch: token }, ident, block);
@@ -183,19 +183,19 @@ describe('reflection', () => {
     });
 
     describe('Expressions', () => {
-        const ident = createToken(TokenKind.Identifier, 'a', range);
-        const expr = createStringLiteral('', range);
-        const token = createToken(TokenKind.StringLiteral, '', range);
-        const block = new Block([], range);
+        const ident = createToken(TokenKind.Identifier, 'a');
+        const expr = createStringLiteral('');
+        const token = createToken(TokenKind.StringLiteral, '');
+        const block = new Block([]);
         const charCode: Token & { charCode: number } = {
             kind: TokenKind.EscapedCharCodeLiteral,
             text: '0',
-            range: range,
+            range: undefined,
             isReserved: false,
             charCode: 0,
             leadingWhitespace: ''
         };
-        const nsVar = new NamespacedVariableNameExpression(createVariableExpression('a', range));
+        const nsVar = new NamespacedVariableNameExpression(createVariableExpression('a'));
         const binary = new BinaryExpression(expr, token, expr);
         const call = new CallExpression(expr, token, token, []);
         const fun = new FunctionExpression([], block, token, token, token, token);
