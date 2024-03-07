@@ -1262,6 +1262,7 @@ export class Parser {
             });
             throw this.lastDiagnosticAsError();
         }
+        maybeIn.kind = TokenKind.In;
 
         let target = this.expression();
         if (!target) {

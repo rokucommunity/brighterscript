@@ -635,12 +635,15 @@ describe('HoverProcessor', () => {
                 end sub
             `);
             program.validate();
-            //    for each number of num|bers
+            //    for each number in num|bers
             let hover = program.getHover(file.srcPath, util.createPosition(3, 43))[0];
             expect(hover?.contents).to.eql([fence('numbers as Array<integer>')]);
-            //    for each num|ber of numbers
+            //    for each num|ber in numbers
             hover = program.getHover(file.srcPath, util.createPosition(3, 33))[0];
             expect(hover?.contents).to.eql([fence('number as integer')]);
+            //    for each number i|n numbers
+            hover = program.getHover(file.srcPath, util.createPosition(3, 38))[0];
+            expect(hover?.contents).to.be.undefined;
         });
     });
 
