@@ -904,8 +904,8 @@ export class Lexer {
 
         let text = this.source.slice(this.start, this.current).toLowerCase();
 
-        // some identifiers can be split into two words, so check the "next" word and see what we get
-        if ((text === '#end' || text === '#else') && this.check(' ', '\t')) {
+        // some identifiers can be split into two words (`#end if`, `#else if`), so check the "next" word and see what we get
+        if ((text.endsWith('end') || text.endsWith('else')) && this.check(' ', '\t')) {
             let endOfFirstWord = this.current;
 
             //skip past whitespace
@@ -918,11 +918,11 @@ export class Lexer {
             } // read the next word
 
             let twoWords = this.source.slice(this.start, this.current).toLowerCase();
-            switch (twoWords.replace(/[\s\t]+/g, ' ')) {
-                case '#else if':
+            switch (twoWords.replace(/\s+/g, '')) {
+                case '#elseif':
                     this.addToken(TokenKind.HashElseIf);
                     return;
-                case '#end if':
+                case '#endif':
                     this.addToken(TokenKind.HashEndIf);
                     return;
             }
@@ -931,7 +931,7 @@ export class Lexer {
             this.current = endOfFirstWord;
         }
 
-        switch (text.replace(/[\s\t]+/g, '')) {
+        switch (text.replace(/\s+/g, '')) {
             case '#if':
                 this.addToken(TokenKind.HashIf);
                 return;

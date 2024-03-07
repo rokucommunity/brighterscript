@@ -1049,10 +1049,20 @@ describe('lexer', () => {
             doTest('#\telseif true', TokenKind.HashElseIf, TokenKind.True);
             doTest('#\t   \t\t \telseif true', TokenKind.HashElseIf, TokenKind.True);
 
+            //#else if
+            doTest('# else if true', TokenKind.HashElseIf, TokenKind.True);
+            doTest('#\t elseif true', TokenKind.HashElseIf, TokenKind.True);
+            doTest('#\t   \t\t \t else if true', TokenKind.HashElseIf, TokenKind.True);
+
             //#endif
             doTest('# endif', TokenKind.HashEndIf);
             doTest('#\tendif', TokenKind.HashEndIf);
             doTest('#\t   \t\t \tendif', TokenKind.HashEndIf);
+
+            //#end if
+            doTest('# end if', TokenKind.HashEndIf);
+            doTest('#\tend if', TokenKind.HashEndIf);
+            doTest('#\t   \t\t \tend if', TokenKind.HashEndIf);
 
             //#const
             doTest('# const thing=true', TokenKind.HashConst, TokenKind.Identifier, TokenKind.Equal, TokenKind.True);
