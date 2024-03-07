@@ -16,6 +16,7 @@ import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import { FunctionType } from '../types/FunctionType';
+import type { AstNode } from './AstNode';
 import { Expression } from './AstNode';
 import { SymbolTable } from '../SymbolTable';
 import { SourceNode } from 'source-map';
@@ -942,6 +943,20 @@ export class SourceLiteralExpression extends Expression {
         return nameParts.join('$');
     }
 
+    /**
+     * Get the line number from our token or from the closest ancestor that has a range
+     */
+    private getClosestLineNumber() {
+        let node: AstNode = this;
+        while (node) {
+            if (node.range) {
+                return node.range.start.line + 1;
+            }
+            node = node.parent;
+        }
+        return -1;
+    }
+
     transpile(state: BrsTranspileState) {
         let text: string;
         switch (this.token.kind) {
@@ -950,7 +965,8 @@ export class SourceLiteralExpression extends Expression {
                 text = `"${pathUrl.substring(0, 4)}" + "${pathUrl.substring(4)}"`;
                 break;
             case TokenKind.SourceLineNumLiteral:
-                text = `${(this.token.range?.start?.line ?? -2) + 1}`;
+                //TODO find first parent that has range, or default to -1
+                text = `${this.getClosestLineNumber()}`;
                 break;
             case TokenKind.FunctionNameLiteral:
                 text = `"${this.getFunctionName(state, ParseMode.BrightScript)}"`;
@@ -960,7 +976,8 @@ export class SourceLiteralExpression extends Expression {
                 break;
             case TokenKind.SourceLocationLiteral:
                 const locationUrl = fileUrl(state.srcPath);
-                text = `"${locationUrl.substring(0, 4)}" + "${locationUrl.substring(4)}:${(this.token.range?.start?.line ?? -2) + 1}"`;
+                //TODO find first parent that has range, or default to -1
+                text = `"${locationUrl.substring(0, 4)}" + "${locationUrl.substring(4)}:${this.getClosestLineNumber()}"`;
                 break;
             case TokenKind.PkgPathLiteral:
                 let pkgPath1 = `pkg:/${state.file.pkgPath}`
