@@ -1170,6 +1170,10 @@ export class ForEachStatement extends Statement {
             walk(this, 'body', visitor, options);
         }
     }
+
+    getType(options: GetTypeOptions): BscType {
+        return this.getSymbolTable().getSymbolType(this.tokens.item.text, options);
+    }
 }
 
 export class WhileStatement extends Statement {
