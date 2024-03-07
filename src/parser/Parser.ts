@@ -491,6 +491,11 @@ export class Parser {
         let body = [] as Statement[];
         while (this.checkAny(TokenKind.Comment, TokenKind.Identifier, TokenKind.At, ...AllowedProperties)) {
             try {
+                //break out of this loop if we encountered the `EndInterface` token not followed by `as`
+                if (this.check(TokenKind.EndInterface) && !this.checkNext(TokenKind.As)) {
+                    break;
+                }
+
                 let decl: Statement;
 
                 //collect leading annotations
@@ -530,10 +535,6 @@ export class Parser {
 
             //ensure statement separator
             this.consumeStatementSeparators();
-            //break out of this loop if we encountered the `EndInterface` token not followed by `as`
-            if (this.check(TokenKind.EndInterface) && !this.checkNext(TokenKind.As)) {
-                break;
-            }
         }
 
         //consume the final `end interface` token

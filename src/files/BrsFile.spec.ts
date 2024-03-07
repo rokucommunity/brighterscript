@@ -770,6 +770,28 @@ describe('BrsFile', () => {
         });
 
         describe('conditional compile', () => {
+            it('supports whitespace-separated directives', () => {
+                const file = program.setFile<BrsFile>('source/main.bs', `
+                    sub main()
+                        #\t const thing=true
+                        #\t if thing
+                            print "if"
+                        #\t elseif false
+                            print "elseif"
+                            #\t error crash
+                        #\t else
+                            print "else"
+                        #\t endif
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+                testTranspile(file.fileContents, `
+                    sub main()
+                        print "if"
+                    end sub
+                `);
+            });
+
             it('supports case-insensitive bs_const variables', () => {
                 fsExtra.outputFileSync(`${rootDir}/manifest`, undent`
                     bs_const=SomeKey=true
@@ -2176,17 +2198,22 @@ describe('BrsFile', () => {
             it('succeeds when token locations are omitted', () => {
                 doTest(`
                     library "something" 'comment before func
-                    sub main(arg0, arg1 as string, arg2 = invalid) 'comment before print
-                        aa = { 'comment
+                    sub main(arg0, arg1 as string, arg2 = invalid)
+                        'comment
+                        aa = {
+                            'comment
                             one: 1
                             "two": 2
                         }
-                        arr = [ 'comment
-                            1 'comment
+                        arr = [
+                            'comment
+                            1
+                            'comment
                             2
                         ]
                         val = +3
-                        print "hello" 'comment after print
+                        print "hello"
+                        'comment after print
                         num = 1
                         num++
                         num += 2
@@ -2349,7 +2376,8 @@ describe('BrsFile', () => {
                     function alpha_charlie()
                     end function
 
-                    sub test() ' alpha.charlie()
+                    sub test()
+                        ' alpha.charlie()
                     end sub
 
                     function __Person_builder()

@@ -505,7 +505,8 @@ export class XmlFile {
             //temporarily add the missing imports as script tags
             this.ast.component.scripts = publishableScripts;
 
-            transpileResult = new SourceNode(null, null, state.srcPath, this.parser.ast.transpile(state));
+
+            transpileResult = util.sourceNodeFromTranspileResult(null, null, state.srcPath, this.parser.ast.transpile(state));
 
             //restore the original scripts array
             this.ast.component.scripts = originalScripts;
