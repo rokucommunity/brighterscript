@@ -770,6 +770,28 @@ describe('BrsFile', () => {
         });
 
         describe('conditional compile', () => {
+            it('supports whitespace-separated directives', () => {
+                const file = program.setFile<BrsFile>('source/main.bs', `
+                    sub main()
+                        #\t const thing=true
+                        #\t if thing
+                            print "if"
+                        #\t elseif false
+                            print "elseif"
+                            #\t error crash
+                        #\t else
+                            print "else"
+                        #\t endif
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+                testTranspile(file.fileContents, `
+                    sub main()
+                        print "if"
+                    end sub
+                `);
+            });
+
             it('supports case-insensitive bs_const variables', () => {
                 fsExtra.outputFileSync(`${rootDir}/manifest`, undent`
                     bs_const=SomeKey=true
