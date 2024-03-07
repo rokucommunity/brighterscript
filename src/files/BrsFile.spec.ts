@@ -25,6 +25,7 @@ import * as fsExtra from 'fs-extra';
 import { URI } from 'vscode-uri';
 import undent from 'undent';
 import { tempDir, rootDir } from '../testHelpers.spec';
+import * as fileUrl from 'file-url';
 
 let sinon = sinonImport.createSandbox();
 
@@ -2395,7 +2396,8 @@ describe('BrsFile', () => {
             });
 
             it('handles source literals properly', () => {
-                const fsPath = rootDir.replace(/\\/g, '/');
+                const pathUrl = fileUrl(rootDir);
+                let text = `"${pathUrl.substring(0, 4)}" + "${pathUrl.substring(4)}`;
                 doTest(`
                     sub test()
                         print SOURCE_FILE_PATH
@@ -2403,11 +2405,10 @@ describe('BrsFile', () => {
                     end sub
                 `, `
                     sub test()
-                        print "file" + ":///${fsPath}/source/main.bs"
-                        print "file" + ":///${fsPath}/source/main.bs:-1"
+                        print ${text}/source/main.bs"
+                        print ${text}/source/main.bs:-1"
                     end sub
                 `);
-
             });
             function doTest(source: string, expected = source) {
                 const file = program.setFile<BrsFile>('source/main.bs', '');
