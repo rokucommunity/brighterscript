@@ -1,7 +1,7 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
-import { Block, CommentStatement, FunctionStatement, NamespaceStatement } from './Statement';
+import type { Block, CommentStatement, FunctionStatement, NamespaceStatement } from './Statement';
 import type { Range } from 'vscode-languageserver';
 import util from '../util';
 import type { BrsTranspileState } from './BrsTranspileState';

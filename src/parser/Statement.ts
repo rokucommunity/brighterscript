@@ -11,7 +11,7 @@ import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
 import { isCallExpression, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFieldStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypedefProvider, isUnaryExpression, isVoidType } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
-import { createInvalidLiteral, createMethodStatement, createToken, interpolatedRange } from '../astUtils/creators';
+import { createInvalidLiteral, createMethodStatement, createToken } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import type { SourceNode } from 'source-map';
@@ -25,7 +25,7 @@ export class EmptyStatement extends Statement {
         /**
          * Create a negative range to indicate this is an interpolated location
          */
-        public range: Range = interpolatedRange
+        public range: Range = undefined
     ) {
         super();
     }
@@ -157,7 +157,7 @@ export class AssignmentStatement extends Statement {
 export class Block extends Statement {
     constructor(
         readonly statements: Statement[],
-        readonly startingRange: Range
+        readonly startingRange?: Range
     ) {
         super();
         this.range = util.createBoundingRange(
@@ -1171,7 +1171,7 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
                 this.nameExpression,
                 this.body,
                 this.endKeyword
-            ) ?? interpolatedRange;
+            );
         }
         return this._range;
     }
