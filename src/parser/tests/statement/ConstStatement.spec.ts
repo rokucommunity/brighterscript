@@ -184,11 +184,11 @@ describe('ConstStatement', () => {
             await testTranspile(`
                 const API_KEY ="ABC"
                 sub main()
-                    print API_KEY.toString()
+                    print API_KEY.toStr()
                 end sub
             `, `
                 sub main()
-                    print "ABC".toString()
+                    print "ABC".toStr()
                 end sub
             `);
         });

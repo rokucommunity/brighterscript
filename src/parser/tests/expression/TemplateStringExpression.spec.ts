@@ -149,11 +149,11 @@ describe('TemplateStringExpression', () => {
         it('properly transpiles one line template string with expressions', async () => {
             await testTranspile(`
                 sub main()
-                    a = \`hello \${LINE_NUM.text} world \${"template" + "".getChars()} test\`
+                    a = \`hello \${LINE_NUM.text} world \${"template" + "".trim()} test\`
                 end sub
             `, `
                 sub main()
-                    a = ("hello " + bslib_toString(LINE_NUM.text) + " world " + bslib_toString("template" + "".getChars()) + " test")
+                    a = ("hello " + bslib_toString(LINE_NUM.text) + " world " + bslib_toString("template" + "".trim()) + " test")
                 end sub
             `);
         });
@@ -220,12 +220,12 @@ describe('TemplateStringExpression', () => {
 
         it('properly transpiles more complex multiline template string', async () => {
             await testTranspile(`
-                sub main()
-                    a = \`I am multiline\n\${a.isRunning()}\nmore\`
+                sub main(data)
+                    a = \`I am multiline\n\${data.isRunning()}\nmore\`
                 end sub
             `, `
-                sub main()
-                    a = ("I am multiline" + chr(10) + bslib_toString(a.isRunning()) + chr(10) + "more")
+                sub main(data)
+                    a = ("I am multiline" + chr(10) + bslib_toString(data.isRunning()) + chr(10) + "more")
                 end sub
             `);
         });

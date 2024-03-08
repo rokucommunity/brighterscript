@@ -10,7 +10,7 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallExpression, isCallableType, isCallfuncExpression, isComponentType, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isReferenceType, isStringType, isTypeCastExpression, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallExpression, isCallableType, isCallfuncExpression, isComponentType, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isPrimitiveType, isReferenceType, isStringType, isTypeCastExpression, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
@@ -30,6 +30,7 @@ import type { ComponentType } from '../types/ComponentType';
 import { createToken } from '../astUtils/creators';
 import { TypedFunctionType } from '../types';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
+import { FunctionType } from '../types/FunctionType';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -180,7 +181,7 @@ export class CallExpression extends Expression {
         if (isCallableType(calleeType) && (!isReferenceType(calleeType.returnType) || calleeType.returnType?.isResolvable())) {
             return calleeType.returnType;
         }
-        if (!isReferenceType(calleeType) && (calleeType as any).returnType?.isResolvable()) {
+        if (!isReferenceType(calleeType) && (calleeType as any)?.returnType?.isResolvable()) {
             return (calleeType as any).returnType;
         }
         return new TypePropertyReferenceType(calleeType, 'returnType');
@@ -552,7 +553,12 @@ export class DottedGetExpression extends Expression {
 
     getType(options: GetTypeOptions) {
         const objType = this.obj?.getType(options);
-        const result = objType?.getMemberType(this.tokens.name?.text, options);
+        let result = objType?.getMemberType(this.tokens.name?.text, options);
+
+        if (util.isClassUsedAsFunction(result, this, options)) {
+            // treat this class constructor as a function
+            result = FunctionType.instance;
+        }
         options.typeChain?.push(new TypeChainEntry({
             name: this.tokens.name?.text,
             type: result,
@@ -560,8 +566,10 @@ export class DottedGetExpression extends Expression {
             range: this.tokens.name?.range ?? this.range,
             kind: this.kind
         }));
-        if (result || options.flags & SymbolTypeFlag.typetime) {
-            // All types should be known at typetime
+        if (result ||
+            options.flags & SymbolTypeFlag.typetime ||
+            (isPrimitiveType(objType) || isCallableType(objType))) {
+            // All types should be known at typeTime, or the obj is well known
             return result;
         }
         // It is possible at runtime that a value has been added dynamically to an object, or something
@@ -1175,6 +1183,11 @@ export class VariableExpression extends Expression {
         if (!resultType) {
             const symbolTable = this.getSymbolTable();
             resultType = symbolTable?.getSymbolType(nameKey, { ...options, fullName: nameKey, tableProvider: () => this.getSymbolTable() });
+
+            if (util.isClassUsedAsFunction(resultType, this, options)) {
+                resultType = FunctionType.instance;
+            }
+
         }
         options.typeChain?.push(new TypeChainEntry({ name: nameKey, type: resultType, data: options.data, range: this.range, kind: this.kind }));
         return resultType;

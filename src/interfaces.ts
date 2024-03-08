@@ -833,6 +833,7 @@ export interface GetTypeOptions {
     ignoreCall?: boolean; // get the type of this expression, NOT it's return type
     onlyCacheResolvedTypes?: boolean;
     ignoreCacheForRetrieval?: boolean;
+    isExistenceTest?: boolean;
 }
 
 export class TypeChainEntry {

@@ -1059,7 +1059,7 @@ describe('CompletionsProcessor', () => {
             }]);
         });
 
-        it.only('treats class name as a function', () => {
+        it('treats class name as a function', () => {
             program.setFile('source/main.bs', `
                 class SomeKlass
                     name as string
@@ -1079,7 +1079,7 @@ describe('CompletionsProcessor', () => {
             }]);
         });
 
-        it.only('treats namespaced class name as a function', () => {
+        it('treats namespaced class name as a function', () => {
             program.setFile('source/main.bs', `
                 namespace alpha
                     class SomeKlass
@@ -1088,11 +1088,12 @@ describe('CompletionsProcessor', () => {
                 end namespace
 
                 sub test()
-                    print alpha.SomeKlass.
+                    print alpha.SomeKlass.toStr()
                 end sub
             `);
 
             program.validate();
+            expectZeroDiagnostics(program);
             // print alpha.SomeKlass.|
             let completions = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(8, 42));
             expectCompletionsIncludes(completions, [{
