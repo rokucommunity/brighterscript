@@ -119,6 +119,7 @@ export enum TokenKind {
     GetLastRunRunTimeError = 'GetLastRunRunTimeError',
     Goto = 'Goto',
     If = 'If',
+    In = 'In',
     Let = 'Let',
     Next = 'Next',
     Not = 'Not',
@@ -391,6 +392,7 @@ export const AllowedProperties = [
     TokenKind.GetLastRunRunTimeError,
     TokenKind.Goto,
     TokenKind.If,
+    TokenKind.In,
     TokenKind.Invalid,
     TokenKind.Let,
     TokenKind.Mod,
@@ -482,7 +484,8 @@ export const AllowedLocalIdentifiers = [
     TokenKind.Catch,
     TokenKind.EndTry,
     TokenKind.Const,
-    TokenKind.Continue
+    TokenKind.Continue,
+    TokenKind.In
 ];
 
 export const BrighterScriptSourceLiterals = [

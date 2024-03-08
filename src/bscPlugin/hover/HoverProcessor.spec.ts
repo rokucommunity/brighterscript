@@ -150,7 +150,7 @@ describe('HoverProcessor', () => {
             // print SOM|E_VALUE
             let hover = program.getHover('source/main.bs', util.createPosition(2, 29))[0];
             expect(hover?.range).to.eql(util.createRange(2, 26, 2, 36));
-            expect(hover?.contents).to.eql([fence('const SOME_VALUE = true')]);
+            expect(hover?.contents).to.eql([fence('const SOME_VALUE = true as boolean')]);
         });
 
         it('finds top-level constant in assignment expression', () => {
@@ -165,7 +165,7 @@ describe('HoverProcessor', () => {
             // value += SOME|_VALUE
             let hover = program.getHover('source/main.bs', util.createPosition(3, 33))[0];
             expect(hover?.range).to.eql(util.createRange(3, 29, 3, 39));
-            expect(hover?.contents).to.eql([fence('const SOME_VALUE = "value"')]);
+            expect(hover?.contents).to.eql([fence('const SOME_VALUE = "value" as string')]);
         });
 
         it('finds namespaced constant in assignment expression', () => {
@@ -182,7 +182,7 @@ describe('HoverProcessor', () => {
             // value += SOME|_VALUE
             let hover = program.getHover('source/main.bs', util.createPosition(3, 47))[0];
             expect(hover?.range).to.eql(util.createRange(3, 43, 3, 53));
-            expect(hover?.contents).to.eql([fence('const someNamespace.SOME_VALUE = "value"')]);
+            expect(hover?.contents).to.eql([fence('const someNamespace.SOME_VALUE = "value" as string')]);
         });
 
         it('finds namespaced constant value', () => {
@@ -198,7 +198,21 @@ describe('HoverProcessor', () => {
             // print name.SOM|E_VALUE
             let hover = program.getHover('source/main.bs', util.createPosition(2, 34))[0];
             expect(hover?.range).to.eql(util.createRange(2, 31, 2, 41));
-            expect(hover?.contents).to.eql([fence('const name.SOME_VALUE = true')]);
+            expect(hover?.contents).to.eql([fence('const name.SOME_VALUE = true as boolean')]);
+        });
+
+        it('finds constant value that is an array', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    print SOME_VALUE
+                end sub
+                const SOME_VALUE = [] as function[]
+            `);
+            program.validate();
+            // print SOM|E_VALUE
+            let hover = program.getHover('source/main.bs', util.createPosition(2, 30))[0];
+            expect(hover?.range).to.eql(util.createRange(2, 26, 2, 36));
+            expect(hover?.contents).to.eql([fence('const SOME_VALUE = [] as Array<function>')]);
         });
 
         it('finds deep namespaced constant value', () => {
@@ -214,7 +228,7 @@ describe('HoverProcessor', () => {
             // print name.sp.a.c.e.SOM|E_VALUE
             let hover = program.getHover('source/main.bs', util.createPosition(2, 43))[0];
             expect(hover?.range).to.eql(util.createRange(2, 40, 2, 50));
-            expect(hover?.contents).to.eql([fence('const name.sp.a.c.e.SOME_VALUE = true')]);
+            expect(hover?.contents).to.eql([fence('const name.sp.a.c.e.SOME_VALUE = true as boolean')]);
         });
 
         it('finds namespaced class types', () => {
@@ -595,6 +609,41 @@ describe('HoverProcessor', () => {
             //    u|p  = "up"
             let hover = program.getHover(file.srcPath, util.createPosition(3, 22))[0];
             expect(hover?.contents).to.eql([`${fence('Direction.up as Direction')}${commentSep}Go Up`]);
+        });
+
+        it('should have correct hovers for loop-items of for-loops', () => {
+            let file = program.setFile('source/main.bs', `
+                sub test()
+                    for index = 0 to 10
+                        print index
+                    end for
+                end sub
+            `);
+            program.validate();
+            //    for in|dex = 0 to 10
+            let hover = program.getHover(file.srcPath, util.createPosition(2, 27))[0];
+            expect(hover?.contents).to.eql([fence('index as integer')]);
+        });
+
+        it('should have correct hovers for loop-items of for-each-loops', () => {
+            let file = program.setFile('source/main.bs', `
+                sub test()
+                    numbers = [1,2,3]
+                    for each number in numbers
+                        print number
+                    end for
+                end sub
+            `);
+            program.validate();
+            //    for each number in num|bers
+            let hover = program.getHover(file.srcPath, util.createPosition(3, 43))[0];
+            expect(hover?.contents).to.eql([fence('numbers as Array<integer>')]);
+            //    for each num|ber in numbers
+            hover = program.getHover(file.srcPath, util.createPosition(3, 33))[0];
+            expect(hover?.contents).to.eql([fence('number as integer')]);
+            //    for each number i|n numbers
+            hover = program.getHover(file.srcPath, util.createPosition(3, 38))[0];
+            expect(hover?.contents).to.be.undefined;
         });
     });
 

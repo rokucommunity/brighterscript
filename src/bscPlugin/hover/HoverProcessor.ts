@@ -77,7 +77,8 @@ export class HoverProcessor {
         const constant = scope?.getConstFileLink(fullName, containingNamespace);
         if (constant) {
             const constantValue = util.sourceNodeFromTranspileResult(null, null, null, constant.item.value.transpile(new BrsTranspileState(file))).toString();
-            return this.buildContentsWithDocsFromExpression(fence(`const ${constant.item.fullName} = ${constantValue}`), constant.item);
+            const constantType = constant.item.getType({ flags: SymbolTypeFlag.runtime });
+            return this.buildContentsWithDocsFromExpression(fence(`const ${constant.item.fullName} = ${constantValue} as ${constantType.toString()}`), constant.item);
         }
     }
 
@@ -111,7 +112,7 @@ export class HoverProcessor {
                 declarationText = firstToken?.text ?? TokenKind.Enum;
             }
         }
-        const innerText = `${declarationText} ${exprTypeString}`.trim();
+        const innerText = `${declarationText} ${exprTypeString} `.trim();
         let result = fence(innerText);
         return result;
     }
@@ -119,7 +120,7 @@ export class HoverProcessor {
     private getMemberHover(memberExpression: FieldStatement | InterfaceFieldStatement, expressionType: BscType) {
         let nameText = `${(memberExpression.parent as ClassStatement | InterfaceStatement)?.getName(ParseMode.BrighterScript)}.${memberExpression.tokens.name.text}`;
         let exprTypeString = expressionType.toString();
-        const innerText = `${nameText} as ${exprTypeString}`.trim();
+        const innerText = `${nameText} as ${exprTypeString} `.trim();
         let result = fence(innerText);
         return result;
     }

@@ -1143,6 +1143,10 @@ export class ForEachStatement extends Statement {
         }
     }
 
+    getType(options: GetTypeOptions): BscType {
+        return this.getSymbolTable().getSymbolType(this.tokens.item.text, options);
+    }
+
     getLeadingTrivia(): Token[] {
         return this.tokens.forEach?.leadingTrivia ?? [];
     }
