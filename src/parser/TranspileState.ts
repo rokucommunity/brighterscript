@@ -1,6 +1,8 @@
 import { SourceNode } from 'source-map';
 import type { Range } from 'vscode-languageserver';
 import type { BsConfig } from '../BsConfig';
+import type { TranspileResult } from '../interfaces';
+import util from '../util';
 
 /**
  * Holds the state of a transpile operation as it works its way through the transpile process
@@ -54,8 +56,8 @@ export class TranspileState {
     /**
      * Shorthand for creating a new source node
      */
-    public sourceNode(locatable: { range?: Range }, code: string | SourceNode | Array<string | SourceNode>): SourceNode {
-        return new SourceNode(
+    public sourceNode(locatable: { range?: Range }, code: string | SourceNode | TranspileResult): SourceNode {
+        return util.sourceNodeFromTranspileResult(
             //convert 0-based range line to 1-based SourceNode line
             locatable.range ? locatable.range.start.line + 1 : null,
             //range and SourceNode character are both 0-based, so no conversion necessary

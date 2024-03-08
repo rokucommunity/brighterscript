@@ -105,4 +105,13 @@ describe('InterfaceStatement', () => {
             end interface
         `);
     });
+
+    it('supports empty interfaces', () => {
+        const file = program.setFile('source/main.bs', `
+           interface SomeInterface
+           end interface
+        `);
+        program.validate();
+        expectZeroDiagnostics(file);
+    });
 });
