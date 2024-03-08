@@ -4,8 +4,8 @@ import { PrintStatement, Block, Body, AssignmentStatement, CommentStatement, Exi
 import { FunctionExpression, BinaryExpression, CallExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, XmlAttributeGetExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression } from '../parser/Expression';
 import type { Token } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
-import { isPrintStatement, isIfStatement, isBody, isAssignmentStatement, isBlock, isExpressionStatement, isCommentStatement, isExitForStatement, isExitWhileStatement, isFunctionStatement, isIncrementStatement, isGotoStatement, isLabelStatement, isReturnStatement, isEndStatement, isStopStatement, isForStatement, isForEachStatement, isWhileStatement, isDottedSetStatement, isIndexedSetStatement, isLibraryStatement, isNamespaceStatement, isImportStatement, isExpression, isBinaryExpression, isCallExpression, isFunctionExpression, isDottedGetExpression, isXmlAttributeGetExpression, isIndexedGetExpression, isGroupingExpression, isLiteralExpression, isEscapedCharCodeLiteralExpression, isArrayLiteralExpression, isAALiteralExpression, isUnaryExpression, isVariableExpression, isSourceLiteralExpression, isNewExpression, isCallfuncExpression, isTemplateStringQuasiExpression, isTemplateStringExpression, isTaggedTemplateStringExpression, isBrsFile, isXmlFile, isClassStatement, isStatement, isAnnotationExpression, isTryCatchStatement, isCatchStatement, isThrowStatement, isLiteralInvalid, isLiteralBoolean, isLiteralNumber, isLiteralInteger, isLiteralLongInteger, isLiteralFloat, isLiteralDouble } from './reflection';
-import { createToken, createStringLiteral, interpolatedRange as range, createInvalidLiteral, createBooleanLiteral, createIntegerLiteral, createVariableExpression, createFloatLiteral, createDoubleLiteral, createLongIntegerLiteral } from './creators';
+import { isPrintStatement, isIfStatement, isBody, isAssignmentStatement, isBlock, isExpressionStatement, isCommentStatement, isExitForStatement, isExitWhileStatement, isFunctionStatement, isIncrementStatement, isGotoStatement, isLabelStatement, isReturnStatement, isEndStatement, isStopStatement, isForStatement, isForEachStatement, isWhileStatement, isDottedSetStatement, isIndexedSetStatement, isLibraryStatement, isNamespaceStatement, isImportStatement, isExpression, isBinaryExpression, isCallExpression, isFunctionExpression, isDottedGetExpression, isXmlAttributeGetExpression, isIndexedGetExpression, isGroupingExpression, isLiteralExpression, isEscapedCharCodeLiteralExpression, isArrayLiteralExpression, isAALiteralExpression, isUnaryExpression, isVariableExpression, isSourceLiteralExpression, isNewExpression, isCallfuncExpression, isTemplateStringQuasiExpression, isTemplateStringExpression, isTaggedTemplateStringExpression, isBrsFile, isXmlFile, isClassStatement, isStatement, isAnnotationExpression, isTryCatchStatement, isCatchStatement, isThrowStatement, isLiteralBoolean, isLiteralDouble, isLiteralFloat, isLiteralInteger, isLiteralInvalid, isLiteralLongInteger, isLiteralNumber } from './reflection';
+import { createToken, createStringLiteral, createVariableExpression, createBooleanLiteral, createDoubleLiteral, createFloatLiteral, createIntegerLiteral, createInvalidLiteral, createLongIntegerLiteral } from './creators';
 import { Program } from '../Program';
 import { BrsFile } from '../files/BrsFile';
 import { XmlFile } from '../files/XmlFile';
@@ -24,12 +24,12 @@ describe('reflection', () => {
     });
 
     describe('Statements', () => {
-        const ident = createToken(TokenKind.Identifier, 'a', range);
-        const expr = createStringLiteral('', range);
-        const token = createToken(TokenKind.StringLiteral, '', range);
+        const ident = createToken(TokenKind.Identifier, 'a');
+        const expr = createStringLiteral('');
+        const token = createToken(TokenKind.StringLiteral, '');
         const body = new Body({ statements: [] });
         const assignment = new AssignmentStatement({ equals: undefined, name: ident, value: expr });
-        const block = new Block({ statements: [], startingRange: range });
+        const block = new Block({ statements: [] });
         const expression = new ExpressionStatement({ expression: expr });
         const comment = new CommentStatement({ comments: [token] });
         const exitFor = new ExitForStatement({ exitFor: token });
@@ -59,7 +59,7 @@ describe('reflection', () => {
         const dottedSet = new DottedSetStatement({ obj: expr, name: ident, value: expr });
         const indexedSet = new IndexedSetStatement({ obj: expr, indexes: [expr], value: expr, openingSquare: token, closingSquare: token });
         const library = new LibraryStatement({ library: token, filePath: token });
-        const namespace = new NamespaceStatement({ namespace: token, nameExpression: createVariableExpression('a', range), body: body, endNamespace: token });
+        const namespace = new NamespaceStatement({ namespace: token, nameExpression: createVariableExpression('a'), body: body, endNamespace: token });
         const cls = new ClassStatement({ class: token, name: ident, body: [], endClass: token });
         const imports = new ImportStatement({ import: token, path: token });
         const catchStmt = new CatchStatement({ catch: token, exceptionVariable: ident, catchBranch: block });
@@ -192,14 +192,14 @@ describe('reflection', () => {
     });
 
     describe('Expressions', () => {
-        const ident = createToken(TokenKind.Identifier, 'a', range);
-        const expr = createStringLiteral('', range);
-        const token = createToken(TokenKind.StringLiteral, '', range);
-        const block = new Block({ statements: [], startingRange: range });
+        const ident = createToken(TokenKind.Identifier, 'a');
+        const expr = createStringLiteral('');
+        const token = createToken(TokenKind.StringLiteral, '');
+        const block = new Block({ statements: [] });
         const charCode: Token & { charCode: number } = {
             kind: TokenKind.EscapedCharCodeLiteral,
             text: '0',
-            range: range,
+            range: undefined,
             isReserved: false,
             charCode: 0,
             leadingWhitespace: '',

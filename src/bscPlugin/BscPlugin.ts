@@ -1,9 +1,10 @@
 import { isBrsFile, isXmlFile } from '../astUtils/reflection';
-import type { CompilerPlugin, OnFileValidateEvent, OnGetCodeActionsEvent, ProvideHoverEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, AfterProgramValidateEvent, AfterSerializeFileEvent, BeforeBuildProgramEvent, OnPrepareFileEvent, ProvideFileEvent, WriteFileEvent } from '../interfaces';
+import type { CompilerPlugin, OnFileValidateEvent, OnGetCodeActionsEvent, ProvideHoverEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent, AfterProgramValidateEvent, AfterSerializeFileEvent, BeforeBuildProgramEvent, OnPrepareFileEvent, ProvideFileEvent, WriteFileEvent } from '../interfaces';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
 import { CompletionsProcessor } from './completions/CompletionsProcessor';
 import { DefinitionProvider } from './definition/DefinitionProvider';
 import { HoverProcessor } from './hover/HoverProcessor';
+import { ReferencesProvider } from './references/ReferencesProvider';
 import { BrsFileSemanticTokensProcessor } from './semanticTokens/BrsFileSemanticTokensProcessor';
 import { BrsFileValidator } from './validation/BrsFileValidator';
 import { ProgramValidator } from './validation/ProgramValidator';
@@ -39,6 +40,10 @@ export class BscPlugin implements CompilerPlugin {
 
     public provideDefinition(event: ProvideDefinitionEvent) {
         new DefinitionProvider(event).process();
+    }
+
+    public provideReferences(event: ProvideReferencesEvent) {
+        new ReferencesProvider(event).process();
     }
 
     public onGetSemanticTokens(event: OnGetSemanticTokensEvent) {

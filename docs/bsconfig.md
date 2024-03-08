@@ -74,7 +74,8 @@ Type: `Array<string | number | {src: string; codes: number[]}`
 
 A list of filters used to hide diagnostics.
 
-- A `string` value should be a relative-to-root-dir or absolute file path or glob pattern of the files that should be excluded. Any file matching this pattern will have all diagnostics supressed.
+- A `string` value should be a relative-to-root-dir or absolute file path or glob pattern of the files that should be excluded. Any file matching this pattern will have all diagnostics supressed. These file paths refer to the location of the source files pre-compilation and are relative to [`rootDir`](#rootdir). Absolute file paths may be used as well.
+    - A file glob may be prefixed with `!` to make it a negative pattern which "un-ignores" the files it matches. (See examples below).
 - A `number` value should be a diagnostic code. This will supress all diagnostics with that code for the whole project.
 - An object can also be provided to filter specific diagnostic codes for a file pattern. For example,
 
@@ -88,6 +89,28 @@ A list of filters used to hide diagnostics.
 Defaults to `undefined`.
 
 If a child bsconfig extends from a parent bsconfig, and both bsconfigs specify `diagnosticFilters`, the parent bsconfig's `diagnosticFilters` field will be completely overwritten.
+
+### Negative patterns in `diagnosticFilters`
+
+A negative pattern can be used to un-ignore some files or codes which were previously ignored. For example,
+
+```jsonc
+"diagnosticFilters": [
+    { "src": "vendor/**/*" }, //ignore all codes from vendor libraries
+    { "src": "!vendor/unreliable/**/*" } //EXCEPT do show errors from this one specific library
+]
+```
+
+A specific error code can be unignored in multiple places by using a pattern which matches everything under `rootDir`. For example,
+
+```jsonc
+"diagnosticFilters": [
+    { "src": "vendor/**/*" }, //ignore all errors from vendor libraries
+    { "src": "!*/**/*", "codes": [1000] } //EXCEPT do show this particular code everywhere
+]
+```
+
+The semantics of overriding match the way `git` treats `.gitignore` files: Negative patterns override earlier positive patterns, and positive patterns override earlier negative patterns.
 
 ## `diagnosticLevel`
 

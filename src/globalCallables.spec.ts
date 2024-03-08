@@ -71,7 +71,8 @@ describe('globalCallables', () => {
             end sub
         `);
         program.validate();
-        const hover = program.getHover(file.srcPath, util.createPosition(2, 25));
+        //print Mi|d("value1", 1)
+        const hover = program.getHover(file.srcPath, util.createPosition(2, 24));
         expect(
             hover[0].contents.toString()
         ).to.include('function Mid(s as string, p as integer, n? as integer) as string');

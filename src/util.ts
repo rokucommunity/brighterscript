@@ -11,7 +11,7 @@ import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, TypeChainEntry, TypeChainProcessResult } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, TranspileResult, TypeChainEntry, TypeChainProcessResult } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -930,7 +930,10 @@ export class Util {
      * Get a location object back by extracting location information from other objects that contain location
      */
     public getRange(startObj: { range: Range }, endObj: { range: Range }): Range {
-        return util.createRangeFromPositions(startObj.range.start, endObj.range.end);
+        if (!startObj?.range || !endObj?.range) {
+            return undefined;
+        }
+        return util.createRangeFromPositions(startObj.range?.start, endObj.range?.end);
     }
 
     /**
@@ -947,8 +950,8 @@ export class Util {
     /**
      * If the two items have lines that touch
      */
-    public linesTouch(first: { range: Range }, second: { range: Range }) {
-        if (first && second && (
+    public linesTouch(first: { range?: Range | undefined }, second: { range?: Range | undefined }) {
+        if (first && second && (first.range !== undefined) && (second.range !== undefined) && (
             first.range.start.line === second.range.start.line ||
             first.range.start.line === second.range.end.line ||
             first.range.end.line === second.range.start.line ||
@@ -1909,6 +1912,21 @@ export class Util {
                 range: this.createRange(0, 0, 0, Number.MAX_VALUE)
             }]);
         }
+    }
+
+    /**
+     * Wraps SourceNode's constructor to be compatible with the TranspileResult type
+     */
+    public sourceNodeFromTranspileResult(
+        line: number | null,
+        column: number | null,
+        source: string | null,
+        chunks?: string | SourceNode | TranspileResult,
+        name?: string
+    ): SourceNode {
+        // we can use a typecast rather than actually transforming the data because SourceNode
+        // accepts a more permissive type than its typedef states
+        return new SourceNode(line, column, source, chunks as any, name);
     }
 
     /**
