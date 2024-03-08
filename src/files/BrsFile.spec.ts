@@ -2381,6 +2381,7 @@ describe('BrsFile', () => {
                 function DoSomething()
                     'lots of empty white space
                     'that will be removed during transpile
+                    'since there are newlines below this comment one newline will be preserved
 
 
 
@@ -2389,6 +2390,8 @@ describe('BrsFile', () => {
                 function DoSomething()
                     'lots of empty white space
                     'that will be removed during transpile
+                    'since there are newlines below this comment one newline will be preserved
+
                 end function
             `);
         });
@@ -2609,6 +2612,28 @@ describe('BrsFile', () => {
                         name: "child" 'comment
                         'comment
                     }
+                end sub
+            `);
+        });
+
+        it('keeps spaces in between comments when a statement ends in a comment ', async () => {
+            await testTranspile(`
+                sub foo()
+                end sub 'comment
+
+                'a function that does something
+                sub foo2()
+                end sub
+            `);
+        });
+
+
+        it('keeps comment in correct place in empty function', async () => {
+            await testTranspile(`
+                sub noop1()
+                end sub
+
+                sub noop2() 'comment in empty function
                 end sub
             `);
         });

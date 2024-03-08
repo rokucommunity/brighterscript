@@ -1,6 +1,6 @@
 import type { DottedGetExpression, TypeExpression, VariableExpression } from './parser/Expression';
 import { SymbolTypeFlag } from './SymbolTableFlag';
-import { isBody, isClassStatement, isCommentStatement, isInterfaceStatement, isNamespaceStatement, isVariableExpression } from './astUtils/reflection';
+import { isBody, isClassStatement, isInterfaceStatement, isNamespaceStatement, isVariableExpression } from './astUtils/reflection';
 import { ChildrenSkipper, WalkMode, createVisitor } from './astUtils/visitors';
 import type { GetTypeOptions, TypeChainEntry } from './interfaces';
 import type { AstNode } from './parser/AstNode';
@@ -43,7 +43,7 @@ export class AstValidationSegmenter {
     }
 
     checkExpressionForUnresolved(segment: AstNode, expression: VariableExpression | DottedGetExpression | TypeExpression, assignedSymbols?: Set<string>) {
-        if (!expression || isCommentStatement(expression)) {
+        if (!expression) {
             return false;
         }
         if (isVariableExpression(expression) && expression.tokens.name.text.toLowerCase() === 'm') {
@@ -74,7 +74,7 @@ export class AstValidationSegmenter {
     private currentNamespaceStatement: NamespaceStatement;
 
     checkSegmentWalk(segment: AstNode) {
-        if (isNamespaceStatement(segment) || isBody(segment) || isCommentStatement(segment)) {
+        if (isNamespaceStatement(segment) || isBody(segment)) {
             return;
         }
         if (isClassStatement(segment)) {

@@ -3,7 +3,7 @@ import type { AssignmentStatement, ClassStatement, ConstStatement, EnumStatement
 import { Cache } from '../Cache';
 import { WalkMode, createVisitor } from './visitors';
 import type { Expression } from '../parser/AstNode';
-import { isAAMemberExpression, isBinaryExpression, isCallExpression, isCommentStatement, isDottedGetExpression, isFunctionExpression, isIndexedGetExpression, isMethodStatement, isNamespaceStatement, isNewExpression, isVariableExpression } from './reflection';
+import { isAAMemberExpression, isBinaryExpression, isCallExpression, isDottedGetExpression, isFunctionExpression, isIndexedGetExpression, isMethodStatement, isNamespaceStatement, isNewExpression, isVariableExpression } from './reflection';
 import type { Parser } from '../parser/Parser';
 import { ParseMode } from '../parser/Parser';
 import type { Token } from '../lexer/Token';
@@ -170,12 +170,11 @@ export class CachedLookups {
                 propertyHints[name.toLowerCase()] = name;
             } else {
                 for (const member of item.elements) {
-                    if (!isCommentStatement(member)) {
-                        const name = member.tokens.key.text;
-                        if (!name.startsWith('"')) {
-                            propertyHints[name.toLowerCase()] = name;
-                        }
+                    const name = member.tokens.key.text;
+                    if (!name.startsWith('"')) {
+                        propertyHints[name.toLowerCase()] = name;
                     }
+
                 }
             }
         };
@@ -294,9 +293,7 @@ export class CachedLookups {
             ArrayLiteralExpression: e => {
                 for (const element of e.elements) {
                     //keep everything except comments
-                    if (!isCommentStatement(element)) {
-                        expressions.add(element);
-                    }
+                    expressions.add(element);
                 }
             },
             DottedGetExpression: e => {

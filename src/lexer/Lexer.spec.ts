@@ -134,7 +134,6 @@ describe('lexer', () => {
         expect(tokens.map(t => t.kind)).to.deep.equal([
             TokenKind.Newline,
             TokenKind.Newline,
-            TokenKind.Comment,
             TokenKind.Newline,
             TokenKind.Newline,
             TokenKind.Newline,
@@ -235,12 +234,32 @@ describe('lexer', () => {
     });
 
     describe('comments', () => {
-        it('does not include carriage return character', () => {
-            let tokens = Lexer.scan(`'someComment\r\nprint "hello"`).tokens;
-            expect(tokens[0].text).to.equal(`'someComment`);
+        it('are not included in output', () => {
+            let kinds = Lexer.scan(`
+                'comment
+                REM some comment
+                print 1 ' comment after
+            `).tokens
+                .map(x => x.kind);
+
+            expect(kinds.length).to.eq(7);
+            expect(kinds).to.eql([
+                TokenKind.Newline,
+                TokenKind.Newline,
+                TokenKind.Newline,
+                TokenKind.Print,
+                TokenKind.IntegerLiteral,
+                TokenKind.Newline,
+                TokenKind.Eof
+            ]);
         });
 
-        it('includes the comment characters in the text', () => {
+        it('do not remove Newline token from output', () => {
+            let tokens = Lexer.scan(`'someComment\r\nprint "hello"`).tokens;
+            expect(tokens[0].kind).to.equal(TokenKind.Newline);
+        });
+
+        it('includes no comment characters in the text', () => {
             let text = Lexer.scan(`
                 'comment
                 REM some comment
@@ -248,10 +267,7 @@ describe('lexer', () => {
                 .filter(x => ![TokenKind.Newline, TokenKind.Eof].includes(x.kind))
                 .map(x => x.text);
 
-            expect(text).to.eql([
-                `'comment`,
-                'REM some comment'
-            ]);
+            expect(text).to.eql([]);
         });
 
         it('tracks the correct location', () => {
@@ -273,7 +289,7 @@ describe('lexer', () => {
                 [1, 24, 1, 25, '('],
                 [1, 25, 1, 26, ')'],
                 [1, 26, 1, 27, ' '],
-                [1, 27, 1, 41, `'first comment`],
+                //  skip `'first comment`
                 [1, 41, 1, 42, '\n'],
                 [2, 0, 2, 20, '                    '],
                 [2, 20, 2, 21, 'k'],
@@ -282,10 +298,10 @@ describe('lexer', () => {
                 [2, 23, 2, 24, ' '],
                 [2, 24, 2, 25, '2'],
                 [2, 25, 2, 26, ' '],
-                [2, 26, 2, 42, `' second comment`],
+                //  skip `' second comment`
                 [2, 42, 2, 43, '\n'],
                 [3, 0, 3, 20, '                    '],
-                [3, 20, 3, 37, 'REM third comment'],
+                //  skip `REM third comment`
                 [3, 37, 3, 38, '\n'],
                 [4, 0, 4, 16, '                '],
                 [4, 16, 4, 23, 'end sub'],
@@ -293,21 +309,6 @@ describe('lexer', () => {
                 [5, 0, 5, 12, '            '],
                 [5, 12, 5, 13, '']//EOF
             ]);
-        });
-
-        it('tracks the correct location for comments', () => {
-            let tokens = Lexer.scan(`
-                'comment
-                REM some comment
-            `).tokens.filter(x => ![TokenKind.Newline, TokenKind.Eof].includes(x.kind));
-
-            expect(tokens[0].range).to.eql(
-                Range.create(1, 16, 1, 24)
-            );
-
-            expect(tokens[1].range).to.eql(
-                Range.create(2, 16, 2, 32)
-            );
         });
 
         it('finds correct location for newlines', () => {
@@ -325,37 +326,20 @@ describe('lexer', () => {
                 Range.create(3, 0, 3, 1) //  /n
             ]);
         });
-        it('finds correct location for comment after if statement', () => {
-            let { tokens } = Lexer.scan(`
-                sub a()
-                    if true then
-                        print false
-                    else if true then
-                        print "true"
-                    else
-                        print "else"
-                    end if 'comment
-                end sub
-            `);
-            let comments = tokens.filter(x => x.kind === TokenKind.Comment);
-            expect(comments).to.be.lengthOf(1);
-            expect(comments[0].range).to.eql(
-                Range.create(8, 27, 8, 35)
-            );
-        });
+
         it('ignores everything after `\'`', () => {
             let { tokens } = Lexer.scan('= \' (');
-            expect(tokens.map(t => t.kind)).to.deep.equal([TokenKind.Equal, TokenKind.Comment, TokenKind.Eof]);
+            expect(tokens.map(t => t.kind)).to.deep.equal([TokenKind.Equal, TokenKind.Eof]);
         });
 
         it('ignores everything after `REM`', () => {
             let { tokens } = Lexer.scan('= REM (');
-            expect(tokens.map(t => t.kind)).to.deep.equal([TokenKind.Equal, TokenKind.Comment, TokenKind.Eof]);
+            expect(tokens.map(t => t.kind)).to.deep.equal([TokenKind.Equal, TokenKind.Eof]);
         });
 
         it('ignores everything after `rem`', () => {
             let { tokens } = Lexer.scan('= rem (');
-            expect(tokens.map(t => t.kind)).to.deep.equal([TokenKind.Equal, TokenKind.Comment, TokenKind.Eof]);
+            expect(tokens.map(t => t.kind)).to.deep.equal([TokenKind.Equal, TokenKind.Eof]);
         });
     }); // comments
 

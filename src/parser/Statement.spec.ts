@@ -1,10 +1,9 @@
 import { expect } from '../chai-config.spec';
 import type { NamespaceStatement, ClassStatement } from './Statement';
-import { Body, CommentStatement, EmptyStatement } from './Statement';
+import { Body, EmptyStatement } from './Statement';
 import { ParseMode, Parser } from './Parser';
 import { WalkMode } from '../astUtils/visitors';
 import { isClassStatement, isNamespaceStatement } from '../astUtils/reflection';
-import { CancellationTokenSource } from 'vscode-languageserver';
 import { Program } from '../Program';
 import { trim } from '../testHelpers.spec';
 import type { BrsFile } from '../files/BrsFile';
@@ -64,19 +63,6 @@ describe('Statement', () => {
             }
             expect(node!.getName(ParseMode.BrighterScript)).to.equal('NameA.NameB');
             expect(node!.getName(ParseMode.BrightScript)).to.equal('NameA_NameB');
-        });
-    });
-
-    describe('CommentStatement', () => {
-        describe('walk', () => {
-            it('skips visitor if canceled', () => {
-                const comment = new CommentStatement({ comments: [] });
-                const cancel = new CancellationTokenSource();
-                cancel.cancel();
-                comment.walk(() => {
-                    throw new Error('Should not have been called');
-                }, { walkMode: WalkMode.visitAllRecursive, cancel: cancel.token });
-            });
         });
     });
 

@@ -1,7 +1,7 @@
 import { SourceNode } from 'source-map';
 import type { Range } from 'vscode-languageserver';
 import { createSGAttribute, createSGInterface, createSGInterfaceField, createSGInterfaceFunction } from '../astUtils/creators';
-import type { FileReference } from '../interfaces';
+import type { FileReference, TranspileResult } from '../interfaces';
 import util from '../util';
 import type { TranspileState } from './TranspileState';
 
@@ -74,7 +74,7 @@ export class SGAttribute {
     private _range = null as Range;
 
     public transpile(state: TranspileState) {
-        const result = [
+        const result: TranspileResult = [
             state.transpileToken(this.tokens.key)
         ];
         if (this.tokens.value) {
@@ -85,7 +85,7 @@ export class SGAttribute {
                 state.transpileToken(this.tokens.closingQuote, '"')
             );
         }
-        return new SourceNode(null, null, null, result);
+        return util.sourceNodeFromTranspileResult(null, null, null, result);
     }
 
     public clone() {
@@ -290,7 +290,7 @@ export class SGElement {
     }
 
     public transpile(state: TranspileState) {
-        return new SourceNode(null, null, null, [
+        return util.sourceNodeFromTranspileResult(null, null, null, [
             state.transpileToken(this.tokens.startTagOpen, '<'), // <
             state.transpileToken(this.tokens.startTagName),
             this.transpileAttributes(state, this.attributes),
@@ -300,13 +300,13 @@ export class SGElement {
 
     protected transpileBody(state: TranspileState) {
         if (this.isSelfClosing) {
-            return new SourceNode(null, null, null, [
+            return util.sourceNodeFromTranspileResult(null, null, null, [
                 ' ',
                 state.transpileToken(this.tokens.startTagClose, '/>'),
                 state.newline
             ]);
         } else {
-            const chunks = [
+            const chunks: TranspileResult = [
                 state.transpileToken(this.tokens.startTagClose, '>'),
                 state.newline
             ];
@@ -325,7 +325,7 @@ export class SGElement {
                 state.transpileToken(this.tokens.endTagClose, '>'),
                 state.newline
             );
-            return new SourceNode(null, null, null, chunks);
+            return util.sourceNodeFromTranspileResult(null, null, null, chunks);
         }
     }
 
@@ -366,7 +366,7 @@ export class SGScript extends SGElement {
 
     protected transpileBody(state: TranspileState) {
         if (this.cdata) {
-            return new SourceNode(null, null, null, [
+            return util.sourceNodeFromTranspileResult(null, null, null, [
                 '>',
                 state.transpileToken(this.cdata),
                 '</',
