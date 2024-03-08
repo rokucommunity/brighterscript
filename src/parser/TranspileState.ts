@@ -133,7 +133,7 @@ export class TranspileState {
     /**
      * Create a SourceNode from a token, accounting for missing range and multi-line text
      */
-    public transpileToken(token: TranspileToken, defaultValue?: string): Array<SourceNode | string> {
+    public transpileToken(token: TranspileToken, defaultValue?: string): TranspileResult {
         if (!token && defaultValue !== undefined) {
             return [new SourceNode(null, null, null, defaultValue)];
         }
@@ -167,7 +167,7 @@ export class TranspileState {
         }
     }
 
-    public transpileEndBlockToken(previousLocatable: { range: Range }, endToken: Token, defaultValue: string, alwaysAddNewlineBeforeEndToken = true) {
+    public transpileEndBlockToken(previousLocatable: { range?: Range }, endToken: Token, defaultValue: string, alwaysAddNewlineBeforeEndToken = true) {
         const result = [];
 
         if (util.hasLeadingComments(endToken)) {

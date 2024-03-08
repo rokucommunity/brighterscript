@@ -1,7 +1,7 @@
 import { SourceNode } from 'source-map';
 import type { Range } from 'vscode-languageserver';
 import { createSGAttribute, createSGInterface, createSGInterfaceField, createSGInterfaceFunction } from '../astUtils/creators';
-import type { FileReference } from '../interfaces';
+import type { FileReference, TranspileResult } from '../interfaces';
 import util from '../util';
 import type { TranspileState } from './TranspileState';
 
@@ -74,18 +74,18 @@ export class SGAttribute {
     private _range = null as Range;
 
     public transpile(state: TranspileState) {
-        const result = [
-            ...state.transpileToken(this.tokens.key)
+        const result: TranspileResult = [
+            state.transpileToken(this.tokens.key)
         ];
         if (this.tokens.value) {
             result.push(
-                ...state.transpileToken(this.tokens.equals, '='),
-                ...state.transpileToken(this.tokens.openingQuote, '"'),
-                ...state.transpileToken(this.tokens.value),
-                ...state.transpileToken(this.tokens.closingQuote, '"')
+                state.transpileToken(this.tokens.equals, '='),
+                state.transpileToken(this.tokens.openingQuote, '"'),
+                state.transpileToken(this.tokens.value),
+                state.transpileToken(this.tokens.closingQuote, '"')
             );
         }
-        return new SourceNode(null, null, null, result);
+        return util.sourceNodeFromTranspileResult(null, null, null, result);
     }
 
     public clone() {
@@ -290,9 +290,9 @@ export class SGElement {
     }
 
     public transpile(state: TranspileState) {
-        return new SourceNode(null, null, null, [
-            ...state.transpileToken(this.tokens.startTagOpen, '<'), // <
-            ...state.transpileToken(this.tokens.startTagName),
+        return util.sourceNodeFromTranspileResult(null, null, null, [
+            state.transpileToken(this.tokens.startTagOpen, '<'), // <
+            state.transpileToken(this.tokens.startTagName),
             this.transpileAttributes(state, this.attributes),
             this.transpileBody(state)
         ]);
@@ -300,14 +300,14 @@ export class SGElement {
 
     protected transpileBody(state: TranspileState) {
         if (this.isSelfClosing) {
-            return new SourceNode(null, null, null, [
+            return util.sourceNodeFromTranspileResult(null, null, null, [
                 ' ',
-                ...state.transpileToken(this.tokens.startTagClose, '/>'),
+                state.transpileToken(this.tokens.startTagClose, '/>'),
                 state.newline
             ]);
         } else {
-            const chunks = [
-                ...state.transpileToken(this.tokens.startTagClose, '>'),
+            const chunks: TranspileResult = [
+                state.transpileToken(this.tokens.startTagClose, '>'),
                 state.newline
             ];
             state.blockDepth++;
@@ -320,12 +320,12 @@ export class SGElement {
             state.blockDepth--;
             chunks.push(
                 state.indentText,
-                ...state.transpileToken(this.tokens.endTagOpen, '</'),
-                ...state.transpileToken(this.tokens.endTagName ?? this.tokens.startTagName),
-                ...state.transpileToken(this.tokens.endTagClose, '>'),
+                state.transpileToken(this.tokens.endTagOpen, '</'),
+                state.transpileToken(this.tokens.endTagName ?? this.tokens.startTagName),
+                state.transpileToken(this.tokens.endTagClose, '>'),
                 state.newline
             );
-            return new SourceNode(null, null, null, chunks);
+            return util.sourceNodeFromTranspileResult(null, null, null, chunks);
         }
     }
 
@@ -366,9 +366,9 @@ export class SGScript extends SGElement {
 
     protected transpileBody(state: TranspileState) {
         if (this.cdata) {
-            return new SourceNode(null, null, null, [
+            return util.sourceNodeFromTranspileResult(null, null, null, [
                 '>',
-                ...state.transpileToken(this.cdata),
+                state.transpileToken(this.cdata),
                 '</',
                 this.tokens.startTagName.text,
                 '>',

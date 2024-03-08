@@ -113,7 +113,7 @@ export class Parser {
     public ast = new Body({ statements: [] });
 
     public get eofToken(): Token {
-        const lastToken = this.tokens[this.tokens.length - 1];
+        const lastToken = this.tokens?.[this.tokens.length - 1];
         if (lastToken?.kind === TokenKind.Eof) {
             return lastToken;
         }
