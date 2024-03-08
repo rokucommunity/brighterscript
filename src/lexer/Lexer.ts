@@ -107,7 +107,9 @@ export class Lexer {
             kind: TokenKind.Eof,
             isReserved: false,
             text: '',
-            range: util.createRange(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd + 1),
+            range: this.options.trackLocations
+                ? util.createRange(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd + 1)
+                : undefined,
             leadingWhitespace: this.leadingWhitespace,
             leadingTrivia: this.leadingTrivia
         });
@@ -126,10 +128,10 @@ export class Lexer {
      * Fill in missing/invalid options with defaults
      */
     private sanitizeOptions(options: ScanOptions) {
-        return {
-            includeWhitespace: false,
-            ...options
-        } as ScanOptions;
+        options ??= {};
+        options.includeWhitespace ??= false;
+        options.trackLocations ??= true;
+        return options;
     }
 
     /**
@@ -905,14 +907,20 @@ export class Lexer {
      */
     private preProcessedConditional() {
         this.advance(); // advance past the leading #
+
+        //consume whitespace
+        while (this.check(' ', '\t')) {
+            this.advance();
+        }
+
         while (isAlphaNumeric(this.peek())) {
             this.advance();
         }
 
         let text = this.source.slice(this.start, this.current).toLowerCase();
 
-        // some identifiers can be split into two words, so check the "next" word and see what we get
-        if ((text === '#end' || text === '#else') && this.check(' ', '\t')) {
+        // some identifiers can be split into two words (`#end if`, `#else if`), so check the "next" word and see what we get
+        if ((text.endsWith('end') || text.endsWith('else')) && this.check(' ', '\t')) {
             let endOfFirstWord = this.current;
 
             //skip past whitespace
@@ -925,11 +933,11 @@ export class Lexer {
             } // read the next word
 
             let twoWords = this.source.slice(this.start, this.current).toLowerCase();
-            switch (twoWords.replace(/[\s\t]+/g, ' ')) {
-                case '#else if':
+            switch (twoWords.replace(/\s+/g, '')) {
+                case '#elseif':
                     this.addToken(TokenKind.HashElseIf);
                     return;
-                case '#end if':
+                case '#endif':
                     this.addToken(TokenKind.HashEndIf);
                     return;
             }
@@ -938,7 +946,7 @@ export class Lexer {
             this.current = endOfFirstWord;
         }
 
-        switch (text) {
+        switch (text.replace(/\s+/g, '')) {
             case '#if':
                 this.addToken(TokenKind.HashIf);
                 return;
@@ -963,12 +971,16 @@ export class Lexer {
                     this.whitespace();
                 }
 
-                while (!this.isAtEnd() && !this.check('\n')) {
+                let hasErrorMessage = false;
+                while (!this.isAtEnd() && !this.check('\r') && !this.check('\n')) {
+                    hasErrorMessage = true;
                     this.advance();
                 }
 
-                // grab all text since we found #error as one token
-                this.addToken(TokenKind.HashErrorMessage);
+                if (hasErrorMessage) {
+                    // grab all text since we found #error as one token
+                    this.addToken(TokenKind.HashErrorMessage);
+                }
 
                 this.start = this.current;
                 return;
@@ -1059,6 +1071,7 @@ export class Lexer {
             leadingWhitespace: this.leadingWhitespace,
             leadingTrivia: []
         };
+
         if (this.isTrivia(token)) {
             this.pushTrivia(token);
         } else {
@@ -1066,7 +1079,9 @@ export class Lexer {
             this.leadingTrivia = [];
         }
         this.leadingWhitespace = '';
-        this.tokens.push(token);
+        if (kind !== TokenKind.Comment) {
+            this.tokens.push(token);
+        }
         this.sync();
         return token;
     }
@@ -1081,17 +1096,27 @@ export class Lexer {
     }
 
     /**
-     * Creates a `TokenLocation` at the lexer's current position for the provided `text`.
-     * @returns the range of `text` as a `TokenLocation`
+     * Creates a `Range` at the lexer's current position
+     * @returns the range of `text`
      */
     private rangeOf(): Range {
-        return util.createRange(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd);
+        if (this.options.trackLocations) {
+            return util.createRange(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd);
+        } else {
+            return undefined;
+        }
     }
 }
 
 export interface ScanOptions {
     /**
      * If true, the whitespace tokens are included. If false, they are discarded
+     * @default false
      */
-    includeWhitespace: boolean;
+    includeWhitespace?: boolean;
+    /**
+     * Should locations be tracked. If false, the `range` property will be omitted
+     * @default true
+     */
+    trackLocations?: boolean;
 }

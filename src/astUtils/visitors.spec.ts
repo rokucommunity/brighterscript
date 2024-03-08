@@ -306,8 +306,6 @@ describe('astUtils visitors', () => {
 
             program.setFile('source/main.brs', EXPRESSIONS_SRC);
             expect(actual).to.deep.equal([
-                //The comment statement is weird because it can't be both a statement and expression, but is treated that way. Just ignore it for now until we refactor comments.
-                //'CommentStatement:1:CommentStatement',          // '<comment>
                 'PrintStatement:1:LiteralExpression',             // print <"msg">; 3
                 'PrintStatement:1:LiteralExpression',             // print "msg"; <3>
                 'PrintStatement:1:TemplateStringExpression',      // print <`expand ${var}`>
@@ -819,7 +817,6 @@ describe('astUtils visitors', () => {
                 'Block',
                 'AssignmentStatement',
                 'AALiteralExpression',
-                'CommentStatement',
                 'AAMemberExpression',
                 'LiteralExpression'
             ]);
@@ -894,8 +891,7 @@ describe('astUtils visitors', () => {
                 'LiteralExpression',
                 //else
                 'Block',
-                'ReturnStatement',
-                'CommentStatement'
+                'ReturnStatement'
             ]);
         });
 

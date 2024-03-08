@@ -21,7 +21,7 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionStatement, isNamespaceStatement, isVariableExpression, isImportStatement, isFieldStatement, isFunctionExpression, isBrsFile, isEnumStatement, isConstStatement, isAnyReferenceType } from '../astUtils/reflection';
+import { isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isNamespaceStatement, isVariableExpression, isImportStatement, isFieldStatement, isEnumStatement, isConstStatement, isAnyReferenceType } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
@@ -35,6 +35,7 @@ import type { BscFileLike } from '../astUtils/CachedLookups';
 import { CachedLookups } from '../astUtils/CachedLookups';
 import { Editor } from '../astUtils/Editor';
 import type { BscFile } from './BscFile';
+import { ReferencesProvider } from '../bscPlugin/references/ReferencesProvider';
 
 export type ProvidedSymbolMap = Map<SymbolTypeFlag, Map<string, BscSymbol>>;
 export type ChangedSymbolMap = Map<SymbolTypeFlag, Set<string>>;
@@ -245,6 +246,17 @@ export class BrsFile implements BscFile {
     public getTokenAt(position: Position) {
         for (let token of this.parser.tokens) {
             if (util.rangeContains(token.range, position)) {
+                return token;
+            }
+        }
+    }
+
+    /**
+     * Get the token at the specified position, or the next token
+     */
+    public getCurrentOrNextTokenAt(position: Position) {
+        for (let token of this.parser.tokens) {
+            if (util.comparePositionToRange(position, token.range) < 0) {
                 return token;
             }
         }
@@ -470,9 +482,11 @@ export class BrsFile implements BscFile {
         const processor = new CommentFlagProcessor(this, ['rem', `'`], diagnosticCodes, [DiagnosticCodeMap.unknownDiagnosticCode]);
 
         this.commentFlags = [];
-        for (let token of tokens) {
-            if (token.kind === TokenKind.Comment) {
-                processor.tryAdd(token.text, token.range);
+        for (let lexerToken of tokens) {
+            for (let triviaToken of lexerToken.leadingTrivia ?? []) {
+                if (triviaToken.kind === TokenKind.Comment) {
+                    processor.tryAdd(triviaToken.text, triviaToken.range);
+                }
             }
         }
         this.commentFlags.push(...processor.commentFlags);
@@ -512,7 +526,7 @@ export class BrsFile implements BscFile {
             for (let param of func.parameters) {
                 scope.variableDeclarations.push({
                     nameRange: param.tokens.name.range,
-                    lineIndex: param.tokens.name.range.start.line,
+                    lineIndex: param.tokens.name.range?.start.line,
                     name: param.tokens.name.text,
                     getType: () => {
                         return param.getType({ flags: SymbolTypeFlag.typetime });
@@ -525,7 +539,7 @@ export class BrsFile implements BscFile {
                 ForEachStatement: (stmt) => {
                     scope.variableDeclarations.push({
                         nameRange: stmt.tokens.item.range,
-                        lineIndex: stmt.tokens.item.range.start.line,
+                        lineIndex: stmt.tokens.item.range?.start.line,
                         name: stmt.tokens.item.text,
                         getType: () => DynamicType.instance //TODO: Infer types from array
                     });
@@ -534,7 +548,7 @@ export class BrsFile implements BscFile {
                     const { name: identifier } = stmt.tokens;
                     scope.labelStatements.push({
                         nameRange: identifier.range,
-                        lineIndex: identifier.range.start.line,
+                        lineIndex: identifier.range?.start.line,
                         name: identifier.text
                     });
                 }
@@ -563,7 +577,7 @@ export class BrsFile implements BscFile {
                 const variableName = statement.tokens.name;
                 scope.variableDeclarations.push({
                     nameRange: variableName.range,
-                    lineIndex: variableName.range.start.line,
+                    lineIndex: variableName.range?.start.line,
                     name: variableName.text,
                     getType: () => {
                         return statement.getType({ flags: SymbolTypeFlag.runtime });
@@ -736,9 +750,9 @@ export class BrsFile implements BscFile {
         return false;
     }
 
-    public getTokensUntil(currentToken: Token, tokenKind: TokenKind, direction: -1 | 1 = -1) {
+    public getTokensUntil(currentToken: Token, tokenKind: TokenKind, direction: -1 | 1 = 1) {
         let tokens = [];
-        for (let i = this.parser.tokens.indexOf(currentToken); direction === -1 ? i >= 0 : i === this.parser.tokens.length; i += direction) {
+        for (let i = this.parser.tokens.indexOf(currentToken); direction === -1 ? i >= 0 : i < this.parser.tokens.length; i += direction) {
             currentToken = this.parser.tokens[i];
             if (currentToken.kind === TokenKind.Newline || currentToken.kind === tokenKind) {
                 break;
@@ -746,6 +760,16 @@ export class BrsFile implements BscFile {
             tokens.push(currentToken);
         }
         return tokens;
+    }
+
+    public getNextTokenByPredicate(currentToken: Token, test: (Token) => boolean, direction: -1 | 1 = 1) {
+        for (let i = this.parser.tokens.indexOf(currentToken); direction === -1 ? i >= 0 : i < this.parser.tokens.length; i += direction) {
+            currentToken = this.parser.tokens[i];
+            if (test(currentToken)) {
+                return currentToken;
+            }
+        }
+        return undefined;
     }
 
     public getPreviousToken(token: Token) {
@@ -780,7 +804,7 @@ export class BrsFile implements BscFile {
     /**
      * Determine if the callee (i.e. function name) is a known function declared on the given namespace.
      */
-    public calleeIsKnownNamespaceFunction(callee: Expression, namespaceName: string) {
+    public calleeIsKnownNamespaceFunction(callee: Expression, namespaceName: string | undefined) {
         //if we have a variable and a namespace
         if (isVariableExpression(callee) && namespaceName) {
             let lowerCalleeName = callee?.tokens.name?.text?.toLowerCase();
@@ -1010,34 +1034,18 @@ export class BrsFile implements BscFile {
         return statement;
     }
 
-    public getReferences(position: Position) {
-
-        const callSiteToken = this.getTokenAt(position);
-
-        let locations = [] as Location[];
-
-        const searchFor = callSiteToken.text.toLowerCase();
-
-        const scopes = this.program.getScopesForFile(this);
-
-        for (const scope of scopes) {
-            const processedFiles = new Set<BrsFile>();
-            for (const file of scope.getAllFiles()) {
-                if (isBrsFile(file) && !processedFiles.has(file)) {
-                    processedFiles.add(file);
-                    file.ast.walk(createVisitor({
-                        VariableExpression: (e) => {
-                            if (e.tokens.name.text.toLowerCase() === searchFor) {
-                                locations.push(util.createLocation(util.pathToUri(file.srcPath), e.range));
-                            }
-                        }
-                    }), {
-                        walkMode: WalkMode.visitExpressionsRecursive
-                    });
-                }
-            }
-        }
-        return locations;
+    /**
+     * Given a position in a file, if the position is sitting on some type of identifier,
+     * look up all references of that identifier (every place that identifier is used across the whole app)
+     * @deprecated use `ReferencesProvider.process()` instead
+     */
+    public getReferences(position: Position): Location[] {
+        return new ReferencesProvider({
+            program: this.program,
+            file: this,
+            position: position,
+            references: []
+        }).process();
     }
 
     /**
@@ -1069,7 +1077,18 @@ export class BrsFile implements BscFile {
         let transpileResult: SourceNode | undefined;
 
         if (this.needsTranspiled) {
-            transpileResult = new SourceNode(null, null, state.srcPath, this.ast.transpile(state));
+            const astTranspile = this.ast.transpile(state);
+            const trailingComments = [];
+            if (util.hasLeadingComments(this.parser.eofToken)) {
+                if (util.isLeadingCommentOnSameLine(this.ast.statements[this.ast.statements.length - 1], this.parser.eofToken)) {
+                    trailingComments.push(' ');
+                } else {
+                    trailingComments.push('\n');
+                }
+                trailingComments.push(...state.transpileLeadingComments(this.parser.eofToken));
+            }
+
+            transpileResult = util.sourceNodeFromTranspileResult(null, null, state.srcPath, [...astTranspile, ...trailingComments]);
         } else if (this.program.options.sourceMap) {
             //emit code as-is with a simple map to the original file location
             transpileResult = util.simpleMap(state.srcPath, this.fileContents);
@@ -1085,11 +1104,12 @@ export class BrsFile implements BscFile {
         }
 
         if (this.program.options.sourceMap) {
-            return new SourceNode(null, null, null, [
+            const stagingFileName = path.basename(state.srcPath).replace(/\.bs$/, '.brs');
+            return new SourceNode(null, null, stagingFileName, [
                 transpileResult,
                 //add the sourcemap reference comment
-                `'//# sourceMappingURL=./${path.basename(state.srcPath)}.map`
-            ]).toStringWithSourceMap();
+                state.newline + `'//# sourceMappingURL=./${stagingFileName}.map`
+            ]).toStringWithSourceMap({ file: stagingFileName });
         } else {
             return {
                 code: transpileResult.toString(),
@@ -1318,7 +1338,7 @@ export class BrsFile implements BscFile {
     public getTypedef() {
         const state = new BrsTranspileState(this);
         const typedef = this.ast.getTypedef(state);
-        const programNode = new SourceNode(null, null, this.srcPath, typedef);
+        const programNode = util.sourceNodeFromTranspileResult(null, null, this.srcPath, typedef);
         return programNode.toString();
     }
 

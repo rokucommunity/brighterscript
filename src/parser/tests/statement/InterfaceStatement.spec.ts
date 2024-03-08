@@ -84,7 +84,6 @@ describe('InterfaceStatement', () => {
                 prop as dynamic
             end interface
         `, `
-            'this comment was throwing exception during transpile
         `);
     });
 
@@ -104,5 +103,14 @@ describe('InterfaceStatement', () => {
                 optional age as integer
             end interface
         `);
+    });
+
+    it('supports empty interfaces', () => {
+        const file = program.setFile('source/main.bs', `
+           interface SomeInterface
+           end interface
+        `);
+        program.validate();
+        expectZeroDiagnostics(file);
     });
 });

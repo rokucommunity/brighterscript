@@ -20,7 +20,7 @@ export abstract class AstNode {
     /**
      *  The starting and ending location of the node.
      */
-    public abstract range: Range;
+    public abstract range?: Range | undefined;
 
     public abstract transpile(state: BrsTranspileState): TranspileResult;
 
@@ -224,7 +224,6 @@ export enum AstNodeKind {
     EmptyStatement = 'EmptyStatement',
     AssignmentStatement = 'AssignmentStatement',
     ExpressionStatement = 'ExpressionStatement',
-    CommentStatement = 'CommentStatement',
     ExitForStatement = 'ExitForStatement',
     ExitWhileStatement = 'ExitWhileStatement',
     FunctionStatement = 'FunctionStatement',

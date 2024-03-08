@@ -1,6 +1,5 @@
 import type { Token } from '../../lexer/Token';
 import { TokenKind, ReservedWords } from '../../lexer/TokenKind';
-import { interpolatedRange } from '../../astUtils/creators';
 import type { Range } from 'vscode-languageserver';
 
 /* A set of utilities to be used while writing tests for the BRS parser. */
@@ -13,7 +12,7 @@ export function token(kind: TokenKind, text?: string): Token {
         kind: kind,
         text: text!,
         isReserved: ReservedWords.has((text ?? '').toLowerCase()),
-        range: interpolatedRange,
+        range: null,
         leadingWhitespace: '',
         leadingTrivia: []
     };
@@ -29,7 +28,7 @@ export function identifier(text: string) {
 /**
  * Test whether a range matches a group of elements with a `range`
  */
-export function rangeMatch(range: Range, elements: ({ range: Range })[]): boolean {
+export function rangeMatch(range: Range, elements: ({ range?: Range })[]): boolean {
     return range.start.line === elements[0].range.start.line &&
         range.start.character === elements[0].range.start.character &&
         range.end.line === elements[elements.length - 1].range.end.line &&

@@ -6,7 +6,7 @@ import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
 import type { AssignmentStatement } from '../../Statement';
 import type { AALiteralExpression, AAMemberExpression } from '../../Expression';
-import { isAALiteralExpression, isAssignmentStatement, isCommentStatement, isDottedGetExpression, isLiteralExpression } from '../../../astUtils/reflection';
+import { isAALiteralExpression, isAssignmentStatement, isDottedGetExpression, isLiteralExpression } from '../../../astUtils/reflection';
 import { expectDiagnostics, expectDiagnosticsIncludes } from '../../../testHelpers.spec';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 
@@ -195,14 +195,12 @@ describe('parser associative array literals', () => {
             }
         `);
         const commas = ((statements[0] as AssignmentStatement).value as AALiteralExpression).elements
-            .map(s => !isCommentStatement(s) && !!s.tokens.comma);
+            .map(s => !!s.tokens.comma);
         expect(commas).to.deep.equal([
             true, // p1
             true, // p2
-            false, // comment
             false, // p3
             false, // p4
-            false, // comment
             true // p5
         ]);
     });

@@ -1,7 +1,7 @@
 import { isBlock, isBrsFile, isCallableType, isClassStatement, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isFunctionExpression, isInterfaceType, isMethodStatement, isNamespaceStatement, isNamespaceType, isNativeType, isXmlFile, isXmlScope } from '../../astUtils/reflection';
 import type { FileReference, ProvideCompletionsEvent } from '../../interfaces';
 import type { BscFile } from '../../files/BscFile';
-import { DeclarableTypes, Keywords, TokenKind } from '../../lexer/TokenKind';
+import { AllowedTriviaTokens, DeclarableTypes, Keywords, TokenKind } from '../../lexer/TokenKind';
 import type { XmlScope } from '../../XmlScope';
 import { util } from '../../util';
 import type { Scope } from '../../Scope';
@@ -144,14 +144,15 @@ export class CompletionsProcessor {
      */
     public getBrsFileCompletions(position: Position, file: BrsFile): CompletionItem[] {
         let result = [] as CompletionItem[];
-
-        const currentToken = file.getTokenAt(position) ?? file.getTokenAt(file.getClosestExpression(position)?.range.start);
+        const currentTokenByFilePosition = file.getTokenAt(position);
+        const currentToken = currentTokenByFilePosition ?? file.getTokenAt(file.getClosestExpression(position)?.range.start);
         if (!currentToken) {
             return [];
         }
-        //if cursor is within a comment, disable completions
         const tokenKind = currentToken?.kind;
-        if (tokenKind === TokenKind.Comment) {
+
+        //if cursor is after a comment, disable completions
+        if (this.isPostionInComment(file, position)) {
             return [];
         }
 
@@ -569,6 +570,24 @@ export class CompletionsProcessor {
                 data: {}
             }
         ];
+    }
+
+    private isPostionInComment(file: BrsFile, position: Position) {
+        const currentToken = file.getCurrentOrNextTokenAt(position);
+        const tokenKind = currentToken?.kind;
+        if (!currentToken) {
+            return true;
+        }
+        if (tokenKind === TokenKind.Comment) {
+            return true;
+        }
+
+        const nextNonComment = file.getNextTokenByPredicate(currentToken, (t: Token) => !AllowedTriviaTokens.includes(t.kind), 1);
+        const firstComment = nextNonComment?.leadingTrivia.find(t => t.kind === TokenKind.Comment);
+        if (firstComment && util.comparePosition(position, firstComment?.range.start) >= 0) {
+            return true;
+        }
+        return false;
     }
 }
 

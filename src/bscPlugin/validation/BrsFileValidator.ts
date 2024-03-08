@@ -1,4 +1,4 @@
-import { isArrayType, isBody, isBrsFile, isClassStatement, isCommentStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
+import { isArrayType, isBody, isBrsFile, isClassStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -292,7 +292,6 @@ export class BrsFileValidator {
                     !isClassStatement(statement) &&
                     !isEnumStatement(statement) &&
                     !isInterfaceStatement(statement) &&
-                    !isCommentStatement(statement) &&
                     !isLibraryStatement(statement) &&
                     !isImportStatement(statement) &&
                     !isConstStatement(statement)
@@ -309,10 +308,6 @@ export class BrsFileValidator {
     private validateImportStatements() {
         let topOfFileIncludeStatements = [] as Array<LibraryStatement | ImportStatement>;
         for (let stmt of this.event.file.parser.ast.statements) {
-            //skip comments
-            if (isCommentStatement(stmt)) {
-                continue;
-            }
             //if we found a non-library statement, this statement is not at the top of the file
             if (isLibraryStatement(stmt) || isImportStatement(stmt)) {
                 topOfFileIncludeStatements.push(stmt);
