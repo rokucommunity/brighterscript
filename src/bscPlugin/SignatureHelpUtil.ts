@@ -78,11 +78,10 @@ export class SignatureHelpUtil {
         const funcStartPosition = func.range.start;
 
         // Get function comments in reverse order
-        let currentToken = file.getTokenAt(funcStartPosition);
+        const trivia = func.getLeadingTrivia().reverse();
         let functionComments = [] as string[];
-        while (currentToken) {
-            currentToken = file.getPreviousToken(currentToken);
 
+        for (const currentToken of trivia) {
             if (!currentToken) {
                 break;
             }
@@ -106,6 +105,7 @@ export class SignatureHelpUtil {
                     break;
                 }
                 functionComments.unshift(currentToken.text);
+            } else if (kind === TokenKind.Whitespace) {
             } else {
                 break;
             }

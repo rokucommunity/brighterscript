@@ -6,6 +6,7 @@ import { Range } from 'vscode-languageserver';
 import type { AAMemberExpression } from '../../Expression';
 import { expectZeroDiagnostics } from '../../../testHelpers.spec';
 import type { Statement } from '../../AstNode';
+import { isAAMemberExpression, isDottedSetStatement } from '../../../astUtils/reflection';
 
 describe('parser', () => {
     describe('`end` keyword', () => {
@@ -259,11 +260,34 @@ describe('parser', () => {
             `
         );
         let { diagnostics, statements } = Parser.parse(tokens) as any;
-        expect(diagnostics).to.exist.and.be.lengthOf(0, 'Error count should be 0');
-        expect(statements[0].func.body.statements[0].value.elements[0].text).to.equal('rem: 1');
-        expect(statements[0].func.body.statements[1].value.elements[1].text).to.equal('rem: 2');
-        expect(statements[0].func.body.statements[2].value.elements[0].text).to.equal('rem: 3: name: "bob"');
-        expect(statements[0].func.body.statements[3].tokens.name.text).to.equal('rem');
+        expectZeroDiagnostics(diagnostics);
+        const mainStatements = statements[0].func.body.statements;
+
+        // 1st AA has no elements - `rem` denotes comment
+        expect(mainStatements[0].value.elements.length).to.eq(0);
+        let commentBeforeClose = mainStatements[0].value.tokens.close.leadingTrivia[2];
+        expect(commentBeforeClose.kind).to.equal(TokenKind.Comment);
+        expect(commentBeforeClose.text).to.equal('rem: 1');
+
+        // 2nd AA has 1 element - `rem` after colon denotes comment, but first AA member is valid
+        expect(mainStatements[1].value.elements.length).to.eq(1);
+        expect(isAAMemberExpression(mainStatements[1].value.elements[0])).to.true;
+        expect(mainStatements[1].value.elements[0].tokens.key.text).to.equal('name');
+        expect(mainStatements[1].value.elements[0].value.tokens.value.text).to.equal('"bob"');
+        commentBeforeClose = mainStatements[1].value.tokens.close.leadingTrivia[2];
+        expect(commentBeforeClose.kind).to.equal(TokenKind.Comment);
+        expect(commentBeforeClose.text).to.equal('rem: 2');
+
+        // 3nd AA has no elements - `rem` colons are included in comments
+        expect(mainStatements[2].value.elements.length).to.eq(0);
+        commentBeforeClose = mainStatements[2].value.tokens.close.leadingTrivia[2];
+        expect(commentBeforeClose.kind).to.equal(TokenKind.Comment);
+        expect(commentBeforeClose.text).to.equal('rem: 3: name: "bob"');
+
+        // `rem` CAN be uses a property of an AA, when preceded by '.'
+        expect(isDottedSetStatement(mainStatements[3])).to.true;
+        expect(mainStatements[3].tokens.name.kind).to.equal(TokenKind.Identifier);
+        expect(mainStatements[3].tokens.name.text).to.equal('rem');
     });
 
     it('handles quoted AA keys', () => {

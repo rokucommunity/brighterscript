@@ -28,7 +28,7 @@ export function identifier(text: string) {
 /**
  * Test whether a range matches a group of elements with a `range`
  */
-export function rangeMatch(range: Range, elements: ({ range: Range })[]): boolean {
+export function rangeMatch(range: Range, elements: ({ range?: Range })[]): boolean {
     return range.start.line === elements[0].range.start.line &&
         range.start.character === elements[0].range.start.character &&
         range.end.line === elements[elements.length - 1].range.end.line &&

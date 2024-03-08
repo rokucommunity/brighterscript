@@ -252,6 +252,17 @@ export class BrsFile implements BscFile {
     }
 
     /**
+     * Get the token at the specified position, or the next token
+     */
+    public getCurrentOrNextTokenAt(position: Position) {
+        for (let token of this.parser.tokens) {
+            if (util.comparePositionToRange(position, token.range) < 0) {
+                return token;
+            }
+        }
+    }
+
+    /**
      * Walk the AST and find the expression that this token is most specifically contained within
      */
     public getClosestExpression(position: Position) {
@@ -471,9 +482,11 @@ export class BrsFile implements BscFile {
         const processor = new CommentFlagProcessor(this, ['rem', `'`], diagnosticCodes, [DiagnosticCodeMap.unknownDiagnosticCode]);
 
         this.commentFlags = [];
-        for (let token of tokens) {
-            if (token.kind === TokenKind.Comment) {
-                processor.tryAdd(token.text, token.range);
+        for (let lexerToken of tokens) {
+            for (let triviaToken of lexerToken.leadingTrivia ?? []) {
+                if (triviaToken.kind === TokenKind.Comment) {
+                    processor.tryAdd(triviaToken.text, triviaToken.range);
+                }
             }
         }
         this.commentFlags.push(...processor.commentFlags);
@@ -737,9 +750,9 @@ export class BrsFile implements BscFile {
         return false;
     }
 
-    public getTokensUntil(currentToken: Token, tokenKind: TokenKind, direction: -1 | 1 = -1) {
+    public getTokensUntil(currentToken: Token, tokenKind: TokenKind, direction: -1 | 1 = 1) {
         let tokens = [];
-        for (let i = this.parser.tokens.indexOf(currentToken); direction === -1 ? i >= 0 : i === this.parser.tokens.length; i += direction) {
+        for (let i = this.parser.tokens.indexOf(currentToken); direction === -1 ? i >= 0 : i < this.parser.tokens.length; i += direction) {
             currentToken = this.parser.tokens[i];
             if (currentToken.kind === TokenKind.Newline || currentToken.kind === tokenKind) {
                 break;
@@ -747,6 +760,16 @@ export class BrsFile implements BscFile {
             tokens.push(currentToken);
         }
         return tokens;
+    }
+
+    public getNextTokenByPredicate(currentToken: Token, test: (Token) => boolean, direction: -1 | 1 = 1) {
+        for (let i = this.parser.tokens.indexOf(currentToken); direction === -1 ? i >= 0 : i < this.parser.tokens.length; i += direction) {
+            currentToken = this.parser.tokens[i];
+            if (test(currentToken)) {
+                return currentToken;
+            }
+        }
+        return undefined;
     }
 
     public getPreviousToken(token: Token) {
@@ -1054,7 +1077,18 @@ export class BrsFile implements BscFile {
         let transpileResult: SourceNode | undefined;
 
         if (this.needsTranspiled) {
-            transpileResult = util.sourceNodeFromTranspileResult(null, null, state.srcPath, this.ast.transpile(state));
+            const astTranspile = this.ast.transpile(state);
+            const trailingComments = [];
+            if (util.hasLeadingComments(this.parser.eofToken)) {
+                if (util.isLeadingCommentOnSameLine(this.ast.statements[this.ast.statements.length - 1], this.parser.eofToken)) {
+                    trailingComments.push(' ');
+                } else {
+                    trailingComments.push('\n');
+                }
+                trailingComments.push(...state.transpileLeadingComments(this.parser.eofToken));
+            }
+
+            transpileResult = util.sourceNodeFromTranspileResult(null, null, state.srcPath, [...astTranspile, ...trailingComments]);
         } else if (this.program.options.sourceMap) {
             //emit code as-is with a simple map to the original file location
             transpileResult = util.simpleMap(state.srcPath, this.fileContents);

@@ -9,12 +9,11 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
-import { isCallExpression, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFieldStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypedefProvider, isUnaryExpression, isVoidType } from '../astUtils/reflection';
+import { isCallExpression, isEnumMemberStatement, isExpression, isExpressionStatement, isFieldStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypedefProvider, isUnaryExpression, isVoidType } from '../astUtils/reflection';
 import { TypeChainEntry, type GetTypeOptions, type TranspileResult, type TypedefProvider } from '../interfaces';
 import { createInvalidLiteral, createMethodStatement, createToken } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
-import type { TranspileState } from './TranspileState';
 import { SymbolTable } from '../SymbolTable';
 import type { Expression } from './AstNode';
 import { AstNodeKind } from './AstNode';
@@ -37,7 +36,7 @@ export class EmptyStatement extends Statement {
     /**
      * Create a negative range to indicate this is an interpolated location
      */
-    public readonly range: Range;
+    public readonly range?: Range;
 
     public readonly kind = AstNodeKind.EmptyStatement;
 
@@ -83,17 +82,16 @@ export class Body extends Statement implements TypedefProvider {
                 //this is the first statement. do nothing related to spacing and newlines
 
                 //if comment is on same line as prior sibling
-            } else if (isCommentStatement(statement) && previousStatement && statement.range?.start.line === previousStatement.range?.end.line) {
+            } else if (util.hasLeadingComments(statement) && previousStatement && util.getLeadingComments(statement)?.[0]?.range?.start.line === previousStatement.range?.end.line) {
                 result.push(
                     ' '
                 );
-
                 //add double newline if this is a comment, and next is a function
-            } else if (isCommentStatement(statement) && nextStatement && isFunctionStatement(nextStatement)) {
+            } else if (util.hasLeadingComments(statement) && nextStatement && isFunctionStatement(nextStatement)) {
                 result.push(state.newline, state.newline);
 
                 //add double newline if is function not preceeded by a comment
-            } else if (isFunctionStatement(statement) && previousStatement && !(isCommentStatement(previousStatement))) {
+            } else if (isFunctionStatement(statement) && previousStatement && !util.hasLeadingComments(statement)) {
                 result.push(state.newline, state.newline);
             } else {
                 //separate statements by a single newline
@@ -154,7 +152,7 @@ export class AssignmentStatement extends Statement {
 
     public readonly value: Expression;
 
-    public readonly typeExpression: TypeExpression;
+    public readonly typeExpression?: TypeExpression;
 
     public readonly kind = AstNodeKind.AssignmentStatement;
 
@@ -190,6 +188,10 @@ export class AssignmentStatement extends Statement {
         options.typeChain?.push(new TypeChainEntry({ name: this.tokens.name.text, type: variableType, data: options.data, range: this.tokens.name.range, kind: this.kind }));
         return variableType;
     }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.name.leadingTrivia ?? [];
+    }
 }
 
 export class Block extends Statement {
@@ -207,7 +209,7 @@ export class Block extends Statement {
     }
 
     public readonly statements: Statement[];
-    public readonly startingRange: Range;
+    public readonly startingRange?: Range;
 
     public readonly kind = AstNodeKind.Block;
 
@@ -219,10 +221,10 @@ export class Block extends Statement {
         for (let i = 0; i < this.statements.length; i++) {
             let previousStatement = this.statements[i - 1];
             let statement = this.statements[i];
-
+            //is not a comment
             //if comment is on same line as parent
-            if (isCommentStatement(statement) &&
-                (util.linesTouch(state.lineage[0], statement) || util.linesTouch(previousStatement, statement))
+            if (util.isLeadingCommentOnSameLine(state.lineage[0], statement) ||
+                util.isLeadingCommentOnSameLine(previousStatement, statement)
             ) {
                 results.push(' ');
 
@@ -276,62 +278,12 @@ export class ExpressionStatement extends Statement {
             walk(this, 'expression', visitor, options);
         }
     }
-}
 
-export class CommentStatement extends Statement implements Expression, TypedefProvider {
-    constructor(options: {
-        comments: Token[];
-    }) {
-        super();
-        this.visitMode = InternalWalkMode.visitStatements | InternalWalkMode.visitExpressions;
-        this.tokens = {
-            comments: options.comments
-        };
-        if (this.tokens.comments?.length > 0) {
-            this.range = util.createBoundingRange(
-                ...this.tokens.comments
-            );
-        }
-    }
-
-    public readonly tokens: {
-        readonly comments: Token[];
-    };
-
-    public readonly kind = AstNodeKind.CommentStatement;
-
-    public readonly range: Range | undefined;
-
-    get text() {
-        return this.tokens.comments.map(x => x.text).join('\n');
-    }
-
-    transpile(state: BrsTranspileState) {
-        let result: TranspileResult = [];
-        for (let i = 0; i < this.tokens.comments.length; i++) {
-            let comment = this.tokens.comments[i];
-            if (i > 0) {
-                result.push(state.indent());
-            }
-            result.push(
-                state.transpileToken(comment)
-            );
-            //add newline for all except final comment
-            if (i < this.tokens.comments.length - 1) {
-                result.push(state.newline);
-            }
-        }
-        return result;
-    }
-
-    public getTypedef(state: TranspileState) {
-        return this.transpile(state as BrsTranspileState);
-    }
-
-    walk(visitor: WalkVisitor, options: WalkOptions) {
-        //nothing to walk
+    getLeadingTrivia(): Token[] {
+        return this.expression.getLeadingTrivia();
     }
 }
+
 
 export class ExitForStatement extends Statement {
     constructor(options?: {
@@ -350,16 +302,18 @@ export class ExitForStatement extends Statement {
 
     public readonly kind = AstNodeKind.ExitForStatement;
 
-    public readonly range: Range;
+    public readonly range?: Range;
 
     transpile(state: BrsTranspileState) {
-        return [
-            this.tokens.exitFor ? state.transpileToken(this.tokens.exitFor) : 'exit for'
-        ];
+        return this.tokens.exitFor ? state.transpileToken(this.tokens.exitFor) : ['exit for'];
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.exitFor?.leadingTrivia ?? [];
     }
 
 }
@@ -381,16 +335,18 @@ export class ExitWhileStatement extends Statement {
 
     public readonly kind = AstNodeKind.ExitWhileStatement;
 
-    public readonly range: Range;
+    public readonly range?: Range;
 
     transpile(state: BrsTranspileState) {
-        return [
-            this.tokens.exitWhile ? state.transpileToken(this.tokens.exitWhile) : 'exit while'
-        ];
+        return this.tokens.exitWhile ? state.transpileToken(this.tokens.exitWhile) : ['exit while'];
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.exitWhile?.leadingTrivia ?? [];
     }
 }
 
@@ -448,7 +404,14 @@ export class FunctionStatement extends Statement implements TypedefProvider {
     }
 
     getTypedef(state: BrsTranspileState) {
-        let result = [] as TranspileResult;
+        let result: TranspileResult = [];
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
         for (let annotation of this.annotations ?? []) {
             result.push(
                 ...annotation.getTypedef(state),
@@ -546,18 +509,11 @@ export class IfStatement extends Statement {
         if (thenNodes.length > 0) {
             results.push(thenNodes);
         }
-        results.push('\n');
-
         //else branch
-        if (this.tokens.else) {
-            //else
-            results.push(
-                state.indent(),
-                state.transpileToken(this.tokens.else)
-            );
-        }
-
         if (this.elseBranch) {
+            //else
+            results.push(...state.transpileEndBlockToken(this.thenBranch, this.tokens.else, 'else'));
+
             if (isIfStatement(this.elseBranch)) {
                 //chained elseif
                 state.lineage.unshift(this.elseBranch);
@@ -584,19 +540,12 @@ export class IfStatement extends Statement {
                 if (body.length > 0) {
                     results.push(...body);
                 }
-                results.push('\n');
             }
         }
 
         //end if
-        results.push(state.indent());
-        if (this.tokens.endIf) {
-            results.push(
-                state.transpileToken(this.tokens.endIf)
-            );
-        } else {
-            results.push('end if');
-        }
+        results.push(...state.transpileEndBlockToken(this.elseBranch ?? this.thenBranch, this.tokens.endIf, 'end if'));
+
         return results;
     }
 
@@ -610,6 +559,10 @@ export class IfStatement extends Statement {
         if (this.elseBranch && options.walkMode & InternalWalkMode.walkStatements) {
             walk(this, 'elseBranch', visitor, options);
         }
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.if?.leadingTrivia ?? [];
     }
 }
 
@@ -649,6 +602,10 @@ export class IncrementStatement extends Statement {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'value', visitor, options);
         }
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.value?.getLeadingTrivia() ?? [];
     }
 }
 
@@ -721,6 +678,10 @@ export class PrintStatement extends Statement {
             //sometimes we have semicolon Tokens in the expressions list (should probably fix that...), so only walk the actual expressions
             walkArray(this.expressions, visitor, options, this, (item) => isExpression(item as any));
         }
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.print?.leadingTrivia ?? [];
     }
 }
 
@@ -795,6 +756,10 @@ export class DimStatement extends Statement {
         }
         return type;
     }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.dim?.leadingTrivia ?? [];
+    }
 }
 
 export class GotoStatement extends Statement {
@@ -832,6 +797,10 @@ export class GotoStatement extends Statement {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.goto?.leadingTrivia ?? [];
     }
 }
 
@@ -916,6 +885,10 @@ export class ReturnStatement extends Statement {
             walk(this, 'value', visitor, options);
         }
     }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.return?.leadingTrivia ?? [];
+    }
 }
 
 export class EndStatement extends Statement {
@@ -944,6 +917,10 @@ export class EndStatement extends Statement {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
     }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.end?.leadingTrivia ?? [];
+    }
 }
 
 export class StopStatement extends Statement {
@@ -970,6 +947,10 @@ export class StopStatement extends Statement {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.stop?.leadingTrivia ?? [];
     }
 }
 
@@ -1057,14 +1038,8 @@ export class ForStatement extends Statement {
         result.push(...this.body.transpile(state));
         state.lineage.shift();
 
-        // add new line before "end for"
-        result.push('\n');
-
         //end for
-        result.push(
-            state.indent(),
-            state.transpileToken(this.tokens.endFor, 'end for')
-        );
+        result.push(...state.transpileEndBlockToken(this.body, this.tokens.endFor, 'end for'));
 
         return result;
     }
@@ -1080,6 +1055,10 @@ export class ForStatement extends Statement {
         if (options.walkMode & InternalWalkMode.walkStatements) {
             walk(this, 'body', visitor, options);
         }
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.for?.leadingTrivia ?? [];
     }
 }
 
@@ -1149,14 +1128,9 @@ export class ForEachStatement extends Statement {
         result.push(...this.body.transpile(state));
         state.lineage.shift();
 
-        // add new line before "end for"
-        result.push('\n');
-
         //end for
-        result.push(
-            state.indent(),
-            state.transpileToken(this.tokens.endFor, 'end for')
-        );
+        result.push(...state.transpileEndBlockToken(this.body, this.tokens.endFor, 'end for'));
+
         return result;
     }
 
@@ -1171,6 +1145,10 @@ export class ForEachStatement extends Statement {
 
     getType(options: GetTypeOptions): BscType {
         return this.getSymbolTable().getSymbolType(this.tokens.item.text, options);
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.forEach?.leadingTrivia ?? [];
     }
 }
 
@@ -1223,14 +1201,8 @@ export class WhileStatement extends Statement {
         result.push(...this.body.transpile(state));
         state.lineage.shift();
 
-        //trailing newline only if we have body statements
-        result.push('\n');
-
         //end while
-        result.push(
-            state.indent(),
-            state.transpileToken(this.tokens.endWhile, 'end while')
-        );
+        result.push(...state.transpileEndBlockToken(this.body, this.tokens.endWhile, 'end while'));
 
         return result;
     }
@@ -1242,6 +1214,10 @@ export class WhileStatement extends Statement {
         if (options.walkMode & InternalWalkMode.walkStatements) {
             walk(this, 'body', visitor, options);
         }
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.while?.leadingTrivia ?? [];
     }
 }
 
@@ -1313,6 +1289,10 @@ export class DottedSetStatement extends Statement {
             kind: this.kind
         }));
         return result;
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.obj.getLeadingTrivia();
     }
 }
 
@@ -1391,6 +1371,10 @@ export class IndexedSetStatement extends Statement {
             walk(this, 'value', visitor, options);
         }
     }
+
+    getLeadingTrivia(): Token[] {
+        return this.obj.getLeadingTrivia();
+    }
 }
 
 export class LibraryStatement extends Statement implements TypedefProvider {
@@ -1438,6 +1422,10 @@ export class LibraryStatement extends Statement implements TypedefProvider {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.library?.leadingTrivia ?? [];
     }
 }
 
@@ -1518,12 +1506,20 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         return this.body.transpile(state);
     }
 
-    getTypedef(state: BrsTranspileState): TranspileResult {
-        let result = [
-            'namespace ',
+    getTypedef(state: BrsTranspileState) {
+        let result: TranspileResult = [];
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
+
+        result.push('namespace ',
             ...this.getName(ParseMode.BrighterScript),
             state.newline
-        ] as TranspileResult;
+        );
         state.blockDepth++;
         result.push(
             ...this.body.getTypedef(state)
@@ -1619,6 +1615,10 @@ export class ImportStatement extends Statement implements TypedefProvider {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.import?.leadingTrivia ?? [];
     }
 }
 
@@ -1729,6 +1729,13 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
 
     getTypedef(state: BrsTranspileState) {
         const result = [] as TranspileResult;
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
         for (let annotation of this.annotations ?? []) {
             result.push(
                 ...annotation.getTypedef(state),
@@ -1870,6 +1877,13 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
 
     getTypedef(state: BrsTranspileState): TranspileResult {
         const result = [] as TranspileResult;
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
         for (let annotation of this.annotations ?? []) {
             result.push(
                 ...annotation.getTypedef(state),
@@ -1980,6 +1994,13 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
 
     getTypedef(state: BrsTranspileState) {
         const result = [] as TranspileResult;
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
         for (let annotation of this.annotations ?? []) {
             result.push(
                 ...annotation.getTypedef(state),
@@ -2148,6 +2169,13 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
     getTypedef(state: BrsTranspileState) {
         const result = [] as TranspileResult;
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
         for (let annotation of this.annotations ?? []) {
             result.push(
                 ...annotation.getTypedef(state),
@@ -2587,7 +2615,14 @@ export class MethodStatement extends FunctionStatement {
     }
 
     getTypedef(state: BrsTranspileState) {
-        const result = [] as TranspileResult;
+        const result: TranspileResult = [];
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
         for (let annotation of this.annotations ?? []) {
             result.push(
                 ...annotation.getTypedef(state),
@@ -2773,6 +2808,13 @@ export class FieldStatement extends Statement implements TypedefProvider {
     getTypedef(state: BrsTranspileState) {
         const result = [];
         if (this.tokens.name) {
+            for (let comment of util.getLeadingComments(this) ?? []) {
+                result.push(
+                    comment.text,
+                    state.newline,
+                    state.indent()
+                );
+            }
             for (let annotation of this.annotations ?? []) {
                 result.push(
                     ...annotation.getTypedef(state),
@@ -2864,6 +2906,10 @@ export class TryCatchStatement extends Statement {
             walk(this, 'catchStatement', visitor, options);
         }
     }
+
+    public getLeadingTrivia(): Token[] {
+        return this.tokens.try?.leadingTrivia ?? [];
+    }
 }
 
 export class CatchStatement extends Statement {
@@ -2909,6 +2955,10 @@ export class CatchStatement extends Statement {
         if (this.catchBranch && options.walkMode & InternalWalkMode.walkStatements) {
             walk(this, 'catchBranch', visitor, options);
         }
+    }
+
+    public getLeadingTrivia(): Token[] {
+        return this.tokens.catch?.leadingTrivia ?? [];
     }
 }
 
@@ -2961,6 +3011,10 @@ export class ThrowStatement extends Statement {
             walk(this, 'expression', visitor, options);
         }
     }
+
+    public getLeadingTrivia(): Token[] {
+        return this.tokens.throw?.leadingTrivia ?? [];
+    }
 }
 
 
@@ -2969,7 +3023,7 @@ export class EnumStatement extends Statement implements TypedefProvider {
         enum?: Token;
         name: Identifier;
         endEnum?: Token;
-        body: Array<EnumMemberStatement | CommentStatement>;
+        body: Array<EnumMemberStatement>;
     }) {
         super();
         this.tokens = {
@@ -2986,7 +3040,7 @@ export class EnumStatement extends Statement implements TypedefProvider {
         readonly name: Identifier;
         readonly endEnum?: Token;
     };
-    public readonly body: Array<EnumMemberStatement | CommentStatement>;
+    public readonly body: Array<EnumMemberStatement>;
 
     public readonly kind = AstNodeKind.EnumStatement;
 
@@ -3010,7 +3064,7 @@ export class EnumStatement extends Statement implements TypedefProvider {
     }
 
     public getLeadingTrivia(): Token[] {
-        return util.concatAnnotationLeadingTrivia(this, this.tokens.enum.leadingTrivia);
+        return util.concatAnnotationLeadingTrivia(this, this.tokens.enum?.leadingTrivia);
     }
 
     /**
@@ -3087,6 +3141,13 @@ export class EnumStatement extends Statement implements TypedefProvider {
 
     getTypedef(state: BrsTranspileState) {
         const result = [] as TranspileResult;
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
         for (let annotation of this.annotations ?? []) {
             result.push(
                 ...annotation.getTypedef(state),
@@ -3186,9 +3247,15 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
     }
 
     getTypedef(state: BrsTranspileState): TranspileResult {
-        const result = [
-            this.tokens.name.text
-        ] as TranspileResult;
+        const result: TranspileResult = [];
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
+        result.push(this.tokens.name.text);
         if (this.tokens.equals) {
             result.push(' ', this.tokens.equals.text, ' ');
             if (this.value) {
@@ -3248,7 +3315,7 @@ export class ConstStatement extends Statement implements TypedefProvider {
     }
 
     public getLeadingTrivia(): Token[] {
-        return util.concatAnnotationLeadingTrivia(this, this.tokens.const.leadingTrivia);
+        return util.concatAnnotationLeadingTrivia(this, this.tokens.const?.leadingTrivia);
     }
 
     /**
@@ -3276,7 +3343,15 @@ export class ConstStatement extends Statement implements TypedefProvider {
     }
 
     getTypedef(state: BrsTranspileState): TranspileResult {
-        return [
+        const result: TranspileResult = [];
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
+        result.push(
             this.tokens.const ? state.tokenToSourceNode(this.tokens.const) : 'const',
             ' ',
             state.tokenToSourceNode(this.tokens.name),
@@ -3284,7 +3359,8 @@ export class ConstStatement extends Statement implements TypedefProvider {
             this.tokens.equals ? state.tokenToSourceNode(this.tokens.equals) : '=',
             ' ',
             ...this.value.transpile(state)
-        ];
+        );
+        return result;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -3333,5 +3409,9 @@ export class ContinueStatement extends Statement {
     }
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
+    }
+
+    public getLeadingTrivia(): Token[] {
+        return this.tokens.continue?.leadingTrivia ?? [];
     }
 }

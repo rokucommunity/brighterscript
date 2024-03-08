@@ -24,7 +24,7 @@ import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
 import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionParameterExpression, IndexedGetExpression, LiteralExpression, NewExpression, TypeExpression, VariableExpression, XmlAttributeGetExpression } from './parser/Expression';
 import { Logger, LogLevel } from './Logger';
-import type { Identifier, Locatable, Token } from './lexer/Token';
+import { isToken, type Identifier, type Locatable, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
 import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLongIntegerType, isNumberType, isStringType, isTypeExpression, isTypedArrayExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
@@ -630,40 +630,61 @@ export class Util {
     /**
      * Combine all the documentation found before a token (i.e. comment tokens)
      */
-    public getTokenDocumentation(tokens: Token[], token?: Token) {
+    public getTokenDocumentation(token?: Token | AstNode) {
+        const leadingTrivia = isToken(token) ? token.leadingTrivia : token?.getLeadingTrivia() ?? [];
+        const tokens = leadingTrivia?.filter(t => t.kind === TokenKind.Newline || t.kind === TokenKind.Comment);
         const comments = [] as Token[];
-        const idx = tokens?.indexOf(token);
-        if (!idx || idx === -1) {
-            return undefined;
-        }
-        for (let i = idx - 1; i >= 0; i--) {
+
+        let newLinesInRow = 0;
+        for (let i = tokens.length - 1; i >= 0; i--) {
             const token = tokens[i];
             //skip whitespace and newline chars
             if (token.kind === TokenKind.Comment) {
                 comments.push(token);
-            } else if (token.kind === TokenKind.Newline || token.kind === TokenKind.Whitespace) {
+                newLinesInRow = 0;
+            } else if (token.kind === TokenKind.Newline) {
                 //skip these tokens
-                continue;
+                newLinesInRow++;
 
+                if (newLinesInRow > 1) {
+                    // stop processing on empty line.
+                    break;
+                }
                 //any other token means there are no more comments
             } else {
                 break;
             }
         }
+        const jsDocCommentBlockLine = /(\/\*{2,}|\*{1,}\/)/i;
+        let usesjsDocCommentBlock = false;
         if (comments.length > 0) {
-            return comments.reverse().map(x => x.text.replace(/^('|rem)/i, '').trim()).map(line => {
-                if (line.startsWith('@')) {
-                    // Handle jsdoc/brightscriptdoc tags specially
-                    // make sure they are on their own markdown line, and add italics
-                    const firstSpaceIndex = line.indexOf(' ');
-                    if (firstSpaceIndex === -1) {
-                        return `\n_${line}_`;
+            return comments.reverse()
+                .map(x => x.text.replace(/^('|rem)/i, '').trim())
+                .filter(line => {
+                    if (jsDocCommentBlockLine.exec(line)) {
+                        usesjsDocCommentBlock = true;
+                        return false;
                     }
-                    const firstWord = line.substring(0, firstSpaceIndex);
-                    return `\n_${firstWord}_ ${line.substring(firstSpaceIndex + 1)}`;
-                }
-                return line;
-            }).join('\n');
+                    return true;
+                }).map(line => {
+                    if (usesjsDocCommentBlock) {
+                        if (line.startsWith('*')) {
+                            //remove jsDoc leading '*'
+                            line = line.slice(1).trim();
+                        }
+                    }
+                    if (line.startsWith('@')) {
+                        // Handle jsdoc/brightscriptdoc tags specially
+                        // make sure they are on their own markdown line, and add italics
+                        const firstSpaceIndex = line.indexOf(' ');
+                        if (firstSpaceIndex === -1) {
+                            return `\n_${line}_`;
+                        }
+                        const firstWord = line.substring(0, firstSpaceIndex);
+                        return `\n_${firstWord}_ ${line.substring(firstSpaceIndex + 1)}`;
+                    }
+                    return line;
+                }).join('\n');
         }
     }
 
@@ -674,8 +695,7 @@ export class Util {
         if (!node) {
             return;
         }
-        const leadingTrivia = node.getLeadingTrivia();
-        return this.getTokenDocumentation(leadingTrivia, leadingTrivia[leadingTrivia.length - 1]);
+        return this.getTokenDocumentation(node);
     }
 
     /**
@@ -1081,7 +1101,7 @@ export class Util {
      *  Gets the bounding range of a bunch of ranges or objects that have ranges
      *  TODO: this does a full iteration of the args. If the args were guaranteed to be in range order, we could optimize this
      */
-    public createBoundingRange(...locatables: Array<{ range?: Range } | Range>): Range | undefined {
+    public createBoundingRange(...locatables: Array<{ range?: Range } | Range | undefined>): Range | undefined {
         let startPosition: Position | undefined;
         let endPosition: Position | undefined;
 
@@ -1584,7 +1604,7 @@ export class Util {
     }
 
 
-    public concatAnnotationLeadingTrivia(stmt: Statement, otherTrivia: Token[]): Token[] {
+    public concatAnnotationLeadingTrivia(stmt: Statement, otherTrivia: Token[] = []): Token[] {
         return [...(stmt.annotations?.map(anno => anno.getLeadingTrivia()).flat() ?? []), ...otherTrivia];
     }
 
@@ -2078,6 +2098,25 @@ export class Util {
 
     public getAstNodeFriendlyName(node: AstNode) {
         return node?.kind.replace(/Statement|Expression/g, '');
+    }
+
+
+    public hasLeadingComments(input: Token | AstNode) {
+        const leadingTrivia = isToken(input) ? input?.leadingTrivia : input?.getLeadingTrivia() ?? [];
+        return !!leadingTrivia.find(t => t.kind === TokenKind.Comment);
+    }
+
+    public getLeadingComments(input: Token | AstNode) {
+        const leadingTrivia = isToken(input) ? input?.leadingTrivia : input?.getLeadingTrivia() ?? [];
+        return leadingTrivia.filter(t => t.kind === TokenKind.Comment);
+    }
+
+    public isLeadingCommentOnSameLine(line: { range?: Range }, input: Token | AstNode) {
+        const leadingCommentRange = this.getLeadingComments(input)?.[0];
+        if (leadingCommentRange) {
+            return this.linesTouch(line, leadingCommentRange);
+        }
+        return false;
     }
 }
 

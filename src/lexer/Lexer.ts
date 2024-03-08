@@ -1071,6 +1071,7 @@ export class Lexer {
             leadingWhitespace: this.leadingWhitespace,
             leadingTrivia: []
         };
+
         if (this.isTrivia(token)) {
             this.pushTrivia(token);
         } else {
@@ -1078,7 +1079,9 @@ export class Lexer {
             this.leadingTrivia = [];
         }
         this.leadingWhitespace = '';
-        this.tokens.push(token);
+        if (kind !== TokenKind.Comment) {
+            this.tokens.push(token);
+        }
         this.sync();
         return token;
     }
