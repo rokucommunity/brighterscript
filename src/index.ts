@@ -35,4 +35,4 @@ export * from './BusyStatusTracker';
 export * from './Logger';
 export * from './parser/SGTypes';
 export * from './parser/SGParser';
-
+export * from './SymbolTypeFlag';
