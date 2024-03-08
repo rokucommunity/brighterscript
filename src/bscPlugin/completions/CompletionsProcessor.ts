@@ -21,6 +21,7 @@ import type { AstNode } from '../../parser/AstNode';
 import type { ClassStatement, FunctionStatement, NamespaceStatement } from '../../parser/Statement';
 import type { Token } from '../../lexer/Token';
 import { createIdentifier } from '../../astUtils/creators';
+import { FunctionType } from '../../types/FunctionType';
 
 export class CompletionsProcessor {
     constructor(
@@ -249,6 +250,11 @@ export class CompletionsProcessor {
                 currentSymbols = symbolTable?.getAllSymbols(symbolTableLookupFlag) ?? [];
                 const tokenType = expression.getType({ flags: SymbolTypeFlag.runtime });
                 if (isClassType(tokenType)) {
+                    if (tokenType.name.split('.').pop().toLowerCase() === beforeDotToken?.text.toLowerCase()) {
+                        // className is used as variable -- it actually refers to the constructor here
+                        currentSymbols = FunctionType.instance.getMemberTable().getAllSymbols(symbolTableLookupFlag);
+                    }
+
                     currentSymbols = currentSymbols.filter((symbol) => {
                         if (symbol.name === 'new') {
                             // don't return the constructor as a property

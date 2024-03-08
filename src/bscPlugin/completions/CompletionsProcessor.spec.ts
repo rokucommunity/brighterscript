@@ -1059,6 +1059,47 @@ describe('CompletionsProcessor', () => {
             }]);
         });
 
+        it.only('treats class name as a function', () => {
+            program.setFile('source/main.bs', `
+                class SomeKlass
+                    name as string
+                end class
+
+                sub test()
+                    print SomeKlass.
+                end sub
+            `);
+
+            program.validate();
+            // print SomeKlass.|
+            let completions = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(6, 36));
+            expectCompletionsIncludes(completions, [{
+                label: 'ifFunction',
+                kind: CompletionItemKind.Interface
+            }]);
+        });
+
+        it.only('treats namespaced class name as a function', () => {
+            program.setFile('source/main.bs', `
+                namespace alpha
+                    class SomeKlass
+                        name as string
+                    end class
+                end namespace
+
+                sub test()
+                    print alpha.SomeKlass.
+                end sub
+            `);
+
+            program.validate();
+            // print alpha.SomeKlass.|
+            let completions = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(8, 42));
+            expectCompletionsIncludes(completions, [{
+                label: 'ifFunction',
+                kind: CompletionItemKind.Interface
+            }]);
+        });
 
     });
 

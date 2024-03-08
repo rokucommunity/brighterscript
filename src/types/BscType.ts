@@ -38,6 +38,7 @@ export abstract class BscType {
     }
 
     getMemberTable() {
+        this.addBuiltInInterfaces();
         return this.memberTable;
     }
 
