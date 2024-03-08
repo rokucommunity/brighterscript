@@ -10,6 +10,7 @@ import { Block, MethodStatement } from '../parser/Statement';
 /**
  * A range that points to the beginning of the file. Used to give non-null ranges to programmatically-added source code.
  * (Hardcoded range to prevent circular dependency issue in `../util.ts`)
+ * @deprecated don't use this, it screws up sourcemaps. Just set range to null
  */
 export const interpolatedRange = {
     start: {
@@ -84,7 +85,7 @@ const tokenDefaults = {
     [TokenKind.Whitespace]: ' '
 };
 
-export function createToken<T extends TokenKind>(kind: T, text?: string, range = interpolatedRange): Token & { kind: T } {
+export function createToken<T extends TokenKind>(kind: T, text?: string, range?: Range): Token & { kind: T } {
     return {
         kind: kind,
         text: text ?? tokenDefaults[kind as string] ?? kind.toString().toLowerCase(),
@@ -153,7 +154,7 @@ export function createBooleanLiteral(value: string, range?: Range) {
 export function createFunctionExpression(kind: TokenKind.Sub | TokenKind.Function) {
     return new FunctionExpression({
         parameters: [],
-        body: new Block({ statements: [], startingRange: interpolatedRange }),
+        body: new Block({ statements: [] }),
         functionType: createToken(kind),
         endFunctionType: kind === TokenKind.Sub ? createToken(TokenKind.EndSub) : createToken(TokenKind.EndFunction),
         leftParen: createToken(TokenKind.LeftParen),

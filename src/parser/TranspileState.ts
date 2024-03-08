@@ -4,6 +4,7 @@ import type { BsConfig } from '../BsConfig';
 import { TokenKind } from '../lexer/TokenKind';
 import type { Token } from '../lexer/Token';
 import util from '../util';
+import type { TranspileResult } from '../interfaces';
 
 
 interface TranspileToken {
@@ -66,8 +67,8 @@ export class TranspileState {
     /**
      * Shorthand for creating a new source node
      */
-    public sourceNode(locatable: { range?: Range }, code: string | SourceNode | Array<string | SourceNode>): SourceNode {
-        return new SourceNode(
+    public sourceNode(locatable: { range?: Range }, code: string | SourceNode | TranspileResult): SourceNode {
+        return util.sourceNodeFromTranspileResult(
             //convert 0-based range line to 1-based SourceNode line
             locatable.range ? locatable.range.start.line + 1 : null,
             //range and SourceNode character are both 0-based, so no conversion necessary

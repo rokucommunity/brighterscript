@@ -16,8 +16,7 @@ import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
-import { SymbolTypeFlag } from '../SymbolTableFlag';
-import { TypedFunctionType } from '../types/TypedFunctionType';
+import type { AstNode } from './AstNode';
 import { AstNodeKind, Expression } from './AstNode';
 import { SymbolTable } from '../SymbolTable';
 import { SourceNode } from 'source-map';
@@ -29,6 +28,8 @@ import { ArrayType } from '../types/ArrayType';
 import { AssociativeArrayType } from '../types/AssociativeArrayType';
 import type { ComponentType } from '../types/ComponentType';
 import { createToken } from '../astUtils/creators';
+import { SymbolTypeFlag } from '../SymbolTableFlag';
+import { TypedFunctionType } from '../types';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -55,7 +56,7 @@ export class BinaryExpression extends Expression {
 
     public readonly kind = AstNodeKind.BinaryExpression;
 
-    public readonly range: Range;
+    public readonly range: Range | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -130,10 +131,10 @@ export class CallExpression extends Expression {
 
     public readonly kind = AstNodeKind.CallExpression;
 
-    public readonly range: Range;
+    public readonly range: Range | undefined;
 
     transpile(state: BrsTranspileState, nameOverride?: string) {
-        let result: Array<string | SourceNode> = [];
+        let result: TranspileResult = [];
 
         //transpile the name
         if (nameOverride) {
@@ -260,7 +261,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
     }
 
     transpile(state: BrsTranspileState, name?: Identifier, includeBody = true) {
-        let results = [];
+        let results = [] as TranspileResult;
         //'function'|'sub'
         results.push(
             ...state.transpileToken(this.tokens.functionType, 'function')
@@ -433,7 +434,7 @@ export class FunctionParameterExpression extends Expression {
         return paramType;
     }
 
-    public get range(): Range {
+    public get range(): Range | undefined {
         return util.createBoundingRange(
             this.tokens.name,
             this.tokens.as,
@@ -444,10 +445,10 @@ export class FunctionParameterExpression extends Expression {
     }
 
     public transpile(state: BrsTranspileState) {
-        let result = [
+        let result: TranspileResult = [
             //name
             ...state.transpileToken(this.tokens.name)
-        ] as any[];
+        ];
         //default value
         if (this.defaultValue) {
             result.push(' = ');
@@ -467,20 +468,23 @@ export class FunctionParameterExpression extends Expression {
     }
 
     public getTypedef(state: BrsTranspileState): TranspileResult {
-        return [
-            //name
-            this.tokens.name.text,
-            //default value
-            ...(this.defaultValue ? [
-                ' = ',
-                ...this.defaultValue.transpile(state)
-            ] : []),
-            //type declaration
-            ...(this.typeExpression ? [
-                ' as ',
-                ...(this.typeExpression?.getTypedef(state) ?? [''])
-            ] : [])
-        ];
+        const results = [this.tokens.name.text] as TranspileResult;
+
+        if (this.defaultValue) {
+            results.push(' = ', ...this.defaultValue.transpile(state));
+        }
+
+        if (this.tokens.as) {
+            results.push(' as ');
+
+            // TODO: Is this conditional needed? Will typeToken always exist
+            // so long as `asToken` exists?
+            if (this.typeExpression) {
+                results.push(...(this.typeExpression?.getTypedef(state) ?? ['']));
+            }
+        }
+
+        return results;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -523,7 +527,7 @@ export class DottedGetExpression extends Expression {
 
     public readonly kind = AstNodeKind.DottedGetExpression;
 
-    public readonly range: Range;
+    public readonly range: Range | undefined;
 
     transpile(state: BrsTranspileState) {
         //if the callee starts with a namespace name, transpile the name
@@ -599,7 +603,7 @@ export class XmlAttributeGetExpression extends Expression {
 
     public readonly obj: Expression;
 
-    public readonly range: Range;
+    public readonly range: Range | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -656,7 +660,7 @@ export class IndexedGetExpression extends Expression {
         readonly questionDot?: Token; //  ? or ?.
     };
 
-    public readonly range: Range;
+    public readonly range: Range | undefined;
 
     transpile(state: BrsTranspileState) {
         const result = [];
@@ -725,7 +729,7 @@ export class GroupingExpression extends Expression {
 
     public readonly kind = AstNodeKind.GroupingExpression;
 
-    public readonly range: Range;
+    public readonly range: Range | undefined;
 
     transpile(state: BrsTranspileState) {
         if (isTypeCastExpression(this.expression)) {
@@ -863,10 +867,10 @@ export class ArrayLiteralExpression extends Expression {
 
     public readonly kind = AstNodeKind.ArrayLiteralExpression;
 
-    public readonly range: Range;
+    public readonly range: Range | undefined;
 
     transpile(state: BrsTranspileState) {
-        let result = [];
+        let result: TranspileResult = [];
         result.push(
             ...state.transpileToken(this.tokens.open, '[')
         );
@@ -932,7 +936,7 @@ export class AAMemberExpression extends Expression {
 
     public readonly kind = AstNodeKind.AAMemberExpression;
 
-    public readonly range: Range;
+    public readonly range: Range | undefined;
 
     public readonly tokens: {
         readonly key: Token;
@@ -985,10 +989,10 @@ export class AALiteralExpression extends Expression {
 
     public readonly kind = AstNodeKind.AALiteralExpression;
 
-    public readonly range: Range;
+    public readonly range: Range | undefined;
 
     transpile(state: BrsTranspileState) {
-        let result = [];
+        let result: TranspileResult = [];
         //open curly
         result.push(
             ...state.transpileToken(this.tokens.open, '{')
@@ -1076,7 +1080,7 @@ export class UnaryExpression extends Expression {
 
     public readonly kind = AstNodeKind.UnaryExpression;
 
-    public readonly range: Range;
+    public readonly range: Range | undefined;
 
     public readonly tokens: {
         readonly operator: Token;
@@ -1084,7 +1088,7 @@ export class UnaryExpression extends Expression {
     public readonly right: Expression;
 
     transpile(state: BrsTranspileState) {
-        let separatingWhitespace: string;
+        let separatingWhitespace: string | undefined;
         if (isVariableExpression(this.right)) {
             separatingWhitespace = this.right.tokens.name.leadingWhitespace;
         } else if (isLiteralExpression(this.right)) {
@@ -1092,6 +1096,7 @@ export class UnaryExpression extends Expression {
         } else {
             separatingWhitespace = ' ';
         }
+
         return [
             ...state.transpileToken(this.tokens.operator),
             separatingWhitespace,
@@ -1138,10 +1143,10 @@ export class VariableExpression extends Expression {
     }
 
     transpile(state: BrsTranspileState) {
-        let result = [];
+        let result: TranspileResult = [];
         const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
         //if the callee is the name of a known namespace function
-        if (state.file.calleeIsKnownNamespaceFunction(this, namespace?.getName(ParseMode.BrighterScript))) {
+        if (namespace && state.file.calleeIsKnownNamespaceFunction(this, namespace.getName(ParseMode.BrighterScript))) {
             result.push(
                 state.sourceNode(this, [
                     namespace.getName(ParseMode.BrightScript),
@@ -1218,8 +1223,8 @@ export class SourceLiteralExpression extends Expression {
     }
 
     private getFunctionName(state: BrsTranspileState, parseMode: ParseMode) {
-        let func = state.file.getFunctionScopeAtPosition(this.tokens.value.range.start).func;
-        let nameParts = [];
+        let func = this.findAncestor<FunctionExpression>(isFunctionExpression);
+        let nameParts = [] as TranspileResult;
         let parentFunction: FunctionExpression;
         while ((parentFunction = func.findAncestor<FunctionExpression>(isFunctionExpression))) {
             let index = this.findFunctionIndex(parentFunction, func);
@@ -1228,9 +1233,23 @@ export class SourceLiteralExpression extends Expression {
         }
         //get the index of this function in its parent
         nameParts.unshift(
-            func.functionStatement.getName(parseMode)
+            func.functionStatement!.getName(parseMode)
         );
         return nameParts.join('$');
+    }
+
+    /**
+     * Get the line number from our token or from the closest ancestor that has a range
+     */
+    private getClosestLineNumber() {
+        let node: AstNode = this;
+        while (node) {
+            if (node.range) {
+                return node.range.start.line + 1;
+            }
+            node = node.parent;
+        }
+        return -1;
     }
 
     transpile(state: BrsTranspileState) {
@@ -1241,7 +1260,8 @@ export class SourceLiteralExpression extends Expression {
                 text = `"${pathUrl.substring(0, 4)}" + "${pathUrl.substring(4)}"`;
                 break;
             case TokenKind.SourceLineNumLiteral:
-                text = `${this.tokens.value.range.start.line + 1}`;
+                //TODO find first parent that has range, or default to -1
+                text = `${this.getClosestLineNumber()}`;
                 break;
             case TokenKind.FunctionNameLiteral:
                 text = `"${this.getFunctionName(state, ParseMode.BrightScript)}"`;
@@ -1251,7 +1271,8 @@ export class SourceLiteralExpression extends Expression {
                 break;
             case TokenKind.SourceLocationLiteral:
                 const locationUrl = fileUrl(state.srcPath);
-                text = `"${locationUrl.substring(0, 4)}" + "${locationUrl.substring(4)}:${this.tokens.value.range.start.line + 1}"`;
+                //TODO find first parent that has range, or default to -1
+                text = `"${locationUrl.substring(0, 4)}" + "${locationUrl.substring(4)}:${this.getClosestLineNumber()}"`;
                 break;
             case TokenKind.PkgPathLiteral:
                 text = `"${util.sanitizePkgPath(state.file.pkgPath)}"`;
@@ -1300,7 +1321,7 @@ export class NewExpression extends Expression {
 
     public readonly kind = AstNodeKind.NewExpression;
 
-    public readonly range: Range;
+    public readonly range: Range | undefined;
 
     public readonly tokens: {
         readonly new?: Token;
@@ -1391,10 +1412,10 @@ export class CallfuncExpression extends Expression {
 
     public readonly kind = AstNodeKind.CallfuncExpression;
 
-    public readonly range: Range;
+    public readonly range: Range | undefined;
 
     public transpile(state: BrsTranspileState) {
-        let result = [];
+        let result = [] as TranspileResult;
         result.push(
             ...this.callee.transpile(state),
             state.sourceNode(this.tokens.operator, '.callfunc'),
@@ -1487,10 +1508,10 @@ export class TemplateStringQuasiExpression extends Expression {
     public readonly expressions: Array<LiteralExpression | EscapedCharCodeLiteralExpression>;
     public readonly kind = AstNodeKind.TemplateStringQuasiExpression;
 
-    readonly range: Range;
+    readonly range: Range | undefined;
 
     transpile(state: BrsTranspileState, skipEmptyStrings = true) {
-        let result = [];
+        let result = [] as TranspileResult;
         let plus = '';
         for (let expression of this.expressions) {
             //skip empty strings
@@ -1545,7 +1566,7 @@ export class TemplateStringExpression extends Expression {
     public readonly quasis: TemplateStringQuasiExpression[];
     public readonly expressions: Expression[];
 
-    public readonly range: Range;
+    public readonly range: Range | undefined;
 
     public getType(options: GetTypeOptions) {
         return StringType.instance;
@@ -1656,10 +1677,10 @@ export class TaggedTemplateStringExpression extends Expression {
     public readonly quasis: TemplateStringQuasiExpression[];
     public readonly expressions: Expression[];
 
-    public readonly range: Range;
+    public readonly range: Range | undefined;
 
     transpile(state: BrsTranspileState) {
-        let result = [];
+        let result = [] as TranspileResult;
         result.push(
             ...state.transpileToken(this.tokens.tagName),
             '(['
@@ -1737,7 +1758,7 @@ export class AnnotationExpression extends Expression {
         readonly name: Token;
     };
 
-    public get range() {
+    public get range(): Range | undefined {
         return util.createBoundingRange(
             this.tokens.at,
             this.tokens.name,
@@ -1807,7 +1828,7 @@ export class TernaryExpression extends Expression {
 
     public readonly kind = AstNodeKind.TernaryExpression;
 
-    public readonly range: Range;
+    public readonly range: Range | undefined;
 
     public readonly tokens: {
         readonly questionMark?: Token;
@@ -1819,9 +1840,9 @@ export class TernaryExpression extends Expression {
     public readonly alternate?: Expression;
 
     transpile(state: BrsTranspileState) {
-        let result = [];
-        let consequentInfo = util.getExpressionInfo(this.consequent);
-        let alternateInfo = util.getExpressionInfo(this.alternate);
+        let result = [] as TranspileResult;
+        let consequentInfo = util.getExpressionInfo(this.consequent!);
+        let alternateInfo = util.getExpressionInfo(this.alternate!);
 
         //get all unique variable names used in the consequent and alternate, and sort them alphabetically so the output is consistent
         let allUniqueVarNames = [...new Set([...consequentInfo.uniqueVarNames, ...alternateInfo.uniqueVarNames])].sort();
@@ -1911,7 +1932,7 @@ export class NullCoalescingExpression extends Expression {
 
     public readonly kind = AstNodeKind.NullCoalescingExpression;
 
-    public readonly range: Range;
+    public readonly range: Range | undefined;
 
     public readonly tokens: {
         readonly questionQuestion?: Token;
@@ -1921,7 +1942,7 @@ export class NullCoalescingExpression extends Expression {
     public readonly alternate: Expression;
 
     transpile(state: BrsTranspileState) {
-        let result = [];
+        let result = [] as TranspileResult;
         let consequentInfo = util.getExpressionInfo(this.consequent);
         let alternateInfo = util.getExpressionInfo(this.alternate);
 
@@ -2046,7 +2067,7 @@ export class RegexLiteralExpression extends Expression {
 }
 
 // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
-type ExpressionValue = string | number | boolean | Expression | ExpressionValue[] | { [key: string]: ExpressionValue };
+type ExpressionValue = string | number | boolean | Expression | ExpressionValue[] | { [key: string]: ExpressionValue } | null;
 
 function expressionToValue(expr: Expression, strict: boolean): ExpressionValue {
     if (!expr) {
@@ -2121,7 +2142,7 @@ export class TypeExpression extends Expression implements TypedefProvider {
         return this.expression.getType({ ...options, flags: SymbolTypeFlag.typetime });
     }
 
-    getTypedef(state: TranspileState): (string | SourceNode)[] {
+    getTypedef(state: TranspileState): TranspileResult {
         // TypeDefs should pass through any valid type names
         return this.expression.transpile(state as BrsTranspileState);
     }

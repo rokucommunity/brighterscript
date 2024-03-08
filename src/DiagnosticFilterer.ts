@@ -4,10 +4,22 @@ import * as minimatch from 'minimatch';
 import type { BsConfig } from './BsConfig';
 import { standardizePath as s } from './util';
 
+interface DiagnosticWithSuppression {
+    diagnostic: BsDiagnostic;
+    isSuppressed: boolean;
+}
+
+interface NormalizedFilter {
+    src?: string;
+    codes?: (number | string)[];
+    isNegative: boolean;
+}
+
 export class DiagnosticFilterer {
-    private byFile: Record<string, BsDiagnostic[]>;
-    private filters: Array<{ src?: string; codes?: (number | string)[] }> | undefined;
+    private byFile: Record<string, DiagnosticWithSuppression[]>;
+    private filters: NormalizedFilter[] | undefined;
     private rootDir: string | undefined;
+
 
     constructor() {
         this.byFile = {};
@@ -45,10 +57,9 @@ export class DiagnosticFilterer {
         for (let key in this.byFile) {
             let fileDiagnostics = this.byFile[key];
             for (let diagnostic of fileDiagnostics) {
-                if (finalDiagnostics.includes(diagnostic)) {
-                    //do not include duplicate diagnostics
-                } else {
-                    finalDiagnostics.push(diagnostic);
+                //filter out duplicate and suppressed diagnostics
+                if (!finalDiagnostics.includes(diagnostic.diagnostic) && !diagnostic.isSuppressed) {
+                    finalDiagnostics.push(diagnostic.diagnostic);
                 }
             }
         }
@@ -72,11 +83,14 @@ export class DiagnosticFilterer {
             if (!this.byFile[lowerSrcPath]) {
                 this.byFile[lowerSrcPath] = [];
             }
-            this.byFile[lowerSrcPath].push(diagnostic);
+            this.byFile[lowerSrcPath].push({
+                diagnostic: diagnostic,
+                isSuppressed: false
+            });
         }
     }
 
-    private filterAllFiles(filter: { src?: string; codes?: (number | string)[] }) {
+    private filterAllFiles(filter: NormalizedFilter) {
         let matchedFilePaths: string[];
 
         //if there's a src, match against all files
@@ -101,59 +115,94 @@ export class DiagnosticFilterer {
         }
     }
 
-    private filterFile(filter: { src?: string; codes?: (number | string)[] }, filePath: string) {
-        //if there are no codes, throw out all diagnostics for this file
-        if (!filter.codes) {
-            //remove this file from the list because all of its diagnostics were removed
-            delete this.byFile[filePath];
+    private filterFile(filter: NormalizedFilter, filePath: string) {
+        //if the filter is negative, we're turning diagnostics on
+        //if the filter is not negative we're turning diagnostics off
+        const isSuppressing = !filter.isNegative;
 
-            //filter any diagnostics with matching codes
+        //if there is no code, set isSuppressed on every diagnostic in this file
+        if (!filter.codes) {
+            this.byFile[filePath].forEach(diagnostic => {
+                diagnostic.isSuppressed = isSuppressing;
+            });
+
+            //set isSuppressed for any diagnostics with matching codes
         } else {
             let fileDiagnostics = this.byFile[filePath];
-            for (let i = 0; i < fileDiagnostics.length; i++) {
-                let diagnostic = fileDiagnostics[i];
-                if (filter.codes.includes(diagnostic.code!)) {
-                    //remove this diagnostic
-                    fileDiagnostics.splice(i, 1);
-                    //repeat this loop iteration (with the new item at this index)
-                    i--;
+            for (const diagnostic of fileDiagnostics) {
+                if (filter.codes.includes(diagnostic.diagnostic.code!)) {
+                    diagnostic.isSuppressed = isSuppressing;
                 }
             }
         }
     }
 
-    public getDiagnosticFilters(config1: BsConfig) {
+    public getDiagnosticFilters(config: BsConfig) {
+        let globalIgnoreCodes: (number | string)[] = [...config.ignoreErrorCodes ?? []];
+        let diagnosticFilters = [...config.diagnosticFilters ?? []];
 
-        let globalIgnoreCodes: (number | string)[] = [...config1.ignoreErrorCodes ?? []];
-        let diagnosticFilters = [...config1.diagnosticFilters ?? []];
+        let result: NormalizedFilter[] = [];
 
-        let result: Array<{ src?: string; codes: (number | string)[] }> = [];
-
-        for (let filter of diagnosticFilters as any[]) {
-            if (typeof filter === 'number') {
-                globalIgnoreCodes.push(filter);
-                continue;
-            } else if (typeof filter === 'string') {
-                filter = {
-                    src: filter
-                };
-
-                //if this is a code-only filter, add them to the globalCodes array (and skip adding it now)
-            } else if (Array.isArray(filter?.codes) && !filter.src) {
-                globalIgnoreCodes.push(...filter.codes);
-                continue;
-            }
-
-            //if this looks like a filter, keep it
-            if (filter?.src || filter?.codes) {
-                result.push(filter);
-            }
-        }
         //include a filter for all global ignore codes
+        //this comes first, because negative patterns will override ignoreErrorCodes
         if (globalIgnoreCodes.length > 0) {
             result.push({
-                codes: globalIgnoreCodes
+                codes: globalIgnoreCodes,
+                isNegative: false
             });
+        }
+
+        for (let filter of diagnosticFilters) {
+            if (typeof filter === 'number') {
+                result.push({
+                    codes: [filter],
+                    isNegative: false
+                });
+                continue;
+            }
+
+            if (typeof filter === 'string') {
+                const isNegative = filter.startsWith('!');
+                const trimmedFilter = isNegative ? filter.slice(1) : filter;
+
+                result.push({
+                    src: trimmedFilter,
+                    isNegative: isNegative
+                });
+                continue;
+            }
+
+            //filter out bad inputs
+            if (!filter || typeof filter !== 'object') {
+                continue;
+            }
+
+            //code-only filter
+            if ('codes' in filter && !('src' in filter) && Array.isArray(filter.codes)) {
+                result.push({
+                    codes: filter.codes,
+                    isNegative: false
+                });
+                continue;
+            }
+
+            if ('src' in filter) {
+                const isNegative = filter.src.startsWith('!');
+                const trimmedFilter = isNegative ? filter.src.slice(1) : filter.src;
+
+                if ('codes' in filter) {
+                    result.push({
+                        src: trimmedFilter,
+                        codes: filter.codes,
+                        isNegative: isNegative
+                    });
+                } else {
+                    result.push({
+                        src: trimmedFilter,
+                        isNegative: isNegative
+                    });
+                }
+            }
         }
         return result;
     }

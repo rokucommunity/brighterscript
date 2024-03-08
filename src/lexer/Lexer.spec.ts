@@ -1011,6 +1011,55 @@ describe('lexer', () => {
             ]);
         });
 
+        it('handles whitespace between hash and keywords', () => {
+            function doTest(text: string, ...expected: TokenKind[]) {
+                let { tokens } = Lexer.scan(text);
+                expect(tokens.map(t => t.kind)).to.deep.equal([
+                    ...expected,
+                    TokenKind.Eof
+                ]);
+            }
+            //#if
+            doTest('# if true', TokenKind.HashIf, TokenKind.True);
+            doTest('#\tif true', TokenKind.HashIf, TokenKind.True);
+            doTest('#\t   \t\t \tif true', TokenKind.HashIf, TokenKind.True);
+
+            //#else
+            doTest('# else', TokenKind.HashElse);
+            doTest('#\telse', TokenKind.HashElse);
+            doTest('#\t   \t\t \telse', TokenKind.HashElse);
+
+            //#elseif
+            doTest('# elseif true', TokenKind.HashElseIf, TokenKind.True);
+            doTest('#\telseif true', TokenKind.HashElseIf, TokenKind.True);
+            doTest('#\t   \t\t \telseif true', TokenKind.HashElseIf, TokenKind.True);
+
+            //#else if
+            doTest('# else if true', TokenKind.HashElseIf, TokenKind.True);
+            doTest('#\t elseif true', TokenKind.HashElseIf, TokenKind.True);
+            doTest('#\t   \t\t \t else if true', TokenKind.HashElseIf, TokenKind.True);
+
+            //#endif
+            doTest('# endif', TokenKind.HashEndIf);
+            doTest('#\tendif', TokenKind.HashEndIf);
+            doTest('#\t   \t\t \tendif', TokenKind.HashEndIf);
+
+            //#end if
+            doTest('# end if', TokenKind.HashEndIf);
+            doTest('#\tend if', TokenKind.HashEndIf);
+            doTest('#\t   \t\t \tend if', TokenKind.HashEndIf);
+
+            //#const
+            doTest('# const thing=true', TokenKind.HashConst, TokenKind.Identifier, TokenKind.Equal, TokenKind.True);
+            doTest('#\tconst thing=true', TokenKind.HashConst, TokenKind.Identifier, TokenKind.Equal, TokenKind.True);
+            doTest('#\t   \t\t \tconst thing=true', TokenKind.HashConst, TokenKind.Identifier, TokenKind.Equal, TokenKind.True);
+
+            //#error
+            doTest('# error', TokenKind.HashError);
+            doTest('#\terror', TokenKind.HashError);
+            doTest('#\t   \t\t \terror', TokenKind.HashError);
+        });
+
         it('reads constant aliases', () => {
             let { tokens } = Lexer.scan('#const bar foo');
             expect(tokens.map(t => t.kind)).to.deep.equal([
@@ -1082,6 +1131,14 @@ describe('lexer', () => {
                 TokenKind.HashEndIf,
                 TokenKind.HashEndIf,
                 TokenKind.HashEndIf,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('does not require a message after #error', () => {
+            let { tokens } = Lexer.scan('#error');
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.HashError,
                 TokenKind.Eof
             ]);
         });

@@ -13,8 +13,8 @@ import { Lexer } from '../lexer/Lexer';
 import { TokenKind } from '../lexer/TokenKind';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import util, { standardizePath as s } from '../util';
-import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile, trim } from '../testHelpers.spec';
-import { ParseMode } from '../parser/Parser';
+import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
+import { ParseMode, Parser } from '../parser/Parser';
 import { ImportStatement } from '../parser/Statement';
 import { createToken } from '../astUtils/creators';
 import * as fsExtra from 'fs-extra';
@@ -24,6 +24,7 @@ import { tempDir, rootDir } from '../testHelpers.spec';
 import { SymbolTypeFlag } from '../SymbolTableFlag';
 import { ClassType, EnumType, FloatType, InterfaceType } from '../types';
 import type { StandardizedFileEntry } from 'roku-deploy';
+import * as fileUrl from 'file-url';
 
 let sinon = sinonImport.createSandbox();
 
@@ -577,6 +578,28 @@ describe('BrsFile', () => {
         });
 
         describe('conditional compile', () => {
+            it('supports whitespace-separated directives', async () => {
+                const file = program.setFile<BrsFile>('source/main.bs', `
+                    sub main()
+                        #\t const thing=true
+                        #\t if thing
+                            print "if"
+                        #\t elseif false
+                            print "elseif"
+                            #\t error crash
+                        #\t else
+                            print "else"
+                        #\t endif
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+                await testTranspile(file.fileContents, `
+                    sub main()
+                        print "if"
+                    end sub
+                `);
+            });
+
             it('supports case-insensitive bs_const variables', () => {
                 fsExtra.outputFileSync(`${rootDir}/manifest`, undent`
                     bs_const=SomeKey=true
@@ -1642,6 +1665,237 @@ describe('BrsFile', () => {
     });
 
     describe('transpile', () => {
+        describe('null tokens', () => {
+            it('succeeds when token locations are omitted', () => {
+                doTest(`
+                    library "something" 'comment before func
+                    sub main(arg0, arg1 as string, arg2 = invalid)
+                        'comment
+                        aa = {
+                            'comment
+                            one: 1
+                            "two": 2
+                        }
+                        arr = [
+                            'comment
+                            1
+                            'comment
+                            2
+                        ]
+                        val = + m.val
+                        print "hello"
+                        'comment after print
+                        num = 1
+                        num++
+                        num += 2
+                        num = +num
+                        test(num)
+                        for i = 0 to 10 step 1
+                            exit for
+                        end for
+                        while true
+                            exit while
+                        end while
+                        if true then
+                            print 1
+                        else if true
+                            print 1
+                        else
+                            print 1
+                        end if
+                        dim thing[1, 2]
+                        label1:
+                        goto label1
+                        end
+                        stop
+                        stuff = [
+                            1
+                            2
+                            3
+                        ]
+                        for each item in stuff
+                            print item
+                        end for
+                        m.thing = 1
+                        m.thing += 1
+                        m[1] = 1
+                        m[1] += 1
+                        m[1, 2] = 2
+                        try
+                            print m.b.c
+                        catch e
+                            print e
+                        end try
+                        throw "crash"
+                        for i = 0 to 10
+                            continue
+                        end for
+                        print m@name
+                        print (1 + 2)
+                    end sub
+
+                    sub test(p1)
+                        return p1
+                    end sub
+                `);
+            });
+
+            it('works for bs content', () => {
+                program.setFile('source/lib.bs', ``);
+                doTest(`
+                    import "pkg:/source/lib.bs"
+                    @annotation()
+                    sub test()
+                        two = 2
+                        print \`1\${two}\${3}\n\`
+                        print (1 as integer)
+                        print SOURCE_LINE_NUM
+                        print FUNCTION_NAME
+                        print SOURCE_FUNCTION_NAME
+                        print PKG_LOCATION
+                        print PKG_PATH
+                        print LINE_NUM
+                        print new Person()
+                        m@.someCallfunc()
+                        m@.someCallfunc(1, 2)
+                        print tag\`stuff\${LINE_NUM}\${LINE_NUM}\`
+                        print 1 = 1 ? 1 : 2
+                        print 1 = 1 ? m.one : m.two
+                        print 1 ?? 2
+                        print m.one ?? m.two
+                        print /123/gi
+                    end sub
+                    function tag(param1, param2)
+                    end function
+                    const a = 1
+                    namespace alpha
+                        function beta()
+                            throw "An error has occurred"
+                        end function
+                        function charlie()
+                        end function
+                    end namespace
+                    sub test2()
+                        ' alpha.charlie()
+                    end sub
+
+                    enum Direction
+                        up = "up"
+                    end enum
+
+                    class Person
+                        name as string
+                        sub new()
+                            print m.name
+                        end sub
+
+                        sub test()
+                        end sub
+                    end class
+
+                    interface Beta
+                        name as string
+                    end interface
+                `, `
+                    'import "pkg:/source/lib.bs"
+
+                    sub test()
+                        two = 2
+                        print ("1" + bslib_toString(two) + bslib_toString(3) + chr(10))
+                        print 1
+                        print -1
+                        print "test"
+                        print "test"
+                        print "pkg:/source/main.brs:" + str(LINE_NUM)
+                        print "pkg:/source/main.brs"
+                        print LINE_NUM
+                        print Person()
+                        m.callfunc("someCallfunc")
+                        m.callfunc("someCallfunc", 1, 2)
+                        print tag(["stuff", "", ""], [LINE_NUM, LINE_NUM])
+                        print bslib_ternary(1 = 1, 1, 2)
+                        print (function(__bsCondition, m)
+                                if __bsCondition then
+                                    return m.one
+                                else
+                                    return m.two
+                                end if
+                            end function)(1 = 1, m)
+                        print bslib_coalesce(1, 2)
+                        print (function(m)
+                                __bsConsequent = m.one
+                                if __bsConsequent <> invalid then
+                                    return __bsConsequent
+                                else
+                                    return m.two
+                                end if
+                            end function)(m)
+                        print CreateObject("roRegex", "123", "gi")
+                    end sub
+
+                    function tag(param1, param2)
+                    end function
+
+                    function alpha_beta()
+                        throw "An error has occurred"
+                    end function
+
+                    function alpha_charlie()
+                    end function
+
+                    sub test2()
+                        ' alpha.charlie()
+                    end sub
+
+                    function __Person_builder()
+                        instance = {}
+                        instance.new = sub()
+                            m.name = invalid
+                            print m.name
+                        end sub
+                        instance.test = sub()
+                        end sub
+                        return instance
+                    end function
+                    function Person()
+                        instance = __Person_builder()
+                        instance.new()
+                        return instance
+                    end function
+                `);
+            });
+
+            it('handles source literals properly', () => {
+                const pathUrl = fileUrl(rootDir);
+                let text = `"${pathUrl.substring(0, 4)}" + "${pathUrl.substring(4)}`;
+                doTest(`
+                    sub test()
+                        print SOURCE_FILE_PATH
+                        print SOURCE_LOCATION
+                    end sub
+                `, `
+                    sub test()
+                        print ${text}/source/main.bs"
+                        print ${text}/source/main.bs:-1"
+                    end sub
+                `);
+            });
+            function doTest(source: string, expected = source) {
+                const file = program.setFile<BrsFile>('source/main.bs', '');
+                //override the parser with our locationless parser
+                file['_parser'] = Parser.parse(source, { mode: ParseMode.BrighterScript, trackLocations: false });
+                program.getScopesForFile(file).forEach(x => x['cache'].clear());
+                program.validate();
+                expectZeroDiagnostics(program);
+                const result = file.transpile();
+                expect(
+                    trimMap(undent(result.code))
+                ).to.eql(
+                    undent(expected)
+                );
+            }
+        });
+
         it('transpilies libpkg:/ paths when encountered', async () => {
             program.setFile('source/lib.bs', `
                 import "libpkg:/source/numbers.bs"
@@ -2153,6 +2407,28 @@ describe('BrsFile', () => {
 
         it('does not add leading or trailing newlines', async () => {
             await testTranspile(`function abc()\nend function`, undefined, 'none');
+        });
+
+        it('generates proper sourcemap comment', () => {
+            program.options.sourceMap = true;
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main()
+                end sub
+            `);
+            expect(file.transpile().code).to.eql(undent`
+                sub main()
+                end sub
+                '//# sourceMappingURL=./main.brs.map
+            `);
+        });
+
+        it('includes sourcemap.name property', () => {
+            program.options.sourceMap = true;
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main()
+                end sub
+            `);
+            expect(file.transpile().map.toJSON().file).to.eql('main.brs');
         });
 
         it('handles sourcemap edge case', async () => {
@@ -3391,6 +3667,32 @@ describe('BrsFile', () => {
                 'TwoType', 'OneType']);
         });
 
+        it('allows built-in types for interface members', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                interface MyBase
+                    regex as roRegex
+                    node as roSGNodeLabel
+                    sub outputMatches(textInput as string)
+                    function getLabelParent() as roSGNode
+                end interface
+                `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows extends on interfaces', async () => {
+            await testTranspile(`
+                interface MyBase
+                    url as string
+                end interface
+
+                interface MyExtends extends MyBase
+                    method as string
+                end interface
+            `, `
+            `);
+        });
+
         it('should include unknown param and return types on class methods', () => {
             const mainFile: BrsFile = program.setFile('source/main.bs', `
                 class Klass
@@ -4065,7 +4367,7 @@ describe('BrsFile', () => {
 
                 mainFile = program.setFile('source/main.bs', `
                     function func1(p as string) as integer
-                        return len(p)+1
+                        return len(p) + 1
                     end function
 
                     sub displayModelTypeInLabel(myLabel as roSgNodeLabel)
@@ -4132,11 +4434,10 @@ describe('BrsFile', () => {
             it('functions in a namespace that have class params show change properly', () => {
                 const fileContent = `
                     namespace Alpha.Beta
-
                         class SomeKlass
                             name as string
                             function combineName(klass as SomeKlass)
-                                m.name = m.name+klass.name
+                                m.name = m.name + klass.name
                             end function
                         end class
 
@@ -4165,7 +4466,7 @@ describe('BrsFile', () => {
                     aa1 = {
                         "sprop1": 0,
                         prop1: 1
-                        prop2: {
+                                prop2: {
                             prop3: 2
                         }
                     }
@@ -4202,7 +4503,7 @@ describe('BrsFile', () => {
                     aa1 = {
                         "constructor": 0,
                         constructor: 1
-                        valueOf: {
+                                valueOf: {
                             toString: 2
                         }
                     }
@@ -4217,6 +4518,46 @@ describe('BrsFile', () => {
 
             const { propertyHints } = file['_cachedLookups'];
             expect(Object.keys(propertyHints).sort()).to.deep.equal(expected, 'Initial hints');
+        });
+
+        it('allows built-in types for class members', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                class MyBase
+                    regex as roRegex
+                    node as roSGNodeLabel
+
+                    sub outputMatches(textInput as string)
+                        matches = m.regex.match(textInput)
+                        if matches.count() > 1
+                            m.node.text = matches[1]
+                        else
+                            m.node.text = "no match"
+                        end if
+                    end sub
+
+                    function getLabelParent() as roSGNode
+                        return m.node.getParent()
+                    end function
+                end class
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows types on lhs of assignments', async () => {
+            await testTranspile(`
+                sub foo(node as roSGNode)
+                    nodeParent as roSGNode = node.getParent()
+                    text as string = nodeParent.id
+                    print text
+                end sub
+            `, `
+                sub foo(node as dynamic)
+                    nodeParent = node.getParent()
+                    text = nodeParent.id
+                    print text
+                end sub
+            `);
         });
     });
 });

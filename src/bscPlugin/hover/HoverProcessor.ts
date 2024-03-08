@@ -1,4 +1,3 @@
-import { SourceNode } from 'source-map';
 import { isBrsFile, isCallfuncExpression, isClassStatement, isEnumMemberStatement, isEnumStatement, isEnumType, isInheritableType, isInterfaceStatement, isMemberField, isNamespaceStatement, isNamespaceType, isNewExpression, isTypedFunctionType, isXmlFile } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
@@ -77,7 +76,7 @@ export class HoverProcessor {
         //find a constant with this name
         const constant = scope?.getConstFileLink(fullName, containingNamespace);
         if (constant) {
-            const constantValue = new SourceNode(null, null, null, constant.item.value.transpile(new BrsTranspileState(file))).toString();
+            const constantValue = util.sourceNodeFromTranspileResult(null, null, null, constant.item.value.transpile(new BrsTranspileState(file))).toString();
             return this.buildContentsWithDocsFromExpression(fence(`const ${constant.item.fullName} = ${constantValue}`), constant.item);
         }
     }

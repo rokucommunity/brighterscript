@@ -105,7 +105,7 @@ export class PreprocessorParser {
      */
     private hashIf(): CC.Chunk | undefined {
         if (this.match(TokenKind.HashIf)) {
-            let startingLine = this.previous().range.start.line;
+            let startingLine = this.previous().range?.start?.line;
             let elseChunk: CC.Chunk[] | undefined;
 
             let ifCondition = this.advance();

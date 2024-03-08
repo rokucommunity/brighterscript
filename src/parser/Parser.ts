@@ -173,15 +173,17 @@ export class Parser {
      * @returns the same instance of the parser which contains the diagnostics and statements
      */
     public parse(toParse: Token[] | string, options?: ParseOptions) {
+        this.logger = options?.logger ?? new Logger();
+        options = this.sanitizeParseOptions(options);
+        this.options = options;
+
         let tokens: Token[];
         if (typeof toParse === 'string') {
-            tokens = Lexer.scan(toParse).tokens;
+            tokens = Lexer.scan(toParse, { trackLocations: options.trackLocations }).tokens;
         } else {
             tokens = toParse;
         }
-        this.logger = options?.logger ?? new Logger();
         this.tokens = tokens;
-        this.options = this.sanitizeParseOptions(options);
         this.allowedLocalIdentifiers = [
             ...AllowedLocalIdentifiers,
             //when in plain brightscript mode, the BrighterScript source literals can be used as regular variables
@@ -238,10 +240,10 @@ export class Parser {
     }
 
     private sanitizeParseOptions(options: ParseOptions) {
-        return {
-            mode: 'brightscript',
-            ...(options || {})
-        } as ParseOptions;
+        options ??= {};
+        options.mode ??= ParseMode.BrightScript;
+        options.trackLocations ??= true;
+        return options;
     }
 
     /**
@@ -463,6 +465,11 @@ export class Parser {
         let body = [] as Statement[];
         while (this.checkAny(TokenKind.Comment, TokenKind.Identifier, TokenKind.At, ...AllowedProperties)) {
             try {
+                //break out of this loop if we encountered the `EndInterface` token not followed by `as`
+                if (this.check(TokenKind.EndInterface) && !this.checkNext(TokenKind.As)) {
+                    break;
+                }
+
                 let decl: Statement;
 
                 //collect leading annotations
@@ -498,10 +505,6 @@ export class Parser {
 
             //ensure statement separator
             this.consumeStatementSeparators();
-            //break out of this loop if we encountered the `EndInterface` token not followed by `as`
-            if (this.check(TokenKind.EndInterface) && !this.checkNext(TokenKind.As)) {
-                break;
-            }
         }
 
         //consume the final `end interface` token
@@ -3102,11 +3105,16 @@ export interface ParseOptions {
     /**
      * The parse mode. When in 'BrightScript' mode, no BrighterScript syntax is allowed, and will emit diagnostics.
      */
-    mode: ParseMode;
+    mode?: ParseMode;
     /**
      * A logger that should be used for logging. If omitted, a default logger is used
      */
     logger?: Logger;
+    /**
+     * Should locations be tracked. If false, the `range` property will be omitted
+     * @default true
+     */
+    trackLocations?: boolean;
 }
 
 
