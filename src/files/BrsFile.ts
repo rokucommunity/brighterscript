@@ -30,7 +30,7 @@ import type { UnresolvedSymbol } from '../AstValidationSegmenter';
 import { AstValidationSegmenter } from '../AstValidationSegmenter';
 import type { BscSymbol } from '../SymbolTable';
 import { SymbolTable } from '../SymbolTable';
-import { SymbolTypeFlag } from '../SymbolTableFlag';
+import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import type { BscFileLike } from '../astUtils/CachedLookups';
 import { CachedLookups } from '../astUtils/CachedLookups';
 import { Editor } from '../astUtils/Editor';

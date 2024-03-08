@@ -2,7 +2,7 @@ import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import { StringType } from './StringType';
 import { expectTypeToBe } from '../testHelpers.spec';
 import { IntegerType } from './IntegerType';
-import { SymbolTypeFlag } from '../SymbolTableFlag';
+import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { TypedFunctionType } from './TypedFunctionType';
 import { BooleanType } from './BooleanType';
 import { FunctionType } from './FunctionType';

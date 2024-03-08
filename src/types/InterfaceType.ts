@@ -1,5 +1,5 @@
 import type { TypeCompatibilityData } from '../interfaces';
-import { SymbolTypeFlag } from '../SymbolTableFlag';
+import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { isDynamicType, isInterfaceType, isObjectType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';

@@ -5,7 +5,7 @@ import type { ReferenceType } from './types/ReferenceType';
 import type { UnionType } from './types/UnionType';
 import { getUniqueType } from './types/helpers';
 import { isAnyReferenceType, isReferenceType } from './astUtils/reflection';
-import type { SymbolTypeFlag } from './SymbolTableFlag';
+import type { SymbolTypeFlag } from './SymbolTypeFlag';
 
 /**
  * Stores the types associated with variables and functions in the Brighterscript code

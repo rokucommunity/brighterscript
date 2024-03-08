@@ -4,7 +4,7 @@ import { ArrayType } from './ArrayType';
 import { DynamicType } from './DynamicType';
 import { BooleanType } from './BooleanType';
 import { StringType } from './StringType';
-import { SymbolTypeFlag } from '../SymbolTableFlag';
+import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { TypedFunctionType } from './TypedFunctionType';
 import { expectTypeToBe } from '../testHelpers.spec';
 import { IntegerType } from './IntegerType';

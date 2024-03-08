@@ -1,4 +1,4 @@
-import { SymbolTypeFlag } from '../SymbolTableFlag';
+import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { isAssociativeArrayType, isClassType, isDynamicType, isObjectType } from '../astUtils/reflection';
 import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
 import { BscType } from './BscType';

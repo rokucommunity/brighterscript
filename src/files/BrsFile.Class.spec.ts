@@ -1677,19 +1677,24 @@ describe('BrsFile BrighterScript classes', () => {
         ]);
     });
 
-    it('catches namespaced class name which is the same as a global class', () => {
+    it('allows namespaced class name which is the same as a global class', () => {
         program.setFile('source/main.bs', `
             namespace NameA.NameB
                 class Animal
+                    name as string
                 end class
+
+                sub printThisAnimalName(ani as Animal) ' this refers to NameA.NameB.Animal
+                    print ani.name
+                end sub
             end namespace
+
             class Animal
+                doesNotHaveName as string
             end class
         `);
         program.validate();
-        expectDiagnostics(program, [
-            DiagnosticMessages.nameCollision('Class', 'Class', 'Animal').message
-        ]);
+        expectZeroDiagnostics(program);
     });
 
     it('catches class with same name as function', () => {

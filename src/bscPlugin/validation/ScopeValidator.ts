@@ -5,7 +5,7 @@ import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import { DiagnosticOrigin } from '../../interfaces';
 import type { BsDiagnostic, BsDiagnosticWithOrigin, ExtraSymbolData, OnScopeValidateEvent, TypeChainEntry, TypeCompatibilityData } from '../../interfaces';
-import { SymbolTypeFlag } from '../../SymbolTableFlag';
+import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import type { AssignmentStatement, ClassStatement, DottedSetStatement, EnumStatement, NamespaceStatement, ReturnStatement } from '../../parser/Statement';
 import util from '../../util';
 import { nodes, components } from '../../roku-types';

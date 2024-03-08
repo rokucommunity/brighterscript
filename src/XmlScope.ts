@@ -1,13 +1,13 @@
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { XmlFile } from './files/XmlFile';
-import type { CallableContainerMap, FileReference } from './interfaces';
+import type { FileReference } from './interfaces';
 import { DiagnosticOrigin } from './interfaces';
 import type { Program } from './Program';
 import type { SGElement } from './parser/SGTypes';
 import { SGFieldTypes } from './parser/SGTypes';
 import util from './util';
-import { SymbolTypeFlag } from './SymbolTableFlag';
+import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { BscFile } from './files/BscFile';
 import { DynamicType } from './types/DynamicType';
 import type { BaseFunctionType } from './types/BaseFunctionType';
@@ -81,23 +81,23 @@ export class XmlScope extends Scope {
         return result;
     }
 
-    protected _validate(callableContainerMap: CallableContainerMap) {
+    protected _validate() {
         //validate brs files
-        super._validate(callableContainerMap);
+        super._validate();
 
         //detect when the child imports a script that its ancestor also imports
         this.diagnosticDetectDuplicateAncestorScriptImports();
 
         //validate component interface
-        this.diagnosticValidateInterface(callableContainerMap);
+        this.diagnosticValidateInterface();
     }
 
-    private diagnosticValidateInterface(callableContainerMap: CallableContainerMap) {
+    private diagnosticValidateInterface() {
         if (!this.xmlFile.parser.ast?.componentElement?.interfaceElement) {
             return;
         }
         const iface = this.xmlFile.parser.ast.componentElement.interfaceElement;
-
+        const callableContainerMap = this.getCallableContainerMap();
         //validate functions
         for (const func of iface.functions) {
             const name = func.name;

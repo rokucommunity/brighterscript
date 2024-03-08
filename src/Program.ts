@@ -28,7 +28,7 @@ import { SignatureHelpUtil } from './bscPlugin/SignatureHelpUtil';
 import { DiagnosticSeverityAdjuster } from './DiagnosticSeverityAdjuster';
 import { IntegerType } from './types/IntegerType';
 import { StringType } from './types/StringType';
-import { SymbolTypeFlag } from './SymbolTableFlag';
+import { SymbolTypeFlag } from './SymbolTypeFlag';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';

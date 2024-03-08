@@ -9,7 +9,7 @@ import { NewExpression } from './Expression';
 import { expectDiagnosticsIncludes, expectZeroDiagnostics } from '../testHelpers.spec';
 import { isClassStatement } from '../astUtils/reflection';
 import { StringType } from '../types/StringType';
-import { SymbolTypeFlag } from '../SymbolTableFlag';
+import { SymbolTypeFlag } from '../SymbolTypeFlag';
 
 describe('parser class', () => {
     it('throws exception when used in brightscript scope', () => {

@@ -7,7 +7,7 @@ import { InterfaceType } from './InterfaceType';
 import { ObjectType } from './ObjectType';
 import { StringType } from './StringType';
 import type { ReferenceType } from './ReferenceType';
-import { SymbolTypeFlag } from '../SymbolTableFlag';
+import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { AssociativeArrayType } from './AssociativeArrayType';
 import { ArrayType } from './ArrayType';
 import { BooleanType } from './BooleanType';

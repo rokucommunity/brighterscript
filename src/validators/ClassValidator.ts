@@ -11,7 +11,7 @@ import type { BrsFile } from '../files/BrsFile';
 import { TokenKind } from '../lexer/TokenKind';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
-import { SymbolTypeFlag } from '../SymbolTableFlag';
+import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import type { BscFile } from '../files/BscFile';
 
 export class BsClassValidator {

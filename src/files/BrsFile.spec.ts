@@ -21,7 +21,7 @@ import * as fsExtra from 'fs-extra';
 import { URI } from 'vscode-uri';
 import undent from 'undent';
 import { tempDir, rootDir } from '../testHelpers.spec';
-import { SymbolTypeFlag } from '../SymbolTableFlag';
+import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { ClassType, EnumType, FloatType, InterfaceType } from '../types';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import * as fileUrl from 'file-url';

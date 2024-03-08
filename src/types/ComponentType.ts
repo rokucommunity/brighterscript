@@ -1,5 +1,5 @@
 import type { GetSymbolTypeOptions } from '../SymbolTable';
-import type { SymbolTypeFlag } from '../SymbolTableFlag';
+import type { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { SymbolTable } from '../SymbolTable';
 import { isComponentType, isDynamicType, isObjectType } from '../astUtils/reflection';
 import type { ExtraSymbolData, TypeCompatibilityData } from '../interfaces';

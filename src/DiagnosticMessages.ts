@@ -3,7 +3,7 @@ import { DiagnosticSeverity } from 'vscode-languageserver';
 import type { BsDiagnostic, TypeCompatibilityData } from './interfaces';
 import { TokenKind } from './lexer/TokenKind';
 import util from './util';
-import { SymbolTypeFlag } from './SymbolTableFlag';
+import { SymbolTypeFlag } from './SymbolTypeFlag';
 
 /**
  * An object that keeps track of all possible error messages.

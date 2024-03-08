@@ -11,7 +11,7 @@ import type { BrsFile } from './files/BrsFile';
 import type { NamespaceStatement } from './parser/Statement';
 import type { CompilerPlugin, OnScopeValidateEvent } from './interfaces';
 import { DiagnosticOrigin } from './interfaces';
-import { SymbolTypeFlag } from './SymbolTableFlag';
+import { SymbolTypeFlag } from './SymbolTypeFlag';
 import { EnumMemberType, EnumType } from './types/EnumType';
 import { ClassType } from './types/ClassType';
 import { BooleanType } from './types/BooleanType';
@@ -145,7 +145,7 @@ describe('Scope', () => {
         ]);
     });
 
-    it('does flag namespaced const and un-namespaced function collision', () => {
+    it('does not flag namespaced const and un-namespaced function collision', () => {
         program.setFile('source/main.bs', `
             namespace alpha
                 const options = {}
@@ -155,9 +155,7 @@ describe('Scope', () => {
             end sub
         `);
         program.validate();
-        expectDiagnostics(program, [
-            DiagnosticMessages.nameCollision('Const', 'Function', 'options').message
-        ]);
+        expectZeroDiagnostics(program);
     });
 
     it('flags parameter with same name as namespace', () => {
@@ -1265,7 +1263,7 @@ describe('Scope', () => {
         });
 
         describe('name collisions', () => {
-            it('should validate when class and interfaces have name collisions', () => {
+            it('should validate when class have name collisions with global function', () => {
                 program.setFile('source/main.bs', `
                     class Log
                     end class
@@ -1277,9 +1275,19 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectDiagnosticsIncludes(program, [
-                    DiagnosticMessages.nameCollision('Class', 'Global Function', 'Log').message,
-                    DiagnosticMessages.nameCollision('Interface', 'Global Function', 'Lcase').message
+                    DiagnosticMessages.nameCollision('Class', 'Global Function', 'Log').message
                 ]);
+            });
+
+            it('should not validate when interfaces have name collisions with global function', () => {
+                program.setFile('source/main.bs', `
+                    interface Lcase
+                        name as string
+                    end interface
+
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
             });
 
             it('should validate when a namespace has a name collision with a class', () => {
@@ -1342,7 +1350,7 @@ describe('Scope', () => {
                 ]);
             });
 
-            it('should validate when a const has a name collision with something else', () => {
+            it('should not validate when a const has a name collision with something else in different namespace', () => {
                 program.setFile('source/main.bs', `
                     namespace SomeEnum
                         const MY_CONST = "hello"
@@ -1350,6 +1358,20 @@ describe('Scope', () => {
 
                     function MY_CONST()
                     end function
+                `);
+                program.validate();
+                let diagnostics = program.getDiagnostics();
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('should validate when a const has a name collision with something else in same namespace', () => {
+                program.setFile('source/main.bs', `
+                    namespace SomeEnum
+                        const MY_CONST = "hello"
+
+                        function MY_CONST()
+                        end function
+                    end namespace
                 `);
                 program.validate();
                 let diagnostics = program.getDiagnostics();
@@ -3756,6 +3778,275 @@ describe('Scope', () => {
         });
 
     });
+
+    describe('shadowing', () => {
+        it('allows namespaces shadowing global function names', () => {
+            program.setFile<BrsFile>('source/file1.bs', `
+                namespace log
+                    sub doLog(x)
+                        ? x
+                    end sub
+                end namespace
+            `);
+            program.setFile<BrsFile>('source/file2.bs', `
+                sub foo()
+                    log.doLog("hello")
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows enums shadowing global function names', () => {
+            program.setFile<BrsFile>('source/file1.bs', `
+                enum log
+                    debug = "DEBUG"
+                    error = "ERROR"
+                end enum
+            `);
+            program.setFile<BrsFile>('source/file2.bs', `
+                sub foo(message)
+                    print log.debug;" ";message
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows interfaces shadowing global function names', () => {
+            program.setFile<BrsFile>('source/file1.bs', `
+                interface log
+                    abs
+                    function formatJson(input)
+                end interface
+            `);
+            program.setFile<BrsFile>('source/file2.bs', `
+                sub foo(logger as log)
+                    print logger.abs;" ";logger.formatJson("message")
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows consts shadowing global function names', () => {
+            program.setFile<BrsFile>('source/file1.bs', `
+                const log = "hello"   ' const shadows global function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+
+        it('disallows enum/const shadowing', () => {
+            program.setFile<BrsFile>('source/file1.bs', `
+                enum SomeName
+                    opt1
+                    opt2
+                end enum
+
+                const SomeName = "hello"    ' const and enum have same name
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.nameCollision('Enum', 'Const', 'SomeName').message,
+                DiagnosticMessages.nameCollision('Const', 'Enum', 'SomeName').message
+            ]);
+        });
+
+        it('disallows enum/namespace shadowing', () => {
+            program.setFile<BrsFile>('source/file1.bs', `
+                enum SomeName
+                    opt1
+                    opt2
+                end enum
+
+                namespace SomeName
+                    sub foo()
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.nameCollision('Enum', 'Namespace', 'SomeName').message,
+                DiagnosticMessages.nameCollision('Namespace', 'Enum', 'SomeName').message
+            ]);
+        });
+
+        it('disallows interface/namespace shadowing', () => {
+            program.setFile<BrsFile>('source/file1.bs', `
+                interface SomeName  ' interface has same name as namespace
+                    opt1
+                    opt2
+                end interface
+
+                namespace SomeName
+                    sub foo()
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.nameCollision('Interface', 'Namespace', 'SomeName').message,
+                DiagnosticMessages.nameCollision('Namespace', 'Interface', 'SomeName').message
+            ]);
+        });
+
+        it('disallows class/namespace shadowing', () => {
+            program.setFile<BrsFile>('source/file1.bs', `
+                class SomeName  ' class has same name as namespace
+                    opt1
+                    opt2
+                end class
+
+                namespace SomeName
+                    sub foo()
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.nameCollision('Class', 'Namespace', 'SomeName').message,
+                DiagnosticMessages.nameCollision('Namespace', 'Class', 'SomeName').message
+            ]);
+        });
+
+        it('allows namespaced functions shadowing upper scope function names', () => {
+            program.setFile<BrsFile>('source/file.bs', `
+                namespace alpha
+                    sub log(input)
+                      print "in namespace"
+                    end sub
+
+                    sub test()
+                        log(44) ' prints "in namespace"
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows namespaced functions shadowing upper scope function names', () => {
+            program.setFile<BrsFile>('source/file.bs', `
+                sub someFunc()
+                    print "outside"
+                end sub
+
+                namespace alpha
+                    sub someFunc()
+                      print "inside"
+                    end sub
+
+                    sub test()
+                        someFunc() ' prints "inside"
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('disallows class/global function shadowing', () => {
+            program.setFile<BrsFile>('source/file.bs', `
+                class log  ' class shadows global function
+                    sub foo()
+                    end sub
+                end class
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.nameCollision('Class', 'Global Function', 'log')
+            ]);
+        });
+
+        it('disallows class/local function shadowing', () => {
+            program.setFile<BrsFile>('source/file.bs', `
+                function someName()
+                end function
+
+                class SomeName  ' class shadows local function
+                    sub foo()
+                    end sub
+                end class
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.functionCannotHaveSameNameAsClass('someName'),
+                DiagnosticMessages.nameCollision('Class', 'Function', 'SomeName')
+            ]);
+        });
+
+
+        it('allows function having same name as class in namespace', () => {
+            program.setFile<BrsFile>('source/file.bs', `
+                function someName()
+                end function
+
+                namespace alpha
+                    class SomeName  ' class in namespace shadows function in upper scope
+                        sub foo()
+                        end sub
+                    end class
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows class in namespace having same name as global function', () => {
+            program.setFile<BrsFile>('source/file.bs', `
+                namespace alpha
+                    class log ' class in namespace shadows global function
+                        text = "hello"
+                    end class
+
+                    sub foo()
+                       myLog = new Log()
+                       print myLog.text ' prints "hello"
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('disallows reusing a class name as "for each" variable in a function', () => {
+            program.setFile<BrsFile>('source/file.bs', `
+                class Person
+                    name as string
+                end class
+
+                sub foo(people as Person[])
+                    for each person in people
+                        print person.name
+                    end for
+                end sub
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, DiagnosticMessages.localVarSameNameAsClass('Person').message);
+        });
+
+        it('disallows reusing a class name as "for each" variable in a method', () => {
+            program.setFile<BrsFile>('source/file.bs', `
+                class Person
+                    name as string
+                    children as Person[]
+
+                    sub test()
+                        for each person in m.children
+                            print person.name
+                        end for
+                    end sub
+                end class
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, DiagnosticMessages.localVarSameNameAsClass('Person').message);
+        });
+    });
+
 
     describe('performance', () => {
 

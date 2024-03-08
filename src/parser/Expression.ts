@@ -28,8 +28,8 @@ import { ArrayType } from '../types/ArrayType';
 import { AssociativeArrayType } from '../types/AssociativeArrayType';
 import type { ComponentType } from '../types/ComponentType';
 import { createToken } from '../astUtils/creators';
-import { SymbolTypeFlag } from '../SymbolTableFlag';
 import { TypedFunctionType } from '../types';
+import { SymbolTypeFlag } from '../SymbolTypeFlag';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 

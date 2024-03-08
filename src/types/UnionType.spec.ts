@@ -4,7 +4,7 @@ import { IntegerType } from './IntegerType';
 import { UnionType } from './UnionType';
 import { FloatType } from './FloatType';
 import { InterfaceType } from './InterfaceType';
-import { SymbolTypeFlag } from '../SymbolTableFlag';
+import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { BooleanType } from './BooleanType';
 import { expectTypeToBe } from '../testHelpers.spec';
 import { isReferenceType } from '../astUtils/reflection';

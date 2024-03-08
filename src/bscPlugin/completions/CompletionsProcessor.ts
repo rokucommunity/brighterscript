@@ -9,7 +9,7 @@ import { ParseMode } from '../../parser/Parser';
 import type { CompletionItem, Position } from 'vscode-languageserver';
 import { CompletionItemKind, TextEdit } from 'vscode-languageserver';
 import type { BscSymbol } from '../../SymbolTable';
-import { SymbolTypeFlag } from '../../SymbolTableFlag';
+import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import type { XmlFile } from '../../files/XmlFile';
 import type { Program } from '../../Program';
 import type { BrsFile } from '../../files/BrsFile';

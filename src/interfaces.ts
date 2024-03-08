@@ -17,7 +17,7 @@ import type { BscFile } from './files/BscFile';
 import type { FileFactory } from './files/Factory';
 import type { LazyFileData } from './files/LazyFileData';
 import type { SymbolTable } from './SymbolTable';
-import type { SymbolTypeFlag } from './SymbolTableFlag';
+import type { SymbolTypeFlag } from './SymbolTypeFlag';
 import { createToken } from './astUtils/creators';
 import { TokenKind } from './lexer/TokenKind';
 
