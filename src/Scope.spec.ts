@@ -3331,6 +3331,28 @@ describe('Scope', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        it('resets m in a function in an AA literal', () => {
+            program.setFile<BrsFile>('source/class.bs', `
+                class TestKlass
+                    function getData() as object
+                        data = {
+                            data: [] as float[],
+                            sum: function() as float
+                                value = 0
+                                for each item in m.data
+                                    value += item
+                                end for
+                                return value
+                            end function
+                        }
+                        return data
+                    end function
+                end class
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('unlinkSymbolTable', () => {
