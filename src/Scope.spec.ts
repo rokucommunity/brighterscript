@@ -8,7 +8,7 @@ import PluginInterface from './PluginInterface';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, trim } from './testHelpers.spec';
 import { Logger } from './Logger';
 import type { BrsFile } from './files/BrsFile';
-import type { NamespaceStatement } from './parser/Statement';
+import type { ForEachStatement, NamespaceStatement } from './parser/Statement';
 import type { CompilerPlugin, OnScopeValidateEvent } from './interfaces';
 import { DiagnosticOrigin } from './interfaces';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
@@ -23,12 +23,13 @@ import { FloatType } from './types/FloatType';
 import { NamespaceType } from './types/NamespaceType';
 import { DoubleType } from './types/DoubleType';
 import { UnionType } from './types/UnionType';
-import { isFunctionStatement, isNamespaceStatement } from './astUtils/reflection';
+import { isForEachStatement, isFunctionStatement, isNamespaceStatement } from './astUtils/reflection';
 import { ArrayType } from './types/ArrayType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { InterfaceType } from './types/InterfaceType';
 import { ComponentType } from './types/ComponentType';
 import * as path from 'path';
+import { WalkMode } from './astUtils/visitors';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -3332,8 +3333,8 @@ describe('Scope', () => {
             expectZeroDiagnostics(program);
         });
 
-        it('resets m in a function in an AA literal', () => {
-            program.setFile<BrsFile>('source/class.bs', `
+        it('resets m in a function in an AA literal to be an AssociativeArray type', () => {
+            const file = program.setFile<BrsFile>('source/class.bs', `
                 class TestKlass
                     function getData() as object
                         data = {
@@ -3352,6 +3353,9 @@ describe('Scope', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
+            const forEachStmt = file.parser.ast.findChildren(isForEachStatement, { walkMode: WalkMode.visitAllRecursive })[0] as ForEachStatement;
+            const mType = forEachStmt.getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime });
+            expectTypeToBe(mType, AssociativeArrayType);
         });
     });
 
