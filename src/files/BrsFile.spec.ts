@@ -2071,6 +2071,25 @@ describe('BrsFile', () => {
                     end sub
                 `);
             });
+
+            it('transpiles empty throw with "User-specified exception"', async () => {
+                await testTranspile(`
+                    sub main()
+                        try
+                            throw 'bs:disable-line
+                        catch e
+                        end try
+                    end sub
+                `, `
+                    sub main()
+                        try
+                            throw "User-specified exception"
+                        'bs:disable-line
+                        catch e
+                        end try
+                    end sub
+                `);
+            });
         });
 
         describe('try/catch', () => {
