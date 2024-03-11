@@ -1393,8 +1393,9 @@ export class TernaryExpression extends Expression {
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
-        let consequentInfo = util.getExpressionInfo(this.consequent!);
-        let alternateInfo = util.getExpressionInfo(this.alternate!);
+        const file = state.file;
+        let consequentInfo = util.getExpressionInfo(this.consequent!, file);
+        let alternateInfo = util.getExpressionInfo(this.alternate!, file);
 
         //get all unique variable names used in the consequent and alternate, and sort them alphabetically so the output is consistent
         let allUniqueVarNames = [...new Set([...consequentInfo.uniqueVarNames, ...alternateInfo.uniqueVarNames])].sort();
@@ -1409,7 +1410,7 @@ export class TernaryExpression extends Expression {
                     this.questionMarkToken,
                     //write all the scope variables as parameters.
                     //TODO handle when there are more than 31 parameters
-                    `(function(__bsCondition, ${allUniqueVarNames.join(', ')})`
+                    `(function(${['__bsCondition', ...allUniqueVarNames].join(', ')})`
                 ),
                 state.newline,
                 //double indent so our `end function` line is still indented one at the end
@@ -1433,7 +1434,7 @@ export class TernaryExpression extends Expression {
                 state.indent(-1),
                 state.sourceNode(this.questionMarkToken, 'end function)('),
                 ...this.test.transpile(state),
-                state.sourceNode(this.questionMarkToken, `, ${allUniqueVarNames.join(', ')})`)
+                state.sourceNode(this.questionMarkToken, `${['', ...allUniqueVarNames].join(', ')})`)
             );
             state.blockDepth--;
         } else {
@@ -1476,8 +1477,9 @@ export class NullCoalescingExpression extends Expression {
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
-        let consequentInfo = util.getExpressionInfo(this.consequent);
-        let alternateInfo = util.getExpressionInfo(this.alternate);
+        const file = state.file;
+        let consequentInfo = util.getExpressionInfo(this.consequent, file);
+        let alternateInfo = util.getExpressionInfo(this.alternate, file);
 
         //get all unique variable names used in the consequent and alternate, and sort them alphabetically so the output is consistent
         let allUniqueVarNames = [...new Set([...consequentInfo.uniqueVarNames, ...alternateInfo.uniqueVarNames])].sort();

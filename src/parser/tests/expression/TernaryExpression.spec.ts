@@ -502,6 +502,55 @@ describe('ternary expressions', () => {
             `);
         });
 
+        it('ignores enum variable names', () => {
+            testTranspile(`
+                enum Direction
+                    up = "up"
+                    down = "down"
+                end enum
+                sub main()
+                    d = Direction.up
+                    theDir = d = Direction.up ? Direction.up : false
+                end sub
+            `, `
+                sub main()
+                    d = "up"
+                    theDir = (function(__bsCondition)
+                            if __bsCondition then
+                                return "up"
+                            else
+                                return false
+                            end if
+                        end function)(d = "up")
+                end sub
+            `);
+        });
+
+        it('ignores const variable names', () => {
+            testTranspile(`
+                enum Direction
+                    up = "up"
+                    down = "down"
+                end enum
+                const UP = "up"
+                sub main()
+                    d = Direction.up
+                    theDir = d = Direction.up ? UP : Direction.down
+                end sub
+            `, `
+                sub main()
+                    d = "up"
+                    theDir = (function(__bsCondition)
+                            if __bsCondition then
+                                return "up"
+                            else
+                                return "down"
+                            end if
+                        end function)(d = "up")
+                end sub
+            `);
+        });
+
         it('supports scope-captured outer, and simple inner', () => {
             testTranspile(
                 `
