@@ -1,3 +1,4 @@
+import { SymbolTable } from '../SymbolTable';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { isAssociativeArrayType, isClassType, isDynamicType, isObjectType } from '../astUtils/reflection';
 import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
@@ -43,5 +44,17 @@ export class AssociativeArrayType extends BscType {
 
     isEqual(otherType: BscType) {
         return isAssociativeArrayType(otherType) && this.checkCompatibilityBasedOnMembers(otherType, SymbolTypeFlag.runtime);
+    }
+
+    private builtInMemberTable: SymbolTable;
+
+    getBuiltInMemberTable(): SymbolTable {
+        if (this.builtInMemberTable) {
+            return this.builtInMemberTable;
+        }
+        this.builtInMemberTable = new SymbolTable(`${this.__identifier} Built-in Members`);
+        this.pushMemberProvider(() => this.builtInMemberTable);
+        return this.builtInMemberTable;
+
     }
 }

@@ -1059,6 +1059,7 @@ export class AALiteralExpression extends Expression {
 
     getType(options: GetTypeOptions): BscType {
         const resultType = new AssociativeArrayType();
+        resultType.addBuiltInInterfaces();
         for (const element of this.elements) {
             if (isAAMemberExpression(element)) {
                 resultType.addMember(element.tokens.key.text, { definingNode: element }, element.getType(options), SymbolTypeFlag.runtime);
