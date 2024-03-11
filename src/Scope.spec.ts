@@ -1784,7 +1784,6 @@ describe('Scope', () => {
                     class MyClass
                         member as integer
                     end class
-
                 `);
                 program.validate();
                 expectDiagnostics(program, [
@@ -2022,6 +2021,24 @@ describe('Scope', () => {
             it('finds unknown members of primitive types', () => {
                 program.setFile(`source/main.bs`, `
                     sub fn(input as SomeKlass)
+                        piValue = input.getPi().someProp
+                    end sub
+
+                    class SomeKlass
+                        function getPi() as float
+                            return 3.14
+                        end function
+                    end class
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindName('someProp').message
+                ]);
+            });
+
+            it('finds unknown methods of primitive types', () => {
+                program.setFile(`source/main.bs`, `
+                    sub fn(input as SomeKlass)
                         piValue = input.getPi().noMethod()
                     end sub
 
@@ -2032,11 +2049,10 @@ describe('Scope', () => {
                     end class
                 `);
                 program.validate();
-                //TODO: ideally, if this is a primitive type, we should know all the possible members
-                // This *SHOULD* be an error, but currently, during Runtime, an unknown member (from DottedtGetExpression) is returned as Dynamic.instance
-                expectZeroDiagnostics(program);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindName('noMethod').message
+                ]);
             });
-
 
             it('finds members of arrays', () => {
                 program.setFile(`source/main.bs`, `

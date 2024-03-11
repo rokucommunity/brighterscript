@@ -11,7 +11,7 @@ import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, TranspileResult, TypeChainEntry, TypeChainProcessResult } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, TranspileResult, TypeChainEntry, TypeChainProcessResult, GetTypeOptions } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -26,7 +26,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { Logger, LogLevel } from './Logger';
 import { isToken, type Identifier, type Locatable, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLongIntegerType, isNumberType, isStringType, isTypeExpression, isTypedArrayExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLongIntegerType, isNewExpression, isNumberType, isStringType, isTypeExpression, isTypedArrayExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import * as requireRelative from 'require-relative';
@@ -2115,6 +2115,18 @@ export class Util {
         const leadingCommentRange = this.getLeadingComments(input)?.[0];
         if (leadingCommentRange) {
             return this.linesTouch(line, leadingCommentRange);
+        }
+        return false;
+    }
+
+    public isClassUsedAsFunction(potentialClassType: BscType, expression: Expression, options: GetTypeOptions) {
+        // eslint-disable-next-line no-bitwise
+        if (options.flags & SymbolTypeFlag.runtime &&
+            isClassType(potentialClassType) &&
+            !options.isExistenceTest &&
+            potentialClassType.name.toLowerCase() === this.getAllDottedGetPartsAsString(expression).toLowerCase() &&
+            !expression.findAncestor(isNewExpression)) {
+            return true;
         }
         return false;
     }

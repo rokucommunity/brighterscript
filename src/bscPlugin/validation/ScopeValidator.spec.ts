@@ -1733,12 +1733,12 @@ describe('ScopeValidator', () => {
                 end class
 
                 sub doStuff()
-                    print klass.name ' only valid use of "Klass" is as a constructor: "new Klass()"
+                    print klass.name ' only valid use of "Klass" is as a constructor: "new Klass()", or as a function
                 end sub
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.itemCannotBeUsedAsVariable('Klass')
+                DiagnosticMessages.cannotFindName('name', 'function.name')
             ]);
         });
 
@@ -1756,7 +1756,7 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.itemCannotBeUsedAsVariable('Alpha.Klass')
+                DiagnosticMessages.cannotFindName('name', 'function.name')
             ]);
         });
 
