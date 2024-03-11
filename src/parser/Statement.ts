@@ -3001,7 +3001,7 @@ export class ThrowStatement extends Statement {
 
             //no expression found. Rather than emit syntax errors, provide a generic error message
         } else {
-            result.push('"An error has occurred"');
+            result.push('"User-specified exception"');
         }
         return result;
     }
