@@ -1,6 +1,6 @@
 import { URI } from 'vscode-uri';
 import type { Range } from 'vscode-languageserver';
-import { isAssignmentStatement, isAssociativeArrayType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isConstStatement, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumStatement, isEnumType, isFunctionExpression, isFunctionStatement, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isObjectType, isPrimitiveType, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
+import { isAssignmentStatement, isAssociativeArrayType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isConstStatement, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumStatement, isEnumType, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isObjectType, isPrimitiveType, isReferenceType, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
@@ -164,7 +164,7 @@ export class ScopeValidator {
     /**
      * If this is the lhs of an assignment, we don't need to flag it as unresolved
      */
-    private ignoreUnresolvedAssignmentLHS(expression: Expression, exprType: BscType, definingNode?: AstNode) {
+    private hasValidDeclaration(expression: Expression, exprType: BscType, definingNode?: AstNode) {
         if (!isVariableExpression(expression)) {
             return false;
         }
@@ -173,6 +173,9 @@ export class ScopeValidator {
             // this symbol was defined in a "normal" assignment (eg. not a compound assignment)
             assignmentAncestor = definingNode;
             return assignmentAncestor?.tokens.name?.text.toLowerCase() === expression?.tokens.name?.text.toLowerCase();
+        } else if (isFunctionParameterExpression(definingNode)) {
+            // this symbol was defined in a function param
+            return true;
         } else {
             assignmentAncestor = expression?.findAncestor(isAssignmentStatement);
         }
@@ -458,8 +461,13 @@ export class ScopeValidator {
         const expectedLHSType = assignStmt.typeExpression.getType({ ...getTypeOpts, data: {}, typeChain: typeChainExpectedLHS });
         const actualRHSType = assignStmt.value?.getType(getTypeOpts);
         const compatibilityData: TypeCompatibilityData = {};
-
-        if (!expectedLHSType?.isTypeCompatible(actualRHSType, compatibilityData)) {
+        if (!expectedLHSType || !expectedLHSType.isResolvable()) {
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.cannotFindName(assignStmt.typeExpression.getName(ParseMode.BrighterScript)),
+                range: assignStmt.typeExpression.range,
+                file: file
+            });
+        } else if (!expectedLHSType?.isTypeCompatible(actualRHSType, compatibilityData)) {
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.assignmentTypeMismatch(actualRHSType.toString(), expectedLHSType.toString(), compatibilityData),
                 range: assignStmt.range,
@@ -603,12 +611,12 @@ export class ScopeValidator {
             data: typeData
         });
 
-        const shouldIgnoreLHS = this.ignoreUnresolvedAssignmentLHS(expression, exprType, typeData?.definingNode);
+        const hasValidDeclaration = this.hasValidDeclaration(expression, exprType, typeData?.definingNode);
 
-        if (!this.isTypeKnown(exprType) && !shouldIgnoreLHS) {
-            if (expression.getType({ flags: oppositeSymbolType })?.isResolvable()) {
+        if (!this.isTypeKnown(exprType) && !hasValidDeclaration) {
+            if (expression.getType({ flags: oppositeSymbolType, isExistenceTest: true })?.isResolvable()) {
                 const oppoSiteTypeChain = [];
-                const invalidlyUsedResolvedType = expression.getType({ flags: oppositeSymbolType, typeChain: oppoSiteTypeChain });
+                const invalidlyUsedResolvedType = expression.getType({ flags: oppositeSymbolType, typeChain: oppoSiteTypeChain, isExistenceTest: true });
                 const typeChainScan = util.processTypeChain(oppoSiteTypeChain);
                 if (isUsedAsType) {
                     this.addMultiScopeDiagnostic({
@@ -616,11 +624,18 @@ export class ScopeValidator {
                         range: expression.range,
                         file: file
                     });
-                } else {
+                } else if (invalidlyUsedResolvedType && !isReferenceType(invalidlyUsedResolvedType)) {
                     this.addMultiScopeDiagnostic({
                         ...DiagnosticMessages.itemCannotBeUsedAsVariable(invalidlyUsedResolvedType.toString()),
                         range: expression.range,
                         file: file
+                    });
+                } else {
+                    const typeChainScan = util.processTypeChain(typeChain);
+                    this.addMultiScopeDiagnostic({
+                        file: file as BscFile,
+                        ...DiagnosticMessages.cannotFindName(typeChainScan.itemName, typeChainScan.fullNameOfItem),
+                        range: typeChainScan.range
                     });
                 }
 
@@ -637,6 +652,7 @@ export class ScopeValidator {
         if (isUsedAsType) {
             return;
         }
+
         const containingNamespaceName = expression.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
 
         if (!(isCallExpression(expression.parent) && isNewExpression(expression.parent?.parent))) {
@@ -700,7 +716,6 @@ export class ScopeValidator {
         let isFirst = true;
         for (let i = 0; i < typeChain.length - 1; i++) { // do not look at final entry - we CAN use the constructor as a variable
             const tce = typeChain[i];
-
             lowerNameSoFar += `${lowerNameSoFar ? '.' : ''}${tce.name.toLowerCase()}`;
             if (!isNamespaceType(tce.type)) {
                 if (isFirst && containingNamespaceName) {

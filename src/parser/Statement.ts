@@ -175,7 +175,7 @@ export class AssignmentStatement extends Statement {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
-            //TODO: Walk TypeExpression. We need to decide how to implement types on assignments
+            walk(this, 'typeExpression', visitor, options);
             walk(this, 'value', visitor, options);
         }
     }
@@ -3001,7 +3001,7 @@ export class ThrowStatement extends Statement {
 
             //no expression found. Rather than emit syntax errors, provide a generic error message
         } else {
-            result.push('"An error has occurred"');
+            result.push('"User-specified exception"');
         }
         return result;
     }

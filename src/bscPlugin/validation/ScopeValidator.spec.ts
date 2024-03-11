@@ -1647,6 +1647,44 @@ describe('ScopeValidator', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        it('does not show a diagnostic when using a function param with unknown type', () => {
+            program.setFile('source/main.bs', `
+                function test(item as Whatever)
+                    return {data: item}
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('Whatever')
+            ]);
+        });
+
+        it('does not show a diagnostic when using a variable declared with unknown type cast', () => {
+            program.setFile('source/main.bs', `
+                function test()
+                    item = {} as Whatever
+                    return {data: item}
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('Whatever')
+            ]);
+        });
+
+        it('does not show a diagnostic when using a variable declared with unknown type', () => {
+            program.setFile('source/main.bs', `
+                function test()
+                    item as Whatever = {}
+                    return {data: item}
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('Whatever')
+            ]);
+        });
     });
 
     describe('itemCannotBeUsedAsVariable', () => {
@@ -1733,12 +1771,12 @@ describe('ScopeValidator', () => {
                 end class
 
                 sub doStuff()
-                    print klass.name ' only valid use of "Klass" is as a constructor: "new Klass()"
+                    print klass.name ' only valid use of "Klass" is as a constructor: "new Klass()", or as a function
                 end sub
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.itemCannotBeUsedAsVariable('Klass')
+                DiagnosticMessages.cannotFindName('name', 'function.name')
             ]);
         });
 
@@ -1756,7 +1794,7 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.itemCannotBeUsedAsVariable('Alpha.Klass')
+                DiagnosticMessages.cannotFindName('name', 'function.name')
             ]);
         });
 
