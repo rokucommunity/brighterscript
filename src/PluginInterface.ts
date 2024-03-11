@@ -57,7 +57,7 @@ export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> 
                         (plugin as any)[event](...args);
                     });
                 } catch (err) {
-                    this.logger?.error(`Error when calling plugin ${plugin.name}.${event}:`, err);
+                    this.logger?.error(`Error when calling plugin ${plugin.name}.${event}:`, (err as Error).stack);
                     if (!this.suppressErrors) {
                         throw err;
                     }
