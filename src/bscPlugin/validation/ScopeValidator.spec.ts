@@ -7,8 +7,9 @@ import type { TypeCompatibilityData } from '../../interfaces';
 import { IntegerType } from '../../types/IntegerType';
 import { StringType } from '../../types/StringType';
 import type { BrsFile } from '../../files/BrsFile';
-import { FloatType } from '../../types';
+import { FloatType, InterfaceType } from '../../types';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
+import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 
 describe('ScopeValidator', () => {
 
@@ -2056,6 +2057,59 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
+        });
+
+
+        it('allows AA with overidden props to meet interface', () => {
+            program.setFile('source/code.bs', `
+                namespace alpha.beta
+                    interface Stream
+                        thumbnailTiler as Thumbnail
+                    end interface
+
+                    interface Thumbnail
+                        count as integer
+                    end interface
+
+                    function createStreamObject() as Stream
+                        return {
+                            thumbnailTiler: {
+                                count: 1
+                            }
+                        }
+                    end function
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows AA with inside AA to be validated properly', () => {
+            program.setFile('source/code.bs', `
+                namespace alpha.beta
+                    interface Stream
+                        thumbnailTiler as Thumbnail
+                    end interface
+
+                    interface Thumbnail
+                        count as integer
+                    end interface
+
+                    function createStreamObject() as Stream
+                        return {
+                            thumbnailTiler: {
+                                count: "hello"
+                            }
+                        }
+                    end function
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.returnTypeMismatch('roAssociativeArray', 'alpha.beta.Stream', {
+                    fieldMismatches: [{ name: 'thumbnailTiler', expectedType: new InterfaceType('alpha.beta.Thumbnail'), actualType: new AssociativeArrayType() }]
+                }).message
+            ]);
         });
     });
 
