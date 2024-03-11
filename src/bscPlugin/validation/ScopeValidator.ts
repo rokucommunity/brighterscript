@@ -1,5 +1,5 @@
 import { URI } from 'vscode-uri';
-import { isAssignmentStatement, isAssociativeArrayType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isObjectType, isPrimitiveType, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
+import { isAssignmentStatement, isAssociativeArrayType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isObjectType, isPrimitiveType, isReferenceType, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -590,9 +590,9 @@ export class ScopeValidator {
         const hasValidDeclaration = this.hasValidDeclaration(expression, exprType, typeData?.definingNode);
 
         if (!this.isTypeKnown(exprType) && !hasValidDeclaration) {
-            if (expression.getType({ flags: oppositeSymbolType })?.isResolvable()) {
+            if (expression.getType({ flags: oppositeSymbolType, isExistenceTest: true })?.isResolvable()) {
                 const oppoSiteTypeChain = [];
-                const invalidlyUsedResolvedType = expression.getType({ flags: oppositeSymbolType, typeChain: oppoSiteTypeChain });
+                const invalidlyUsedResolvedType = expression.getType({ flags: oppositeSymbolType, typeChain: oppoSiteTypeChain, isExistenceTest: true });
                 const typeChainScan = util.processTypeChain(oppoSiteTypeChain);
                 if (isUsedAsType) {
                     this.addMultiScopeDiagnostic({
@@ -600,11 +600,18 @@ export class ScopeValidator {
                         range: expression.range,
                         file: file
                     });
-                } else {
+                } else if (invalidlyUsedResolvedType && !isReferenceType(invalidlyUsedResolvedType)) {
                     this.addMultiScopeDiagnostic({
                         ...DiagnosticMessages.itemCannotBeUsedAsVariable(invalidlyUsedResolvedType.toString()),
                         range: expression.range,
                         file: file
+                    });
+                } else {
+                    const typeChainScan = util.processTypeChain(typeChain);
+                    this.addMultiScopeDiagnostic({
+                        file: file as BscFile,
+                        ...DiagnosticMessages.cannotFindName(typeChainScan.itemName, typeChainScan.fullNameOfItem),
+                        range: typeChainScan.range
                     });
                 }
 
@@ -685,7 +692,6 @@ export class ScopeValidator {
         let isFirst = true;
         for (let i = 0; i < typeChain.length - 1; i++) { // do not look at final entry - we CAN use the constructor as a variable
             const tce = typeChain[i];
-
             lowerNameSoFar += `${lowerNameSoFar ? '.' : ''}${tce.name.toLowerCase()}`;
             if (!isNamespaceType(tce.type)) {
                 if (isFirst && containingNamespaceName) {

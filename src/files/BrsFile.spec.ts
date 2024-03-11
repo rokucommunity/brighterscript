@@ -2836,7 +2836,7 @@ describe('BrsFile', () => {
                 program.setFile('source/main.bs', `
                     sub test()
                         someNode = createObject("roSGNode", "Rectangle")
-                        someNode@.someFunction(test.value)
+                        someNode@.someFunction({test: "value"})
                     end sub
                 `);
                 program.validate();
