@@ -1476,10 +1476,18 @@ export class Util {
                     return BooleanType.instance;
                 }
                 break;
-            // Logical operators
+            // Logical or bitwise operators
             case TokenKind.Or:
             case TokenKind.And:
-                if (eitherBooleanOrNum) {
+                if (bothNumbers) {
+                    // "and"/"or" represent bitwise operators
+                    if (hasLongInteger && !hasDouble && !hasFloat) {
+                        // 2 long ints or long int and int
+                        return LongIntegerType.instance;
+                    }
+                    return IntegerType.instance;
+                } else if (eitherBooleanOrNum) {
+                    // "and"/"or" represent logical operators
                     return BooleanType.instance;
                 }
                 break;

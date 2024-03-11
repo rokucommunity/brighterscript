@@ -23,13 +23,14 @@ import { FloatType } from './types/FloatType';
 import { NamespaceType } from './types/NamespaceType';
 import { DoubleType } from './types/DoubleType';
 import { UnionType } from './types/UnionType';
-import { isForEachStatement, isFunctionStatement, isNamespaceStatement } from './astUtils/reflection';
+import { isForEachStatement, isFunctionExpression, isFunctionStatement, isNamespaceStatement } from './astUtils/reflection';
 import { ArrayType } from './types/ArrayType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { InterfaceType } from './types/InterfaceType';
 import { ComponentType } from './types/ComponentType';
 import * as path from 'path';
 import { WalkMode } from './astUtils/visitors';
+import type { FunctionExpression } from './parser/Expression';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -2965,6 +2966,25 @@ describe('Scope', () => {
                 expectTypeToBe(symbolTable.getSymbolType('f', opts), FloatType);
                 expectTypeToBe(symbolTable.getSymbolType('g', opts), IntegerType);
                 expectTypeToBe(symbolTable.getSymbolType('h', opts), FloatType);
+            });
+
+            it('should set correct types on bitwise operators on numbers', () => {
+                let mainFile = program.setFile<BrsFile>('source/main.bs', `
+                    sub process()
+                        three = &h01 or &h02
+                        print three ' prints 3
+
+                        one = &h01 and &h01
+                        print one ' prints 1
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const func = mainFile.ast.findChild<FunctionExpression>(isFunctionExpression);
+                const symbolTable = func.body.getSymbolTable();
+                const opts = { flags: SymbolTypeFlag.runtime };
+                expectTypeToBe(symbolTable.getSymbolType('one', opts), IntegerType);
+                expectTypeToBe(symbolTable.getSymbolType('three', opts), IntegerType);
             });
         });
 
