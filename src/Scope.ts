@@ -1,22 +1,17 @@
 /* eslint-disable @typescript-eslint/dot-notation */
 import * as path from 'path';
 import chalk from 'chalk';
-import type { DiagnosticInfo } from './DiagnosticMessages';
-import { DiagnosticMessages } from './DiagnosticMessages';
 import { DiagnosticOrigin } from './interfaces';
 import type { CallableContainer, BsDiagnosticWithOrigin, FileReference, FileLink, Callable, NamespaceContainer, ScopeValidationOptions, BsDiagnostic } from './interfaces';
 import type { Program } from './Program';
-import { BsClassValidator } from './validators/ClassValidator';
 import { type NamespaceStatement, type ClassStatement, type EnumStatement, type InterfaceStatement, type EnumMemberStatement, type ConstStatement } from './parser/Statement';
 import { ParseMode } from './parser/Parser';
 import { util } from './util';
-import { globalCallableMap } from './globalCallables';
 import { Cache } from './Cache';
-import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
-import { isBrsFile, isXmlFile, isEnumMemberStatement, isNamespaceStatement, isNamespaceType, isReferenceType, isCallableType, isFunctionStatement, isEnumStatement, isConstStatement, isInterfaceStatement } from './astUtils/reflection';
+import { isBrsFile, isXmlFile, isEnumMemberStatement, isNamespaceType, isReferenceType, isCallableType } from './astUtils/reflection';
 import { SymbolTable } from './SymbolTable';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { BscFile } from './files/BscFile';
@@ -26,9 +21,6 @@ import { referenceTypeFactory } from './types/ReferenceType';
 import { unionTypeFactory } from './types/UnionType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import type { AstNode, Statement } from './parser/AstNode';
-import { WalkMode, createVisitor } from './astUtils/visitors';
-import type { Token } from './lexer/Token';
-import type { Range } from 'vscode-languageserver';
 
 /**
  * Assign some few factories to the SymbolTable to prevent cyclical imports. This file seems like the most intuitive place to do the linking
@@ -69,7 +61,6 @@ export class Scope {
      * "namea", "namea.nameb", "namea.nameb.namec"
      */
     public get namespaceLookup() {
-
         let allFilesValidated = true;
         for (const file of this.getAllFiles()) {
             if (isBrsFile(file) && !file.hasTypedef) {
@@ -165,7 +156,6 @@ export class Scope {
         }
         return cls;
     }
-
 
     /**
      * Get an interface and its containing file by the interface name
@@ -745,7 +735,6 @@ export class Scope {
             //clear the scope's errors list (we will populate them from this method)
             this.clearScopeLevelDiagnostics();
 
-
             //Since statements from files are shared across multiple scopes, we need to link those statements to the current scope
             this.linkSymbolTable();
             const scopeValidateEvent = {
@@ -756,30 +745,11 @@ export class Scope {
             };
             this.program.plugins.emit('beforeScopeValidate', scopeValidateEvent);
             this.program.plugins.emit('onScopeValidate', scopeValidateEvent);
-            this._validate();
             this.program.plugins.emit('afterScopeValidate', scopeValidateEvent);
             //unlink all symbol tables from this scope (so they don't accidentally stick around)
             this.unlinkSymbolTable();
 
             (this as any).isValidated = true;
-        });
-    }
-
-    protected _validate() {
-        //find all duplicate function declarations
-        this.diagnosticFindDuplicateFunctionDeclarations();
-
-        //detect missing and incorrect-case script imports
-        this.diagnosticValidateScriptImportPaths();
-
-        //enforce a series of checks on the bodies of class methods
-        this.validateClasses();
-
-        //do many per-file checks
-        this.enumerateBrsFiles((file) => {
-            this.diagnosticDetectFunctionCollisions(file);
-            this.detectVariableNamespaceCollisions(file);
-            this.detectNameCollisions(file);
         });
     }
 
@@ -921,350 +891,10 @@ export class Scope {
         this.linkSymbolTableDisposables = [];
     }
 
-    private detectVariableNamespaceCollisions(file: BrsFile) {
-        //find all function parameters
-        for (let func of file['_cachedLookups'].functionExpressions) {
-            for (let param of func.parameters) {
-                let lowerParamName = param.tokens.name.text.toLowerCase();
-                let namespace = this.getNamespace(lowerParamName, param.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript).toLowerCase());
-                //see if the param matches any starting namespace part
-                if (namespace) {
-                    this.diagnostics.push({
-                        origin: DiagnosticOrigin.Scope,
-                        file: file,
-                        ...DiagnosticMessages.parameterMayNotHaveSameNameAsNamespace(param.tokens.name.text),
-                        range: param.tokens.name.range,
-                        relatedInformation: [{
-                            message: 'Namespace declared here',
-                            location: util.createLocation(
-                                URI.file(namespace.file.srcPath).toString(),
-                                namespace.nameRange
-                            )
-                        }]
-                    });
-                }
-            }
-        }
-
-        for (let assignment of file['_cachedLookups'].assignmentStatements) {
-            let lowerAssignmentName = assignment.tokens.name.text.toLowerCase();
-            let namespace = this.getNamespace(lowerAssignmentName, assignment.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript).toLowerCase());
-            //see if the param matches any starting namespace part
-            if (namespace) {
-                this.diagnostics.push({
-                    origin: DiagnosticOrigin.Scope,
-                    file: file,
-                    ...DiagnosticMessages.variableMayNotHaveSameNameAsNamespace(assignment.tokens.name.text),
-                    range: assignment.tokens.name.range,
-                    relatedInformation: [{
-                        message: 'Namespace declared here',
-                        location: util.createLocation(
-                            URI.file(namespace.file.srcPath).toString(),
-                            namespace.nameRange
-                        )
-                    }]
-                });
-            }
-        }
-    }
-
-    /**
-     * Find various function collisions
-     */
-    private diagnosticDetectFunctionCollisions(file: BrsFile) {
-        for (let func of file.callables) {
-            const funcName = func.getName(ParseMode.BrighterScript);
-            const lowerFuncName = funcName?.toLowerCase();
-            if (lowerFuncName) {
-
-                //find function declarations with the same name as a stdlib function
-                if (globalCallableMap.has(lowerFuncName)) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.scopeFunctionShadowedByBuiltInFunction(),
-                        range: func.nameRange,
-                        file: file,
-                        origin: DiagnosticOrigin.Scope
-
-                    });
-                }
-
-                //find any functions that have the same name as a class
-                const klassLink = this.getClassFileLink(lowerFuncName);
-                if (klassLink) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.functionCannotHaveSameNameAsClass(funcName),
-                        range: func.nameRange,
-                        file: file,
-                        origin: DiagnosticOrigin.Scope,
-                        relatedInformation: [{
-                            location: util.createLocation(
-                                URI.file(klassLink.file.srcPath).toString(),
-                                klassLink.item.tokens.name.range
-                            ),
-                            message: 'Original class declared here'
-                        }]
-                    });
-                }
-            }
-        }
-    }
-
-    private detectNameCollisions(file: BrsFile) {
-        file.ast.walk(createVisitor({
-            NamespaceStatement: (nsStmt) => {
-                this.validateNameCollision(file, nsStmt, nsStmt.getNameParts()?.[0]);
-            },
-            ClassStatement: (classStmt) => {
-                this.validateNameCollision(file, classStmt, classStmt.tokens.name);
-            },
-            InterfaceStatement: (ifaceStmt) => {
-                this.validateNameCollision(file, ifaceStmt, ifaceStmt.tokens.name);
-            },
-            ConstStatement: (constStmt) => {
-                this.validateNameCollision(file, constStmt, constStmt.tokens.name);
-            },
-            EnumStatement: (enumStmt) => {
-                this.validateNameCollision(file, enumStmt, enumStmt.tokens.name);
-            },
-            AssignmentStatement: (assignStmt) => {
-                // Note: this also includes For statements
-                this.detectShadowedLocalVar(file, {
-                    name: assignStmt.tokens.name.text,
-                    type: assignStmt.getType({ flags: SymbolTypeFlag.runtime }),
-                    nameRange: assignStmt.tokens.name.range
-                });
-            },
-            ForEachStatement: (forEachStmt) => {
-                this.detectShadowedLocalVar(file, {
-                    name: forEachStmt.tokens.item.text,
-                    type: forEachStmt.getType({ flags: SymbolTypeFlag.runtime }),
-                    nameRange: forEachStmt.tokens.item.range
-                });
-            }
-        }), {
-            walkMode: WalkMode.visitAllRecursive
-        });
-    }
-
-
-    validateNameCollision(file: BrsFile, node: AstNode, nameIdentifier: Token) {
-        const name = nameIdentifier?.text;
-        if (!name || !node) {
-            return;
-        }
-        const nameRange = nameIdentifier.range;
-
-        const containingNamespace = node.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
-        const containingNamespaceLower = containingNamespace?.toLowerCase();
-        const links = this.getAllFileLinks(name, containingNamespace);
-        for (let link of links) {
-            if (!link || link.item === node) {
-                // refers to same node
-                continue;
-            }
-            if (isNamespaceStatement(link.item) && isNamespaceStatement(node)) {
-                // namespace can be declared multiple times
-                continue;
-            }
-            if (isFunctionStatement(link.item) || link.file?.destPath === 'global') {
-                const linkItemNamespaceLower = link.item?.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript)?.toLowerCase();
-                if (!(containingNamespaceLower && linkItemNamespaceLower) || linkItemNamespaceLower !== containingNamespaceLower) {
-
-                    // the thing found is a function OR from global (which is also a function)
-                    if (isNamespaceStatement(node) ||
-                        isEnumStatement(node) ||
-                        isConstStatement(node) ||
-                        isInterfaceStatement(node)) {
-                        // these are not callable functions in transpiled code - ignore them
-                        continue;
-                    }
-                }
-            }
-
-            const thisNodeKindName = util.getAstNodeFriendlyName(node);
-            const thatNodeKindName = link.file.srcPath === 'global' ? 'Global Function' : util.getAstNodeFriendlyName(link.item) ?? '';
-
-            let thatNameRange = (link.item as any)?.tokens?.name?.range ?? link.item?.range;
-
-            if (isNamespaceStatement(link.item)) {
-                thatNameRange = (link.item as NamespaceStatement).getNameParts()?.[0]?.range;
-            }
-
-            const relatedInformation = thatNameRange ? [{
-                message: `${thatNodeKindName} declared here`,
-                location: util.createLocation(
-                    URI.file(link.file?.srcPath).toString(),
-                    thatNameRange
-                )
-            }] : undefined;
-
-            this.diagnostics.push({
-                file: file,
-                ...DiagnosticMessages.nameCollision(thisNodeKindName, thatNodeKindName, name),
-                origin: DiagnosticOrigin.Scope,
-                range: nameRange,
-                relatedInformation: relatedInformation
-            });
-        }
-
-    }
-
-    private validateClasses() {
-        let validator = new BsClassValidator(this);
-        validator.validate();
-        this.diagnostics.push(...validator.diagnostics.map(diag => {
-            return { ...diag, origin: DiagnosticOrigin.Scope };
-        }));
-    }
-
-
-    private detectShadowedLocalVar(file: BrsFile, varDeclaration: { name: string; type: BscType; nameRange: Range }) {
-        const varName = varDeclaration.name;
-        const lowerVarName = varName.toLowerCase();
-        const classMap = this.getClassMap();
-        const callableContainerMap = this.getCallableContainerMap();
-
-        const varIsFunction = () => {
-            return isCallableType(varDeclaration.type);
-        };
-
-        if (
-            //has same name as stdlib
-            globalCallableMap.has(lowerVarName)
-        ) {
-            //local var function with same name as stdlib function
-            if (varIsFunction()) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.localVarFunctionShadowsParentFunction('stdlib'),
-                    range: varDeclaration.nameRange,
-                    file: file,
-                    origin: DiagnosticOrigin.Scope
-                });
-            }
-        } else if (callableContainerMap.has(lowerVarName)) {
-            const callable = callableContainerMap.get(lowerVarName);
-            //is same name as a callable
-            if (varIsFunction()) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.localVarFunctionShadowsParentFunction('scope'),
-                    range: varDeclaration.nameRange,
-                    file: file,
-                    origin: DiagnosticOrigin.Scope,
-                    relatedInformation: [{
-                        message: 'Function declared here',
-                        location: util.createLocation(
-                            URI.file(callable[0].callable.file.srcPath).toString(),
-                            callable[0].callable.nameRange
-                        )
-                    }]
-                });
-            } else {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.localVarShadowedByScopedFunction(),
-                    range: varDeclaration.nameRange,
-                    file: file,
-                    origin: DiagnosticOrigin.Scope,
-                    relatedInformation: [{
-                        message: 'Function declared here',
-                        location: util.createLocation(
-                            URI.file(callable[0].callable.file.srcPath).toString(),
-                            callable[0].callable.nameRange
-                        )
-                    }]
-                });
-            }
-            //has the same name as an in-scope class
-        } else if (classMap.has(lowerVarName)) {
-            const classStmtLink = classMap.get(lowerVarName);
-            this.diagnostics.push({
-                ...DiagnosticMessages.localVarSameNameAsClass(classStmtLink?.item?.getName(ParseMode.BrighterScript)),
-                range: varDeclaration.nameRange,
-                file: file,
-                origin: DiagnosticOrigin.Scope,
-                relatedInformation: [{
-                    message: 'Class declared here',
-                    location: util.createLocation(
-                        URI.file(classStmtLink.file.srcPath).toString(),
-                        classStmtLink?.item.tokens.name.range
-                    )
-                }]
-            });
-        }
-    }
-
-    /**
-     * Create diagnostics for any duplicate function declarations
-     */
-    private diagnosticFindDuplicateFunctionDeclarations() {
-
-        //for each list of callables with the same name
-        for (let [lowerName, callableContainers] of this.getCallableContainerMap()) {
-
-            let globalCallables = [] as CallableContainer[];
-            let nonGlobalCallables = [] as CallableContainer[];
-            let ownCallables = [] as CallableContainer[];
-            let ancestorNonGlobalCallables = [] as CallableContainer[];
-
-            for (let container of callableContainers) {
-                if (container.scope === this.program.globalScope) {
-                    globalCallables.push(container);
-                } else {
-                    nonGlobalCallables.push(container);
-                    if (container.scope === this) {
-                        ownCallables.push(container);
-                    } else {
-                        ancestorNonGlobalCallables.push(container);
-                    }
-                }
-            }
-
-            //add info diagnostics about child shadowing parent functions
-            if (ownCallables.length > 0 && ancestorNonGlobalCallables.length > 0) {
-                for (let container of ownCallables) {
-                    //skip the init function (because every component will have one of those){
-                    if (lowerName !== 'init') {
-                        let shadowedCallable = ancestorNonGlobalCallables[ancestorNonGlobalCallables.length - 1];
-                        if (!!shadowedCallable && shadowedCallable.callable.file === container.callable.file) {
-                            //same file: skip redundant imports
-                            continue;
-                        }
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.overridesAncestorFunction(
-                                container.callable.name,
-                                container.scope.name,
-                                shadowedCallable.callable.file.destPath,
-                                //grab the last item in the list, which should be the closest ancestor's version
-                                shadowedCallable.scope.name
-                            ),
-                            range: container.callable.nameRange,
-                            file: container.callable.file,
-                            origin: DiagnosticOrigin.Scope
-                        });
-                    }
-                }
-            }
-
-            //add error diagnostics about duplicate functions in the same scope
-            if (ownCallables.length > 1) {
-
-                for (let callableContainer of ownCallables) {
-                    let callable = callableContainer.callable;
-
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.duplicateFunctionImplementation(callable.name, callableContainer.scope.name),
-                        range: callable.nameRange,
-                        file: callable.file,
-                        origin: DiagnosticOrigin.Scope
-                    });
-                }
-            }
-        }
-    }
-
     /**
      * Get the list of all script imports for this scope
      */
-    private getOwnScriptImports() {
+    public getOwnScriptImports() {
         let result = [] as FileReference[];
         this.enumerateOwnFiles((file) => {
             if (isBrsFile(file)) {
@@ -1276,49 +906,11 @@ export class Scope {
         return result;
     }
 
-    /**
-     * Verify that all of the scripts imported by each file in this scope actually exist
-     */
-    private diagnosticValidateScriptImportPaths() {
-        let scriptImports = this.getOwnScriptImports();
-        //verify every script import
-        for (let scriptImport of scriptImports) {
-            let referencedFile = this.getFileByRelativePath(scriptImport.destPath);
-            //if we can't find the file
-            if (!referencedFile) {
-                //skip the default bslib file, it will exist at transpile time but should not show up in the program during validation cycle
-                if (scriptImport.destPath === this.program.bslibPkgPath) {
-                    continue;
-                }
-                let dInfo: DiagnosticInfo;
-                if (scriptImport.text.trim().length === 0) {
-                    dInfo = DiagnosticMessages.scriptSrcCannotBeEmpty();
-                } else {
-                    dInfo = DiagnosticMessages.referencedFileDoesNotExist();
-                }
-
-                this.diagnostics.push({
-                    ...dInfo,
-                    range: scriptImport.filePathRange,
-                    file: scriptImport.sourceFile,
-                    origin: DiagnosticOrigin.Scope
-                });
-                //if the character casing of the script import path does not match that of the actual path
-            } else if (scriptImport.destPath !== referencedFile.destPath) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.scriptImportCaseMismatch(referencedFile.destPath),
-                    range: scriptImport.filePathRange,
-                    file: scriptImport.sourceFile,
-                    origin: DiagnosticOrigin.Scope
-                });
-            }
-        }
-    }
 
     /**
      * Find the file with the specified relative path
      */
-    protected getFileByRelativePath(relativePath: string) {
+    public getFileByRelativePath(relativePath: string) {
         if (!relativePath) {
             return;
         }
