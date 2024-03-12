@@ -76,6 +76,9 @@ export class ScopeValidator {
 
         //do many per-file checks for every file in this (and parent) scopes
         this.event.scope.enumerateBrsFiles((file) => {
+            if (!isBrsFile(file)) {
+                return;
+            }
             this.diagnosticDetectFunctionCollisions(file);
             this.detectVariableNamespaceCollisions(file);
             this.detectNameCollisions(file);
@@ -132,9 +135,22 @@ export class ScopeValidator {
                     },
                     AssignmentStatement: (assignStmt) => {
                         this.validateAssignmentStatement(file, assignStmt);
+                        // Note: this also includes For statements
+                        this.detectShadowedLocalVar(file, {
+                            name: assignStmt.tokens.name.text,
+                            type: assignStmt.getType({ flags: SymbolTypeFlag.runtime }),
+                            nameRange: assignStmt.tokens.name.range
+                        });
                     },
                     NewExpression: (newExpr) => {
                         this.validateNewExpression(file, newExpr);
+                    },
+                    ForEachStatement: (forEachStmt) => {
+                        this.detectShadowedLocalVar(file, {
+                            name: forEachStmt.tokens.item.text,
+                            type: forEachStmt.getType({ flags: SymbolTypeFlag.runtime }),
+                            nameRange: forEachStmt.tokens.item.range
+                        });
                     }
                 });
                 const segmentsToWalkForValidation = (thisFileHasChanges || !hasChangeInfo)
@@ -991,24 +1007,9 @@ export class ScopeValidator {
             },
             EnumStatement: (enumStmt) => {
                 this.validateNameCollision(file, enumStmt, enumStmt.tokens.name);
-            },
-            AssignmentStatement: (assignStmt) => {
-                // Note: this also includes For statements
-                this.detectShadowedLocalVar(file, {
-                    name: assignStmt.tokens.name.text,
-                    type: assignStmt.getType({ flags: SymbolTypeFlag.runtime }),
-                    nameRange: assignStmt.tokens.name.range
-                });
-            },
-            ForEachStatement: (forEachStmt) => {
-                this.detectShadowedLocalVar(file, {
-                    name: forEachStmt.tokens.item.text,
-                    type: forEachStmt.getType({ flags: SymbolTypeFlag.runtime }),
-                    nameRange: forEachStmt.tokens.item.range
-                });
             }
         }), {
-            walkMode: WalkMode.visitAllRecursive
+            walkMode: WalkMode.visitStatements
         });
     }
 
