@@ -97,14 +97,52 @@ export class ScopeValidator {
                             const changeSymbolSetForFlag = this.event.changedSymbols.get(flag);
                             if (util.setContainsUnresolvedSymbol(changeSymbolSetForFlag, requiredSymbol)) {
                                 thisFileRequiresChangedSymbol = true;
+                                break;
                             }
                         }
                     }
                 }
+
+                // Check for shadowed variables
+
+                // eslint-disable-next-line @typescript-eslint/dot-notation
+                /*for (let assignStmt of file['_cachedLookups'].assignmentStatements) {
+                 this.detectShadowedLocalVar(file, {
+                     name: assignStmt.tokens.name.text,
+                     type: assignStmt.getType({ flags: SymbolTypeFlag.runtime }),
+                     nameRange: assignStmt.tokens.name.range
+                 });
+             }
+
+
+                             for (let segment of file.validationSegmenter.segmentsForValidation) {
+                                 const assignedTokensInSegment = file.validationSegmenter.assignedTokensInSegment?.get(segment)?.values() ?? [];
+                                 for (let assignedToken of assignedTokensInSegment) {
+                                     this.detectShadowedLocalVar(file, {
+                                         name: assignedToken.token.text,
+                                         type: assignedToken.node.getType({ flags: SymbolTypeFlag.runtime }),
+                                         nameRange: assignedToken.token.range
+                                     });
+                                 }
+                             }*/
+
                 const thisFileHasChanges = this.event.changedFiles.includes(file);
                 if (hasChangeInfo && !thisFileRequiresChangedSymbol && !thisFileHasChanges) {
                     // this file does not require a symbol that has changed, and this file has not changed
-                    return;
+
+                    let thisFileAssignsChangedSymbol = false;
+                    const runTimeChangedSymbolSet = this.event.changedSymbols.get(SymbolTypeFlag.runtime);
+                    for (let assignedSymbol of file.assignedSymbols) {
+                        if (runTimeChangedSymbolSet.has(assignedSymbol.token.text.toLowerCase())) {
+                            thisFileAssignsChangedSymbol = true;
+                            break;
+                        }
+                    }
+
+                    if (!thisFileAssignsChangedSymbol) {
+                        // this file does not hav a variable assignment that needs to be checked
+                        return;
+                    }
                 }
                 if (thisFileHasChanges) {
                     this.event.scope.clearAstSegmentDiagnosticsByFile(file);
@@ -1076,7 +1114,7 @@ export class ScopeValidator {
 
     }
 
-    private detectShadowedLocalVar(file: BrsFile, varDeclaration: { name: string; type: BscType; nameRange: Range }) {
+    public detectShadowedLocalVar(file: BrsFile, varDeclaration: { name: string; type: BscType; nameRange: Range }) {
         const varName = varDeclaration.name;
         const lowerVarName = varName.toLowerCase();
         const classMap = this.event.scope.getClassMap();
