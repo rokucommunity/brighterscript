@@ -140,11 +140,7 @@ export class TranspileState {
         const leadingCommentsSourceNodes = this.transpileLeadingComments(token);
 
         if (!token.range) {
-            try {
-                return [new SourceNode(null, null, null, [...leadingCommentsSourceNodes, token.text])];
-            } catch (e) {
-                console.log(e);
-            }
+            return [new SourceNode(null, null, null, [...leadingCommentsSourceNodes, token.text])];
         }
         //split multi-line text
         if (token.range?.end.line > token.range?.start.line) {
