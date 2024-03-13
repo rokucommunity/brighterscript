@@ -134,7 +134,7 @@ export class TranspileState {
      * Create a SourceNode from a token, accounting for missing range and multi-line text
      */
     public transpileToken(token: TranspileToken, defaultValue?: string): TranspileResult {
-        if (!token && defaultValue !== undefined) {
+        if (!token?.text && defaultValue !== undefined) {
             return [new SourceNode(null, null, null, defaultValue)];
         }
         const leadingCommentsSourceNodes = this.transpileLeadingComments(token);
@@ -143,7 +143,7 @@ export class TranspileState {
             return [new SourceNode(null, null, null, [...leadingCommentsSourceNodes, token.text])];
         }
         //split multi-line text
-        if (token.range.end.line > token.range.start.line) {
+        if (token.range?.end.line > token.range?.start.line) {
             const lines = token.text.split(/\r?\n/g);
             const code = [
                 this.sourceNode(token, [...leadingCommentsSourceNodes, lines[0]])

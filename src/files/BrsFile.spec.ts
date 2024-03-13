@@ -25,6 +25,8 @@ import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { ClassType, EnumType, FloatType, InterfaceType } from '../types';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import * as fileUrl from 'file-url';
+import { isAALiteralExpression } from '../astUtils/reflection';
+import type { AALiteralExpression } from '../parser/Expression';
 
 let sinon = sinonImport.createSandbox();
 
@@ -1665,6 +1667,23 @@ describe('BrsFile', () => {
     });
 
     describe('transpile', () => {
+        it('does not crash when AA is missing closing curly token', async () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main()
+                    aa = {}
+                end sub
+            `);
+            //delete the ending token `}`
+            const aa = file.ast.findChild<AALiteralExpression>(isAALiteralExpression);
+            delete (aa.tokens as any).close;
+
+            await testTranspile(file, `
+                sub main()
+                    aa = {}
+                end sub
+            `, undefined, undefined, false);
+        });
+
         describe('null tokens', () => {
             it('succeeds when token locations are omitted', () => {
                 doTest(`
