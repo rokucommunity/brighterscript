@@ -1584,7 +1584,7 @@ export class Util {
      * Gathers expressions, variables, and unique names from an expression.
      * This is mostly used for the ternary expression
      */
-    public getExpressionInfo(expression: Expression): ExpressionInfo {
+    public getExpressionInfo(expression: Expression, file: BrsFile): ExpressionInfo {
         const expressions = [expression];
         const variableExpressions = [] as VariableExpression[];
         const uniqueVarNames = new Set<string>();
@@ -1608,7 +1608,15 @@ export class Util {
         //handle the expression itself (for situations when expression is a VariableExpression)
         expressionWalker(expression);
 
-        return { expressions: expressions, varExpressions: variableExpressions, uniqueVarNames: [...uniqueVarNames] };
+        const scope = file.program.getFirstScopeForFile(file);
+        const filteredVarNames = [...uniqueVarNames].filter((varName: string) => {
+            const varNameLower = varName.toLowerCase();
+            // TODO: include namespaces in this filter
+            return !scope.getEnumMap().has(varNameLower) &&
+                !scope.getConstMap().has(varNameLower);
+        });
+
+        return { expressions: expressions, varExpressions: variableExpressions, uniqueVarNames: filteredVarNames };
     }
 
 
