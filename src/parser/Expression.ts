@@ -1477,9 +1477,8 @@ export class NullCoalescingExpression extends Expression {
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
-        const file = state.file;
-        let consequentInfo = util.getExpressionInfo(this.consequent, file);
-        let alternateInfo = util.getExpressionInfo(this.alternate, file);
+        let consequentInfo = util.getExpressionInfo(this.consequent, state.file);
+        let alternateInfo = util.getExpressionInfo(this.alternate, state.file);
 
         //get all unique variable names used in the consequent and alternate, and sort them alphabetically so the output is consistent
         let allUniqueVarNames = [...new Set([...consequentInfo.uniqueVarNames, ...alternateInfo.uniqueVarNames])].sort();
