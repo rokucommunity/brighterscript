@@ -258,10 +258,18 @@ function getTestFileAction(
     action: (file: BscFile) => Promise<{ code: string; map?: string }>,
     scopeGetter: () => [program: Program, rootDir: string]
 ) {
-    return async function testFileAction<TFile extends BscFile = BscFile>(source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', destPath = 'source/main.bs', failOnDiagnostic = true) {
+    return async function testFileAction<TFile extends BscFile = BscFile>(sourceOrFile: string | BscFile, expected?: string, formatType: 'trim' | 'none' = 'trim', destPath = 'source/main.bs', failOnDiagnostic = true) {
         let [program, rootDir] = scopeGetter();
-        expected = expected ? expected : source;
-        let file = program.setFile<TFile>({ src: s`${rootDir}/${destPath}`, dest: destPath }, source);
+        let file: BscFile;
+        if (typeof sourceOrFile === 'string') {
+            expected = expected ? expected : sourceOrFile;
+            file = program.setFile<TFile>({ src: s`${rootDir}/${destPath}`, dest: destPath }, sourceOrFile);
+        } else {
+            file = sourceOrFile;
+            if (!expected) {
+                throw new Error('`expected` is required when passing a file');
+            }
+        }
         program.validate();
         if (failOnDiagnostic !== false) {
             expectZeroDiagnostics(program);
@@ -279,7 +287,7 @@ function getTestFileAction(
         expect(sources[0]).to.equal(sources[1]);
         return {
             file: file,
-            source: source,
+            source: sourceOrFile,
             expected: expected,
             actual: codeWithMap.code,
             map: codeWithMap.map
