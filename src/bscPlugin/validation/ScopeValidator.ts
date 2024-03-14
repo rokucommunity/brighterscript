@@ -88,61 +88,18 @@ export class ScopeValidator {
             if (isBrsFile(file)) {
                 const hasChangeInfo = this.event.changedFiles && this.event.changedSymbols;
 
-                let thisFileRequiresChangedSymbol = false;
-                for (let requiredSymbol of file.requiredSymbols) {
-                    // eslint-disable-next-line no-bitwise
-                    for (const flag of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
-                        // eslint-disable-next-line no-bitwise
-                        if (flag & requiredSymbol.flags) {
-                            const changeSymbolSetForFlag = this.event.changedSymbols.get(flag);
-                            if (util.setContainsUnresolvedSymbol(changeSymbolSetForFlag, requiredSymbol)) {
-                                thisFileRequiresChangedSymbol = true;
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                // Check for shadowed variables
-
-                // eslint-disable-next-line @typescript-eslint/dot-notation
-                /*for (let assignStmt of file['_cachedLookups'].assignmentStatements) {
-                 this.detectShadowedLocalVar(file, {
-                     name: assignStmt.tokens.name.text,
-                     type: assignStmt.getType({ flags: SymbolTypeFlag.runtime }),
-                     nameRange: assignStmt.tokens.name.range
-                 });
-             }
-
-
-                             for (let segment of file.validationSegmenter.segmentsForValidation) {
-                                 const assignedTokensInSegment = file.validationSegmenter.assignedTokensInSegment?.get(segment)?.values() ?? [];
-                                 for (let assignedToken of assignedTokensInSegment) {
-                                     this.detectShadowedLocalVar(file, {
-                                         name: assignedToken.token.text,
-                                         type: assignedToken.node.getType({ flags: SymbolTypeFlag.runtime }),
-                                         nameRange: assignedToken.token.range
-                                     });
-                                 }
-                             }*/
+                const thisFileRequiresChangedSymbol = this.doesFileRequireChangedSymbol(file);
 
                 const thisFileHasChanges = this.event.changedFiles.includes(file);
+
                 if (hasChangeInfo && !thisFileRequiresChangedSymbol && !thisFileHasChanges) {
                     // this file does not require a symbol that has changed, and this file has not changed
 
-                    let thisFileAssignsChangedSymbol = false;
-                    const runTimeChangedSymbolSet = this.event.changedSymbols.get(SymbolTypeFlag.runtime);
-                    for (let assignedSymbol of file.assignedSymbols) {
-                        if (runTimeChangedSymbolSet.has(assignedSymbol.token.text.toLowerCase())) {
-                            thisFileAssignsChangedSymbol = true;
-                            break;
-                        }
-                    }
-
-                    if (!thisFileAssignsChangedSymbol) {
-                        // this file does not hav a variable assignment that needs to be checked
+                    if (!this.doesFileAssignChangedSymbol(file)) {
+                        // this file does not have a variable assignment that needs to be checked
                         return;
                     }
+
                 }
                 if (thisFileHasChanges) {
                     this.event.scope.clearAstSegmentDiagnosticsByFile(file);
@@ -205,6 +162,36 @@ export class ScopeValidator {
                 }
             }
         });
+    }
+
+    private doesFileRequireChangedSymbol(file: BrsFile) {
+        let thisFileRequiresChangedSymbol = false;
+        for (let requiredSymbol of file.requiredSymbols) {
+            // eslint-disable-next-line no-bitwise
+            for (const flag of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
+                // eslint-disable-next-line no-bitwise
+                if (flag & requiredSymbol.flags) {
+                    const changeSymbolSetForFlag = this.event.changedSymbols.get(flag);
+                    if (util.setContainsUnresolvedSymbol(changeSymbolSetForFlag, requiredSymbol)) {
+                        thisFileRequiresChangedSymbol = true;
+                        break;
+                    }
+                }
+            }
+        }
+        return thisFileRequiresChangedSymbol;
+    }
+
+    private doesFileAssignChangedSymbol(file: BrsFile) {
+        let thisFileAssignsChangedSymbol = false;
+        const runTimeChangedSymbolSet = this.event.changedSymbols.get(SymbolTypeFlag.runtime);
+        for (let assignedSymbol of file.assignedSymbols) {
+            if (runTimeChangedSymbolSet.has(assignedSymbol.token.text.toLowerCase())) {
+                thisFileAssignsChangedSymbol = true;
+                break;
+            }
+        }
+        return thisFileAssignsChangedSymbol;
     }
 
     private currentSegmentBeingValidated: AstNode;
