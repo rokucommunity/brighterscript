@@ -9,6 +9,7 @@ import { CallExpression, type FunctionExpression, type LiteralExpression } from 
 import { ParseMode } from '../../parser/Parser';
 import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, WhileStatement } from '../../parser/Statement';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
+import { ArrayDefaultTypeReferenceType } from '../../types/ReferenceType';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import { DynamicType } from '../../types/DynamicType';
 import util from '../../util';
@@ -97,7 +98,10 @@ export class BrsFileValidator {
             ForEachStatement: (node) => {
                 //register the for loop variable
                 const loopTargetType = node.target.getType({ flags: SymbolTypeFlag.runtime });
-                const loopVarType = isArrayType(loopTargetType) ? loopTargetType.defaultType : DynamicType.instance;
+                let loopVarType = isArrayType(loopTargetType) ? loopTargetType.defaultType : DynamicType.instance;
+                if (!loopTargetType.isResolvable()) {
+                    loopVarType = new ArrayDefaultTypeReferenceType(loopTargetType);
+                }
                 node.parent.getSymbolTable()?.addSymbol(node.tokens.item.text, { definingNode: node }, loopVarType, SymbolTypeFlag.runtime);
             },
             NamespaceStatement: (node) => {

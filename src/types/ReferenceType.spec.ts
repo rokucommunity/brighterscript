@@ -4,7 +4,7 @@ import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { expectTypeToBe } from '../testHelpers.spec';
 import { DynamicType } from './DynamicType';
 import { IntegerType } from './IntegerType';
-import { TypePropertyReferenceType, ReferenceType, BinaryOperatorReferenceType } from './ReferenceType';
+import { TypePropertyReferenceType, ReferenceType, BinaryOperatorReferenceType, ArrayDefaultTypeReferenceType } from './ReferenceType';
 import { StringType } from './StringType';
 import { FloatType } from './FloatType';
 import { ClassType } from './ClassType';
@@ -14,6 +14,7 @@ import { NamespaceType } from './NamespaceType';
 import { createToken } from '../astUtils/creators';
 import { TokenKind } from '../lexer/TokenKind';
 import { util } from '../util';
+import { ArrayType } from './ArrayType';
 
 const runtimeFlag = SymbolTypeFlag.runtime;
 
@@ -158,4 +159,22 @@ describe('PropertyReferenceType', () => {
 
     });
 
+});
+
+describe('ArrayDefaultTypeReferenceType', () => {
+
+    it('should resolve the default type of an array, which is defined in the future', () => {
+        const table = new SymbolTable('test');
+        const futureArray = new ReferenceType('futureArray', 'futureArray', runtimeFlag, () => table);
+
+        const myArrayDefaultType = new ArrayDefaultTypeReferenceType(futureArray);
+        expect(myArrayDefaultType.isResolvable()).to.be.false;
+        expect((myArrayDefaultType as any).kind).to.equal(DynamicType.instance.kind);
+
+        //Define the symbol
+        table.addSymbol('futureArray', {}, new ArrayType(IntegerType.instance), runtimeFlag);
+        //myArrayDefaultType is now treated as integer
+        expect(myArrayDefaultType.isResolvable()).to.be.true;
+        expect((myArrayDefaultType as any).kind).to.equal(IntegerType.instance.kind);
+    });
 });
