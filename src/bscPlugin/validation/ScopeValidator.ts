@@ -146,6 +146,13 @@ export class ScopeValidator {
                             type: forEachStmt.getType({ flags: SymbolTypeFlag.runtime }),
                             nameRange: forEachStmt.tokens.item.range
                         });
+                    },
+                    FunctionParameterExpression: (funcParam) => {
+                        this.detectShadowedLocalVar(file, {
+                            name: funcParam.tokens.name.text,
+                            type: funcParam.getType({ flags: SymbolTypeFlag.runtime }),
+                            nameRange: funcParam.tokens.name.range
+                        });
                     }
                 });
                 const segmentsToWalkForValidation = (thisFileHasChanges || !hasChangeInfo)
