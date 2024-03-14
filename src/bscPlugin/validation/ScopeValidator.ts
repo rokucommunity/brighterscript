@@ -13,7 +13,8 @@ import util from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
 import type { Token } from '../../lexer/Token';
-import { AstNodeKind, type AstNode } from '../../parser/AstNode';
+import { AstNodeKind } from '../../parser/AstNode';
+import type { AstNode } from '../../parser/AstNode';
 import type { Expression } from '../../parser/AstNode';
 import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression } from '../../parser/Expression';
 import { CallExpression } from '../../parser/Expression';
@@ -28,6 +29,7 @@ import { globalCallableMap } from '../../globalCallables';
 import type { XmlScope } from '../../XmlScope';
 import type { XmlFile } from '../../files/XmlFile';
 import { SGFieldTypes } from '../../parser/SGTypes';
+import type { Scope } from '../../Scope';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -66,7 +68,21 @@ export class ScopeValidator {
         }
     }
 
+    private validationMetrics = new Map<Scope, Map<BrsFile, Map<AstNode, number>>>();
+
+
     public reset() {
+        console.log('*** BEGIN VALIDATION METRICS ***');
+        for (let [scope, scopeDeets] of this.validationMetrics.entries()) {
+            for (let [file, fileDeets] of scopeDeets.entries()) {
+                for (let [node, count] of fileDeets.entries()) {
+                    console.log(`${scope.name},${file.pkgPath},${util.rangeToString(node.range)},${count}`);
+                }
+            }
+        }
+        console.log('***  END VALIDATION METRICS  ***');
+
+        this.validationMetrics = new Map<Scope, Map<BrsFile, Map<AstNode, number>>>();
         this.event = undefined;
         this.onceCache.clear();
         this.multiScopeCache.clear();
@@ -84,8 +100,17 @@ export class ScopeValidator {
             this.detectNameCollisions(file);
         });
 
+        if (!this.validationMetrics.has(this.event.scope)) {
+            this.validationMetrics.set(this.event.scope, new Map<BrsFile, Map<AstNode, number>>());
+        }
+        const scopeMap = this.validationMetrics.get(this.event.scope);
         this.event.scope.enumerateOwnFiles((file) => {
             if (isBrsFile(file)) {
+                if (!scopeMap.has(file)) {
+                    scopeMap.set(file, new Map<AstNode, number>());
+                }
+                const fileMap = scopeMap.get(file);
+
                 const hasChangeInfo = this.event.changedFiles && this.event.changedSymbols;
 
                 const thisFileRequiresChangedSymbol = this.doesFileRequireChangedSymbol(file);
@@ -165,6 +190,10 @@ export class ScopeValidator {
                     segment.walk(validationVisitor, {
                         walkMode: InsideSegmentWalkMode
                     });
+                    if (!fileMap.has(segment)) {
+                        fileMap.set(segment, 0);
+                    }
+                    fileMap.set(segment, fileMap.get(segment) + 1);
                     file.markSegmentAsValidated(segment);
                 }
             }
@@ -1334,7 +1363,7 @@ export class ScopeValidator {
      * for diagnostics where scope isn't important. (i.e. CreateObject validations)
      */
     private addDiagnosticOnce(diagnostic: BsDiagnostic) {
-        this.onceCache.getOrAdd(`${diagnostic.code} -${diagnostic.message} -${util.rangeToString(diagnostic.range)} `, () => {
+        this.onceCache.getOrAdd(`${diagnostic.code} - ${diagnostic.message} - ${util.rangeToString(diagnostic.range)} `, () => {
             const diagnosticWithOrigin = { ...diagnostic } as BsDiagnosticWithOrigin;
             if (!diagnosticWithOrigin.origin) {
                 // diagnostic does not have origin.
@@ -1365,7 +1394,7 @@ export class ScopeValidator {
      * Add a diagnostic (to the first scope) that will have `relatedInformation` for each affected scope
      */
     private addMultiScopeDiagnostic(diagnostic: BsDiagnostic | BsDiagnosticWithOrigin) {
-        diagnostic = this.multiScopeCache.getOrAdd(`${diagnostic.file?.srcPath} -${diagnostic.code} -${diagnostic.message} -${util.rangeToString(diagnostic.range)} `, () => {
+        diagnostic = this.multiScopeCache.getOrAdd(`${diagnostic.file?.srcPath} - ${diagnostic.code} - ${diagnostic.message} - ${util.rangeToString(diagnostic.range)} `, () => {
 
             if (!diagnostic.relatedInformation) {
                 diagnostic.relatedInformation = [];
