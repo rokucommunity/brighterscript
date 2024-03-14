@@ -168,7 +168,7 @@ describe('ScopeValidator', () => {
             program.validate();
             //should have an error
             expectDiagnostics(program, [
-                DiagnosticMessages.mismatchArgumentCount('1-32', 0)
+                DiagnosticMessages.mismatchArgumentCount('1-63', 0)
             ]);
         });
 
