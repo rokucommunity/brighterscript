@@ -193,4 +193,19 @@ export class AstValidationSegmenter {
     markSegmentAsValidated(segment: AstNode) {
         this.validatedSegments.set(segment, true);
     }
+
+    checkIfSegmentNeedRevalidation(segment: AstNode) {
+        if (!this.validatedSegments.get(segment)) {
+            return true;
+        }
+        const unresolved = this.unresolvedSegmentsSymbols.get(segment);
+        if (unresolved?.size > 0) {
+            return true;
+        }
+        const assignedTokens = this.assignedTokensInSegment.get(segment);
+        if (assignedTokens?.size > 0) {
+            return true;
+        }
+        return false;
+    }
 }

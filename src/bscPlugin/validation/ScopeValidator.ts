@@ -29,7 +29,6 @@ import { globalCallableMap } from '../../globalCallables';
 import type { XmlScope } from '../../XmlScope';
 import type { XmlFile } from '../../files/XmlFile';
 import { SGFieldTypes } from '../../parser/SGTypes';
-import type { Scope } from '../../Scope';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -68,21 +67,19 @@ export class ScopeValidator {
         }
     }
 
-    private validationMetrics = new Map<Scope, Map<BrsFile, Map<AstNode, number>>>();
+    private validationMetrics = new Map<BrsFile, Map<AstNode, number>>();
 
 
     public reset() {
-        console.log('*** BEGIN VALIDATION METRICS ***');
-        for (let [scope, scopeDeets] of this.validationMetrics.entries()) {
-            for (let [file, fileDeets] of scopeDeets.entries()) {
-                for (let [node, count] of fileDeets.entries()) {
-                    console.log(`${scope.name},${file.pkgPath},${util.rangeToString(node.range)},${count}`);
-                }
-            }
-        }
-        console.log('***  END VALIDATION METRICS  ***');
-
-        this.validationMetrics = new Map<Scope, Map<BrsFile, Map<AstNode, number>>>();
+        /* console.log('*** BEGIN VALIDATION METRICS ***');
+         for (let [file, fileDeets] of this.validationMetrics.entries()) {
+             for (let [node, count] of fileDeets.entries()) {
+                 console.log(`${file.pkgPath},${util.rangeToString(node.range)},${count}`);
+             }
+         }
+         console.log('***  END VALIDATION METRICS  ***');
+ */
+        this.validationMetrics = new Map<BrsFile, Map<AstNode, number>>();
         this.event = undefined;
         this.onceCache.clear();
         this.multiScopeCache.clear();
@@ -100,16 +97,13 @@ export class ScopeValidator {
             this.detectNameCollisions(file);
         });
 
-        if (!this.validationMetrics.has(this.event.scope)) {
-            this.validationMetrics.set(this.event.scope, new Map<BrsFile, Map<AstNode, number>>());
-        }
-        const scopeMap = this.validationMetrics.get(this.event.scope);
         this.event.scope.enumerateOwnFiles((file) => {
             if (isBrsFile(file)) {
-                if (!scopeMap.has(file)) {
-                    scopeMap.set(file, new Map<AstNode, number>());
+
+                if (!this.validationMetrics.has(file)) {
+                    this.validationMetrics.set(file, new Map<AstNode, number>());
                 }
-                const fileMap = scopeMap.get(file);
+                const fileMap = this.validationMetrics.get(file);
 
                 const hasChangeInfo = this.event.changedFiles && this.event.changedSymbols;
 
@@ -185,6 +179,9 @@ export class ScopeValidator {
                     : file.getValidationSegments(this.event.changedSymbols); // validate only what's needed in the file
 
                 for (const segment of segmentsToWalkForValidation) {
+                    if (!file.validationSegmenter.checkIfSegmentNeedRevalidation(segment)) {
+                        continue;
+                    }
                     this.currentSegmentBeingValidated = segment;
                     this.event.scope.clearAstSegmentDiagnostics(segment);
                     segment.walk(validationVisitor, {
