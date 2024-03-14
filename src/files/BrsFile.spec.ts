@@ -4254,11 +4254,3 @@ describe('BrsFile', () => {
     });
 
 });
-
-class Person {
-    name: string;
-}
-
-function test(this: Person, actualParam1: number) {
-
-}
