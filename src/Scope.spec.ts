@@ -3167,7 +3167,7 @@ describe('Scope', () => {
             });
 
 
-            it('should set correct type on for loops', () => {
+            it('should set correct type on for each loop items', () => {
                 let mainFile = program.setFile<BrsFile>('source/main.bs', `
                     sub sum(nums as integer[]) as integer
                         total = 0
@@ -3179,12 +3179,39 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const processFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
-                const symbolTable = processFnScope.symbolTable;
+                const forEachStmt = mainFile.ast.findChild<ForEachStatement>(isForEachStatement);
+                const symbolTable = forEachStmt.getSymbolTable();
                 const opts = { flags: SymbolTypeFlag.runtime };
                 expectTypeToBe(symbolTable.getSymbolType('total', opts), IntegerType);
                 expectTypeToBe(symbolTable.getSymbolType('num', opts), IntegerType);
                 expectTypeToBe(symbolTable.getSymbolType('nums', opts), ArrayType);
+            });
+
+            it('should set correct type on for each loop items when looping a const array in a namespace', () => {
+                let mainFile = program.setFile<BrsFile>('source/main.bs', `
+                    namespace Alpha
+                        const data = [1,2,3]
+
+                        function printData()
+                            for each item in Alpha.data
+                                print item
+                            end for
+                        end function
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const forEachStmt = mainFile.ast.findChild<ForEachStatement>(isForEachStatement);
+                const symbolTable = forEachStmt.getSymbolTable();
+                const opts = { flags: SymbolTypeFlag.runtime };
+                expectTypeToBe(symbolTable.getSymbolType('data', opts), ArrayType);
+                expectTypeToBe((symbolTable.getSymbolType('data', opts) as ArrayType).defaultType, IntegerType);
+
+                expectTypeToBe(symbolTable.getSymbolType('Alpha', opts).getMemberType('data', opts), ArrayType);
+                expectTypeToBe(((symbolTable.getSymbolType('Alpha', opts).getMemberType('data', opts)) as ArrayType).defaultType, IntegerType);
+
+                expectTypeToBe(symbolTable.getSymbolType('item', opts), IntegerType);
+
             });
 
             it('should set correct type on array literals', () => {
