@@ -5,7 +5,7 @@ import type { BrsFile } from '../../files/BrsFile';
 import type { OnFileValidateEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
-import type { LiteralExpression } from '../../parser/Expression';
+import { CallExpression, type FunctionExpression, type LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, WhileStatement } from '../../parser/Statement';
 import { DynamicType } from '../../types/DynamicType';
@@ -85,7 +85,6 @@ export class BrsFileValidator {
             },
             FunctionStatement: (node) => {
                 this.validateDeclarationLocations(node, 'function', () => util.createBoundingRange(node.func.functionType, node.name));
-
                 if (node.name?.text) {
                     node.parent.getSymbolTable().addSymbol(
                         node.name.text,
@@ -113,6 +112,7 @@ export class BrsFileValidator {
                 if (!node.symbolTable.hasSymbol('m')) {
                     node.symbolTable.addSymbol('m', undefined, DynamicType.instance);
                 }
+                this.validateFunctionParameterCount(node);
             },
             FunctionParameterExpression: (node) => {
                 const paramName = node.name?.text;
@@ -163,6 +163,18 @@ export class BrsFileValidator {
             ...DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel(keyword),
             range: rangeFactory?.() ?? statement.range
         });
+    }
+
+    private validateFunctionParameterCount(func: FunctionExpression) {
+        if (func.parameters.length > CallExpression.MaximumArguments) {
+            //flag every parameter over the limit
+            for (let i = CallExpression.MaximumArguments; i < func.parameters.length; i++) {
+                this.event.file.addDiagnostic({
+                    ...DiagnosticMessages.tooManyCallableParameters(func.parameters.length, CallExpression.MaximumArguments),
+                    range: func.parameters[i].name.range
+                });
+            }
+        }
     }
 
     private validateEnumDeclaration(stmt: EnumStatement) {
