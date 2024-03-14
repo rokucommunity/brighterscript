@@ -5,7 +5,7 @@ import type { BrsFile } from '../../files/BrsFile';
 import type { ExtraSymbolData, OnFileValidateEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
-import type { FunctionExpression, LiteralExpression } from '../../parser/Expression';
+import { CallExpression, type FunctionExpression, type LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, WhileStatement } from '../../parser/Statement';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
@@ -142,6 +142,7 @@ export class BrsFileValidator {
                 if (!node.symbolTable.hasSymbol('m', SymbolTypeFlag.runtime) || node.findAncestor(isAALiteralExpression)) {
                     node.symbolTable.addSymbol('m', undefined, new AssociativeArrayType(), SymbolTypeFlag.runtime);
                 }
+                this.validateFunctionParameterCount(node);
             },
             FunctionParameterExpression: (node) => {
                 const paramName = node.tokens.name?.text;
@@ -197,6 +198,18 @@ export class BrsFileValidator {
             ...DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel(keyword),
             range: rangeFactory?.() ?? statement.range
         });
+    }
+
+    private validateFunctionParameterCount(func: FunctionExpression) {
+        if (func.parameters.length > CallExpression.MaximumArguments) {
+            //flag every parameter over the limit
+            for (let i = CallExpression.MaximumArguments; i < func.parameters.length; i++) {
+                this.event.file.addDiagnostic({
+                    ...DiagnosticMessages.tooManyCallableParameters(func.parameters.length, CallExpression.MaximumArguments),
+                    range: func.parameters[i]?.tokens.name?.range ?? func.parameters[i]?.range ?? func.range
+                });
+            }
+        }
     }
 
     private validateEnumDeclaration(stmt: EnumStatement) {
