@@ -27,32 +27,32 @@ describe('optional chaining', () => {
         program.dispose();
     });
 
-    it('transpiles ?. properly', () => {
-        testTranspile(`
+    it('transpiles ?. properly', async () => {
+        await testTranspile(`
             sub main()
                 print m?.value
             end sub
         `);
     });
 
-    it('transpiles ?[ properly', () => {
-        testTranspile(`
+    it('transpiles ?[ properly', async () => {
+        await testTranspile(`
             sub main()
                 print m?["value"]
             end sub
         `);
     });
 
-    it(`transpiles '?.[`, () => {
-        testTranspile(`
+    it(`transpiles '?.[`, async () => {
+        await testTranspile(`
             sub main()
                 print m?["value"]
             end sub
         `);
     });
 
-    it(`transpiles '?@`, () => {
-        testTranspile(`
+    it(`transpiles '?@`, async () => {
+        await testTranspile(`
             sub main()
                 someXml = invalid
                 print someXml?@someAttr
@@ -60,8 +60,8 @@ describe('optional chaining', () => {
         `);
     });
 
-    it(`transpiles '?(`, () => {
-        testTranspile(`
+    it(`transpiles '?(`, async () => {
+        await testTranspile(`
             sub main()
                 localFunc = sub()
                 end sub
@@ -71,8 +71,8 @@ describe('optional chaining', () => {
         `);
     });
 
-    it('transpiles various use cases', () => {
-        testTranspile(`
+    it('transpiles various use cases', async () => {
+        await testTranspile(`
             sub main()
                 obj = {}
                 arr = []
@@ -96,8 +96,8 @@ describe('optional chaining', () => {
         `);
     });
 
-    it('includes final operator in chain', () => {
-        testTranspile(`
+    it('includes final operator in chain', async () => {
+        await testTranspile(`
             sub main()
                 if m.cardFolderStack <> invalid then
                     m?.cardFolderStack?.visible?.ither = false

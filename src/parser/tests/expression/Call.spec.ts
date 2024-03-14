@@ -14,7 +14,7 @@ describe('parser call expressions', () => {
     it('parses named function calls', () => {
         const { statements, diagnostics } = Parser.parse([
             identifier('RebootSystem'),
-            { kind: TokenKind.LeftParen, text: '(', range: null as any },
+            { kind: TokenKind.LeftParen, text: '(', range: null as any, leadingTrivia: [] },
             token(TokenKind.RightParen, ')'),
             EOF
         ]);
@@ -65,7 +65,7 @@ describe('parser call expressions', () => {
     it('allows closing parentheses on separate line', () => {
         const { statements, diagnostics } = Parser.parse([
             identifier('RebootSystem'),
-            { kind: TokenKind.LeftParen, text: '(', range: null as any },
+            { kind: TokenKind.LeftParen, text: '(', range: null as any, leadingTrivia: [] },
             token(TokenKind.Newline, '\\n'),
             token(TokenKind.Newline, '\\n'),
             token(TokenKind.RightParen, ')'),
@@ -100,37 +100,37 @@ describe('parser call expressions', () => {
         // first should be: data.foo.bar = "hello"
         expect(isDottedSetStatement(bodyStatements[0])).to.be.true;
         const setStmt = bodyStatements[0] as any;
-        expect(setStmt.name.text).to.equal('bar');
-        expect(setStmt.obj.name.text).to.equal('foo');
-        expect(setStmt.obj.obj.name.text).to.equal('data');
-        expect(setStmt.value.token.text).to.equal('"hello"');
+        expect(setStmt.tokens.name.text).to.equal('bar');
+        expect(setStmt.obj.tokens.name.text).to.equal('foo');
+        expect(setStmt.obj.obj.tokens.name.text).to.equal('data');
+        expect(setStmt.value.tokens.value.text).to.equal('"hello"');
 
         // 2nd should be: data.foo.func()
         expect(isExpressionStatement(bodyStatements[1])).to.be.true;
         expect(isCallExpression((bodyStatements[1] as any).expression)).to.be.true;
         const callExpr = (bodyStatements[1] as any).expression;
-        expect(callExpr.callee.name.text).to.be.equal('func');
-        expect(callExpr.callee.obj.name.text).to.be.equal('foo');
-        expect(callExpr.callee.obj.obj.name.text).to.be.equal('data');
+        expect(callExpr.callee.tokens.name.text).to.be.equal('func');
+        expect(callExpr.callee.obj.tokens.name.text).to.be.equal('foo');
+        expect(callExpr.callee.obj.obj.tokens.name.text).to.be.equal('data');
 
         // 3rd should be: result = data.foo
         expect(isAssignmentStatement(bodyStatements[2])).to.be.true;
         const assignStmt = (bodyStatements[2] as any);
-        expect(assignStmt.name.text).to.equal('result');
-        expect(assignStmt.value.name.text).to.equal('foo');
+        expect(assignStmt.tokens.name.text).to.equal('result');
+        expect(assignStmt.value.tokens.name.text).to.equal('foo');
 
         // 4th should be: return result
         expect(isReturnStatement(bodyStatements[3])).to.be.true;
         const returnStmt = (bodyStatements[3] as any);
-        expect(returnStmt.value.name.text).to.equal('result');
+        expect(returnStmt.value.tokens.name.text).to.equal('result');
     });
 
     it('accepts arguments', () => {
         const { statements, diagnostics } = Parser.parse([
             identifier('add'),
-            { kind: TokenKind.LeftParen, text: '(', range: null as any },
+            { kind: TokenKind.LeftParen, text: '(', range: null as any, leadingTrivia: [] },
             token(TokenKind.IntegerLiteral, '1'),
-            { kind: TokenKind.Comma, text: ',', range: null as any },
+            { kind: TokenKind.Comma, text: ',', range: null as any, leadingTrivia: [] },
             token(TokenKind.IntegerLiteral, '2'),
             token(TokenKind.RightParen, ')'),
             EOF
@@ -221,7 +221,7 @@ describe('parser call expressions', () => {
             expect(isExpressionStatement(bodyStatements[0])).to.be.true;
             expect(isCallExpression((bodyStatements[0] as ExpressionStatement).expression)).to.be.true;
             const callExpr = (bodyStatements[0] as ExpressionStatement).expression as any;
-            expect(callExpr.callee.name.text).to.equal('otherFunc');
+            expect(callExpr.callee.tokens.name.text).to.equal('otherFunc');
 
             // args should still be parsed, as well!
             expect(callExpr.args).to.be.lengthOf(2);

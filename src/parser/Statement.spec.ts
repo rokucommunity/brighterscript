@@ -1,10 +1,9 @@
 import { expect } from '../chai-config.spec';
-import type { NamespaceStatement } from './Statement';
-import { Body, CommentStatement, EmptyStatement } from './Statement';
+import type { NamespaceStatement, ClassStatement } from './Statement';
+import { Body, EmptyStatement } from './Statement';
 import { ParseMode, Parser } from './Parser';
 import { WalkMode } from '../astUtils/visitors';
-import { isNamespaceStatement } from '../astUtils/reflection';
-import { CancellationTokenSource } from 'vscode-languageserver';
+import { isClassStatement, isNamespaceStatement } from '../astUtils/reflection';
 import { Program } from '../Program';
 import { trim } from '../testHelpers.spec';
 import type { BrsFile } from '../files/BrsFile';
@@ -32,7 +31,7 @@ describe('Statement', () => {
 
     describe('Body', () => {
         it('initializes statements array if none provided', () => {
-            const body = new Body();
+            const body = new Body({});
             expect(body.statements).to.eql([]);
         });
     });
@@ -67,19 +66,6 @@ describe('Statement', () => {
         });
     });
 
-    describe('CommentStatement', () => {
-        describe('walk', () => {
-            it('skips visitor if canceled', () => {
-                const comment = new CommentStatement([]);
-                const cancel = new CancellationTokenSource();
-                cancel.cancel();
-                comment.walk(() => {
-                    throw new Error('Should not have been called');
-                }, { walkMode: WalkMode.visitAllRecursive, cancel: cancel.token });
-            });
-        });
-    });
-
     describe('ClassStatement', () => {
         describe('getName', () => {
             it('handles null namespace name', () => {
@@ -88,7 +74,7 @@ describe('Statement', () => {
                     end class
                 `);
                 program.validate();
-                const stmt = file.parser.references.classStatements[0];
+                const stmt = file.ast.findChildren<ClassStatement>(isClassStatement)[0];
                 expect(stmt.getName(ParseMode.BrightScript)).to.equal('Animal');
                 expect(stmt.getName(ParseMode.BrighterScript)).to.equal('Animal');
             });
@@ -100,7 +86,7 @@ describe('Statement', () => {
                     end namespace
                 `);
                 program.validate();
-                const stmt = file.parser.references.classStatements[0];
+                const stmt = file.ast.findChildren<ClassStatement>(isClassStatement)[0];
                 expect(stmt.getName(ParseMode.BrightScript)).to.equal('NameA_Animal');
                 expect(stmt.getName(ParseMode.BrighterScript)).to.equal('NameA.Animal');
             });

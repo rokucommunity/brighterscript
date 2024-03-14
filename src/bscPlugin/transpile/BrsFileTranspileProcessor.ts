@@ -1,29 +1,48 @@
 import { createToken } from '../../astUtils/creators';
-import { isBrsFile, isDottedGetExpression, isLiteralExpression, isUnaryExpression, isVariableExpression } from '../../astUtils/reflection';
+import type { Editor } from '../../astUtils/Editor';
+import { isDottedGetExpression, isLiteralExpression, isVariableExpression, isUnaryExpression } from '../../astUtils/reflection';
+import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BrsFile } from '../../files/BrsFile';
-import type { BeforeFileTranspileEvent } from '../../interfaces';
+import type { OnPrepareFileEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { Expression } from '../../parser/AstNode';
 import { LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import type { Scope } from '../../Scope';
 import util from '../../util';
+import { BslibManager } from '../serialize/BslibManager';
 
 export class BrsFilePreTranspileProcessor {
     public constructor(
-        private event: BeforeFileTranspileEvent<BrsFile>
+        private event: OnPrepareFileEvent<BrsFile>
     ) {
     }
 
     public process() {
-        if (isBrsFile(this.event.file)) {
-            this.iterateExpressions();
+        this.iterateExpressions();
+        //apply prefixes to bslib
+        if (BslibManager.isBslibPkgPath(this.event.file.pkgPath)) {
+            this.applyPrefixesIfMissing(this.event.file, this.event.editor);
         }
+    }
+
+    public applyPrefixesIfMissing(file: BrsFile, editor: Editor) {
+        file.ast.walk(createVisitor({
+            FunctionStatement: (statement) => {
+                //add the bslib prefix
+                if (!statement.tokens.name.text.startsWith('bslib_')) {
+                    editor.setProperty(statement.tokens.name, 'text', `bslib_${statement.tokens.name.text}`);
+                }
+            }
+        }), {
+            walkMode: WalkMode.visitAllRecursive
+        });
     }
 
     private iterateExpressions() {
         const scope = this.event.program.getFirstScopeForFile(this.event.file);
-        for (let expression of this.event.file.parser.references.expressions) {
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        for (let expression of this.event.file['_cachedLookups'].expressions) {
             if (expression) {
                 if (isUnaryExpression(expression)) {
                     this.processExpression(expression.right, scope);
@@ -38,43 +57,46 @@ export class BrsFilePreTranspileProcessor {
      * Given a string optionally separated by dots, find an enum related to it.
      * For example, all of these would return the enum: `SomeNamespace.SomeEnum.SomeMember`, SomeEnum.SomeMember, `SomeEnum`
      */
-    private getEnumInfo(name: string, containingNamespace: string, scope: Scope | undefined) {
+    private getEnumInfo(name: string, containingNamespace: string, scope: Scope) {
+        //look for the enum directly
+        let result = scope?.getEnumFileLink(name, containingNamespace);
 
-        //do we have an enum MEMBER reference? (i.e. SomeEnum.someMember or SomeNamespace.SomeEnum.SomeMember)
-        let memberLink = scope?.getEnumMemberFileLink(name, containingNamespace);
-        if (memberLink) {
-            const value = memberLink.item.getValue();
+        if (result) {
             return {
-                enum: memberLink.item.parent,
-                value: new LiteralExpression(createToken(
-                    //just use float literal for now...it will transpile properly with any literal value
-                    value.startsWith('"') ? TokenKind.StringLiteral : TokenKind.FloatLiteral,
-                    value
-                ))
+                enum: result.item
             };
         }
-
-        //do we have an enum reference? (i.e. SomeEnum or SomeNamespace.SomeEnum)
-        let enumLink = scope?.getEnumFileLink(name, containingNamespace);
-
-        if (enumLink) {
+        //assume we've been given the enum.member syntax, so pop the member and try again
+        const parts = name.toLowerCase().split('.');
+        const memberName = parts.pop();
+        if (containingNamespace && parts[0] !== containingNamespace.toLowerCase()) {
+            parts.unshift(containingNamespace.toLowerCase());
+        }
+        result = scope?.getEnumMap().get(parts.join('.'));
+        if (result) {
+            const value = result.item.getMemberValue(memberName);
             return {
-                enum: enumLink.item
+                enum: result.item,
+                value: new LiteralExpression({
+                    value: createToken(
+                        //just use float literal for now...it will transpile properly with any literal value
+                        value?.startsWith('"') ? TokenKind.StringLiteral : TokenKind.FloatLiteral,
+                        value
+                    )
+                })
             };
         }
-
     }
 
     private processExpression(expression: Expression, scope: Scope | undefined) {
         let containingNamespace = this.event.file.getNamespaceStatementForPosition(expression.range.start)?.getName(ParseMode.BrighterScript);
 
         const parts = util.splitExpression(expression);
-
         const processedNames: string[] = [];
         for (let part of parts) {
             let entityName: string;
             if (isVariableExpression(part) || isDottedGetExpression(part)) {
-                processedNames.push(part?.name?.text?.toLocaleLowerCase());
+                processedNames.push(part?.tokens.name?.text?.toLocaleLowerCase());
                 entityName = processedNames.join('.');
             } else {
                 return;

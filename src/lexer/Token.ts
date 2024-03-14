@@ -17,6 +17,11 @@ export interface Token {
      * Any leading whitespace found prior to this token. Excludes newline characters.
      */
     leadingWhitespace?: string;
+
+    /**
+     * Any tokens starting on the next line of the previous token, up to the start of this token
+     */
+    leadingTrivia: Token[];
 }
 
 /**
@@ -40,7 +45,7 @@ export interface Identifier extends Token {
  * @returns `true` is `obj` is a `Token`, otherwise `false`
  */
 export function isToken(obj: Record<string, any>): obj is Token {
-    return !!(obj.kind && obj.text);
+    return !!(obj?.kind && (obj.text || obj.kind === TokenKind.Eof));
 }
 
 /**

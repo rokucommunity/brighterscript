@@ -40,12 +40,12 @@ export class ReferencesProvider {
                 processedFiles.add(file);
                 file.ast.walk(createVisitor({
                     AssignmentStatement: (s) => {
-                        if (s.name?.text?.toLowerCase() === searchFor) {
-                            this.event.references.push(util.createLocation(util.pathToUri(file.srcPath), s.name.range));
+                        if (s.tokens.name?.text?.toLowerCase() === searchFor) {
+                            this.event.references.push(util.createLocation(util.pathToUri(file.srcPath), s.tokens.name.range));
                         }
                     },
                     VariableExpression: (e) => {
-                        if (e.name.text.toLowerCase() === searchFor) {
+                        if (e.tokens.name.text.toLowerCase() === searchFor) {
                             this.event.references.push(util.createLocation(util.pathToUri(file.srcPath), e.range));
                         }
                     }

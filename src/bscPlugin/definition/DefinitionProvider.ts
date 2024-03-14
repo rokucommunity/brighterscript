@@ -1,4 +1,4 @@
-import { isBrsFile, isClassStatement, isDottedGetExpression, isNamespaceStatement, isXmlFile, isXmlScope } from '../../astUtils/reflection';
+import { isBrsFile, isClassStatement, isDottedGetExpression, isNamespaceStatement, isVariableExpression, isXmlFile, isXmlScope } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ProvideDefinitionEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
@@ -63,7 +63,7 @@ export class DefinitionProvider {
                 );
                 return;
             }
-            if (isDottedGetExpression(expression)) {
+            if (isDottedGetExpression(expression) || isVariableExpression(expression)) {
 
                 const enumLink = scope.getEnumFileLink(fullName, containingNamespace);
                 if (enumLink) {
@@ -85,6 +85,28 @@ export class DefinitionProvider {
                     );
                     return;
                 }
+
+                const interfaceFileLink = scope.getInterfaceFileLink(fullName, containingNamespace);
+                if (interfaceFileLink) {
+                    this.event.definitions.push(
+                        util.createLocation(
+                            URI.file(interfaceFileLink.file.srcPath).toString(),
+                            interfaceFileLink.item.tokens.name.range
+                        )
+                    );
+                    return;
+                }
+
+                const classFileLink = scope.getClassFileLink(fullName, containingNamespace);
+                if (classFileLink) {
+                    this.event.definitions.push(
+                        util.createLocation(
+                            URI.file(classFileLink.file.srcPath).toString(),
+                            classFileLink.item.tokens.name.range
+                        )
+                    );
+                    return;
+                }
             }
         }
 
@@ -96,15 +118,15 @@ export class DefinitionProvider {
             for (const scope of this.event.program.getScopes()) {
                 //does this xml file declare this function in its interface?
                 if (isXmlScope(scope)) {
-                    const apiFunc = scope.xmlFile.ast?.component?.api?.functions?.find(x => x.name.toLowerCase() === textToSearchFor); // eslint-disable-line @typescript-eslint/no-loop-func
+                    const apiFunc = scope.xmlFile.ast?.componentElement?.interfaceElement?.functions?.find(x => x.name.toLowerCase() === textToSearchFor); // eslint-disable-line @typescript-eslint/no-loop-func
                     if (apiFunc) {
                         this.event.definitions.push(
-                            util.createLocation(util.pathToUri(scope.xmlFile.srcPath), apiFunc.range)
+                            util.createLocation(util.pathToUri(scope.xmlFile.srcPath), apiFunc.getAttribute('name').tokens.value.range)
                         );
                         const callable = scope.getAllCallables().find((c) => c.callable.name.toLowerCase() === textToSearchFor); // eslint-disable-line @typescript-eslint/no-loop-func
                         if (callable) {
                             this.event.definitions.push(
-                                util.createLocation(util.pathToUri((callable.callable.file as BrsFile).srcPath), callable.callable.functionStatement.name.range)
+                                util.createLocation(util.pathToUri((callable.callable.file as BrsFile).srcPath), callable.callable.functionStatement.tokens.name.range)
                             );
                         }
                     }
@@ -116,7 +138,7 @@ export class DefinitionProvider {
         // eslint-disable-next-line @typescript-eslint/dot-notation
         let classToken = file['getTokenBefore'](token, TokenKind.Class);
         if (classToken) {
-            let cs = file.parser.ast.findChild<ClassStatement>((klass) => isClassStatement(klass) && klass.classKeyword.range === classToken.range);
+            let cs = file.parser.ast.findChild<ClassStatement>((klass) => isClassStatement(klass) && klass.tokens.class.range === classToken.range);
             if (cs?.parentClassName) {
                 const nameParts = cs.parentClassName.getNameParts();
                 let extendedClass = file.getClassFileLink(nameParts[nameParts.length - 1], nameParts.slice(0, -1).join('.'));
@@ -164,7 +186,7 @@ export class DefinitionProvider {
         //look through all files in scope for matches
         for (const scope of scopesForFile) {
             for (const file of scope.getAllFiles()) {
-                if (isXmlFile(file) || filesSearched.has(file)) {
+                if (!isBrsFile(file) || filesSearched.has(file)) {
                     continue;
                 }
                 filesSearched.add(file);
@@ -206,7 +228,7 @@ export class DefinitionProvider {
         const statementHandler = (statement: NamespaceStatement) => {
             if (!location && statement.getName(ParseMode.BrighterScript).toLowerCase() === namespaceName) {
                 const namespaceItemStatementHandler = (statement: ClassStatement | FunctionStatement) => {
-                    if (!location && statement.name.text.toLowerCase() === endName) {
+                    if (!location && statement.tokens.name.text.toLowerCase() === endName) {
                         const uri = util.pathToUri(file.srcPath);
                         location = util.createLocation(uri, statement.range);
                     }

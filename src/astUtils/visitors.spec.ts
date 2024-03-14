@@ -8,14 +8,15 @@ import type { BrsFile } from '../files/BrsFile';
 import type { FunctionStatement } from '../parser/Statement';
 import { PrintStatement, Block, ReturnStatement, ExpressionStatement } from '../parser/Statement';
 import { TokenKind } from '../lexer/TokenKind';
-import { createVisitor, WalkMode, walkStatements } from './visitors';
-import { isPrintStatement } from './reflection';
+import { ChildrenSkipper, createVisitor, WalkMode, walkStatements } from './visitors';
+import { isFunctionExpression, isPrintStatement } from './reflection';
 import { createCall, createToken, createVariableExpression } from './creators';
 import { createStackedVisitor } from './stackedVisitor';
-import { AstEditor } from './AstEditor';
+import { Editor } from './Editor';
 import { Parser } from '../parser/Parser';
 import type { Statement, Expression, AstNode } from '../parser/AstNode';
 import { expectZeroDiagnostics } from '../testHelpers.spec';
+import type { FunctionExpression } from '../parser/Expression';
 
 describe('astUtils visitors', () => {
     const rootDir = process.cwd();
@@ -85,7 +86,8 @@ describe('astUtils visitors', () => {
 
     function functionsWalker(visitor: (statement: Statement, parent: Statement) => void, cancel?: CancellationToken) {
         return (file: BrsFile) => {
-            file.parser.references.functionExpressions.some(functionExpression => {
+            const funcExpressions = file.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitExpressionsRecursive });
+            funcExpressions.some(functionExpression => {
                 visitor(functionExpression.body, undefined);
                 walkStatements(functionExpression.body, (statement, parent) => visitor(statement, parent), cancel);
                 return cancel?.isCancellationRequested;
@@ -103,7 +105,7 @@ describe('astUtils visitors', () => {
             const walker = functionsWalker(visitor);
             program.plugins.add({
                 name: 'walker',
-                afterFileParse: file => walker(file as BrsFile)
+                afterProvideFile: event => walker(event.files[0] as BrsFile)
             });
             program.setFile('source/main.brs', PRINTS_SRC);
             expect(actual).to.deep.equal([
@@ -140,7 +142,7 @@ describe('astUtils visitors', () => {
             const walker = functionsWalker(s => actual.push(s.constructor.name), cancel.token);
             program.plugins.add({
                 name: 'walker',
-                afterFileParse: file => walker(file as BrsFile)
+                afterProvideFile: event => walker(event.files[0] as BrsFile)
             });
             program.setFile('source/main.brs', PRINTS_SRC);
             expect(actual).to.deep.equal([
@@ -185,7 +187,7 @@ describe('astUtils visitors', () => {
             }, cancel.token);
             program.plugins.add({
                 name: 'walker',
-                afterFileParse: file => walker(file as BrsFile)
+                afterProvideFile: event => walker(event.files[0] as BrsFile)
             });
             program.setFile('source/main.brs', PRINTS_SRC);
             expect(actual).to.deep.equal([
@@ -213,9 +215,10 @@ describe('astUtils visitors', () => {
                 Block: blockHandler
             });
             const printStatement = new PrintStatement({
-                print: createToken(TokenKind.Print)
-            }, []);
-            const blockStatement = new Block([], Range.create(0, 0, 0, 0));
+                print: createToken(TokenKind.Print),
+                expressions: []
+            });
+            const blockStatement = new Block({ statements: [], startingRange: Range.create(0, 0, 0, 0) });
             visitor(printStatement, undefined);
             visitor(blockStatement, undefined);
             expect(printHandler.callCount).to.equal(1);
@@ -228,15 +231,20 @@ describe('astUtils visitors', () => {
     describe('Statement editor', () => {
         it('allows replacing statements', () => {
             const printStatement1 = new PrintStatement({
-                print: createToken(TokenKind.Print)
-            }, []);
+                print: createToken(TokenKind.Print),
+                expressions: []
+            });
             const printStatement2 = new PrintStatement({
-                print: createToken(TokenKind.Print)
-            }, []);
-            const block = new Block([
-                printStatement1,
-                new ReturnStatement({ return: createToken(TokenKind.Return) })
-            ], Range.create(0, 0, 0, 0));
+                print: createToken(TokenKind.Print),
+                expressions: []
+            });
+            const block = new Block({
+                statements: [
+                    printStatement1,
+                    new ReturnStatement({ return: createToken(TokenKind.Return) })
+                ],
+                startingRange: Range.create(0, 0, 0, 0)
+            });
             const visitor = createVisitor({
                 PrintStatement: () => printStatement2
             });
@@ -244,21 +252,23 @@ describe('astUtils visitors', () => {
             expect(block.statements[0]).to.equal(printStatement2);
         });
 
-        it('uses the AstEditor for replacement when provided', () => {
-            const editor = new AstEditor();
+        it('uses the Editor for replacement when provided', () => {
+            const editor = new Editor();
 
             const printStatement1 = new PrintStatement({
-                print: createToken(TokenKind.Print)
-            }, []);
+                print: createToken(TokenKind.Print),
+                expressions: []
+            });
 
             const printStatement2 = new PrintStatement({
-                print: createToken(TokenKind.Print)
-            }, []);
+                print: createToken(TokenKind.Print),
+                expressions: []
+            });
 
-            const block = new Block([
-                printStatement1
-            ], Range.create(0, 0, 0, 0));
-
+            const block = new Block({
+                statements: [printStatement1],
+                startingRange: Range.create(0, 0, 0, 0)
+            });
 
             block.walk(createVisitor({
                 PrintStatement: () => printStatement2
@@ -291,13 +301,11 @@ describe('astUtils visitors', () => {
             });
             program.plugins.add({
                 name: 'walker',
-                afterFileParse: (file) => walker(file as BrsFile)
+                afterProvideFile: (event) => walker(event.files[0] as BrsFile)
             });
 
             program.setFile('source/main.brs', EXPRESSIONS_SRC);
             expect(actual).to.deep.equal([
-                //The comment statement is weird because it can't be both a statement and expression, but is treated that way. Just ignore it for now until we refactor comments.
-                //'CommentStatement:1:CommentStatement',          // '<comment>
                 'PrintStatement:1:LiteralExpression',             // print <"msg">; 3
                 'PrintStatement:1:LiteralExpression',             // print "msg"; <3>
                 'PrintStatement:1:TemplateStringExpression',      // print <`expand ${var}`>
@@ -645,7 +653,6 @@ describe('astUtils visitors', () => {
                end namespace
             `, [
                 'NamespaceStatement',
-                'NamespacedVariableNameExpression',
                 'DottedGetExpression',
                 'VariableExpression'
             ]);
@@ -810,7 +817,6 @@ describe('astUtils visitors', () => {
                 'Block',
                 'AssignmentStatement',
                 'AALiteralExpression',
-                'CommentStatement',
                 'AAMemberExpression',
                 'LiteralExpression'
             ]);
@@ -885,8 +891,7 @@ describe('astUtils visitors', () => {
                 'LiteralExpression',
                 //else
                 'Block',
-                'ReturnStatement',
-                'CommentStatement'
+                'ReturnStatement'
             ]);
         });
 
@@ -939,7 +944,6 @@ describe('astUtils visitors', () => {
                 'AssignmentStatement',
                 'NewExpression',
                 'CallExpression',
-                'NamespacedVariableNameExpression',
                 'VariableExpression'
             ]);
         });
@@ -972,7 +976,11 @@ describe('astUtils visitors', () => {
             `, [
                 'ClassStatement',
                 'FieldStatement',
+                'TypeExpression',
+                'VariableExpression',
                 'FieldStatement',
+                'TypeExpression',
+                'VariableExpression',
                 'LiteralExpression',
                 'MethodStatement',
                 'FunctionExpression',
@@ -1083,11 +1091,11 @@ describe('astUtils visitors', () => {
                 PrintStatement: (astNode, parent, owner: Statement[], key) => {
                     printStatementCount++;
                     //add another expression to the list every time. This should result in 1 the first time, 2 the second, 3 the third.
-                    calls.push(new ExpressionStatement(
-                        createCall(
+                    calls.push(new ExpressionStatement({
+                        expression: createCall(
                             createVariableExpression('doSomethingBeforePrint')
                         )
-                    ));
+                    }));
                     owner.splice(key, 0, ...calls);
                 },
                 CallExpression: () => {
@@ -1102,6 +1110,60 @@ describe('astUtils visitors', () => {
             expect(
                 (ast.statements[0] as FunctionStatement).func.body.statements
             ).to.be.lengthOf(9);
+        });
+
+        it('skips children when requested', () => {
+            const file: BrsFile = program.setFile('source/main.bs', `
+                sub test()
+                    print 1 + 1
+                    print "hello"
+                end sub
+
+                sub test2()
+                    i = 2
+                    while i > 0
+                        print createObject("roDateTime").ToISOString()
+                        i--
+                    end while
+                end sub
+            `);
+            const actual = new Array<string>();
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            // do not walk into print statements
+            const skipper = new ChildrenSkipper();
+            file.ast.walk((node) => {
+                actual.push(node.kind);
+                if (isPrintStatement(node)) {
+                    skipper.skip();
+                }
+            }, {
+                walkMode: WalkMode.visitAllRecursive,
+                skipChildren: skipper
+            });
+
+            // Does not walk into print statements
+            expect(actual).to.deep.equal([
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'PrintStatement',
+                'PrintStatement',
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'AssignmentStatement',
+                'LiteralExpression',
+                'WhileStatement',
+                'BinaryExpression',
+                'VariableExpression',
+                'LiteralExpression',
+                'Block',
+                'PrintStatement',
+                'IncrementStatement',
+                'VariableExpression'
+            ]);
         });
     });
 });

@@ -4,10 +4,12 @@ import { codeActionUtil } from '../../CodeActionUtil';
 import type { DiagnosticMessageType } from '../../DiagnosticMessages';
 import { DiagnosticCodeMap } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
+import type { BscFile } from '../../files/BscFile';
 import type { XmlFile } from '../../files/XmlFile';
-import type { BscFile, OnGetCodeActionsEvent } from '../../interfaces';
+import type { OnGetCodeActionsEvent } from '../../interfaces';
 import { ParseMode } from '../../parser/Parser';
 import { util } from '../../util';
+import { isBrsFile } from '../../astUtils/reflection';
 
 export class CodeActionsProcessor {
     public constructor(
@@ -35,21 +37,22 @@ export class CodeActionsProcessor {
      */
     private suggestImports(diagnostic: Diagnostic, key: string, files: BscFile[]) {
         //skip if we already have this suggestion
-        if (this.suggestedImports.has(key)) {
+        if (this.suggestedImports.has(key) || !isBrsFile(this.event.file)) {
             return;
         }
 
         this.suggestedImports.add(key);
-        const importStatements = (this.event.file as BrsFile).parser.references.importStatements;
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        const importStatements = this.event.file['_cachedLookups'].importStatements;
         //find the position of the first import statement, or the top of the file if there is none
-        const insertPosition = importStatements[importStatements.length - 1]?.importToken.range?.start ?? util.createPosition(0, 0);
+        const insertPosition = importStatements[importStatements.length - 1]?.tokens.import?.range?.start ?? util.createPosition(0, 0);
 
         //find all files that reference this function
         for (const file of files) {
-            const pkgPath = util.getRokuPkgPath(file.pkgPath);
+            const destPath = util.sanitizePkgPath(file.destPath);
             this.event.codeActions.push(
                 codeActionUtil.createCodeAction({
-                    title: `import "${pkgPath}"`,
+                    title: `import "${destPath}"`,
                     diagnostics: [diagnostic],
                     isPreferred: false,
                     kind: CodeActionKind.QuickFix,
@@ -57,7 +60,7 @@ export class CodeActionsProcessor {
                         type: 'insert',
                         filePath: this.event.file.srcPath,
                         position: insertPosition,
-                        newText: `import "${pkgPath}"\n`
+                        newText: `import "${destPath}"\n`
                     }]
                 })
             );
@@ -75,10 +78,10 @@ export class CodeActionsProcessor {
             diagnostic,
             lowerName,
             [
-                ...this.event.file.program.findFilesForFunction(lowerName),
-                ...this.event.file.program.findFilesForClass(lowerName),
-                ...this.event.file.program.findFilesForNamespace(lowerName),
-                ...this.event.file.program.findFilesForEnum(lowerName)
+                ...this.event.program.findFilesForFunction(lowerName),
+                ...this.event.program.findFilesForClass(lowerName),
+                ...this.event.program.findFilesForNamespace(lowerName),
+                ...this.event.program.findFilesForEnum(lowerName)
             ]
         );
     }
@@ -92,15 +95,15 @@ export class CodeActionsProcessor {
         this.suggestImports(
             diagnostic,
             lowerClassName,
-            this.event.file.program.findFilesForClass(lowerClassName)
+            this.event.program.findFilesForClass(lowerClassName)
         );
     }
 
     private addMissingExtends(diagnostic: DiagnosticMessageType<'xmlComponentMissingExtendsAttribute'>) {
         const srcPath = this.event.file.srcPath;
-        const { component } = (this.event.file as XmlFile).parser.ast;
+        const { componentElement } = (this.event.file as XmlFile).parser.ast;
         //inject new attribute after the final attribute, or after the `<component` if there are no attributes
-        const pos = (component.attributes[component.attributes.length - 1] ?? component.tag).range.end;
+        const pos = (componentElement.attributes[componentElement.attributes.length - 1] ?? componentElement.tokens.startTagName).range.end;
         this.event.codeActions.push(
             codeActionUtil.createCodeAction({
                 title: `Extend "Group"`,

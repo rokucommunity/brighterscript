@@ -3,8 +3,10 @@ import { Parser } from '../../Parser';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
+import type { FunctionStatement } from '../../Statement';
 import type { ForStatement } from '../../Statement';
 import { LiteralExpression } from '../../Expression';
+import { isFunctionStatement } from '../../../astUtils/reflection';
 
 describe('parser for loops', () => {
     it('accepts a \'step\' clause', () => {
@@ -27,7 +29,7 @@ describe('parser for loops', () => {
         const statement = statements[0] as ForStatement;
         expect(diagnostics[0]?.message).not.to.exist;
         expect(statement.increment).to.be.instanceof(LiteralExpression);
-        expect((statement.increment as LiteralExpression).token.text).to.equal('2');
+        expect((statement.increment as LiteralExpression).tokens.value.text).to.equal('2');
     });
 
     it('supports omitted \'step\' clause', () => {
@@ -58,7 +60,8 @@ describe('parser for loops', () => {
         `);
         expect(parser.diagnostics).to.be.lengthOf(1);
         expect(parser.statements).to.be.lengthOf(1);
-        expect(parser.references.functionStatements[0].func.body.statements).to.be.lengthOf(1);
+        const functionStatements = parser.ast.findChildren<FunctionStatement>(isFunctionStatement);
+        expect(functionStatements[0].func.body.statements).to.be.lengthOf(1);
     });
 
     it('allows \'next\' to terminate loop', () => {
@@ -103,25 +106,29 @@ describe('parser for loops', () => {
                 kind: TokenKind.For,
                 text: 'for',
                 isReserved: true,
-                range: Range.create(0, 0, 0, 3)
+                range: Range.create(0, 0, 0, 3),
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'i',
                 isReserved: false,
-                range: Range.create(0, 4, 0, 5)
+                range: Range.create(0, 4, 0, 5),
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 isReserved: false,
-                range: Range.create(0, 6, 0, 7)
+                range: Range.create(0, 6, 0, 7),
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '0',
                 isReserved: false,
-                range: Range.create(0, 8, 0, 9)
+                range: Range.create(0, 8, 0, 9),
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.To,
@@ -130,19 +137,22 @@ describe('parser for loops', () => {
                 range: {
                     start: { line: 0, character: 10 },
                     end: { line: 0, character: 12 }
-                }
+                },
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '10',
                 isReserved: false,
-                range: Range.create(0, 13, 0, 15)
+                range: Range.create(0, 13, 0, 15),
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 isReserved: false,
-                range: Range.create(0, 15, 0, 16)
+                range: Range.create(0, 15, 0, 16),
+                leadingTrivia: []
             },
             // loop body isn't significant for location tracking, so helper functions are safe
             identifier('Rnd'),
@@ -154,7 +164,8 @@ describe('parser for loops', () => {
                 kind: TokenKind.EndFor,
                 text: 'end for',
                 isReserved: false,
-                range: Range.create(2, 0, 2, 8)
+                range: Range.create(2, 0, 2, 8),
+                leadingTrivia: []
             },
             EOF
         ]);

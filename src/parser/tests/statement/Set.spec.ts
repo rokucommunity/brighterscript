@@ -132,91 +132,104 @@ describe('parser indexed assignment', () => {
                 text: 'arr',
                 isReserved: false,
                 range: Range.create(0, 0, 0, 3),
-                leadingWhitespace: ''
+                leadingWhitespace: '',
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.LeftSquareBracket,
                 text: '[',
                 isReserved: false,
                 range: Range.create(0, 3, 0, 4),
-                leadingWhitespace: ''
+                leadingWhitespace: '',
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '0',
                 isReserved: false,
                 range: Range.create(0, 4, 0, 5),
-                leadingWhitespace: ''
+                leadingWhitespace: '',
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.RightSquareBracket,
                 text: ']',
                 isReserved: false,
                 range: Range.create(0, 5, 0, 6),
-                leadingWhitespace: ''
+                leadingWhitespace: '',
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 isReserved: false,
                 range: Range.create(0, 7, 0, 8),
-                leadingWhitespace: ''
+                leadingWhitespace: '',
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '1',
                 isReserved: false,
                 range: Range.create(0, 9, 0, 10),
-                leadingWhitespace: ''
+                leadingWhitespace: '',
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 isReserved: false,
                 range: Range.create(0, 10, 0, 11),
-                leadingWhitespace: ''
+                leadingWhitespace: '',
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'obj',
                 isReserved: false,
                 range: Range.create(1, 0, 1, 3),
-                leadingWhitespace: ''
+                leadingWhitespace: '',
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.Dot,
                 text: '.',
                 isReserved: false,
                 range: Range.create(1, 3, 1, 4),
-                leadingWhitespace: ''
+                leadingWhitespace: '',
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'a',
                 isReserved: false,
                 range: Range.create(1, 4, 1, 5),
-                leadingWhitespace: ''
+                leadingWhitespace: '',
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 isReserved: false,
                 range: Range.create(1, 6, 1, 7),
-                leadingWhitespace: ''
+                leadingWhitespace: '',
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '5',
                 isReserved: false,
                 range: Range.create(1, 8, 1, 9),
-                leadingWhitespace: ''
+                leadingWhitespace: '',
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 isReserved: false,
                 range: Range.create(1, 10, 1, 11),
-                leadingWhitespace: ''
+                leadingWhitespace: '',
+                leadingTrivia: []
             }
         ]);
 

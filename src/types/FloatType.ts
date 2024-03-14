@@ -1,33 +1,34 @@
-import type { BscType } from './BscType';
-import { DoubleType } from './DoubleType';
-import { DynamicType } from './DynamicType';
-import { IntegerType } from './IntegerType';
-import { LongIntegerType } from './LongIntegerType';
+import { isDoubleType, isDynamicType, isFloatType, isIntegerType, isLongIntegerType, isObjectType } from '../astUtils/reflection';
+import { BscType } from './BscType';
+import { BscTypeKind } from './BscTypeKind';
+import { isEnumTypeCompatible, isNativeInterfaceCompatibleNumber, isUnionTypeCompatible } from './helpers';
+import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
+import type { TypeCompatibilityData } from '../interfaces';
 
-export class FloatType implements BscType {
+export class FloatType extends BscType {
     constructor(
         public typeText?: string
-    ) { }
-
-    public isAssignableTo(targetType: BscType) {
-        return (
-            targetType instanceof FloatType ||
-            targetType instanceof DynamicType
-        );
+    ) {
+        super();
     }
 
-    public isConvertibleTo(targetType: BscType) {
-        if (
-            targetType instanceof DynamicType ||
-            targetType instanceof IntegerType ||
-            targetType instanceof FloatType ||
-            targetType instanceof DoubleType ||
-            targetType instanceof LongIntegerType
-        ) {
-            return true;
-        } else {
-            return false;
-        }
+    public readonly kind = BscTypeKind.FloatType;
+
+    public static instance = new FloatType('float');
+
+    public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
+        return (
+            isDynamicType(targetType) ||
+            isObjectType(targetType) ||
+            isIntegerType(targetType) ||
+            isFloatType(targetType) ||
+            isDoubleType(targetType) ||
+            isLongIntegerType(targetType) ||
+            isUnionTypeCompatible(this, targetType, data) ||
+            isEnumTypeCompatible(this, targetType, data) ||
+            isNativeInterfaceCompatibleNumber(this, targetType, data)
+        );
+
     }
 
     public toString() {
@@ -37,4 +38,10 @@ export class FloatType implements BscType {
     public toTypeString(): string {
         return this.toString();
     }
+
+    public isEqual(targetType: BscType): boolean {
+        return isFloatType(targetType);
+    }
 }
+
+BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('float', FloatType.instance);

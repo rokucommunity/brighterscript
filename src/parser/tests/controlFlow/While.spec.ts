@@ -4,6 +4,8 @@ import { Parser } from '../../Parser';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
+import type { FunctionStatement } from '../../Statement';
+import { isFunctionStatement } from '../../../astUtils/reflection';
 
 describe('parser while statements', () => {
 
@@ -59,7 +61,8 @@ describe('parser while statements', () => {
         `);
         expect(parser.diagnostics).to.be.lengthOf(1);
         expect(parser.statements).to.be.lengthOf(1);
-        expect(parser.references.functionStatements[0].func.body.statements).to.be.lengthOf(1);
+        const functionStatements = parser.ast.findChildren<FunctionStatement>(isFunctionStatement);
+        expect(functionStatements[0].func.body.statements).to.be.lengthOf(1);
     });
 
     it('location tracking', () => {
@@ -76,19 +79,22 @@ describe('parser while statements', () => {
                 kind: TokenKind.While,
                 text: 'while',
                 isReserved: true,
-                range: Range.create(0, 0, 0, 5)
+                range: Range.create(0, 0, 0, 5),
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.True,
                 text: 'true',
                 isReserved: true,
-                range: Range.create(0, 6, 0, 10)
+                range: Range.create(0, 6, 0, 10),
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 isReserved: false,
-                range: Range.create(0, 10, 0, 11)
+                range: Range.create(0, 10, 0, 11),
+                leadingTrivia: []
             },
             // loop body isn't significant for location tracking, so helper functions are safe
             identifier('Rnd'),
@@ -100,7 +106,8 @@ describe('parser while statements', () => {
                 kind: TokenKind.EndWhile,
                 text: 'end while',
                 isReserved: false,
-                range: Range.create(2, 0, 2, 9)
+                range: Range.create(2, 0, 2, 9),
+                leadingTrivia: []
             },
             EOF
         ]);

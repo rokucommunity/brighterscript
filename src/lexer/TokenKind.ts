@@ -119,6 +119,7 @@ export enum TokenKind {
     GetLastRunRunTimeError = 'GetLastRunRunTimeError',
     Goto = 'Goto',
     If = 'If',
+    In = 'In',
     Let = 'Let',
     Next = 'Next',
     Not = 'Not',
@@ -391,6 +392,7 @@ export const AllowedProperties = [
     TokenKind.GetLastRunRunTimeError,
     TokenKind.Goto,
     TokenKind.If,
+    TokenKind.In,
     TokenKind.Invalid,
     TokenKind.Let,
     TokenKind.Mod,
@@ -482,7 +484,8 @@ export const AllowedLocalIdentifiers = [
     TokenKind.Catch,
     TokenKind.EndTry,
     TokenKind.Const,
-    TokenKind.Continue
+    TokenKind.Continue,
+    TokenKind.In
 ];
 
 export const BrighterScriptSourceLiterals = [
@@ -614,11 +617,16 @@ export const DeclarableTypes = [
     TokenKind.Double,
     TokenKind.String,
     TokenKind.Object,
-    TokenKind.Interface,
     TokenKind.Dynamic,
     TokenKind.Void,
     TokenKind.Function
 ];
+
+/** List of TokenKind that will not break parsing a TypeExpression in Brighterscript*/
+export const AllowedTypeIdentifiers = [
+    ...AllowedProperties
+];
+
 
 /**
  * The tokens that might preceed a regex literal
@@ -663,3 +671,13 @@ export const PreceedingRegexTypes = new Set([
     TokenKind.Colon,
     TokenKind.Semicolon
 ]);
+
+/**
+ * The tokens that may be in leading trivia
+ */
+export const AllowedTriviaTokens: ReadonlyArray<TokenKind> = [
+    TokenKind.Newline,
+    TokenKind.Whitespace,
+    TokenKind.Comment,
+    TokenKind.Colon
+];

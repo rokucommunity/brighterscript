@@ -1,12 +1,12 @@
 import { expect } from '../../chai-config.spec';
 import { SemanticTokenModifiers, SemanticTokenTypes } from 'vscode-languageserver-protocol';
 import type { BrsFile } from '../../files/BrsFile';
-import type { BscFile, SemanticToken } from '../../interfaces';
+import type { BscFile } from '../../files/BscFile';
+import type { SemanticToken } from '../../interfaces';
 import { Program } from '../../Program';
 import { expectZeroDiagnostics } from '../../testHelpers.spec';
 import { util } from '../../util';
 import { rootDir } from '../../testHelpers.spec';
-
 
 describe('BrsFileSemanticTokensProcessor', () => {
     let program: Program;
@@ -52,6 +52,7 @@ describe('BrsFileSemanticTokensProcessor', () => {
                 sub new()
                     m.alien = new Humanoids.Aliens.Alien()
                 end sub
+                public alien
             end class
 
             namespace Humanoids.Aliens
@@ -184,13 +185,13 @@ describe('BrsFileSemanticTokensProcessor', () => {
             //`type` function call
             range: util.createRange(2, 29, 2, 33),
             tokenType: SemanticTokenTypes.function
-        }, {
+        }, { //Humanoids
             range: util.createRange(2, 34, 2, 43),
             tokenType: SemanticTokenTypes.namespace
-        }, {
+        }, { //Aliens
             range: util.createRange(2, 44, 2, 50),
             tokenType: SemanticTokenTypes.namespace
-        }, {
+        }, { //Invade
             range: util.createRange(2, 51, 2, 57),
             tokenType: SemanticTokenTypes.function
         }]);
@@ -422,4 +423,29 @@ describe('BrsFileSemanticTokensProcessor', () => {
             }
         ]);
     });
+
+
+    it('matches native interfaces', () => {
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            sub init()
+                m.alien = new Humanoids.Aliens.Alien.NOT_A_CLASS() 'bs:disable-line
+            end sub
+
+            namespace Humanoids.Aliens
+                class Alien
+                end class
+            end namespace
+        `);
+        expectSemanticTokens(file, [{
+            range: util.createRange(2, 30, 2, 39),
+            tokenType: SemanticTokenTypes.namespace
+        }, {
+            range: util.createRange(2, 40, 2, 46),
+            tokenType: SemanticTokenTypes.namespace
+        }, {
+            range: util.createRange(2, 47, 2, 52),
+            tokenType: SemanticTokenTypes.class
+        }]);
+    });
+
 });

@@ -108,3 +108,13 @@ second line text`
 ```brighterscript
 authStatus = user <> invalid ? "logged in" : "not logged in"
 ```
+
+## [Union Types](union-types.md)
+```brighterscript
+sub logData(data as string or number)
+    print data.toStr()
+end sub
+```
+
+## [Variable Shadowing](variable-shadowing.md)
+Name resolution rules for various types of shadowing.

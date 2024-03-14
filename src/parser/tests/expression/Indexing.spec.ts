@@ -194,7 +194,7 @@ describe('parser indexing', () => {
         const nodes = [];
         parser.ast.findChild<AssignmentStatement>(isAssignmentStatement).value.walk((x) => {
             if (isLiteralExpression(x)) {
-                nodes.push(x.token.text);
+                nodes.push(x.tokens.value.text);
             }
         }, { walkMode: WalkMode.visitAllRecursive });
         expect(nodes).to.eql(['0', '1', '2']);
@@ -207,7 +207,7 @@ describe('parser indexing', () => {
         const nodes = [];
         parser.ast.findChild<IndexedSetStatement>(isIndexedSetStatement).walk((x) => {
             if (isLiteralExpression(x)) {
-                nodes.push(x.token.text);
+                nodes.push(x.tokens.value.text);
             }
         }, { walkMode: WalkMode.visitAllRecursive });
         expect(nodes).to.eql(['0', '1', '2', '"value"']);
@@ -277,13 +277,13 @@ describe('parser indexing', () => {
             expect(statements).to.be.lengthOf(1);
             expect(isAssignmentStatement(statements[0])).to.be.true;
             const assignStmt = statements[0] as AssignmentStatement;
-            expect(assignStmt.name.text).to.equal('_');
+            expect(assignStmt.tokens.name.text).to.equal('_');
             expect(isIndexedGetExpression(assignStmt.value)).to.be.true;
             const indexedGetExpr = assignStmt.value as IndexedGetExpression;
-            expect((indexedGetExpr.obj as VariableExpression).name.text).to.equal('foo');
-            expect(isDottedGetExpression(indexedGetExpr.index)).to.be.true;
-            const dottedGetExpr = indexedGetExpr.index as DottedGetExpression;
-            expect(dottedGetExpr.name.text).to.equal('baz');
+            expect((indexedGetExpr.obj as VariableExpression).tokens.name.text).to.equal('foo');
+            expect(isDottedGetExpression(indexedGetExpr.indexes[0])).to.be.true;
+            const dottedGetExpr = indexedGetExpr.indexes[0] as DottedGetExpression;
+            expect(dottedGetExpr.tokens.name.text).to.equal('baz');
             expect(isVariableExpression(dottedGetExpr.obj)).to.be.true;
         });
 

@@ -8,12 +8,12 @@ export class Cache<TKey = any, TValue = any> extends Map<TKey, TValue> {
      * otherwise call the factory function to create the value, add it to the cache, and return it.
      */
     public getOrAdd<R extends TValue = TValue>(key: TKey, factory: (key: TKey) => R): R {
-        if (!this.has(key)) {
+        if (!super.has(key)) {
             const value = factory(key);
-            this.set(key, value);
+            super.set(key, value);
             return value;
         } else {
-            return this.get(key);
+            return super.get(key) as R;
         }
     }
 

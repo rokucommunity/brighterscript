@@ -79,22 +79,25 @@ describe('parser print statements', () => {
                 kind: TokenKind.Print,
                 text: 'print',
                 isReserved: true,
-                range: Range.create(0, 0, 1, 5),
-                leadingWhitespace: ''
+                range: Range.create(0, 0, 0, 5),
+                leadingWhitespace: '',
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.StringLiteral,
                 text: `"foo"`,
                 isReserved: false,
                 range: Range.create(0, 6, 0, 11),
-                leadingWhitespace: ''
+                leadingWhitespace: '',
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 isReserved: false,
                 range: Range.create(0, 11, 0, 12),
-                leadingWhitespace: ''
+                leadingWhitespace: '',
+                leadingTrivia: []
             }
         ]);
 
@@ -104,8 +107,8 @@ describe('parser print statements', () => {
     });
 
     describe('transpile', () => {
-        it('retains comma separators', () => {
-            testTranspile(`
+        it('retains comma separators', async () => {
+            await testTranspile(`
                 sub main()
                     a$ = "string"
                     print a$, a$, a$
@@ -113,8 +116,8 @@ describe('parser print statements', () => {
             `);
         });
 
-        it('retains semicolon separators', () => {
-            testTranspile(`
+        it('retains semicolon separators', async () => {
+            await testTranspile(`
                 sub main()
                     a$ = "string"
                     print a$; a$; a$
@@ -122,8 +125,8 @@ describe('parser print statements', () => {
             `);
         });
 
-        it('supports no space between function calls', () => {
-            testTranspile(`
+        it('supports no space between function calls', async () => {
+            await testTranspile(`
                 function getText()
                     return "text"
                 end function
@@ -134,8 +137,8 @@ describe('parser print statements', () => {
             `);
         });
 
-        it('supports print in loop', () => {
-            testTranspile(`
+        it('supports print in loop', async () => {
+            await testTranspile(`
                 sub main()
                     paramArr = ["This", "is", true, "and", "this", "is", 1]
                     print "This is one line of stuff:";
@@ -164,8 +167,8 @@ describe('parser print statements', () => {
             `);
         });
 
-        it('handles roku documentation examples', () => {
-            testTranspile(`
+        it('handles roku documentation examples', async () => {
+            await testTranspile(`
                 sub main()
                     x=5:print 25; " is equal to"; x^2
                     a$="string":print a$;a$,a$;" ";a$

@@ -1,6 +1,6 @@
 import type { AstNode } from '../parser/AstNode';
 
-export class AstEditor {
+export class Editor {
     private changes: Change[] = [];
 
     /**
@@ -131,6 +131,12 @@ export class AstEditor {
         }
         this.changes = [];
     }
+}
+/**
+ * @deprecated use `Editor` instead
+ */
+export class AstEditor extends Editor {
+
 }
 
 interface Change {

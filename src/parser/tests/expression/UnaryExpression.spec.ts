@@ -11,8 +11,8 @@ describe('UnaryExpression', () => {
         });
     });
 
-    it('handles advanced cases', () => {
-        const { file } = testTranspile(`
+    it('handles advanced cases', async () => {
+        const { file } = await testTranspile(`
             Sub Main()
                 x = 96
                 y = 56

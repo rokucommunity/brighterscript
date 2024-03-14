@@ -5,18 +5,22 @@ import { CancellationTokenSource } from 'vscode-languageserver';
 import { InternalWalkMode } from '../astUtils/visitors';
 import type { SymbolTable } from '../SymbolTable';
 import type { BrsTranspileState } from './BrsTranspileState';
-import type { TranspileResult } from '../interfaces';
+import type { GetTypeOptions, TranspileResult } from '../interfaces';
 import type { AnnotationExpression } from './Expression';
 import util from '../util';
+import { DynamicType } from '../types/DynamicType';
+import type { BscType } from '../types/BscType';
+import type { Token } from '../lexer/Token';
 
 /**
  * A BrightScript AST node
  */
 export abstract class AstNode {
+    public abstract kind: AstNodeKind;
     /**
      *  The starting and ending location of the node.
      */
-    public abstract range: Range | undefined;
+    public abstract range?: Range | undefined;
 
     public abstract transpile(state: BrsTranspileState): TranspileResult;
 
@@ -101,6 +105,27 @@ export abstract class AstNode {
     }
 
     /**
+     * Find a list of all children first child where the matcher evaluates to true.
+     * @param matcher a function called for each node. If you return true, the specified node is included in the results. If you return a node,
+     * that node is returned. all other return values exclude that value and continue the loop
+     */
+    public findChildren<TNode extends AstNode = AstNode>(matcher: (node: AstNode, cancellationSource: CancellationTokenSource) => boolean | AstNode | undefined | void, options?: WalkOptions): Array<TNode> {
+        const cancel = new CancellationTokenSource();
+        let result: Array<AstNode> = [];
+        this.walk((node) => {
+            const matcherValue = matcher(node, cancel);
+            if (matcherValue) {
+                result.push(matcherValue === true ? node : matcherValue);
+            }
+        }, {
+            walkMode: WalkMode.visitAllRecursive,
+            ...options ?? {},
+            cancel: cancel.token
+        });
+        return result as TNode[];
+    }
+
+    /**
      * FInd the deepest child that includes the given position
      */
     public findChildAtPosition<TNodeType extends AstNode = AstNode>(position: Position, options?: WalkOptions): TNodeType | undefined {
@@ -113,6 +138,13 @@ export abstract class AstNode {
     }
 
     /**
+     * Get the BscType of this node.
+     */
+    public getType(options: GetTypeOptions): BscType {
+        return DynamicType.instance;
+    }
+
+    /**
      * Links all child nodes to their parent AstNode, and the same with symbol tables. This performs a full AST walk, so you should use this sparingly
      */
     public link() {
@@ -120,6 +152,24 @@ export abstract class AstNode {
         this.walk(() => { }, {
             walkMode: WalkMode.visitAllRecursive
         });
+    }
+
+    /**
+     * Walk upward and return the root node
+     */
+    public getRoot() {
+        let node = this as AstNode;
+
+        while (node) {
+            if (!node.parent) {
+                return node;
+            }
+            node = node.parent;
+        }
+    }
+
+    public getLeadingTrivia(): Token[] {
+        return [];
     }
 }
 
@@ -131,7 +181,7 @@ export abstract class Statement extends AstNode {
     /**
      * Annotations for this statement
      */
-    public annotations: AnnotationExpression[] | undefined;
+    public annotations?: AnnotationExpression[] | undefined;
 }
 
 
@@ -141,4 +191,76 @@ export abstract class Expression extends AstNode {
      * When being considered by the walk visitor, this describes what type of element the current class is.
      */
     public visitMode = InternalWalkMode.visitExpressions;
+}
+
+export enum AstNodeKind {
+    Body = 'Body',
+    BinaryExpression = 'BinaryExpression',
+    CallExpression = 'CallExpression',
+    FunctionExpression = 'FunctionExpression',
+    FunctionParameterExpression = 'FunctionParameterExpression',
+    NamespacedVariableNameExpression = 'NamespacedVariableNameExpression',
+    DottedGetExpression = 'DottedGetExpression',
+    XmlAttributeGetExpression = 'XmlAttributeGetExpression',
+    IndexedGetExpression = 'IndexedGetExpression',
+    GroupingExpression = 'GroupingExpression',
+    LiteralExpression = 'LiteralExpression',
+    EscapedCharCodeLiteralExpression = 'EscapedCharCodeLiteralExpression',
+    ArrayLiteralExpression = 'ArrayLiteralExpression',
+    AAMemberExpression = 'AAMemberExpression',
+    AALiteralExpression = 'AALiteralExpression',
+    UnaryExpression = 'UnaryExpression',
+    VariableExpression = 'VariableExpression',
+    SourceLiteralExpression = 'SourceLiteralExpression',
+    NewExpression = 'NewExpression',
+    CallfuncExpression = 'CallfuncExpression',
+    TemplateStringQuasiExpression = 'TemplateStringQuasiExpression',
+    TemplateStringExpression = 'TemplateStringExpression',
+    TaggedTemplateStringExpression = 'TaggedTemplateStringExpression',
+    AnnotationExpression = 'AnnotationExpression',
+    TernaryExpression = 'TernaryExpression',
+    NullCoalescingExpression = 'NullCoalescingExpression',
+    RegexLiteralExpression = 'RegexLiteralExpression',
+    EmptyStatement = 'EmptyStatement',
+    AssignmentStatement = 'AssignmentStatement',
+    ExpressionStatement = 'ExpressionStatement',
+    ExitForStatement = 'ExitForStatement',
+    ExitWhileStatement = 'ExitWhileStatement',
+    FunctionStatement = 'FunctionStatement',
+    IfStatement = 'IfStatement',
+    IncrementStatement = 'IncrementStatement',
+    PrintStatement = 'PrintStatement',
+    DimStatement = 'DimStatement',
+    GotoStatement = 'GotoStatement',
+    LabelStatement = 'LabelStatement',
+    ReturnStatement = 'ReturnStatement',
+    EndStatement = 'EndStatement',
+    StopStatement = 'StopStatement',
+    ForStatement = 'ForStatement',
+    ForEachStatement = 'ForEachStatement',
+    WhileStatement = 'WhileStatement',
+    DottedSetStatement = 'DottedSetStatement',
+    IndexedSetStatement = 'IndexedSetStatement',
+    LibraryStatement = 'LibraryStatement',
+    NamespaceStatement = 'NamespaceStatement',
+    ImportStatement = 'ImportStatement',
+    InterfaceStatement = 'InterfaceStatement',
+    InterfaceFieldStatement = 'InterfaceFieldStatement',
+    InterfaceMethodStatement = 'InterfaceMethodStatement',
+    ClassStatement = 'ClassStatement',
+    MethodStatement = 'MethodStatement',
+    ClassMethodStatement = 'ClassMethodStatement',
+    FieldStatement = 'FieldStatement',
+    ClassFieldStatement = 'ClassFieldStatement',
+    TryCatchStatement = 'TryCatchStatement',
+    CatchStatement = 'CatchStatement',
+    ThrowStatement = 'ThrowStatement',
+    EnumStatement = 'EnumStatement',
+    EnumMemberStatement = 'EnumMemberStatement',
+    ConstStatement = 'ConstStatement',
+    ContinueStatement = 'ContinueStatement',
+    Block = 'Block',
+    TypeExpression = 'TypeExpression',
+    TypeCastExpression = 'TypeCastExpression',
+    TypedArrayExpression = 'TypedArrayExpression'
 }

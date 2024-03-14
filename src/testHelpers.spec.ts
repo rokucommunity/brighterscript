@@ -1,4 +1,4 @@
-import type { BscFile, BsDiagnostic } from './interfaces';
+import type { BsDiagnostic } from './interfaces';
 import * as assert from 'assert';
 import chalk from 'chalk';
 import type { CodeDescription, CompletionItem, Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, integer, Range } from 'vscode-languageserver';
@@ -9,10 +9,11 @@ import { codeActionUtil } from './CodeActionUtil';
 import type { BrsFile } from './files/BrsFile';
 import type { Program } from './Program';
 import { standardizePath as s } from './util';
-import type { CodeWithSourceMap } from 'source-map';
 import { getDiagnosticLine } from './diagnosticUtils';
 import { firstBy } from 'thenby';
 import undent from 'undent';
+import type { BscFile } from './files/BscFile';
+import type { BscType } from './types/BscType';
 
 export const tempDir = s`${__dirname}/../.tmp`;
 export const rootDir = s`${tempDir}/rootDir`;
@@ -20,7 +21,7 @@ export const stagingDir = s`${tempDir}/stagingDir`;
 
 export const trim = undent;
 
-type DiagnosticCollection = { getDiagnostics(): Array<Diagnostic> } | { diagnostics: Diagnostic[] } | Diagnostic[];
+type DiagnosticCollection = { getDiagnostics(): Array<Diagnostic> } | { diagnostics?: Diagnostic[] } | Diagnostic[];
 
 function getDiagnostics(arg: DiagnosticCollection): BsDiagnostic[] {
     if (Array.isArray(arg)) {
@@ -95,7 +96,7 @@ function cloneDiagnostic(actualDiagnosticInput: BsDiagnostic, expectedDiagnostic
         actualDiagnostic.file = cloneObject(
             actualDiagnostic.file,
             expectedDiagnostic?.file,
-            ['srcPath', 'pkgPath']
+            ['srcPath', 'destPath', 'pkgPath']
         ) as any;
     }
     return actualDiagnostic;
@@ -137,10 +138,11 @@ export function expectDiagnostics(arg: DiagnosticCollection, expected: Array<Par
  * @param arg - any object that contains diagnostics (such as `Program`, `Scope`, or even an array of diagnostics)
  * @param expected an array of expected diagnostics. if it's a string, assume that's a diagnostic error message
  */
-export function expectDiagnosticsIncludes(arg: DiagnosticCollection, expected: Array<PartialDiagnostic | string | number>) {
+export function expectDiagnosticsIncludes(arg: DiagnosticCollection, expected: PartialDiagnostic | string | number | Array<PartialDiagnostic | string | number>) {
+    let actualExpected = Array.isArray(expected) ? expected : [expected];
     const actualDiagnostics = getDiagnostics(arg);
     const expectedDiagnostics =
-        expected.map(x => {
+        actualExpected.map(x => {
             let result = x;
             if (typeof x === 'string') {
                 result = { message: x };
@@ -177,7 +179,7 @@ export function expectZeroDiagnostics(arg: DiagnosticCollection) {
             diagnostic.message = diagnostic.message.replace(/\r/g, '\\r').replace(/\n/g, '\\n');
             message += `\n        • bs${diagnostic.code} "${diagnostic.message}" at ${diagnostic.file?.srcPath ?? ''}#(${diagnostic.range?.start.line}:${diagnostic.range?.start.character})-(${diagnostic.range?.end.line}:${diagnostic.range?.end.character})`;
             //print the line containing the error (if we can find it)srcPath
-            const line = diagnostic.file?.fileContents?.split(/\r?\n/g)?.[diagnostic.range?.start.line];
+            const line = (diagnostic.file as BrsFile)?.fileContents?.split(/\r?\n/g)?.[diagnostic.range?.start.line];
             if (line) {
                 message += '\n' + getDiagnosticLine(diagnostic, line, chalk.red);
             }
@@ -236,32 +238,43 @@ export function expectInstanceOf<T>(items: any[], constructors: Array<new (...ar
 
 export function getTestTranspile(scopeGetter: () => [program: Program, rootDir: string]) {
     return getTestFileAction((file) => {
-        return file.program['_getTranspiledFileContents'](file);
+        return (file as BrsFile).program.getTranspiledFileContents(file.srcPath);
     }, scopeGetter);
 }
 
 export function getTestGetTypedef(scopeGetter: () => [program: Program, rootDir: string]) {
-    return getTestFileAction((file) => {
+    return getTestFileAction(async (file) => {
+        const program = (file as BrsFile).program;
+        program.options.emitDefinitions = true;
+        const result = await program.getTranspiledFileContents(file.srcPath);
         return {
-            code: (file as BrsFile).getTypedef(),
+            code: result.typedef,
             map: undefined
-        } as any as CodeWithSourceMap;
+        };
     }, scopeGetter);
 }
 
 function getTestFileAction(
-    action: (file: BscFile) => CodeWithSourceMap,
+    action: (file: BscFile) => Promise<{ code: string; map?: string }>,
     scopeGetter: () => [program: Program, rootDir: string]
 ) {
-    return function testFileAction(source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', pkgPath = 'source/main.bs', failOnDiagnostic = true) {
+    return async function testFileAction<TFile extends BscFile = BscFile>(sourceOrFile: string | TFile, expected?: string, formatType: 'trim' | 'none' = 'trim', destPath = 'source/main.bs', failOnDiagnostic = true) {
         let [program, rootDir] = scopeGetter();
-        expected = expected ? expected : source;
-        let file = program.setFile<BrsFile>({ src: s`${rootDir}/${pkgPath}`, dest: pkgPath }, source);
+        let file: TFile;
+        if (typeof sourceOrFile === 'string') {
+            expected = expected ? expected : sourceOrFile;
+            file = program.setFile<TFile>({ src: s`${rootDir}/${destPath}`, dest: destPath }, sourceOrFile);
+        } else {
+            file = sourceOrFile;
+            if (!expected) {
+                throw new Error('`expected` is required when passing a file');
+            }
+        }
         program.validate();
         if (failOnDiagnostic !== false) {
             expectZeroDiagnostics(program);
         }
-        let codeWithMap = action(file);
+        let codeWithMap = await action(file);
 
         let sources = [trimMap(codeWithMap.code), expected];
 
@@ -274,7 +287,7 @@ function getTestFileAction(
         expect(sources[0]).to.equal(sources[1]);
         return {
             file: file,
-            source: source,
+            source: sourceOrFile,
             expected: expected,
             actual: codeWithMap.code,
             map: codeWithMap.map
@@ -361,6 +374,13 @@ export function mapToObject<T>(map: Map<any, T>) {
         result[key] = value;
     }
     return result;
+}
+
+/**
+ * Test that a type is what was expected
+ */
+export function expectTypeToBe(someType: BscType, expectedTypeClass: any) {
+    expect(someType?.constructor?.name).to.eq(expectedTypeClass.name);
 }
 
 export function stripConsoleColors(inputString) {

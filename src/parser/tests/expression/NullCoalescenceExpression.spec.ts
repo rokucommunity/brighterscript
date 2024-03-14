@@ -15,7 +15,7 @@ import {
     NullCoalescingExpression
 } from '../../Expression';
 import { Program } from '../../../Program';
-import { expectZeroDiagnostics, getTestTranspile } from '../../../testHelpers.spec';
+import { expectDiagnosticsIncludes, expectZeroDiagnostics, getTestTranspile } from '../../../testHelpers.spec';
 
 describe('NullCoalescingExpression', () => {
     it('throws exception when used in brightscript scope', () => {
@@ -25,28 +25,27 @@ describe('NullCoalescingExpression', () => {
     });
 
     describe('null coalescing as statements are not supported', () => {
-        it(`rejects various consequents with primitive values:`, () => {
+        it(`creates diagnostic when used as a statement`, () => {
             //test as property
-            for (const test in [
+            for (const test of [
                 'true',
                 'false',
                 'len("person") = 10',
-                'm.getResponse()',
-                'm.myZombies[3].ifFed = true'
+                'm.getResponse()'
             ]) {
 
                 let { tokens } = Lexer.scan(`${test} ?? "human"`);
                 let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
-                expect(diagnostics).to.not.be.empty;
-                expect(statements).to.be.empty;
+                expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.unexpectedToken('??').code);
+                expect(statements).not.to.be.empty;
             }
         });
     });
 
-    describe('invalid coalescene - variety of test cases', () => {
-        it(`rejects various consequents with primitive values:`, () => {
+    describe('different coalescence types- variety of test cases', () => {
+        it(`accepts various consequents with primitive values:`, () => {
             //test as property
-            for (const test in [
+            for (const test of [
                 'result = true',
                 'result = false',
                 'result = len("person") = 10',
@@ -56,14 +55,15 @@ describe('NullCoalescingExpression', () => {
 
                 let { tokens } = Lexer.scan(`${test} ?? "human"`);
                 let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
-                expect(diagnostics).to.not.be.empty;
-                expect(statements).to.be.empty;
+                expect(diagnostics).to.be.empty;
+                expect(statements[0]).instanceof(AssignmentStatement);
+                expect((statements[0] as AssignmentStatement).value).instanceof(NullCoalescingExpression);
             }
         });
 
-        it(`supports non-primitive alternates:`, () => {
+        it(`supports non-primitive alternates`, () => {
             //test as property
-            for (const consequent in [
+            for (const consequent of [
                 'true',
                 'false',
                 'len("person") = 10',
@@ -77,7 +77,6 @@ describe('NullCoalescingExpression', () => {
                 expectZeroDiagnostics(diagnostics);
                 expect(statements[0]).instanceof(AssignmentStatement);
                 expect((statements[0] as AssignmentStatement).value).instanceof(NullCoalescingExpression);
-
             }
         });
     });
@@ -158,9 +157,9 @@ describe('NullCoalescingExpression', () => {
             expect(statements[0]).instanceof(AssignmentStatement);
             expect((statements[0] as AssignmentStatement).value).instanceof(AALiteralExpression);
             let literalExpression = (statements[0] as AssignmentStatement).value as AALiteralExpression;
-            expect((literalExpression.elements[0] as AAMemberExpression).keyToken.text).is.equal('"v1"');
+            expect((literalExpression.elements[0] as AAMemberExpression).tokens.key.text).is.equal('"v1"');
             expect((literalExpression.elements[0] as AAMemberExpression).value).instanceOf(NullCoalescingExpression);
-            expect((literalExpression.elements[1] as AAMemberExpression).keyToken.text).is.equal('"v2"');
+            expect((literalExpression.elements[1] as AAMemberExpression).tokens.key.text).is.equal('"v2"');
             expect((literalExpression.elements[1] as AAMemberExpression).value).instanceOf(LiteralExpression);
         });
 
@@ -189,26 +188,26 @@ describe('NullCoalescingExpression', () => {
             program.dispose();
         });
 
-        it('uses the proper prefix when aliased package is installed', () => {
+        it('uses the proper prefix when aliased package is installed', async () => {
             program.setFile('source/roku_modules/rokucommunity_bslib/bslib.brs', '');
-            testTranspile(`
-                sub main()
+            await testTranspile(`
+                sub main(user)
                     a = user ?? false
                 end sub
             `, `
-                sub main()
+                sub main(user)
                     a = rokucommunity_bslib_coalesce(user, false)
                 end sub
             `);
         });
 
-        it('properly transpiles null coalesence assignments - simple', () => {
-            testTranspile(`
-                sub main()
+        it('properly transpiles null coalesence assignments - simple', async () => {
+            await testTranspile(`
+                sub main(user)
                     a = user ?? {"id": "default"}
                 end sub
             `, `
-                sub main()
+                sub main(user)
                     a = bslib_coalesce(user, {
                         "id": "default"
                     })
@@ -216,8 +215,8 @@ describe('NullCoalescingExpression', () => {
             `);
         });
 
-        it('properly transpiles null coalesence assignments - complex consequent', () => {
-            testTranspile(`
+        it('properly transpiles null coalesence assignments - complex consequent', async () => {
+            await testTranspile(`
                 sub main()
                     user = {}
                     a = user.getAccount() ?? {"id": "default"}
@@ -239,13 +238,13 @@ describe('NullCoalescingExpression', () => {
             `);
         });
 
-        it('transpiles null coalesence assignment for variable alternate- complex consequent', () => {
-            testTranspile(`
-                sub main()
+        it('transpiles null coalesence assignment for variable alternate- complex consequent', async () => {
+            await testTranspile(`
+                sub main(obj)
                     a = obj.link ?? false
                 end sub
             `, `
-                sub main()
+                sub main(obj)
                     a = (function(obj)
                             __bsConsequent = obj.link
                             if __bsConsequent <> invalid then
@@ -258,8 +257,8 @@ describe('NullCoalescingExpression', () => {
             `);
         });
 
-        it('properly transpiles null coalesence assignments - complex alternate', () => {
-            testTranspile(`
+        it('properly transpiles null coalesence assignments - complex alternate', async () => {
+            await testTranspile(`
                 sub main()
                     user = {}
                     settings = {}
@@ -281,8 +280,8 @@ describe('NullCoalescingExpression', () => {
             `);
         });
 
-        it('ignores enum variable names', () => {
-            testTranspile(`
+        it('ignores enum variable names', async () => {
+            await testTranspile(`
                 enum Direction
                     up = "up"
                 end enum
@@ -305,8 +304,8 @@ describe('NullCoalescingExpression', () => {
             `);
         });
 
-        it('ignores const variable names', () => {
-            testTranspile(`
+        it('ignores const variable names', async () => {
+            await testTranspile(`
                 const USER = "user"
                 sub main()
                     settings = {}
