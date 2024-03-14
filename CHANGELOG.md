@@ -6,6 +6,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.28](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.27...v1.0.0-alpha.28) - 2024-03-13
+### Added
+- type to const hovers and adds hover for for-each loop vars ([#1092](https://github.com/rokucommunity/brighterscript/pull/1092))
+### Changed
+- formal support for various variable and name shadowing rules ([#1089](https://github.com/rokucommunity/brighterscript/pull/1089))
+- improve message for empty throw statements ([#1099](https://github.com/rokucommunity/brighterscript/pull/1099))
+- move scope.validate() into BscPlugin ([#1105](https://github.com/rokucommunity/brighterscript/pull/1105))
+- remove `CommentStatement` and all comment tokens from Lexer output ([#1083](https://github.com/rokucommunity/brighterscript/pull/1083))
+### Fixed
+- 'm' type is now AssocArray in function in AALiteral ([#1097](https://github.com/rokucommunity/brighterscript/pull/1097))
+- ensure SymbolTypeFlag is exported from ./index.ts ([#1094](https://github.com/rokucommunity/brighterscript/pull/1094))
+- diagnostic when using variable declared with unknown type ([#1098](https://github.com/rokucommunity/brighterscript/pull/1098))
+- issue with bitwise binary operators ([#1107](https://github.com/rokucommunity/brighterscript/pull/1107))
+- issue with AA overriding built-in properties ([#1106](https://github.com/rokucommunity/brighterscript/pull/1106))
+- classname as variable for completions and validations ([#1096](https://github.com/rokucommunity/brighterscript/pull/1096))
+
+
+
 ## [1.0.0-alpha.27](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.26...v1.0.0-alpha.27) - 2024-02-27
 ### Added
  - Validation when trying to access a class member directly on a class name ([#1073](https://github.com/rokucommunity/brighterscript/pull/1073))
@@ -181,6 +199,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.66.0-alpha.0](https://github.com/rokucommunity/brighterscript/compare/v0.65.1...v0.66.0-alpha.0) - 2023-06-09
 ### Changed
  - all the type tracking stuff!
+## [0.65.26](https://github.com/rokucommunity/brighterscript/compare/v0.65.25...v0.65.26) - 2024-03-13
+### Fixed
+ - Prevent unused variable warnings on transpiled ternary and null coalescence expressions ([#1101](https://github.com/rokucommunity/brighterscript/pull/1101))
+
+
+
 ## [0.65.25](https://github.com/rokucommunity/brighterscript/compare/v0.65.24...v0.65.25) - 2024-03-07
 ### Added
  - Allow negative patterns in diagnostic filters ([#1078](https://github.com/rokucommunity/brighterscript/pull/1078))
