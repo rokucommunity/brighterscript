@@ -102,7 +102,13 @@ export class BinaryExpression extends Expression {
 
 
 export class CallExpression extends Expression {
-    static MaximumArguments = 32;
+    /**
+     * Number of parameters that can be defined on a function
+     *
+     * Prior to Roku OS 11.5, this was 32
+     * As of Roku OS 11.5, this is 63
+     */
+    static MaximumArguments = 63;
 
     constructor(options: {
         callee: Expression;
