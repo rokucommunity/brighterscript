@@ -8,7 +8,8 @@ describe('Sequencer', () => {
         const values = [];
         void new Sequencer({
             name: 'test',
-            cancellationToken: cancellationTokenSource.token
+            cancellationToken: cancellationTokenSource.token,
+            minSyncDuration: 100
         }).forEach([1, 2, 3], (i) => {
             values.push(i);
             if (i === 2) {
