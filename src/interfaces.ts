@@ -413,3 +413,5 @@ export interface FileLink<T> {
 }
 
 export type DisposableLike = Disposable | (() => any);
+
+export type MaybePromise<T> = T | Promise<T>;

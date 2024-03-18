@@ -2,13 +2,14 @@ import { standardizePath as s, util } from '../util';
 import { rokuDeploy } from 'roku-deploy';
 import * as path from 'path';
 import * as EventEmitter from 'eventemitter3';
-import type { LspDiagnostic, LspProject, MaybePromise } from './LspProject';
+import type { LspDiagnostic, LspProject } from './LspProject';
 import { Project } from './Project';
 import { WorkerThreadProject } from './worker/WorkerThreadProject';
-import type { Position } from 'vscode-languageserver';
+import { type Hover, type Position } from 'vscode-languageserver';
 import { Deferred } from '../deferred';
 import type { FlushEvent } from './DocumentManager';
 import { DocumentManager } from './DocumentManager';
+import type { MaybePromise } from '../interfaces';
 
 /**
  * Manages all brighterscript projects for the language server
@@ -103,7 +104,7 @@ export class ProjectManager {
     /**
      * Return the first project where the async matcher returns true
      */
-    private async findFirstMatchingProject(callback: (project: LspProject) => boolean | PromiseLike<boolean>) {
+    private async findFirstMatchingProject(matcher: (project: LspProject) => boolean | PromiseLike<boolean>) {
         const deferred = new Deferred<LspProject>();
         let projectCount = this.projects.length;
         let doneCount = 0;
@@ -115,7 +116,7 @@ export class ProjectManager {
                 //wait for the project to activate
                 await project.whenActivated();
 
-                if (await Promise.resolve(callback(project)) === true) {
+                if (await Promise.resolve(matcher(project)) === true) {
                     deferred.tryResolve(project);
                 }
             } catch (e) {
@@ -133,8 +134,8 @@ export class ProjectManager {
 
     public async getSemanticTokens(srcPath: string) {
         //find the first program that has this file, since it would be incredibly inefficient to generate semantic tokens for the same file multiple times.
-        const project = await this.findFirstMatchingProject((p) => {
-            return p.hasFile(srcPath);
+        const project = await this.findFirstMatchingProject((x) => {
+            return x.hasFile(srcPath);
         });
 
         //if we found a project
@@ -147,7 +148,7 @@ export class ProjectManager {
     }
 
     public async transpileFile(srcPath: string) {
-        //find the first program that has this file, since it would be incredibly inefficient to generate semantic tokens for the same file multiple times.
+        //find the first program that has this file
         const project = await this.findFirstMatchingProject((p) => {
             return p.hasFile(srcPath);
         });
@@ -169,6 +170,21 @@ export class ProjectManager {
         // for (let completion of completions) {
         //     completion.commitCharacters = ['.'];
         // }
+    }
+
+    /**
+     * Get the hover information for the given position in the file. If multiple projects have hover information, the projects will be raced and
+     * the fastest result will be returned
+     * @returns the hover information or undefined if no hover information was found
+     */
+    public async getHover(srcPath: string, position: Position): Promise<Hover> {
+        //Ask every project for hover info, keep whichever one responds first that has a valid response
+        let hover = await util.promiseRaceMatch(
+            this.projects.map(x => x.getHover({ srcPath: srcPath, position: position })),
+            //keep the first non-falsey result
+            (result) => !!result
+        );
+        return hover?.[0];
     }
 
     /**
@@ -254,16 +270,15 @@ export class ProjectManager {
 
     /**
      * Create a project for the given config
-     * @param config
      * @returns a new project, or the existing project if one already exists with this config info
      */
-    private async createProject(config1: ProjectConfig) {
+    private async createProject(config: ProjectConfig) {
         //skip this project if we already have it
-        if (this.hasProject(config1.projectPath)) {
-            return this.getProject(config1.projectPath);
+        if (this.hasProject(config.projectPath)) {
+            return this.getProject(config.projectPath);
         }
 
-        let project: LspProject = config1.threadingEnabled
+        let project: LspProject = config.threadingEnabled
             ? new WorkerThreadProject()
             : new Project();
 
@@ -278,9 +293,9 @@ export class ProjectManager {
         });
 
         await project.activate({
-            projectPath: config1.projectPath,
-            workspaceFolder: config1.workspaceFolder,
-            projectNumber: config1.projectNumber ?? ProjectManager.projectNumberSequence++
+            projectPath: config.projectPath,
+            workspaceFolder: config.workspaceFolder,
+            projectNumber: config.projectNumber ?? ProjectManager.projectNumberSequence++
         });
         console.log('Activated');
     }

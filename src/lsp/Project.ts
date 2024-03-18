@@ -2,17 +2,17 @@ import { ProgramBuilder } from '../ProgramBuilder';
 import * as EventEmitter from 'eventemitter3';
 import util, { standardizePath as s } from '../util';
 import * as path from 'path';
-import type { ActivateOptions, LspDiagnostic, LspProject, MaybePromise } from './LspProject';
-import type { CompilerPlugin } from '../interfaces';
+import type { ActivateOptions, LspDiagnostic, LspProject } from './LspProject';
+import type { CompilerPlugin, Hover, MaybePromise } from '../interfaces';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { URI } from 'vscode-uri';
 import { Deferred } from '../deferred';
 import { rokuDeploy } from 'roku-deploy';
+import type { Position } from 'vscode-languageserver-protocol';
 import { CancellationTokenSource } from 'vscode-languageserver-protocol';
-import { DocumentAction } from './DocumentManager';
+import type { DocumentAction } from './DocumentManager';
 
 export class Project implements LspProject {
-
 
     /**
      * Activates this project. Every call to `activate` should completely reset the project, clear all used ram and start from scratch.
@@ -83,7 +83,7 @@ export class Project implements LspProject {
 
     /**
      * Promise that resolves when the project finishes activating
-     * @returns
+     * @returns a promise that resolves when the project finishes activating
      */
     public whenActivated() {
         return this.activationDeferred.promise;
@@ -111,7 +111,7 @@ export class Project implements LspProject {
     /**
      * Cancel any active validation that's running
      */
-    public async cancelValidate() {
+    public cancelValidate() {
         this.validationCancelToken?.cancel();
         delete this.validationCancelToken;
     }
@@ -174,7 +174,7 @@ export class Project implements LspProject {
             }
         }
         if (didChangeFiles) {
-            this.validate();
+            await this.validate();
         }
         return didChangeFiles;
     }
@@ -239,6 +239,11 @@ export class Project implements LspProject {
     public async transpileFile(srcPath: string) {
         await this.onIdle();
         return this.builder.program.getTranspiledFileContents(srcPath);
+    }
+
+    public async getHover(options: { srcPath: string; position: Position }): Promise<Hover[]> {
+        await this.onIdle();
+        return this.builder.program.getHover(options.srcPath, options.position);
     }
 
     /**

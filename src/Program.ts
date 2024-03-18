@@ -24,7 +24,6 @@ import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
 import { BscPlugin } from './bscPlugin/BscPlugin';
 import { AstEditor } from './astUtils/AstEditor';
 import type { SourceMapGenerator } from 'source-map';
-import { rokuDeploy } from 'roku-deploy';
 import type { Statement } from './parser/AstNode';
 import { CallExpressionInfo } from './bscPlugin/CallExpressionInfo';
 import { SignatureHelpUtil } from './bscPlugin/SignatureHelpUtil';

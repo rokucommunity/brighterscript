@@ -1,8 +1,8 @@
-import type { CancellationToken, Diagnostic } from 'vscode-languageserver';
-import type { SemanticToken } from '../interfaces';
+import type { Diagnostic, Position } from 'vscode-languageserver';
+import type { Hover, MaybePromise, SemanticToken } from '../interfaces';
 import type { BsConfig } from '../BsConfig';
-import { DocumentAction } from './DocumentManager';
-import { FileTranspileResult } from '../Program';
+import type { DocumentAction } from './DocumentManager';
+import type { FileTranspileResult } from '../Program';
 
 /**
  * Defines the contract between the ProjectManager and the main or worker thread Project classes
@@ -39,7 +39,7 @@ export interface LspProject {
     /**
      * Cancel any active validation that's running
      */
-    cancelValidate(): Promise<void>;
+    cancelValidate(): MaybePromise<void>;
 
     /**
      * Get the bsconfig options from the program. Should only be called after `.activate()` has completed.
@@ -69,6 +69,11 @@ export interface LspProject {
     transpileFile(srcPath: string): MaybePromise<FileTranspileResult>;
 
     /**
+     * Get the hover information for the specified position in the specified file
+     */
+    getHover(options: { srcPath: string; position: Position }): MaybePromise<Hover[]>;
+
+    /**
      * Does this project have the specified file. Should only be called after `.activate()` has completed.
      */
     hasFile(srcPath: string): MaybePromise<boolean>;
@@ -79,7 +84,7 @@ export interface LspProject {
      * @param documentActions
      * @returns a boolean indicating whether this project accepted any of the file changes. If false, then this project didn't recognize any of the files and thus did nothing
      */
-    applyFileChanges(documentActions: DocumentAction[]): Promise<boolean>
+    applyFileChanges(documentActions: DocumentAction[]): Promise<boolean>;
 
     /**
      * An event that is emitted anytime the diagnostics for the project have changed (typically after a validate cycle has finished)
@@ -117,5 +122,3 @@ export interface ActivateOptions {
 export interface LspDiagnostic extends Diagnostic {
     uri: string;
 }
-
-export type MaybePromise<T> = T | Promise<T>;

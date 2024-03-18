@@ -20,7 +20,6 @@ import type {
     SemanticTokens,
     SemanticTokensParams,
     TextDocumentChangeEvent,
-    Hover,
     HandlerResult,
     InitializeError,
     InitializeResult,
@@ -36,8 +35,7 @@ import {
     FileChangeType,
     ProposedFeatures,
     TextDocuments,
-    TextDocumentSyncKind,
-    CodeActionKind,
+    TextDocumentSyncKind
 } from 'vscode-languageserver/node';
 import { URI } from 'vscode-uri';
 import { TextDocument } from 'vscode-languageserver-textdocument';
@@ -190,7 +188,7 @@ export class LanguageServer implements OnHandler<Connection> {
                 //     triggerCharacters: ['(', ',']
                 // },
                 // definitionProvider: true,
-                // hoverProvider: true,
+                hoverProvider: true,
                 executeCommandProvider: {
                     commands: [
                         CustomCommands.TranspileFile
@@ -401,38 +399,9 @@ export class LanguageServer implements OnHandler<Connection> {
 
     @AddStackToErrorMessage
     public async onHover(params: TextDocumentPositionParams) {
-        //ensure programs are initialized
-        await this.waitAllProjectFirstRuns();
-
         const srcPath = util.uriToPath(params.textDocument.uri);
-        let projects = this.getProjects();
-        let hovers = projects
-            //get hovers from all projects
-            .map((x) => x.builder.program.getHover(srcPath, params.position))
-            //flatten to a single list
-            .flat();
-
-        const contents = [
-            ...(hovers ?? [])
-                //pull all hover contents out into a flag array of strings
-                .map(x => {
-                    return Array.isArray(x?.contents) ? x?.contents : [x?.contents];
-                }).flat()
-                //remove nulls
-                .filter(x => !!x)
-                //dedupe hovers across all projects
-                .reduce((set, content) => set.add(content), new Set<string>()).values()
-        ];
-
-        if (contents.length > 0) {
-            let hover: Hover = {
-                //use the range from the first hover
-                range: hovers[0]?.range,
-                //the contents of all hovers
-                contents: contents
-            };
-            return hover;
-        }
+        const result = await this.projectManager.getHover(srcPath, params.position);
+        return result;
     }
 
     @AddStackToErrorMessage

@@ -4,12 +4,12 @@ import type { ParseError } from 'jsonc-parser';
 import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 import * as path from 'path';
 import { rokuDeploy, DefaultFiles, standardizePath as rokuDeployStandardizePath } from 'roku-deploy';
-import type { Diagnostic, Position, Range, Location, CancellationToken } from 'vscode-languageserver';
+import type { Diagnostic, Position, Range, Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, DisposableLike } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, DisposableLike, MaybePromise } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -1521,7 +1521,7 @@ export class Util {
      * @param matcher a function that should return true if this value should be kept. Returning any value other than true means `false`
      * @returns the first resolved value that matches the matcher, or undefined if none of them match
      */
-    public async promiseRaceMatch<T>(promises: Promise<T>[], matcher: (value: T) => boolean) {
+    public async promiseRaceMatch<T>(promises: MaybePromise<T>[], matcher: (value: T) => boolean) {
         const workingPromises = [
             ...promises
         ];
@@ -1533,7 +1533,7 @@ export class Util {
             //race the promises. If any of them resolve, evaluate it against the matcher. If that passes, return the value. otherwise, eliminate this promise and try again
             const result = await Promise.race(
                 workingPromises.map((promise, i) => {
-                    return promise
+                    return Promise.resolve(promise)
                         .then(value => ({ value: value, index: i }))
                         .catch(error => ({ error: error, index: i }));
                 })

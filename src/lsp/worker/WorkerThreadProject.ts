@@ -3,16 +3,17 @@ import { Worker } from 'worker_threads';
 import type { WorkerMessage } from './MessageHandler';
 import { MessageHandler } from './MessageHandler';
 import util from '../../util';
-import type { LspDiagnostic, MaybePromise } from '../LspProject';
+import type { LspDiagnostic } from '../LspProject';
 import { type ActivateOptions, type LspProject } from '../LspProject';
 import { isMainThread, parentPort } from 'worker_threads';
 import { WorkerThreadProjectRunner } from './WorkerThreadProjectRunner';
 import { WorkerPool } from './WorkerPool';
-import type { SemanticToken } from '../../interfaces';
+import type { Hover, MaybePromise, SemanticToken } from '../../interfaces';
 import type { BsConfig } from '../../BsConfig';
-import { DocumentAction } from '../DocumentManager';
+import type { DocumentAction } from '../DocumentManager';
 import { Deferred } from '../../deferred';
-import { FileTranspileResult } from '../../Program';
+import type { FileTranspileResult } from '../../Program';
+import type { Position } from 'vscode-languageserver-protocol';
 
 export const workerPool = new WorkerPool(() => {
     return new Worker(
@@ -64,7 +65,7 @@ export class WorkerThreadProject implements LspProject {
 
     /**
      * Promise that resolves when the project finishes activating
-     * @returns
+     * @returns a promise that resolves when the project finishes activating
      */
     public whenActivated() {
         return this.activationDeferred.promise;
@@ -109,8 +110,7 @@ export class WorkerThreadProject implements LspProject {
     /**
      * Set new contents for a file. This is safe to call any time. Changes will be queued and flushed at the correct times
      * during the program's lifecycle flow
-     * @param srcPath absolute source path of the file
-     * @param fileContents the text contents of the file
+     * @param documentActions absolute source path of the file
      */
     public async applyFileChanges(documentActions: DocumentAction[]) {
         const response = await this.messageHandler.sendRequest<boolean>('applyFileChanges', {
@@ -157,6 +157,13 @@ export class WorkerThreadProject implements LspProject {
     public async transpileFile(srcPath: string) {
         const response = await this.messageHandler.sendRequest<FileTranspileResult>('transpileFile', {
             data: [srcPath]
+        });
+        return response.data;
+    }
+
+    public async getHover(options: { srcPath: string; position: Position }): Promise<Hover[]> {
+        const response = await this.messageHandler.sendRequest<Hover[]>('getHover', {
+            data: [options]
         });
         return response.data;
     }
