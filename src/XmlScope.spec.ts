@@ -40,7 +40,7 @@ describe('XmlScope', () => {
                 <component name="Child" extends="Parent">
                 </component>
             `);
-            let childScope = program.getComponentScope('Child');
+            let childScope = program.getComponentScope('Child')!;
 
             program.validate();
 
@@ -71,8 +71,7 @@ describe('XmlScope', () => {
                 <component name="ChildComponent" extends="ParentComponent">
                 </component>
             `);
-            let childScope = program.getScopesForFile(childXmlFile);
-            let definition = childScope[0].getDefinition(childXmlFile, Position.create(1, 48));
+            const definition = program.getDefinition(childXmlFile.srcPath, Position.create(1, 48));
             expect(definition).to.be.lengthOf(1);
             expect(definition[0].uri).to.equal(util.pathToUri(parentXmlFile.srcPath));
         });
@@ -86,7 +85,7 @@ describe('XmlScope', () => {
                 </component>
             `);
             program.validate();
-            expect(program.getComponentScope('Child').getOwnFiles()[0]).to.equal(xmlFile);
+            expect(program.getComponentScope('Child')!.getOwnFiles()[0]).to.equal(xmlFile);
         });
     });
 
@@ -113,7 +112,7 @@ describe('XmlScope', () => {
                 end sub
             `);
             program.validate();
-            let childScope = program.getComponentScope('child');
+            let childScope = program.getComponentScope('child')!;
             expectDiagnostics(childScope, [{
                 ...DiagnosticMessages.xmlFunctionNotFound('func2'),
                 range: Range.create(4, 24, 4, 29)
@@ -157,7 +156,7 @@ describe('XmlScope', () => {
                 end sub
             `);
             program.validate();
-            expectDiagnostics(program.getComponentScope('child'), [{
+            expectDiagnostics(program.getComponentScope('child')!, [{
                 ...DiagnosticMessages.xmlInvalidFieldType('no'),
                 range: Range.create(4, 33, 4, 35)
             }, {

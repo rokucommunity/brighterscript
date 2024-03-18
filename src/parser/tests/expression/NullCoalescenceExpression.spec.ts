@@ -280,5 +280,51 @@ describe('NullCoalescingExpression', () => {
                 end sub
             `);
         });
+
+        it('ignores enum variable names', () => {
+            testTranspile(`
+                enum Direction
+                    up = "up"
+                end enum
+                sub main()
+                    d = invalid
+                    a = d ?? Direction.up
+                end sub
+            `, `
+                sub main()
+                    d = invalid
+                    a = (function(d)
+                            __bsConsequent = d
+                            if __bsConsequent <> invalid then
+                                return __bsConsequent
+                            else
+                                return "up"
+                            end if
+                        end function)(d)
+                end sub
+            `);
+        });
+
+        it('ignores const variable names', () => {
+            testTranspile(`
+                const USER = "user"
+                sub main()
+                    settings = {}
+                    a = m.defaults.getAccount(settings.name) ?? USER
+                end sub
+            `, `
+                sub main()
+                    settings = {}
+                    a = (function(m, settings)
+                            __bsConsequent = m.defaults.getAccount(settings.name)
+                            if __bsConsequent <> invalid then
+                                return __bsConsequent
+                            else
+                                return "user"
+                            end if
+                        end function)(m, settings)
+                end sub
+            `);
+        });
     });
 });

@@ -46,7 +46,7 @@ describe('EnumStatement', () => {
         `, { mode: ParseMode.BrighterScript });
 
         expectZeroDiagnostics(parser);
-        expect(parser.ast.statements[0].annotations[0].name).to.eql('someAnnotation');
+        expect(parser.ast.statements[0].annotations![0].name).to.eql('someAnnotation');
     });
 
     it('constructs when missing enum name', () => {
@@ -447,7 +447,7 @@ describe('EnumStatement', () => {
         function expectMemberValueMap(code: string, expected: Record<string, string>) {
             const file = program.setFile<BrsFile>('source/lib.brs', code);
             const cancel = new CancellationTokenSource();
-            let firstEnum: EnumStatement;
+            let firstEnum: EnumStatement | undefined;
             file.ast.walk(statement => {
                 if (isEnumStatement(statement)) {
                     firstEnum = statement;
@@ -458,7 +458,7 @@ describe('EnumStatement', () => {
                 cancel: cancel.token
             });
             expect(firstEnum).to.exist;
-            const values = firstEnum.getMemberValueMap();
+            const values = firstEnum!.getMemberValueMap();
             expect(
                 [...values].reduce((prev, [key, value]) => {
                     prev[key] = value;

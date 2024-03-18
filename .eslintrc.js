@@ -42,6 +42,7 @@ module.exports = {
         '@typescript-eslint/no-implicit-any-catch': 'off',
         '@typescript-eslint/no-invalid-this': 'off',
         '@typescript-eslint/no-magic-numbers': 'off',
+        '@typescript-eslint/no-non-null-assertion': 'off',
         '@typescript-eslint/no-parameter-properties': 'off',
         //had to add this rule to prevent eslint from crashing
         '@typescript-eslint/no-restricted-imports': ['off', {}],
@@ -61,6 +62,7 @@ module.exports = {
         '@typescript-eslint/no-type-alias': 'off',
         '@typescript-eslint/no-unnecessary-boolean-literal-compare': 'off',
         '@typescript-eslint/no-unnecessary-condition': 'off',
+        '@typescript-eslint/no-unnecessary-type-assertion': 'off',
         '@typescript-eslint/no-unsafe-assignment': 'off',
         '@typescript-eslint/no-unsafe-call': 'off',
         '@typescript-eslint/no-unsafe-member-access': 'off',
@@ -240,8 +242,6 @@ module.exports = {
         files: ['benchmarks/**/*.ts'],
         rules: {
             '@typescript-eslint/dot-notation': 'off',
-            '@typescript-eslint/no-unnecessary-type-assertion': 'off',
-            '@typescript-eslint/no-non-null-assertion': 'off',
             'camelcase': 'off'
         }
     }]

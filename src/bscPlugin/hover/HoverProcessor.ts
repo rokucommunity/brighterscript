@@ -1,4 +1,3 @@
-import { SourceNode } from 'source-map';
 import { isBrsFile, isFunctionType, isXmlFile } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
@@ -17,7 +16,7 @@ export class HoverProcessor {
     }
 
     public process() {
-        let hover: Hover;
+        let hover: Hover | undefined;
         if (isBrsFile(this.event.file)) {
             hover = this.getBrsFileHover(this.event.file);
         } else if (isXmlFile(this.event.file)) {
@@ -40,7 +39,7 @@ export class HoverProcessor {
         return parts.join('\n');
     }
 
-    private getBrsFileHover(file: BrsFile): Hover {
+    private getBrsFileHover(file: BrsFile): Hover | undefined {
         const scope = this.event.scopes[0];
         const fence = (code: string) => util.mdFence(code, 'brightscript');
         //get the token at the position
@@ -56,7 +55,7 @@ export class HoverProcessor {
 
         //throw out invalid tokens and the wrong kind of tokens
         if (!token || !hoverTokenTypes.includes(token.kind)) {
-            return null;
+            return undefined;
         }
 
         const expression = file.getClosestExpression(this.event.position);
@@ -67,7 +66,7 @@ export class HoverProcessor {
             //find a constant with this name
             const constant = scope?.getConstFileLink(fullName, containingNamespace);
             if (constant) {
-                const constantValue = new SourceNode(null, null, null, constant.item.value.transpile(new BrsTranspileState(file))).toString();
+                const constantValue = util.sourceNodeFromTranspileResult(null, null, null, constant.item.value.transpile(new BrsTranspileState(file))).toString();
                 return {
                     contents: this.buildContentsWithDocs(fence(`const ${constant.item.fullName} = ${constantValue}`), constant.item.tokens.const),
                     range: token.range
@@ -127,6 +126,9 @@ export class HoverProcessor {
      */
     private getTokenDocumentation(tokens: Token[], token?: Token) {
         const comments = [] as Token[];
+        if (!token) {
+            return undefined;
+        }
         const idx = tokens?.indexOf(token);
         if (!idx || idx === -1) {
             return undefined;
@@ -150,7 +152,7 @@ export class HoverProcessor {
         }
     }
 
-    private getXmlFileHover(file: XmlFile) {
+    private getXmlFileHover(file: XmlFile): Hover | undefined {
         //TODO add xml hovers
         return undefined;
     }

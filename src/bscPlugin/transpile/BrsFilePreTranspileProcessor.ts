@@ -38,10 +38,10 @@ export class BrsFilePreTranspileProcessor {
      * Given a string optionally separated by dots, find an enum related to it.
      * For example, all of these would return the enum: `SomeNamespace.SomeEnum.SomeMember`, SomeEnum.SomeMember, `SomeEnum`
      */
-    private getEnumInfo(name: string, containingNamespace: string, scope: Scope) {
+    private getEnumInfo(name: string, containingNamespace: string, scope: Scope | undefined) {
 
         //do we have an enum MEMBER reference? (i.e. SomeEnum.someMember or SomeNamespace.SomeEnum.SomeMember)
-        let memberLink = scope.getEnumMemberFileLink(name, containingNamespace);
+        let memberLink = scope?.getEnumMemberFileLink(name, containingNamespace);
         if (memberLink) {
             const value = memberLink.item.getValue();
             return {
@@ -65,7 +65,7 @@ export class BrsFilePreTranspileProcessor {
 
     }
 
-    private processExpression(expression: Expression, scope: Scope) {
+    private processExpression(expression: Expression, scope: Scope | undefined) {
         let containingNamespace = this.event.file.getNamespaceStatementForPosition(expression.range.start)?.getName(ParseMode.BrighterScript);
 
         const parts = util.splitExpression(expression);

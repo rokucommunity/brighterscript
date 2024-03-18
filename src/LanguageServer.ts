@@ -280,7 +280,7 @@ export class LanguageServer implements OnHandler<Connection> {
         //clone the diagnostics for each code action, since certain diagnostics can have circular reference properties that kill the language server if serialized
         for (const codeAction of codeActions) {
             if (codeAction.diagnostics) {
-                codeAction.diagnostics = codeAction.diagnostics.map(x => util.toDiagnostic(x, params.textDocument.uri));
+                codeAction.diagnostics = codeAction.diagnostics?.map(x => util.toDiagnostic(x, params.textDocument.uri));
             }
         }
         return codeActions;
