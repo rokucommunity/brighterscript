@@ -1513,11 +1513,58 @@ export class Util {
     }
 
     /**
-     * Run a series of actions in chunks. This allows us to run them sequentially or each operation on nexttick to prevent starving the CPU
-     * @param options
+     * Race a series of promises, and return the first one that resolves AND matches the matcher function.
+     * If all of the promises reject, then this will emit an AggregatreError with all of the errors.
+     * If at least one promise resolves, then this will log all of the errors to the console
+     * If at least one promise resolves but none of them match the matcher, then this will return undefined.
+     * @param promises all of the promises to race
+     * @param matcher a function that should return true if this value should be kept. Returning any value other than true means `false`
+     * @returns the first resolved value that matches the matcher, or undefined if none of them match
      */
-    public runInChunks(options: { async: boolean; cancel: CancellationToken; actions: Array<{ collection: any[]; action: (item: any) => any }> }) {
+    public async promiseRaceMatch<T>(promises: Promise<T>[], matcher: (value: T) => boolean) {
+        const workingPromises = [
+            ...promises
+        ];
 
+        const results: Array<{ value: T; index: number } | { error: Error; index: number }> = [];
+        let returnValue: T;
+
+        while (workingPromises.length > 0) {
+            //race the promises. If any of them resolve, evaluate it against the matcher. If that passes, return the value. otherwise, eliminate this promise and try again
+            const result = await Promise.race(
+                workingPromises.map((promise, i) => {
+                    return promise
+                        .then(value => ({ value: value, index: i }))
+                        .catch(error => ({ error: error, index: i }));
+                })
+            );
+            results.push(result);
+            //if we got a value and it matches the matcher, return it
+            if ('value' in result && matcher?.(result.value) === true) {
+                returnValue = result.value;
+                break;
+            }
+
+            //remove this non-matched (or errored) promise from the list and try again
+            workingPromises.splice(result.index, 1);
+        }
+
+        const errors = (results as Array<{ error: Error }>)
+            .filter(x => 'error' in x)
+            .map(x => x.error);
+
+        //if all of them crashed, then reject
+        if (errors.length === promises.length) {
+            throw new AggregateError(errors);
+        } else {
+            //log all of the errors
+            for (const error of errors) {
+                console.error(error);
+            }
+        }
+
+        //return the matched value, or undefined if there wasn't one
+        return returnValue;
     }
 }
 
