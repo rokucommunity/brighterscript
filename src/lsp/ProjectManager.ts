@@ -10,11 +10,17 @@ import { Deferred } from '../deferred';
 import type { FlushEvent } from './DocumentManager';
 import { DocumentManager } from './DocumentManager';
 import type { MaybePromise } from '../interfaces';
+import { BusyStatusTracker } from '../BusyStatusTracker';
 
 /**
  * Manages all brighterscript projects for the language server
  */
 export class ProjectManager {
+    constructor() {
+        this.documentManager.on('flush', (event) => {
+            void this.applyDocumentChanges(event);
+        });
+    }
 
     /**
      * Collection of all projects
@@ -25,17 +31,13 @@ export class ProjectManager {
         delay: 150
     });
 
-
-    constructor() {
-        this.documentManager.on('flush', (event) => {
-            void this.applyDocumentChanges(event);
-        });
-    }
+    public busyStatusTracker = new BusyStatusTracker();
 
     /**
      * Apply all of the queued document changes. This should only be called as a result of the documentManager flushing changes, and never called manually
      * @param event the document changes that have occurred since the last time we applied
      */
+    @TrackBusyStatus
     private async applyDocumentChanges(event: FlushEvent) {
         //apply all of the document actions to each project in parallel
         await Promise.all(this.projects.map(async (project) => {
@@ -50,6 +52,7 @@ export class ProjectManager {
      * Leave existing projects alone if they are not affected by these changes
      * @param workspaceConfigs an array of workspaces
      */
+    @TrackBusyStatus
     public async syncProjects(workspaceConfigs: WorkspaceConfig[]) {
         //build a list of unique projects across all workspace folders
         let projectConfigs = (await Promise.all(
@@ -132,6 +135,12 @@ export class ProjectManager {
         return deferred.promise;
     }
 
+    /**
+     * Get all the semantic tokens for the given file
+     * @param srcPath absolute path to the file
+     * @returns an array of semantic tokens
+     */
+    @TrackBusyStatus
     public async getSemanticTokens(srcPath: string) {
         //find the first program that has this file, since it would be incredibly inefficient to generate semantic tokens for the same file multiple times.
         const project = await this.findFirstMatchingProject((x) => {
@@ -147,6 +156,12 @@ export class ProjectManager {
         }
     }
 
+    /**
+     * Get a string containing the transpiled contents of the file at the given path
+     * @param srcPath path to the file
+     * @returns the transpiled contents of the file as a string
+     */
+    @TrackBusyStatus
     public async transpileFile(srcPath: string) {
         //find the first program that has this file
         const project = await this.findFirstMatchingProject((p) => {
@@ -162,6 +177,12 @@ export class ProjectManager {
         }
     }
 
+    /**
+     *  Get the completions for the given position in the file
+     * @param srcPath the path to the file
+     * @param position the position of the cursor in the file
+     */
+    @TrackBusyStatus
     public async getCompletions(srcPath: string, position: Position) {
         // const completions = await Promise.all(
         //     this.projects.map(x => x.getCompletions(srcPath, position))
@@ -177,6 +198,7 @@ export class ProjectManager {
      * the fastest result will be returned
      * @returns the hover information or undefined if no hover information was found
      */
+    @TrackBusyStatus
     public async getHover(srcPath: string, position: Position): Promise<Hover> {
         //Ask every project for hover info, keep whichever one responds first that has a valid response
         let hover = await util.promiseRaceMatch(
@@ -193,6 +215,7 @@ export class ProjectManager {
      * @param position the position of symbol
      * @returns a list of locations where the symbol under the position is defined in the project
      */
+    @TrackBusyStatus
     public async getDefinition(srcPath: string, position: Position): Promise<Location[]> {
         //TODO should we merge definitions across ALL projects? or just return definitions from the first project we found
 
@@ -290,6 +313,7 @@ export class ProjectManager {
      * Create a project for the given config
      * @returns a new project, or the existing project if one already exists with this config info
      */
+    @TrackBusyStatus
     private async createProject(config: ProjectConfig) {
         //skip this project if we already have it
         if (this.hasProject(config.projectPath)) {
@@ -315,7 +339,6 @@ export class ProjectManager {
             workspaceFolder: config.workspaceFolder,
             projectNumber: config.projectNumber ?? ProjectManager.projectNumberSequence++
         });
-        console.log('Activated');
     }
 
     public on(eventName: 'critical-failure', handler: (data: { project: LspProject; message: string }) => MaybePromise<void>);
@@ -383,4 +406,19 @@ interface ProjectConfig {
      * TODO - is there a better name for this?
      */
     threadingEnabled?: boolean;
+}
+
+
+/**
+ * An annotation used to wrap the method in a busyStatus tracking call
+ */
+function TrackBusyStatus(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+    let originalMethod = descriptor.value;
+
+    //wrapping the original method
+    descriptor.value = function value(this: ProjectManager, ...args: any[]) {
+        return this.busyStatusTracker.run(() => {
+            return originalMethod.apply(this, args);
+        }, originalMethod.name);
+    };
 }

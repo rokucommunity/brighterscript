@@ -47,8 +47,6 @@ import { Throttler } from './Throttler';
 import { DiagnosticCollection } from './DiagnosticCollection';
 import { isBrsFile } from './astUtils/reflection';
 import { encodeSemanticTokens, semanticTokensLegend } from './SemanticTokenUtils';
-import type { BusyStatus } from './BusyStatusTracker';
-import { BusyStatusTracker } from './BusyStatusTracker';
 import type { WorkspaceConfig } from './lsp/ProjectManager';
 import { ProjectManager } from './lsp/ProjectManager';
 import type { LspDiagnostic, LspProject } from './lsp/LspProject';
@@ -97,8 +95,6 @@ export class LanguageServer implements OnHandler<Connection> {
         return this.validateThrottler.run(this.boundValidateAll);
     }
 
-    public busyStatusTracker = new BusyStatusTracker();
-
     //run the server
     public run() {
         this.projectManager = new ProjectManager();
@@ -108,17 +104,16 @@ export class LanguageServer implements OnHandler<Connection> {
             void this.sendDiagnostics(event);
         });
 
+        this.projectManager.busyStatusTracker.on('change', (event) => {
+            this.sendBusyStatus();
+        });
+
         //allow the lsp to provide file contents
         //TODO handle this...
         // this.projectManager.addFileResolver(this.documentFileResolver.bind(this));
 
         // Create a connection for the server. The connection uses Node's IPC as a transport.
         this.establishConnection();
-
-        // Send the current status of the busyStatusTracker anytime it changes
-        this.busyStatusTracker.on('change', (status) => {
-            this.sendBusyStatus(status);
-        });
 
         //listen to all of the output log events and pipe them into the debug channel in the extension
         this.loggerSubscription = Logger.subscribe((text) => {
@@ -202,7 +197,6 @@ export class LanguageServer implements OnHandler<Connection> {
      * Called when the client has finished initializing
      */
     @AddStackToErrorMessage
-    @TrackBusyStatus
     public async onInitialized() {
         try {
             if (this.hasConfigurationCapability) {
@@ -235,7 +229,6 @@ export class LanguageServer implements OnHandler<Connection> {
      * Provide a list of completion items based on the current cursor position
      */
     @AddStackToErrorMessage
-    @TrackBusyStatus
     public async onCompletion1(params: CompletionParams, workDoneProgress: WorkDoneProgressReporter, resultProgress?: ResultProgressReporter<CompletionItem[]>) {
         const completions = await this.projectManager.getCompletions(
             util.uriToPath(params.textDocument.uri),
@@ -261,7 +254,6 @@ export class LanguageServer implements OnHandler<Connection> {
     }
 
     @AddStackToErrorMessage
-    @TrackBusyStatus
     public async onCodeAction(params: CodeActionParams) {
         //ensure programs are initialized
         await this.waitAllProjectFirstRuns();
@@ -307,7 +299,6 @@ export class LanguageServer implements OnHandler<Connection> {
      * file types are watched (.brs,.bs,.xml,manifest, and any json/text/image files)
      */
     @AddStackToErrorMessage
-    @TrackBusyStatus
     private async onDidChangeWatchedFiles(params: DidChangeWatchedFilesParams) {
         //ensure programs are initialized
         await this.waitAllProjectFirstRuns();
@@ -405,7 +396,6 @@ export class LanguageServer implements OnHandler<Connection> {
     }
 
     @AddStackToErrorMessage
-    @TrackBusyStatus
     public async onWorkspaceSymbol(params: WorkspaceSymbolParams) {
         await this.waitAllProjectFirstRuns();
 
@@ -426,7 +416,6 @@ export class LanguageServer implements OnHandler<Connection> {
     }
 
     @AddStackToErrorMessage
-    @TrackBusyStatus
     public async onDocumentSymbol(params: DocumentSymbolParams) {
         await this.waitAllProjectFirstRuns();
 
@@ -442,7 +431,6 @@ export class LanguageServer implements OnHandler<Connection> {
     }
 
     @AddStackToErrorMessage
-    @TrackBusyStatus
     public async onDefinition(params: TextDocumentPositionParams) {
         const srcPath = util.uriToPath(params.textDocument.uri);
 
@@ -451,7 +439,6 @@ export class LanguageServer implements OnHandler<Connection> {
     }
 
     @AddStackToErrorMessage
-    @TrackBusyStatus
     public async onSignatureHelp(params: SignatureHelpParams) {
         await this.waitAllProjectFirstRuns();
 
@@ -486,7 +473,6 @@ export class LanguageServer implements OnHandler<Connection> {
     }
 
     @AddStackToErrorMessage
-    @TrackBusyStatus
     public async onReferences(params: ReferenceParams) {
         await this.waitAllProjectFirstRuns();
 
@@ -504,7 +490,6 @@ export class LanguageServer implements OnHandler<Connection> {
 
 
     @AddStackToErrorMessage
-    @TrackBusyStatus
     private async onFullSemanticTokens(params: SemanticTokensParams) {
         const srcPath = util.uriToPath(params.textDocument.uri);
         const result = await this.projectManager.getSemanticTokens(srcPath);
@@ -515,7 +500,6 @@ export class LanguageServer implements OnHandler<Connection> {
     }
 
     @AddStackToErrorMessage
-    @TrackBusyStatus
     public async onExecuteCommand(params: ExecuteCommandParams) {
         await this.waitAllProjectFirstRuns();
         if (params.command === CustomCommands.TranspileFile) {
@@ -539,14 +523,14 @@ export class LanguageServer implements OnHandler<Connection> {
      * Send a new busy status notification to the client based on the current busy status
      * @param status
      */
-    private sendBusyStatus(status: BusyStatus) {
+    private sendBusyStatus() {
         this.busyStatusIndex = ++this.busyStatusIndex <= 0 ? 0 : this.busyStatusIndex;
 
         void this.connection.sendNotification(NotificationName.busyStatus, {
-            status: status,
+            status: this.projectManager.busyStatusTracker.status,
             timestamp: Date.now(),
             index: this.busyStatusIndex,
-            activeRuns: [...this.busyStatusTracker.activeRuns]
+            activeRuns: [...this.projectManager.busyStatusTracker.activeRuns]
         });
     }
     private busyStatusIndex = -1;
@@ -580,7 +564,6 @@ export class LanguageServer implements OnHandler<Connection> {
      * Handle situations where bsconfig.json files were added or removed (to elevate/lower workspaceFolder projects accordingly)
      * Leave existing projects alone if they are not affected by these changes
      */
-    @TrackBusyStatus
     private async syncProjects() {
         // get all workspace paths from the client
         let workspaces = await Promise.all(
@@ -905,14 +888,12 @@ export class LanguageServer implements OnHandler<Connection> {
     }
 
     @AddStackToErrorMessage
-    @TrackBusyStatus
     private onTextDocumentDidChangeContent(event: TextDocumentChangeEvent<TextDocument>) {
         const srcPath = URI.parse(event.document.uri).fsPath;
         console.log('setFile', srcPath);
         this.projectManager.setFile(srcPath, event.document.getText());
     }
 
-    @TrackBusyStatus
     private async validateAll() {
         try {
             //synchronize parsing for open files that were included/excluded from projects
@@ -1007,20 +988,6 @@ function AddStackToErrorMessage(target: any, propertyKey: string, descriptor: Pr
             }
             throw e;
         }
-    };
-}
-
-/**
- * An annotation used to wrap the method in a busyStatus tracking call
- */
-function TrackBusyStatus(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
-    let originalMethod = descriptor.value;
-
-    //wrapping the original method
-    descriptor.value = function value(this: LanguageServer, ...args: any[]) {
-        return this.busyStatusTracker.run(() => {
-            return originalMethod.apply(this, args);
-        }, originalMethod.name);
     };
 }
 
