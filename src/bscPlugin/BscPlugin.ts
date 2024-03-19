@@ -1,9 +1,10 @@
 import { isBrsFile, isXmlFile } from '../astUtils/reflection';
-import type { BeforeFileTranspileEvent, CompilerPlugin, OnFileValidateEvent, OnGetCodeActionsEvent, ProvideHoverEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent } from '../interfaces';
+import type { BeforeFileTranspileEvent, CompilerPlugin, OnFileValidateEvent, OnGetCodeActionsEvent, ProvideHoverEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent } from '../interfaces';
 import type { Program } from '../Program';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
 import { CompletionsProcessor } from './completions/CompletionsProcessor';
 import { DefinitionProvider } from './definition/DefinitionProvider';
+import { DocumentSymbolProcessor } from './documentSymbol/DocumentSymbolProcessor';
 import { HoverProcessor } from './hover/HoverProcessor';
 import { ReferencesProvider } from './references/ReferencesProvider';
 import { BrsFileSemanticTokensProcessor } from './semanticTokens/BrsFileSemanticTokensProcessor';
@@ -22,6 +23,10 @@ export class BscPlugin implements CompilerPlugin {
 
     public provideHover(event: ProvideHoverEvent) {
         return new HoverProcessor(event).process();
+    }
+
+    public provideDocumentSymbols(event: ProvideDocumentSymbolsEvent) {
+        return new DocumentSymbolProcessor(event).process();
     }
 
     public provideCompletions(event: ProvideCompletionsEvent) {

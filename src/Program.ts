@@ -1,14 +1,14 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location } from 'vscode-languageserver';
+import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location, DocumentSymbol } from 'vscode-languageserver';
 import { CompletionItemKind } from 'vscode-languageserver';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent } from './interfaces';
+import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -959,6 +959,23 @@ export class Program {
         }
 
         return result ?? [];
+    }
+
+    public getDocumentSymbols(srcPath: string): DocumentSymbol[] | undefined {
+        let file = this.getFile(srcPath);
+        if (file) {
+            const event: ProvideDocumentSymbolsEvent = {
+                program: this,
+                file: file,
+                documentSymbols: []
+            };
+            this.plugins.emit('beforeProvideDocumentSymbols', event);
+            this.plugins.emit('provideDocumentSymbols', event);
+            this.plugins.emit('afterProvideDocumentSymbols', event);
+            return event.documentSymbols;
+        } else {
+            return undefined;
+        }
     }
 
     /**
