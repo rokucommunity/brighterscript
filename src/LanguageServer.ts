@@ -14,7 +14,6 @@ import type {
     SymbolInformation,
     DocumentSymbolParams,
     ReferenceParams,
-    SignatureHelp,
     SignatureHelpParams,
     CodeActionParams,
     SemanticTokens,
@@ -45,7 +44,6 @@ import { standardizePath as s, util } from './util';
 import { Logger } from './Logger';
 import { Throttler } from './Throttler';
 import { DiagnosticCollection } from './DiagnosticCollection';
-import { isBrsFile } from './astUtils/reflection';
 import { encodeSemanticTokens, semanticTokensLegend } from './SemanticTokenUtils';
 import type { WorkspaceConfig } from './lsp/ProjectManager';
 import { ProjectManager } from './lsp/ProjectManager';
@@ -169,7 +167,7 @@ export class LanguageServer implements OnHandler<Connection> {
                 //     triggerCharacters: ['.'],
                 //     allCommitCharacters: ['.', '@']
                 // },
-                // documentSymbolProvider: true,
+                documentSymbolProvider: true,
                 // workspaceSymbolProvider: true,
                 semanticTokensProvider: {
                     legend: semanticTokensLegend,
@@ -417,17 +415,9 @@ export class LanguageServer implements OnHandler<Connection> {
 
     @AddStackToErrorMessage
     public async onDocumentSymbol(params: DocumentSymbolParams) {
-        await this.waitAllProjectFirstRuns();
-
-        await this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true);
-
         const srcPath = util.uriToPath(params.textDocument.uri);
-        for (const project of this.getProjects()) {
-            const file = project.builder.program.getFile(srcPath);
-            if (isBrsFile(file)) {
-                return file.getDocumentSymbols();
-            }
-        }
+        const result = await this.projectManager.getDocumentSymbol(srcPath);
+        return result;
     }
 
     @AddStackToErrorMessage
@@ -494,7 +484,6 @@ export class LanguageServer implements OnHandler<Connection> {
 
     /**
      * Send a new busy status notification to the client based on the current busy status
-     * @param status
      */
     private sendBusyStatus() {
         this.busyStatusIndex = ++this.busyStatusIndex <= 0 ? 0 : this.busyStatusIndex;

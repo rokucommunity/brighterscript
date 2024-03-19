@@ -5,7 +5,7 @@ import * as EventEmitter from 'eventemitter3';
 import type { LspDiagnostic, LspProject } from './LspProject';
 import { Project } from './Project';
 import { WorkerThreadProject } from './worker/WorkerThreadProject';
-import type { Hover, Position, Location, SignatureHelp } from 'vscode-languageserver-protocol';
+import type { Hover, Position, Location, SignatureHelp, DocumentSymbol } from 'vscode-languageserver-protocol';
 import { Deferred } from '../deferred';
 import type { FlushEvent } from './DocumentManager';
 import { DocumentManager } from './DocumentManager';
@@ -249,6 +249,17 @@ export class ProjectManager {
             };
             return result;
         }
+    }
+
+    @TrackBusyStatus
+    public async getDocumentSymbol(srcPath: string): Promise<DocumentSymbol[]> {
+        //Ask every project for definition info, keep whichever one responds first that has a valid response
+        let result = await util.promiseRaceMatch(
+            this.projects.map(x => x.getDocumentSymbol({ srcPath: srcPath })),
+            //keep the first non-falsey result
+            (result) => !!result
+        );
+        return result;
     }
 
     /**

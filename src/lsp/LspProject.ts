@@ -1,4 +1,4 @@
-import type { Diagnostic, Position, Location } from 'vscode-languageserver';
+import type { Diagnostic, Position, Location, DocumentSymbol } from 'vscode-languageserver';
 import type { Hover, MaybePromise, SemanticToken } from '../interfaces';
 import type { BsConfig } from '../BsConfig';
 import type { DocumentAction } from './DocumentManager';
@@ -84,6 +84,12 @@ export interface LspProject {
      * @param options the file path and position to get the definition for
      */
     getSignatureHelp(options: { srcPath: string; position: Position }): MaybePromise<SignatureInfoObj[]>;
+
+    /**
+     * Get the list of symbols for the specified file
+     * @param options
+     */
+    getDocumentSymbol(options: { srcPath: string }): Promise<DocumentSymbol[]>;
 
     /**
      * Does this project have the specified file. Should only be called after `.activate()` has completed.

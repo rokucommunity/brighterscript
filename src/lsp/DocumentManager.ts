@@ -1,5 +1,5 @@
 import * as EventEmitter from 'eventemitter3';
-import type { MaybePromise } from './LspProject';
+import type { MaybePromise } from '../interfaces';
 
 /**
  * Maintains a queued/buffered list of file operations. These operations don't actually do anything on their own.
@@ -25,7 +25,6 @@ export class DocumentManager {
 
     /**
      * Add/set the contents of a file
-     * @param document
      */
     public set(srcPath: string, fileContents: string) {
         if (this.queue.has(srcPath)) {
@@ -41,7 +40,6 @@ export class DocumentManager {
 
     /**
      * Delete a file
-     * @param document
      */
     public delete(srcPath: string) {
         this.queue.delete(srcPath);

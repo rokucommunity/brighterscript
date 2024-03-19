@@ -1596,8 +1596,8 @@ export class Util {
             .map(x => x.error);
 
         //if all of them crashed, then reject
-        if (errors.length === promises.length) {
-            throw new AggregateError(errors);
+        if (promises.length > 0 && errors.length === promises.length) {
+            throw new AggregateError(errors, 'All requests failed. First error message: ' + errors[0].message);
         } else {
             //log all of the errors
             for (const error of errors) {

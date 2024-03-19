@@ -6,7 +6,7 @@ import type { BsConfig } from './BsConfig';
 import * as fsExtra from 'fs-extra';
 import { createSandbox } from 'sinon';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import { tempDir, rootDir, expectThrows } from './testHelpers.spec';
+import { tempDir, rootDir } from './testHelpers.spec';
 import { Program } from './Program';
 import type { BsDiagnostic } from '.';
 
@@ -921,7 +921,7 @@ describe('util', () => {
         });
     });
 
-    describe.only('promiseRaceMatch', () => {
+    describe('promiseRaceMatch', () => {
         async function resolveAfter<T = any>(value: T, timeout: number) {
             await util.sleep(timeout);
             return value;
@@ -951,6 +951,12 @@ describe('util', () => {
                     resolveAfter('c', 1)
                 ], x => true)
             ).to.eql('c');
+        });
+
+        it('does not throw when there were zero promises', async () => {
+            expect(
+                await util.promiseRaceMatch([], x => true)
+            ).to.be.undefined;
         });
 
         it('returns a value even if one of the promises never resolves', async () => {

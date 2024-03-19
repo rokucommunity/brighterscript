@@ -1,5 +1,5 @@
+import { MaybePromise } from '..';
 import { Deferred } from '../deferred';
-import type { MaybePromise } from './LspProject';
 
 /**
  * Manages multiple readers and writers, and ensures that no readers are reading while a writer is writing.

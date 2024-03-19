@@ -8,7 +8,7 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import { URI } from 'vscode-uri';
 import { Deferred } from '../deferred';
 import { rokuDeploy } from 'roku-deploy';
-import type { Location, Position } from 'vscode-languageserver-protocol';
+import type { DocumentSymbol, Location, Position } from 'vscode-languageserver-protocol';
 import { CancellationTokenSource } from 'vscode-languageserver-protocol';
 import type { DocumentAction } from './DocumentManager';
 import type { SignatureInfoObj } from '../Program';
@@ -160,8 +160,6 @@ export class Project implements LspProject {
     /**
      * Add or replace the in-memory contents of the file at the specified path. This is typically called as the user is typing.
      * This will cancel any pending validation cycles and queue a future validation cycle instead.
-     * @param srcPath absolute path to the file
-     * @param fileContents the contents of the file
      */
     public async applyFileChanges(documentActions: DocumentAction[]): Promise<boolean> {
         let didChangeFiles = false;
@@ -264,6 +262,11 @@ export class Project implements LspProject {
         return this.builder.program.getSignatureHelp(options.srcPath, options.position);
     }
 
+    public async getDocumentSymbol(options: { srcPath: string }): Promise<DocumentSymbol[]> {
+        await this.onIdle();
+        return this.builder.program.getDocumentSymbols(options.srcPath);
+    }
+
     /**
      * Manages the BrighterScript program. The main interface into the compiler/validator
      */
@@ -293,7 +296,6 @@ export class Project implements LspProject {
 
     /**
      * Find the path to the bsconfig.json file for this project
-     * @param config options that help us find the bsconfig.json
      * @returns path to bsconfig.json, or undefined if unable to find it
      */
     private async getConfigFilePath(config: { configFilePath?: string; projectPath: string }) {
