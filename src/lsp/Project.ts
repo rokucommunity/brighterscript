@@ -8,7 +8,7 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import { URI } from 'vscode-uri';
 import { Deferred } from '../deferred';
 import { rokuDeploy } from 'roku-deploy';
-import type { DocumentSymbol, Location, Position } from 'vscode-languageserver-protocol';
+import type { DocumentSymbol, Location, Position, SymbolInformation } from 'vscode-languageserver-protocol';
 import { CancellationTokenSource } from 'vscode-languageserver-protocol';
 import type { DocumentAction } from './DocumentManager';
 import type { SignatureInfoObj } from '../Program';
@@ -265,6 +265,11 @@ export class Project implements LspProject {
     public async getDocumentSymbol(options: { srcPath: string }): Promise<DocumentSymbol[]> {
         await this.onIdle();
         return this.builder.program.getDocumentSymbols(options.srcPath);
+    }
+
+    public async getWorkspaceSymbol(): Promise<SymbolInformation[]> {
+        await this.onIdle();
+        return this.builder.program.getWorkspaceSymbols();
     }
 
     /**

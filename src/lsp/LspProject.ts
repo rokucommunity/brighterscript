@@ -1,4 +1,4 @@
-import type { Diagnostic, Position, Location, DocumentSymbol } from 'vscode-languageserver';
+import type { Diagnostic, Position, Location, DocumentSymbol, SymbolInformation } from 'vscode-languageserver';
 import type { Hover, MaybePromise, SemanticToken } from '../interfaces';
 import type { BsConfig } from '../BsConfig';
 import type { DocumentAction } from './DocumentManager';
@@ -90,6 +90,13 @@ export interface LspProject {
      * @param options
      */
     getDocumentSymbol(options: { srcPath: string }): Promise<DocumentSymbol[]>;
+
+    /**
+     * Get the list of symbols for the entire workspace
+     * @param srcPath
+     */
+    getWorkspaceSymbol(): Promise<SymbolInformation[]>;
+
 
     /**
      * Does this project have the specified file. Should only be called after `.activate()` has completed.

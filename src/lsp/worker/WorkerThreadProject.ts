@@ -13,7 +13,7 @@ import type { BsConfig } from '../../BsConfig';
 import type { DocumentAction } from '../DocumentManager';
 import { Deferred } from '../../deferred';
 import type { FileTranspileResult, SignatureInfoObj } from '../../Program';
-import type { Position, Location, DocumentSymbol } from 'vscode-languageserver-protocol';
+import type { Position, Location, DocumentSymbol, SymbolInformation } from 'vscode-languageserver-protocol';
 
 export const workerPool = new WorkerPool(() => {
     return new Worker(
@@ -182,6 +182,10 @@ export class WorkerThreadProject implements LspProject {
 
     public async getDocumentSymbol(options: { srcPath: string }): Promise<DocumentSymbol[]> {
         return this.sendStandardRequest<DocumentSymbol[]>('getDocumentSymbol', options);
+    }
+
+    public async getWorkspaceSymbol(): Promise<SymbolInformation[]> {
+        return this.sendStandardRequest<SymbolInformation[]>('getWorkspaceSymbol');
     }
 
     /**

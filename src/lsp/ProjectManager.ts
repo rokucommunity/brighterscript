@@ -5,7 +5,7 @@ import * as EventEmitter from 'eventemitter3';
 import type { LspDiagnostic, LspProject } from './LspProject';
 import { Project } from './Project';
 import { WorkerThreadProject } from './worker/WorkerThreadProject';
-import type { Hover, Position, Location, SignatureHelp, DocumentSymbol } from 'vscode-languageserver-protocol';
+import type { Hover, Position, Location, SignatureHelp, DocumentSymbol, SymbolInformation } from 'vscode-languageserver-protocol';
 import { Deferred } from '../deferred';
 import type { FlushEvent } from './DocumentManager';
 import { DocumentManager } from './DocumentManager';
@@ -285,7 +285,6 @@ export class ProjectManager {
     @TrackBusyStatus
     @OnReady
     public async getDocumentSymbol(srcPath: string): Promise<DocumentSymbol[]> {
-        await this.onReady();
         //Ask every project for definition info, keep whichever one responds first that has a valid response
         let result = await util.promiseRaceMatch(
             this.projects.map(x => x.getDocumentSymbol({ srcPath: srcPath })),
@@ -293,6 +292,35 @@ export class ProjectManager {
             (result) => !!result
         );
         return result;
+    }
+
+    @TrackBusyStatus
+    @OnReady
+    public async getWorkspaceSymbol(): Promise<SymbolInformation[]> {
+        //Ask every project for definition info, keep whichever one responds first that has a valid response
+        let responses = await Promise.allSettled(
+            this.projects.map(x => x.getWorkspaceSymbol())
+        );
+        let results = responses
+            //keep all symbol results
+            .map((x) => {
+                return x.status === 'fulfilled' ? x.value : [];
+            })
+            //flatten the array
+            .flat()
+            //throw out nulls
+            .filter(x => !!x);
+
+        // Remove duplicates
+        const allSymbols = Object.values(
+            results.reduce((map, symbol) => {
+                const key = symbol.location.uri + symbol.name;
+                map[key] = symbol;
+                return map;
+            }, {})
+        );
+
+        return allSymbols as SymbolInformation[];
     }
 
     /**

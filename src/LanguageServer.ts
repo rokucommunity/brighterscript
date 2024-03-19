@@ -168,7 +168,7 @@ export class LanguageServer implements OnHandler<Connection> {
                 //     allCommitCharacters: ['.', '@']
                 // },
                 documentSymbolProvider: true,
-                // workspaceSymbolProvider: true,
+                workspaceSymbolProvider: true,
                 semanticTokensProvider: {
                     legend: semanticTokensLegend,
                     full: true
@@ -395,22 +395,8 @@ export class LanguageServer implements OnHandler<Connection> {
 
     @AddStackToErrorMessage
     public async onWorkspaceSymbol(params: WorkspaceSymbolParams) {
-        await this.waitAllProjectFirstRuns();
-
-        const results = util.flatMap(
-            await Promise.all(this.getProjects().map(project => {
-                return project.builder.program.getWorkspaceSymbols();
-            })),
-            c => c
-        );
-
-        // Remove duplicates
-        const allSymbols = Object.values(results.reduce((map, symbol) => {
-            const key = symbol.location.uri + symbol.name;
-            map[key] = symbol;
-            return map;
-        }, {}));
-        return allSymbols as SymbolInformation[];
+        const result = await this.projectManager.getWorkspaceSymbol();
+        return result;
     }
 
     @AddStackToErrorMessage
