@@ -4,9 +4,10 @@ import { createSandbox } from 'sinon';
 import { rootDir } from '../../testHelpers.spec';
 import type { DocumentSymbol } from 'vscode-languageserver-types';
 import { SymbolKind } from 'vscode-languageserver-types';
+import { BrsFile } from '../../files/BrsFile';
 let sinon = createSandbox();
 
-describe('DocumentSymbolProcessor', () => {
+describe.only('DocumentSymbolProcessor', () => {
     let program: Program;
     beforeEach(() => {
         program = new Program({ rootDir: rootDir, sourceMap: true });
@@ -23,6 +24,114 @@ describe('DocumentSymbolProcessor', () => {
             expected
         );
     }
+
+    it('skips other file types for now', () => {
+        program.setFile('components/MainScene.xml', `
+            <component name="MainScene" extends="Scene">
+            </component>
+        `);
+        expectSymbols(
+            program.getDocumentSymbols('components/MainScene.xml'),
+            {}
+        );
+    });
+
+    it('does not crash when name is missing', () => {
+        program.plugins['suppressErrors'] = false;
+        function testMissingToken(source: string, nameTokenPath: string[], expected: SymbolTree = {}) {
+            const file = program.setFile<BrsFile>('source/main.brs', source);
+            let node = file.ast.statements[0];
+            //delete the token at the given path
+            for (let i = 0; i < nameTokenPath.length - 1; i++) {
+                node = node[nameTokenPath[i]];
+            }
+            delete node[nameTokenPath[nameTokenPath.length - 1]];
+
+            expectSymbols(
+                program.getDocumentSymbols('source/main.brs'),
+                expected
+            );
+        }
+
+        //function name is missing
+        testMissingToken(`
+            sub alpha()
+            end sub
+        `, ['name']);
+
+        //class name is missing
+        testMissingToken(`
+            class alpha
+            end class
+        `, ['name']);
+
+        //class field name is missing
+        testMissingToken(`
+            class alpha
+                name as string
+            end class
+        `, ['body', '0', 'name'], {
+            alpha: SymbolKind.Class
+        });
+
+        //class method name is missing
+        testMissingToken(`
+            class alpha
+                sub test()
+                end sub
+            end class
+        `, ['body', '0', 'name'], {
+            alpha: SymbolKind.Class
+        });
+
+        //interface name is missing
+        testMissingToken(`
+            interface alpha
+            end interface
+        `, ['tokens', 'name']);
+
+        //interface method name is missing
+        testMissingToken(`
+            interface alpha
+                sub test() as void
+            end interface
+        `, ['body', '0', 'tokens', 'name'], {
+            alpha: SymbolKind.Interface
+        });
+
+        //interface field name is missing
+        testMissingToken(`
+            interface alpha
+                name as string
+            end interface
+        `, ['body', '0', 'tokens', 'name'], {
+            alpha: SymbolKind.Interface
+        });
+
+        //const name is missing
+        testMissingToken(`
+            const alpha = 1
+        `, ['tokens', 'name']);
+
+        //namespace name is missing
+        testMissingToken(`
+            namespace alpha
+            end namespace
+        `, ['nameExpression']);
+
+        //enum name is missing
+        testMissingToken(`
+            enum alpha
+            end enum
+        `, ['tokens', 'name']);
+
+        //enum member name is missing
+        testMissingToken(`
+            enum alpha
+                name = 1
+            end enum
+        `, ['tokens', 'name']);
+    });
 
     it('finds functions', () => {
         doTest(`

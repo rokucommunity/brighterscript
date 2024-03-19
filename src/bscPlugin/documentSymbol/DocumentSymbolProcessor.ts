@@ -27,43 +27,43 @@ export class DocumentSymbolProcessor {
         return this.event.documentSymbols;
 
         function getSymbolsFromStatement(statement: Statement) {
-            if (isFunctionStatement(statement)) {
+            if (isFunctionStatement(statement) && statement.name?.text) {
                 return DocumentSymbol.create(statement.name.text, '', SymbolKind.Function, statement.range, statement.name.range);
 
-            } else if (isMethodStatement(statement)) {
-                return DocumentSymbol.create(statement.name.text, '', SymbolKind.Method, statement.range, statement.name.range);
-
-            } else if (isInterfaceMethodStatement(statement)) {
-                return DocumentSymbol.create(statement.tokens.name.text, '', SymbolKind.Method, statement.range, statement.tokens.name.range);
-
-            } else if (isFieldStatement(statement)) {
-                return DocumentSymbol.create(statement.name.text, '', SymbolKind.Field, statement.range, statement.name.range);
-
-            } else if (isInterfaceFieldStatement(statement)) {
-                return DocumentSymbol.create(statement.tokens.name.text, '', SymbolKind.Field, statement.range, statement.tokens.name.range);
-
-            } else if (isConstStatement(statement)) {
-                return DocumentSymbol.create(statement.tokens.name.text, '', SymbolKind.Constant, statement.range, statement.tokens.name.range);
-
-            } else if (isNamespaceStatement(statement)) {
-                const children = statement.body.statements
-                    .map(getSymbolsFromStatement)
-                    .filter(x => !!x);
-                return DocumentSymbol.create(statement.nameExpression.getNameParts().pop(), '', SymbolKind.Namespace, statement.range, statement.nameExpression.range, children);
-
-            } else if (isClassStatement(statement)) {
+            } else if (isClassStatement(statement) && statement.name?.text) {
                 const children = statement.body
                     .map(getSymbolsFromStatement)
                     .filter(x => !!x);
                 return DocumentSymbol.create(statement.name.text, '', SymbolKind.Class, statement.range, statement.name.range, children);
 
-            } else if (isInterfaceStatement(statement)) {
+            } else if (isFieldStatement(statement) && statement.name?.text) {
+                return DocumentSymbol.create(statement.name.text, '', SymbolKind.Field, statement.range, statement.name.range);
+
+            } else if (isMethodStatement(statement) && statement.name?.text) {
+                return DocumentSymbol.create(statement.name.text, '', SymbolKind.Method, statement.range, statement.name.range);
+
+            } else if (isInterfaceStatement(statement) && statement.tokens.name?.text) {
                 const children = statement.body
                     .map(getSymbolsFromStatement)
                     .filter(x => !!x);
                 return DocumentSymbol.create(statement.tokens.name.text, '', SymbolKind.Interface, statement.range, statement.tokens.name.range, children);
 
-            } else if (isEnumStatement(statement)) {
+            } else if (isInterfaceFieldStatement(statement) && statement.tokens.name?.text) {
+                return DocumentSymbol.create(statement.tokens.name.text, '', SymbolKind.Field, statement.range, statement.tokens.name.range);
+
+            } else if (isInterfaceMethodStatement(statement) && statement.tokens.name?.text) {
+                return DocumentSymbol.create(statement.tokens.name.text, '', SymbolKind.Method, statement.range, statement.tokens.name.range);
+
+            } else if (isConstStatement(statement) && statement.tokens.name?.text) {
+                return DocumentSymbol.create(statement.tokens.name.text, '', SymbolKind.Constant, statement.range, statement.tokens.name.range);
+
+            } else if (isNamespaceStatement(statement) && statement.nameExpression) {
+                const children = statement.body.statements
+                    .map(getSymbolsFromStatement)
+                    .filter(x => !!x);
+                return DocumentSymbol.create(statement.nameExpression.getNameParts().pop(), '', SymbolKind.Namespace, statement.range, statement.nameExpression.range, children);
+
+            } else if (isEnumStatement(statement) && statement.tokens.name?.text) {
                 const children = statement.body
                     .map(getSymbolsFromStatement)
                     .filter(x => !!x);
