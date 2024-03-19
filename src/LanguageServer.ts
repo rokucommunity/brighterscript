@@ -179,9 +179,9 @@ export class LanguageServer implements OnHandler<Connection> {
                 // codeActionProvider: {
                 //     codeActionKinds: [CodeActionKind.Refactor]
                 // },
-                // signatureHelpProvider: {
-                //     triggerCharacters: ['(', ',']
-                // },
+                signatureHelpProvider: {
+                    triggerCharacters: ['(', ',']
+                },
                 definitionProvider: true,
                 hoverProvider: true,
                 executeCommandProvider: {
@@ -440,36 +440,9 @@ export class LanguageServer implements OnHandler<Connection> {
 
     @AddStackToErrorMessage
     public async onSignatureHelp(params: SignatureHelpParams) {
-        await this.waitAllProjectFirstRuns();
-
-        const filepath = util.uriToPath(params.textDocument.uri);
-        await this.keyedThrottler.onIdleOnce(filepath, true);
-
-        try {
-            const signatures = util.flatMap(
-                await Promise.all(this.getProjects().map(project => project.builder.program.getSignatureHelp(filepath, params.position)
-                )),
-                c => c
-            );
-
-            const activeSignature = signatures.length > 0 ? 0 : null;
-
-            const activeParameter = activeSignature >= 0 ? signatures[activeSignature]?.index : null;
-
-            let results: SignatureHelp = {
-                signatures: signatures.map((s) => s.signature),
-                activeSignature: activeSignature,
-                activeParameter: activeParameter
-            };
-            return results;
-        } catch (e: any) {
-            this.connection.console.error(`error in onSignatureHelp: ${e.stack ?? e.message ?? e}`);
-            return {
-                signatures: [],
-                activeSignature: 0,
-                activeParameter: 0
-            };
-        }
+        const filePath = util.uriToPath(params.textDocument.uri);
+        const result = await this.projectManager.getSignatureHelp(filePath, params.position);
+        return result;
     }
 
     @AddStackToErrorMessage

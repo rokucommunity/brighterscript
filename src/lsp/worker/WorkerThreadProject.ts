@@ -12,7 +12,7 @@ import type { Hover, MaybePromise, SemanticToken } from '../../interfaces';
 import type { BsConfig } from '../../BsConfig';
 import type { DocumentAction } from '../DocumentManager';
 import { Deferred } from '../../deferred';
-import type { FileTranspileResult } from '../../Program';
+import type { FileTranspileResult, SignatureInfoObj } from '../../Program';
 import type { Position, Location } from 'vscode-languageserver-protocol';
 
 export const workerPool = new WorkerPool(() => {
@@ -176,6 +176,9 @@ export class WorkerThreadProject implements LspProject {
         return this.sendStandardRequest<Location[]>('getDefinition', options);
     }
 
+    public async getSignatureHelp(options: { srcPath: string; position: Position }): Promise<SignatureInfoObj[]> {
+        return this.sendStandardRequest<SignatureInfoObj[]>('getSignatureHelp', options);
+    }
 
     /**
      * Handles request/response/update messages from the worker thread

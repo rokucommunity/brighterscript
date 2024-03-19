@@ -1028,8 +1028,8 @@ export class Program {
         }
     }
 
-    public getSignatureHelp(filepath: string, position: Position): SignatureInfoObj[] {
-        let file: BrsFile = this.getFile(filepath);
+    public getSignatureHelp(filePath: string, position: Position): SignatureInfoObj[] {
+        let file: BrsFile = this.getFile(filePath);
         if (!file || !isBrsFile(file)) {
             return [];
         }

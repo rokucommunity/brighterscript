@@ -11,6 +11,7 @@ import { rokuDeploy } from 'roku-deploy';
 import type { Location, Position } from 'vscode-languageserver-protocol';
 import { CancellationTokenSource } from 'vscode-languageserver-protocol';
 import type { DocumentAction } from './DocumentManager';
+import type { SignatureInfoObj } from '../Program';
 
 export class Project implements LspProject {
 
@@ -256,6 +257,11 @@ export class Project implements LspProject {
     public async getDefinition(options: { srcPath: string; position: Position }): Promise<Location[]> {
         await this.onIdle();
         return this.builder.program.getDefinition(options.srcPath, options.position);
+    }
+
+    public async getSignatureHelp(options: { srcPath: string; position: Position }): Promise<SignatureInfoObj[]> {
+        await this.onIdle();
+        return this.builder.program.getSignatureHelp(options.srcPath, options.position);
     }
 
     /**

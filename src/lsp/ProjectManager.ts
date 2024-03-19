@@ -5,7 +5,7 @@ import * as EventEmitter from 'eventemitter3';
 import type { LspDiagnostic, LspProject } from './LspProject';
 import { Project } from './Project';
 import { WorkerThreadProject } from './worker/WorkerThreadProject';
-import type { Hover, Position, Location } from 'vscode-languageserver-protocol';
+import type { Hover, Position, Location, SignatureHelp } from 'vscode-languageserver-protocol';
 import { Deferred } from '../deferred';
 import type { FlushEvent } from './DocumentManager';
 import { DocumentManager } from './DocumentManager';
@@ -226,6 +226,29 @@ export class ProjectManager {
             (result) => !!result
         );
         return result;
+    }
+
+    @TrackBusyStatus
+    public async getSignatureHelp(srcPath: string, position: Position): Promise<SignatureHelp> {
+        //Ask every project for definition info, keep whichever one responds first that has a valid response
+        let signatures = await util.promiseRaceMatch(
+            this.projects.map(x => x.getSignatureHelp({ srcPath: srcPath, position: position })),
+            //keep the first non-falsey result
+            (result) => !!result
+        );
+
+        if (signatures?.length > 0) {
+            const activeSignature = signatures.length > 0 ? 0 : undefined;
+
+            const activeParameter = activeSignature >= 0 ? signatures[activeSignature]?.index : undefined;
+
+            let result: SignatureHelp = {
+                signatures: signatures.map((s) => s.signature),
+                activeSignature: activeSignature,
+                activeParameter: activeParameter
+            };
+            return result;
+        }
     }
 
     /**
