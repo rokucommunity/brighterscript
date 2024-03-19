@@ -228,11 +228,9 @@ export class LanguageServer implements OnHandler<Connection> {
      */
     @AddStackToErrorMessage
     public async onCompletion1(params: CompletionParams, workDoneProgress: WorkDoneProgressReporter, resultProgress?: ResultProgressReporter<CompletionItem[]>) {
-        const completions = await this.projectManager.getCompletions(
-            util.uriToPath(params.textDocument.uri),
-            params.position
-        );
+        const srcPath = util.uriToPath(params.textDocument.uri);
 
+        const completions = await this.projectManager.getCompletions({ srcPath: srcPath, position: params.position });
         return completions;
     }
 
@@ -389,7 +387,7 @@ export class LanguageServer implements OnHandler<Connection> {
     @AddStackToErrorMessage
     public async onHover(params: TextDocumentPositionParams) {
         const srcPath = util.uriToPath(params.textDocument.uri);
-        const result = await this.projectManager.getHover(srcPath, params.position);
+        const result = await this.projectManager.getHover({ srcPath: srcPath, position: params.position });
         return result;
     }
 
@@ -402,7 +400,7 @@ export class LanguageServer implements OnHandler<Connection> {
     @AddStackToErrorMessage
     public async onDocumentSymbol(params: DocumentSymbolParams) {
         const srcPath = util.uriToPath(params.textDocument.uri);
-        const result = await this.projectManager.getDocumentSymbol(srcPath);
+        const result = await this.projectManager.getDocumentSymbol({ srcPath: srcPath });
         return result;
     }
 
@@ -410,14 +408,14 @@ export class LanguageServer implements OnHandler<Connection> {
     public async onDefinition(params: TextDocumentPositionParams) {
         const srcPath = util.uriToPath(params.textDocument.uri);
 
-        const result = this.projectManager.getDefinition(srcPath, params.position);
+        const result = this.projectManager.getDefinition({ srcPath: srcPath, position: params.position });
         return result;
     }
 
     @AddStackToErrorMessage
     public async onSignatureHelp(params: SignatureHelpParams) {
-        const filePath = util.uriToPath(params.textDocument.uri);
-        const result = await this.projectManager.getSignatureHelp(filePath, params.position);
+        const srcPath = util.uriToPath(params.textDocument.uri);
+        const result = await this.projectManager.getSignatureHelp({ srcPath: srcPath, position: params.position });
         return result;
     }
 
@@ -432,7 +430,7 @@ export class LanguageServer implements OnHandler<Connection> {
     @AddStackToErrorMessage
     private async onFullSemanticTokens(params: SemanticTokensParams) {
         const srcPath = util.uriToPath(params.textDocument.uri);
-        const result = await this.projectManager.getSemanticTokens(srcPath);
+        const result = await this.projectManager.getSemanticTokens({ srcPath: srcPath });
 
         return {
             data: encodeSemanticTokens(result)

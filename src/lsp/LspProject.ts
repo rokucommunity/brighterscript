@@ -60,13 +60,13 @@ export interface LspProject {
      * Get the full list of semantic tokens for the given file path
      * @param srcPath absolute path to the source file
      */
-    getSemanticTokens(srcPath: string): MaybePromise<SemanticToken[]>;
+    getSemanticTokens(options: { srcPath: string }): MaybePromise<SemanticToken[]>;
 
     /**
      * Transpile the specified file
      * @param srcPath
      */
-    transpileFile(srcPath: string): MaybePromise<FileTranspileResult>;
+    transpileFile(options: { srcPath: string }): MaybePromise<FileTranspileResult>;
 
     /**
      * Get the hover information for the specified position in the specified file

@@ -160,12 +160,12 @@ export class WorkerThreadProject implements LspProject {
      * Get the full list of semantic tokens for the given file path
      * @param srcPath absolute path to the source file
      */
-    public async getSemanticTokens(srcPath: string) {
-        return this.sendStandardRequest<SemanticToken[]>('getSemanticTokens', srcPath);
+    public async getSemanticTokens(options: { srcPath: string }) {
+        return this.sendStandardRequest<SemanticToken[]>('getSemanticTokens', options);
     }
 
-    public async transpileFile(srcPath: string) {
-        return this.sendStandardRequest<FileTranspileResult>('transpileFile', srcPath);
+    public async transpileFile(options: { srcPath: string }) {
+        return this.sendStandardRequest<FileTranspileResult>('transpileFile', options);
     }
 
     public async getHover(options: { srcPath: string; position: Position }): Promise<Hover[]> {

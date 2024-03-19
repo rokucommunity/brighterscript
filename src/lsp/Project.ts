@@ -237,14 +237,14 @@ export class Project implements LspProject {
      * Get the full list of semantic tokens for the given file path
      * @param srcPath absolute path to the source file
      */
-    public async getSemanticTokens(srcPath: string) {
+    public async getSemanticTokens(options: { srcPath: string }) {
         await this.onIdle();
-        return this.builder.program.getSemanticTokens(srcPath);
+        return this.builder.program.getSemanticTokens(options.srcPath);
     }
 
-    public async transpileFile(srcPath: string) {
+    public async transpileFile(options: { srcPath: string }) {
         await this.onIdle();
-        return this.builder.program.getTranspiledFileContents(srcPath);
+        return this.builder.program.getTranspiledFileContents(options.srcPath);
     }
 
     public async getHover(options: { srcPath: string; position: Position }): Promise<Hover[]> {

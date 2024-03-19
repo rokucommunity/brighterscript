@@ -167,16 +167,16 @@ export class ProjectManager {
      */
     @TrackBusyStatus
     @OnReady
-    public async getSemanticTokens(srcPath: string) {
+    public async getSemanticTokens(options: { srcPath: string }) {
         //find the first program that has this file, since it would be incredibly inefficient to generate semantic tokens for the same file multiple times.
         const project = await this.findFirstMatchingProject((x) => {
-            return x.hasFile(srcPath);
+            return x.hasFile(options.srcPath);
         });
 
         //if we found a project
         if (project) {
             const result = await Promise.resolve(
-                project.getSemanticTokens(srcPath)
+                project.getSemanticTokens(options)
             );
             return result;
         }
@@ -189,16 +189,16 @@ export class ProjectManager {
      */
     @TrackBusyStatus
     @OnReady
-    public async transpileFile(srcPath: string) {
+    public async transpileFile(options: { srcPath: string }) {
         //find the first program that has this file
         const project = await this.findFirstMatchingProject((p) => {
-            return p.hasFile(srcPath);
+            return p.hasFile(options.srcPath);
         });
 
         //if we found a project
         if (project) {
             const result = await Promise.resolve(
-                project.transpileFile(srcPath)
+                project.transpileFile(options)
             );
             return result;
         }
@@ -211,7 +211,7 @@ export class ProjectManager {
      */
     @TrackBusyStatus
     @OnReady
-    public async getCompletions(srcPath: string, position: Position) {
+    public async getCompletions(options: { srcPath: string; position: Position }) {
         // const completions = await Promise.all(
         //     this.projects.map(x => x.getCompletions(srcPath, position))
         // );
@@ -228,10 +228,10 @@ export class ProjectManager {
      */
     @TrackBusyStatus
     @OnReady
-    public async getHover(srcPath: string, position: Position): Promise<Hover> {
+    public async getHover(options: { srcPath: string; position: Position }): Promise<Hover> {
         //Ask every project for hover info, keep whichever one responds first that has a valid response
         let hover = await util.promiseRaceMatch(
-            this.projects.map(x => x.getHover({ srcPath: srcPath, position: position })),
+            this.projects.map(x => x.getHover(options)),
             //keep the first non-falsey result
             (result) => !!result
         );
@@ -246,12 +246,12 @@ export class ProjectManager {
      */
     @TrackBusyStatus
     @OnReady
-    public async getDefinition(srcPath: string, position: Position): Promise<Location[]> {
+    public async getDefinition(options: { srcPath: string; position: Position }): Promise<Location[]> {
         //TODO should we merge definitions across ALL projects? or just return definitions from the first project we found
 
         //Ask every project for definition info, keep whichever one responds first that has a valid response
         let result = await util.promiseRaceMatch(
-            this.projects.map(x => x.getDefinition({ srcPath: srcPath, position: position })),
+            this.projects.map(x => x.getDefinition(options)),
             //keep the first non-falsey result
             (result) => !!result
         );
@@ -260,10 +260,10 @@ export class ProjectManager {
 
     @TrackBusyStatus
     @OnReady
-    public async getSignatureHelp(srcPath: string, position: Position): Promise<SignatureHelp> {
+    public async getSignatureHelp(options: { srcPath: string; position: Position }): Promise<SignatureHelp> {
         //Ask every project for definition info, keep whichever one responds first that has a valid response
         let signatures = await util.promiseRaceMatch(
-            this.projects.map(x => x.getSignatureHelp({ srcPath: srcPath, position: position })),
+            this.projects.map(x => x.getSignatureHelp(options)),
             //keep the first non-falsey result
             (result) => !!result
         );
@@ -284,10 +284,10 @@ export class ProjectManager {
 
     @TrackBusyStatus
     @OnReady
-    public async getDocumentSymbol(srcPath: string): Promise<DocumentSymbol[]> {
+    public async getDocumentSymbol(options: { srcPath: string }): Promise<DocumentSymbol[]> {
         //Ask every project for definition info, keep whichever one responds first that has a valid response
         let result = await util.promiseRaceMatch(
-            this.projects.map(x => x.getDocumentSymbol({ srcPath: srcPath })),
+            this.projects.map(x => x.getDocumentSymbol(options)),
             //keep the first non-falsey result
             (result) => !!result
         );
