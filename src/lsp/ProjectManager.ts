@@ -5,7 +5,7 @@ import * as EventEmitter from 'eventemitter3';
 import type { LspDiagnostic, LspProject } from './LspProject';
 import { Project } from './Project';
 import { WorkerThreadProject } from './worker/WorkerThreadProject';
-import { type Hover, type Position } from 'vscode-languageserver';
+import type { Hover, Position, Location } from 'vscode-languageserver-protocol';
 import { Deferred } from '../deferred';
 import type { FlushEvent } from './DocumentManager';
 import { DocumentManager } from './DocumentManager';
@@ -185,6 +185,24 @@ export class ProjectManager {
             (result) => !!result
         );
         return hover?.[0];
+    }
+
+    /**
+     * Get the definition for the symbol at the given position in the file
+     * @param srcPath the path to the file
+     * @param position the position of symbol
+     * @returns a list of locations where the symbol under the position is defined in the project
+     */
+    public async getDefinition(srcPath: string, position: Position): Promise<Location[]> {
+        //TODO should we merge definitions across ALL projects? or just return definitions from the first project we found
+
+        //Ask every project for definition info, keep whichever one responds first that has a valid response
+        let result = await util.promiseRaceMatch(
+            this.projects.map(x => x.getDefinition({ srcPath: srcPath, position: position })),
+            //keep the first non-falsey result
+            (result) => !!result
+        );
+        return result;
     }
 
     /**

@@ -1,4 +1,4 @@
-import type { Diagnostic, Position } from 'vscode-languageserver';
+import type { Diagnostic, Position, Location } from 'vscode-languageserver';
 import type { Hover, MaybePromise, SemanticToken } from '../interfaces';
 import type { BsConfig } from '../BsConfig';
 import type { DocumentAction } from './DocumentManager';
@@ -72,6 +72,12 @@ export interface LspProject {
      * Get the hover information for the specified position in the specified file
      */
     getHover(options: { srcPath: string; position: Position }): MaybePromise<Hover[]>;
+
+    /**
+     * Get the locations where the symbol at the specified position is defined
+     * @param options the file path and position to get the definition for
+     */
+    getDefinition(options: { srcPath: string; position: Position }): MaybePromise<Location[]>;
 
     /**
      * Does this project have the specified file. Should only be called after `.activate()` has completed.

@@ -13,7 +13,7 @@ import type { BsConfig } from '../../BsConfig';
 import type { DocumentAction } from '../DocumentManager';
 import { Deferred } from '../../deferred';
 import type { FileTranspileResult } from '../../Program';
-import type { Position } from 'vscode-languageserver-protocol';
+import type { Position, Location } from 'vscode-languageserver-protocol';
 
 export const workerPool = new WorkerPool(() => {
     return new Worker(
@@ -55,7 +55,7 @@ export class WorkerThreadProject implements LspProject {
         await this.messageHandler.sendRequest('activate', { data: [options] });
 
         //populate a few properties with data from the thread so we can use them for some synchronous checks
-        this.filePaths = await this.getFilePaths();
+        this.filePaths = new Set(await this.getFilePaths());
         this.options = await this.getOptions();
 
         this.activationDeferred.resolve();
@@ -90,10 +90,10 @@ export class WorkerThreadProject implements LspProject {
     }
 
     /**
-     * A local copy of all the file paths loaded in this program. This needs to stay in sync with any files we add/delete in the worker thread,
-     * so we can keep doing in-process `.hasFile()` checks
+     * A local copy of all the file paths loaded in this program, stored in lower case.
+     * This needs to stay in sync with any files we add/delete in the worker thread so we can keep doing in-process `.hasFile()` checks.
      */
-    private filePaths: string[];
+    private filePaths: Set<string>;
 
     public async getDiagnostics() {
         const response = await this.messageHandler.sendRequest<LspDiagnostic[]>('getDiagnostics');
@@ -101,10 +101,10 @@ export class WorkerThreadProject implements LspProject {
     }
 
     /**
-     * Does this project have the specified file. Should only be called after `.activate()` has finished/
+     * Does this project have the specified file. Should only be called after `.activate()` has finished.
      */
     public hasFile(srcPath: string) {
-        return this.filePaths.includes(srcPath);
+        return this.filePaths.has(srcPath.toLowerCase());
     }
 
     /**
@@ -144,29 +144,38 @@ export class WorkerThreadProject implements LspProject {
     }
 
     /**
+     * Send a request with the standard structure
+     * @param name the name of the request
+     * @param data the array of data to send
+     * @returns the response from the request
+     */
+    private async sendStandardRequest<T>(name: string, ...data: any[]) {
+        const response = await this.messageHandler.sendRequest<T>(name as any, {
+            data: data
+        });
+        return response.data;
+    }
+
+    /**
      * Get the full list of semantic tokens for the given file path
      * @param srcPath absolute path to the source file
      */
     public async getSemanticTokens(srcPath: string) {
-        const response = await this.messageHandler.sendRequest<SemanticToken[]>('getSemanticTokens', {
-            data: [srcPath]
-        });
-        return response.data;
+        return this.sendStandardRequest<SemanticToken[]>('getSemanticTokens', srcPath);
     }
 
     public async transpileFile(srcPath: string) {
-        const response = await this.messageHandler.sendRequest<FileTranspileResult>('transpileFile', {
-            data: [srcPath]
-        });
-        return response.data;
+        return this.sendStandardRequest<FileTranspileResult>('transpileFile', srcPath);
     }
 
     public async getHover(options: { srcPath: string; position: Position }): Promise<Hover[]> {
-        const response = await this.messageHandler.sendRequest<Hover[]>('getHover', {
-            data: [options]
-        });
-        return response.data;
+        return this.sendStandardRequest<Hover[]>('getHover', options);
     }
+
+    public async getDefinition(options: { srcPath: string; position: Position }): Promise<Location[]> {
+        return this.sendStandardRequest<Location[]>('getDefinition', options);
+    }
+
 
     /**
      * Handles request/response/update messages from the worker thread

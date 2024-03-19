@@ -8,7 +8,7 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import { URI } from 'vscode-uri';
 import { Deferred } from '../deferred';
 import { rokuDeploy } from 'roku-deploy';
-import type { Position } from 'vscode-languageserver-protocol';
+import type { Location, Position } from 'vscode-languageserver-protocol';
 import { CancellationTokenSource } from 'vscode-languageserver-protocol';
 import type { DocumentAction } from './DocumentManager';
 
@@ -224,7 +224,14 @@ export class Project implements LspProject {
      * Get the list of all file paths that are currently loaded in the project
      */
     public getFilePaths() {
-        return Object.keys(this.builder.program.files).sort();
+        //get all the files in the program
+        return Object.values(this.builder.program.files)
+            //grab their srcPath values, and toLowerCase them here in case we're in a different thread just to save cycles from the main thread
+            .map(x => x.srcPath?.toLowerCase())
+            //exclude nulls
+            .filter(x => !!x)
+            //sort them so it's easier to reason about downstream
+            .sort();
     }
 
     /**
@@ -244,6 +251,11 @@ export class Project implements LspProject {
     public async getHover(options: { srcPath: string; position: Position }): Promise<Hover[]> {
         await this.onIdle();
         return this.builder.program.getHover(options.srcPath, options.position);
+    }
+
+    public async getDefinition(options: { srcPath: string; position: Position }): Promise<Location[]> {
+        await this.onIdle();
+        return this.builder.program.getDefinition(options.srcPath, options.position);
     }
 
     /**

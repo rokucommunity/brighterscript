@@ -187,7 +187,7 @@ export class LanguageServer implements OnHandler<Connection> {
                 // signatureHelpProvider: {
                 //     triggerCharacters: ['(', ',']
                 // },
-                // definitionProvider: true,
+                definitionProvider: true,
                 hoverProvider: true,
                 executeCommandProvider: {
                     commands: [
@@ -444,17 +444,10 @@ export class LanguageServer implements OnHandler<Connection> {
     @AddStackToErrorMessage
     @TrackBusyStatus
     public async onDefinition(params: TextDocumentPositionParams) {
-        await this.waitAllProjectFirstRuns();
-
         const srcPath = util.uriToPath(params.textDocument.uri);
 
-        const results = util.flatMap(
-            await Promise.all(this.getProjects().map(project => {
-                return project.builder.program.getDefinition(srcPath, params.position);
-            })),
-            c => c
-        );
-        return results;
+        const result = this.projectManager.getDefinition(srcPath, params.position);
+        return result;
     }
 
     @AddStackToErrorMessage
