@@ -883,8 +883,8 @@ describe('LanguageServer', () => {
                 expect(namespaceSymbol.name).to.equal('MyFirstNamespace');
                 const classChildrenSymbols = namespaceSymbol.children!;
                 expect(classChildrenSymbols.length).to.equal(2);
-                expect(classChildrenSymbols[0].name).to.equal('MyFirstNamespace.pi');
-                expect(classChildrenSymbols[1].name).to.equal('MyFirstNamespace.buildAwesome');
+                expect(classChildrenSymbols[0].name).to.equal('pi');
+                expect(classChildrenSymbols[1].name).to.equal('buildAwesome');
             }
         });
     });

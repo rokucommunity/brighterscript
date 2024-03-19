@@ -39,7 +39,7 @@ export interface Identifier extends Token {
  * @param obj the object to check for `Token`-ness
  * @returns `true` is `obj` is a `Token`, otherwise `false`
  */
-export function isToken(obj: Record<string, any>): obj is Token {
+export function isToken(obj: any): obj is Token {
     return !!(obj.kind && obj.text);
 }
 
