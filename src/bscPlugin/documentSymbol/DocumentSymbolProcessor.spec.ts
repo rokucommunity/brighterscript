@@ -4,10 +4,10 @@ import { createSandbox } from 'sinon';
 import { rootDir } from '../../testHelpers.spec';
 import type { DocumentSymbol } from 'vscode-languageserver-types';
 import { SymbolKind } from 'vscode-languageserver-types';
-import { BrsFile } from '../../files/BrsFile';
+import type { BrsFile } from '../../files/BrsFile';
 let sinon = createSandbox();
 
-describe.only('DocumentSymbolProcessor', () => {
+describe('DocumentSymbolProcessor', () => {
     let program: Program;
     beforeEach(() => {
         program = new Program({ rootDir: rootDir, sourceMap: true });
