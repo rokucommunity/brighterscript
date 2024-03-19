@@ -46,6 +46,23 @@ export class ProjectManager {
     }
 
     /**
+     * A promise that's set when a sync starts, and resolved when the sync is complete
+     */
+    private syncPromise: Promise<void> | undefined;
+    private firstSync = new Deferred();
+
+    /**
+     * Get a promise that resolves when this manager is finished initializing
+     */
+    public onReady() {
+        return Promise.allSettled([
+            //wait for the first sync to finish
+            this.firstSync.promise,
+            //make sure we're not in the middle of a sync
+            this.syncPromise
+        ]);
+    }
+    /**
      * Given a list of all desired projects, create any missing projects and destroy and projects that are no longer available
      * Treat workspaces that don't have a bsconfig.json as a project.
      * Handle situations where bsconfig.json files were added or removed (to elevate/lower workspaceFolder projects accordingly)
@@ -54,44 +71,52 @@ export class ProjectManager {
      */
     @TrackBusyStatus
     public async syncProjects(workspaceConfigs: WorkspaceConfig[]) {
-        //build a list of unique projects across all workspace folders
-        let projectConfigs = (await Promise.all(
-            workspaceConfigs.map(async workspaceConfig => {
-                const projectPaths = await this.getProjectPaths(workspaceConfig);
-                return projectPaths.map(projectPath => ({
-                    projectPath: s`${projectPath}`,
-                    workspaceFolder: s`${workspaceConfig}`,
-                    excludePatterns: workspaceConfig.excludePatterns,
-                    threadingEnabled: workspaceConfig.threadingEnabled
-                }));
-            })
-        )).flat(1);
+        this.syncPromise = (async () => {
+            //build a list of unique projects across all workspace folders
+            let projectConfigs = (await Promise.all(
+                workspaceConfigs.map(async workspaceConfig => {
+                    const projectPaths = await this.getProjectPaths(workspaceConfig);
+                    return projectPaths.map(projectPath => ({
+                        projectPath: s`${projectPath}`,
+                        workspaceFolder: s`${workspaceConfig}`,
+                        excludePatterns: workspaceConfig.excludePatterns,
+                        threadingEnabled: workspaceConfig.threadingEnabled
+                    }));
+                })
+            )).flat(1);
 
-        //delete projects not represented in the list
-        for (const project of this.projects) {
-            //we can't find this existing project in our new list, so scrap it
-            if (!projectConfigs.find(x => x.projectPath === project.projectPath)) {
-                this.removeProject(project);
+            //delete projects not represented in the list
+            for (const project of this.projects) {
+                //we can't find this existing project in our new list, so scrap it
+                if (!projectConfigs.find(x => x.projectPath === project.projectPath)) {
+                    this.removeProject(project);
+                }
             }
-        }
 
-        // skip projects we already have (they're already loaded...no need to reload them)
-        projectConfigs = projectConfigs.filter(x => {
-            return !this.hasProject(x.projectPath);
-        });
+            // skip projects we already have (they're already loaded...no need to reload them)
+            projectConfigs = projectConfigs.filter(x => {
+                return !this.hasProject(x.projectPath);
+            });
 
-        //dedupe by project path
-        projectConfigs = [
-            ...projectConfigs.reduce(
-                (acc, x) => acc.set(x.projectPath, x),
-                new Map<string, typeof projectConfigs[0]>()
-            ).values()
-        ];
+            //dedupe by project path
+            projectConfigs = [
+                ...projectConfigs.reduce(
+                    (acc, x) => acc.set(x.projectPath, x),
+                    new Map<string, typeof projectConfigs[0]>()
+                ).values()
+            ];
 
-        //create missing projects
-        await Promise.all(
-            projectConfigs.map(config => this.createProject(config))
-        );
+            //create missing projects
+            await Promise.all(
+                projectConfigs.map(config => this.createProject(config))
+            );
+
+            //mark that we've completed our first sync
+            this.firstSync.tryResolve();
+        })();
+
+        //return the sync promise
+        return this.syncPromise;
     }
 
     /**
@@ -141,6 +166,7 @@ export class ProjectManager {
      * @returns an array of semantic tokens
      */
     @TrackBusyStatus
+    @OnReady
     public async getSemanticTokens(srcPath: string) {
         //find the first program that has this file, since it would be incredibly inefficient to generate semantic tokens for the same file multiple times.
         const project = await this.findFirstMatchingProject((x) => {
@@ -162,6 +188,7 @@ export class ProjectManager {
      * @returns the transpiled contents of the file as a string
      */
     @TrackBusyStatus
+    @OnReady
     public async transpileFile(srcPath: string) {
         //find the first program that has this file
         const project = await this.findFirstMatchingProject((p) => {
@@ -183,6 +210,7 @@ export class ProjectManager {
      * @param position the position of the cursor in the file
      */
     @TrackBusyStatus
+    @OnReady
     public async getCompletions(srcPath: string, position: Position) {
         // const completions = await Promise.all(
         //     this.projects.map(x => x.getCompletions(srcPath, position))
@@ -199,6 +227,7 @@ export class ProjectManager {
      * @returns the hover information or undefined if no hover information was found
      */
     @TrackBusyStatus
+    @OnReady
     public async getHover(srcPath: string, position: Position): Promise<Hover> {
         //Ask every project for hover info, keep whichever one responds first that has a valid response
         let hover = await util.promiseRaceMatch(
@@ -216,6 +245,7 @@ export class ProjectManager {
      * @returns a list of locations where the symbol under the position is defined in the project
      */
     @TrackBusyStatus
+    @OnReady
     public async getDefinition(srcPath: string, position: Position): Promise<Location[]> {
         //TODO should we merge definitions across ALL projects? or just return definitions from the first project we found
 
@@ -229,6 +259,7 @@ export class ProjectManager {
     }
 
     @TrackBusyStatus
+    @OnReady
     public async getSignatureHelp(srcPath: string, position: Position): Promise<SignatureHelp> {
         //Ask every project for definition info, keep whichever one responds first that has a valid response
         let signatures = await util.promiseRaceMatch(
@@ -252,7 +283,9 @@ export class ProjectManager {
     }
 
     @TrackBusyStatus
+    @OnReady
     public async getDocumentSymbol(srcPath: string): Promise<DocumentSymbol[]> {
+        await this.onReady();
         //Ask every project for definition info, keep whichever one responds first that has a valid response
         let result = await util.promiseRaceMatch(
             this.projects.map(x => x.getDocumentSymbol({ srcPath: srcPath })),
@@ -454,5 +487,18 @@ function TrackBusyStatus(target: any, propertyKey: string, descriptor: PropertyD
         return this.busyStatusTracker.run(() => {
             return originalMethod.apply(this, args);
         }, originalMethod.name);
+    };
+}
+
+/**
+ * Wraps the method in a an awaited call to `onReady` to ensure the project manager is ready before the method is called
+ */
+function OnReady(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+    let originalMethod = descriptor.value;
+
+    //wrapping the original method
+    descriptor.value = async function value(this: ProjectManager, ...args: any[]) {
+        await this.onReady();
+        return originalMethod.apply(this, args);
     };
 }
