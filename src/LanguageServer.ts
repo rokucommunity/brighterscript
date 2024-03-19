@@ -11,7 +11,6 @@ import type {
     TextDocumentPositionParams,
     ExecuteCommandParams,
     WorkspaceSymbolParams,
-    SymbolInformation,
     DocumentSymbolParams,
     ReferenceParams,
     SignatureHelpParams,
@@ -25,7 +24,8 @@ import type {
     CompletionParams,
     ResultProgressReporter,
     WorkDoneProgressReporter,
-    SemanticTokensOptions
+    SemanticTokensOptions,
+    Location
 } from 'vscode-languageserver/node';
 import {
     SemanticTokensRequest,
@@ -173,7 +173,7 @@ export class LanguageServer implements OnHandler<Connection> {
                     legend: semanticTokensLegend,
                     full: true
                 } as SemanticTokensOptions,
-                // referencesProvider: true,
+                referencesProvider: true,
                 // codeActionProvider: {
                 //     codeActionKinds: [CodeActionKind.Refactor]
                 // },
@@ -422,19 +422,10 @@ export class LanguageServer implements OnHandler<Connection> {
     }
 
     @AddStackToErrorMessage
-    public async onReferences(params: ReferenceParams) {
-        await this.waitAllProjectFirstRuns();
-
-        const position = params.position;
+    public async onReferences(params: ReferenceParams): Promise<Location[]> {
         const srcPath = util.uriToPath(params.textDocument.uri);
-
-        const results = util.flatMap(
-            await Promise.all(this.getProjects().map(project => {
-                return project.builder.program.getReferences(srcPath, position);
-            })),
-            c => c
-        );
-        return results.filter((r) => r);
+        const result = await this.projectManager.getReferences({ srcPath: srcPath, position: params.position });
+        return result;
     }
 
 

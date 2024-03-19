@@ -272,6 +272,11 @@ export class Project implements LspProject {
         return this.builder.program.getWorkspaceSymbols();
     }
 
+    public async getReferences(options: { srcPath: string; position: Position }): Promise<Location[]> {
+        await this.onIdle();
+        return this.builder.program.getReferences(options.srcPath, options.position);
+    }
+
     /**
      * Manages the BrighterScript program. The main interface into the compiler/validator
      */

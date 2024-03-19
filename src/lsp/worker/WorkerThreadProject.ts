@@ -188,6 +188,10 @@ export class WorkerThreadProject implements LspProject {
         return this.sendStandardRequest<SymbolInformation[]>('getWorkspaceSymbol');
     }
 
+    public async getReferences(options: { srcPath: string; position: Position }): Promise<Location[]> {
+        return this.sendStandardRequest<Location[]>('getReferences', options);
+    }
+
     /**
      * Handles request/response/update messages from the worker thread
      */

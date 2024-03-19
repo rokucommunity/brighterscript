@@ -323,6 +323,18 @@ export class ProjectManager {
         return allSymbols as SymbolInformation[];
     }
 
+    @TrackBusyStatus
+    @OnReady
+    public async getReferences(options: { srcPath: string; position: Position }): Promise<Location[]> {
+        //Ask every project for definition info, keep whichever one responds first that has a valid response
+        let result = await util.promiseRaceMatch(
+            this.projects.map(x => x.getReferences(options)),
+            //keep the first non-falsey result
+            (result) => !!result
+        );
+        return result;
+    }
+
     /**
      * Scan a given workspace for all `bsconfig.json` files. If at least one is found, then only folders who have bsconfig.json are returned.
      * If none are found, then the workspaceFolder itself is treated as a project

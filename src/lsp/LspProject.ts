@@ -87,16 +87,18 @@ export interface LspProject {
 
     /**
      * Get the list of symbols for the specified file
-     * @param options
      */
-    getDocumentSymbol(options: { srcPath: string }): Promise<DocumentSymbol[]>;
+    getDocumentSymbol(options: { srcPath: string }): MaybePromise<DocumentSymbol[]>;
 
     /**
      * Get the list of symbols for the entire workspace
-     * @param srcPath
      */
     getWorkspaceSymbol(): Promise<SymbolInformation[]>;
 
+    /**
+     * Get the list of references for the specified file and position
+     */
+    getReferences(options: { srcPath: string; position: Position }): MaybePromise<Location[]>;
 
     /**
      * Does this project have the specified file. Should only be called after `.activate()` has completed.
