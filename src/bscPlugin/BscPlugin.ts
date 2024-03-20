@@ -1,10 +1,10 @@
 import { isBrsFile, isXmlFile } from '../astUtils/reflection';
-import type { BeforeFileTranspileEvent, CompilerPlugin, OnFileValidateEvent, OnGetCodeActionsEvent, ProvideHoverEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent } from '../interfaces';
+import type { BeforeFileTranspileEvent, CompilerPlugin, OnFileValidateEvent, OnGetCodeActionsEvent, ProvideHoverEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent } from '../interfaces';
 import type { Program } from '../Program';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
 import { CompletionsProcessor } from './completions/CompletionsProcessor';
 import { DefinitionProvider } from './definition/DefinitionProvider';
-import { DocumentSymbolProcessor } from './documentSymbol/DocumentSymbolProcessor';
+import { DocumentSymbolProcessor } from './symbols/DocumentSymbolProcessor';
 import { HoverProcessor } from './hover/HoverProcessor';
 import { ReferencesProvider } from './references/ReferencesProvider';
 import { BrsFileSemanticTokensProcessor } from './semanticTokens/BrsFileSemanticTokensProcessor';
@@ -13,6 +13,7 @@ import { BrsFileValidator } from './validation/BrsFileValidator';
 import { ProgramValidator } from './validation/ProgramValidator';
 import { ScopeValidator } from './validation/ScopeValidator';
 import { XmlFileValidator } from './validation/XmlFileValidator';
+import { WorkspaceSymbolProcessor } from './symbols/WorkspaceSymbolProcessor';
 
 export class BscPlugin implements CompilerPlugin {
     public name = 'BscPlugin';
@@ -27,6 +28,10 @@ export class BscPlugin implements CompilerPlugin {
 
     public provideDocumentSymbols(event: ProvideDocumentSymbolsEvent) {
         return new DocumentSymbolProcessor(event).process();
+    }
+
+    public provideWorkspaceSymbols(event: ProvideWorkspaceSymbolsEvent) {
+        return new WorkspaceSymbolProcessor(event).process();
     }
 
     public provideCompletions(event: ProvideCompletionsEvent) {
