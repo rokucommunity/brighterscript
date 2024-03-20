@@ -26,7 +26,7 @@ import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import type { AstNode, Expression, Statement } from '../parser/AstNode';
-import type { UnresolvedSymbol } from '../AstValidationSegmenter';
+import type { AssignedSymbol, UnresolvedSymbol } from '../AstValidationSegmenter';
 import { AstValidationSegmenter } from '../AstValidationSegmenter';
 import type { BscSymbol } from '../SymbolTable';
 import { SymbolTable } from '../SymbolTable';
@@ -1164,6 +1164,19 @@ export class BrsFile implements BscFile {
     public get providedSymbols() {
         return this.cache?.getOrAdd(`providedSymbols`, () => {
             return this.getProvidedSymbols();
+        });
+    }
+
+    public get assignedSymbols() {
+        return this.cache.getOrAdd(`assignedSymbols`, () => {
+            const allAssignedSymbolsEntries = this.validationSegmenter.assignedTokensInSegment.entries() ?? [];
+
+            let allAssignedSymbolsSet: AssignedSymbol[] = [];
+
+            for (const [_segment, assignedSymbolSet] of allAssignedSymbolsEntries) {
+                allAssignedSymbolsSet.push(...assignedSymbolSet.values());
+            }
+            return allAssignedSymbolsSet;
         });
     }
 

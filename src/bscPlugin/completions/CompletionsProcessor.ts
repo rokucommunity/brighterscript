@@ -298,7 +298,7 @@ export class CompletionsProcessor {
             let ignoreAllPropertyNames = false;
 
             // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
-            switch (tokenBefore.kind) {
+            switch (tokenBefore?.kind) {
                 case TokenKind.New:
                     //we are after a new keyword; so we can only be namespaces that have a class or classes at this point
                     currentSymbols = currentSymbols.filter(symbol => isClassType(symbol.type) || this.isNamespaceTypeWithMemberType(symbol.type, isClassType));

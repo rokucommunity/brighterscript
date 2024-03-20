@@ -76,6 +76,9 @@ export class ScopeValidator {
 
         //do many per-file checks for every file in this (and parent) scopes
         this.event.scope.enumerateBrsFiles((file) => {
+            if (!isBrsFile(file)) {
+                return;
+            }
             this.diagnosticDetectFunctionCollisions(file);
             this.detectVariableNamespaceCollisions(file);
             this.detectNameCollisions(file);
@@ -85,23 +88,18 @@ export class ScopeValidator {
             if (isBrsFile(file)) {
                 const hasChangeInfo = this.event.changedFiles && this.event.changedSymbols;
 
-                let thisFileRequiresChangedSymbol = false;
-                for (let requiredSymbol of file.requiredSymbols) {
-                    // eslint-disable-next-line no-bitwise
-                    for (const flag of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
-                        // eslint-disable-next-line no-bitwise
-                        if (flag & requiredSymbol.flags) {
-                            const changeSymbolSetForFlag = this.event.changedSymbols.get(flag);
-                            if (util.setContainsUnresolvedSymbol(changeSymbolSetForFlag, requiredSymbol)) {
-                                thisFileRequiresChangedSymbol = true;
-                            }
-                        }
-                    }
-                }
+                const thisFileRequiresChangedSymbol = this.doesFileRequireChangedSymbol(file);
+
                 const thisFileHasChanges = this.event.changedFiles.includes(file);
+
                 if (hasChangeInfo && !thisFileRequiresChangedSymbol && !thisFileHasChanges) {
                     // this file does not require a symbol that has changed, and this file has not changed
-                    return;
+
+                    if (!this.doesFileAssignChangedSymbol(file)) {
+                        // this file does not have a variable assignment that needs to be checked
+                        return;
+                    }
+
                 }
                 if (thisFileHasChanges) {
                     this.event.scope.clearAstSegmentDiagnosticsByFile(file);
@@ -132,9 +130,29 @@ export class ScopeValidator {
                     },
                     AssignmentStatement: (assignStmt) => {
                         this.validateAssignmentStatement(file, assignStmt);
+                        // Note: this also includes For statements
+                        this.detectShadowedLocalVar(file, {
+                            name: assignStmt.tokens.name.text,
+                            type: assignStmt.getType({ flags: SymbolTypeFlag.runtime }),
+                            nameRange: assignStmt.tokens.name.range
+                        });
                     },
                     NewExpression: (newExpr) => {
                         this.validateNewExpression(file, newExpr);
+                    },
+                    ForEachStatement: (forEachStmt) => {
+                        this.detectShadowedLocalVar(file, {
+                            name: forEachStmt.tokens.item.text,
+                            type: forEachStmt.getType({ flags: SymbolTypeFlag.runtime }),
+                            nameRange: forEachStmt.tokens.item.range
+                        });
+                    },
+                    FunctionParameterExpression: (funcParam) => {
+                        this.detectShadowedLocalVar(file, {
+                            name: funcParam.tokens.name.text,
+                            type: funcParam.getType({ flags: SymbolTypeFlag.runtime }),
+                            nameRange: funcParam.tokens.name.range
+                        });
                     }
                 });
                 const segmentsToWalkForValidation = (thisFileHasChanges || !hasChangeInfo)
@@ -151,6 +169,36 @@ export class ScopeValidator {
                 }
             }
         });
+    }
+
+    private doesFileRequireChangedSymbol(file: BrsFile) {
+        let thisFileRequiresChangedSymbol = false;
+        for (let requiredSymbol of file.requiredSymbols) {
+            // eslint-disable-next-line no-bitwise
+            for (const flag of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
+                // eslint-disable-next-line no-bitwise
+                if (flag & requiredSymbol.flags) {
+                    const changeSymbolSetForFlag = this.event.changedSymbols.get(flag);
+                    if (util.setContainsUnresolvedSymbol(changeSymbolSetForFlag, requiredSymbol)) {
+                        thisFileRequiresChangedSymbol = true;
+                        break;
+                    }
+                }
+            }
+        }
+        return thisFileRequiresChangedSymbol;
+    }
+
+    private doesFileAssignChangedSymbol(file: BrsFile) {
+        let thisFileAssignsChangedSymbol = false;
+        const runTimeChangedSymbolSet = this.event.changedSymbols.get(SymbolTypeFlag.runtime);
+        for (let assignedSymbol of file.assignedSymbols) {
+            if (runTimeChangedSymbolSet.has(assignedSymbol.token.text.toLowerCase())) {
+                thisFileAssignsChangedSymbol = true;
+                break;
+            }
+        }
+        return thisFileAssignsChangedSymbol;
     }
 
     private currentSegmentBeingValidated: AstNode;
@@ -991,24 +1039,9 @@ export class ScopeValidator {
             },
             EnumStatement: (enumStmt) => {
                 this.validateNameCollision(file, enumStmt, enumStmt.tokens.name);
-            },
-            AssignmentStatement: (assignStmt) => {
-                // Note: this also includes For statements
-                this.detectShadowedLocalVar(file, {
-                    name: assignStmt.tokens.name.text,
-                    type: assignStmt.getType({ flags: SymbolTypeFlag.runtime }),
-                    nameRange: assignStmt.tokens.name.range
-                });
-            },
-            ForEachStatement: (forEachStmt) => {
-                this.detectShadowedLocalVar(file, {
-                    name: forEachStmt.tokens.item.text,
-                    type: forEachStmt.getType({ flags: SymbolTypeFlag.runtime }),
-                    nameRange: forEachStmt.tokens.item.range
-                });
             }
         }), {
-            walkMode: WalkMode.visitAllRecursive
+            walkMode: WalkMode.visitStatements
         });
     }
 
@@ -1075,7 +1108,7 @@ export class ScopeValidator {
 
     }
 
-    private detectShadowedLocalVar(file: BrsFile, varDeclaration: { name: string; type: BscType; nameRange: Range }) {
+    public detectShadowedLocalVar(file: BrsFile, varDeclaration: { name: string; type: BscType; nameRange: Range }) {
         const varName = varDeclaration.name;
         const lowerVarName = varName.toLowerCase();
         const classMap = this.event.scope.getClassMap();

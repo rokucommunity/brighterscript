@@ -924,7 +924,7 @@ describe('Scope', () => {
                 }]);
             });
 
-            it('detects local function with same name as scope function', () => {
+            it('detects local variable with same name as scope function', () => {
                 program.setFile(`source/main.brs`, `
                     sub main()
                         getHello = "override"
@@ -938,6 +938,22 @@ describe('Scope', () => {
                 expectDiagnostics(program, [{
                     message: DiagnosticMessages.localVarShadowedByScopedFunction().message,
                     range: Range.create(2, 24, 2, 32)
+                }]);
+            });
+
+            it('detects function param with same name as scope function', () => {
+                program.setFile(`source/main.brs`, `
+                    sub main(getHello = "hello")
+                        print getHello ' prints <Function: gethello> (i.e. local variable override does NOT work for same-scope-defined methods)
+                    end sub
+                    function getHello()
+                        return "hello"
+                    end function
+                `);
+                program.validate();
+                expectDiagnostics(program, [{
+                    message: DiagnosticMessages.localVarShadowedByScopedFunction().message,
+                    range: Range.create(1, 29, 1, 37)
                 }]);
             });
 
