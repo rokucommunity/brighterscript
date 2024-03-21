@@ -168,12 +168,14 @@ export class AstValidationSegmenter {
 
             if (symbolsRequired) {
                 for (const requiredSymbol of symbolsRequired.values()) {
-                    // eslint-disable-next-line no-bitwise
-                    const runTimeOrTypeTimeSymbolFlag = requiredSymbol.flags & (SymbolTypeFlag.runtime | SymbolTypeFlag.typetime);
-                    const changeSymbolSetForFlag = changedSymbols.get(runTimeOrTypeTimeSymbolFlag);
-                    if (util.setContainsUnresolvedSymbol(changeSymbolSetForFlag, requiredSymbol)) {
-                        segmentsToWalkForValidation.push(segment);
-                        break;
+                    for (const flagType of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
+                        // eslint-disable-next-line no-bitwise
+                        const runTimeOrTypeTimeSymbolFlag = requiredSymbol.flags & flagType;
+                        const changeSymbolSetForFlag = changedSymbols.get(runTimeOrTypeTimeSymbolFlag);
+                        if (util.setContainsUnresolvedSymbol(changeSymbolSetForFlag, requiredSymbol)) {
+                            segmentsToWalkForValidation.push(segment);
+                            break;
+                        }
                     }
                 }
             } else if (segmentNeedsRevalidation) {
@@ -201,11 +203,11 @@ export class AstValidationSegmenter {
         const unresolved = this.unresolvedSegmentsSymbols.get(segment);
         if (unresolved?.size > 0) {
             return true;
-        }
-        const assignedTokens = this.assignedTokensInSegment.get(segment);
-        if (assignedTokens?.size > 0) {
-            return true;
-        }
+        } /*
+         const assignedTokens = this.assignedTokensInSegment.get(segment);
+         if (assignedTokens?.size > 0) {
+             return true;
+         }*/
         return false;
     }
 }

@@ -322,7 +322,13 @@ export class CompletionsProcessor {
 
     private getScopeSymbolCompletions(file: BrsFile, scope: Scope, symbolTableLookupFlag: SymbolTypeFlag) {
         // get all scope available symbols
-        const scopeAvailableSymbols = scope.symbolTable.getOwnSymbols(symbolTableLookupFlag).filter(sym => {
+
+        let scopeSymbols = file.parseMode === ParseMode.BrighterScript
+            ? [...scope.symbolTable.getOwnSymbols(symbolTableLookupFlag), ...scope.allNamespaceTypeTable.getOwnSymbols(symbolTableLookupFlag)]
+            : scope.symbolTable.getOwnSymbols(symbolTableLookupFlag);
+
+
+        const scopeAvailableSymbols = scopeSymbols.filter(sym => {
             if (file.parseMode === ParseMode.BrighterScript) {
                 // eslint-disable-next-line no-bitwise
                 if (sym.flags & SymbolTypeFlag.postTranspile) {

@@ -18,7 +18,7 @@ import type { AstNode } from '../../parser/AstNode';
 import type { Expression } from '../../parser/AstNode';
 import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression } from '../../parser/Expression';
 import { CallExpression } from '../../parser/Expression';
-import { WalkMode, createVisitor } from '../../astUtils/visitors';
+import { createVisitor } from '../../astUtils/visitors';
 import type { BscType } from '../../types/BscType';
 import type { BscFile } from '../../files/BscFile';
 import { InsideSegmentWalkMode } from '../../AstValidationSegmenter';
@@ -77,8 +77,8 @@ export class ScopeValidator {
                  console.log(`${file.pkgPath},${util.rangeToString(node.range)},${count}`);
              }
          }
-         console.log('***  END VALIDATION METRICS  ***');
- */
+         console.log('***  END VALIDATION METRICS  ***');*/
+
         this.validationMetrics = new Map<BrsFile, Map<AstNode, number>>();
         this.event = undefined;
         this.onceCache.clear();
@@ -95,7 +95,9 @@ export class ScopeValidator {
             this.diagnosticDetectFunctionCollisions(file);
             this.detectVariableNamespaceCollisions(file);
             this.detectNameCollisions(file);
+
         });
+        console.log('Checking Scope', this.event.scope.name);
 
         this.event.scope.enumerateOwnFiles((file) => {
             if (isBrsFile(file)) {
@@ -189,6 +191,13 @@ export class ScopeValidator {
                     });
                     if (!fileMap.has(segment)) {
                         fileMap.set(segment, 0);
+                    } else {
+                        console.log('Checking ... ', file.pkgPath, util.rangeToString(segment.range));
+                        const unresolved = file.validationSegmenter.unresolvedSegmentsSymbols.get(segment);
+                        if (unresolved?.size > 0) {
+                            const missing = [...unresolved.values()].map(m => util.processTypeChain(m.typeChain).fullChainName);
+                            console.log(missing);
+                        }
                     }
                     fileMap.set(segment, fileMap.get(segment) + 1);
                     file.markSegmentAsValidated(segment);
@@ -1050,25 +1059,52 @@ export class ScopeValidator {
     }
 
     private detectNameCollisions(file: BrsFile) {
-        file.ast.walk(createVisitor({
-            NamespaceStatement: (nsStmt) => {
-                this.validateNameCollision(file, nsStmt, nsStmt.getNameParts()?.[0]);
-            },
-            ClassStatement: (classStmt) => {
-                this.validateNameCollision(file, classStmt, classStmt.tokens.name);
-            },
-            InterfaceStatement: (ifaceStmt) => {
-                this.validateNameCollision(file, ifaceStmt, ifaceStmt.tokens.name);
-            },
-            ConstStatement: (constStmt) => {
-                this.validateNameCollision(file, constStmt, constStmt.tokens.name);
-            },
-            EnumStatement: (enumStmt) => {
-                this.validateNameCollision(file, enumStmt, enumStmt.tokens.name);
-            }
-        }), {
-            walkMode: WalkMode.visitStatements
-        });
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        for (let nsStmt of file['_cachedLookups'].namespaceStatements) {
+            this.validateNameCollision(file, nsStmt, nsStmt.getNameParts()?.[0]);
+
+        }
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        for (let classStmt of file['_cachedLookups'].classStatements) {
+            this.validateNameCollision(file, classStmt, classStmt.tokens.name);
+
+        }
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        for (let ifaceStmt of file['_cachedLookups'].interfaceStatements) {
+            this.validateNameCollision(file, ifaceStmt, ifaceStmt.tokens.name);
+
+        }
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        for (let constStmt of file['_cachedLookups'].constStatements) {
+            this.validateNameCollision(file, constStmt, constStmt.tokens.name);
+        }
+
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        for (let enumStmt of file['_cachedLookups'].enumStatements) {
+            this.validateNameCollision(file, enumStmt, enumStmt.tokens.name);
+
+        }
+
+        /*
+                file.ast.walk(createVisitor({
+                    NamespaceStatement: (nsStmt) => {
+                        this.validateNameCollision(file, nsStmt, nsStmt.getNameParts()?.[0]);
+                    },
+                    ClassStatement: (classStmt) => {
+                        this.validateNameCollision(file, classStmt, classStmt.tokens.name);
+                    },
+                    InterfaceStatement: (ifaceStmt) => {
+                        this.validateNameCollision(file, ifaceStmt, ifaceStmt.tokens.name);
+                    },
+                    ConstStatement: (constStmt) => {
+                        this.validateNameCollision(file, constStmt, constStmt.tokens.name);
+                    },
+                    EnumStatement: (enumStmt) => {
+                        this.validateNameCollision(file, enumStmt, enumStmt.tokens.name);
+                    }
+                }), {
+                    walkMode: WalkMode.visitStatements
+                });*/
     }
 
 
@@ -1081,7 +1117,7 @@ export class ScopeValidator {
 
         const containingNamespace = node.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
         const containingNamespaceLower = containingNamespace?.toLowerCase();
-        const links = this.event.scope.getAllFileLinks(name, containingNamespace);
+        const links = this.event.scope.getAllFileLinks(name, containingNamespace, !isNamespaceStatement(node));
         for (let link of links) {
             if (!link || link.item === node) {
                 // refers to same node

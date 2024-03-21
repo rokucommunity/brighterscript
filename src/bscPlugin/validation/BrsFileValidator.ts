@@ -1,4 +1,4 @@
-import { isAALiteralExpression, isArrayType, isBody, isBrsFile, isClassStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
+import { isAALiteralExpression, isArrayType, isBody, isClassStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -36,10 +36,6 @@ export class BrsFileValidator {
         //only validate the file if it was actually parsed (skip files containing typedefs)
         if (!this.event.file.hasTypedef) {
             this.validateImportStatements();
-        }
-
-        if (isBrsFile(this.event.file)) {
-            this.event.file.processSymbolInformation();
         }
         unlinkGlobalSymbolTable();
     }

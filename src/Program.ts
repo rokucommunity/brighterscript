@@ -848,6 +848,7 @@ export class Program {
 
             //validate every file
             const brsFilesValidated: BrsFile[] = [];
+            const afterValidateFiles = [];
             for (const file of Object.values(this.files)) {
                 //for every unvalidated file, validate it
                 if (!file.isValidated) {
@@ -862,8 +863,15 @@ export class Program {
                     if (isBrsFile(file)) {
                         brsFilesValidated.push(file);
                     }
-                    this.plugins.emit('afterFileValidate', validateFileEvent);
+                    afterValidateFiles.push(file);
                 }
+            }
+            for (const file of afterValidateFiles) {
+                const validateFileEvent = {
+                    program: this,
+                    file: file
+                };
+                this.plugins.emit('afterFileValidate', validateFileEvent);
             }
 
             // build list of all changed symbols in each file that changed
@@ -960,6 +968,7 @@ export class Program {
             }
 
             this.logger.time(LogLevel.info, ['Validate all scopes'], () => {
+                console.log(changedSymbols);
                 for (let scopeName in this.scopes) {
                     let scope = this.scopes[scopeName];
                     scope.validate({ changedFiles: brsFilesValidated, changedSymbols: changedSymbols });

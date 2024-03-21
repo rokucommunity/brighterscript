@@ -579,7 +579,7 @@ export interface OnFileValidateEvent<T extends BscFile = BscFile> {
     program: Program;
     file: T;
 }
-export type AfterFileValidateEvent = OnFileValidateEvent;
+export type AfterFileValidateEvent<T extends BscFile = BscFile> = OnFileValidateEvent;
 
 export interface OnFileValidateEvent<T extends BscFile = BscFile> {
     program: Program;
