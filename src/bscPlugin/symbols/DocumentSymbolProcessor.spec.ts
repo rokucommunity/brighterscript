@@ -7,7 +7,7 @@ import { SymbolKind } from 'vscode-languageserver-types';
 import type { BrsFile } from '../../files/BrsFile';
 let sinon = createSandbox();
 
-describe('DocumentSymbolProcessor', () => {
+describe.only('DocumentSymbolProcessor', () => {
     let program: Program;
     beforeEach(() => {
         program = new Program({ rootDir: rootDir, sourceMap: true });
