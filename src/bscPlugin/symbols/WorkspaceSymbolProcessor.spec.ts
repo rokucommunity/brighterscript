@@ -2,27 +2,64 @@ import { expect } from '../../chai-config.spec';
 import { Program } from '../../Program';
 import { createSandbox } from 'sinon';
 import { rootDir } from '../../testHelpers.spec';
-import type { DocumentSymbol } from 'vscode-languageserver-types';
+import { WorkspaceSymbol } from 'vscode-languageserver-types';
 import { SymbolKind } from 'vscode-languageserver-types';
 import type { BrsFile } from '../../files/BrsFile';
+import util, { standardizePath as s } from '../../util';
 let sinon = createSandbox();
 
-describe('DocumentSymbolProcessor', () => {
+describe('WorkspaceSymbolProcessor', () => {
     let program: Program;
+
     beforeEach(() => {
         program = new Program({ rootDir: rootDir, sourceMap: true });
     });
+
     afterEach(() => {
         sinon.restore();
         program.dispose();
     });
 
-    function doTest(source: string, expected: SymbolTree) {
-        program.setFile('source/main.brs', source);
-        expectSymbols(
-            program.getDocumentSymbols('source/main.brs'),
-            expected
+    type ExpectedArray = [string, SymbolKind, string?, number?, number?, number?, number?];
+
+    function doTest(sources: string[], expected: Array<ExpectedArray>) {
+        for (let i = 0; i < sources.length; i++) {
+            program.setFile(`source/lib${i}.brs`, sources[i]);
+        }
+
+        const actual = program.getWorkspaceSymbols().sort((a, b) => symbolToString(a).localeCompare(symbolToString(b)));
+        for (let i = 0; i < actual.length; i++) {
+            let a = actual[i] as any;
+            let b = expected?.[i];
+            //if the expected doesn't have a range, delete the range from the actual
+            if (b?.[3] === undefined) {
+                delete a.location.range;
+            }
+        }
+
+        expect(
+            actual.map(x => symbolToString(x))
+        ).to.eql(
+            expected?.map(x => symbolToString(
+                WorkspaceSymbol.create(
+                    x[0],
+                    x[1],
+                    util.pathToUri(s`${rootDir}/${x[2] ?? 'source/lib0.brs'}`),
+                    typeof x[3] === 'number' ? util.createRange(x[3], x[4], x[5], x[6]) : null
+                )
+            )) ?? undefined
         );
+    }
+
+    const SymbolKindMap = new Map(Object.entries(SymbolKind).map(x => [x[1], x[0]]));
+
+    function symbolToString(symbol: WorkspaceSymbol) {
+        let result = `${symbol.name}|${SymbolKindMap.get(symbol.kind)}|${symbol.location.uri}`;
+        const range = (symbol as any).location.range;
+        if (range) {
+            result += util.rangeToString(range);
+        }
+        return result;
     }
 
     it('skips other file types for now', () => {
@@ -30,16 +67,15 @@ describe('DocumentSymbolProcessor', () => {
             <component name="MainScene" extends="Scene">
             </component>
         `);
-        expectSymbols(
-            program.getDocumentSymbols('components/MainScene.xml'),
-            {}
-        );
+        expect(
+            program.getWorkspaceSymbols()
+        ).to.eql([]);
     });
 
     it('does not crash when name is missing', () => {
         program.plugins['suppressErrors'] = false;
-        function testMissingToken(source: string, nameTokenPath: string[], expected: SymbolTree = {}) {
-            const file = program.setFile<BrsFile>('source/main.brs', source);
+        function testMissingToken(source: string, nameTokenPath: string[], expected?: ExpectedArray[]) {
+            const file = program.setFile<BrsFile>('source/lib0.brs', source);
             let node = file.ast.statements[0];
             //delete the token at the given path
             for (let i = 0; i < nameTokenPath.length - 1; i++) {
@@ -47,10 +83,7 @@ describe('DocumentSymbolProcessor', () => {
             }
             delete node[nameTokenPath[nameTokenPath.length - 1]];
 
-            expectSymbols(
-                program.getDocumentSymbols('source/main.brs'),
-                expected
-            );
+            doTest([], expected ?? []);
         }
 
         //function name is missing
@@ -70,9 +103,9 @@ describe('DocumentSymbolProcessor', () => {
             class alpha
                 name as string
             end class
-        `, ['body', '0', 'name'], {
-            alpha: SymbolKind.Class
-        });
+        `, ['body', '0', 'name'], [
+            ['alpha', SymbolKind.Class]
+        ]);
 
         //class method name is missing
         testMissingToken(`
@@ -80,9 +113,9 @@ describe('DocumentSymbolProcessor', () => {
                 sub test()
                 end sub
             end class
-        `, ['body', '0', 'name'], {
-            alpha: SymbolKind.Class
-        });
+        `, ['body', '0', 'name'], [
+            ['alpha', SymbolKind.Class]
+        ]);
 
         //interface name is missing
         testMissingToken(`
@@ -95,18 +128,18 @@ describe('DocumentSymbolProcessor', () => {
             interface alpha
                 sub test() as void
             end interface
-        `, ['body', '0', 'tokens', 'name'], {
-            alpha: SymbolKind.Interface
-        });
+        `, ['body', '0', 'tokens', 'name'], [
+            ['alpha', SymbolKind.Interface]
+        ]);
 
         //interface field name is missing
         testMissingToken(`
             interface alpha
                 name as string
             end interface
-        `, ['body', '0', 'tokens', 'name'], {
-            alpha: SymbolKind.Interface
-        });
+        `, ['body', '0', 'tokens', 'name'], [
+            ['alpha', SymbolKind.Interface]
+        ]);
 
         //const name is missing
         testMissingToken(`
@@ -134,19 +167,19 @@ describe('DocumentSymbolProcessor', () => {
     });
 
     it('finds functions', () => {
-        doTest(`
+        doTest([`
             function alpha()
             end function
             function beta()
             end function
-        `, {
-            'alpha': SymbolKind.Function,
-            'beta': SymbolKind.Function
-        });
+        `], [
+            ['alpha', SymbolKind.Function, 'source/lib0.brs', 1, 12, 2, 24],
+            ['beta', SymbolKind.Function, 'source/lib0.brs', 3, 12, 4, 24]
+        ]);
     });
 
     it('finds namespaces', () => {
-        doTest(`
+        doTest([`
             namespace alpha
             end namespace
             namespace beta
@@ -155,20 +188,16 @@ describe('DocumentSymbolProcessor', () => {
                 namespace delta
                 end namespace
             end namespace
-        `, {
-            alpha: SymbolKind.Namespace,
-            beta: SymbolKind.Namespace,
-            charlie: {
-                kind: SymbolKind.Namespace,
-                children: {
-                    delta: SymbolKind.Namespace
-                }
-            }
-        });
+        `], [
+            ['alpha', SymbolKind.Namespace],
+            ['beta', SymbolKind.Namespace],
+            ['charlie', SymbolKind.Namespace],
+            ['delta', SymbolKind.Namespace]
+        ]);
     });
 
     it('finds classes', () => {
-        doTest(`
+        doTest([`
             class alpha
             end class
 
@@ -180,149 +209,72 @@ describe('DocumentSymbolProcessor', () => {
                     end sub
                 end class
             end namespace
-        `, {
-            alpha: SymbolKind.Class,
-            beta: {
-                kind: SymbolKind.Namespace,
-                children: {
-                    charlie: {
-                        kind: SymbolKind.Class,
-                        children: {
-                            name: SymbolKind.Field,
-                            speak: SymbolKind.Method
-                        }
-                    }
-                }
-            }
-        });
+        `], [
+            ['alpha', SymbolKind.Class],
+            ['beta', SymbolKind.Namespace],
+            ['charlie', SymbolKind.Class],
+            ['name', SymbolKind.Field],
+            ['speak', SymbolKind.Method]
+        ]);
     });
 
     it('finds interfaces', () => {
-        doTest(`
+        doTest([`
             interface alpha
-                name as string
+                beta as string
             end interface
 
-            namespace beta
-                interface charlie
-                    age as string
-                    sub speak() as void
+            namespace charlie
+                interface delta
+                    echo as string
+                    sub foxtrot() as void
                 end interface
             end namespace
-        `, {
-            alpha: {
-                kind: SymbolKind.Interface,
-                children: {
-                    name: SymbolKind.Field
-                }
-            },
-            beta: {
-                kind: SymbolKind.Namespace,
-                children: {
-                    charlie: {
-                        kind: SymbolKind.Interface,
-                        children: {
-                            age: SymbolKind.Field,
-                            speak: SymbolKind.Method
-                        }
-                    }
-                }
-            }
-        });
+        `], [
+            ['alpha', SymbolKind.Interface],
+            ['beta', SymbolKind.Field],
+            ['charlie', SymbolKind.Namespace],
+            ['delta', SymbolKind.Interface],
+            ['echo', SymbolKind.Field],
+            ['foxtrot', SymbolKind.Method]
+        ]);
     });
 
     it('finds consts', () => {
-        doTest(`
+        doTest([`
             const alpha = 1
             namespace beta
                 const charlie = 2
             end namespace
             const delta = 3
-        `, {
-            alpha: SymbolKind.Constant,
-            beta: {
-                kind: SymbolKind.Namespace,
-                children: {
-                    charlie: SymbolKind.Constant
-                }
-            },
-            delta: SymbolKind.Constant
-        });
+        `], [
+            ['alpha', SymbolKind.Constant],
+            ['beta', SymbolKind.Namespace],
+            ['charlie', SymbolKind.Constant],
+            ['delta', SymbolKind.Constant]
+        ]);
     });
 
     it('finds enums', () => {
-        doTest(`
+        doTest([`
             enum alpha
-                a = 1
-                b = 2
+                b = 1
+                c = 2
             end enum
-            namespace beta
-                enum charlie
-                    c = 3
-                    d = 4
+            namespace delta
+                enum echo
+                    f = 3
+                    g = 4
                 end enum
             end namespace
-        `, {
-            alpha: {
-                kind: SymbolKind.Enum,
-                children: {
-                    a: SymbolKind.EnumMember,
-                    b: SymbolKind.EnumMember
-                }
-            },
-            beta: {
-                kind: SymbolKind.Namespace,
-                children: {
-                    charlie: {
-                        kind: SymbolKind.Enum,
-                        children: {
-                            c: SymbolKind.EnumMember,
-                            d: SymbolKind.EnumMember
-                        }
-                    }
-                }
-            }
-        });
+        `], [
+            ['alpha', SymbolKind.Enum],
+            ['b', SymbolKind.EnumMember],
+            ['c', SymbolKind.EnumMember],
+            ['delta', SymbolKind.Namespace],
+            ['echo', SymbolKind.Enum],
+            ['f', SymbolKind.EnumMember],
+            ['g', SymbolKind.EnumMember]
+        ]);
     });
-
-    function expectSymbols(documentSymbols: DocumentSymbol[], expected: SymbolTree) {
-        expect(
-            symbolKindToString(createSymbolTree(documentSymbols))
-        ).to.eql(
-            symbolKindToString(expected)
-        );
-    }
-
-    const SymbolKindMap = new Map(Object.entries(SymbolKind).map(x => [x[1], x[0]]));
-
-    function symbolKindToString(tree: SymbolTree) {
-        //recursively walk the tree and convert every .kind property to a string
-        for (let key in tree) {
-            let value = tree[key];
-            if (typeof value === 'object') {
-                tree[key] = symbolKindToString(value as any) as any;
-            } else {
-                tree[key] = SymbolKindMap.get(value as any);
-            }
-        }
-        return tree;
-    }
-
-    function createSymbolTree(documentSymbols: DocumentSymbol[]) {
-        let tree = {} as SymbolTree;
-        for (let symbol of documentSymbols) {
-            tree[symbol.name] = symbol.kind;
-            if (symbol.children?.length > 0) {
-                tree[symbol.name] = {
-                    kind: symbol.kind,
-                    children: createSymbolTree(symbol.children)
-                };
-            }
-        }
-        return tree;
-    }
 });
-
-interface SymbolTree {
-    [key: string]: SymbolKind | string | { kind: SymbolKind | string; children: SymbolTree };
-}

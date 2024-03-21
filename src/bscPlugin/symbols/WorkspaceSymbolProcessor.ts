@@ -1,9 +1,8 @@
-import { DocumentSymbol, SymbolKind } from 'vscode-languageserver-types';
-import { isBrsFile, isClassStatement, isConstStatement, isEnumMemberStatement, isEnumStatement, isFieldStatement, isFunctionStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInterfaceStatement, isMethodStatement, isNamespaceStatement } from '../../astUtils/reflection';
+import { isBrsFile } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ProvideWorkspaceSymbolsEvent } from '../../interfaces';
-import type { Statement } from '../../parser/AstNode';
-import { getWorkspaceSymbolFromStatement } from './symbolUtils';
+import { getWorkspaceSymbolsFromStatement } from './symbolUtils';
+import util from '../../util';
 
 export class WorkspaceSymbolProcessor {
     public constructor(
@@ -23,12 +22,10 @@ export class WorkspaceSymbolProcessor {
     }
 
     private getBrsFileWorkspaceSymbols(file: BrsFile) {
-        const symbol = SymbolInformation.create(name, symbolKind, statement.range, uri, containerStatement?.getName(ParseMode.BrighterScript));
-
         for (const statement of file.ast.statements) {
-            const symbol = getWorkspaceSymbolFromStatement(statement);
+            const symbol = getWorkspaceSymbolsFromStatement(statement, util.pathToUri(file.srcPath));
             if (symbol) {
-                this.event.workspaceSymbols.push(symbol);
+                this.event.workspaceSymbols.push(...symbol);
             }
         }
         return this.event.workspaceSymbols;

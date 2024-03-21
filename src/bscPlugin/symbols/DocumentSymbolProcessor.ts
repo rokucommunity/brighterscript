@@ -1,7 +1,7 @@
 import { isBrsFile } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ProvideDocumentSymbolsEvent } from '../../interfaces';
-import { getDocumentSymbolFromStatement } from './symbolUtils';
+import { getDocumentSymbolsFromStatement } from './symbolUtils';
 
 export class DocumentSymbolProcessor {
     public constructor(
@@ -18,9 +18,9 @@ export class DocumentSymbolProcessor {
 
     private getBrsFileDocumentSymbols(file: BrsFile) {
         for (const statement of file.ast.statements) {
-            const symbol = getDocumentSymbolFromStatement(statement);
+            const symbol = getDocumentSymbolsFromStatement(statement);
             if (symbol) {
-                this.event.documentSymbols.push(symbol);
+                this.event.documentSymbols.push(...symbol);
             }
         }
         return this.event.documentSymbols;
