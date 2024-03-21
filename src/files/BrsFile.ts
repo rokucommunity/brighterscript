@@ -2,7 +2,7 @@ import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
 import type { CompletionItem, Position, Location, Diagnostic } from 'vscode-languageserver';
 import { CancellationTokenSource } from 'vscode-languageserver';
-import { CompletionItemKind, SymbolKind, SymbolInformation, TextEdit } from 'vscode-languageserver';
+import { CompletionItemKind, TextEdit } from 'vscode-languageserver';
 import chalk from 'chalk';
 import * as path from 'path';
 import type { Scope } from '../Scope';
@@ -192,8 +192,6 @@ export class BrsFile {
     public get ast() {
         return this.parser.ast;
     }
-
-    private workspaceSymbols: SymbolInformation[];
 
     /**
      * Get the token at the specified position
