@@ -51,6 +51,7 @@ import { BuiltInInterfaceAdder } from './types/BuiltInInterfaceAdder';
 import type { UnresolvedSymbol } from './AstValidationSegmenter';
 import { WalkMode, createVisitor } from './astUtils/visitors';
 import type { BscFile } from './files/BscFile';
+import { Stopwatch } from './Stopwatch';
 
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
@@ -866,6 +867,7 @@ export class Program {
                     afterValidateFiles.push(file);
                 }
             }
+            // AfterFileValidate is after all files have been validated
             for (const file of afterValidateFiles) {
                 const validateFileEvent = {
                     program: this,
@@ -968,11 +970,23 @@ export class Program {
             }
 
             this.logger.time(LogLevel.info, ['Validate all scopes'], () => {
-                console.log(changedSymbols);
+                let linkTime = 0;
+                let validationTime = 0;
+                let scopesValidated = 0;
                 for (let scopeName in this.scopes) {
                     let scope = this.scopes[scopeName];
-                    scope.validate({ changedFiles: brsFilesValidated, changedSymbols: changedSymbols });
+                    const scopeValidated = scope.validate({ changedFiles: afterValidateFiles, changedSymbols: changedSymbols });
+                    if (scopeValidated) {
+                        scopesValidated++;
+                    }
+                    linkTime += scope.validationMetrics.linkTime;
+                    validationTime += scope.validationMetrics.validationTime;
                 }
+                const linkTimeStopWatch = new Stopwatch();
+                linkTimeStopWatch.totalMilliseconds = linkTime;
+                const validationTimeStopWatch = new Stopwatch();
+                validationTimeStopWatch.totalMilliseconds = validationTime;
+                this.logger.info(`Scopes Validated: ${scopesValidated}, Link Time: ${linkTimeStopWatch.getDurationText()}, Validation Time: ${validationTimeStopWatch.getDurationText()}`);
             });
 
             this.detectDuplicateComponentNames();

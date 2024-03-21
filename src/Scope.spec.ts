@@ -3903,6 +3903,42 @@ describe('Scope', () => {
             expectZeroDiagnostics(program);
         });
 
+        it('revalidates if import file changes', () => {
+            program.setFile<BrsFile>('source/file1.bs', `
+                import "pkg:/source/file2.bs"
+
+                    function test()
+                        print test2()
+                    end function
+            `);
+            program.setFile<BrsFile>('source/file2.bs', ``);
+            //let widgetXml =
+            program.setFile<BrsFile>('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <script uri="pkg:/source/file1.bs"/>
+                </component>
+            `);
+            program.setFile<BrsFile>('components/Widget.bs', trim`
+                sub init()
+                    test()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('test2').message
+            ]);
+
+            program.setFile<BrsFile>('source/file2.bs', `
+                function test2()
+                    return 2
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
         describe('namespaces', () => {
 
             it('does not require symbols found in same namespace', () => {

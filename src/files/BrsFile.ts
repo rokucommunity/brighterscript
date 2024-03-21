@@ -23,7 +23,7 @@ import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
 import { isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isNamespaceStatement, isVariableExpression, isImportStatement, isFieldStatement, isEnumStatement, isConstStatement, isAnyReferenceType, isNamespaceType, isReferenceType, isCallableType, isBrsFile } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
-import type { DependencyGraph } from '../DependencyGraph';
+import type { DependencyChangedEvent, DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import type { AstNode, Expression, Statement } from '../parser/AstNode';
 import type { AssignedSymbol, UnresolvedSymbol } from '../AstValidationSegmenter';
@@ -335,10 +335,13 @@ export class BrsFile implements BscFile {
         this.hasTypedef = !!this.typedefFile;
     }
 
-    public onDependenciesChanged() {
+    public onDependenciesChanged(event: DependencyChangedEvent) {
         this.resolveTypedef();
         this.unlinkNamespaceSymbolTables();
         this.cache?.delete('namespaceSymbolTable');
+        this.cache?.delete('requiredSymbols');
+
+        this.validationSegmenter.unValidateAllSegments();
     }
 
     /**
@@ -1186,13 +1189,12 @@ export class BrsFile implements BscFile {
     }
 
     public processSymbolInformation() {
+        // Get namespaces across imported files
         const nsTable = this.getNamespaceSymbolTable(false);
         this.linkSymbolTableDisposables.push(this.ast.symbolTable.addSibling(nsTable));
 
         this.validationSegmenter.processTree(this.ast);
         this.program.addFileSymbolInfo(this);
-        this.cache?.set('processSymbolInformation', true);
-
         this.unlinkNamespaceSymbolTables();
     }
 
@@ -1200,6 +1202,7 @@ export class BrsFile implements BscFile {
         for (let disposable of this.linkSymbolTableDisposables) {
             disposable();
         }
+        this.linkSymbolTableDisposables = [];
     }
 
     private linkSymbolTableDisposables = [];
@@ -1247,17 +1250,7 @@ export class BrsFile implements BscFile {
             if (!namespaceTypesKnown.has(nsName)) {
                 namespaceTypesKnown.set(nsName, currentNSType);
             }
-
-            /*  for (let nsStmt of nsContainer.namespaceStatements) {
-                  //            this.linkSymbolTableDisposables.push(
-                  nsStmt?.getSymbolTable().addSibling(nsContainer.symbolTable);
-                  //          );
-              }*/
-
-            // this.linkSymbolTableDisposables.push(
             currentNSType.memberTable.addSibling(nsContainer.symbolTable);
-            // );
-
         }
     }
 

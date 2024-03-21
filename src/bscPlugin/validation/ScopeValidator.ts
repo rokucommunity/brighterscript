@@ -86,18 +86,22 @@ export class ScopeValidator {
     }
 
     private walkFiles() {
+        const hasChangeInfo = this.event.changedFiles && this.event.changedSymbols;
 
         //do many per-file checks for every file in this (and parent) scopes
         this.event.scope.enumerateBrsFiles((file) => {
             if (!isBrsFile(file)) {
                 return;
             }
-            this.diagnosticDetectFunctionCollisions(file);
+            const thisFileHasChanges = this.event.changedFiles.includes(file);
             this.detectVariableNamespaceCollisions(file);
-            this.detectNameCollisions(file);
 
+            if (thisFileHasChanges || this.doesFileProvideChangedSymbol(file, this.event.changedSymbols)) {
+                this.diagnosticDetectFunctionCollisions(file);
+                this.detectNameCollisions(file);
+            }
         });
-        console.log('Checking Scope', this.event.scope.name);
+        //console.log('Checking Scope', this.event.scope.name);
 
         this.event.scope.enumerateOwnFiles((file) => {
             if (isBrsFile(file)) {
@@ -107,13 +111,13 @@ export class ScopeValidator {
                 }
                 const fileMap = this.validationMetrics.get(file);
 
-                const hasChangeInfo = this.event.changedFiles && this.event.changedSymbols;
+                const thisFileHasChanges = this.event.changedFiles.includes(file);
 
                 const thisFileRequiresChangedSymbol = this.doesFileRequireChangedSymbol(file);
 
-                const thisFileHasChanges = this.event.changedFiles.includes(file);
+                const hasUnvalidatedSegments = file.validationSegmenter.hasUnvalidatedSegments();
 
-                if (hasChangeInfo && !thisFileRequiresChangedSymbol && !thisFileHasChanges) {
+                if (hasChangeInfo && !thisFileRequiresChangedSymbol && !thisFileHasChanges && !hasUnvalidatedSegments) {
                     // this file does not require a symbol that has changed, and this file has not changed
 
                     if (!this.doesFileAssignChangedSymbol(file)) {
@@ -191,13 +195,6 @@ export class ScopeValidator {
                     });
                     if (!fileMap.has(segment)) {
                         fileMap.set(segment, 0);
-                    } else {
-                        console.log('Checking ... ', file.pkgPath, util.rangeToString(segment.range));
-                        const unresolved = file.validationSegmenter.unresolvedSegmentsSymbols.get(segment);
-                        if (unresolved?.size > 0) {
-                            const missing = [...unresolved.values()].map(m => util.processTypeChain(m.typeChain).fullChainName);
-                            console.log(missing);
-                        }
                     }
                     fileMap.set(segment, fileMap.get(segment) + 1);
                     file.markSegmentAsValidated(segment);
@@ -222,6 +219,23 @@ export class ScopeValidator {
             }
         }
         return thisFileRequiresChangedSymbol;
+    }
+
+    private doesFileProvideChangedSymbol(file: BrsFile, changedSymbols: Map<SymbolTypeFlag, Set<string>>) {
+        if (!changedSymbols) {
+            return true;
+        }
+        for (const flag of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
+            const providedSymbolKeysFlag = file.providedSymbols.symbolMap.get(flag).keys();
+            const changedSymbolSetForFlag = changedSymbols.get(flag);
+
+            for (let providedKey of providedSymbolKeysFlag) {
+                if (changedSymbolSetForFlag.has(providedKey)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private doesFileAssignChangedSymbol(file: BrsFile) {

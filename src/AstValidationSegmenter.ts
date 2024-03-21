@@ -70,7 +70,7 @@ export class AstValidationSegmenter {
                 } else {
                     symbolsSet = this.unresolvedSegmentsSymbols.get(segment);
                 }
-
+                this.validatedSegments.set(segment, false);
                 symbolsSet.add({ typeChain: typeChain, flags: typeChain[0].data.flags, endChainFlags: flag, containingNamespaces: this.currentNamespaceStatement?.getNameParts()?.map(t => t.text) });
             }
             return true;
@@ -172,7 +172,10 @@ export class AstValidationSegmenter {
                         // eslint-disable-next-line no-bitwise
                         const runTimeOrTypeTimeSymbolFlag = requiredSymbol.flags & flagType;
                         const changeSymbolSetForFlag = changedSymbols.get(runTimeOrTypeTimeSymbolFlag);
-                        if (util.setContainsUnresolvedSymbol(changeSymbolSetForFlag, requiredSymbol)) {
+                        if (!changeSymbolSetForFlag) {
+                            // This symbol has no flag - it is of unknown usage
+                            // This can happen when testing if a function exists
+                        } else if (util.setContainsUnresolvedSymbol(changeSymbolSetForFlag, requiredSymbol)) {
                             segmentsToWalkForValidation.push(segment);
                             break;
                         }
@@ -196,6 +199,18 @@ export class AstValidationSegmenter {
         this.validatedSegments.set(segment, true);
     }
 
+    unValidateAllSegments() {
+        for (const segment of this.validatedSegments.keys()) {
+            this.validatedSegments.set(segment, false);
+        }
+    }
+
+
+    hasUnvalidatedSegments() {
+        return Array.from(this.validatedSegments.values()).includes(false);
+    }
+
+
     checkIfSegmentNeedRevalidation(segment: AstNode) {
         if (!this.validatedSegments.get(segment)) {
             return true;
@@ -209,5 +224,16 @@ export class AstValidationSegmenter {
              return true;
          }*/
         return false;
+    }
+
+    markSegmentsInvalidatedBySymbol(symbolName: string, flag: SymbolTypeFlag) {
+        for (let [segment, unresolvedSet] of this.unresolvedSegmentsSymbols) {
+            for (let unresolvedSymbol of unresolvedSet.values()) {
+                if (unresolvedSymbol.typeChain.join('.').toLowerCase() === symbolName) {
+                    this.validatedSegments.set(segment, false);
+                    break;
+                }
+            }
+        }
     }
 }
