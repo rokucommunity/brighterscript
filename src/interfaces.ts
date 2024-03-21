@@ -1,4 +1,4 @@
-import type { Range, Diagnostic, CodeAction, SemanticTokenTypes, SemanticTokenModifiers, Position, CompletionItem, Location, DocumentSymbol } from 'vscode-languageserver';
+import type { Range, Diagnostic, CodeAction, Position, CompletionItem, Location, DocumentSymbol, WorkspaceSymbol } from 'vscode-languageserver-protocol';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -14,6 +14,7 @@ import type { SourceMapGenerator, SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
 import type { AstEditor } from './astUtils/AstEditor';
 import type { Token } from './lexer/Token';
+import type { SemanticTokenModifiers, SemanticTokenTypes } from 'vscode-languageserver';
 
 export interface BsDiagnostic extends Diagnostic {
     file: BscFile;
@@ -277,6 +278,22 @@ export interface CompilerPlugin {
     afterProvideDocumentSymbols?(event: AfterProvideDocumentSymbolsEvent): any;
 
 
+    /**
+     * Called before the `provideWorkspaceSymbols` hook
+     */
+    beforeProvideWorkspaceSymbols?(event: BeforeProvideWorkspaceSymbolsEvent): any;
+    /**
+     * Provide all of the workspace symbols for the entire project
+     * @param event
+     */
+    provideWorkspaceSymbols?(event: ProvideWorkspaceSymbolsEvent): any;
+    /**
+     * Called after `provideWorkspaceSymbols`. Use this if you want to intercept or sanitize the workspace symbols data provided by bsc or other plugins
+     * @param event
+     */
+    afterProvideWorkspaceSymbols?(event: AfterProvideWorkspaceSymbolsEvent): any;
+
+
     onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
     //scope events
     afterScopeCreate?: (scope: Scope) => void;
@@ -401,6 +418,17 @@ export interface ProvideDocumentSymbolsEvent<TFile = BscFile> {
 }
 export type BeforeProvideDocumentSymbolsEvent<TFile = BscFile> = ProvideDocumentSymbolsEvent<TFile>;
 export type AfterProvideDocumentSymbolsEvent<TFile = BscFile> = ProvideDocumentSymbolsEvent<TFile>;
+
+
+export interface ProvideWorkspaceSymbolsEvent {
+    program: Program;
+    /**
+     * The result list of symbols
+     */
+    workspaceSymbols: WorkspaceSymbol[];
+}
+export type BeforeProvideWorkspaceSymbolsEvent = ProvideWorkspaceSymbolsEvent;
+export type AfterProvideWorkspaceSymbolsEvent = ProvideWorkspaceSymbolsEvent;
 
 
 export interface OnGetSemanticTokensEvent<T extends BscFile = BscFile> {

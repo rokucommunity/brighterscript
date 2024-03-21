@@ -969,17 +969,14 @@ describe('LanguageServer', () => {
         });
 
         it('should work for nested class as well', async () => {
-            const nestedNamespace = 'containerNamespace';
-            const nestedClassName = 'nestedClass';
-
             addScriptFile('nested', `
-                namespace ${nestedNamespace}
-                    class ${nestedClassName}
-                        function pi()
+                namespace animals
+                    class dog
+                        function run()
                             return 3.141592653589793
                         end function
 
-                        function buildAwesome()
+                        function speak()
                             return 42
                         end function
                     end class
@@ -991,13 +988,17 @@ describe('LanguageServer', () => {
             for (let i = 0; i < 2; i++) {
                 const symbols = await server['onWorkspaceSymbol']({} as any);
                 expect(symbols.length).to.equal(4);
-                expect(symbols[0].name).to.equal(`pi`);
-                expect(symbols[0].containerName).to.equal(`${nestedNamespace}.${nestedClassName}`);
-                expect(symbols[1].name).to.equal(`buildAwesome`);
-                expect(symbols[1].containerName).to.equal(`${nestedNamespace}.${nestedClassName}`);
-                expect(symbols[2].name).to.equal(`${nestedNamespace}.${nestedClassName}`);
-                expect(symbols[2].containerName).to.equal(nestedNamespace);
-                expect(symbols[3].name).to.equal(nestedNamespace);
+                expect(
+                    symbols.map(x => ({
+                        name: x.name,
+                        containerName: x.containerName
+                    })).sort((a, b) => a.name.localeCompare(b.name))
+                ).to.eql([
+                    { name: 'animals', containerName: undefined },
+                    { name: `dog`, containerName: 'animals' },
+                    { name: `run`, containerName: 'dog' },
+                    { name: 'speak', containerName: 'dog' }
+                ]);
             }
         });
     });

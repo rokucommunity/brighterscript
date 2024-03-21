@@ -8,7 +8,7 @@ import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent } from './interfaces';
+import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -905,14 +905,14 @@ export class Program {
      * Goes through each file and builds a list of workspace symbols for the program. Used by LanguageServer's onWorkspaceSymbol functionality
      */
     public getWorkspaceSymbols() {
-        const results = Object.keys(this.files).map(key => {
-            const file = this.files[key];
-            if (isBrsFile(file)) {
-                return file.getWorkspaceSymbols();
-            }
-            return [];
-        });
-        return util.flatMap(results, c => c);
+        const event: ProvideWorkspaceSymbolsEvent = {
+            program: this,
+            workspaceSymbols: []
+        };
+        this.plugins.emit('beforeProvideWorkspaceSymbols', event);
+        this.plugins.emit('provideWorkspaceSymbols', event);
+        this.plugins.emit('afterProvideWorkspaceSymbols', event);
+        return event.workspaceSymbols;
     }
 
     /**
@@ -961,6 +961,10 @@ export class Program {
         return result ?? [];
     }
 
+    /**
+     * Get full list of document symbols for a file
+     * @param srcPath path to the file
+     */
     public getDocumentSymbols(srcPath: string): DocumentSymbol[] | undefined {
         let file = this.getFile(srcPath);
         if (file) {
