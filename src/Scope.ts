@@ -151,21 +151,22 @@ export class Scope {
     }
 
 
-    private getFileLink<T>(cachedFileMap: Map<string, T>, itemName: string, containingNamespace?: string): FileLink<T> {
+    private getFileLinkFromFileMap<T>(cachedMapName: string, itemName: string, containingNamespace?: string): FileLink<T> {
         let result: FileLink<T>;
         const fullNameLower = util.getFullyQualifiedClassName(itemName, containingNamespace)?.toLowerCase();
+        const itemNameLower = itemName?.toLowerCase();
         if (fullNameLower) {
             this.enumerateBrsFilesWithBreak((file) => {
-                let stmt = cachedFileMap.get(itemName);
+                let stmt = file['_cachedLookups'][cachedMapName].get(fullNameLower);
                 if (stmt) {
                     result = { item: stmt, file: file };
                 }
                 return !!stmt;
             });
         }
-        if (!result && itemName) {
+        if (!result && itemNameLower && fullNameLower !== itemNameLower) {
             this.enumerateBrsFilesWithBreak((file) => {
-                let stmt = cachedFileMap.get(itemName);
+                let stmt = file['_cachedLookups'][cachedMapName].get(itemNameLower);
                 if (stmt) {
                     result = { item: stmt, file: file };
                 }
@@ -181,17 +182,7 @@ export class Scope {
      * @param containingNamespace - The namespace used to resolve relative class names. (i.e. the namespace around the current statement trying to find a class)
      */
     public getClassFileLink(className: string, containingNamespace?: string): FileLink<ClassStatement> {
-        const lowerClassName = className?.toLowerCase();
-        const classMap = this.getClassMap();
-
-        let cls = classMap.get(
-            util.getFullyQualifiedClassName(lowerClassName, containingNamespace?.toLowerCase())
-        );
-        //if we couldn't find the class by its full namespaced name, look for a global class with that name
-        if (!cls) {
-            cls = classMap.get(lowerClassName);
-        }
-        return cls;
+        return this.getFileLinkFromFileMap('classStatementMap', className, containingNamespace);
     }
 
     /**
@@ -200,17 +191,7 @@ export class Scope {
      * @param containingNamespace - The namespace used to resolve relative interface names. (i.e. the namespace around the current statement trying to find a interface)
      */
     public getInterfaceFileLink(ifaceName: string, containingNamespace?: string): FileLink<InterfaceStatement> {
-        const lowerName = ifaceName?.toLowerCase();
-        const ifaceMap = this.getInterfaceMap();
-
-        let iface = ifaceMap.get(
-            util.getFullyQualifiedClassName(lowerName, containingNamespace?.toLowerCase())
-        );
-        //if we couldn't find the iface by its full namespaced name, look for a global class with that name
-        if (!iface) {
-            iface = ifaceMap.get(lowerName);
-        }
-        return iface;
+        return this.getFileLinkFromFileMap('interfaceStatementMap', ifaceName, containingNamespace);
     }
 
     /**
@@ -219,6 +200,8 @@ export class Scope {
      * @param containingNamespace - The namespace used to resolve relative enum names. (i.e. the namespace around the current statement trying to find a enum)
      */
     public getEnumFileLink(enumName: string, containingNamespace?: string): FileLink<EnumStatement> {
+        return this.getFileLinkFromFileMap('enumStatementMap', enumName, containingNamespace);
+
         const lowerName = enumName?.toLowerCase();
         const enumMap = this.getEnumMap();
 
@@ -241,15 +224,9 @@ export class Scope {
         let lowerNameParts = enumMemberName?.toLowerCase()?.split('.');
         let memberName = lowerNameParts?.splice(lowerNameParts.length - 1, 1)?.[0];
         let lowerName = lowerNameParts?.join('.');
-        const enumMap = this.getEnumMap();
 
-        let enumeration = enumMap.get(
-            util.getFullyQualifiedClassName(lowerName, containingNamespace?.toLowerCase())
-        );
-        //if we couldn't find the enum by its full namespaced name, look for a global enum with that name
-        if (!enumeration) {
-            enumeration = enumMap.get(lowerName);
-        }
+        let enumeration = this.getEnumFileLink(lowerName, containingNamespace);
+
         if (enumeration) {
             let member = enumeration.item.findChild<EnumMemberStatement>((child) => isEnumMemberStatement(child) && child.name?.toLowerCase() === memberName);
             return member ? { item: member, file: enumeration.file } : undefined;
@@ -262,29 +239,7 @@ export class Scope {
      * @param containingNamespace - The namespace used to resolve relative constant names. (i.e. the namespace around the current statement trying to find a constant)
      */
     public getConstFileLink(constName: string, containingNamespace?: string): FileLink<ConstStatement> {
-        const fullNameLower = util.getFullyQualifiedClassName(constName, containingNamespace)?.toLowerCase();
-        let result;
-        if (fullNameLower) {
-            this.enumerateBrsFilesWithBreak((file) => {
-                let stmt = file['_cachedLookups'].constStatementMap.get(fullNameLower);
-                if (stmt) {
-                    result = { item: stmt, file: file };
-                }
-                return !!stmt;
-            });
-        }
-
-        if (!result && constName) {
-            const lowerName = constName?.toLowerCase();
-            this.enumerateBrsFilesWithBreak((file) => {
-                let stmt = file['_cachedLookups'].constStatementMap.get(lowerName);
-                if (stmt) {
-                    result = { item: stmt, file: file };
-                }
-                return !!stmt;
-            });
-        }
-        return result;
+        return this.getFileLinkFromFileMap('constStatementMap', constName, containingNamespace);
     }
 
     public getAllFileLinks(name: string, containingNamespace?: string, includeNamespaces = false, includeNameShadowsOutsideNamespace = false): FileLink<Statement>[] {
@@ -305,13 +260,6 @@ export class Scope {
             if (nameSpaceContainer) {
                 links.push({ item: nameSpaceContainer.namespaceStatements?.[0], file: nameSpaceContainer?.file as BrsFile });
             }
-            /*
-            if (nameSpaces?.length > 0) {
-                const nsContainersWithStatement = nameSpaces.find(nsContainer => nsContainer?.namespaceStatements?.length > 0); //.filter(nsContainer => nsContainer?.namespaceStatements?.length > 0)?.[0];
-                if (nsContainersWithStatement) {
-                    links.push({ item: nsContainersWithStatement?.namespaceStatements?.[0], file: nsContainersWithStatement?.file as BrsFile });
-                }
-            }*/
         }
         const fullNameLower = (containingNamespace ? `${containingNamespace}.${name}` : name).toLowerCase();
         const callable = this.getCallableByName(name);
