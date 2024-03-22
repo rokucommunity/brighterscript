@@ -67,19 +67,7 @@ export class ScopeValidator {
         }
     }
 
-    private validationMetrics = new Map<BrsFile, Map<AstNode, number>>();
-
-
     public reset() {
-        /* console.log('*** BEGIN VALIDATION METRICS ***');
-         for (let [file, fileDeets] of this.validationMetrics.entries()) {
-             for (let [node, count] of fileDeets.entries()) {
-                 console.log(`${file.pkgPath},${util.rangeToString(node.range)},${count}`);
-             }
-         }
-         console.log('***  END VALIDATION METRICS  ***');*/
-
-        this.validationMetrics = new Map<BrsFile, Map<AstNode, number>>();
         this.event = undefined;
         this.onceCache.clear();
         this.multiScopeCache.clear();
@@ -101,16 +89,9 @@ export class ScopeValidator {
                 this.detectNameCollisions(file);
             }
         });
-        //console.log('Checking Scope', this.event.scope.name);
 
         this.event.scope.enumerateOwnFiles((file) => {
             if (isBrsFile(file)) {
-
-                if (!this.validationMetrics.has(file)) {
-                    this.validationMetrics.set(file, new Map<AstNode, number>());
-                }
-                const fileMap = this.validationMetrics.get(file);
-
                 const thisFileHasChanges = this.event.changedFiles.includes(file);
 
                 const thisFileRequiresChangedSymbol = this.doesFileRequireChangedSymbol(file);
@@ -193,10 +174,6 @@ export class ScopeValidator {
                     segment.walk(validationVisitor, {
                         walkMode: InsideSegmentWalkMode
                     });
-                    if (!fileMap.has(segment)) {
-                        fileMap.set(segment, 0);
-                    }
-                    fileMap.set(segment, fileMap.get(segment) + 1);
                     file.markSegmentAsValidated(segment);
                 }
             }
@@ -1098,27 +1075,6 @@ export class ScopeValidator {
             this.validateNameCollision(file, enumStmt, enumStmt.tokens.name);
 
         }
-
-        /*
-                file.ast.walk(createVisitor({
-                    NamespaceStatement: (nsStmt) => {
-                        this.validateNameCollision(file, nsStmt, nsStmt.getNameParts()?.[0]);
-                    },
-                    ClassStatement: (classStmt) => {
-                        this.validateNameCollision(file, classStmt, classStmt.tokens.name);
-                    },
-                    InterfaceStatement: (ifaceStmt) => {
-                        this.validateNameCollision(file, ifaceStmt, ifaceStmt.tokens.name);
-                    },
-                    ConstStatement: (constStmt) => {
-                        this.validateNameCollision(file, constStmt, constStmt.tokens.name);
-                    },
-                    EnumStatement: (enumStmt) => {
-                        this.validateNameCollision(file, enumStmt, enumStmt.tokens.name);
-                    }
-                }), {
-                    walkMode: WalkMode.visitStatements
-                });*/
     }
 
 
