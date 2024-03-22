@@ -70,7 +70,14 @@ export class ProjectManager {
      * @param workspaceConfigs an array of workspaces
      */
     @TrackBusyStatus
-    public async syncProjects(workspaceConfigs: WorkspaceConfig[]) {
+    public async syncProjects(workspaceConfigs: WorkspaceConfig[], forceReload = false) {
+        //if we're force reloading, destroy all projects and start fresh
+        if (forceReload) {
+            for (const project of this.projects) {
+                this.removeProject(project);
+            }
+        }
+
         this.syncPromise = (async () => {
             //build a list of unique projects across all workspace folders
             let projectConfigs = (await Promise.all(
@@ -78,7 +85,7 @@ export class ProjectManager {
                     const projectPaths = await this.getProjectPaths(workspaceConfig);
                     return projectPaths.map(projectPath => ({
                         projectPath: s`${projectPath}`,
-                        workspaceFolder: s`${workspaceConfig}`,
+                        workspaceFolder: s`${workspaceConfig.workspaceFolder}`,
                         excludePatterns: workspaceConfig.excludePatterns,
                         threadingEnabled: workspaceConfig.threadingEnabled
                     }));

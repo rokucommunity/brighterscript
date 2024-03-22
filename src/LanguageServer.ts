@@ -27,7 +27,9 @@ import type {
     SemanticTokensOptions,
     Location,
     CompletionList,
-    CancellationToken
+    CancellationToken,
+    DidChangeConfigurationParams,
+    DidChangeConfigurationRegistrationOptions
 } from 'vscode-languageserver/node';
 import {
     SemanticTokensRequest,
@@ -201,16 +203,23 @@ export class LanguageServer implements OnHandler<Connection> {
     public async onInitialized() {
         try {
             if (this.hasConfigurationCapability) {
-                // Register for all configuration changes.
+                // register for when the user changes workspace or user settings
                 await this.connection.client.register(
                     DidChangeConfigurationNotification.type,
-                    undefined
+                    {
+                        //we only care about when these settings sections change
+                        section: [
+                            'brightscript',
+                            'files'
+                        ]
+                    } as DidChangeConfigurationRegistrationOptions
                 );
             }
 
             await this.syncProjects();
 
             if (this.clientHasWorkspaceFolderCapability) {
+                //if the client changes their workspaces, we need to get our projects in sync
                 this.connection.workspace.onDidChangeWorkspaceFolders(async (evt) => {
                     await this.syncProjects();
                 });
@@ -237,16 +246,9 @@ export class LanguageServer implements OnHandler<Connection> {
     }
 
     @AddStackToErrorMessage
-    private async onDidChangeConfiguration() {
-        if (this.hasConfigurationCapability) {
-            //if the user changes any config value, just mass-reload all projects
-            await this.reloadProjects(this.getProjects());
-            // Reset all cached document settings
-        } else {
-            // this.globalSettings = <ExampleSettings>(
-            //     (change.settings.languageServerExample || this.defaultSettings)
-            // );
-        }
+    protected async onDidChangeConfiguration(args: DidChangeConfigurationParams) {
+        //if the user changes any user/workspace config settings, just mass-reload all projects
+        await this.syncProjects(true);
     }
 
     /**
@@ -469,8 +471,9 @@ export class LanguageServer implements OnHandler<Connection> {
      * Treat workspaces that don't have a bsconfig.json as a project.
      * Handle situations where bsconfig.json files were added or removed (to elevate/lower workspaceFolder projects accordingly)
      * Leave existing projects alone if they are not affected by these changes
+     * @param forceReload if true, all projects are discarded and recreated from scratch
      */
-    private async syncProjects() {
+    private async syncProjects(forceReload = false) {
         // get all workspace paths from the client
         let workspaces = await Promise.all(
             (await this.connection.workspace.getWorkspaceFolders() ?? []).map(async (x) => {
@@ -487,7 +490,7 @@ export class LanguageServer implements OnHandler<Connection> {
             })
         );
 
-        await this.projectManager.syncProjects(workspaces);
+        await this.projectManager.syncProjects(workspaces, forceReload);
     }
 
     /**
