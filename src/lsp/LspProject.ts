@@ -1,4 +1,4 @@
-import type { Diagnostic, Position, Range, Location, DocumentSymbol, WorkspaceSymbol, CodeAction } from 'vscode-languageserver';
+import type { Diagnostic, Position, Range, Location, DocumentSymbol, WorkspaceSymbol, CodeAction, CompletionList } from 'vscode-languageserver';
 import type { Hover, MaybePromise, SemanticToken } from '../interfaces';
 import type { BsConfig } from '../BsConfig';
 import type { DocumentAction } from './DocumentManager';
@@ -104,6 +104,11 @@ export interface LspProject {
      * Get all of the code actions for the specified file and range
      */
     getCodeActions(options: { srcPath: string; range: Range }): Promise<CodeAction[]>;
+
+    /**
+     * Get the completions for the specified file and position
+     */
+    getCompletions(options: { srcPath: string; position: Position }): Promise<CompletionList>;
 
     /**
      * Does this project have the specified file. Should only be called after `.activate()` has completed.

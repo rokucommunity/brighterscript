@@ -25,7 +25,9 @@ import type {
     ResultProgressReporter,
     WorkDoneProgressReporter,
     SemanticTokensOptions,
-    Location
+    Location,
+    CompletionList,
+    CancellationToken
 } from 'vscode-languageserver/node';
 import {
     SemanticTokensRequest,
@@ -161,13 +163,13 @@ export class LanguageServer implements OnHandler<Connection> {
         return {
             capabilities: {
                 textDocumentSync: TextDocumentSyncKind.Full,
-                // // Tell the client that the server supports code completion
-                // completionProvider: {
-                //     resolveProvider: true,
-                //     //anytime the user types a period, auto-show the completion results
-                //     triggerCharacters: ['.'],
-                //     allCommitCharacters: ['.', '@']
-                // },
+                // Tell the client that the server supports code completion
+                completionProvider: {
+                    resolveProvider: false,
+                    //anytime the user types a period, auto-show the completion results
+                    triggerCharacters: ['.'],
+                    allCommitCharacters: ['.', '@']
+                },
                 documentSymbolProvider: true,
                 workspaceSymbolProvider: true,
                 semanticTokensProvider: {
@@ -228,26 +230,10 @@ export class LanguageServer implements OnHandler<Connection> {
      * Provide a list of completion items based on the current cursor position
      */
     @AddStackToErrorMessage
-    public async onCompletion1(params: CompletionParams, workDoneProgress: WorkDoneProgressReporter, resultProgress?: ResultProgressReporter<CompletionItem[]>) {
+    public async onCompletion(params: CompletionParams, token: CancellationToken, workDoneProgress: WorkDoneProgressReporter, resultProgress: ResultProgressReporter<CompletionItem[]>): Promise<CompletionList> {
         const srcPath = util.uriToPath(params.textDocument.uri);
-
         const completions = await this.projectManager.getCompletions({ srcPath: srcPath, position: params.position });
         return completions;
-    }
-
-    /**
-     * Provide a full completion item from the selection
-     */
-    @AddStackToErrorMessage
-    public onCompletionResolve(item: CompletionItem): CompletionItem {
-        if (item.data === 1) {
-            item.detail = 'TypeScript details';
-            item.documentation = 'TypeScript documentation';
-        } else if (item.data === 2) {
-            item.detail = 'JavaScript details';
-            item.documentation = 'JavaScript documentation';
-        }
-        return item;
     }
 
     @AddStackToErrorMessage
@@ -810,7 +796,6 @@ export class LanguageServer implements OnHandler<Connection> {
     @AddStackToErrorMessage
     private onTextDocumentDidChangeContent(event: TextDocumentChangeEvent<TextDocument>) {
         const srcPath = URI.parse(event.document.uri).fsPath;
-        console.log('setFile', srcPath);
         this.projectManager.setFile(srcPath, event.document.getText());
     }
 

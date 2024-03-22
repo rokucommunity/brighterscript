@@ -13,7 +13,7 @@ import type { BsConfig } from '../../BsConfig';
 import type { DocumentAction } from '../DocumentManager';
 import { Deferred } from '../../deferred';
 import type { FileTranspileResult, SignatureInfoObj } from '../../Program';
-import type { Position, Range, Location, DocumentSymbol, WorkspaceSymbol, CodeAction } from 'vscode-languageserver-protocol';
+import type { Position, Range, Location, DocumentSymbol, WorkspaceSymbol, CodeAction, CompletionList } from 'vscode-languageserver-protocol';
 
 export const workerPool = new WorkerPool(() => {
     return new Worker(
@@ -158,7 +158,6 @@ export class WorkerThreadProject implements LspProject {
 
     /**
      * Get the full list of semantic tokens for the given file path
-     * @param srcPath absolute path to the source file
      */
     public async getSemanticTokens(options: { srcPath: string }) {
         return this.sendStandardRequest<SemanticToken[]>('getSemanticTokens', options);
@@ -194,6 +193,10 @@ export class WorkerThreadProject implements LspProject {
 
     public async getCodeActions(options: { srcPath: string; range: Range }): Promise<CodeAction[]> {
         return this.sendStandardRequest<CodeAction[]>('getCodeActions', options);
+    }
+
+    public async getCompletions(options: { srcPath: string; position: Position }): Promise<CompletionList> {
+        return this.sendStandardRequest<CompletionList>('getCompletions', options);
     }
 
     /**

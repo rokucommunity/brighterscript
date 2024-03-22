@@ -5,7 +5,7 @@ import * as EventEmitter from 'eventemitter3';
 import type { LspDiagnostic, LspProject } from './LspProject';
 import { Project } from './Project';
 import { WorkerThreadProject } from './worker/WorkerThreadProject';
-import type { Hover, Position, Range, Location, SignatureHelp, DocumentSymbol, SymbolInformation, WorkspaceSymbol, CodeAction } from 'vscode-languageserver-protocol';
+import type { Hover, Position, Range, Location, SignatureHelp, DocumentSymbol, SymbolInformation, WorkspaceSymbol, CodeAction, CompletionList } from 'vscode-languageserver-protocol';
 import { Deferred } from '../deferred';
 import type { FlushEvent } from './DocumentManager';
 import { DocumentManager } from './DocumentManager';
@@ -211,14 +211,14 @@ export class ProjectManager {
      */
     @TrackBusyStatus
     @OnReady
-    public async getCompletions(options: { srcPath: string; position: Position }) {
-        // const completions = await Promise.all(
-        //     this.projects.map(x => x.getCompletions(srcPath, position))
-        // );
-
-        // for (let completion of completions) {
-        //     completion.commitCharacters = ['.'];
-        // }
+    public async getCompletions(options: { srcPath: string; position: Position }): Promise<CompletionList> {
+        //Ask every project for results, keep whichever one responds first that has a valid response
+        let result = await util.promiseRaceMatch(
+            this.projects.map(x => x.getCompletions(options)),
+            //keep the first non-falsey result
+            (result) => !!result
+        );
+        return result;
     }
 
     /**

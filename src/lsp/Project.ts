@@ -9,6 +9,7 @@ import { URI } from 'vscode-uri';
 import { Deferred } from '../deferred';
 import { rokuDeploy } from 'roku-deploy';
 import type { CodeAction, DocumentSymbol, Position, Range, Location, WorkspaceSymbol } from 'vscode-languageserver-protocol';
+import { CompletionList } from 'vscode-languageserver-protocol';
 import { CancellationTokenSource } from 'vscode-languageserver-protocol';
 import type { DocumentAction } from './DocumentManager';
 import type { SignatureInfoObj } from '../Program';
@@ -284,6 +285,16 @@ export class Project implements LspProject {
     public async getCodeActions(options: { srcPath: string; range: Range }): Promise<CodeAction[]> {
         await this.onIdle();
         return this.builder.program.getCodeActions(options.srcPath, options.range);
+    }
+
+    public async getCompletions(options: { srcPath: string; position: Position }): Promise<CompletionList> {
+        await this.onIdle();
+        const completions = this.builder.program.getCompletions(options.srcPath, options.position);
+        const result = CompletionList.create(completions);
+        result.itemDefaults = {
+            commitCharacters: ['.']
+        };
+        return result;
     }
 
     /**
