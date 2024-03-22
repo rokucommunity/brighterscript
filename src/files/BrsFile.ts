@@ -1156,7 +1156,7 @@ export class BrsFile implements BscFile {
 
         const makeImportTreeNamespaceTable = () => {
             const nsTable = new SymbolTable(`File Complete NamespaceTypes ${this.destPath}`, () => this.program.globalScope.symbolTable);
-            this.updateWithDependenciesNamespaceTables(nsTable, []);
+            this.updateWithDependenciesNamespaceTables(nsTable, new Set());
             return nsTable;
         };
         if (!allowCache) {
@@ -1165,11 +1165,11 @@ export class BrsFile implements BscFile {
         return this.cache?.getOrAdd(`namespaceSymbolTable`, makeImportTreeNamespaceTable);
     }
 
-    private updateWithDependenciesNamespaceTables(symbolTableToUpdate: SymbolTable, filesToSkip) {
+    private updateWithDependenciesNamespaceTables(symbolTableToUpdate: SymbolTable, filesToSkip: Set<string>) {
         symbolTableToUpdate.mergeNamespaceSymbolTables(this.getOwnNamespaceSymbolTable());
-        filesToSkip.push(this.destPath);
+        filesToSkip.add(this.destPath);
         for (const filePath of this.dependencies) {
-            if (filesToSkip.includes(filePath)) {
+            if (filesToSkip.has(filePath)) {
                 continue;
             }
             const importedFile = this.program.getFile<BrsFile>(filePath);
