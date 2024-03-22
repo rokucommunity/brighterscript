@@ -7,7 +7,7 @@ import { SymbolKind } from 'vscode-languageserver-types';
 import type { BrsFile } from '../../files/BrsFile';
 let sinon = createSandbox();
 
-describe.only('DocumentSymbolProcessor', () => {
+describe('DocumentSymbolProcessor', () => {
     let program: Program;
     beforeEach(() => {
         program = new Program({ rootDir: rootDir, sourceMap: true });
@@ -130,7 +130,9 @@ describe.only('DocumentSymbolProcessor', () => {
             enum alpha
                 name = 1
             end enum
-        `, ['tokens', 'name']);
+        `, ['body', '0', 'tokens', 'name'], {
+            alpha: SymbolKind.Enum
+        });
     });
 
     it('finds functions', () => {

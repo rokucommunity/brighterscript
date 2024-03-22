@@ -34,18 +34,17 @@ export function getWorkspaceSymbolsFromBrsFile(file: BrsFile) {
     let symbolsToProcess = getSymbolsFromAstNode(file.ast);
     while (symbolsToProcess.length > 0) {
         //get the symbol
-        const symbol = symbolsToProcess.shift();
+        const symbolInfo = symbolsToProcess.shift();
         //push any children to be processed later
-        symbolsToProcess.push(...symbol.children);
-
-        result.push(
-            WorkspaceSymbol.create(
-                symbol.name,
-                symbol.kind,
-                uri,
-                symbol.selectionRange
-            )
+        symbolsToProcess.push(...symbolInfo.children);
+        const workspaceSymbol = WorkspaceSymbol.create(
+            symbolInfo.name,
+            symbolInfo.kind,
+            uri,
+            symbolInfo.selectionRange
         );
+        workspaceSymbol.containerName = symbolInfo.containerName;
+        result.push(workspaceSymbol);
     }
     return result;
 }

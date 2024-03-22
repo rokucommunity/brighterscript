@@ -987,7 +987,6 @@ describe('LanguageServer', () => {
             // We run the check twice as the first time is with it not cached and second time is with it cached
             for (let i = 0; i < 2; i++) {
                 const symbols = await server['onWorkspaceSymbol']({} as any);
-                expect(symbols.length).to.equal(4);
                 expect(
                     symbols.map(x => ({
                         name: x.name,
