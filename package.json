@@ -152,7 +152,6 @@
     "serialize-error": "^7.0.1",
     "source-map": "^0.7.4",
     "uuid": "^9.0.0",
-    "v8-profiler-next": "^1.10.0",
     "vscode-languageserver": "7.0.0",
     "vscode-languageserver-protocol": "3.16.0",
     "vscode-languageserver-textdocument": "^1.0.1",
