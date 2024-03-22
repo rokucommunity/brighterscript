@@ -1,4 +1,4 @@
-import type { Diagnostic, Position, Location, DocumentSymbol, WorkspaceSymbol } from 'vscode-languageserver';
+import type { Diagnostic, Position, Range, Location, DocumentSymbol, WorkspaceSymbol, CodeAction } from 'vscode-languageserver';
 import type { Hover, MaybePromise, SemanticToken } from '../interfaces';
 import type { BsConfig } from '../BsConfig';
 import type { DocumentAction } from './DocumentManager';
@@ -99,6 +99,11 @@ export interface LspProject {
      * Get the list of references for the specified file and position
      */
     getReferences(options: { srcPath: string; position: Position }): MaybePromise<Location[]>;
+
+    /**
+     * Get all of the code actions for the specified file and range
+     */
+    getCodeActions(options: { srcPath: string; range: Range }): Promise<CodeAction[]>;
 
     /**
      * Does this project have the specified file. Should only be called after `.activate()` has completed.

@@ -34,7 +34,8 @@ import {
     FileChangeType,
     ProposedFeatures,
     TextDocuments,
-    TextDocumentSyncKind
+    TextDocumentSyncKind,
+    CodeActionKind
 } from 'vscode-languageserver/node';
 import { URI } from 'vscode-uri';
 import { TextDocument } from 'vscode-languageserver-textdocument';
@@ -174,9 +175,9 @@ export class LanguageServer implements OnHandler<Connection> {
                     full: true
                 } as SemanticTokensOptions,
                 referencesProvider: true,
-                // codeActionProvider: {
-                //     codeActionKinds: [CodeActionKind.Refactor]
-                // },
+                codeActionProvider: {
+                    codeActionKinds: [CodeActionKind.Refactor]
+                },
                 signatureHelpProvider: {
                     triggerCharacters: ['(', ',']
                 },
@@ -248,32 +249,6 @@ export class LanguageServer implements OnHandler<Connection> {
         }
         return item;
     }
-
-    @AddStackToErrorMessage
-    public async onCodeAction(params: CodeActionParams) {
-        //ensure programs are initialized
-        await this.waitAllProjectFirstRuns();
-
-        let srcPath = util.uriToPath(params.textDocument.uri);
-
-        //wait until the file has settled
-        await this.onValidateSettled();
-
-        const codeActions = this
-            .getProjects()
-            //skip programs that don't have this file
-            .filter(x => x.builder?.program?.hasFile(srcPath))
-            .flatMap(workspace => workspace.builder.program.getCodeActions(srcPath, params.range));
-
-        //clone the diagnostics for each code action, since certain diagnostics can have circular reference properties that kill the language server if serialized
-        for (const codeAction of codeActions) {
-            if (codeAction.diagnostics) {
-                codeAction.diagnostics = codeAction.diagnostics?.map(x => util.toDiagnostic(x, params.textDocument.uri));
-            }
-        }
-        return codeActions;
-    }
-
 
     @AddStackToErrorMessage
     private async onDidChangeConfiguration() {
@@ -436,6 +411,14 @@ export class LanguageServer implements OnHandler<Connection> {
             data: encodeSemanticTokens(result)
         } as SemanticTokens;
     }
+
+    @AddStackToErrorMessage
+    public async onCodeAction(params: CodeActionParams) {
+        const srcPath = util.uriToPath(params.textDocument.uri);
+        const result = await this.projectManager.getCodeActions({ srcPath: srcPath, range: params.range });
+        return result;
+    }
+
 
     @AddStackToErrorMessage
     public async onExecuteCommand(params: ExecuteCommandParams) {

@@ -8,7 +8,7 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import { URI } from 'vscode-uri';
 import { Deferred } from '../deferred';
 import { rokuDeploy } from 'roku-deploy';
-import type { DocumentSymbol, Location, Position, WorkspaceSymbol } from 'vscode-languageserver-protocol';
+import type { CodeAction, DocumentSymbol, Position, Range, Location, WorkspaceSymbol } from 'vscode-languageserver-protocol';
 import { CancellationTokenSource } from 'vscode-languageserver-protocol';
 import type { DocumentAction } from './DocumentManager';
 import type { SignatureInfoObj } from '../Program';
@@ -279,6 +279,11 @@ export class Project implements LspProject {
     public async getReferences(options: { srcPath: string; position: Position }): Promise<Location[]> {
         await this.onIdle();
         return this.builder.program.getReferences(options.srcPath, options.position);
+    }
+
+    public async getCodeActions(options: { srcPath: string; range: Range }): Promise<CodeAction[]> {
+        await this.onIdle();
+        return this.builder.program.getCodeActions(options.srcPath, options.range);
     }
 
     /**

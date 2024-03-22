@@ -5,7 +5,7 @@ import * as EventEmitter from 'eventemitter3';
 import type { LspDiagnostic, LspProject } from './LspProject';
 import { Project } from './Project';
 import { WorkerThreadProject } from './worker/WorkerThreadProject';
-import type { Hover, Position, Location, SignatureHelp, DocumentSymbol, SymbolInformation, WorkspaceSymbol } from 'vscode-languageserver-protocol';
+import type { Hover, Position, Range, Location, SignatureHelp, DocumentSymbol, SymbolInformation, WorkspaceSymbol, CodeAction } from 'vscode-languageserver-protocol';
 import { Deferred } from '../deferred';
 import type { FlushEvent } from './DocumentManager';
 import { DocumentManager } from './DocumentManager';
@@ -332,6 +332,25 @@ export class ProjectManager {
             //keep the first non-falsey result
             (result) => !!result
         );
+        return result;
+    }
+
+    @TrackBusyStatus
+    @OnReady
+    public async getCodeActions(options: { srcPath: string; range: Range }): Promise<CodeAction[]> {
+        //Ask every project for definition info, keep whichever one responds first that has a valid response
+        let result = await util.promiseRaceMatch(
+            this.projects.map(x => x.getCodeActions(options)),
+            //keep the first non-falsey result
+            (result) => !!result
+        );
+
+        //clone the diagnostics for each code action, since certain diagnostics can have circular reference properties that kill the language server if serialized
+        for (const codeAction of result) {
+            if (codeAction.diagnostics) {
+                codeAction.diagnostics = codeAction.diagnostics?.map(x => util.toDiagnostic(x, options.srcPath));
+            }
+        }
         return result;
     }
 
