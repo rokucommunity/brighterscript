@@ -1,8 +1,7 @@
 import { isBrsFile } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ProvideWorkspaceSymbolsEvent } from '../../interfaces';
-import { getWorkspaceSymbolsFromStatement } from './symbolUtils';
-import util from '../../util';
+import { getWorkspaceSymbolsFromBrsFile } from './symbolUtils';
 
 export class WorkspaceSymbolProcessor {
     public constructor(
@@ -22,12 +21,8 @@ export class WorkspaceSymbolProcessor {
     }
 
     private getBrsFileWorkspaceSymbols(file: BrsFile) {
-        for (const statement of file.ast.statements) {
-            const symbol = getWorkspaceSymbolsFromStatement(statement, util.pathToUri(file.srcPath));
-            if (symbol) {
-                this.event.workspaceSymbols.push(...symbol);
-            }
-        }
+        const symbols = getWorkspaceSymbolsFromBrsFile(file);
+        this.event.workspaceSymbols.push(...symbols);
         return this.event.workspaceSymbols;
     }
 }

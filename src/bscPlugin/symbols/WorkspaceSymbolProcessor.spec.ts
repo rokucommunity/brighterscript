@@ -57,7 +57,7 @@ describe('WorkspaceSymbolProcessor', () => {
         let result = `${symbol.name}|${SymbolKindMap.get(symbol.kind)}|${symbol.location.uri}`;
         const range = (symbol as any).location.range;
         if (range) {
-            result += util.rangeToString(range);
+            result += '|' + util.rangeToString(range);
         }
         return result;
     }
@@ -163,7 +163,9 @@ describe('WorkspaceSymbolProcessor', () => {
             enum alpha
                 name = 1
             end enum
-        `, ['tokens', 'name']);
+        `, ['body', '0', 'tokens', 'name'], [
+            ['alpha', SymbolKind.Enum]
+        ]);
     });
 
     it('finds functions', () => {
@@ -173,8 +175,8 @@ describe('WorkspaceSymbolProcessor', () => {
             function beta()
             end function
         `], [
-            ['alpha', SymbolKind.Function, 'source/lib0.brs', 1, 12, 2, 24],
-            ['beta', SymbolKind.Function, 'source/lib0.brs', 3, 12, 4, 24]
+            ['alpha', SymbolKind.Function, 'source/lib0.brs', 1, 21, 1, 26],
+            ['beta', SymbolKind.Function, 'source/lib0.brs', 3, 21, 3, 25]
         ]);
     });
 

@@ -130,7 +130,9 @@ describe('DocumentSymbolProcessor', () => {
             enum alpha
                 name = 1
             end enum
-        `, ['tokens', 'name']);
+        `, ['body', '0', 'tokens', 'name'], {
+            alpha: SymbolKind.Enum
+        });
     });
 
     it('finds functions', () => {
