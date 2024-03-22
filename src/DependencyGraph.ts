@@ -79,7 +79,7 @@ export class DependencyGraph {
 
     /**
      * Get a list of the immediate dependencies for the given key.
-    */
+     */
     public getImmediateDependencies(keys: string | string[], exclude?: string[]) {
         if (typeof keys === 'string') {
             return this.nodes[keys]?.dependencies ?? [];
