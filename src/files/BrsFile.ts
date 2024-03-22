@@ -2,7 +2,7 @@ import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
 import type { CompletionItem, Position, Location, Diagnostic } from 'vscode-languageserver';
 import { CancellationTokenSource } from 'vscode-languageserver';
-import { CompletionItemKind, SymbolKind, SymbolInformation, TextEdit } from 'vscode-languageserver';
+import { CompletionItemKind, TextEdit } from 'vscode-languageserver';
 import chalk from 'chalk';
 import * as path from 'path';
 import type { Scope } from '../Scope';
@@ -29,10 +29,11 @@ import type { BscType } from '../types/BscType';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
-import type { AstNode, Expression, Statement } from '../parser/AstNode';
+import type { AstNode, Expression } from '../parser/AstNode';
 import { DefinitionProvider } from '../bscPlugin/definition/DefinitionProvider';
 import { ReferencesProvider } from '../bscPlugin/references/ReferencesProvider';
-import { DocumentSymbolProcessor } from '../bscPlugin/documentSymbol/DocumentSymbolProcessor';
+import { DocumentSymbolProcessor } from '../bscPlugin/symbols/DocumentSymbolProcessor';
+import { WorkspaceSymbolProcessor } from '../bscPlugin/symbols/WorkspaceSymbolProcessor';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -191,8 +192,6 @@ export class BrsFile {
     public get ast() {
         return this.parser.ast;
     }
-
-    private workspaceSymbols: SymbolInformation[];
 
     /**
      * Get the token at the specified position
@@ -1287,57 +1286,10 @@ export class BrsFile {
      * Builds a list of workspace symbols for this file. Used by LanguageServer's onWorkspaceSymbol functionality
      */
     public getWorkspaceSymbols() {
-        if (this.workspaceSymbols) {
-            return this.workspaceSymbols;
-        }
-
-        let symbols = [] as SymbolInformation[];
-
-        for (const statement of this.ast.statements) {
-            for (const symbol of this.generateWorkspaceSymbols(statement)) {
-                symbols.push(symbol);
-            }
-        }
-        this.workspaceSymbols = symbols;
-        return symbols;
-    }
-
-    /**
-     * Builds a single SymbolInformation object for use by LanguageServer's onWorkspaceSymbol functionality
-     */
-    private generateWorkspaceSymbols(statement: Statement, containerStatement?: ClassStatement | NamespaceStatement) {
-        let symbolKind: SymbolKind;
-        const symbols = [];
-
-        if (isFunctionStatement(statement)) {
-            symbolKind = SymbolKind.Function;
-        } else if (isMethodStatement(statement)) {
-            symbolKind = SymbolKind.Method;
-        } else if (isNamespaceStatement(statement)) {
-            symbolKind = SymbolKind.Namespace;
-
-            for (const childStatement of statement.body.statements) {
-                for (const symbol of this.generateWorkspaceSymbols(childStatement, statement)) {
-                    symbols.push(symbol);
-                }
-            }
-        } else if (isClassStatement(statement)) {
-            symbolKind = SymbolKind.Class;
-
-            for (const childStatement of statement.body) {
-                for (const symbol of this.generateWorkspaceSymbols(childStatement, statement)) {
-                    symbols.push(symbol);
-                }
-            }
-        } else {
-            return symbols;
-        }
-
-        const name = statement.getName(ParseMode.BrighterScript);
-        const uri = util.pathToUri(this.srcPath);
-        const symbol = SymbolInformation.create(name, symbolKind, statement.range, uri, containerStatement?.getName(ParseMode.BrighterScript));
-        symbols.push(symbol);
-        return symbols;
+        return new WorkspaceSymbolProcessor({
+            program: this.program,
+            workspaceSymbols: []
+        }).process();
     }
 
     /**

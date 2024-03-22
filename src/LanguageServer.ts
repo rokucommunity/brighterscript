@@ -847,7 +847,7 @@ export class LanguageServer implements OnHandler<Connection> {
             );
         } catch (e: any) {
             this.connection.console.error(e);
-            this.sendCriticalFailure(`Critical error validating project: ${e.message}${e.stack ?? ''}`);
+            await this.sendCriticalFailure(`Critical error validating project: ${e.message}${e.stack ?? ''}`);
         }
     }
 
