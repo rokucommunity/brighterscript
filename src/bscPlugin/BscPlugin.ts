@@ -1,5 +1,5 @@
 import { isBrsFile, isXmlFile } from '../astUtils/reflection';
-import type { CompilerPlugin, OnFileValidateEvent, OnGetCodeActionsEvent, ProvideHoverEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent, AfterProgramValidateEvent, AfterSerializeFileEvent, BeforeBuildProgramEvent, OnPrepareFileEvent, ProvideFileEvent, WriteFileEvent } from '../interfaces';
+import type { CompilerPlugin, OnFileValidateEvent, OnGetCodeActionsEvent, ProvideHoverEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent, AfterProgramValidateEvent, AfterSerializeFileEvent, BeforeBuildProgramEvent, OnPrepareFileEvent, ProvideFileEvent, WriteFileEvent, AfterFileValidateEvent } from '../interfaces';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
 import { CompletionsProcessor } from './completions/CompletionsProcessor';
 import { DefinitionProvider } from './definition/DefinitionProvider';
@@ -18,6 +18,7 @@ import type { XmlFile } from '../files/XmlFile';
 import { FileWriter } from './FileWriter';
 import { FileProvider } from './fileProviders/FileProvider';
 import { FileSerializer } from './serialize/FileSerializer';
+import { BrsFileAfterValidator } from './validation/BrsFileAfterValidatior';
 
 export class BscPlugin implements CompilerPlugin {
     public name = 'BscPlugin';
@@ -57,6 +58,12 @@ export class BscPlugin implements CompilerPlugin {
             return new BrsFileValidator(event as OnFileValidateEvent<BrsFile>).process();
         } else if (isXmlFile(event.file)) {
             return new XmlFileValidator(event as OnFileValidateEvent<XmlFile>).process();
+        }
+    }
+
+    public afterFileValidate(event: AfterFileValidateEvent) {
+        if (isBrsFile(event.file)) {
+            return new BrsFileAfterValidator(event as AfterFileValidateEvent<BrsFile>).process();
         }
     }
 

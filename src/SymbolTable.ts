@@ -4,7 +4,7 @@ import { CacheVerifier } from './CacheVerifier';
 import type { ReferenceType } from './types/ReferenceType';
 import type { UnionType } from './types/UnionType';
 import { getUniqueType } from './types/helpers';
-import { isAnyReferenceType, isReferenceType } from './astUtils/reflection';
+import { isAnyReferenceType, isNamespaceType, isReferenceType } from './astUtils/reflection';
 import type { SymbolTypeFlag } from './SymbolTypeFlag';
 
 /**
@@ -245,6 +245,39 @@ export class SymbolTable implements SymbolTypeGetter {
                 );
             }
         }
+    }
+
+    mergeNamespaceSymbolTables(symbolTable: SymbolTable) {
+        const disposables = [] as Array<() => void>;
+        //console.log(' :: mergeNamespaceSymbolTables:', this.name, '<-', symbolTable.name);
+        for (let [_name, value] of symbolTable.symbolMap) {
+            //console.log(name, value.length);
+            const symbol = value[0];
+            if (symbol) {
+                //console.log(symbol.name, ' ~ ', symbol.type.toString());
+                const existingRuntimeType = this.getSymbolType(symbol.name, { flags: symbol.flags });
+
+                if (isNamespaceType(existingRuntimeType) && isNamespaceType(symbol.type)) {
+                    disposables.push(...existingRuntimeType.memberTable.mergeNamespaceSymbolTables(symbol.type.memberTable));
+                } else {
+                    this.addSymbol(
+                        symbol.name,
+                        symbol.data,
+                        symbol.type,
+                        symbol.flags
+                    );
+                    disposables.push(() => this.removeSymbol(symbol.name));
+                }
+            }
+        }
+        //console.log(' :: mergeNamespaceSymbolTables: checking siblings');
+
+        for (let siblingTable of symbolTable.siblings) {
+            //console.log(' sibling', siblingTable.name);
+            disposables.push(...this.mergeNamespaceSymbolTables(siblingTable));
+        }
+        //console.log(' :: mergeNamespaceSymbolTables:', this.name, '<-', symbolTable.name, 'done');
+        return disposables;
     }
 
     /**

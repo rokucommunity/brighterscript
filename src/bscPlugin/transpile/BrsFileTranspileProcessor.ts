@@ -72,7 +72,7 @@ export class BrsFilePreTranspileProcessor {
         if (containingNamespace && parts[0] !== containingNamespace.toLowerCase()) {
             parts.unshift(containingNamespace.toLowerCase());
         }
-        result = scope?.getEnumMap().get(parts.join('.'));
+        result = scope?.getEnumFileLink(parts.join('.'));
         if (result) {
             const value = result.item.getMemberValue(memberName);
             return {

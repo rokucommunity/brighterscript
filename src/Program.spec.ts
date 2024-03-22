@@ -89,7 +89,7 @@ describe('Program', () => {
             expect(program.globalScope.getAllCallables().length).to.be.greaterThan(0);
         });
         it('validate gets called and does nothing', () => {
-            expect(program.globalScope.validate()).to.eql(undefined);
+            expect(program.globalScope.validate()).to.eql(false);
         });
     });
 

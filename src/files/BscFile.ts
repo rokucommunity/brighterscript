@@ -1,6 +1,7 @@
 import type { SourceMapGenerator } from 'source-map';
 import type { Editor } from '../astUtils/Editor';
 import type { BsDiagnostic, CommentFlag } from '../interfaces';
+import type { DependencyChangedEvent } from '../DependencyGraph';
 
 export interface BscFile {
     /**
@@ -53,7 +54,7 @@ export interface BscFile {
     /**
      * Called when any of this file's dependencies change (i.e. file depends on `a.brs`, and `a.brs` changes)
      */
-    onDependenciesChanged?: () => void;
+    onDependenciesChanged?: (event: DependencyChangedEvent) => void;
     /**
      * A list of diagnostics associated with this file
      */

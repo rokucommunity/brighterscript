@@ -11,16 +11,15 @@ import { Cache } from './Cache';
 import { LogLevel } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
-import { isBrsFile, isXmlFile, isEnumMemberStatement, isNamespaceType, isReferenceType, isCallableType } from './astUtils/reflection';
+import { isBrsFile, isXmlFile, isEnumMemberStatement, isXmlScope } from './astUtils/reflection';
 import { SymbolTable } from './SymbolTable';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { BscFile } from './files/BscFile';
-import type { BscType } from './types/BscType';
-import { NamespaceType } from './types/NamespaceType';
 import { referenceTypeFactory } from './types/ReferenceType';
 import { unionTypeFactory } from './types/UnionType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import type { AstNode, Statement } from './parser/AstNode';
+import { performance } from 'perf_hooks';
 
 /**
  * Assign some few factories to the SymbolTable to prevent cyclical imports. This file seems like the most intuitive place to do the linking
@@ -111,6 +110,20 @@ export class Scope {
         return nsList;
     }
 
+
+    /**
+     * Get a NamespaceContainer by its name, looking for a fully qualified version first, then global version next if not found
+     */
+    public getFirstNamespaceWithRoot(rootName: string, containingNamespace?: string) {
+        const nameLower = rootName?.toLowerCase();
+
+        let lookupName = nameLower;
+        if (containingNamespace) {
+            lookupName = `${containingNamespace?.toLowerCase()}.${nameLower}`;
+        }
+        return this.namespaceLookup.get(lookupName);
+    }
+
     /**
      * Get the class with the specified name.
      * @param className - The class name, including the namespace of the class if possible
@@ -138,21 +151,50 @@ export class Scope {
         return this.getEnumFileLink(enumName, containingNamespace)?.item;
     }
 
+    private useFileCachesForFileLinkLookups = false;
+
+    private getFileLinkFromFileMap<T>(cachedMapName: string, itemName: string, containingNamespace?: string): FileLink<T> {
+        let result: FileLink<T>;
+        const fullNameLower = util.getFullyQualifiedClassName(itemName, containingNamespace)?.toLowerCase();
+        const itemNameLower = itemName?.toLowerCase();
+        if (fullNameLower) {
+            this.enumerateBrsFilesWithBreak((file) => {
+                let stmt = file['_cachedLookups'][cachedMapName].get(fullNameLower);
+                if (stmt) {
+                    result = { item: stmt, file: file };
+                }
+                return !!stmt;
+            });
+        }
+        if (!result && itemNameLower && fullNameLower !== itemNameLower) {
+            this.enumerateBrsFilesWithBreak((file) => {
+                let stmt = file['_cachedLookups'][cachedMapName].get(itemNameLower);
+                if (stmt) {
+                    result = { item: stmt, file: file };
+                }
+                return !!stmt;
+            });
+        }
+        return result;
+    }
+
     /**
      * Get a class and its containing file by the class name
      * @param className - The class name, including the namespace of the class if possible
      * @param containingNamespace - The namespace used to resolve relative class names. (i.e. the namespace around the current statement trying to find a class)
      */
     public getClassFileLink(className: string, containingNamespace?: string): FileLink<ClassStatement> {
-        const lowerClassName = className?.toLowerCase();
+        if (this.useFileCachesForFileLinkLookups) {
+            return this.getFileLinkFromFileMap('classStatementMap', className, containingNamespace);
+        }
+        const lowerName = className?.toLowerCase();
+        const fullNameLower = util.getFullyQualifiedClassName(lowerName, containingNamespace)?.toLowerCase();
         const classMap = this.getClassMap();
 
-        let cls = classMap.get(
-            util.getFullyQualifiedClassName(lowerClassName, containingNamespace?.toLowerCase())
-        );
+        let cls = classMap.get(fullNameLower);
         //if we couldn't find the class by its full namespaced name, look for a global class with that name
-        if (!cls) {
-            cls = classMap.get(lowerClassName);
+        if (!cls && lowerName && lowerName !== fullNameLower) {
+            cls = classMap.get(lowerName);
         }
         return cls;
     }
@@ -163,14 +205,16 @@ export class Scope {
      * @param containingNamespace - The namespace used to resolve relative interface names. (i.e. the namespace around the current statement trying to find a interface)
      */
     public getInterfaceFileLink(ifaceName: string, containingNamespace?: string): FileLink<InterfaceStatement> {
+        if (this.useFileCachesForFileLinkLookups) {
+            return this.getFileLinkFromFileMap('interfaceStatementMap', ifaceName, containingNamespace);
+        }
         const lowerName = ifaceName?.toLowerCase();
+        const fullNameLower = util.getFullyQualifiedClassName(lowerName, containingNamespace)?.toLowerCase();
         const ifaceMap = this.getInterfaceMap();
 
-        let iface = ifaceMap.get(
-            util.getFullyQualifiedClassName(lowerName, containingNamespace?.toLowerCase())
-        );
+        let iface = ifaceMap.get(fullNameLower);
         //if we couldn't find the iface by its full namespaced name, look for a global class with that name
-        if (!iface) {
+        if (!iface && lowerName && lowerName !== fullNameLower) {
             iface = ifaceMap.get(lowerName);
         }
         return iface;
@@ -182,14 +226,16 @@ export class Scope {
      * @param containingNamespace - The namespace used to resolve relative enum names. (i.e. the namespace around the current statement trying to find a enum)
      */
     public getEnumFileLink(enumName: string, containingNamespace?: string): FileLink<EnumStatement> {
+        if (this.useFileCachesForFileLinkLookups) {
+            return this.getFileLinkFromFileMap('enumStatementMap', enumName, containingNamespace);
+        }
         const lowerName = enumName?.toLowerCase();
+        const fullNameLower = util.getFullyQualifiedClassName(lowerName, containingNamespace)?.toLowerCase();
         const enumMap = this.getEnumMap();
 
-        let enumeration = enumMap.get(
-            util.getFullyQualifiedClassName(lowerName, containingNamespace?.toLowerCase())
-        );
+        let enumeration = enumMap.get(fullNameLower);
         //if we couldn't find the enum by its full namespaced name, look for a global enum with that name
-        if (!enumeration) {
+        if (!enumeration && lowerName && lowerName !== fullNameLower) {
             enumeration = enumMap.get(lowerName);
         }
         return enumeration;
@@ -203,7 +249,7 @@ export class Scope {
     public getEnumMemberFileLink(enumMemberName: string, containingNamespace?: string): FileLink<EnumMemberStatement> {
         let lowerNameParts = enumMemberName?.toLowerCase()?.split('.');
         let memberName = lowerNameParts?.splice(lowerNameParts.length - 1, 1)?.[0];
-        let lowerName = lowerNameParts?.join('.');
+        let lowerName = lowerNameParts?.join('.').toLowerCase();
         const enumMap = this.getEnumMap();
 
         let enumeration = enumMap.get(
@@ -225,20 +271,23 @@ export class Scope {
      * @param containingNamespace - The namespace used to resolve relative constant names. (i.e. the namespace around the current statement trying to find a constant)
      */
     public getConstFileLink(constName: string, containingNamespace?: string): FileLink<ConstStatement> {
+        if (this.useFileCachesForFileLinkLookups) {
+            return this.getFileLinkFromFileMap('constStatementMap', constName, containingNamespace);
+        }
         const lowerName = constName?.toLowerCase();
+        const fullNameLower = util.getFullyQualifiedClassName(lowerName, containingNamespace)?.toLowerCase();
+
         const constMap = this.getConstMap();
 
-        let result = constMap.get(
-            util.getFullyQualifiedClassName(lowerName, containingNamespace?.toLowerCase())
-        );
+        let result = constMap.get(fullNameLower);
         //if we couldn't find the constant by its full namespaced name, look for a global constant with that name
-        if (!result) {
+        if (!result && lowerName !== fullNameLower) {
             result = constMap.get(lowerName);
         }
         return result;
     }
 
-    public getAllFileLinks(name: string, containingNamespace?: string, includeNameShadowsOutsideNamespace = false): FileLink<Statement>[] {
+    public getAllFileLinks(name: string, containingNamespace?: string, includeNamespaces = false, includeNameShadowsOutsideNamespace = false): FileLink<Statement>[] {
         let links: FileLink<Statement>[] = [];
 
         links.push(this.getClassFileLink(name, containingNamespace),
@@ -251,12 +300,10 @@ export class Scope {
                 this.getConstFileLink(name),
                 this.getEnumFileLink(name));
         }
-
-        const nameSpaces = this.getNamespacesWithRoot(name, containingNamespace);
-        if (nameSpaces?.length > 0) {
-            const nsContainersWithStatement = nameSpaces.filter(nsContainer => nsContainer?.namespaceStatements?.length > 0)?.[0];
-            if (nsContainersWithStatement) {
-                links.push({ item: nsContainersWithStatement?.namespaceStatements?.[0], file: nsContainersWithStatement?.file as BrsFile });
+        if (includeNamespaces) {
+            const nameSpaceContainer = this.getFirstNamespaceWithRoot(name, containingNamespace);
+            if (nameSpaceContainer) {
+                links.push({ item: nameSpaceContainer.namespaceStatements?.[0], file: nameSpaceContainer?.file as BrsFile });
             }
         }
         const fullNameLower = (containingNamespace ? `${containingNamespace}.${name}` : name).toLowerCase();
@@ -512,7 +559,7 @@ export class Scope {
             for (let dependency of dependencies) {
                 //load components by their name
                 if (dependency.startsWith('component:')) {
-                    let comp = this.program.getComponent(dependency.replace(/$component:/, ''));
+                    let comp = this.program.getComponent(dependency.replace(/^component:/, ''));
                     if (comp) {
                         result.push(comp.file);
                     }
@@ -524,6 +571,36 @@ export class Scope {
                 }
             }
             this.logDebug('getAllFiles', () => result.map(x => x.destPath));
+            return result;
+        });
+    }
+
+    /**
+     * Gets a list of all files in this scope, but not imported files, and not from ancestor scopes
+     */
+    public getImmediateFiles(): BscFile[] {
+        return this.cache.getOrAdd('getImmediateFiles', () => {
+            let result = [] as BscFile[];
+            if (isXmlScope(this)) {
+                result.push(this.xmlFile);
+            }
+            let dependencies = this.dependencyGraph.getImmediateDependencies(this.dependencyGraphKey);
+            for (let dependency of dependencies) {
+                //load components by their name
+                if (dependency.startsWith('component:')) {
+                    let comp = this.program.getComponent(dependency.replace(/^component:/, ''));
+                    if (comp) {
+                        result.push(...comp.scope.getImmediateFiles());
+                        result.push(comp.file);
+                    }
+                } else {
+                    let file = this.program.getFile(dependency);
+                    if (file) {
+                        result.push(file);
+                    }
+                }
+            }
+            this.logDebug('getImmediateFiles', () => result.map(x => x.destPath));
             return result;
         });
     }
@@ -593,28 +670,6 @@ export class Scope {
         return this.cache.getOrAdd('callableContainerMap', () => {
             let callables = this.getAllCallables();
 
-            //sort the callables by filepath and then method name, so the errors will be consistent
-            // eslint-disable-next-line prefer-arrow-callback
-            /* callables = callables.sort((a, b) => {
-                 const pathA = a.callable.file.srcPath;
-                 const pathB = b.callable.file.srcPath;
-                 //sort by path
-                 if (pathA < pathB) {
-                     return -1;
-                 } else if (pathA > pathB) {
-                     return 1;
-                 }
-                 //sort by function name
-                 const funcA = b.callable.name;
-                 const funcB = b.callable.name;
-                 if (funcA < funcB) {
-                     return -1;
-                 } else if (funcA > funcB) {
-                     return 1;
-                 }
-                 return 0;
-             });*/
-
             //get a list of all callables, indexed by their lower case names
             return util.getCallableContainersByLowerName(callables);
         });
@@ -629,6 +684,21 @@ export class Scope {
             //only brs files without a typedef
             if (isBrsFile(file) && !file.hasTypedef) {
                 callback(file);
+            }
+        }
+    }
+
+    /**
+     * Iterate over Brs files not shadowed by typedefs
+     */
+    public enumerateBrsFilesWithBreak(callback: (file: BrsFile) => boolean) {
+        const files = this.getAllFiles();
+        for (const file of files) {
+            //only brs files without a typedef
+            if (isBrsFile(file) && !file.hasTypedef) {
+                if (callback(file)) {
+                    break;
+                }
             }
         }
     }
@@ -716,12 +786,37 @@ export class Scope {
     }
     private _debugLogComponentName: string;
 
+
+    public validationMetrics = {
+        linkTime: 0,
+        validationTime: 0
+    };
+
     public validate(validationOptions: ScopeValidationOptions = { force: false }) {
         //if this scope is already validated, no need to revalidate
         if (this.isValidated === true && !validationOptions.force) {
             this.logDebug('validate(): already validated');
-            return;
+            return false;
         }
+
+        const hasChangedSymbols = validationOptions.changedSymbols?.get(SymbolTypeFlag.runtime).size > 0 || validationOptions.changedSymbols?.get(SymbolTypeFlag.typetime).size > 0;
+        let immediateFileChanged = false;
+        if (!validationOptions.initialValidation && validationOptions.changedSymbols && !hasChangedSymbols && validationOptions.changedFiles) {
+            for (let file of this.getImmediateFiles()) {
+                if (validationOptions.changedFiles.includes(file)) {
+                    immediateFileChanged = true;
+                    break;
+                }
+            }
+
+            if (!immediateFileChanged) {
+                // There was no need to validate this scope.
+                (this as any).isValidated = true;
+                return false;
+            }
+        }
+
+        this.useFileCachesForFileLinkLookups = !validationOptions.initialValidation;
 
         this.program.logger.time(LogLevel.debug, [this._debugLogComponentName, 'validate()'], () => {
 
@@ -736,21 +831,26 @@ export class Scope {
             this.clearScopeLevelDiagnostics();
 
             //Since statements from files are shared across multiple scopes, we need to link those statements to the current scope
+
+            let t0 = performance.now();
             this.linkSymbolTable();
+            this.validationMetrics.linkTime = performance.now() - t0;
             const scopeValidateEvent = {
                 program: this.program,
                 scope: this,
                 changedFiles: validationOptions?.changedFiles,
                 changedSymbols: validationOptions?.changedSymbols
             };
+            t0 = performance.now();
             this.program.plugins.emit('beforeScopeValidate', scopeValidateEvent);
             this.program.plugins.emit('onScopeValidate', scopeValidateEvent);
+            this.validationMetrics.validationTime = performance.now() - t0;
             this.program.plugins.emit('afterScopeValidate', scopeValidateEvent);
             //unlink all symbol tables from this scope (so they don't accidentally stick around)
             this.unlinkSymbolTable();
-
             (this as any).isValidated = true;
         });
+        return true;
     }
 
     clearAstSegmentDiagnostics(astSegment: AstNode) {
@@ -795,6 +895,12 @@ export class Scope {
 
     private symbolsAddedDuringLinking: { symbolTable: SymbolTable; name: string; flags: number }[] = [];
 
+    public get allNamespaceTypeTable() {
+        return this._allNamespaceTypeTable;
+    }
+
+    private _allNamespaceTypeTable: SymbolTable;
+
     /**
      * Builds the current symbol table for the scope, by merging the tables for all the files in this scope.
      * Also links all file symbols tables to this new table
@@ -816,68 +922,38 @@ export class Scope {
      */
     public linkSymbolTable() {
         SymbolTable.cacheVerifier.generateToken();
+        this._allNamespaceTypeTable = new SymbolTable(`Scope NamespaceTypes ${this.name}`);
         for (const file of this.getAllFiles()) {
             if (isBrsFile(file)) {
                 this.linkSymbolTableDisposables.push(
                     file.parser.symbolTable.pushParentProvider(() => this.symbolTable)
                 );
+
             }
         }
-        //Add namespace aggregates to namespace member tables
-        const namespaceTypesKnown = new Map<string, BscType>();
+        const directFiles = this.getImmediateFiles();
+        for (const file of directFiles) {
+            if (isBrsFile(file)) {
+                const namespaceTypes = file.getNamespaceSymbolTable();
 
-        // eslint-disable-next-line no-bitwise
-        let getTypeOptions = { flags: SymbolTypeFlag.runtime | SymbolTypeFlag.typetime };
-        for (const [nsName, nsContainer] of this.namespaceLookup) {
-            let currentNSType: BscType = null;
-            let parentNSType: BscType = null;
-            const existingNsStmt = nsContainer.namespaceStatements?.[0];
-
-            if (!nsContainer.isTopLevel) {
-                parentNSType = namespaceTypesKnown.get(nsContainer.parentNameLower);
-                if (!parentNSType) {
-                    // we don't know about the parent namespace... uh, oh!
-                    this.program.logger.error(`Unable to find parent namespace type for namespace ${nsName}`);
-                    break;
-                }
-                currentNSType = parentNSType.getMemberType(nsContainer.fullNameLower, getTypeOptions);
-            } else {
-                currentNSType = this.symbolTable.getSymbolType(nsContainer.fullNameLower, getTypeOptions);
+                this.linkSymbolTableDisposables.push(
+                    ...this._allNamespaceTypeTable.mergeNamespaceSymbolTables(namespaceTypes)
+                );
+                /* this.linkSymbolTableDisposables.push(
+                     () => file.unlinkNamespaceSymbolTables()
+                 );*/
             }
-            if (!isNamespaceType(currentNSType)) {
-                if (!currentNSType || isReferenceType(currentNSType) || isCallableType(currentNSType)) {
-                    currentNSType = existingNsStmt
-                        ? existingNsStmt.getType(getTypeOptions)
-                        : new NamespaceType(nsName);
-                    if (parentNSType) {
-                        // adding as a member of existing NS
-                        parentNSType.addMember(nsContainer.lastPartName, { definingNode: existingNsStmt }, currentNSType, getTypeOptions.flags);
-                        this.symbolsAddedDuringLinking.push({ symbolTable: parentNSType.getMemberTable(), name: nsContainer.lastPartName, flags: getTypeOptions.flags });
-                    } else {
-                        this.symbolTable.addSymbol(nsContainer.lastPartName, { definingNode: existingNsStmt }, currentNSType, getTypeOptions.flags);
-                        this.symbolsAddedDuringLinking.push({ symbolTable: this.symbolTable, name: nsContainer.lastPartName, flags: getTypeOptions.flags });
-                    }
-                } else {
-                    // Something else already used the name this namespace is using.
-                    continue;
-                }
-            } else {
-                // Existing known namespace
-            }
-            if (!namespaceTypesKnown.has(nsName)) {
-                namespaceTypesKnown.set(nsName, currentNSType);
-            }
-
+        }
+        for (const [_, nsContainer] of this.namespaceLookup) {
             for (let nsStmt of nsContainer.namespaceStatements) {
                 this.linkSymbolTableDisposables.push(
                     nsStmt?.getSymbolTable().addSibling(nsContainer.symbolTable)
                 );
             }
-
-            this.linkSymbolTableDisposables.push(
-                currentNSType.memberTable.addSibling(nsContainer.symbolTable)
-            );
         }
+        this.linkSymbolTableDisposables.push(
+            this.symbolTable.addSibling(this._allNamespaceTypeTable)
+        );
     }
 
     public unlinkSymbolTable() {

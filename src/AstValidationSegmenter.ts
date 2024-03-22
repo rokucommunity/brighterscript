@@ -70,7 +70,7 @@ export class AstValidationSegmenter {
                 } else {
                     symbolsSet = this.unresolvedSegmentsSymbols.get(segment);
                 }
-
+                this.validatedSegments.set(segment, false);
                 symbolsSet.add({ typeChain: typeChain, flags: typeChain[0].data.flags, endChainFlags: flag, containingNamespaces: this.currentNamespaceStatement?.getNameParts()?.map(t => t.text) });
             }
             return true;
@@ -168,12 +168,17 @@ export class AstValidationSegmenter {
 
             if (symbolsRequired) {
                 for (const requiredSymbol of symbolsRequired.values()) {
-                    // eslint-disable-next-line no-bitwise
-                    const runTimeOrTypeTimeSymbolFlag = requiredSymbol.flags & (SymbolTypeFlag.runtime | SymbolTypeFlag.typetime);
-                    const changeSymbolSetForFlag = changedSymbols.get(runTimeOrTypeTimeSymbolFlag);
-                    if (util.setContainsUnresolvedSymbol(changeSymbolSetForFlag, requiredSymbol)) {
-                        segmentsToWalkForValidation.push(segment);
-                        break;
+                    for (const flagType of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
+                        // eslint-disable-next-line no-bitwise
+                        const runTimeOrTypeTimeSymbolFlag = requiredSymbol.flags & flagType;
+                        const changeSymbolSetForFlag = changedSymbols.get(runTimeOrTypeTimeSymbolFlag);
+                        if (!changeSymbolSetForFlag) {
+                            // This symbol has no flag - it is of unknown usage
+                            // This can happen when testing if a function exists
+                        } else if (util.setContainsUnresolvedSymbol(changeSymbolSetForFlag, requiredSymbol)) {
+                            segmentsToWalkForValidation.push(segment);
+                            break;
+                        }
                     }
                 }
             } else if (segmentNeedsRevalidation) {
@@ -192,5 +197,43 @@ export class AstValidationSegmenter {
 
     markSegmentAsValidated(segment: AstNode) {
         this.validatedSegments.set(segment, true);
+    }
+
+    unValidateAllSegments() {
+        for (const segment of this.validatedSegments.keys()) {
+            this.validatedSegments.set(segment, false);
+        }
+    }
+
+
+    hasUnvalidatedSegments() {
+        return Array.from(this.validatedSegments.values()).includes(false);
+    }
+
+
+    checkIfSegmentNeedRevalidation(segment: AstNode) {
+        if (!this.validatedSegments.get(segment)) {
+            return true;
+        }
+        const unresolved = this.unresolvedSegmentsSymbols.get(segment);
+        if (unresolved?.size > 0) {
+            return true;
+        } /*
+         const assignedTokens = this.assignedTokensInSegment.get(segment);
+         if (assignedTokens?.size > 0) {
+             return true;
+         }*/
+        return false;
+    }
+
+    markSegmentsInvalidatedBySymbol(symbolName: string, flag: SymbolTypeFlag) {
+        for (let [segment, unresolvedSet] of this.unresolvedSegmentsSymbols) {
+            for (let unresolvedSymbol of unresolvedSet.values()) {
+                if (unresolvedSymbol.typeChain.join('.').toLowerCase() === symbolName) {
+                    this.validatedSegments.set(segment, false);
+                    break;
+                }
+            }
+        }
     }
 }
