@@ -19,6 +19,7 @@ import { referenceTypeFactory } from './types/ReferenceType';
 import { unionTypeFactory } from './types/UnionType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import type { AstNode, Statement } from './parser/AstNode';
+import { performance } from 'perf_hooks';
 
 /**
  * Assign some few factories to the SymbolTable to prevent cyclical imports. This file seems like the most intuitive place to do the linking
