@@ -150,6 +150,7 @@ export class Scope {
         return this.getEnumFileLink(enumName, containingNamespace)?.item;
     }
 
+    private useFileCachesForFileLinkLookups = false;
 
     private getFileLinkFromFileMap<T>(cachedMapName: string, itemName: string, containingNamespace?: string): FileLink<T> {
         let result: FileLink<T>;
@@ -182,7 +183,19 @@ export class Scope {
      * @param containingNamespace - The namespace used to resolve relative class names. (i.e. the namespace around the current statement trying to find a class)
      */
     public getClassFileLink(className: string, containingNamespace?: string): FileLink<ClassStatement> {
-        return this.getFileLinkFromFileMap('classStatementMap', className, containingNamespace);
+        if (this.useFileCachesForFileLinkLookups) {
+            return this.getFileLinkFromFileMap('classStatementMap', className, containingNamespace);
+        }
+        const lowerName = className?.toLowerCase();
+        const fullNameLower = util.getFullyQualifiedClassName(lowerName, containingNamespace)?.toLowerCase();
+        const classMap = this.getClassMap();
+
+        let cls = classMap.get(fullNameLower);
+        //if we couldn't find the class by its full namespaced name, look for a global class with that name
+        if (!cls && lowerName && lowerName !== fullNameLower) {
+            cls = classMap.get(lowerName);
+        }
+        return cls;
     }
 
     /**
@@ -191,7 +204,19 @@ export class Scope {
      * @param containingNamespace - The namespace used to resolve relative interface names. (i.e. the namespace around the current statement trying to find a interface)
      */
     public getInterfaceFileLink(ifaceName: string, containingNamespace?: string): FileLink<InterfaceStatement> {
-        return this.getFileLinkFromFileMap('interfaceStatementMap', ifaceName, containingNamespace);
+        if (this.useFileCachesForFileLinkLookups) {
+            return this.getFileLinkFromFileMap('interfaceStatementMap', ifaceName, containingNamespace);
+        }
+        const lowerName = ifaceName?.toLowerCase();
+        const fullNameLower = util.getFullyQualifiedClassName(lowerName, containingNamespace)?.toLowerCase();
+        const ifaceMap = this.getInterfaceMap();
+
+        let iface = ifaceMap.get(fullNameLower);
+        //if we couldn't find the iface by its full namespaced name, look for a global class with that name
+        if (!iface && lowerName && lowerName !== fullNameLower) {
+            iface = ifaceMap.get(lowerName);
+        }
+        return iface;
     }
 
     /**
@@ -200,16 +225,16 @@ export class Scope {
      * @param containingNamespace - The namespace used to resolve relative enum names. (i.e. the namespace around the current statement trying to find a enum)
      */
     public getEnumFileLink(enumName: string, containingNamespace?: string): FileLink<EnumStatement> {
-        return this.getFileLinkFromFileMap('enumStatementMap', enumName, containingNamespace);
-
+        if (this.useFileCachesForFileLinkLookups) {
+            return this.getFileLinkFromFileMap('enumStatementMap', enumName, containingNamespace);
+        }
         const lowerName = enumName?.toLowerCase();
+        const fullNameLower = util.getFullyQualifiedClassName(lowerName, containingNamespace)?.toLowerCase();
         const enumMap = this.getEnumMap();
 
-        let enumeration = enumMap.get(
-            util.getFullyQualifiedClassName(lowerName, containingNamespace?.toLowerCase())
-        );
+        let enumeration = enumMap.get(fullNameLower);
         //if we couldn't find the enum by its full namespaced name, look for a global enum with that name
-        if (!enumeration) {
+        if (!enumeration && lowerName && lowerName !== fullNameLower) {
             enumeration = enumMap.get(lowerName);
         }
         return enumeration;
@@ -223,10 +248,16 @@ export class Scope {
     public getEnumMemberFileLink(enumMemberName: string, containingNamespace?: string): FileLink<EnumMemberStatement> {
         let lowerNameParts = enumMemberName?.toLowerCase()?.split('.');
         let memberName = lowerNameParts?.splice(lowerNameParts.length - 1, 1)?.[0];
-        let lowerName = lowerNameParts?.join('.');
+        let lowerName = lowerNameParts?.join('.').toLowerCase();
+        const enumMap = this.getEnumMap();
 
-        let enumeration = this.getEnumFileLink(lowerName, containingNamespace);
-
+        let enumeration = enumMap.get(
+            util.getFullyQualifiedClassName(lowerName, containingNamespace?.toLowerCase())
+        );
+        //if we couldn't find the enum by its full namespaced name, look for a global enum with that name
+        if (!enumeration) {
+            enumeration = enumMap.get(lowerName);
+        }
         if (enumeration) {
             let member = enumeration.item.findChild<EnumMemberStatement>((child) => isEnumMemberStatement(child) && child.name?.toLowerCase() === memberName);
             return member ? { item: member, file: enumeration.file } : undefined;
@@ -239,7 +270,20 @@ export class Scope {
      * @param containingNamespace - The namespace used to resolve relative constant names. (i.e. the namespace around the current statement trying to find a constant)
      */
     public getConstFileLink(constName: string, containingNamespace?: string): FileLink<ConstStatement> {
-        return this.getFileLinkFromFileMap('constStatementMap', constName, containingNamespace);
+        if (this.useFileCachesForFileLinkLookups) {
+            return this.getFileLinkFromFileMap('constStatementMap', constName, containingNamespace);
+        }
+        const lowerName = constName?.toLowerCase();
+        const fullNameLower = util.getFullyQualifiedClassName(lowerName, containingNamespace)?.toLowerCase();
+
+        const constMap = this.getConstMap();
+
+        let result = constMap.get(fullNameLower);
+        //if we couldn't find the constant by its full namespaced name, look for a global constant with that name
+        if (!result && lowerName !== fullNameLower) {
+            result = constMap.get(lowerName);
+        }
+        return result;
     }
 
     public getAllFileLinks(name: string, containingNamespace?: string, includeNamespaces = false, includeNameShadowsOutsideNamespace = false): FileLink<Statement>[] {
@@ -530,6 +574,9 @@ export class Scope {
         });
     }
 
+    /**
+     * Gets a list of all files in this scope, but not imported files, and not from ancestor scopes
+     */
     public getImmediateFiles(): BscFile[] {
         return this.cache.getOrAdd('getImmediateFiles', () => {
             let result = [] as BscFile[];
@@ -753,7 +800,7 @@ export class Scope {
 
         const hasChangedSymbols = validationOptions.changedSymbols?.get(SymbolTypeFlag.runtime).size > 0 || validationOptions.changedSymbols?.get(SymbolTypeFlag.typetime).size > 0;
         let immediateFileChanged = false;
-        if (validationOptions.changedSymbols && !hasChangedSymbols && validationOptions.changedFiles) {
+        if (!validationOptions.initialValidation && validationOptions.changedSymbols && !hasChangedSymbols && validationOptions.changedFiles) {
             for (let file of this.getImmediateFiles()) {
                 if (validationOptions.changedFiles.includes(file)) {
                     immediateFileChanged = true;
@@ -767,6 +814,8 @@ export class Scope {
                 return false;
             }
         }
+
+        this.useFileCachesForFileLinkLookups = !validationOptions.initialValidation;
 
         this.program.logger.time(LogLevel.debug, [this._debugLogComponentName, 'validate()'], () => {
 

@@ -1187,7 +1187,6 @@ export class ScopeValidator {
     public detectShadowedLocalVar(file: BrsFile, varDeclaration: { name: string; type: BscType; nameRange: Range }) {
         const varName = varDeclaration.name;
         const lowerVarName = varName.toLowerCase();
-        const classMap = this.event.scope.getClassMap();
         const callableContainerMap = this.event.scope.getCallableContainerMap();
 
         const varIsFunction = () => {
@@ -1240,21 +1239,23 @@ export class ScopeValidator {
                 });
             }
             //has the same name as an in-scope class
-        } else if (classMap.has(lowerVarName)) {
-            const classStmtLink = classMap.get(lowerVarName);
-            this.addMultiScopeDiagnostic({
-                ...DiagnosticMessages.localVarSameNameAsClass(classStmtLink?.item?.getName(ParseMode.BrighterScript)),
-                range: varDeclaration.nameRange,
-                file: file,
-                origin: DiagnosticOrigin.Scope,
-                relatedInformation: [{
-                    message: 'Class declared here',
-                    location: util.createLocation(
-                        URI.file(classStmtLink.file.srcPath).toString(),
-                        classStmtLink?.item.tokens.name.range
-                    )
-                }]
-            });
+        } else {
+            const classStmtLink = this.event.scope.getClassFileLink(lowerVarName);
+            if (classStmtLink) {
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.localVarSameNameAsClass(classStmtLink?.item?.getName(ParseMode.BrighterScript)),
+                    range: varDeclaration.nameRange,
+                    file: file,
+                    origin: DiagnosticOrigin.Scope,
+                    relatedInformation: [{
+                        message: 'Class declared here',
+                        location: util.createLocation(
+                            URI.file(classStmtLink.file.srcPath).toString(),
+                            classStmtLink?.item.tokens.name.range
+                        )
+                    }]
+                });
+            }
         }
     }
 

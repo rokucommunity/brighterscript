@@ -835,6 +835,8 @@ export class Program {
     }>();
 
 
+    private isFirstValidation = true;
+
     /**
      * Traverse the entire project, and validate all scopes
      */
@@ -975,7 +977,7 @@ export class Program {
                 let scopesValidated = 0;
                 for (let scopeName in this.scopes) {
                     let scope = this.scopes[scopeName];
-                    const scopeValidated = scope.validate({ changedFiles: afterValidateFiles, changedSymbols: changedSymbols });
+                    const scopeValidated = scope.validate({ changedFiles: afterValidateFiles, changedSymbols: changedSymbols, initialValidation: this.isFirstValidation });
                     if (scopeValidated) {
                         scopesValidated++;
                     }
@@ -990,6 +992,8 @@ export class Program {
             });
 
             this.detectDuplicateComponentNames();
+
+            this.isFirstValidation = false;
 
             this.plugins.emit('afterProgramValidate', programValidateEvent);
         });

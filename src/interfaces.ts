@@ -590,10 +590,12 @@ export interface TranspileEntry {
     outputPath: string;
 }
 
+
 export interface ScopeValidationOptions {
     changedFiles?: BscFile[];
     changedSymbols?: Map<SymbolTypeFlag, Set<string>>;
     force?: boolean;
+    initialValidation?: boolean;
 }
 
 export interface OnScopeValidateEvent {
