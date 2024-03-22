@@ -31,4 +31,12 @@ export class Stopwatch {
             return `${parts.milliseconds}.${fractionalMilliseconds}ms`;
         }
     }
+
+    getDurationTextFor<T>(func: () => T): { durationText: string; result: T } {
+        this.start();
+        const result = func();
+        this.stop();
+        return { durationText: this.getDurationText(), result: result };
+    }
 }
+

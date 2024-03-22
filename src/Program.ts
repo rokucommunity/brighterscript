@@ -62,6 +62,12 @@ export interface SignatureInfoObj {
     signature: SignatureInformation;
 }
 
+export interface ProgramValidationInfo {
+    symbolsNotDefinedInEveryScope: { symbol: UnresolvedSymbol; scope: Scope }[];
+    duplicateSymbolsInSameScope: { symbol: UnresolvedSymbol; scope: Scope }[];
+    symbolsNotConsistentAcrossScopes: { symbol: UnresolvedSymbol; scopes: Scope[] }[];
+}
+
 export class Program {
     constructor(
         /**
@@ -827,13 +833,7 @@ export class Program {
         }
     }
 
-
-    public lastValidationInfo = new Map<string, {
-        symbolsNotDefinedInEveryScope: { symbol: UnresolvedSymbol; scope: Scope }[];
-        duplicateSymbolsInSameScope: { symbol: UnresolvedSymbol; scope: Scope }[];
-        symbolsNotConsistentAcrossScopes: { symbol: UnresolvedSymbol; scopes: Scope[] }[];
-    }>();
-
+    public lastValidationInfo = new Map<string, ProgramValidationInfo>();
 
     private isFirstValidation = true;
 
@@ -849,105 +849,66 @@ export class Program {
             this.plugins.emit('beforeProgramValidate', programValidateEvent);
             this.plugins.emit('onProgramValidate', programValidateEvent);
 
+            const metrics = {
+                filesValidated: 0,
+                fileValidationTime: '',
+                fileInfoGenerationTime: '',
+                programValidationTime: '',
+                scopesValidated: 0,
+                totalLinkTime: '',
+                totalScopeValidationTime: '',
+                componentValidationTime: ''
+            };
+
+            const validationStopwatch = new Stopwatch();
             //validate every file
             const brsFilesValidated: BrsFile[] = [];
             const afterValidateFiles = [];
-            for (const file of Object.values(this.files)) {
-                //for every unvalidated file, validate it
-                if (!file.isValidated) {
+
+            metrics.fileValidationTime = validationStopwatch.getDurationTextFor(() => {
+                for (const file of Object.values(this.files)) {
+                    //for every unvalidated file, validate it
+                    if (!file.isValidated) {
+                        const validateFileEvent = {
+                            program: this,
+                            file: file
+                        };
+                        this.plugins.emit('beforeFileValidate', validateFileEvent);
+                        //emit an event to allow plugins to contribute to the file validation process
+                        this.plugins.emit('onFileValidate', validateFileEvent);
+                        file.isValidated = true;
+                        if (isBrsFile(file)) {
+                            brsFilesValidated.push(file);
+                        }
+                        afterValidateFiles.push(file);
+                    }
+                }
+                // AfterFileValidate is after all files have been validated
+                for (const file of afterValidateFiles) {
                     const validateFileEvent = {
                         program: this,
                         file: file
                     };
-                    this.plugins.emit('beforeFileValidate', validateFileEvent);
-                    //emit an event to allow plugins to contribute to the file validation process
-                    this.plugins.emit('onFileValidate', validateFileEvent);
-                    file.isValidated = true;
-                    if (isBrsFile(file)) {
-                        brsFilesValidated.push(file);
-                    }
-                    afterValidateFiles.push(file);
+                    this.plugins.emit('afterFileValidate', validateFileEvent);
                 }
-            }
-            // AfterFileValidate is after all files have been validated
-            for (const file of afterValidateFiles) {
-                const validateFileEvent = {
-                    program: this,
-                    file: file
-                };
-                this.plugins.emit('afterFileValidate', validateFileEvent);
-            }
+            }).durationText;
 
-            // build list of all changed symbols in each file that changed
-            this.lastValidationInfo.clear();
-            for (const file of brsFilesValidated) {
+            metrics.filesValidated = afterValidateFiles.length;
 
-                const fileInfo: {
-                    symbolsNotDefinedInEveryScope: { symbol: UnresolvedSymbol; scope: Scope }[];
-                    duplicateSymbolsInSameScope: { symbol: UnresolvedSymbol; scope: Scope }[];
-                    symbolsNotConsistentAcrossScopes: { symbol: UnresolvedSymbol; scopes: Scope[] }[];
-                } = {
-                    symbolsNotDefinedInEveryScope: [],
-                    duplicateSymbolsInSameScope: [],
-                    symbolsNotConsistentAcrossScopes: []
-                };
-                const scopesToCheckForConsistency = this.getScopesForFile(file);
-                for (const symbol of file.requiredSymbols) {
-                    let providedSymbolType: BscType;
-                    let scopesDefiningSymbol: Scope[] = [];
-                    let scopesAreInconsistent = false;
+            metrics.fileInfoGenerationTime = validationStopwatch.getDurationTextFor(() => {
+                // build list of all changed symbols in each file that changed
+                this.updateLastValidationFileInfo(brsFilesValidated);
+            }).durationText;
 
-                    for (const scope of scopesToCheckForConsistency) {
-                        let symbolFoundInScope = false;
-                        for (const scopeFile of scope.getAllFiles()) {
-                            if (!isBrsFile(scopeFile) || scopeFile.isTypedef || scopeFile.hasTypedef) {
-                                continue;
-                            }
-                            const lowerFirstSymbolName = symbol.typeChain?.[0]?.name.toLowerCase();
-                            let symbolInThisScope = scopeFile.providedSymbols.symbolMap?.get(symbol.flags)?.get(lowerFirstSymbolName);
-                            if (!symbolInThisScope && symbol.containingNamespaces?.length > 0) {
-                                const fullNameWithNamespaces = (symbol.containingNamespaces.join('.') + '.' + lowerFirstSymbolName).toLowerCase();
-                                symbolInThisScope = scopeFile.providedSymbols.symbolMap?.get(symbol.flags)?.get(fullNameWithNamespaces);
-                            }
-                            if (symbolInThisScope) {
-                                if (symbolFoundInScope) {
-                                    // this is duplicately defined!
-                                    fileInfo.duplicateSymbolsInSameScope.push({ symbol: symbol, scope: scope });
-                                } else {
-                                    symbolFoundInScope = true;
-                                    scopesDefiningSymbol.push(scope);
-                                    //check for consistency across scopes
-                                    if (!providedSymbolType) {
-                                        providedSymbolType = symbolInThisScope.type;
-                                    } else {
-                                        //get more general type
-                                        if (providedSymbolType.isEqual(symbolInThisScope.type)) {
-                                            //type in this scope is the same as one we're already checking
-                                        } else if (providedSymbolType.isTypeCompatible(symbolInThisScope.type)) {
-                                            //type in this scope is compatible with one we're storing. use most generic
-                                            providedSymbolType = symbolInThisScope.type;
-                                        } else if (symbolInThisScope.type.isTypeCompatible(providedSymbolType)) {
-                                            // type we're storing is more generic that the type in this scope
-                                        } else {
-                                            // type in this scope is not compatible with other types for this symbol
-                                            scopesAreInconsistent = true;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        if (!symbolFoundInScope) {
-                            fileInfo.symbolsNotDefinedInEveryScope.push({ symbol: symbol, scope: scope });
-                        }
-                    }
-                    if (scopesAreInconsistent) {
-                        fileInfo.symbolsNotConsistentAcrossScopes.push({ symbol: symbol, scopes: scopesDefiningSymbol });
-                    }
-                }
-                this.lastValidationInfo.set(file.srcPath.toLowerCase(), fileInfo);
-            }
+            validationStopwatch.stop();
+            metrics.fileInfoGenerationTime = validationStopwatch.getDurationText();
+            validationStopwatch.reset();
+            validationStopwatch.start();
 
-            this.detectIncompatibleSymbolsAcrossScopes();
+            metrics.programValidationTime = validationStopwatch.getDurationTextFor(() => {
+                this.detectIncompatibleSymbolsAcrossScopes();
+            }).durationText;
+
 
             // Build component types for any component that changes
             this.logger.time(LogLevel.info, ['Build component types'], () => {
@@ -970,11 +931,11 @@ export class Program {
                 const changedSymbolsSetArr = changedSymbolsMapArr.map(symMap => symMap.get(flag));
                 changedSymbols.set(flag, new Set(...changedSymbolsSetArr));
             }
-
+            let linkTime = 0;
+            let validationTime = 0;
+            let scopesValidated = 0;
             this.logger.time(LogLevel.info, ['Validate all scopes'], () => {
-                let linkTime = 0;
-                let validationTime = 0;
-                let scopesValidated = 0;
+
                 for (let scopeName in this.scopes) {
                     let scope = this.scopes[scopeName];
                     const scopeValidated = scope.validate({ changedFiles: afterValidateFiles, changedSymbols: changedSymbols, initialValidation: this.isFirstValidation });
@@ -984,19 +945,103 @@ export class Program {
                     linkTime += scope.validationMetrics.linkTime;
                     validationTime += scope.validationMetrics.validationTime;
                 }
-                const linkTimeStopWatch = new Stopwatch();
-                linkTimeStopWatch.totalMilliseconds = linkTime;
-                const validationTimeStopWatch = new Stopwatch();
-                validationTimeStopWatch.totalMilliseconds = validationTime;
-                this.logger.info(`Scopes Validated: ${scopesValidated}, Link Time: ${linkTimeStopWatch.getDurationText()}, Validation Time: ${validationTimeStopWatch.getDurationText()}`);
             });
+            metrics.scopesValidated = scopesValidated;
+            validationStopwatch.totalMilliseconds = linkTime;
+            metrics.totalLinkTime = validationStopwatch.getDurationText();
 
-            this.detectDuplicateComponentNames();
+            validationStopwatch.totalMilliseconds = validationTime;
+            metrics.totalScopeValidationTime = validationStopwatch.getDurationText();
+
+            metrics.componentValidationTime = validationStopwatch.getDurationTextFor(() => {
+                this.detectDuplicateComponentNames();
+            }).durationText;
+
+            this.logValidationMetrics(metrics);
 
             this.isFirstValidation = false;
 
             this.plugins.emit('afterProgramValidate', programValidateEvent);
         });
+    }
+
+    private updateLastValidationFileInfo(brsFilesValidated: BrsFile[]) {
+        this.lastValidationInfo.clear();
+        for (const file of brsFilesValidated) {
+
+            const fileInfo: {
+                symbolsNotDefinedInEveryScope: { symbol: UnresolvedSymbol; scope: Scope }[];
+                duplicateSymbolsInSameScope: { symbol: UnresolvedSymbol; scope: Scope }[];
+                symbolsNotConsistentAcrossScopes: { symbol: UnresolvedSymbol; scopes: Scope[] }[];
+            } = {
+                symbolsNotDefinedInEveryScope: [],
+                duplicateSymbolsInSameScope: [],
+                symbolsNotConsistentAcrossScopes: []
+            };
+            const scopesToCheckForConsistency = this.getScopesForFile(file);
+            for (const symbol of file.requiredSymbols) {
+                let providedSymbolType: BscType;
+                let scopesDefiningSymbol: Scope[] = [];
+                let scopesAreInconsistent = false;
+
+                for (const scope of scopesToCheckForConsistency) {
+                    let symbolFoundInScope = false;
+                    for (const scopeFile of scope.getAllFiles()) {
+                        if (!isBrsFile(scopeFile) || scopeFile.isTypedef || scopeFile.hasTypedef) {
+                            continue;
+                        }
+                        const lowerFirstSymbolName = symbol.typeChain?.[0]?.name.toLowerCase();
+                        let symbolInThisScope = scopeFile.providedSymbols.symbolMap?.get(symbol.flags)?.get(lowerFirstSymbolName);
+                        if (!symbolInThisScope && symbol.containingNamespaces?.length > 0) {
+                            const fullNameWithNamespaces = (symbol.containingNamespaces.join('.') + '.' + lowerFirstSymbolName).toLowerCase();
+                            symbolInThisScope = scopeFile.providedSymbols.symbolMap?.get(symbol.flags)?.get(fullNameWithNamespaces);
+                        }
+                        if (symbolInThisScope) {
+                            if (symbolFoundInScope) {
+                                // this is duplicately defined!
+                                fileInfo.duplicateSymbolsInSameScope.push({ symbol: symbol, scope: scope });
+                            } else {
+                                symbolFoundInScope = true;
+                                scopesDefiningSymbol.push(scope);
+                                //check for consistency across scopes
+                                if (!providedSymbolType) {
+                                    providedSymbolType = symbolInThisScope.type;
+                                } else {
+                                    //get more general type
+                                    if (providedSymbolType.isEqual(symbolInThisScope.type)) {
+                                        //type in this scope is the same as one we're already checking
+                                    } else if (providedSymbolType.isTypeCompatible(symbolInThisScope.type)) {
+                                        //type in this scope is compatible with one we're storing. use most generic
+                                        providedSymbolType = symbolInThisScope.type;
+                                    } else if (symbolInThisScope.type.isTypeCompatible(providedSymbolType)) {
+                                        // type we're storing is more generic that the type in this scope
+                                    } else {
+                                        // type in this scope is not compatible with other types for this symbol
+                                        scopesAreInconsistent = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (!symbolFoundInScope) {
+                        fileInfo.symbolsNotDefinedInEveryScope.push({ symbol: symbol, scope: scope });
+                    }
+                }
+                if (scopesAreInconsistent) {
+                    fileInfo.symbolsNotConsistentAcrossScopes.push({ symbol: symbol, scopes: scopesDefiningSymbol });
+                }
+            }
+            this.lastValidationInfo.set(file.srcPath.toLowerCase(), fileInfo);
+        }
+    }
+
+    // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
+    private logValidationMetrics(metrics: { [key: string]: number | string }) {
+        let logs = [] as string[];
+        for (const key in metrics) {
+            logs.push(`${key}=${chalk.yellow(metrics[key].toString())}`);
+        }
+        this.logger.info(`Validation Metrics: ${logs.join(', ')}`);
     }
 
 

@@ -1143,7 +1143,7 @@ export class BrsFile implements BscFile {
         symbolTableToUpdate.mergeNamespaceSymbolTables(this.getOwnNamespaceSymbolTable());
         filesToSkip.add(this.destPath.toLowerCase());
         for (const filePath of this.dependencies) {
-            if (filesToSkip.has(filePath)) {
+            if (filesToSkip.has(filePath.toLowerCase())) {
                 continue;
             }
             const importedFile = this.program.getFile<BrsFile>(filePath);
