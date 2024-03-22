@@ -1167,7 +1167,7 @@ export class BrsFile implements BscFile {
 
     private updateWithDependenciesNamespaceTables(symbolTableToUpdate: SymbolTable, filesToSkip: Set<string>) {
         symbolTableToUpdate.mergeNamespaceSymbolTables(this.getOwnNamespaceSymbolTable());
-        filesToSkip.add(this.destPath);
+        filesToSkip.add(this.destPath.toLowerCase());
         for (const filePath of this.dependencies) {
             if (filesToSkip.has(filePath)) {
                 continue;
