@@ -33,6 +33,7 @@ export class Stopwatch {
     }
 
     getDurationTextFor<T>(func: () => T): { durationText: string; result: T } {
+        this.reset();
         this.start();
         const result = func();
         this.stop();
