@@ -8,7 +8,7 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import { URI } from 'vscode-uri';
 import { Deferred } from '../deferred';
 import { rokuDeploy } from 'roku-deploy';
-import type { DocumentSymbol, Location, Position, SymbolInformation } from 'vscode-languageserver-protocol';
+import type { DocumentSymbol, Location, Position, WorkspaceSymbol } from 'vscode-languageserver-protocol';
 import { CancellationTokenSource } from 'vscode-languageserver-protocol';
 import type { DocumentAction } from './DocumentManager';
 import type { SignatureInfoObj } from '../Program';
@@ -235,7 +235,8 @@ export class Project implements LspProject {
 
     /**
      * Get the full list of semantic tokens for the given file path
-     * @param srcPath absolute path to the source file
+     * @param options options for getting semantic tokens
+     * @param options.srcPath absolute path to the source file
      */
     public async getSemanticTokens(options: { srcPath: string }) {
         await this.onIdle();
@@ -267,9 +268,12 @@ export class Project implements LspProject {
         return this.builder.program.getDocumentSymbols(options.srcPath);
     }
 
-    public async getWorkspaceSymbol(): Promise<SymbolInformation[]> {
+    public async getWorkspaceSymbol(): Promise<WorkspaceSymbol[]> {
         await this.onIdle();
-        return this.builder.program.getWorkspaceSymbols();
+        console.time('getWorkspaceSymbol');
+        const result = this.builder.program.getWorkspaceSymbols();
+        console.timeEnd('getWorkspaceSymbol');
+        return result;
     }
 
     public async getReferences(options: { srcPath: string; position: Position }): Promise<Location[]> {
@@ -373,31 +377,4 @@ export class Project implements LspProject {
             );
         }
     }
-}
-
-/**
- * An annotation used to wrap the method in a readerWriter.write() call
- */
-function WriteLock(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
-    let originalMethod = descriptor.value;
-
-    //wrapping the original method
-    descriptor.value = function value(this: Project, ...args: any[]) {
-        return (this as any).readerWriter.write(() => {
-            return originalMethod.apply(this, args);
-        }, originalMethod.name);
-    };
-}
-/**
- * An annotation used to wrap the method in a readerWriter.read() call
- */
-function ReadLock(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
-    let originalMethod = descriptor.value;
-
-    //wrapping the original method
-    descriptor.value = function value(this: Project, ...args: any[]) {
-        return (this as any).readerWriter.read(() => {
-            return originalMethod.apply(this, args);
-        }, originalMethod.name);
-    };
 }

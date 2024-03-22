@@ -1,4 +1,4 @@
-import type { Diagnostic, Position, Location, DocumentSymbol, SymbolInformation } from 'vscode-languageserver';
+import type { Diagnostic, Position, Location, DocumentSymbol, WorkspaceSymbol } from 'vscode-languageserver';
 import type { Hover, MaybePromise, SemanticToken } from '../interfaces';
 import type { BsConfig } from '../BsConfig';
 import type { DocumentAction } from './DocumentManager';
@@ -93,7 +93,7 @@ export interface LspProject {
     /**
      * Get the list of symbols for the entire workspace
      */
-    getWorkspaceSymbol(): Promise<SymbolInformation[]>;
+    getWorkspaceSymbol(): Promise<WorkspaceSymbol[]>;
 
     /**
      * Get the list of references for the specified file and position

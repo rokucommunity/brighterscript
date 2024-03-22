@@ -75,6 +75,8 @@ export class MessageHandler<T, TRequestName = MethodNames<T>> {
      * Send a request to the worker, and wait for a response.
      * @param name the name of the request
      * @param options the request options
+     * @param options.data an array of data that will be passed in as params to the target function
+     * @param options.id an id for this request
      */
     public async sendRequest<R>(name: TRequestName, options?: { data: any[]; id?: number }) {
         const request: WorkerMessage = {
@@ -117,6 +119,8 @@ export class MessageHandler<T, TRequestName = MethodNames<T>> {
      * Send a request to the worker, and wait for a response.
      * @param name the name of the request
      * @param options options for the update
+     * @param options.data an array of data that will be passed in as params to the target function
+     * @param options.id an id for this update
      */
     public sendUpdate<T>(name: string, options?: { data?: any[]; id?: number }) {
         let update: WorkerMessage = {
@@ -140,19 +144,6 @@ export class MessageHandler<T, TRequestName = MethodNames<T>> {
             stack: error.stack,
             cause: (error.cause as any)?.message && (error.cause as any)?.stack ? this.errorToObject(error.cause as any) : error.cause
         };
-    }
-
-    /**
-     * Turn an object with an error structure into a proper error
-     * @param error the error (in object form) to turn into a proper Error item
-     */
-    private objectToError(error: Error) {
-        let result = new Error();
-        result.name = error.name;
-        result.message = error.message;
-        result.stack = error.stack;
-        result.cause = (error.cause as any)?.message && (error.cause as any)?.stack ? this.objectToError(error.cause as any) : error.cause;
-        return result;
     }
 
     public dispose() {

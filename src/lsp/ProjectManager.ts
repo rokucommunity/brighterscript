@@ -5,7 +5,7 @@ import * as EventEmitter from 'eventemitter3';
 import type { LspDiagnostic, LspProject } from './LspProject';
 import { Project } from './Project';
 import { WorkerThreadProject } from './worker/WorkerThreadProject';
-import type { Hover, Position, Location, SignatureHelp, DocumentSymbol, SymbolInformation } from 'vscode-languageserver-protocol';
+import type { Hover, Position, Location, SignatureHelp, DocumentSymbol, SymbolInformation, WorkspaceSymbol } from 'vscode-languageserver-protocol';
 import { Deferred } from '../deferred';
 import type { FlushEvent } from './DocumentManager';
 import { DocumentManager } from './DocumentManager';
@@ -296,7 +296,7 @@ export class ProjectManager {
 
     @TrackBusyStatus
     @OnReady
-    public async getWorkspaceSymbol(): Promise<SymbolInformation[]> {
+    public async getWorkspaceSymbol(): Promise<WorkspaceSymbol[]> {
         //Ask every project for definition info, keep whichever one responds first that has a valid response
         let responses = await Promise.allSettled(
             this.projects.map(x => x.getWorkspaceSymbol())
