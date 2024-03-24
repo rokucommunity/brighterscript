@@ -491,6 +491,13 @@ export class ProjectManager {
         this.emitter.emit(eventName, data);
     }
     private emitter = new EventEmitter();
+
+    public dispose() {
+        this.emitter.removeAllListeners();
+        for (const project of this.projects) {
+            project.dispose();
+        }
+    }
 }
 
 export interface WorkspaceConfig {

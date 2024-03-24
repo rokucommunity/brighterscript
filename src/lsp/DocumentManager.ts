@@ -1,5 +1,6 @@
 import * as EventEmitter from 'eventemitter3';
 import type { MaybePromise } from '../interfaces';
+import util from '../util';
 
 /**
  * Maintains a queued/buffered list of file operations. These operations don't actually do anything on their own.
@@ -27,6 +28,7 @@ export class DocumentManager {
      * Add/set the contents of a file
      */
     public set(srcPath: string, fileContents: string) {
+        srcPath = util.standardizePath(srcPath);
         if (this.queue.has(srcPath)) {
             this.queue.delete(srcPath);
         }
@@ -42,6 +44,7 @@ export class DocumentManager {
      * Delete a file
      */
     public delete(srcPath: string) {
+        srcPath = util.standardizePath(srcPath);
         this.queue.delete(srcPath);
         this.queue.set(srcPath, { type: 'delete', srcPath: srcPath });
     }

@@ -1,12 +1,14 @@
 import { expect } from 'chai';
 import { ProjectManager } from './ProjectManager';
-import { tempDir, rootDir } from '../testHelpers.spec';
+import { tempDir, rootDir, expectZeroDiagnostics, expectDiagnostics } from '../testHelpers.spec';
 import * as fsExtra from 'fs-extra';
 import util, { standardizePath as s } from '../util';
 import { createSandbox } from 'sinon';
 import { Project } from './Project';
 import { WorkerThreadProject } from './worker/WorkerThreadProject';
 import { getWakeWorkerThreadPromise } from './worker/WorkerThreadProject.spec';
+import type { LspDiagnostic } from './LspProject';
+import { DiagnosticMessages } from '../DiagnosticMessages';
 const sinon = createSandbox();
 
 describe('ProjectManager', () => {
@@ -16,12 +18,30 @@ describe('ProjectManager', () => {
         manager = new ProjectManager();
         fsExtra.emptyDirSync(tempDir);
         sinon.restore();
+        diagnosticsListeners = [];
+        diagnostics = [];
+        manager.on('diagnostics', (event) => {
+            diagnostics.push(event.diagnostics);
+            diagnosticsListeners.pop()?.(event.diagnostics);
+        });
     });
 
     afterEach(() => {
         fsExtra.emptyDirSync(tempDir);
         sinon.restore();
+        manager.dispose();
     });
+
+    /**
+     * Get a promise that resolves when the next diagnostics event is emitted
+     */
+    function onNextDiagnostics() {
+        return new Promise<LspDiagnostic[]>((resolve) => {
+            diagnosticsListeners.push(resolve);
+        });
+    }
+    let diagnosticsListeners: Array<(diagnostics: LspDiagnostic[]) => void> = [];
+    let diagnostics: Array<LspDiagnostic[]> = [];
 
 
     describe('on', () => {
@@ -153,6 +173,29 @@ describe('ProjectManager', () => {
                 s`${rootDir}/subdir1`,
                 s`${rootDir}/subdir2`
             ]);
+        });
+    });
+
+    describe('onDidChangeWatchedFiles', () => {
+        it('properly syncs changes', async () => {
+            fsExtra.outputFileSync(`${rootDir}/source/lib1.brs`, `sub test1():print "alpha":end sub`);
+            fsExtra.outputFileSync(`${rootDir}/source/lib2.brs`, `sub test2():print "beta":end sub`);
+            await manager.syncProjects([{
+                workspaceFolder: rootDir
+            }]);
+            expectZeroDiagnostics(await onNextDiagnostics());
+
+            manager.setFile(`${rootDir}/source/lib1.brs`, `sub test1():print alpha:end sub`);
+            manager.setFile(`${rootDir}/source/lib2.brs`, `sub test2()::print beta:end sub`);
+
+            expectDiagnostics(await onNextDiagnostics(), [
+                DiagnosticMessages.cannotFindName('alpha').message,
+                DiagnosticMessages.cannotFindName('beta').message
+            ]);
+
+            manager.setFile(`${rootDir}/source/lib1.brs`, `sub test1():print "alpha":end sub`);
+            manager.setFile(`${rootDir}/source/lib2.brs`, `sub test2():print "beta":end sub`);
+            expectZeroDiagnostics(await onNextDiagnostics());
         });
     });
 
