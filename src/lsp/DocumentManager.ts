@@ -41,11 +41,20 @@ export class DocumentManager {
     }
 
     /**
-     * Delete a file
+     * Delete a file or directory. If a directory is provided, all pending changes within that directory will be discarded
+     * and only the delete action will be queued
      */
     public delete(srcPath: string) {
         srcPath = util.standardizePath(srcPath);
+        //remove any pending action with this exact path
         this.queue.delete(srcPath);
+        //we can't tell if this a directory, so just remove all pending changes for files that start with this path
+        for (const key of this.queue.keys()) {
+            if (key.startsWith(srcPath)) {
+                this.queue.delete(key);
+            }
+        }
+        //register this delete
         this.queue.set(srcPath, { type: 'delete', srcPath: srcPath });
     }
 

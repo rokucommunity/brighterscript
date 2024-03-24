@@ -9,6 +9,7 @@ import { WorkerThreadProject } from './worker/WorkerThreadProject';
 import { getWakeWorkerThreadPromise } from './worker/WorkerThreadProject.spec';
 import type { LspDiagnostic } from './LspProject';
 import { DiagnosticMessages } from '../DiagnosticMessages';
+import { FileChangeType } from 'vscode-languageserver-protocol';
 const sinon = createSandbox();
 
 describe('ProjectManager', () => {
@@ -176,7 +177,7 @@ describe('ProjectManager', () => {
         });
     });
 
-    describe('onDidChangeWatchedFiles', () => {
+    describe('handleFileChanges', () => {
         it('properly syncs changes', async () => {
             fsExtra.outputFileSync(`${rootDir}/source/lib1.brs`, `sub test1():print "alpha":end sub`);
             fsExtra.outputFileSync(`${rootDir}/source/lib2.brs`, `sub test2():print "beta":end sub`);
@@ -185,17 +186,47 @@ describe('ProjectManager', () => {
             }]);
             expectZeroDiagnostics(await onNextDiagnostics());
 
-            manager.setFile(`${rootDir}/source/lib1.brs`, `sub test1():print alpha:end sub`);
-            manager.setFile(`${rootDir}/source/lib2.brs`, `sub test2()::print beta:end sub`);
+            await manager.handleFileChanges([
+                { srcPath: `${rootDir}/source/lib1.brs`, fileContents: `sub test1():print alpha:end sub`, type: FileChangeType.Changed },
+                { srcPath: `${rootDir}/source/lib2.brs`, fileContents: `sub test2()::print beta:end sub`, type: FileChangeType.Changed }
+            ]);
 
             expectDiagnostics(await onNextDiagnostics(), [
                 DiagnosticMessages.cannotFindName('alpha').message,
                 DiagnosticMessages.cannotFindName('beta').message
             ]);
 
-            manager.setFile(`${rootDir}/source/lib1.brs`, `sub test1():print "alpha":end sub`);
-            manager.setFile(`${rootDir}/source/lib2.brs`, `sub test2():print "beta":end sub`);
+            await manager.handleFileChanges([
+                { srcPath: `${rootDir}/source/lib1.brs`, fileContents: `sub test1():print "alpha":end sub`, type: FileChangeType.Changed },
+                { srcPath: `${rootDir}/source/lib2.brs`, fileContents: `sub test2()::print "beta":end sub`, type: FileChangeType.Changed }
+            ]);
+
             expectZeroDiagnostics(await onNextDiagnostics());
+        });
+
+        it('adds all new files in a folder', async () => {
+            fsExtra.outputFileSync(`${rootDir}/source/main.brs`, `sub main():print "main":end sub`);
+
+            await manager.syncProjects([{
+                workspaceFolder: rootDir
+            }]);
+            expectZeroDiagnostics(await onNextDiagnostics());
+
+            //add a few files to a folder, then register that folder as an "add"
+            fsExtra.outputFileSync(`${rootDir}/source/libs/alpha/beta.brs`, `sub beta(): print one: end sub`);
+            fsExtra.outputFileSync(`${rootDir}/source/libs/alpha/charlie/delta.brs`, `sub delta():print two:end sub`);
+            fsExtra.outputFileSync(`${rootDir}/source/libs/echo/foxtrot.brs`, `sub foxtrot():print three:end sub`);
+
+            await manager.handleFileChanges([
+                //register the entire folder as an "add"
+                { srcPath: `${rootDir}/source/libs`, type: FileChangeType.Created }
+            ]);
+
+            expectDiagnostics(await onNextDiagnostics(), [
+                DiagnosticMessages.cannotFindName('one').message,
+                DiagnosticMessages.cannotFindName('two').message,
+                DiagnosticMessages.cannotFindName('three').message
+            ]);
         });
     });
 

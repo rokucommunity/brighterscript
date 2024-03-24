@@ -39,7 +39,9 @@ import {
     ProposedFeatures,
     TextDocuments,
     TextDocumentSyncKind,
-    CodeActionKind
+    CodeActionKind,
+    DidChangeWatchedFilesNotification,
+    WatchKind
 } from 'vscode-languageserver/node';
 import { URI } from 'vscode-uri';
 import { TextDocument } from 'vscode-languageserver-textdocument';
@@ -258,9 +260,14 @@ export class LanguageServer implements OnHandler<Connection> {
      * file types are watched (.brs,.bs,.xml,manifest, and any json/text/image files)
      */
     @AddStackToErrorMessage
-    private async onDidChangeWatchedFiles(params: DidChangeWatchedFilesParams) {
-        //ensure programs are initialized
-        await this.waitAllProjectFirstRuns();
+    protected async onDidChangeWatchedFiles(params: DidChangeWatchedFilesParams) {
+        await this.projectManager.handleFileChanges(
+            params.changes.map(x => ({
+                srcPath: util.uriToPath(x.uri),
+                type: x.type
+            }))
+        );
+        return;
 
         let projects = this.getProjects();
 
@@ -522,13 +529,6 @@ export class LanguageServer implements OnHandler<Connection> {
      */
     private sendCriticalFailure(message: string) {
         void this.connection.sendNotification('critical-failure', message);
-    }
-
-    /**
-     * Wait for all programs' first run to complete
-     */
-    private async waitAllProjectFirstRuns(waitForFirstProject = true) {
-        //TODO delete me
     }
 
     /**
@@ -797,9 +797,12 @@ export class LanguageServer implements OnHandler<Connection> {
     }
 
     @AddStackToErrorMessage
-    private onTextDocumentDidChangeContent(event: TextDocumentChangeEvent<TextDocument>) {
-        const srcPath = URI.parse(event.document.uri).fsPath;
-        this.projectManager.setFile(srcPath, event.document.getText());
+    private async onTextDocumentDidChangeContent(event: TextDocumentChangeEvent<TextDocument>) {
+        await this.projectManager.handleFileChanges([{
+            srcPath: URI.parse(event.document.uri).fsPath,
+            type: FileChangeType.Changed,
+            fileContents: event.document.getText()
+        }]);
     }
 
     private async validateAll() {

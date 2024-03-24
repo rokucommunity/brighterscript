@@ -1,4 +1,4 @@
-import type { Range, Diagnostic, CodeAction, Position, CompletionItem, Location, DocumentSymbol, WorkspaceSymbol, Disposable } from 'vscode-languageserver-protocol';
+import type { Range, Diagnostic, CodeAction, Position, CompletionItem, Location, DocumentSymbol, WorkspaceSymbol, Disposable, FileChangeType } from 'vscode-languageserver-protocol';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -550,3 +550,12 @@ export interface FileLink<T> {
 export type DisposableLike = Disposable | (() => any);
 
 export type MaybePromise<T> = T | Promise<T>;
+
+export interface FileChange {
+    srcPath: string;
+    type: FileChangeType;
+    /**
+     * If provided, this is the new contents of the file. If not provided, the file will be read from disk
+     */
+    fileContents?: string;
+}

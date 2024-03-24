@@ -1,16 +1,18 @@
 import { standardizePath as s, util } from '../util';
 import { rokuDeploy } from 'roku-deploy';
+import * as fsExtra from 'fs-extra';
 import * as path from 'path';
 import * as EventEmitter from 'eventemitter3';
 import type { LspDiagnostic, LspProject } from './LspProject';
 import { Project } from './Project';
 import { WorkerThreadProject } from './worker/WorkerThreadProject';
-import type { Hover, Position, Range, Location, SignatureHelp, DocumentSymbol, SymbolInformation, WorkspaceSymbol, CodeAction, CompletionList } from 'vscode-languageserver-protocol';
+import { type Hover, type Position, type Range, type Location, type SignatureHelp, type DocumentSymbol, type SymbolInformation, type WorkspaceSymbol, type CodeAction, type CompletionList, FileChangeType } from 'vscode-languageserver-protocol';
 import { Deferred } from '../deferred';
 import type { FlushEvent } from './DocumentManager';
 import { DocumentManager } from './DocumentManager';
-import type { MaybePromise } from '../interfaces';
+import type { FileChange, MaybePromise } from '../interfaces';
 import { BusyStatusTracker } from '../BusyStatusTracker';
+import * as fastGlob from 'fast-glob';
 
 /**
  * Manages all brighterscript projects for the language server
@@ -132,8 +134,66 @@ export class ProjectManager {
      * @param srcPath absolute source path of the file
      * @param fileContents the text contents of the file
      */
-    public setFile(srcPath: string, fileContents: string) {
+    private setFile(srcPath: string, fileContents: string) {
         this.documentManager.set(srcPath, fileContents);
+    }
+
+    /**
+     * Promise that resolves when all file changes have been processed (so we can queue file changes in sequence)
+     */
+    private handleFileChangesPromise: Promise<any> = Promise.resolve();
+
+    /**
+     * Handle when files or directories are added, changed, or deleted in the workspace.
+     * This is safe to call any time. Changes will be queued and flushed at the correct times
+     */
+    public async handleFileChanges(changes: FileChange[]) {
+        //wait for the previous file change handling to finish, then handle these changes
+        this.handleFileChangesPromise = this.handleFileChangesPromise.catch((e) => {
+            console.error(e);
+            //ignore errors, they will be handled by the previous caller
+        }).then(() => {
+            //process all file changes in parallel
+            return Promise.all(changes.map(async (change) => {
+                await this.handleFileChange(change);
+            }));
+        });
+        await this.handleFileChangesPromise;
+        return this.handleFileChangesPromise;
+    }
+
+    /**
+     * Handle a single file change. If the file is a directory, this will recursively read all files in the directory and call `handleFileChanges` again
+     */
+    private async handleFileChange(change: FileChange) {
+        const srcPath = util.standardizePath(change.srcPath);
+        if (change.type === FileChangeType.Deleted) {
+            //mark this document or directory as deleted
+            this.documentManager.delete(srcPath);
+
+            //file added or changed
+        } else {
+            //this is a new file. set the file contents
+            if (fsExtra.statSync(srcPath).isFile()) {
+                const fileContents = change.fileContents ?? (await fsExtra.readFile(change.srcPath, 'utf8')).toString();
+                this.setFile(change.srcPath, fileContents);
+
+                //if this is a new directory, read all files recursively and register those as file changes too
+            } else {
+                const files = await fastGlob('**/*', {
+                    cwd: change.srcPath,
+                    onlyFiles: true,
+                    absolute: true
+                });
+                //pipe all files found recursively in the new directory through this same function so they can be processed correctly
+                await Promise.all(files.map((srcPath) => {
+                    return this.handleFileChange({
+                        srcPath: srcPath,
+                        type: FileChangeType.Changed
+                    });
+                }));
+            }
+        }
     }
 
     /**
@@ -169,7 +229,6 @@ export class ProjectManager {
 
     /**
      * Get all the semantic tokens for the given file
-     * @param srcPath absolute path to the file
      * @returns an array of semantic tokens
      */
     @TrackBusyStatus
@@ -191,7 +250,6 @@ export class ProjectManager {
 
     /**
      * Get a string containing the transpiled contents of the file at the given path
-     * @param srcPath path to the file
      * @returns the transpiled contents of the file as a string
      */
     @TrackBusyStatus
@@ -213,8 +271,6 @@ export class ProjectManager {
 
     /**
      *  Get the completions for the given position in the file
-     * @param srcPath the path to the file
-     * @param position the position of the cursor in the file
      */
     @TrackBusyStatus
     @OnReady
@@ -247,8 +303,6 @@ export class ProjectManager {
 
     /**
      * Get the definition for the symbol at the given position in the file
-     * @param srcPath the path to the file
-     * @param position the position of symbol
      * @returns a list of locations where the symbol under the position is defined in the project
      */
     @TrackBusyStatus

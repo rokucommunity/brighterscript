@@ -165,7 +165,7 @@ export class Project implements LspProject {
         let didChangeFiles = false;
         for (const action of documentActions) {
             let didChangeThisFile = false;
-            if (this.hasFile(action.srcPath)) {
+            if (this.willAcceptFile(action.srcPath)) {
                 if (action.type === 'set') {
                     didChangeThisFile = this.setFile(action.srcPath, action.fileContents);
                 } else if (action.type === 'delete') {
@@ -178,6 +178,13 @@ export class Project implements LspProject {
             await this.validate();
         }
         return didChangeFiles;
+    }
+
+    /**
+     * Determine if this project will accept the file at the specified path (i.e. does it match a pattern in the project's files array)
+     */
+    private willAcceptFile(srcPath: string) {
+        return !!rokuDeploy.getDestPath(srcPath, this.builder.program.options.files, this.builder.program.options.rootDir);
     }
 
     /**

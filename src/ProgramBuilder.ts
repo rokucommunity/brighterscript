@@ -269,7 +269,7 @@ export class ProgramBuilder {
     /**
      * Run the entire process exactly one time.
      */
-    private runOnce(options?: { skipValidation?: boolean; }) {
+    private runOnce(options?: { skipValidation?: boolean }) {
         //clear the console
         this.clearConsole();
         let cancellationToken = { isCanceled: false };
@@ -355,7 +355,7 @@ export class ProgramBuilder {
      * Run the process once, allowing cancelability.
      * NOTE: This should only be called by `runOnce`.
      */
-    private async _runOnce(options: { cancellationToken: { isCanceled: any }; skipValidation: boolean; }) {
+    private async _runOnce(options: { cancellationToken: { isCanceled: any }; skipValidation: boolean }) {
         let wereDiagnosticsPrinted = false;
         try {
             //maybe cancel?
