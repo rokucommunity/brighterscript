@@ -228,6 +228,31 @@ describe('ProjectManager', () => {
                 DiagnosticMessages.cannotFindName('three').message
             ]);
         });
+
+        it('removes all files in a folder', async () => {
+            fsExtra.outputFileSync(`${rootDir}/source/main.brs`, `sub main():print "main":end sub`);
+            fsExtra.outputFileSync(`${rootDir}/source/libs/alpha/beta.brs`, `sub beta(): print one: end sub`);
+            fsExtra.outputFileSync(`${rootDir}/source/libs/alpha/charlie/delta.brs`, `sub delta():print two:end sub`);
+            fsExtra.outputFileSync(`${rootDir}/source/libs/echo/foxtrot.brs`, `sub foxtrot():print three:end sub`);
+
+            await manager.syncProjects([{
+                workspaceFolder: rootDir
+            }]);
+
+            expectDiagnostics(await onNextDiagnostics(), [
+                DiagnosticMessages.cannotFindName('one').message,
+                DiagnosticMessages.cannotFindName('two').message,
+                DiagnosticMessages.cannotFindName('three').message
+            ]);
+
+            await manager.handleFileChanges([
+                //register the entire folder as an "add"
+                { srcPath: `${rootDir}/source/libs`, type: FileChangeType.Deleted }
+            ]);
+
+            expectZeroDiagnostics(await onNextDiagnostics());
+        });
+
     });
 
     describe('threading', () => {
@@ -323,12 +348,14 @@ describe('ProjectManager', () => {
         });
     });
 
-    describe('raceUntil', () => {
-        beforeEach(() => {
-        });
-
+    describe('findFirstMatchingProject', () => {
         async function doTest(expectedIndex: number, ...values: any[]) {
-            manager.projects = [{ index: 0 }, { index: 1 }, { index: 2 }] as any;
+            manager.projects = [0, 1, 2].map((i) => {
+                const project = new Project();
+                project['index'] = i;
+                project['activationDeferred'].resolve();
+                return project;
+            });
 
             let idx = 0;
             expect(

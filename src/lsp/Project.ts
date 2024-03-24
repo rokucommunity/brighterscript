@@ -20,7 +20,6 @@ export class Project implements LspProject {
      * Activates this project. Every call to `activate` should completely reset the project, clear all used ram and start from scratch.
      */
     public async activate(options: ActivateOptions) {
-        this.activationDeferred = new Deferred();
 
         this.projectPath = options.projectPath;
         this.workspaceFolder = options.workspaceFolder;
@@ -82,6 +81,11 @@ export class Project implements LspProject {
     }
 
     /**
+     * Gets resolved when the project has finished activating
+     */
+    private activationDeferred = new Deferred();
+
+    /**
      * Promise that resolves when the project finishes activating
      * @returns a promise that resolves when the project finishes activating
      */
@@ -123,10 +127,6 @@ export class Project implements LspProject {
         return this.builder.program.options;
     }
 
-    /**
-     * Gets resolved when the project has finished activating
-     */
-    private activationDeferred: Deferred;
 
     public getDiagnostics() {
         const diagnostics = this.builder.getDiagnostics();
@@ -165,12 +165,13 @@ export class Project implements LspProject {
         let didChangeFiles = false;
         for (const action of documentActions) {
             let didChangeThisFile = false;
-            if (this.willAcceptFile(action.srcPath)) {
-                if (action.type === 'set') {
-                    didChangeThisFile = this.setFile(action.srcPath, action.fileContents);
-                } else if (action.type === 'delete') {
-                    didChangeThisFile = this.removeFile(action.srcPath);
-                }
+            //if this is a `set` and the file matches the project's files array, set it
+            if (action.type === 'set' && this.willAcceptFile(action.srcPath)) {
+                didChangeThisFile = this.setFile(action.srcPath, action.fileContents);
+
+                //try to delete the file or directory
+            } else if (action.type === 'delete') {
+                didChangeThisFile = this.removeFileOrDirectory(action.srcPath);
             }
             didChangeFiles = didChangeFiles || didChangeThisFile;
         }
@@ -217,15 +218,28 @@ export class Project implements LspProject {
     /**
      * Remove the in-memory file at the specified path. This is typically called when the user (or file system watcher) triggers a file delete
      * @param srcPath absolute path to the File
-     * @returns true if we found and removed the file. false if we didn't have a file to remove
+     * @returns true if we found and removed at least one file, or false if no files were removed
      */
-    private removeFile(srcPath: string) {
+    private removeFileOrDirectory(srcPath: string) {
+        srcPath = util.standardizePath(srcPath);
+        //if this is a direct file match, remove the file
         if (this.builder.program.hasFile(srcPath)) {
             this.builder.program.removeFile(srcPath);
             return true;
-        } else {
-            return false;
         }
+
+        //maybe this is a directory. Remove all files that start with this path
+        let removedSomeFiles = false;
+        let lowerSrcPath = srcPath.toLowerCase();
+        for (let file of Object.values(this.builder.program.files)) {
+            //if the file path starts with the parent path and the file path does not exactly match the folder path
+            if (file.srcPath?.toLowerCase().startsWith(lowerSrcPath)) {
+                this.builder.program.removeFile(file.srcPath, false);
+                removedSomeFiles = true;
+            }
+        }
+        //return true if we removed at least one file
+        return removedSomeFiles;
     }
 
     /**

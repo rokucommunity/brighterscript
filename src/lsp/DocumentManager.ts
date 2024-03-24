@@ -37,6 +37,7 @@ export class DocumentManager {
             srcPath: srcPath,
             fileContents: fileContents
         });
+        //schedule a future flush
         this.throttle();
     }
 
@@ -56,6 +57,9 @@ export class DocumentManager {
         }
         //register this delete
         this.queue.set(srcPath, { type: 'delete', srcPath: srcPath });
+
+        //schedule a future flush
+        this.throttle();
     }
 
     /**

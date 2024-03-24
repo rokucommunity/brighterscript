@@ -129,16 +129,6 @@ export class ProjectManager {
     }
 
     /**
-     * Set new contents for a file. This is safe to call any time. Changes will be queued and flushed at the correct times
-     * during the program's lifecycle flow
-     * @param srcPath absolute source path of the file
-     * @param fileContents the text contents of the file
-     */
-    private setFile(srcPath: string, fileContents: string) {
-        this.documentManager.set(srcPath, fileContents);
-    }
-
-    /**
      * Promise that resolves when all file changes have been processed (so we can queue file changes in sequence)
      */
     private handleFileChangesPromise: Promise<any> = Promise.resolve();
@@ -176,7 +166,7 @@ export class ProjectManager {
             //this is a new file. set the file contents
             if (fsExtra.statSync(srcPath).isFile()) {
                 const fileContents = change.fileContents ?? (await fsExtra.readFile(change.srcPath, 'utf8')).toString();
-                this.setFile(change.srcPath, fileContents);
+                this.documentManager.set(change.srcPath, fileContents);
 
                 //if this is a new directory, read all files recursively and register those as file changes too
             } else {
@@ -549,7 +539,7 @@ export class ProjectManager {
     public dispose() {
         this.emitter.removeAllListeners();
         for (const project of this.projects) {
-            project.dispose();
+            project?.dispose?.();
         }
     }
 }

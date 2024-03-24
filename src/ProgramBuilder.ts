@@ -534,15 +534,18 @@ export class ProgramBuilder {
 
     /**
      * Remove all files from the program that are in the specified folder path
-     * @param srcPath the path to the
+     * @param srcPath the path to the folder to remove
      */
-    public removeFilesInFolder(srcPath: string) {
+    public removeFilesInFolder(srcPath: string): boolean {
+        let removedSomeFiles = false;
         for (let filePath in this.program.files) {
             //if the file path starts with the parent path and the file path does not exactly match the folder path
             if (filePath.startsWith(srcPath) && filePath !== srcPath) {
                 this.program.removeFile(filePath);
+                removedSomeFiles = true;
             }
         }
+        return removedSomeFiles;
     }
 
     /**
