@@ -13,7 +13,7 @@ describe('Project', () => {
 
     beforeEach(() => {
         sinon.restore();
-        project = new Project();
+        project = new Project({} as any);
         fsExtra.emptyDirSync(tempDir);
     });
 

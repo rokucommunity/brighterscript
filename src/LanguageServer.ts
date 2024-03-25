@@ -122,10 +122,6 @@ export class LanguageServer implements OnHandler<Connection> {
             this.sendBusyStatus();
         });
 
-        //allow the lsp to provide file contents
-        //TODO handle this...
-        // this.projectManager.addFileResolver(this.documentFileResolver.bind(this));
-
         // Create a connection for the server. The connection uses Node's IPC as a transport.
         this.establishConnection();
 
@@ -539,18 +535,6 @@ export class LanguageServer implements OnHandler<Connection> {
         void this.connection.sendNotification('critical-failure', message);
     }
 
-    /**
-     * Event handler for when the program wants to load file contents.
-     * anytime the program wants to load a file, check with our in-memory document cache first
-     */
-    private documentFileResolver(srcPath: string) {
-        let pathUri = URI.file(srcPath).toString();
-        let document = this.documents.get(pathUri);
-        if (document) {
-            return document.getText();
-        }
-    }
-
     private async createStandaloneFileProject(srcPath: string) {
         //skip this workspace if we already have it
         if (this.standaloneFileProjects[srcPath]) {
@@ -561,9 +545,6 @@ export class LanguageServer implements OnHandler<Connection> {
 
         //prevent clearing the console on run...this isn't the CLI so we want to keep a full log of everything
         builder.allowConsoleClearing = false;
-
-        //look for files in our in-memory cache before going to the file system
-        builder.addFileResolver(this.documentFileResolver.bind(this));
 
         //get the path to the directory where this file resides
         let cwd = path.dirname(srcPath);
