@@ -39,9 +39,7 @@ import {
     ProposedFeatures,
     TextDocuments,
     TextDocumentSyncKind,
-    CodeActionKind,
-    DidChangeWatchedFilesNotification,
-    WatchKind
+    CodeActionKind
 } from 'vscode-languageserver/node';
 import { URI } from 'vscode-uri';
 import { TextDocument } from 'vscode-languageserver-textdocument';
@@ -107,6 +105,17 @@ export class LanguageServer implements OnHandler<Connection> {
         //anytime a project emits a collection of diagnostics, send them to the client
         this.projectManager.on('diagnostics', (event) => {
             void this.sendDiagnostics(event);
+        });
+
+        // Send all open document changes whenever a project reloads. This is necessary because the project loads files from disk
+        // and may not have the latest unsaved file changes. Any existing projects that already use these files will just ignore the changes
+        // because the file contents haven't changed.
+        this.projectManager.on('project-reload', (event) => {
+            for (const document of this.documents.all()) {
+                void this.onTextDocumentDidChangeContent({
+                    document: document
+                });
+            }
         });
 
         this.projectManager.busyStatusTracker.on('change', (event) => {
@@ -417,7 +426,6 @@ export class LanguageServer implements OnHandler<Connection> {
 
     @AddStackToErrorMessage
     public async onExecuteCommand(params: ExecuteCommandParams) {
-        await this.waitAllProjectFirstRuns();
         if (params.command === CustomCommands.TranspileFile) {
             const result = await this.projectManager.transpileFile(params.arguments[0]);
             //back-compat: include `pathAbsolute` property so older vscode versions still work
@@ -838,7 +846,7 @@ export class LanguageServer implements OnHandler<Connection> {
      * Send diagnostics to the client
      */
     private async sendDiagnostics(options: { project: LspProject; diagnostics: LspDiagnostic[] }) {
-        const patch = this.diagnosticCollection.getPatch(options.project, options.diagnostics);
+        const patch = this.diagnosticCollection.getPatch(options.project.projectNumber, options.diagnostics);
 
         await Promise.all(Object.keys(patch).map(async (srcPath) => {
             const uri = URI.file(srcPath).toString();

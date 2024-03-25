@@ -40,6 +40,7 @@ export class ProjectManager {
      * @param event the document changes that have occurred since the last time we applied
      */
     @TrackBusyStatus
+    @OnReady
     private async applyDocumentChanges(event: FlushEvent) {
         //apply all of the document actions to each project in parallel
         await Promise.all(this.projects.map(async (project) => {
@@ -184,6 +185,21 @@ export class ProjectManager {
                 }));
             }
         }
+
+        //reload any projects whose bsconfig.json was changed
+        const projectsToReload = this.projects.filter(x => x.configFilePath?.toLowerCase() === change.srcPath.toLowerCase());
+        await Promise.all(
+            projectsToReload.map(x => this.reloadProject(x))
+        );
+    }
+
+    /**
+     * Given a project, forcibly reload it by removing it and re-adding it
+     */
+    private async reloadProject(project: LspProject) {
+        this.removeProject(project);
+        await this.createProject(project.projectConfig);
+        this.emit('project-reload', { project: project });
     }
 
     /**
@@ -498,8 +514,8 @@ export class ProjectManager {
         }
 
         let project: LspProject = config.threadingEnabled
-            ? new WorkerThreadProject()
-            : new Project();
+            ? new WorkerThreadProject(config)
+            : new Project(config);
 
         this.projects.push(project);
 
@@ -510,15 +526,13 @@ export class ProjectManager {
                 project: project
             } as any);
         });
+        config.projectNumber ??= ProjectManager.projectNumberSequence++;
 
-        await project.activate({
-            projectPath: config.projectPath,
-            workspaceFolder: config.workspaceFolder,
-            projectNumber: config.projectNumber ?? ProjectManager.projectNumberSequence++
-        });
+        await project.activate(config);
     }
 
     public on(eventName: 'critical-failure', handler: (data: { project: LspProject; message: string }) => MaybePromise<void>);
+    public on(eventName: 'project-reload', handler: (data: { project: LspProject }) => MaybePromise<void>);
     public on(eventName: 'diagnostics', handler: (data: { project: LspProject; diagnostics: LspDiagnostic[] }) => MaybePromise<void>);
     public on(eventName: string, handler: (payload: any) => MaybePromise<void>) {
         this.emitter.on(eventName, handler as any);
@@ -528,6 +542,7 @@ export class ProjectManager {
     }
 
     private emit(eventName: 'critical-failure', data: { project: LspProject; message: string });
+    private emit(eventName: 'project-reload', data: { project: LspProject });
     private emit(eventName: 'diagnostics', data: { project: LspProject; diagnostics: LspDiagnostic[] });
     private async emit(eventName: string, data?) {
         //emit these events on next tick, otherwise they will be processed immediately which could cause issues
@@ -564,7 +579,7 @@ export interface WorkspaceConfig {
     threadingEnabled?: boolean;
 }
 
-interface ProjectConfig {
+export interface ProjectConfig {
     /**
      * Path to the project
      */

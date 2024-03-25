@@ -1,13 +1,18 @@
 import type { Diagnostic, Position, Range, Location, DocumentSymbol, WorkspaceSymbol, CodeAction, CompletionList } from 'vscode-languageserver';
 import type { Hover, MaybePromise, SemanticToken } from '../interfaces';
-import type { BsConfig } from '../BsConfig';
 import type { DocumentAction } from './DocumentManager';
 import type { FileTranspileResult, SignatureInfoObj } from '../Program';
+import type { ProjectConfig } from './ProjectManager';
 
 /**
  * Defines the contract between the ProjectManager and the main or worker thread Project classes
  */
 export interface LspProject {
+
+    /**
+     * The config used to initialize this project. Only here to use when reloading the project
+     */
+    projectConfig: ProjectConfig;
 
     /**
      * The path to where the project resides
@@ -20,10 +25,22 @@ export interface LspProject {
     projectNumber: number;
 
     /**
+     * The root directory of the project.
+     * Only available after `.activate()` has completed
+     */
+    rootDir: string;
+
+    /**
+     * Path to a bsconfig.json file that will be used for this project.
+     * Only available after `.activate()` has completed
+     */
+    configFilePath?: string;
+
+    /**
      * Initialize and start running the project. This will scan for all files, and build a full project in memory, then validate the project
      * @param options
      */
-    activate(options: ActivateOptions): MaybePromise<void>;
+    activate(options: ActivateOptions): MaybePromise<ActivateResponse>;
 
     /**
      * Get a promise that resolves when the project finishes activating
@@ -40,11 +57,6 @@ export interface LspProject {
      * Cancel any active validation that's running
      */
     cancelValidate(): MaybePromise<void>;
-
-    /**
-     * Get the bsconfig options from the program. Should only be called after `.activate()` has completed.
-     */
-    getOptions(): MaybePromise<BsConfig>;
 
     /**
      * Get the list of all file paths that are currently loaded in the project
@@ -158,4 +170,15 @@ export interface ActivateOptions {
 
 export interface LspDiagnostic extends Diagnostic {
     uri: string;
+}
+
+export interface ActivateResponse {
+    /**
+     * The root directory of the project
+     */
+    rootDir: string;
+    /**
+     * The path to the config file (i.e. `bsconfig.json`) that was used to load this project
+     */
+    configFilePath: string;
 }

@@ -1,8 +1,7 @@
 import { DiagnosticCollection } from './DiagnosticCollection';
 import util from './util';
 import { expect } from './chai-config.spec';
-import { Project } from './lsp/Project';
-import type { LspDiagnostic, LspProject } from './lsp/LspProject';
+import type { LspDiagnostic } from './lsp/LspProject';
 import { URI } from 'vscode-uri';
 import { rootDir } from './testHelpers.spec';
 import * as path from 'path';
@@ -11,21 +10,20 @@ import { interpolatedRange } from './astUtils/creators';
 
 describe('DiagnosticCollection', () => {
     let collection: DiagnosticCollection;
-    let project: Project;
+    let projectId: number;
 
     beforeEach(() => {
         collection = new DiagnosticCollection();
-        project = new Project();
-        project.projectPath = rootDir;
+        projectId = 1;
     });
 
     function testPatch(options: {
-        project?: LspProject;
+        projectId?: number;
         diagnosticsByFile?: Record<string, Array<string | LspDiagnostic>>;
         expected?: Record<string, string[]>;
     }) {
 
-        const patch = collection.getPatch(options.project ?? project, createDiagnostics(options.diagnosticsByFile ?? {}));
+        const patch = collection.getPatch(options.projectId ?? projectId, createDiagnostics(options.diagnosticsByFile ?? {}));
         //convert the patch into our test structure
         const actual = {};
         for (let filePath in patch) {
@@ -44,12 +42,22 @@ describe('DiagnosticCollection', () => {
         expect(actual).to.eql(expected);
     }
 
+    it('computes patch for empty diagnostics', () => {
+        //start with 1 diagnostic
+        testPatch({
+            diagnosticsByFile: {
+                'source/file1.brs': ['message1']
+            },
+            expected: {
+                'source/file1.brs': ['message1']
+            }
+        });
+    });
+
     it('computes patch for specific project', () => {
-        const project1 = new Project();
-        const project2 = new Project();
         //should be all diagnostics from project1
         testPatch({
-            project: project1,
+            projectId: 1,
             diagnosticsByFile: {
                 'alpha.brs': ['a1', 'a2'],
                 'beta.brs': ['b1', 'b2']
@@ -62,7 +70,7 @@ describe('DiagnosticCollection', () => {
 
         //set project2 diagnostics that overlap a little with project1
         testPatch({
-            project: project2,
+            projectId: 2,
             diagnosticsByFile: {
                 'beta.brs': ['b2', 'b3'],
                 'charlie.brs': ['c1', 'c2']
@@ -76,7 +84,7 @@ describe('DiagnosticCollection', () => {
 
         //set project 1 diagnostics again (same diagnostics)
         testPatch({
-            project: project1,
+            projectId: 1,
             diagnosticsByFile: {
                 'alpha.brs': ['a1', 'a2'],
                 'beta.brs': ['b1', 'b2']
@@ -200,7 +208,7 @@ describe('DiagnosticCollection', () => {
                     message: 'message1',
                     range: interpolatedRange,
                     uri: undefined,
-                    projects: [project]
+                    projects: [projectId]
                 } as any]
             },
             expected: {

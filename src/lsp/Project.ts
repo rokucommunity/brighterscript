@@ -2,7 +2,7 @@ import { ProgramBuilder } from '../ProgramBuilder';
 import * as EventEmitter from 'eventemitter3';
 import util, { standardizePath as s } from '../util';
 import * as path from 'path';
-import type { ActivateOptions, LspDiagnostic, LspProject } from './LspProject';
+import type { ActivateOptions, ActivateResponse, LspDiagnostic, LspProject } from './LspProject';
 import type { CompilerPlugin, Hover, MaybePromise } from '../interfaces';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { URI } from 'vscode-uri';
@@ -13,14 +13,22 @@ import { CompletionList } from 'vscode-languageserver-protocol';
 import { CancellationTokenSource } from 'vscode-languageserver-protocol';
 import type { DocumentAction } from './DocumentManager';
 import type { SignatureInfoObj } from '../Program';
+import type { ProjectConfig } from './ProjectManager';
 
 export class Project implements LspProject {
+    constructor(
+        /**
+         * The config used to create this project. Mostly just here to use when reloading this project
+         */
+        public projectConfig: ProjectConfig
+    ) {
+
+    }
 
     /**
      * Activates this project. Every call to `activate` should completely reset the project, clear all used ram and start from scratch.
      */
-    public async activate(options: ActivateOptions) {
-
+    public async activate(options: ActivateOptions): Promise<ActivateResponse> {
         this.projectPath = options.projectPath;
         this.workspaceFolder = options.workspaceFolder;
         this.projectNumber = options.projectNumber;
@@ -78,6 +86,15 @@ export class Project implements LspProject {
         void this.validate();
 
         this.activationDeferred.resolve();
+
+        return {
+            configFilePath: this.configFilePath,
+            rootDir: this.builder.program.options.rootDir
+        };
+    }
+
+    public get rootDir() {
+        return this.builder.program.options.rootDir;
     }
 
     /**
@@ -120,14 +137,6 @@ export class Project implements LspProject {
         delete this.validationCancelToken;
     }
 
-    /**
-     * Get the bsconfig options from the program. Should only be called after `.activate()` has completed.
-     */
-    public getOptions() {
-        return this.builder.program.options;
-    }
-
-
     public getDiagnostics() {
         const diagnostics = this.builder.getDiagnostics();
         return diagnostics.map(x => {
@@ -162,6 +171,7 @@ export class Project implements LspProject {
      * This will cancel any pending validation cycles and queue a future validation cycle instead.
      */
     public async applyFileChanges(documentActions: DocumentAction[]): Promise<boolean> {
+        await this.onIdle();
         let didChangeFiles = false;
         for (const action of documentActions) {
             let didChangeThisFile = false;
@@ -408,7 +418,7 @@ export class Project implements LspProject {
 
     public dispose() {
         this.builder?.dispose();
-        this.emitter.removeAllListeners();
+        this.emitter?.removeAllListeners();
         if (this.activationDeferred?.isCompleted === false) {
             this.activationDeferred.reject(
                 new Error('Project was disposed, activation has been aborted')

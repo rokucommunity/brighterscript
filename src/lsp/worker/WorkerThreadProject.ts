@@ -3,17 +3,17 @@ import { Worker } from 'worker_threads';
 import type { WorkerMessage } from './MessageHandler';
 import { MessageHandler } from './MessageHandler';
 import util from '../../util';
-import type { LspDiagnostic } from '../LspProject';
+import type { LspDiagnostic, ActivateResponse } from '../LspProject';
 import { type ActivateOptions, type LspProject } from '../LspProject';
 import { isMainThread, parentPort } from 'worker_threads';
 import { WorkerThreadProjectRunner } from './WorkerThreadProjectRunner';
 import { WorkerPool } from './WorkerPool';
 import type { Hover, MaybePromise, SemanticToken } from '../../interfaces';
-import type { BsConfig } from '../../BsConfig';
 import type { DocumentAction } from '../DocumentManager';
 import { Deferred } from '../../deferred';
 import type { FileTranspileResult, SignatureInfoObj } from '../../Program';
 import type { Position, Range, Location, DocumentSymbol, WorkspaceSymbol, CodeAction, CompletionList } from 'vscode-languageserver-protocol';
+import type { ProjectConfig } from '../ProjectManager';
 
 export const workerPool = new WorkerPool(() => {
     return new Worker(
@@ -37,6 +37,15 @@ if (!isMainThread) {
 
 export class WorkerThreadProject implements LspProject {
 
+    constructor(
+        /**
+         * The config used to create this project. Mostly just here to use when reloading this project
+         */
+        public projectConfig: ProjectConfig
+    ) {
+
+    }
+
     public async activate(options: ActivateOptions) {
         this.projectPath = options.projectPath;
         this.workspaceFolder = options.workspaceFolder;
@@ -52,16 +61,49 @@ export class WorkerThreadProject implements LspProject {
             onUpdate: this.processUpdate.bind(this)
         });
 
-        await this.messageHandler.sendRequest('activate', { data: [options] });
+        const activateResponse = await this.messageHandler.sendRequest<ActivateResponse>('activate', { data: [options] });
+        this.configFilePath = activateResponse.data.configFilePath;
+        this.rootDir = activateResponse.data.rootDir;
 
         //populate a few properties with data from the thread so we can use them for some synchronous checks
         this.filePaths = new Set(await this.getFilePaths());
-        this.options = await this.getOptions();
 
         this.activationDeferred.resolve();
+        return activateResponse.data;
     }
 
     private activationDeferred = new Deferred();
+
+    /**
+     * The root directory of the project
+     */
+    public rootDir: string;
+
+    /**
+     * Path to a bsconfig.json file that will be used for this project
+     */
+    public configFilePath?: string;
+
+    /**
+     * The worker thread where the actual project will execute
+     */
+    private worker: Worker;
+
+    /**
+     * The path to where the project resides
+     */
+    public projectPath: string;
+
+    /**
+     * A unique number for this project, generated during this current language server session. Mostly used so we can identify which project is doing logging
+     */
+    public projectNumber: number;
+
+    /**
+     * The path to the workspace where this project resides. A workspace can have multiple projects (by adding a bsconfig.json to each folder).
+     * Defaults to `.projectPath` if not set
+     */
+    public workspaceFolder: string;
 
     /**
      * Promise that resolves when the project finishes activating
@@ -125,22 +167,6 @@ export class WorkerThreadProject implements LspProject {
      */
     public async getFilePaths() {
         return (await this.messageHandler.sendRequest<string[]>('getFilePaths')).data;
-    }
-
-    /**
-     * Get the bsconfig options from the program. Should only be called after `.activate()` has completed.
-     */
-    public async getOptions() {
-        return (await this.messageHandler.sendRequest<BsConfig>('getOptions')).data;
-    }
-
-    /**
-     * A local reference to the bsconfig this project was built with. Should only be accessed after `.activate()` has completed.
-     */
-    private options: BsConfig;
-
-    public get rootDir() {
-        return this.options.rootDir;
     }
 
     /**
@@ -212,32 +238,6 @@ export class WorkerThreadProject implements LspProject {
         //for now, all updates are treated like "events"
         this.emit(update.name as any, update.data);
     }
-
-    /**
-     * The worker thread where the actual project will execute
-     */
-    private worker: Worker;
-
-    /**
-     * The path to where the project resides
-     */
-    public projectPath: string;
-
-    /**
-     * A unique number for this project, generated during this current language server session. Mostly used so we can identify which project is doing logging
-     */
-    public projectNumber: number;
-
-    /**
-     * The path to the workspace where this project resides. A workspace can have multiple projects (by adding a bsconfig.json to each folder).
-     * Defaults to `.projectPath` if not set
-     */
-    public workspaceFolder: string;
-
-    /**
-     * Path to a bsconfig.json file that will be used for this project
-     */
-    public configFilePath?: string;
 
     public on(eventName: 'critical-failure', handler: (data: { message: string }) => void);
     public on(eventName: 'diagnostics', handler: (data: { diagnostics: LspDiagnostic[] }) => MaybePromise<void>);

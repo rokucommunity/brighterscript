@@ -10,11 +10,9 @@ export class DiagnosticCollection {
      * Get a patch of any changed diagnostics since last time. This takes a single project and diagnostics, but evaulates
      * the patch based on all previously seen projects. It's supposed to be a rolling patch.
      * This will include _ALL_ diagnostics for a file if any diagnostics have changed for that file, due to how the language server expects diagnostics to be sent.
-     * @param projects
-     * @returns
      */
-    public getPatch(project: LspProject, diagnostics: LspDiagnostic[]) {
-        const diagnosticsByFile = this.getDiagnosticsByFile(project, diagnostics as KeyedDiagnostic[]);
+    public getPatch(projectId: number, diagnostics: LspDiagnostic[]) {
+        const diagnosticsByFile = this.getDiagnosticsByFile(projectId, diagnostics as KeyedDiagnostic[]);
 
         const patch = {
             ...this.getRemovedPatch(diagnosticsByFile),
@@ -29,11 +27,10 @@ export class DiagnosticCollection {
 
     /**
      * Get all the previous diagnostics, remove any that were exclusive to the current project, then mix in the project's new diagnostics.
-     * @param project the latest project that should have its diagnostics refreshed
+     * @param projectId the id of the project that should have its diagnostics refreshed
      * @param thisProjectDiagnostics diagnostics for the project
-     * @returns
      */
-    private getDiagnosticsByFile(project: LspProject, thisProjectDiagnostics: KeyedDiagnostic[]) {
+    private getDiagnosticsByFile(projectId: number, thisProjectDiagnostics: KeyedDiagnostic[]) {
         const result = this.clonePreviousDiagnosticsByFile();
 
         const diagnosticsByKey = new Map<string, KeyedDiagnostic>();
@@ -47,13 +44,10 @@ export class DiagnosticCollection {
                 //remember this diagnostic key for use when deduping down below
                 diagnosticsByKey.set(diagnostic.key, diagnostic);
 
-                const idx = diagnostic.projects.indexOf(project);
                 //unlink the diagnostic from this project
-                if (idx > -1) {
-                    diagnostic.projects.splice(idx, 1);
-                }
+                diagnostic.projectIds.delete(projectId);
                 //delete this diagnostic if it's no longer linked to any projects
-                if (diagnostic.projects.length === 0) {
+                if (diagnostic.projectIds.size === 0) {
                     diagnostics.splice(i, 1);
                     diagnosticsByKey.delete(diagnostic.key);
                 }
@@ -80,7 +74,7 @@ export class DiagnosticCollection {
                 range.end.character +
                 diagnostic.message;
 
-            diagnostic.projects ??= [project];
+            diagnostic.projectIds ??= new Set([projectId]);
 
             //don't include duplicates
             if (!diagnosticsByKey.has(diagnostic.key)) {
@@ -90,11 +84,8 @@ export class DiagnosticCollection {
                 diagnosticsForFile.push(diagnostic);
             }
 
-            const projects = diagnosticsByKey.get(diagnostic.key).projects;
             //link this project to the diagnostic
-            if (!projects.includes(project)) {
-                projects.push(project);
-            }
+            diagnosticsByKey.get(diagnostic.key).projectIds.add(projectId);
         }
 
         //sort the list so it's easier to compare later
@@ -115,7 +106,7 @@ export class DiagnosticCollection {
                 clone[key].push({
                     ...diagnostic,
                     //make a copy of the projects array (but keep the project references intact)
-                    projects: [...diagnostic.projects]
+                    projectIds: new Set([...diagnostic.projectIds])
                 });
             }
         }
@@ -128,7 +119,8 @@ export class DiagnosticCollection {
     private getRemovedPatch(currentDiagnosticsByFile: Record<string, KeyedDiagnostic[]>) {
         const result = {} as Record<string, KeyedDiagnostic[]>;
         for (const filePath in this.previousDiagnosticsByFile) {
-            if (!currentDiagnosticsByFile[filePath]) {
+            //if there are no current diagnostics for this file, add an empty array to the result for that file path
+            if ((currentDiagnosticsByFile[filePath]?.length ?? 0) === 0) {
                 result[filePath] = [];
             }
         }
@@ -173,7 +165,7 @@ export class DiagnosticCollection {
     private getAddedPatch(currentDiagnosticsByFile: Record<string, KeyedDiagnostic[]>) {
         const result = {} as Record<string, KeyedDiagnostic[]>;
         for (const filePath in currentDiagnosticsByFile) {
-            if (!this.previousDiagnosticsByFile[filePath]) {
+            if ((this.previousDiagnosticsByFile[filePath]?.length ?? 0) === 0) {
                 result[filePath] = currentDiagnosticsByFile[filePath];
             }
         }
@@ -183,5 +175,5 @@ export class DiagnosticCollection {
 
 interface KeyedDiagnostic extends LspDiagnostic {
     key: string;
-    projects: LspProject[];
+    projectIds: Set<number>;
 }
