@@ -40,6 +40,38 @@ describe('Project', () => {
         });
     });
 
+    describe('setFile', () => {
+        it('skips setting the file if the contents have not changed', async () => {
+            await project.activate({ projectPath: rootDir });
+            //initial set should be true
+            expect(
+                await project.applyFileChanges([{
+                    fileContents: 'sub main:end sub',
+                    srcPath: s`${rootDir}/source/main.brs`,
+                    type: 'set'
+                }])
+            ).to.be.true;
+
+            //contents haven't changed, this should be false
+            expect(
+                await project.applyFileChanges([{
+                    fileContents: 'sub main:end sub',
+                    srcPath: s`${rootDir}/source/main.brs`,
+                    type: 'set'
+                }])
+            ).to.be.false;
+
+            //contents changed again, should be true
+            expect(
+                await project.applyFileChanges([{
+                    fileContents: 'sub main2:end sub',
+                    srcPath: s`${rootDir}/source/main.brs`,
+                    type: 'set'
+                }])
+            ).to.be.true;
+        });
+    });
+
     describe('activate', () => {
         it('finds bsconfig.json at root', async () => {
             fsExtra.outputFileSync(`${rootDir}/bsconfig.json`, '');

@@ -203,13 +203,19 @@ export class Project implements LspProject {
      * during the program's lifecycle flow
      * @param srcPath absolute source path of the file
      * @param fileContents the text contents of the file
-     * @returns true if this program accepted and added the file. false if this file doesn't match against the program's files array
+     * @returns true if this program accepted and added the file. false if the program didn't want the file, or if the contents didn't change
      */
     private setFile(srcPath: string, fileContents: string) {
         const { files, rootDir } = this.builder.program.options;
 
         //get the dest path for this file.
         let destPath = rokuDeploy.getDestPath(srcPath, files, rootDir);
+
+        //if we have a file and the contents haven't changed
+        let file = this.builder.program.getFile(destPath);
+        if (file && file.fileContents === fileContents) {
+            return false;
+        }
 
         //if we got a dest path, then the program wants this file
         if (destPath) {
