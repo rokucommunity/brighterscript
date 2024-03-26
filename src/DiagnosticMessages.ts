@@ -756,13 +756,18 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error
     }),
     incompatibleSymbolDefinition: (symbol: string, scopeName: string) => ({
-        message: `'${symbol}' is incompatible across scope group (${scopeName})`, // TODO: Add scopes where it was defined
+        message: `'${symbol}' is incompatible across these scopes: ${scopeName}`,
         code: 1145,
         severity: DiagnosticSeverity.Error
     }),
     memberAccessibilityMismatch: (memberName: string, accessModifierFlag: SymbolTypeFlag, definingClassName: string) => ({
         message: `Member '${memberName}' is ${accessModifierNameFromFlag(accessModifierFlag)}${accessModifierAdditionalInfo(accessModifierFlag, definingClassName)}`, // TODO: Add scopes where it was defined
         code: 1146,
+        severity: DiagnosticSeverity.Error
+    }),
+    symbolNotDefinedInScopes: (symbol: string, scopesListString: string) => ({
+        message: `'${symbol}' is not defined in these scopes: ${scopesListString}`,
+        code: 1147,
         severity: DiagnosticSeverity.Error
     })
 };

@@ -895,21 +895,6 @@ export class Program {
 
             metrics.filesValidated = afterValidateFiles.length;
 
-            metrics.fileInfoGenerationTime = validationStopwatch.getDurationTextFor(() => {
-                // build list of all changed symbols in each file that changed
-                this.updateLastValidationFileInfo(brsFilesValidated);
-            }).durationText;
-
-            validationStopwatch.stop();
-            metrics.fileInfoGenerationTime = validationStopwatch.getDurationText();
-            validationStopwatch.reset();
-            validationStopwatch.start();
-
-            metrics.programValidationTime = validationStopwatch.getDurationTextFor(() => {
-                this.detectIncompatibleSymbolsAcrossScopes();
-            }).durationText;
-
-
             // Build component types for any component that changes
             this.logger.time(LogLevel.info, ['Build component types'], () => {
                 for (let { componentKey, componentName } of this.componentSymbolsToUpdate) {
@@ -918,6 +903,14 @@ export class Program {
                 this.componentSymbolsToUpdate.clear();
             });
 
+            metrics.fileInfoGenerationTime = validationStopwatch.getDurationTextFor(() => {
+                // build list of all changed symbols in each file that changed
+                this.updateLastValidationFileInfo(brsFilesValidated);
+            }).durationText;
+
+            metrics.programValidationTime = validationStopwatch.getDurationTextFor(() => {
+                this.detectIncompatibleSymbolsAcrossScopes();
+            }).durationText;
 
             const changedSymbolsMapArr = brsFilesValidated?.map(f => {
                 if (isBrsFile(f)) {
@@ -935,10 +928,14 @@ export class Program {
             let validationTime = 0;
             let scopesValidated = 0;
             this.logger.time(LogLevel.info, ['Validate all scopes'], () => {
-
+                const filesToBeValidatedInScopeContext = new Set<BscFile>(afterValidateFiles);
                 for (let scopeName in this.scopes) {
                     let scope = this.scopes[scopeName];
-                    const scopeValidated = scope.validate({ changedFiles: afterValidateFiles, changedSymbols: changedSymbols, initialValidation: this.isFirstValidation });
+                    const scopeValidated = scope.validate({
+                        filesToBeValidatedInScopeContext: filesToBeValidatedInScopeContext,
+                        changedSymbols: changedSymbols,
+                        initialValidation: this.isFirstValidation
+                    });
                     if (scopeValidated) {
                         scopesValidated++;
                     }
@@ -983,6 +980,12 @@ export class Program {
                 let providedSymbolType: BscType;
                 let scopesDefiningSymbol: Scope[] = [];
                 let scopesAreInconsistent = false;
+
+                // check global scope for components
+                if (symbol.typeChain.length === 1 && this.globalScope.symbolTable.getSymbol(symbol.typeChain[0].name, symbol.flags)) {
+                    //symbol is available in global scope. ignore it
+                    continue;
+                }
 
                 for (const scope of scopesToCheckForConsistency) {
                     let symbolFoundInScope = false;
@@ -1048,11 +1051,32 @@ export class Program {
     private detectIncompatibleSymbolsAcrossScopes() {
         for (const [lowerFilePath, fileInfo] of this.lastValidationInfo.entries()) {
             const file = this.files[lowerFilePath];
+            const scopesForFile = this.getScopesForFile(file);
             for (const symbolAndScopes of fileInfo.symbolsNotConsistentAcrossScopes) {
                 const typeChainResult = util.processTypeChain(symbolAndScopes.symbol.typeChain);
                 const scopeListName = symbolAndScopes.scopes.map(s => s.name).join(', ');
                 this.diagnostics.push({
                     ...DiagnosticMessages.incompatibleSymbolDefinition(typeChainResult.fullNameOfItem, scopeListName),
+                    file: file,
+                    range: typeChainResult.range
+                });
+            }
+            const mapOfSymbolsAndMissingScopes = new Map<UnresolvedSymbol, Scope[]>();
+            for (const symbolAndScope of fileInfo.symbolsNotDefinedInEveryScope) {
+                if (!mapOfSymbolsAndMissingScopes.has(symbolAndScope.symbol)) {
+                    mapOfSymbolsAndMissingScopes.set(symbolAndScope.symbol, []);
+                }
+                mapOfSymbolsAndMissingScopes.get(symbolAndScope.symbol).push(symbolAndScope.scope);
+            }
+            for (const [symbol, scopes] of mapOfSymbolsAndMissingScopes.entries()) {
+                if (scopes.length === scopesForFile.length) {
+                    // do not add diagnostic if thing is not in ANY scopes
+                    continue;
+                }
+                const typeChainResult = util.processTypeChain(symbol.typeChain);
+                const scopeListName = scopes.map(s => s.name).join(', ');
+                this.diagnostics.push({
+                    ...DiagnosticMessages.symbolNotDefinedInScopes(typeChainResult.fullNameOfItem, scopeListName),
                     file: file,
                     range: typeChainResult.range
                 });
