@@ -11,7 +11,7 @@ import { rokuDeploy } from 'roku-deploy';
 import type { CodeAction, DocumentSymbol, Position, Range, Location, WorkspaceSymbol } from 'vscode-languageserver-protocol';
 import { CompletionList } from 'vscode-languageserver-protocol';
 import { CancellationTokenSource } from 'vscode-languageserver-protocol';
-import type { DocumentAction } from './DocumentManager';
+import type { DocumentAction, DocumentActionWithStatus } from './DocumentManager';
 import type { SignatureInfoObj } from '../Program';
 import type { ProjectConfig } from './ProjectManager';
 
@@ -59,13 +59,11 @@ export class Project implements LspProject {
             }
         } as CompilerPlugin);
 
-        //register any external file resolvers
-        //TODO handle in-memory file stuff
-        // builder.addFileResolver(...this.fileResolvers);
-
         await this.builder.run({
             cwd: cwd,
             project: this.configFilePath,
+            //if we were given a files array, use it (mostly used for standalone projects)
+            files: options.files,
             watch: false,
             createPackage: false,
             deploy: false,
@@ -170,25 +168,30 @@ export class Project implements LspProject {
      * Add or replace the in-memory contents of the file at the specified path. This is typically called as the user is typing.
      * This will cancel any pending validation cycles and queue a future validation cycle instead.
      */
-    public async applyFileChanges(documentActions: DocumentAction[]): Promise<boolean> {
+    public async applyFileChanges(documentActions: DocumentAction[]): Promise<DocumentActionWithStatus[]> {
         await this.onIdle();
         let didChangeFiles = false;
-        for (const action of documentActions) {
+        const result = documentActions as DocumentActionWithStatus[];
+        for (const action of result) {
             let didChangeThisFile = false;
             //if this is a `set` and the file matches the project's files array, set it
             if (action.type === 'set' && this.willAcceptFile(action.srcPath)) {
                 didChangeThisFile = this.setFile(action.srcPath, action.fileContents);
+                //this file was accepted by the program
+                action.status = 'accepted';
 
                 //try to delete the file or directory
             } else if (action.type === 'delete') {
                 didChangeThisFile = this.removeFileOrDirectory(action.srcPath);
+                //if we deleted at least one file, mark this action as accepted
+                action.status = didChangeThisFile ? 'accepted' : 'rejected';
             }
             didChangeFiles = didChangeFiles || didChangeThisFile;
         }
         if (didChangeFiles) {
             await this.validate();
         }
-        return didChangeFiles;
+        return result;
     }
 
     /**

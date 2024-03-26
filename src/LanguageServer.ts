@@ -47,7 +47,6 @@ import type { BsConfig } from './BsConfig';
 import { ProgramBuilder } from './ProgramBuilder';
 import { standardizePath as s, util } from './util';
 import { Logger } from './Logger';
-import { Throttler } from './Throttler';
 import { DiagnosticCollection } from './DiagnosticCollection';
 import { encodeSemanticTokens, semanticTokensLegend } from './SemanticTokenUtils';
 import type { WorkspaceConfig } from './lsp/ProjectManager';
@@ -89,14 +88,6 @@ export class LanguageServer implements OnHandler<Connection> {
     private documents = new TextDocuments(TextDocument);
 
     private loggerSubscription: () => void;
-
-    public validateThrottler = new Throttler(0);
-
-    private boundValidateAll = this.validateAll.bind(this);
-
-    private validateAllThrottled() {
-        return this.validateThrottler.run(this.boundValidateAll);
-    }
 
     //run the server
     public run() {
@@ -242,6 +233,48 @@ export class LanguageServer implements OnHandler<Connection> {
         }
     }
 
+    @AddStackToErrorMessage
+    private async onTextDocumentDidChangeContent(event: TextDocumentChangeEvent<TextDocument>) {
+        await this.projectManager.handleFileChanges([{
+            srcPath: URI.parse(event.document.uri).fsPath,
+            type: FileChangeType.Changed,
+            fileContents: event.document.getText(),
+            allowStandaloneProject: true
+        }]);
+    }
+
+    /**
+     * Called when watched files changed (add/change/delete).
+     * The CLIENT is in charge of what files to watch, so all client
+     * implementations should ensure that all valid project
+     * file types are watched (.brs,.bs,.xml,manifest, and any json/text/image files)
+     */
+    @AddStackToErrorMessage
+    protected async onDidChangeWatchedFiles(params: DidChangeWatchedFilesParams) {
+        await this.projectManager.handleFileChanges(
+            params.changes.map(x => ({
+                srcPath: util.uriToPath(x.uri),
+                type: x.type,
+                //if this is an open document, allow this file to be loaded in a standalone project (if applicable)
+                allowStandaloneProject: this.documents.get(x.uri) !== undefined
+            }))
+        );
+    }
+
+    @AddStackToErrorMessage
+    private async onDocumentClose(event: TextDocumentChangeEvent<TextDocument>): Promise<void> {
+        const { document } = event;
+        let filePath = URI.parse(document.uri).fsPath;
+        let standaloneFileProject = this.standaloneFileProjects[filePath];
+        //if this was a temp file, close it
+        if (standaloneFileProject) {
+            await standaloneFileProject.firstRunPromise;
+            standaloneFileProject.builder.dispose();
+            delete this.standaloneFileProjects[filePath];
+            await this.sendDiagnostics();
+        }
+    }
+
     /**
      * Provide a list of completion items based on the current cursor position
      */
@@ -256,107 +289,6 @@ export class LanguageServer implements OnHandler<Connection> {
     protected async onDidChangeConfiguration(args: DidChangeConfigurationParams) {
         //if the user changes any user/workspace config settings, just mass-reload all projects
         await this.syncProjects(true);
-    }
-
-    /**
-     * Called when watched files changed (add/change/delete).
-     * The CLIENT is in charge of what files to watch, so all client
-     * implementations should ensure that all valid project
-     * file types are watched (.brs,.bs,.xml,manifest, and any json/text/image files)
-     */
-    @AddStackToErrorMessage
-    protected async onDidChangeWatchedFiles(params: DidChangeWatchedFilesParams) {
-        await this.projectManager.handleFileChanges(
-            params.changes.map(x => ({
-                srcPath: util.uriToPath(x.uri),
-                type: x.type
-            }))
-        );
-        return;
-
-        let projects = this.getProjects();
-
-        //convert all file paths to absolute paths
-        let changes = params.changes.map(x => {
-            return {
-                type: x.type,
-                srcPath: s`${URI.parse(x.uri).fsPath}`
-            };
-        });
-
-        let keys = changes.map(x => x.srcPath);
-
-        //filter the list of changes to only the ones that made it through the debounce unscathed
-        changes = changes.filter(x => keys.includes(x.srcPath));
-
-        //if we have changes to work with
-        if (changes.length > 0) {
-
-            //if any bsconfig files were added or deleted, re-sync all projects instead of the more specific approach below
-            if (changes.find(x => (x.type === FileChangeType.Created || x.type === FileChangeType.Deleted) && path.basename(x.srcPath).toLowerCase() === 'bsconfig.json')) {
-                return this.syncProjects();
-            }
-
-            //reload any workspace whose bsconfig.json file has changed
-            {
-                let projectsToReload = [] as Project[];
-                //get the file paths as a string array
-                let filePaths = changes.map((x) => x.srcPath);
-
-                for (let project of projects) {
-                    if (project.configFilePath && filePaths.includes(project.configFilePath)) {
-                        projectsToReload.push(project);
-                    }
-                }
-                if (projectsToReload.length > 0) {
-                    //vsc can generate a ton of these changes, for vsc system files, so we need to bail if there's no work to do on any of our actual project files
-                    //reload any projects that need to be reloaded
-                    await this.reloadProjects(projectsToReload);
-                }
-
-                //reassign `projects` to the non-reloaded projects
-                projects = projects.filter(x => !projectsToReload.includes(x));
-            }
-
-            //convert created folders into a list of files of their contents
-            const directoryChanges = changes
-                //get only creation items
-                .filter(change => change.type === FileChangeType.Created)
-                //keep only the directories
-                .filter(change => util.isDirectorySync(change.srcPath));
-
-            //remove the created directories from the changes array (we will add back each of their files next)
-            changes = changes.filter(x => !directoryChanges.includes(x));
-
-            //look up every file in each of the newly added directories
-            const newFileChanges = directoryChanges
-                //take just the path
-                .map(x => x.srcPath)
-                //exclude the roku deploy staging folder
-                .filter(dirPath => !dirPath.includes('.roku-deploy-staging'))
-                //get the files for each folder recursively
-                .flatMap(dirPath => {
-                    //look up all files
-                    let files = fastGlob.sync('**/*', {
-                        absolute: true,
-                        cwd: rokuDeployUtil.toForwardSlashes(dirPath)
-                    });
-                    return files.map(x => {
-                        return {
-                            type: FileChangeType.Created,
-                            srcPath: s`${x}`
-                        };
-                    });
-                });
-
-            //add the new file changes to the changes array.
-            changes.push(...newFileChanges as any);
-
-            //give every workspace the chance to handle file changes
-            await Promise.all(
-                projects.map((project) => this.handleFileChanges(project, changes))
-            );
-        }
     }
 
     @AddStackToErrorMessage
@@ -495,7 +427,7 @@ export class LanguageServer implements OnHandler<Connection> {
                     excludePatterns: await this.getWorkspaceExcludeGlobs(workspaceFolder),
                     bsconfigPath: config.configFile,
                     //TODO we need to solidify the actual name of this flag in user/workspace settings
-                    threadingEnabled: config.languageServer.enableThreading
+                    threadingEnabled: config.languageServer.enableThreading ?? true
 
                 } as WorkspaceConfig;
             })
@@ -603,41 +535,6 @@ export class LanguageServer implements OnHandler<Connection> {
     }
 
 
-    /**
-     * Reload each of the specified workspaces
-     */
-    private async reloadProjects(projects: Project[]) {
-        await Promise.all(
-            projects.map(async (project) => {
-                //ensure the workspace has finished starting up
-                try {
-                    await project.firstRunPromise;
-                } catch (e) { }
-
-                //handle standard workspace
-                if (project.isStandaloneFileProject === false) {
-                    this.removeProject(project);
-
-                    //create a new workspace/brs program
-                    await this.createProject(project.projectPath, project.workspacePath, project.projectNumber);
-
-                    //handle temp workspace
-                } else {
-                    project.builder.dispose();
-                    delete this.standaloneFileProjects[project.projectPath];
-                    await this.createStandaloneFileProject(project.projectPath);
-                }
-            })
-        );
-        if (projects.length > 0) {
-            //wait for all of the programs to finish starting up
-            await this.waitAllProjectFirstRuns();
-
-            // valdiate all workspaces
-            this.validateAllThrottled(); //eslint-disable-line
-        }
-    }
-
     private getRootDir(workspace: Project) {
         let options = workspace?.builder?.program?.options;
         return options?.rootDir ?? options?.cwd;
@@ -694,136 +591,6 @@ export class LanguageServer implements OnHandler<Connection> {
     }
 
     /**
-     * This only operates on files that match the specified files globs, so it is safe to throw
-     * any file changes you receive with no unexpected side-effects
-     */
-    public async handleFileChanges(project: Project, changes: { type: FileChangeType; srcPath: string }[]) {
-        //this loop assumes paths are both file paths and folder paths, which eliminates the need to detect.
-        //All functions below can handle being given a file path AND a folder path, and will only operate on the one they are looking for
-        let consumeCount = 0;
-        await Promise.all(changes.map(async (change) => {
-            consumeCount += await this.handleFileChange(project, change) ? 1 : 0;
-        }));
-
-        if (consumeCount > 0) {
-            await this.validateAllThrottled();
-        }
-    }
-
-    /**
-     * This only operates on files that match the specified files globs, so it is safe to throw
-     * any file changes you receive with no unexpected side-effects
-     */
-    private async handleFileChange(project: Project, change: { type: FileChangeType; srcPath: string }) {
-        const { program, options, rootDir } = project.builder;
-
-        //deleted
-        if (change.type === FileChangeType.Deleted) {
-            //try to act on this path as a directory
-            project.builder.removeFilesInFolder(change.srcPath);
-
-            //if this is a file loaded in the program, remove it
-            if (program.hasFile(change.srcPath)) {
-                program.removeFile(change.srcPath);
-                return true;
-            } else {
-                return false;
-            }
-
-            //created
-        } else if (change.type === FileChangeType.Created) {
-            // thanks to `onDidChangeWatchedFiles`, we can safely assume that all "Created" changes are file paths, (not directories)
-
-            //get the dest path for this file.
-            let destPath = rokuDeploy.getDestPath(change.srcPath, options.files, rootDir);
-
-            //if we got a dest path, then the program wants this file
-            if (destPath) {
-                program.setFile(
-                    {
-                        src: change.srcPath,
-                        dest: rokuDeploy.getDestPath(change.srcPath, options.files, rootDir)
-                    },
-                    await project.builder.getFileContents(change.srcPath)
-                );
-                return true;
-            } else {
-                //no dest path means the program doesn't want this file
-                return false;
-            }
-
-            //changed
-        } else if (program.hasFile(change.srcPath)) {
-            //sometimes "changed" events are emitted on files that were actually deleted,
-            //so determine file existance and act accordingly
-            if (await util.pathExists(change.srcPath)) {
-                program.setFile(
-                    {
-                        src: change.srcPath,
-                        dest: rokuDeploy.getDestPath(change.srcPath, options.files, rootDir)
-                    },
-                    await project.builder.getFileContents(change.srcPath)
-                );
-            } else {
-                program.removeFile(change.srcPath);
-            }
-            return true;
-        }
-    }
-
-    @AddStackToErrorMessage
-    private async onDocumentClose(event: TextDocumentChangeEvent<TextDocument>): Promise<void> {
-        const { document } = event;
-        let filePath = URI.parse(document.uri).fsPath;
-        let standaloneFileProject = this.standaloneFileProjects[filePath];
-        //if this was a temp file, close it
-        if (standaloneFileProject) {
-            await standaloneFileProject.firstRunPromise;
-            standaloneFileProject.builder.dispose();
-            delete this.standaloneFileProjects[filePath];
-            await this.sendDiagnostics();
-        }
-    }
-
-    @AddStackToErrorMessage
-    private async onTextDocumentDidChangeContent(event: TextDocumentChangeEvent<TextDocument>) {
-        await this.projectManager.handleFileChanges([{
-            srcPath: URI.parse(event.document.uri).fsPath,
-            type: FileChangeType.Changed,
-            fileContents: event.document.getText()
-        }]);
-    }
-
-    private async validateAll() {
-        try {
-            //synchronize parsing for open files that were included/excluded from projects
-            await this.synchronizeStandaloneProjects();
-
-            let projects = this.getProjects();
-
-            //validate all programs
-            await Promise.all(
-                projects.map((project) => {
-                    project.builder.program.validate();
-                    return project;
-                })
-            );
-        } catch (e: any) {
-            this.connection.console.error(e);
-            await this.sendCriticalFailure(`Critical error validating project: ${e.message}${e.stack ?? ''}`);
-        }
-    }
-
-    private onValidateSettled() {
-        return Promise.all([
-            //wait for the validator to start running (or timeout if it never did)
-            this.validateThrottler.onRunOnce(100),
-            //wait for the validator to stop running (or resolve immediately if it's already idle)
-            this.validateThrottler.onIdleOnce(true)
-        ]);
-    }
-
-    /**
      * Send diagnostics to the client
      */
     private async sendDiagnostics(options: { project: LspProject; diagnostics: LspDiagnostic[] }) {
@@ -848,7 +615,7 @@ export class LanguageServer implements OnHandler<Connection> {
 
     public dispose() {
         this.loggerSubscription?.();
-        this.validateThrottler.dispose();
+        this.projectManager?.dispose?.();
     }
 }
 

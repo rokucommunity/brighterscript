@@ -1,6 +1,6 @@
 import type { Diagnostic, Position, Range, Location, DocumentSymbol, WorkspaceSymbol, CodeAction, CompletionList } from 'vscode-languageserver';
 import type { Hover, MaybePromise, SemanticToken } from '../interfaces';
-import type { DocumentAction } from './DocumentManager';
+import type { DocumentAction, DocumentActionWithStatus } from './DocumentManager';
 import type { FileTranspileResult, SignatureInfoObj } from '../Program';
 import type { ProjectConfig } from './ProjectManager';
 
@@ -133,7 +133,7 @@ export interface LspProject {
      * @param documentActions
      * @returns a boolean indicating whether this project accepted any of the file changes. If false, then this project didn't recognize any of the files and thus did nothing
      */
-    applyFileChanges(documentActions: DocumentAction[]): Promise<boolean>;
+    applyFileChanges(documentActions: DocumentAction[]): Promise<DocumentActionWithStatus[]>;
 
     /**
      * An event that is emitted anytime the diagnostics for the project have changed (typically after a validate cycle has finished)
@@ -166,6 +166,15 @@ export interface ActivateOptions {
      * A unique number for this project, generated during this current language server session. Mostly used so we can identify which project is doing logging
      */
     projectNumber?: number;
+    /**
+     * If present, this will override any files array found in bsconfig or the default.
+     *
+     * The list of file globs used to find all files for the project
+     * If using the {src;dest;} format, you can specify a different destination directory
+     * for the matched files in src.
+     *
+     */
+    files?: Array<string | { src: string | string[]; dest?: string }>;
 }
 
 export interface LspDiagnostic extends Diagnostic {

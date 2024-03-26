@@ -27,7 +27,7 @@ export class DocumentManager {
     /**
      * Add/set the contents of a file
      */
-    public set(srcPath: string, fileContents: string) {
+    public set(srcPath: string, fileContents: string, allowStandaloneProject: boolean) {
         srcPath = util.standardizePath(srcPath);
         if (this.queue.has(srcPath)) {
             this.queue.delete(srcPath);
@@ -35,7 +35,8 @@ export class DocumentManager {
         this.queue.set(srcPath, {
             type: 'set',
             srcPath: srcPath,
-            fileContents: fileContents
+            fileContents: fileContents,
+            allowStandaloneProject: allowStandaloneProject
         });
         //schedule a future flush
         this.throttle();
@@ -122,6 +123,7 @@ export class DocumentManager {
 
 export interface SetDocumentAction {
     type: 'set';
+    allowStandaloneProject: boolean;
     srcPath: string;
     fileContents: string;
 }
@@ -131,6 +133,7 @@ export interface DeleteDocumentAction {
 }
 
 export type DocumentAction = SetDocumentAction | DeleteDocumentAction;
+export type DocumentActionWithStatus = DocumentAction & { status: 'accepted' | 'rejected' };
 
 export interface FlushEvent {
     actions: DocumentAction[];

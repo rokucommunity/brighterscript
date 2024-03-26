@@ -558,4 +558,8 @@ export interface FileChange {
      * If provided, this is the new contents of the file. If not provided, the file will be read from disk
      */
     fileContents?: string;
+    /**
+     * If true, this file change can have a project created exclusively for it, it no other projects handled it
+     */
+    allowStandaloneProject: boolean;
 }

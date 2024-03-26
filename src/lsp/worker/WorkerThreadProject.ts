@@ -9,7 +9,7 @@ import { isMainThread, parentPort } from 'worker_threads';
 import { WorkerThreadProjectRunner } from './WorkerThreadProjectRunner';
 import { WorkerPool } from './WorkerPool';
 import type { Hover, MaybePromise, SemanticToken } from '../../interfaces';
-import type { DocumentAction } from '../DocumentManager';
+import type { DocumentAction, DocumentActionWithStatus } from '../DocumentManager';
 import { Deferred } from '../../deferred';
 import type { FileTranspileResult, SignatureInfoObj } from '../../Program';
 import type { Position, Range, Location, DocumentSymbol, WorkspaceSymbol, CodeAction, CompletionList } from 'vscode-languageserver-protocol';
@@ -28,7 +28,7 @@ export const workerPool = new WorkerPool(() => {
     );
 });
 
-//if this script us running in a Worker, run
+//if this script is running in a Worker, start the project runner
 /* istanbul ignore next */
 if (!isMainThread) {
     const runner = new WorkerThreadProjectRunner();
@@ -150,17 +150,15 @@ export class WorkerThreadProject implements LspProject {
     }
 
     /**
-     * Set new contents for a file. This is safe to call any time. Changes will be queued and flushed at the correct times
+     * Apply a series of file changes to the project. This is safe to call any time. Changes will be queued and flushed at the correct times
      * during the program's lifecycle flow
-     * @param documentActions absolute source path of the file
      */
-    public async applyFileChanges(documentActions: DocumentAction[]) {
-        const response = await this.messageHandler.sendRequest<boolean>('applyFileChanges', {
+    public async applyFileChanges(documentActions: DocumentAction[]): Promise<DocumentActionWithStatus[]> {
+        const response = await this.messageHandler.sendRequest<DocumentActionWithStatus[]>('applyFileChanges', {
             data: [documentActions]
         });
         return response.data;
     }
-
 
     /**
      * Get the list of all file paths that are currently loaded in the project

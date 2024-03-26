@@ -43,9 +43,36 @@ export class ProjectManager {
     @OnReady
     private async applyDocumentChanges(event: FlushEvent) {
         //apply all of the document actions to each project in parallel
-        await Promise.all(this.projects.map(async (project) => {
-            await project.applyFileChanges(event.actions);
+        const responses = await Promise.all(this.projects.map(async (project) => {
+            return project.applyFileChanges(event.actions);
         }));
+
+        //find actions not handled by any project
+        for (let i = 0; i < event.actions.length; i++) {
+            const action = event.actions[i];
+            const handledCount = responses.map(x => x[i]).filter(x => x.status === 'accepted').length;
+            //if this action was handled by zero projects, it's not a delete, and it supports running in a standalone project, then create a a project for it
+            if (handledCount === 0 && action.type !== 'delete' && action.allowStandaloneProject === true) {
+                await this.createStandaloneProject(action.srcPath);
+            }
+        }
+    }
+
+    /**
+     * Create a project that validates a single file. This is useful for getting language support for files that don't belong to a project
+     */
+    private async createStandaloneProject(srcPath: string) {
+        const rootDir = path.join(__dirname, 'standalone-project');
+        await this.createProject({
+            //these folders don't matter for standalone projects
+            workspaceFolder: rootDir,
+            projectPath: rootDir,
+            threadingEnabled: false,
+            files: [{
+                src: srcPath,
+                dest: 'source/standalone.brs'
+            }]
+        });
     }
 
     /**
@@ -149,7 +176,6 @@ export class ProjectManager {
                 await this.handleFileChange(change);
             }));
         });
-        await this.handleFileChangesPromise;
         return this.handleFileChangesPromise;
     }
 
@@ -164,13 +190,8 @@ export class ProjectManager {
 
             //file added or changed
         } else {
-            //this is a new file. set the file contents
-            if (fsExtra.statSync(srcPath).isFile()) {
-                const fileContents = change.fileContents ?? (await fsExtra.readFile(change.srcPath, 'utf8')).toString();
-                this.documentManager.set(change.srcPath, fileContents);
-
-                //if this is a new directory, read all files recursively and register those as file changes too
-            } else {
+            //if this is a new directory, read all files recursively and register those as file changes too
+            if (fsExtra.statSync(srcPath).isDirectory()) {
                 const files = await fastGlob('**/*', {
                     cwd: change.srcPath,
                     onlyFiles: true,
@@ -180,9 +201,15 @@ export class ProjectManager {
                 await Promise.all(files.map((srcPath) => {
                     return this.handleFileChange({
                         srcPath: srcPath,
-                        type: FileChangeType.Changed
+                        type: FileChangeType.Changed,
+                        allowStandaloneProject: change.allowStandaloneProject
                     });
                 }));
+
+                //this is a new file. set the file contents
+            } else {
+                const fileContents = change.fileContents ?? (await fsExtra.readFile(change.srcPath, 'utf8')).toString();
+                this.documentManager.set(change.srcPath, fileContents, change.allowStandaloneProject);
             }
         }
 
@@ -507,7 +534,7 @@ export class ProjectManager {
      * @returns a new project, or the existing project if one already exists with this config info
      */
     @TrackBusyStatus
-    private async createProject(config: ProjectConfig) {
+    private async createProject(config: ProjectConfig): Promise<LspProject> {
         //skip this project if we already have it
         if (this.hasProject(config.projectPath)) {
             return this.getProject(config.projectPath);
@@ -529,6 +556,7 @@ export class ProjectManager {
         config.projectNumber ??= ProjectManager.projectNumberSequence++;
 
         await project.activate(config);
+        return project;
     }
 
     public on(eventName: 'critical-failure', handler: (data: { project: LspProject; message: string }) => MaybePromise<void>);
@@ -605,6 +633,15 @@ export interface ProjectConfig {
      * TODO - is there a better name for this?
      */
     threadingEnabled?: boolean;
+    /**
+     * If present, this will override any files array found in bsconfig or the default.
+     *
+     * The list of file globs used to find all files for the project
+     * If using the {src;dest;} format, you can specify a different destination directory
+     * for the matched files in src.
+     *
+     */
+    files?: Array<string | { src: string | string[]; dest?: string }>;
 }
 
 
