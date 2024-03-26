@@ -530,7 +530,7 @@ type Handler<T> = {
     T[K] extends (arg: infer U) => void ? (arg: U) => void : never;
 };
 // Extracts the argument type from the function and constructs the desired interface
-type OnHandler<T> = {
+export type OnHandler<T> = {
     [K in keyof Handler<T>]: Handler<T>[K] extends (arg: infer U) => void ? U : never;
 };
 
