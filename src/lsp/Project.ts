@@ -278,32 +278,44 @@ export class Project implements LspProject {
      */
     public async getSemanticTokens(options: { srcPath: string }) {
         await this.onIdle();
-        return this.builder.program.getSemanticTokens(options.srcPath);
+        if (this.builder.program.hasFile(options.srcPath)) {
+            return this.builder.program.getSemanticTokens(options.srcPath);
+        }
     }
 
     public async transpileFile(options: { srcPath: string }) {
         await this.onIdle();
-        return this.builder.program.getTranspiledFileContents(options.srcPath);
+        if (this.builder.program.hasFile(options.srcPath)) {
+            return this.builder.program.getTranspiledFileContents(options.srcPath);
+        }
     }
 
     public async getHover(options: { srcPath: string; position: Position }): Promise<Hover[]> {
         await this.onIdle();
-        return this.builder.program.getHover(options.srcPath, options.position);
+        if (this.builder.program.hasFile(options.srcPath)) {
+            return this.builder.program.getHover(options.srcPath, options.position);
+        }
     }
 
     public async getDefinition(options: { srcPath: string; position: Position }): Promise<Location[]> {
         await this.onIdle();
-        return this.builder.program.getDefinition(options.srcPath, options.position);
+        if (this.builder.program.hasFile(options.srcPath)) {
+            return this.builder.program.getDefinition(options.srcPath, options.position);
+        }
     }
 
     public async getSignatureHelp(options: { srcPath: string; position: Position }): Promise<SignatureInfoObj[]> {
         await this.onIdle();
-        return this.builder.program.getSignatureHelp(options.srcPath, options.position);
+        if (this.builder.program.hasFile(options.srcPath)) {
+            return this.builder.program.getSignatureHelp(options.srcPath, options.position);
+        }
     }
 
     public async getDocumentSymbol(options: { srcPath: string }): Promise<DocumentSymbol[]> {
         await this.onIdle();
-        return this.builder.program.getDocumentSymbols(options.srcPath);
+        if (this.builder.program.hasFile(options.srcPath)) {
+            return this.builder.program.getDocumentSymbols(options.srcPath);
+        }
     }
 
     public async getWorkspaceSymbol(): Promise<WorkspaceSymbol[]> {
@@ -316,22 +328,28 @@ export class Project implements LspProject {
 
     public async getReferences(options: { srcPath: string; position: Position }): Promise<Location[]> {
         await this.onIdle();
-        return this.builder.program.getReferences(options.srcPath, options.position);
+        if (this.builder.program.hasFile(options.srcPath)) {
+            return this.builder.program.getReferences(options.srcPath, options.position);
+        }
     }
 
     public async getCodeActions(options: { srcPath: string; range: Range }): Promise<CodeAction[]> {
         await this.onIdle();
-        return this.builder.program.getCodeActions(options.srcPath, options.range);
+        if (this.builder.program.hasFile(options.srcPath)) {
+            return this.builder.program.getCodeActions(options.srcPath, options.range);
+        }
     }
 
     public async getCompletions(options: { srcPath: string; position: Position }): Promise<CompletionList> {
         await this.onIdle();
-        const completions = this.builder.program.getCompletions(options.srcPath, options.position);
-        const result = CompletionList.create(completions);
-        result.itemDefaults = {
-            commitCharacters: ['.']
-        };
-        return result;
+        if (this.builder.program.hasFile(options.srcPath)) {
+            const completions = this.builder.program.getCompletions(options.srcPath, options.position);
+            const result = CompletionList.create(completions);
+            result.itemDefaults = {
+                commitCharacters: ['.']
+            };
+            return result;
+        }
     }
 
     /**

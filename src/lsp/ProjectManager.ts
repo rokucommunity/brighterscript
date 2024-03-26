@@ -267,18 +267,12 @@ export class ProjectManager {
     @TrackBusyStatus
     @OnReady
     public async getSemanticTokens(options: { srcPath: string }) {
-        //find the first program that has this file, since it would be incredibly inefficient to generate semantic tokens for the same file multiple times.
-        const project = await this.findFirstMatchingProject((x) => {
-            return x.hasFile(options.srcPath);
-        });
-
-        //if we found a project
-        if (project) {
-            const result = await Promise.resolve(
-                project.getSemanticTokens(options)
-            );
-            return result;
-        }
+        let result = await util.promiseRaceMatch(
+            this.projects.map(x => x.getSemanticTokens(options)),
+            //keep the first non-falsey result
+            (result) => result?.length > 0
+        );
+        return result;
     }
 
     /**
@@ -288,18 +282,12 @@ export class ProjectManager {
     @TrackBusyStatus
     @OnReady
     public async transpileFile(options: { srcPath: string }) {
-        //find the first program that has this file
-        const project = await this.findFirstMatchingProject((p) => {
-            return p.hasFile(options.srcPath);
-        });
-
-        //if we found a project
-        if (project) {
-            const result = await Promise.resolve(
-                project.transpileFile(options)
-            );
-            return result;
-        }
+        let result = await util.promiseRaceMatch(
+            this.projects.map(x => x.transpileFile(options)),
+            //keep the first non-falsey result
+            (result) => !!result
+        );
+        return result;
     }
 
     /**
@@ -312,7 +300,7 @@ export class ProjectManager {
         let result = await util.promiseRaceMatch(
             this.projects.map(x => x.getCompletions(options)),
             //keep the first non-falsey result
-            (result) => !!result
+            (result) => result?.items?.length > 0
         );
         return result;
     }
@@ -328,8 +316,8 @@ export class ProjectManager {
         //Ask every project for hover info, keep whichever one responds first that has a valid response
         let hover = await util.promiseRaceMatch(
             this.projects.map(x => x.getHover(options)),
-            //keep the first non-falsey result
-            (result) => !!result
+            //keep the first set of non-empty results
+            (result) => result?.length > 0
         );
         return hover?.[0];
     }
