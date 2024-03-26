@@ -22,7 +22,6 @@ import type {
     ResultProgressReporter,
     WorkDoneProgressReporter,
     SemanticTokensOptions,
-    Location,
     CompletionList,
     CancellationToken,
     DidChangeConfigurationParams,
@@ -323,10 +322,10 @@ export class LanguageServer implements Partial<OnHandler<Connection>> {
     }
 
     @AddStackToErrorMessage
-    public async onReferences(params: ReferenceParams): Promise<Location[]> {
+    public async onReferences(params: ReferenceParams) {
         const srcPath = util.uriToPath(params.textDocument.uri);
         const result = await this.projectManager.getReferences({ srcPath: srcPath, position: params.position });
-        return result;
+        return result ?? [];
     }
 
 

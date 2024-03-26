@@ -1,4 +1,4 @@
-import type { Diagnostic, Position, Range, Location, DocumentSymbol, WorkspaceSymbol, CodeAction, CompletionList } from 'vscode-languageserver';
+import type { Diagnostic, Position, Range, Location, DocumentSymbol, WorkspaceSymbol, CodeAction, CompletionList } from 'vscode-languageserver-protocol';
 import type { Hover, MaybePromise, SemanticToken } from '../interfaces';
 import type { DocumentAction, DocumentActionWithStatus } from './DocumentManager';
 import type { FileTranspileResult, SignatureInfoObj } from '../Program';

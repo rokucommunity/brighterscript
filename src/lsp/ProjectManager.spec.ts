@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { ProjectManager } from './ProjectManager';
 import { tempDir, rootDir, expectZeroDiagnostics, expectDiagnostics } from '../testHelpers.spec';
 import * as fsExtra from 'fs-extra';
-import util, { standardizePath as s } from '../util';
+import { standardizePath as s } from '../util';
 import { createSandbox } from 'sinon';
 import { Project } from './Project';
 import { WorkerThreadProject } from './worker/WorkerThreadProject';
@@ -345,76 +345,6 @@ describe('ProjectManager', () => {
     describe('getSemanticTokens', () => {
         it('waits until the project is ready', () => {
 
-        });
-    });
-
-    describe('findFirstMatchingProject', () => {
-        async function doTest(expectedIndex: number, ...values: any[]) {
-            manager.projects = [0, 1, 2].map((i) => {
-                const project = new Project();
-                project['index'] = i;
-                project['activationDeferred'].resolve();
-                return project;
-            });
-
-            let idx = 0;
-            expect(
-                await manager['findFirstMatchingProject']((project) => {
-                    return values[idx++];
-                })
-            ).to.equal(manager.projects[expectedIndex]);
-        }
-
-        async function sleepResolve(timeout: number, value: boolean) {
-            await util.sleep(timeout);
-            return value;
-        }
-
-
-        async function sleepReject(timeout: number, reason: string) {
-            await util.sleep(timeout);
-            throw new Error(reason);
-        }
-
-        it('resolves sync values', async () => {
-            //return the first true value encountered. These are sync, so should resolve immediately
-            await doTest(0, true, false, false);
-            await doTest(1, false, true, false);
-            await doTest(2, false, false, true);
-        });
-
-        it('resolves async values', async () => {
-            //return the first true value encountered
-            await doTest(0, Promise.resolve(true), Promise.resolve(false), Promise.resolve(false));
-            await doTest(1, Promise.resolve(false), Promise.resolve(true), Promise.resolve(false));
-            await doTest(2, Promise.resolve(false), Promise.resolve(false), Promise.resolve(true));
-        });
-
-        it('resolves async values in proper timing order', async () => {
-            //return the first true value encountered
-            await doTest(0, sleepResolve(0, true), sleepResolve(10, false), sleepResolve(20, false));
-            await doTest(1, sleepResolve(0, false), sleepResolve(10, true), sleepResolve(20, false));
-            await doTest(2, sleepResolve(0, false), sleepResolve(10, false), sleepResolve(20, true));
-        });
-
-        it('resolves async values in proper timing order when all are true', async () => {
-            //return the first true value encountered
-            await doTest(0, sleepResolve(0, true), sleepResolve(10, true), sleepResolve(20, true));
-            await doTest(1, sleepResolve(20, true), sleepResolve(0, true), sleepResolve(10, true));
-            await doTest(2, sleepResolve(10, true), sleepResolve(20, true), sleepResolve(0, true));
-        });
-
-        it('fails gracefully when an error occurs', async () => {
-            //return the first true value encountered
-            await doTest(0, sleepResolve(10, true), sleepReject(0, 'crash'), sleepResolve(20, true));
-            await doTest(1, sleepResolve(20, true), sleepResolve(10, true), sleepReject(0, 'crash'));
-            await doTest(2, sleepReject(0, 'crash'), sleepResolve(20, true), sleepResolve(10, true));
-        });
-
-        it('returns undefined when all promises return false', async () => {
-            await doTest(undefined, false, false, false);
-            await doTest(undefined, sleepResolve(0, false), sleepResolve(10, false), sleepResolve(20, false));
-            await doTest(undefined, sleepReject(0, 'crash'), sleepReject(10, 'crash'), sleepReject(20, 'crash'));
         });
     });
 });

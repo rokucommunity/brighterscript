@@ -6,7 +6,8 @@ import * as EventEmitter from 'eventemitter3';
 import type { LspDiagnostic, LspProject, ProjectConfig } from './LspProject';
 import { Project } from './Project';
 import { WorkerThreadProject } from './worker/WorkerThreadProject';
-import { type Hover, type Position, type Range, type Location, type SignatureHelp, type DocumentSymbol, type SymbolInformation, type WorkspaceSymbol, type CodeAction, type CompletionList, FileChangeType } from 'vscode-languageserver-protocol';
+import { FileChangeType } from 'vscode-languageserver-protocol';
+import type { Hover, Position, Range, Location, SignatureHelp, DocumentSymbol, SymbolInformation, WorkspaceSymbol, CompletionList } from 'vscode-languageserver-protocol';
 import { Deferred } from '../deferred';
 import type { FlushEvent } from './DocumentManager';
 import { DocumentManager } from './DocumentManager';
@@ -89,7 +90,9 @@ export class ProjectManager {
             //wait for the first sync to finish
             this.firstSync.promise,
             //make sure we're not in the middle of a sync
-            this.syncPromise
+            this.syncPromise,
+            //make sure all pending file changes have been flushed
+            this.documentManager.onSettle()
         ]);
     }
     /**
@@ -227,37 +230,6 @@ export class ProjectManager {
         this.removeProject(project);
         await this.createProject(project.activateOptions);
         this.emit('project-reload', { project: project });
-    }
-
-    /**
-     * Return the first project where the async matcher returns true
-     */
-    private async findFirstMatchingProject(matcher: (project: LspProject) => boolean | PromiseLike<boolean>) {
-        const deferred = new Deferred<LspProject>();
-        let projectCount = this.projects.length;
-        let doneCount = 0;
-        //wait for pending document changes to settle
-        await this.documentManager.onSettle();
-
-        this.projects.map(async (project) => {
-            try {
-                //wait for the project to activate
-                await project.whenActivated();
-
-                if (await Promise.resolve(matcher(project)) === true) {
-                    deferred.tryResolve(project);
-                }
-            } catch (e) {
-                console.error(e);
-            } finally {
-                doneCount++;
-            }
-            //if this was the last promise, and we didn't resolve, then resolve with undefined
-            if (doneCount >= projectCount) {
-                deferred.tryResolve(undefined);
-            }
-        });
-        return deferred.promise;
     }
 
     /**
@@ -414,25 +386,18 @@ export class ProjectManager {
             //keep the first non-falsey result
             (result) => !!result
         );
-        return result;
+        return result ?? [];
     }
 
     @TrackBusyStatus
     @OnReady
-    public async getCodeActions(options: { srcPath: string; range: Range }): Promise<CodeAction[]> {
+    public async getCodeActions(options: { srcPath: string; range: Range }) {
         //Ask every project for definition info, keep whichever one responds first that has a valid response
         let result = await util.promiseRaceMatch(
             this.projects.map(x => x.getCodeActions(options)),
             //keep the first non-falsey result
             (result) => !!result
         );
-
-        //clone the diagnostics for each code action, since certain diagnostics can have circular reference properties that kill the language server if serialized
-        for (const codeAction of result) {
-            if (codeAction.diagnostics) {
-                codeAction.diagnostics = codeAction.diagnostics?.map(x => util.toDiagnostic(x, options.srcPath));
-            }
-        }
         return result;
     }
 

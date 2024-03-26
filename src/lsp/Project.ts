@@ -8,7 +8,7 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import { URI } from 'vscode-uri';
 import { Deferred } from '../deferred';
 import { rokuDeploy } from 'roku-deploy';
-import type { CodeAction, DocumentSymbol, Position, Range, Location, WorkspaceSymbol } from 'vscode-languageserver-protocol';
+import type { DocumentSymbol, Position, Range, Location, WorkspaceSymbol } from 'vscode-languageserver-protocol';
 import { CompletionList } from 'vscode-languageserver-protocol';
 import { CancellationTokenSource } from 'vscode-languageserver-protocol';
 import type { DocumentAction, DocumentActionWithStatus } from './DocumentManager';
@@ -326,17 +326,24 @@ export class Project implements LspProject {
         return result;
     }
 
-    public async getReferences(options: { srcPath: string; position: Position }): Promise<Location[]> {
+    public async getReferences(options: { srcPath: string; position: Position }) {
         await this.onIdle();
         if (this.builder.program.hasFile(options.srcPath)) {
             return this.builder.program.getReferences(options.srcPath, options.position);
         }
     }
 
-    public async getCodeActions(options: { srcPath: string; range: Range }): Promise<CodeAction[]> {
+    public async getCodeActions(options: { srcPath: string; range: Range }) {
         await this.onIdle();
         if (this.builder.program.hasFile(options.srcPath)) {
-            return this.builder.program.getCodeActions(options.srcPath, options.range);
+            const codeActions = this.builder.program.getCodeActions(options.srcPath, options.range);
+            //clone each diagnostic since certain diagnostics can have circular reference properties that kill the language server if serialized
+            for (const codeAction of codeActions ?? []) {
+                if (codeAction.diagnostics) {
+                    codeAction.diagnostics = codeAction.diagnostics?.map(x => util.toDiagnostic(x, options.srcPath));
+                }
+            }
+            return codeActions;
         }
     }
 
