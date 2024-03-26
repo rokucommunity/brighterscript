@@ -3,7 +3,7 @@ import type { AssignmentStatement, ClassStatement, ConstStatement, EnumStatement
 import { Cache } from '../Cache';
 import { WalkMode, createVisitor } from './visitors';
 import type { Expression } from '../parser/AstNode';
-import { isAAMemberExpression, isBinaryExpression, isCallExpression, isDottedGetExpression, isFunctionExpression, isIndexedGetExpression, isMethodStatement, isNamespaceStatement, isNewExpression, isVariableExpression } from './reflection';
+import { isAAMemberExpression, isBinaryExpression, isCallExpression, isDottedGetExpression, isFunctionExpression, isIndexedGetExpression, isLiteralExpression, isMethodStatement, isNamespaceStatement, isNewExpression, isVariableExpression } from './reflection';
 import type { Parser } from '../parser/Parser';
 import { ParseMode } from '../parser/Parser';
 import type { Token } from '../lexer/Token';
@@ -201,7 +201,7 @@ export class CachedLookups {
                         break;
 
                         //when we hit a variable expression, we're definitely at the leftmost expression so stop
-                    } else if (isVariableExpression(node)) {
+                    } else if (isVariableExpression(node) || isLiteralExpression(node)) {
                         break;
                         //if
 

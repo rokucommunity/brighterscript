@@ -592,7 +592,7 @@ export interface TranspileEntry {
 
 
 export interface ScopeValidationOptions {
-    changedFiles?: BscFile[];
+    filesToBeValidatedInScopeContext?: Set<BscFile>;
     changedSymbols?: Map<SymbolTypeFlag, Set<string>>;
     force?: boolean;
     initialValidation?: boolean;

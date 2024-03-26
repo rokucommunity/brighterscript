@@ -800,10 +800,11 @@ export class Scope {
         }
 
         const hasChangedSymbols = validationOptions.changedSymbols?.get(SymbolTypeFlag.runtime).size > 0 || validationOptions.changedSymbols?.get(SymbolTypeFlag.typetime).size > 0;
+
         let immediateFileChanged = false;
-        if (!validationOptions.initialValidation && validationOptions.changedSymbols && !hasChangedSymbols && validationOptions.changedFiles) {
+        if (!validationOptions.initialValidation && validationOptions.changedSymbols && !hasChangedSymbols && validationOptions.filesToBeValidatedInScopeContext) {
             for (let file of this.getImmediateFiles()) {
-                if (validationOptions.changedFiles.includes(file)) {
+                if (validationOptions.filesToBeValidatedInScopeContext?.has(file)) {
                     immediateFileChanged = true;
                     break;
                 }
@@ -814,6 +815,12 @@ export class Scope {
                 (this as any).isValidated = true;
                 return false;
             }
+        }
+
+        if (!validationOptions.initialValidation && validationOptions.filesToBeValidatedInScopeContext?.size === 0) {
+            // There was no need to validate this scope.
+            (this as any).isValidated = true;
+            return false;
         }
 
         this.useFileCachesForFileLinkLookups = !validationOptions.initialValidation;
@@ -838,7 +845,7 @@ export class Scope {
             const scopeValidateEvent = {
                 program: this.program,
                 scope: this,
-                changedFiles: validationOptions?.changedFiles,
+                changedFiles: new Array<BscFile>(...(validationOptions?.filesToBeValidatedInScopeContext?.values() ?? [])),
                 changedSymbols: validationOptions?.changedSymbols
             };
             t0 = performance.now();
@@ -850,6 +857,9 @@ export class Scope {
             this.unlinkSymbolTable();
             (this as any).isValidated = true;
         });
+        for (let file of this.getAllFiles()) {
+            validationOptions.filesToBeValidatedInScopeContext?.delete(file);
+        }
         return true;
     }
 
