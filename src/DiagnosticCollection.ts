@@ -1,5 +1,5 @@
 import { URI } from 'vscode-uri';
-import type { LspDiagnostic, LspProject } from './lsp/LspProject';
+import type { LspDiagnostic } from './lsp/LspProject';
 import { util } from './util';
 import { firstBy } from 'thenby';
 

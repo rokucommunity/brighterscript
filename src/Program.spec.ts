@@ -555,7 +555,7 @@ describe('Program', () => {
 
         it('properly handles errors in async mode', async () => {
             const file = program.setFile<BrsFile>('source/main.brs', ``);
-            file.validate = function () {
+            file.validate = () => {
                 throw new Error('Crash for test');
             };
             let error: Error;

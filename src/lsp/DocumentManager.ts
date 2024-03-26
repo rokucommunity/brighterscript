@@ -27,7 +27,7 @@ export class DocumentManager {
     /**
      * Add/set the contents of a file
      */
-    public set(srcPath: string, fileContents: string, allowStandaloneProject: boolean) {
+    public set(srcPath: string, fileContents: string, allowStandaloneProject = false) {
         srcPath = util.standardizePath(srcPath);
         if (this.queue.has(srcPath)) {
             this.queue.delete(srcPath);
@@ -123,7 +123,7 @@ export class DocumentManager {
 
 export interface SetDocumentAction {
     type: 'set';
-    allowStandaloneProject: boolean;
+    allowStandaloneProject?: boolean;
     srcPath: string;
     fileContents: string;
 }

@@ -3,8 +3,8 @@ import { Worker } from 'worker_threads';
 import type { WorkerMessage } from './MessageHandler';
 import { MessageHandler } from './MessageHandler';
 import util from '../../util';
-import type { LspDiagnostic, ActivateResponse } from '../LspProject';
-import { type ActivateOptions, type LspProject } from '../LspProject';
+import type { LspDiagnostic, ActivateResponse, ProjectConfig } from '../LspProject';
+import { type LspProject } from '../LspProject';
 import { isMainThread, parentPort } from 'worker_threads';
 import { WorkerThreadProjectRunner } from './WorkerThreadProjectRunner';
 import { WorkerPool } from './WorkerPool';
@@ -13,7 +13,6 @@ import type { DocumentAction, DocumentActionWithStatus } from '../DocumentManage
 import { Deferred } from '../../deferred';
 import type { FileTranspileResult, SignatureInfoObj } from '../../Program';
 import type { Position, Range, Location, DocumentSymbol, WorkspaceSymbol, CodeAction, CompletionList } from 'vscode-languageserver-protocol';
-import type { ProjectConfig } from '../ProjectManager';
 
 export const workerPool = new WorkerPool(() => {
     return new Worker(
@@ -37,20 +36,12 @@ if (!isMainThread) {
 
 export class WorkerThreadProject implements LspProject {
 
-    constructor(
-        /**
-         * The config used to create this project. Mostly just here to use when reloading this project
-         */
-        public projectConfig: ProjectConfig
-    ) {
-
-    }
-
-    public async activate(options: ActivateOptions) {
+    public async activate(options: ProjectConfig) {
+        this.activateOptions = options;
         this.projectPath = options.projectPath;
         this.workspaceFolder = options.workspaceFolder;
         this.projectNumber = options.projectNumber;
-        this.configFilePath = options.configFilePath;
+        this.bsconfigPath = options.bsconfigPath;
 
         // start a new worker thread or get an unused existing thread
         this.worker = workerPool.getWorker();
@@ -62,7 +53,7 @@ export class WorkerThreadProject implements LspProject {
         });
 
         const activateResponse = await this.messageHandler.sendRequest<ActivateResponse>('activate', { data: [options] });
-        this.configFilePath = activateResponse.data.configFilePath;
+        this.bsconfigPath = activateResponse.data.bsconfigPath;
         this.rootDir = activateResponse.data.rootDir;
 
         //populate a few properties with data from the thread so we can use them for some synchronous checks
@@ -75,6 +66,11 @@ export class WorkerThreadProject implements LspProject {
     private activationDeferred = new Deferred();
 
     /**
+     * Options used to activate this project
+     */
+    public activateOptions: ProjectConfig;
+
+    /**
      * The root directory of the project
      */
     public rootDir: string;
@@ -82,7 +78,7 @@ export class WorkerThreadProject implements LspProject {
     /**
      * Path to a bsconfig.json file that will be used for this project
      */
-    public configFilePath?: string;
+    public bsconfigPath?: string;
 
     /**
      * The worker thread where the actual project will execute

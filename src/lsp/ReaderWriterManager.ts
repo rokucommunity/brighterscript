@@ -1,5 +1,5 @@
-import { MaybePromise } from '..';
 import { Deferred } from '../deferred';
+import type { MaybePromise } from '../interfaces';
 
 /**
  * Manages multiple readers and writers, and ensures that no readers are reading while a writer is writing.
@@ -14,7 +14,6 @@ export class ReaderWriterManager {
 
     /**
      * Register a read action
-     * @param action
      */
     public read(action: Action) {
         const reader = {
@@ -28,7 +27,6 @@ export class ReaderWriterManager {
 
     /**
      * Register a write action
-     * @param action
      */
     public write(action: Action) {
         const writer = {

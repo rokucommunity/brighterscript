@@ -24,7 +24,8 @@ describe('DocumentManager', () => {
                 {
                     type: 'set',
                     srcPath: 'alpha',
-                    fileContents: 'three'
+                    fileContents: 'three',
+                    allowStandaloneProject: false
                 }
             ]
         });
@@ -52,11 +53,13 @@ describe('DocumentManager', () => {
                 {
                     type: 'set',
                     srcPath: 'alpha',
-                    fileContents: 'three'
+                    fileContents: 'three',
+                    allowStandaloneProject: false
                 }, {
                     type: 'set',
                     srcPath: 'beta',
-                    fileContents: 'four'
+                    fileContents: 'four',
+                    allowStandaloneProject: false
                 }
             ]
         });
@@ -86,7 +89,8 @@ describe('DocumentManager', () => {
                 {
                     type: 'set',
                     srcPath: 'alpha',
-                    fileContents: 'three'
+                    fileContents: 'three',
+                    allowStandaloneProject: false
                 }
             ]
         });

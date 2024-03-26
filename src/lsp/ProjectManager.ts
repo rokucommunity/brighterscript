@@ -3,7 +3,7 @@ import { rokuDeploy } from 'roku-deploy';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
 import * as EventEmitter from 'eventemitter3';
-import type { LspDiagnostic, LspProject } from './LspProject';
+import type { LspDiagnostic, LspProject, ProjectConfig } from './LspProject';
 import { Project } from './Project';
 import { WorkerThreadProject } from './worker/WorkerThreadProject';
 import { type Hover, type Position, type Range, type Location, type SignatureHelp, type DocumentSymbol, type SymbolInformation, type WorkspaceSymbol, type CodeAction, type CompletionList, FileChangeType } from 'vscode-languageserver-protocol';
@@ -214,7 +214,7 @@ export class ProjectManager {
         }
 
         //reload any projects whose bsconfig.json was changed
-        const projectsToReload = this.projects.filter(x => x.configFilePath?.toLowerCase() === change.srcPath.toLowerCase());
+        const projectsToReload = this.projects.filter(x => x.bsconfigPath?.toLowerCase() === change.srcPath.toLowerCase());
         await Promise.all(
             projectsToReload.map(x => this.reloadProject(x))
         );
@@ -225,7 +225,7 @@ export class ProjectManager {
      */
     private async reloadProject(project: LspProject) {
         this.removeProject(project);
-        await this.createProject(project.projectConfig);
+        await this.createProject(project.activateOptions);
         this.emit('project-reload', { project: project });
     }
 
@@ -541,8 +541,8 @@ export class ProjectManager {
         }
 
         let project: LspProject = config.threadingEnabled
-            ? new WorkerThreadProject(config)
-            : new Project(config);
+            ? new WorkerThreadProject()
+            : new Project();
 
         this.projects.push(project);
 
@@ -606,44 +606,6 @@ export interface WorkspaceConfig {
      */
     threadingEnabled?: boolean;
 }
-
-export interface ProjectConfig {
-    /**
-     * Path to the project
-     */
-    projectPath: string;
-    /**
-     * Path to the workspace in which all project files reside or are referenced by
-     */
-    workspaceFolder: string;
-    /**
-     * A list of glob patterns used to _exclude_ files from various bsconfig searches
-     */
-    excludePatterns?: string[];
-    /**
-     * An optional project number to assign to the project within the context of a language server. reloaded projects should keep the same number if possible
-     */
-    projectNumber?: number;
-    /**
-     * Path to a bsconfig that should be used instead of the auto-discovery algorithm. If this is present, no bsconfig discovery should be used. and an error should be emitted if this file is missing
-     */
-    bsconfigPath?: string;
-    /**
-     * Should this project run in its own dedicated worker thread
-     * TODO - is there a better name for this?
-     */
-    threadingEnabled?: boolean;
-    /**
-     * If present, this will override any files array found in bsconfig or the default.
-     *
-     * The list of file globs used to find all files for the project
-     * If using the {src;dest;} format, you can specify a different destination directory
-     * for the matched files in src.
-     *
-     */
-    files?: Array<string | { src: string | string[]; dest?: string }>;
-}
-
 
 /**
  * An annotation used to wrap the method in a busyStatus tracking call

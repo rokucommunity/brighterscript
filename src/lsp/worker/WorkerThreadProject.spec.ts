@@ -11,7 +11,7 @@ export async function wakeWorkerThread() {
         await project.activate({
             projectPath: rootDir,
             projectNumber: 1
-        });
+        } as any);
     } finally {
         project.dispose();
     }
@@ -58,7 +58,7 @@ describe('WorkerThreadProject', () => {
             await project.activate({
                 projectPath: rootDir,
                 projectNumber: 1
-            });
+            } as any);
             const diagnostics = await project.getDiagnostics();
             expect(diagnostics).lengthOf(1);
             await expectDiagnosticsAsync(diagnostics, [

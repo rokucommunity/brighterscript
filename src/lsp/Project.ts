@@ -2,7 +2,7 @@ import { ProgramBuilder } from '../ProgramBuilder';
 import * as EventEmitter from 'eventemitter3';
 import util, { standardizePath as s } from '../util';
 import * as path from 'path';
-import type { ActivateOptions, ActivateResponse, LspDiagnostic, LspProject } from './LspProject';
+import type { ProjectConfig, ActivateResponse, LspDiagnostic, LspProject } from './LspProject';
 import type { CompilerPlugin, Hover, MaybePromise } from '../interfaces';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { URI } from 'vscode-uri';
@@ -13,26 +13,17 @@ import { CompletionList } from 'vscode-languageserver-protocol';
 import { CancellationTokenSource } from 'vscode-languageserver-protocol';
 import type { DocumentAction, DocumentActionWithStatus } from './DocumentManager';
 import type { SignatureInfoObj } from '../Program';
-import type { ProjectConfig } from './ProjectManager';
 
 export class Project implements LspProject {
-    constructor(
-        /**
-         * The config used to create this project. Mostly just here to use when reloading this project
-         */
-        public projectConfig: ProjectConfig
-    ) {
-
-    }
-
     /**
      * Activates this project. Every call to `activate` should completely reset the project, clear all used ram and start from scratch.
      */
-    public async activate(options: ActivateOptions): Promise<ActivateResponse> {
+    public async activate(options: ProjectConfig): Promise<ActivateResponse> {
+        this.activateOptions = options;
         this.projectPath = options.projectPath;
         this.workspaceFolder = options.workspaceFolder;
         this.projectNumber = options.projectNumber;
-        this.configFilePath = await this.getConfigFilePath(options);
+        this.bsconfigPath = await this.getConfigFilePath(options);
 
         this.builder = new ProgramBuilder();
         this.builder.logger.prefix = `[prj${this.projectNumber}]`;
@@ -40,12 +31,12 @@ export class Project implements LspProject {
 
         let cwd: string;
         //if the config file exists, use it and its folder as cwd
-        if (this.configFilePath && await util.pathExists(this.configFilePath)) {
-            cwd = path.dirname(this.configFilePath);
+        if (this.bsconfigPath && await util.pathExists(this.bsconfigPath)) {
+            cwd = path.dirname(this.bsconfigPath);
         } else {
             cwd = this.projectPath;
             //config file doesn't exist...let `brighterscript` resolve the default way
-            this.configFilePath = undefined;
+            this.bsconfigPath = undefined;
         }
 
         //flush diagnostics every time the program finishes validating
@@ -61,7 +52,7 @@ export class Project implements LspProject {
 
         await this.builder.run({
             cwd: cwd,
-            project: this.configFilePath,
+            project: this.bsconfigPath,
             //if we were given a files array, use it (mostly used for standalone projects)
             files: options.files,
             watch: false,
@@ -73,8 +64,8 @@ export class Project implements LspProject {
         });
 
         //if we found a deprecated brsconfig.json, add a diagnostic warning the user
-        if (this.configFilePath && path.basename(this.configFilePath) === 'brsconfig.json') {
-            this.builder.addDiagnostic(this.configFilePath, {
+        if (this.bsconfigPath && path.basename(this.bsconfigPath) === 'brsconfig.json') {
+            this.builder.addDiagnostic(this.bsconfigPath, {
                 ...DiagnosticMessages.brsConfigJsonIsDeprecated(),
                 range: util.createRange(0, 0, 0, 0)
             });
@@ -86,10 +77,15 @@ export class Project implements LspProject {
         this.activationDeferred.resolve();
 
         return {
-            configFilePath: this.configFilePath,
+            bsconfigPath: this.bsconfigPath,
             rootDir: this.builder.program.options.rootDir
         };
     }
+
+    /**
+     * Options used to activate this project
+     */
+    public activateOptions: ProjectConfig;
 
     public get rootDir() {
         return this.builder.program.options.rootDir;
@@ -362,7 +358,7 @@ export class Project implements LspProject {
     /**
      * Path to a bsconfig.json file that will be used for this project
      */
-    public configFilePath?: string;
+    public bsconfigPath?: string;
 
 
     /**

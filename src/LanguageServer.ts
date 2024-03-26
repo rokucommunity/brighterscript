@@ -1,7 +1,4 @@
 import 'array-flat-polyfill';
-import * as fastGlob from 'fast-glob';
-import * as path from 'path';
-import { rokuDeploy, util as rokuDeployUtil } from 'roku-deploy';
 import type {
     CompletionItem,
     Connection,
@@ -43,9 +40,7 @@ import {
 } from 'vscode-languageserver/node';
 import { URI } from 'vscode-uri';
 import { TextDocument } from 'vscode-languageserver-textdocument';
-import type { BsConfig } from './BsConfig';
-import { ProgramBuilder } from './ProgramBuilder';
-import { standardizePath as s, util } from './util';
+import { util } from './util';
 import { Logger } from './Logger';
 import { DiagnosticCollection } from './DiagnosticCollection';
 import { encodeSemanticTokens, semanticTokensLegend } from './SemanticTokenUtils';
@@ -54,7 +49,7 @@ import { ProjectManager } from './lsp/ProjectManager';
 import type { LspDiagnostic, LspProject } from './lsp/LspProject';
 import type { Project } from './lsp/Project';
 
-export class LanguageServer implements OnHandler<Connection> {
+export class LanguageServer implements Partial<OnHandler<Connection>> {
 
     /**
      * The language server protocol connection, used to send and receive all requests and responses
@@ -72,7 +67,7 @@ export class LanguageServer implements OnHandler<Connection> {
      * Basically these are single-file projects to at least get parsing for standalone files.
      * Also, they should only be created when the file is opened, and destroyed when the file is closed.
      */
-    public standaloneFileProjects = {} as Record<string, Project>;
+    protected standaloneFileProjects = {} as Record<string, Project>;
 
     private hasConfigurationCapability = false;
 
@@ -250,7 +245,7 @@ export class LanguageServer implements OnHandler<Connection> {
      * file types are watched (.brs,.bs,.xml,manifest, and any json/text/image files)
      */
     @AddStackToErrorMessage
-    protected async onDidChangeWatchedFiles(params: DidChangeWatchedFilesParams) {
+    public async onDidChangeWatchedFiles(params: DidChangeWatchedFilesParams) {
         await this.projectManager.handleFileChanges(
             params.changes.map(x => ({
                 srcPath: util.uriToPath(x.uri),
@@ -263,16 +258,17 @@ export class LanguageServer implements OnHandler<Connection> {
 
     @AddStackToErrorMessage
     private async onDocumentClose(event: TextDocumentChangeEvent<TextDocument>): Promise<void> {
-        const { document } = event;
-        let filePath = URI.parse(document.uri).fsPath;
-        let standaloneFileProject = this.standaloneFileProjects[filePath];
-        //if this was a temp file, close it
-        if (standaloneFileProject) {
-            await standaloneFileProject.firstRunPromise;
-            standaloneFileProject.builder.dispose();
-            delete this.standaloneFileProjects[filePath];
-            await this.sendDiagnostics();
-        }
+        //TODO handle closing standalone project
+        // const { document } = event;
+        // let filePath = URI.parse(document.uri).fsPath;
+        // let standaloneFileProject = this.standaloneFileProjects[filePath];
+        // //if this was a temp file, close it
+        // if (standaloneFileProject) {
+        //     await standaloneFileProject.firstRunPromise;
+        //     standaloneFileProject.builder.dispose();
+        //     delete this.standaloneFileProjects[filePath];
+        //     await this.sendDiagnostics();
+        // }
     }
 
     /**
@@ -286,7 +282,7 @@ export class LanguageServer implements OnHandler<Connection> {
     }
 
     @AddStackToErrorMessage
-    protected async onDidChangeConfiguration(args: DidChangeConfigurationParams) {
+    public async onDidChangeConfiguration(args: DidChangeConfigurationParams) {
         //if the user changes any user/workspace config settings, just mass-reload all projects
         await this.syncProjects(true);
     }
@@ -467,129 +463,6 @@ export class LanguageServer implements OnHandler<Connection> {
         void this.connection.sendNotification('critical-failure', message);
     }
 
-    private async createStandaloneFileProject(srcPath: string) {
-        //skip this workspace if we already have it
-        if (this.standaloneFileProjects[srcPath]) {
-            return this.standaloneFileProjects[srcPath];
-        }
-
-        let builder = new ProgramBuilder();
-
-        //prevent clearing the console on run...this isn't the CLI so we want to keep a full log of everything
-        builder.allowConsoleClearing = false;
-
-        //get the path to the directory where this file resides
-        let cwd = path.dirname(srcPath);
-
-        //get the closest config file and use most of the settings from that
-        let configFilePath = await util.findClosestConfigFile(srcPath);
-        let project: BsConfig = {};
-        if (configFilePath) {
-            project = util.normalizeAndResolveConfig({ project: configFilePath });
-        }
-        //override the rootDir and files array
-        project.rootDir = cwd;
-        project.files = [{
-            src: srcPath,
-            dest: path.basename(srcPath)
-        }];
-
-        let firstRunPromise = builder.run({
-            ...project,
-            cwd: cwd,
-            project: configFilePath,
-            watch: false,
-            createPackage: false,
-            deploy: false,
-            copyToStaging: false,
-            diagnosticFilters: [
-                //hide the "file not referenced by any other file" error..that's expected in a standalone file.
-                1013
-            ]
-        }).catch((err) => {
-            console.error(err);
-        });
-
-        let newProject: Project = {
-            projectNumber: this.projectCounter++,
-            builder: builder,
-            firstRunPromise: firstRunPromise,
-            projectPath: srcPath,
-            workspacePath: srcPath,
-            isFirstRunComplete: false,
-            isFirstRunSuccessful: false,
-            configFilePath: configFilePath,
-            isStandaloneFileProject: true
-        };
-
-        this.standaloneFileProjects[srcPath] = newProject;
-
-        await firstRunPromise.then(() => {
-            newProject.isFirstRunComplete = true;
-            newProject.isFirstRunSuccessful = true;
-        }).catch(() => {
-            newProject.isFirstRunComplete = true;
-            newProject.isFirstRunSuccessful = false;
-        });
-        return newProject;
-    }
-
-
-    private getRootDir(workspace: Project) {
-        let options = workspace?.builder?.program?.options;
-        return options?.rootDir ?? options?.cwd;
-    }
-
-    /**
-     * Sometimes users will alter their bsconfig files array, and will include standalone files.
-     * If this is the case, those standalone workspaces should be removed because the file was
-     * included in an actual program now.
-     *
-     * Sometimes files that used to be included are now excluded, so those open files need to be re-processed as standalone
-     */
-    private async synchronizeStandaloneProjects() {
-
-        //remove standalone workspaces that are now included in projects
-        for (let standaloneFilePath in this.standaloneFileProjects) {
-            let standaloneProject = this.standaloneFileProjects[standaloneFilePath];
-            for (let project of this.projects) {
-                await standaloneProject.firstRunPromise;
-
-                let dest = rokuDeploy.getDestPath(
-                    standaloneFilePath,
-                    project?.builder?.program?.options?.files ?? [],
-                    this.getRootDir(project)
-                );
-                //destroy this standalone workspace because the file has now been included in an actual workspace,
-                //or if the workspace wants the file
-                if (project?.builder?.program?.hasFile(standaloneFilePath) || dest) {
-                    standaloneProject.builder.dispose();
-                    delete this.standaloneFileProjects[standaloneFilePath];
-                }
-            }
-        }
-
-        //create standalone projects for open files that no longer have a project
-        let textDocuments = this.documents.all();
-        outer: for (let textDocument of textDocuments) {
-            let filePath = URI.parse(textDocument.uri).fsPath;
-            for (let project of this.getProjects()) {
-                let dest = rokuDeploy.getDestPath(
-                    filePath,
-                    project?.builder?.program?.options?.files ?? [],
-                    this.getRootDir(project)
-                );
-                //if this project has the file, or it wants the file, do NOT make a standaloneProject for this file
-                if (project?.builder?.program?.hasFile(filePath) || dest) {
-                    continue outer;
-                }
-            }
-            //if we got here, no workspace has this file, so make a standalone file workspace
-            let project = await this.createStandaloneFileProject(filePath);
-            await project.firstRunPromise;
-        }
-    }
-
     /**
      * Send diagnostics to the client
      */
@@ -608,12 +481,7 @@ export class LanguageServer implements OnHandler<Connection> {
     }
     private diagnosticCollection = new DiagnosticCollection();
 
-    private getProjects() {
-        //TODO delete this because projectManager handles all this stuff now
-        return [];
-    }
-
-    public dispose() {
+    protected dispose() {
         this.loggerSubscription?.();
         this.projectManager?.dispose?.();
     }

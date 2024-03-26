@@ -13,7 +13,7 @@ describe('Project', () => {
 
     beforeEach(() => {
         sinon.restore();
-        project = new Project({} as any);
+        project = new Project();
         fsExtra.emptyDirSync(tempDir);
     });
 
@@ -42,33 +42,33 @@ describe('Project', () => {
 
     describe('setFile', () => {
         it('skips setting the file if the contents have not changed', async () => {
-            await project.activate({ projectPath: rootDir });
+            await project.activate({ projectPath: rootDir } as any);
             //initial set should be true
             expect(
-                await project.applyFileChanges([{
+                (await project.applyFileChanges([{
                     fileContents: 'sub main:end sub',
                     srcPath: s`${rootDir}/source/main.brs`,
                     type: 'set'
-                }])
-            ).to.be.true;
+                }]))[0].status
+            ).to.eql('accepted');
 
             //contents haven't changed, this should be false
             expect(
-                await project.applyFileChanges([{
+                (await project.applyFileChanges([{
                     fileContents: 'sub main:end sub',
                     srcPath: s`${rootDir}/source/main.brs`,
                     type: 'set'
-                }])
-            ).to.be.false;
+                }]))[0].status
+            ).to.eql('accepted');
 
             //contents changed again, should be true
             expect(
-                await project.applyFileChanges([{
+                (await project.applyFileChanges([{
                     fileContents: 'sub main2:end sub',
                     srcPath: s`${rootDir}/source/main.brs`,
                     type: 'set'
-                }])
-            ).to.be.true;
+                }]))[0].status
+            ).to.eql('accepted');
         });
     });
 
@@ -77,8 +77,8 @@ describe('Project', () => {
             fsExtra.outputFileSync(`${rootDir}/bsconfig.json`, '');
             await project.activate({
                 projectPath: rootDir
-            });
-            expect(project.configFilePath).to.eql(s`${rootDir}/bsconfig.json`);
+            } as any);
+            expect(project.bsconfigPath).to.eql(s`${rootDir}/bsconfig.json`);
         });
 
         it('produces diagnostics after running', async () => {
@@ -90,7 +90,7 @@ describe('Project', () => {
 
             await project.activate({
                 projectPath: rootDir
-            });
+            } as any);
 
             await expectDiagnosticsAsync(project, [
                 DiagnosticMessages.cannotFindName('varNotThere').message
@@ -103,7 +103,7 @@ describe('Project', () => {
             await project.activate({
                 projectPath: rootDir,
                 projectNumber: 123
-            });
+            } as any);
             expect(project.projectNumber).to.eql(123);
         });
 
@@ -113,7 +113,7 @@ describe('Project', () => {
                 projectPath: rootDir,
                 workspaceFolder: rootDir,
                 configFilePath: 'subdir1/brsconfig.json'
-            });
+            } as any);
             await expectDiagnosticsAsync(project, [
                 DiagnosticMessages.brsConfigJsonIsDeprecated()
             ]);

@@ -2,7 +2,6 @@ import type { Diagnostic, Position, Range, Location, DocumentSymbol, WorkspaceSy
 import type { Hover, MaybePromise, SemanticToken } from '../interfaces';
 import type { DocumentAction, DocumentActionWithStatus } from './DocumentManager';
 import type { FileTranspileResult, SignatureInfoObj } from '../Program';
-import type { ProjectConfig } from './ProjectManager';
 
 /**
  * Defines the contract between the ProjectManager and the main or worker thread Project classes
@@ -10,9 +9,9 @@ import type { ProjectConfig } from './ProjectManager';
 export interface LspProject {
 
     /**
-     * The config used to initialize this project. Only here to use when reloading the project
+     * The config used to activate this project
      */
-    projectConfig: ProjectConfig;
+    activateOptions: ProjectConfig;
 
     /**
      * The path to where the project resides
@@ -34,13 +33,13 @@ export interface LspProject {
      * Path to a bsconfig.json file that will be used for this project.
      * Only available after `.activate()` has completed
      */
-    configFilePath?: string;
+    bsconfigPath?: string;
 
     /**
      * Initialize and start running the project. This will scan for all files, and build a full project in memory, then validate the project
      * @param options
      */
-    activate(options: ActivateOptions): MaybePromise<ActivateResponse>;
+    activate(options: ProjectConfig): MaybePromise<ActivateResponse>;
 
     /**
      * Get a promise that resolves when the project finishes activating
@@ -149,23 +148,33 @@ export interface LspProject {
     dispose(): void;
 }
 
-export interface ActivateOptions {
+
+export interface ProjectConfig {
     /**
-     * The path to where the project resides
+     * Path to the project
      */
     projectPath: string;
     /**
-     * The path to the workspace where this project resides. A workspace can have multiple projects (by adding a bsconfig.json to each folder).
+     * Path to the workspace in which all project files reside or are referenced by
      */
-    workspaceFolder?: string;
+    workspaceFolder: string;
     /**
-     * Path to a bsconfig.json file that shall be used for this project
+     * A list of glob patterns used to _exclude_ files from various bsconfig searches
      */
-    configFilePath?: string;
+    excludePatterns?: string[];
     /**
-     * A unique number for this project, generated during this current language server session. Mostly used so we can identify which project is doing logging
+     * An optional project number to assign to the project within the context of a language server. reloaded projects should keep the same number if possible
      */
     projectNumber?: number;
+    /**
+     * Path to a bsconfig that should be used instead of the auto-discovery algorithm. If this is present, no bsconfig discovery should be used. and an error should be emitted if this file is missing
+     */
+    bsconfigPath?: string;
+    /**
+     * Should this project run in its own dedicated worker thread
+     * TODO - is there a better name for this?
+     */
+    threadingEnabled?: boolean;
     /**
      * If present, this will override any files array found in bsconfig or the default.
      *
@@ -176,6 +185,7 @@ export interface ActivateOptions {
      */
     files?: Array<string | { src: string | string[]; dest?: string }>;
 }
+
 
 export interface LspDiagnostic extends Diagnostic {
     uri: string;
@@ -189,5 +199,5 @@ export interface ActivateResponse {
     /**
      * The path to the config file (i.e. `bsconfig.json`) that was used to load this project
      */
-    configFilePath: string;
+    bsconfigPath: string;
 }
