@@ -13,6 +13,7 @@ import { CompletionList } from 'vscode-languageserver-protocol';
 import { CancellationTokenSource } from 'vscode-languageserver-protocol';
 import type { DocumentAction, DocumentActionWithStatus } from './DocumentManager';
 import type { SignatureInfoObj } from '../Program';
+import type { BsConfig } from '../BsConfig';
 
 export class Project implements LspProject {
     /**
@@ -49,19 +50,23 @@ export class Project implements LspProject {
                 });
             }
         } as CompilerPlugin);
-
-        await this.builder.run({
+        const builderOptions = {
             cwd: cwd,
             project: this.bsconfigPath,
-            //if we were given a files array, use it (mostly used for standalone projects)
-            files: options.files,
             watch: false,
             createPackage: false,
             deploy: false,
             copyToStaging: false,
             showDiagnosticsInConsole: false,
             skipInitialValidation: true
-        });
+        } as BsConfig;
+
+        //Assign .files (mostly used for standalone projects) if avaiable, as a dedicated assignment because `undefined` overrides the default value in the `bsconfig.json`
+        if (options.files) {
+            builderOptions.files = options.files;
+        }
+
+        await this.builder.run(builderOptions);
 
         //if we found a deprecated brsconfig.json, add a diagnostic warning the user
         if (this.bsconfigPath && path.basename(this.bsconfigPath) === 'brsconfig.json') {
@@ -320,9 +325,7 @@ export class Project implements LspProject {
 
     public async getWorkspaceSymbol(): Promise<WorkspaceSymbol[]> {
         await this.onIdle();
-        console.time('getWorkspaceSymbol');
         const result = this.builder.program.getWorkspaceSymbols();
-        console.timeEnd('getWorkspaceSymbol');
         return result;
     }
 

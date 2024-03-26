@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { tempDir, rootDir, expectDiagnosticsAsync } from '../testHelpers.spec';
+import { tempDir, rootDir, expectDiagnosticsAsync, expectDiagnostics } from '../testHelpers.spec';
 import * as fsExtra from 'fs-extra';
 import { standardizePath as s } from '../util';
 import { Deferred } from '../deferred';
@@ -37,6 +37,29 @@ describe('Project', () => {
 
             await project['emit']('diagnostics', { diagnostics: [] });
             expect(stub.callCount).to.eql(2);
+        });
+    });
+
+    describe('activate', () => {
+        it('uses `files` from bsconfig.json', async () => {
+            fsExtra.outputJsonSync(`${rootDir}/bsconfig.json`, {
+                rootDir: rootDir,
+                files: [{
+                    src: s`${tempDir}/lib1.brs`,
+                    dest: 'source/lib1.brs'
+                }]
+            });
+            fsExtra.outputFileSync(`${tempDir}/lib1.brs`, `
+                sub main()
+                    print alpha 'this var doesn't exist
+                end sub
+            `);
+            await project.activate({
+                projectPath: rootDir
+            } as any);
+            expectDiagnostics(project, [
+                DiagnosticMessages.cannotFindName('alpha').message
+            ]);
         });
     });
 
