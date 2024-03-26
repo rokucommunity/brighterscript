@@ -174,7 +174,7 @@ export interface ProjectConfig {
      * Should this project run in its own dedicated worker thread
      * TODO - is there a better name for this?
      */
-    threadingEnabled?: boolean;
+    enableThreading?: boolean;
     /**
      * If present, this will override any files array found in bsconfig or the default.
      *

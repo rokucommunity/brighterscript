@@ -264,7 +264,7 @@ describe('ProjectManager', () => {
         it('spawns a worker thread when threading is enabled', async () => {
             await manager.syncProjects([{
                 workspaceFolder: rootDir,
-                threadingEnabled: true
+                enableThreading: true
             }]);
             expect(manager.projects[0]).instanceof(WorkerThreadProject);
         });

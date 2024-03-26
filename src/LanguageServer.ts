@@ -422,7 +422,7 @@ export class LanguageServer implements Partial<OnHandler<Connection>> {
                     excludePatterns: await this.getWorkspaceExcludeGlobs(workspaceFolder),
                     bsconfigPath: config.configFile,
                     //TODO we need to solidify the actual name of this flag in user/workspace settings
-                    threadingEnabled: config.languageServer.enableThreading ?? true
+                    enableThreading: config.languageServer.enableThreading ?? true
 
                 } as WorkspaceConfig;
             })

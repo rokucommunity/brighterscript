@@ -68,7 +68,7 @@ export class ProjectManager {
             //these folders don't matter for standalone projects
             workspaceFolder: rootDir,
             projectPath: rootDir,
-            threadingEnabled: false,
+            enableThreading: false,
             files: [{
                 src: srcPath,
                 dest: 'source/standalone.brs'
@@ -120,7 +120,7 @@ export class ProjectManager {
                         projectPath: s`${projectPath}`,
                         workspaceFolder: s`${workspaceConfig.workspaceFolder}`,
                         excludePatterns: workspaceConfig.excludePatterns,
-                        threadingEnabled: workspaceConfig.threadingEnabled
+                        enableThreading: workspaceConfig.enableThreading
                     }));
                 })
             )).flat(1);
@@ -493,7 +493,7 @@ export class ProjectManager {
             return this.getProject(config.projectPath);
         }
 
-        let project: LspProject = config.threadingEnabled
+        let project: LspProject = config.enableThreading
             ? new WorkerThreadProject()
             : new Project();
 
@@ -555,9 +555,8 @@ export interface WorkspaceConfig {
     bsconfigPath?: string;
     /**
      * Should the projects in this workspace be run in their own dedicated worker threads, or all run on the main thread
-     * TODO - is there a better name for this?
      */
-    threadingEnabled?: boolean;
+    enableThreading?: boolean;
 }
 
 /**
