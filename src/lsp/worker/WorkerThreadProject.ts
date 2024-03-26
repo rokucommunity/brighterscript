@@ -259,7 +259,7 @@ export class WorkerThreadProject implements LspProject {
         if (this.worker) {
             workerPool.releaseWorker(this.worker);
         }
-        this.messageHandler.dispose();
-        this.emitter.removeAllListeners();
+        this.messageHandler?.dispose();
+        this.emitter?.removeAllListeners();
     }
 }

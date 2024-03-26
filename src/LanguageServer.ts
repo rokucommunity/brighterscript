@@ -48,7 +48,7 @@ import { ProjectManager } from './lsp/ProjectManager';
 import type { LspDiagnostic, LspProject } from './lsp/LspProject';
 import type { Project } from './lsp/Project';
 
-export class LanguageServer implements Partial<OnHandler<Connection>> {
+export class LanguageServer {
 
     /**
      * The language server protocol connection, used to send and receive all requests and responses
