@@ -178,6 +178,30 @@ describe('ProjectManager', () => {
     });
 
     describe('handleFileChanges', () => {
+        it('converts a missing file to a delete', async () => {
+            await manager.syncProjects([{
+                workspaceFolder: rootDir
+            }]);
+
+            //monitor the document manager to see what it does
+            const onFlush = manager['documentManager'].once('flush');
+
+            //emit created and changed events for files that don't exist
+            await manager.handleFileChanges([
+                { srcPath: `${rootDir}/source/missing1.brs`, type: FileChangeType.Created },
+                { srcPath: `${rootDir}/source/missing2.brs`, type: FileChangeType.Changed }
+            ]);
+
+            expect(
+                await onFlush
+            ).to.eql({
+                actions: [
+                    { srcPath: s`${rootDir}/source/missing1.brs`, type: 'delete' },
+                    { srcPath: s`${rootDir}/source/missing2.brs`, type: 'delete' }
+                ]
+            });
+        });
+
         it('properly syncs changes', async () => {
             fsExtra.outputFileSync(`${rootDir}/source/lib1.brs`, `sub test1():print "alpha":end sub`);
             fsExtra.outputFileSync(`${rootDir}/source/lib2.brs`, `sub test2():print "beta":end sub`);

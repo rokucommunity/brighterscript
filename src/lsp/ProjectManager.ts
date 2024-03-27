@@ -194,7 +194,7 @@ export class ProjectManager {
             //file added or changed
         } else {
             //if this is a new directory, read all files recursively and register those as file changes too
-            if (fsExtra.statSync(srcPath).isDirectory()) {
+            if (util.isDirectorySync(srcPath)) {
                 const files = await fastGlob('**/*', {
                     cwd: change.srcPath,
                     onlyFiles: true,
@@ -211,8 +211,17 @@ export class ProjectManager {
 
                 //this is a new file. set the file contents
             } else {
-                const fileContents = change.fileContents ?? (await fsExtra.readFile(change.srcPath, 'utf8')).toString();
-                this.documentManager.set(change.srcPath, fileContents, change.allowStandaloneProject);
+                try {
+                    const fileContents = change.fileContents ?? (await fsExtra.readFile(change.srcPath, 'utf8')).toString();
+                    this.documentManager.set(change.srcPath, fileContents, change.allowStandaloneProject);
+                } catch (e) {
+                    //this file is not accessible, and we don't know why. Register it as a "delete" instead so it gets cleared out of the system.
+                    //future changes to this file should flow through as normal
+                    return this.handleFileChange({
+                        srcPath: change.srcPath,
+                        type: FileChangeType.Deleted
+                    });
+                }
             }
         }
 

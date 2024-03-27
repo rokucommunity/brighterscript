@@ -79,7 +79,11 @@ export class Util {
      * Determine if this path is a directory
      */
     public isDirectorySync(dirPath: string | undefined) {
-        return dirPath !== undefined && fs.existsSync(dirPath) && fs.lstatSync(dirPath).isDirectory();
+        try {
+            return dirPath !== undefined && fs.existsSync(dirPath) && fs.lstatSync(dirPath).isDirectory();
+        } catch (e) {
+            return false;
+        }
     }
 
     /**
