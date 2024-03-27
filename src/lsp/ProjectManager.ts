@@ -21,7 +21,7 @@ import * as fastGlob from 'fast-glob';
 export class ProjectManager {
     constructor() {
         this.documentManager.on('flush', (event) => {
-            void this.applyDocumentChanges(event);
+            void this.flushDocumentChanges(event);
         });
     }
 
@@ -42,7 +42,7 @@ export class ProjectManager {
      */
     @TrackBusyStatus
     @OnReady
-    private async applyDocumentChanges(event: FlushEvent) {
+    private async flushDocumentChanges(event: FlushEvent) {
         //apply all of the document actions to each project in parallel
         const responses = await Promise.all(this.projects.map(async (project) => {
             return project.applyFileChanges(event.actions);
