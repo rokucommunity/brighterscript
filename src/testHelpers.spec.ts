@@ -21,6 +21,7 @@ export const stagingDir = s`${tempDir}/stagingDir`;
 export const trim = undent;
 
 type DiagnosticCollection = { getDiagnostics(): Array<Diagnostic> } | { diagnostics: Diagnostic[] } | Diagnostic[];
+type DiagnosticCollectionAsync = DiagnosticCollection | { getDiagnostics(): Promise<Array<Diagnostic>> };
 
 function getDiagnostics(arg: DiagnosticCollection): BsDiagnostic[] {
     if (Array.isArray(arg)) {
@@ -101,6 +102,17 @@ function cloneDiagnostic(actualDiagnosticInput: BsDiagnostic, expectedDiagnostic
     return actualDiagnostic;
 }
 
+/**
+ * Ensure the DiagnosticCollection exactly contains the data from expected list.
+ * @param arg - any object that contains diagnostics (such as `Program`, `Scope`, or even an array of diagnostics)
+ * @param expected an array of expected diagnostics. if it's a string, assume that's a diagnostic error message
+ */
+export async function expectDiagnosticsAsync(arg: DiagnosticCollectionAsync, expected: Array<PartialDiagnostic | string | number>) {
+    expectDiagnostics(
+        await Promise.resolve(getDiagnostics(arg as any)),
+        expected
+    );
+}
 
 /**
  * Ensure the DiagnosticCollection exactly contains the data from expected list.

@@ -78,6 +78,7 @@
     "@guyplusplus/turndown-plugin-gfm": "^1.0.7",
     "@types/benchmark": "^1.0.31",
     "@types/chai": "^4.1.2",
+    "@types/clone": "^2.1.4",
     "@types/command-line-args": "^5.0.0",
     "@types/command-line-usage": "^5.0.1",
     "@types/debounce-promise": "^3.1.1",

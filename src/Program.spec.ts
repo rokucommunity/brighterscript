@@ -44,7 +44,7 @@ describe('Program', () => {
         program.dispose();
     });
 
-    it('Does not crazy for file not referenced by any other scope', async () => {
+    it('Does not crash for file not referenced by any other scope', async () => {
         program.setFile('tests/testFile.spec.bs', `
             function main(args as object) as object
                 return roca(args).describe("test suite", sub()
@@ -551,6 +551,20 @@ describe('Program', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
+        });
+
+        it('properly handles errors in async mode', async () => {
+            const file = program.setFile<BrsFile>('source/main.brs', ``);
+            file.validate = () => {
+                throw new Error('Crash for test');
+            };
+            let error: Error;
+            try {
+                await program.validate({ async: true });
+            } catch (e) {
+                error = e as any;
+            }
+            expect(error?.message).to.eql('Crash for test');
         });
     });
 
@@ -1958,9 +1972,9 @@ describe('Program', () => {
             src: s`${rootDir}/source/main.bs`,
             dest: 'source/main.bs'
         }, {
-            src: s`${rootDir}/source/main.bs`,
-            dest: 'source/main.bs'
-        }], program.options.stagingDir!);
+            src: s`${rootDir}/source/common.bs`,
+            dest: 'source/common.bs'
+        }], program.options.stagingDir);
 
         //entries should now be in alphabetic order
         expect(

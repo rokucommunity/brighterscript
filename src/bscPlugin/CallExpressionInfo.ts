@@ -105,7 +105,7 @@ export class CallExpressionInfo {
         if (callExpression && callExpression.callee === expression) {
             //this expression is the NAME of a CallExpression
             callExpression = expression.parent.findAncestor<CallExpression | CallfuncExpression>(isCallFuncOrCallExpression);
-        } else if (isDottedGetExpression(expression.parent) && expression.parent.parent === callExpression) {
+        } else if (isDottedGetExpression(expression.parent) && expression?.parent?.parent === callExpression) {
             callExpression = callExpression.findAncestor<CallExpression | CallfuncExpression>(isCallFuncOrCallExpression);
         }
 
@@ -162,4 +162,3 @@ export class CallExpressionInfo {
     }
 
 }
-

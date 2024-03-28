@@ -1,8 +1,8 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location, DocumentSymbol } from 'vscode-languageserver';
-import { CompletionItemKind } from 'vscode-languageserver';
+import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location, DocumentSymbol, CancellationToken } from 'vscode-languageserver';
+import { CancellationTokenSource, CompletionItemKind } from 'vscode-languageserver';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
@@ -24,11 +24,11 @@ import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
 import { BscPlugin } from './bscPlugin/BscPlugin';
 import { AstEditor } from './astUtils/AstEditor';
 import type { SourceMapGenerator } from 'source-map';
-import { rokuDeploy } from 'roku-deploy';
 import type { Statement } from './parser/AstNode';
 import { CallExpressionInfo } from './bscPlugin/CallExpressionInfo';
 import { SignatureHelpUtil } from './bscPlugin/SignatureHelpUtil';
 import { DiagnosticSeverityAdjuster } from './DiagnosticSeverityAdjuster';
+import { Sequencer } from './common/Sequencer';
 
 const startOfSourcePkgPath = `source${path.sep}`;
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
@@ -657,16 +657,35 @@ export class Program {
     }
 
     /**
+     * Counter used to track which validation run is being logged
+     */
+    private validationRunSequence = 0;
+
+    /**
      * Traverse the entire project, and validate all scopes
      */
-    public validate() {
-        this.logger.time(LogLevel.log, ['Validating project'], () => {
-            this.diagnostics = [];
-            this.plugins.emit('beforeProgramValidate', this);
+    public validate(): void;
+    public validate(options: { async: false; cancellationToken?: CancellationToken }): void;
+    public validate(options: { async: true; cancellationToken?: CancellationToken }): Promise<void>;
+    public validate(options?: { async?: boolean; cancellationToken?: CancellationToken }) {
+        const timeEnd = this.logger.timeStart(LogLevel.log, `Validating project${this.logger.logLevel > LogLevel.log ? ` (run ${this.validationRunSequence++})` : ''}`);
 
-            //validate every file
-            for (const file of Object.values(this.files)) {
-                //for every unvalidated file, validate it
+        const sequencer = new Sequencer({
+            name: 'program.validate',
+            async: options?.async ?? false,
+            cancellationToken: options?.cancellationToken ?? new CancellationTokenSource().token,
+            //how many milliseconds can pass while doing synchronous operations before we register a short timeout
+            minSyncDuration: 150
+        });
+
+        //this sequencer allows us to run in both sync and async mode, depending on whether options.async is enabled.
+        //We use this to prevent starving the CPU during long validate cycles when running in a language server context
+        return sequencer
+            .once(() => {
+                this.diagnostics = [];
+                this.plugins.emit('beforeProgramValidate', this);
+            })
+            .forEach(Object.values(this.files), (file) => {
                 if (!file.isValidated) {
                     this.plugins.emit('beforeFileValidate', {
                         program: this,
@@ -684,21 +703,23 @@ export class Program {
 
                     this.plugins.emit('afterFileValidate', file);
                 }
-            }
-
-            this.logger.time(LogLevel.info, ['Validate all scopes'], () => {
-                for (let scopeName in this.scopes) {
-                    let scope = this.scopes[scopeName];
-                    scope.linkSymbolTable();
-                    scope.validate();
-                    scope.unlinkSymbolTable();
-                }
-            });
-
-            this.detectDuplicateComponentNames();
-
-            this.plugins.emit('afterProgramValidate', this);
-        });
+            })
+            .forEach(Object.values(this.scopes), (scope) => {
+                scope.linkSymbolTable();
+                scope.validate();
+                scope.unlinkSymbolTable();
+            })
+            .once(() => {
+                this.detectDuplicateComponentNames();
+                this.plugins.emit('afterProgramValidate', this);
+            })
+            .onCancel(() => {
+                timeEnd('cancelled');
+            })
+            .onSuccess(() => {
+                timeEnd();
+            })
+            .run();
     }
 
     /**
@@ -1028,8 +1049,8 @@ export class Program {
         }
     }
 
-    public getSignatureHelp(filepath: string, position: Position): SignatureInfoObj[] {
-        let file: BrsFile = this.getFile(filepath);
+    public getSignatureHelp(filePath: string, position: Position): SignatureInfoObj[] {
+        let file: BrsFile = this.getFile(filePath);
         if (!file || !isBrsFile(file)) {
             return [];
         }
@@ -1124,20 +1145,17 @@ export class Program {
      * @param filePath can be a srcPath or a destPath
      */
     public async getTranspiledFileContents(filePath: string) {
-        let fileMap = await rokuDeploy.getFilePaths(this.options.files, this.options.rootDir);
-        //remove files currently loaded in the program, we will transpile those instead (even if just for source maps)
-        let filteredFileMap = [] as FileObj[];
-        for (let fileEntry of fileMap) {
-            if (this.hasFile(fileEntry.src) === false) {
-                filteredFileMap.push(fileEntry);
-            }
-        }
+        const file = this.getFile(filePath);
+        const fileMap: FileObj[] = [{
+            src: file.srcPath,
+            dest: file.pkgPath
+        }];
         const { entries, astEditor } = this.beforeProgramTranspile(fileMap, this.options.stagingDir);
         const result = this._getTranspiledFileContents(
-            this.getFile(filePath)
+            file
         );
         this.afterProgramTranspile(entries, astEditor);
-        return result;
+        return Promise.resolve(result);
     }
 
     /**
@@ -1146,7 +1164,6 @@ export class Program {
      */
     private _getTranspiledFileContents(file: BscFile, outputPath?: string): FileTranspileResult {
         const editor = new AstEditor();
-
         this.plugins.emit('beforeFileTranspile', {
             program: this,
             file: file,
@@ -1216,15 +1233,19 @@ export class Program {
             return outputPath;
         };
 
-        const entries = Object.values(this.files).map(file => {
-            return {
-                file: file,
-                outputPath: getOutputPath(file)
-            };
+        const entries = Object.values(this.files)
+            //only include the files from fileEntries
+            .filter(file => !!mappedFileEntries[file.srcPath])
+            .map(file => {
+                return {
+                    file: file,
+                    outputPath: getOutputPath(file)
+                };
+            })
             //sort the entries to make transpiling more deterministic
-        }).sort((a, b) => {
-            return a.file.srcPath < b.file.srcPath ? -1 : 1;
-        });
+            .sort((a, b) => {
+                return a.file.srcPath < b.file.srcPath ? -1 : 1;
+            });
 
         const astEditor = new AstEditor();
 

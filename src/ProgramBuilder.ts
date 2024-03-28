@@ -41,8 +41,12 @@ export class ProgramBuilder {
     public plugins: PluginInterface = new PluginInterface([], { logger: this.logger });
     private fileResolvers = [] as FileResolver[];
 
-    public addFileResolver(fileResolver: FileResolver) {
-        this.fileResolvers.push(fileResolver);
+    /**
+     * Add file resolvers that will be able to provide file contents before loading from the file system
+     * @param fileResolvers a list of file resolvers
+     */
+    public addFileResolver(...fileResolvers: FileResolver[]) {
+        this.fileResolvers.push(...fileResolvers);
     }
 
     /**
@@ -74,7 +78,7 @@ export class ProgramBuilder {
         let file: BscFile | undefined = this.program.getFile(srcPath);
         if (!file) {
             file = {
-                pkgPath: this.program.getPkgPath(srcPath),
+                pkgPath: path.basename(srcPath),
                 pathAbsolute: srcPath, //keep this for backwards-compatibility. TODO remove in v1
                 srcPath: srcPath,
                 getDiagnostics: () => {
@@ -93,7 +97,7 @@ export class ProgramBuilder {
         ];
     }
 
-    public async run(options: BsConfig) {
+    public async run(options: BsConfig & { skipInitialValidation?: boolean }) {
         this.logger.logLevel = options.logLevel as LogLevel;
 
         if (this.isRunning) {
@@ -134,10 +138,14 @@ export class ProgramBuilder {
 
         if (this.options.watch) {
             this.logger.log('Starting compilation in watch mode...');
-            await this.runOnce();
+            await this.runOnce({
+                skipValidation: options.skipInitialValidation
+            });
             this.enableWatchMode();
         } else {
-            await this.runOnce();
+            await this.runOnce({
+                skipValidation: options.skipInitialValidation
+            });
         }
     }
 
@@ -261,14 +269,17 @@ export class ProgramBuilder {
     /**
      * Run the entire process exactly one time.
      */
-    private runOnce() {
+    private runOnce(options?: { skipValidation?: boolean }) {
         //clear the console
         this.clearConsole();
         let cancellationToken = { isCanceled: false };
         //wait for the previous run to complete
         let runPromise = this.cancelLastRun().then(() => {
             //start the new run
-            return this._runOnce(cancellationToken);
+            return this._runOnce({
+                cancellationToken: cancellationToken,
+                skipValidation: options?.skipValidation
+            });
         }) as any;
 
         //a function used to cancel this run
@@ -344,18 +355,20 @@ export class ProgramBuilder {
      * Run the process once, allowing cancelability.
      * NOTE: This should only be called by `runOnce`.
      */
-    private async _runOnce(cancellationToken: { isCanceled: any }) {
+    private async _runOnce(options: { cancellationToken: { isCanceled: any }; skipValidation: boolean }) {
         let wereDiagnosticsPrinted = false;
         try {
             //maybe cancel?
-            if (cancellationToken.isCanceled === true) {
+            if (options.cancellationToken.isCanceled === true) {
                 return -1;
             }
             //validate program
-            this.validateProject();
+            if (options.skipValidation !== true) {
+                this.validateProject();
+            }
 
             //maybe cancel?
-            if (cancellationToken.isCanceled === true) {
+            if (options.cancellationToken.isCanceled === true) {
                 return -1;
             }
 
@@ -373,7 +386,7 @@ export class ProgramBuilder {
             await this.createPackageIfEnabled();
 
             //maybe cancel?
-            if (cancellationToken.isCanceled === true) {
+            if (options.cancellationToken.isCanceled === true) {
                 return -1;
             }
 
@@ -521,15 +534,18 @@ export class ProgramBuilder {
 
     /**
      * Remove all files from the program that are in the specified folder path
-     * @param srcPath the path to the
+     * @param srcPath the path to the folder to remove
      */
-    public removeFilesInFolder(srcPath: string) {
+    public removeFilesInFolder(srcPath: string): boolean {
+        let removedSomeFiles = false;
         for (let filePath in this.program.files) {
             //if the file path starts with the parent path and the file path does not exactly match the folder path
             if (filePath.startsWith(srcPath) && filePath !== srcPath) {
                 this.program.removeFile(filePath);
+                removedSomeFiles = true;
             }
         }
+        return removedSomeFiles;
     }
 
     /**
