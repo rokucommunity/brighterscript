@@ -1076,10 +1076,12 @@ export class Util {
      * Helper for creating `Range` objects. Prefer using this function because vscode-languageserver's `Range.create()` is significantly slower
      */
     public createRange(startLine: number, startCharacter: number, endLine: number, endCharacter: number): Range {
-        let maxNumber = 8190;
-        let isOverflowRange = false;
-        if ((startLine > maxNumber) || (startCharacter > maxNumber) || (endLine > maxNumber) || (endCharacter > maxNumber)) {
-            isOverflowRange = true;
+        //skip the cache if any number is higher than the max integer we can store for each key chunk (8191)
+        if ((startLine > 8191) || (startCharacter > 8191) || (endLine > 8191) || (endCharacter > 8191)) {
+            return {
+                start: this.createPosition(startLine, startCharacter),
+                end: this.createPosition(endLine, endCharacter)
+            };
         }
 
         // eslint-disable-next-line no-bitwise
@@ -1090,9 +1092,6 @@ export class Util {
                 start: this.createPosition(startLine, startCharacter),
                 end: this.createPosition(endLine, endCharacter)
             };
-            if (!isOverflowRange) {
-                this.rangeCache.set(key, range);
-            }
         }
         return range;
     }
@@ -1179,6 +1178,12 @@ export class Util {
      * Create a `Position` object. Prefer this over `Position.create` for performance reasons
      */
     public createPosition(line: number, character: number) {
+        if (line > 8191 || character > 8191) {
+            return {
+                line: line,
+                character: character
+            };
+        }
         // eslint-disable-next-line no-bitwise
         const key = (line << 13) + character;
         let position = this.positionCache.get(key);
