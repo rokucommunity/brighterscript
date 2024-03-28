@@ -765,8 +765,8 @@ export let DiagnosticMessages = {
         code: 1146,
         severity: DiagnosticSeverity.Error
     }),
-    symbolNotDefinedInScopes: (symbol: string, scopesListString: string) => ({
-        message: `'${symbol}' is not defined in these scopes: ${scopesListString}`,
+    symbolNotDefinedInScope: (symbol: string) => ({
+        message: `'${symbol}' is not defined in scope`,
         code: 1147,
         severity: DiagnosticSeverity.Error
     })

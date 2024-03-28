@@ -33,12 +33,14 @@ export enum DiagnosticOrigin {
     Program = 'Program',
     Scope = 'Scope',
     File = 'File',
-    ASTSegment = 'AstSegment'
+    ASTSegment = 'AstSegment',
+    CrossScope = 'CrossScope'
 }
 
 export interface BsDiagnosticWithOrigin extends BsDiagnostic {
     origin: DiagnosticOrigin;
     astSegment?: AstNode;
+    filePath?: string;
 }
 
 export interface Callable {

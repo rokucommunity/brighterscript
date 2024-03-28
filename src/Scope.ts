@@ -872,6 +872,11 @@ export class Scope {
         this.diagnostics = this.diagnostics.filter(diag => !(diag.origin === DiagnosticOrigin.ASTSegment && diag.file.srcPath.toLowerCase() === lowerSrcPath));
     }
 
+
+    clearCrossScopeDiagnostics() {
+        this.diagnostics = this.diagnostics.filter(diag => !(diag.origin === DiagnosticOrigin.CrossScope));
+    }
+
     clearScopeLevelDiagnostics() {
         this.diagnostics = this.diagnostics.filter(diag => diag.origin !== DiagnosticOrigin.Scope);
     }

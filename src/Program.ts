@@ -7,7 +7,7 @@ import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { BrsFile, ProvidedSymbolInfo } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, BeforeFileAddEvent, BeforeFileRemoveEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj } from './interfaces';
+import type { BsDiagnostic, FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, BeforeFileAddEvent, BeforeFileRemoveEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj, BsDiagnosticWithOrigin } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -52,6 +52,7 @@ import type { UnresolvedSymbol } from './AstValidationSegmenter';
 import { WalkMode, createVisitor } from './astUtils/visitors';
 import type { BscFile } from './files/BscFile';
 import { Stopwatch } from './Stopwatch';
+import { CrossScopeValidationInfo } from './CrossScopeValidationInfo';
 
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
@@ -232,6 +233,7 @@ export class Program {
      */
     private diagnostics = [] as BsDiagnostic[];
 
+    private crossScopeDiagnostics = [] as BsDiagnosticWithOrigin[];
 
     private fileSymbolInformation = new Map<string, { provides: ProvidedSymbolInfo; requires: UnresolvedSymbol[] }>();
 
@@ -834,6 +836,7 @@ export class Program {
     }
 
     public lastValidationInfo = new Map<string, ProgramValidationInfo>();
+    public crossScopeValidationInfo = new CrossScopeValidationInfo(this);
 
     private isFirstValidation = true;
 
@@ -853,7 +856,7 @@ export class Program {
                 filesValidated: 0,
                 fileValidationTime: '',
                 fileInfoGenerationTime: '',
-                programValidationTime: '',
+                crossScopeValidationTime: '',
                 scopesValidated: 0,
                 totalLinkTime: '',
                 totalScopeValidationTime: '',
@@ -863,7 +866,7 @@ export class Program {
             const validationStopwatch = new Stopwatch();
             //validate every file
             const brsFilesValidated: BrsFile[] = [];
-            const afterValidateFiles = [];
+            const afterValidateFiles: BscFile[] = [];
 
             metrics.fileValidationTime = validationStopwatch.getDurationTextFor(() => {
                 for (const file of Object.values(this.files)) {
@@ -879,6 +882,8 @@ export class Program {
                         file.isValidated = true;
                         if (isBrsFile(file)) {
                             brsFilesValidated.push(file);
+                            this.crossScopeValidationInfo.clearInfoForFile(file);
+                            this.crossScopeValidationInfo.clearInfoFromSourceFile(file);
                         }
                         afterValidateFiles.push(file);
                     }
@@ -908,8 +913,8 @@ export class Program {
                 this.updateLastValidationFileInfo(brsFilesValidated);
             }).durationText;
 
-            metrics.programValidationTime = validationStopwatch.getDurationTextFor(() => {
-                this.detectIncompatibleSymbolsAcrossScopes();
+            metrics.crossScopeValidationTime = validationStopwatch.getDurationTextFor(() => {
+                this.addCrossScopeDiagnostics();
             }).durationText;
 
             const changedSymbolsMapArr = brsFilesValidated?.map(f => {
@@ -965,12 +970,10 @@ export class Program {
     private updateLastValidationFileInfo(brsFilesValidated: BrsFile[]) {
         this.lastValidationInfo.clear();
         for (const file of brsFilesValidated) {
+            const lowerFilePath = file.srcPath.toLowerCase();
+            this.clearCrossScopeDiagnosticsByFilepath(lowerFilePath);
 
-            const fileInfo: {
-                symbolsNotDefinedInEveryScope: { symbol: UnresolvedSymbol; scope: Scope }[];
-                duplicateSymbolsInSameScope: { symbol: UnresolvedSymbol; scope: Scope }[];
-                symbolsNotConsistentAcrossScopes: { symbol: UnresolvedSymbol; scopes: Scope[] }[];
-            } = {
+            const fileInfo: ProgramValidationInfo = {
                 symbolsNotDefinedInEveryScope: [],
                 duplicateSymbolsInSameScope: [],
                 symbolsNotConsistentAcrossScopes: []
@@ -1021,9 +1024,12 @@ export class Program {
                                     } else {
                                         // type in this scope is not compatible with other types for this symbol
                                         scopesAreInconsistent = true;
+                                        this.crossScopeValidationInfo.addIncompatibleScope(scopeFile, symbol, scope, file);
                                     }
                                 }
                             }
+                        } else {
+                            this.crossScopeValidationInfo.addMissingInScope(scopeFile, symbol, scope, file);
                         }
                     }
                     if (!symbolFoundInScope) {
@@ -1034,7 +1040,7 @@ export class Program {
                     fileInfo.symbolsNotConsistentAcrossScopes.push({ symbol: symbol, scopes: scopesDefiningSymbol });
                 }
             }
-            this.lastValidationInfo.set(file.srcPath.toLowerCase(), fileInfo);
+            this.lastValidationInfo.set(lowerFilePath, fileInfo);
         }
     }
 
@@ -1047,16 +1053,26 @@ export class Program {
         this.logger.info(`Validation Metrics: ${logs.join(', ')}`);
     }
 
+    clearCrossScopeDiagnosticsByFilepath(lowerFilePath: string) {
+        this.crossScopeDiagnostics = this.crossScopeDiagnostics.filter(diag => diag.filePath === lowerFilePath);
+    }
 
-    private detectIncompatibleSymbolsAcrossScopes() {
+
+    private addCrossScopeDiagnostics() {
+
+        this.crossScopeValidationInfo.addDiagnostics();
+
+        /*
         for (const [lowerFilePath, fileInfo] of this.lastValidationInfo.entries()) {
             const file = this.files[lowerFilePath];
             const scopesForFile = this.getScopesForFile(file);
             for (const symbolAndScopes of fileInfo.symbolsNotConsistentAcrossScopes) {
                 const typeChainResult = util.processTypeChain(symbolAndScopes.symbol.typeChain);
                 const scopeListName = symbolAndScopes.scopes.map(s => s.name).join(', ');
-                this.diagnostics.push({
+                this.crossScopeDiagnostics.push({
                     ...DiagnosticMessages.incompatibleSymbolDefinition(typeChainResult.fullNameOfItem, scopeListName),
+                    origin: DiagnosticOrigin.CrossScopeByFile,
+                    filePath: lowerFilePath,
                     file: file,
                     range: typeChainResult.range
                 });
@@ -1075,13 +1091,14 @@ export class Program {
                 }
                 const typeChainResult = util.processTypeChain(symbol.typeChain);
                 const scopeListName = scopes.map(s => s.name).join(', ');
-                this.diagnostics.push({
+                this.crossScopeDiagnostics.push({
                     ...DiagnosticMessages.symbolNotDefinedInScopes(typeChainResult.fullNameOfItem, scopeListName),
+                    origin: DiagnosticOrigin.CrossScopeByFile,
                     file: file,
                     range: typeChainResult.range
                 });
             }
-        }
+        }*/
     }
 
     /**
