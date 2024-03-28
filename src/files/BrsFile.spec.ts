@@ -4578,5 +4578,21 @@ describe('BrsFile', () => {
                 end sub
             `);
         });
+
+
+        //fails at the specific length of statement including leading tabs and spaces
+        it('allows long statements', () => {
+            program.setFile('source/main.bs', `function request()\r\nhzzzzandleInterceptedScreenDataaaaaaaaaaainterceptedScreenData() 'bs:disable-line \r\nend function`);
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            program.setFile('source/main.bs', `function request()\r\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\thandleInterceptedScreenDataaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(m._aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaainterceptedScreenData) 'bs:disable-line \r\nend function`);
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            program.setFile('source/main.bs', `function request()\r\n\t\t\t\thandleInterceptedScreenData(m._aaaaaaainterceptedScreenData) 'bs:disable-line 1001\r\nend function`);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 });

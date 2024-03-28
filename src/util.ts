@@ -1076,16 +1076,23 @@ export class Util {
      * Helper for creating `Range` objects. Prefer using this function because vscode-languageserver's `Range.create()` is significantly slower
      */
     public createRange(startLine: number, startCharacter: number, endLine: number, endCharacter: number): Range {
-        // eslint-disable-next-line no-bitwise
-        const key = (startLine << 39) + (startCharacter << 26) + (endLine << 13) + endCharacter;
+        let maxNumber = 8190;
+        let isOverflowRange = false;
+        if ((startLine > maxNumber) || (startCharacter > maxNumber) || (endLine > maxNumber) || (endCharacter > maxNumber)) {
+            isOverflowRange = true;
+        }
 
+        // eslint-disable-next-line no-bitwise
+        const key = (startLine << 52) + (startCharacter << 39) + (endLine << 26) + (endCharacter << 13);
         let range = this.rangeCache.get(key);
         if (!range) {
             range = {
                 start: this.createPosition(startLine, startCharacter),
                 end: this.createPosition(endLine, endCharacter)
             };
-            this.rangeCache.set(key, range);
+            if (!isOverflowRange) {
+                this.rangeCache.set(key, range);
+            }
         }
         return range;
     }
