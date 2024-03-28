@@ -20,10 +20,13 @@ describe('ProjectManager', () => {
         fsExtra.emptyDirSync(tempDir);
         sinon.restore();
         diagnosticsListeners = [];
-        diagnostics = [];
+        diagnosticsResponses = [];
         manager.on('diagnostics', (event) => {
-            diagnostics.push(event.diagnostics);
-            diagnosticsListeners.pop()?.(event.diagnostics);
+            if (diagnosticsListeners.length > 0) {
+                diagnosticsListeners.shift()?.(event.diagnostics);
+            } else {
+                diagnosticsResponses.push(event.diagnostics);
+            }
         });
     });
 
@@ -32,18 +35,21 @@ describe('ProjectManager', () => {
         sinon.restore();
         manager.dispose();
     });
+    let diagnosticsListeners: Array<(diagnostics: LspDiagnostic[]) => void> = [];
+    let diagnosticsResponses: Array<LspDiagnostic[]> = [];
 
     /**
-     * Get a promise that resolves when the next diagnostics event is emitted
+     * Get a promise that resolves when the next diagnostics event is emitted (or pop the earliest unhandled diagnostics list if some are already here)
      */
     function onNextDiagnostics() {
-        return new Promise<LspDiagnostic[]>((resolve) => {
-            diagnosticsListeners.push(resolve);
-        });
+        if (diagnosticsResponses.length > 0) {
+            return Promise.resolve(diagnosticsResponses.shift());
+        } else {
+            return new Promise<LspDiagnostic[]>((resolve) => {
+                diagnosticsListeners.push(resolve);
+            });
+        }
     }
-    let diagnosticsListeners: Array<(diagnostics: LspDiagnostic[]) => void> = [];
-    let diagnostics: Array<LspDiagnostic[]> = [];
-
 
     describe('on', () => {
         it('emits events', async () => {
@@ -309,20 +315,20 @@ describe('ProjectManager', () => {
         });
     });
 
-    describe('createProject', () => {
+    describe('createAndActivateProject', () => {
         it('skips creating project if we already have it', async () => {
             await manager.syncProjects([{
                 workspaceFolder: rootDir
             }]);
 
-            await manager['createProject']({
+            await manager['createAndActivateProject']({
                 projectPath: rootDir
             } as any);
             expect(manager.projects).to.be.length(1);
         });
 
         it('uses given projectNumber', async () => {
-            await manager['createProject']({
+            await manager['createAndActivateProject']({
                 projectPath: rootDir,
                 workspaceFolder: rootDir,
                 projectNumber: 3
@@ -337,7 +343,7 @@ describe('ProjectManager', () => {
             );
             let error;
             try {
-                await manager['createProject']({
+                await manager['createAndActivateProject']({
                     projectPath: rootDir,
                     workspaceFolder: rootDir,
                     bsconfigPath: 'subdir1/brsconfig.json'
@@ -369,6 +375,32 @@ describe('ProjectManager', () => {
     describe('getSemanticTokens', () => {
         it('waits until the project is ready', () => {
 
+        });
+    });
+
+    describe('standalone projects', () => {
+        it('creates a standalone project for files not found in a project', async () => {
+            await manager.syncProjects([]);
+            await manager.handleFileChanges([{
+                srcPath: `${rootDir}/source/main.brs`,
+                type: FileChangeType.Created,
+                fileContents: `sub main():print "main":end sub`,
+                allowStandaloneProject: true
+            }]);
+            await onNextDiagnostics();
+            expect(manager['standaloneProjects'][0]?.srcPath).to.eql(s`${rootDir}/source/main.brs`);
+
+            //it deletes the standalone project when the file is closed
+            await manager.handleFileClose({
+                srcPath: `${rootDir}/source/main.brs`
+            });
+            expect(manager['standaloneProjects']).to.be.empty;
+        });
+
+        it('it does NOT load plugins for standalone projects', async () => {
+            //     manager.handleFileChanges
+            //     await project.activate();
+            //     expect(project.plugins).to.be.length(0);
         });
     });
 });

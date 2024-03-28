@@ -21,7 +21,7 @@ import * as fastGlob from 'fast-glob';
 export class ProjectManager {
     constructor() {
         this.documentManager.on('flush', (event) => {
-            void this.flushDocumentChanges(event);
+            void this.flushDocumentChanges(event).catch(e => console.error(e));
         });
     }
 
@@ -29,6 +29,12 @@ export class ProjectManager {
      * Collection of all projects
      */
     public projects: LspProject[] = [];
+
+    /**
+     * Collection of standalone projects. These are projects that are not part of a workspace, but are instead single files.
+     * All of these are also present in the `projects` collection.
+     */
+    private standaloneProjects: StandaloneProject[] = [];
 
     private documentManager = new DocumentManager({
         delay: 150
@@ -52,7 +58,7 @@ export class ProjectManager {
         for (let i = 0; i < event.actions.length; i++) {
             const action = event.actions[i];
             const handledCount = responses.map(x => x[i]).filter(x => x.status === 'accepted').length;
-            //if this action was handled by zero projects, it's not a delete, and it supports running in a standalone project, then create a a project for it
+            //if this action was handled by zero projects and is not a delete and creating a standalone project is supported, then create a a project for it
             if (handledCount === 0 && action.type !== 'delete' && action.allowStandaloneProject === true) {
                 await this.createStandaloneProject(action.srcPath);
             }
@@ -63,17 +69,36 @@ export class ProjectManager {
      * Create a project that validates a single file. This is useful for getting language support for files that don't belong to a project
      */
     private async createStandaloneProject(srcPath: string) {
-        const rootDir = path.join(__dirname, 'standalone-project');
-        await this.createProject({
+        srcPath = util.standardizePath(srcPath);
+        const projectNumber = ProjectManager.projectNumberSequence++;
+        const rootDir = path.join(__dirname, `standalone-project-${projectNumber}`);
+        const projectOptions = {
             //these folders don't matter for standalone projects
             workspaceFolder: rootDir,
             projectPath: rootDir,
             enableThreading: false,
+            projectNumber: projectNumber,
             files: [{
                 src: srcPath,
                 dest: 'source/standalone.brs'
             }]
-        });
+        };
+        const project = this.constructProject(projectOptions) as StandaloneProject;
+        project.srcPath = srcPath;
+        this.standaloneProjects.push(project);
+        await project.activate(projectOptions);
+    }
+
+    private removeStandaloneProject(srcPath: string) {
+        srcPath = util.standardizePath(srcPath);
+        //remove all standalone projects that have this srcPath
+        for (let i = this.standaloneProjects.length - 1; i >= 0; i--) {
+            const project = this.standaloneProjects[i];
+            if (project.srcPath === srcPath) {
+                this.removeProject(project);
+                this.standaloneProjects.splice(i, 1);
+            }
+        }
     }
 
     /**
@@ -148,7 +173,9 @@ export class ProjectManager {
 
             //create missing projects
             await Promise.all(
-                projectConfigs.map(config => this.createProject(config))
+                projectConfigs.map(async (config) => {
+                    await this.createAndActivateProject(config);
+                })
             );
 
             //mark that we've completed our first sync
@@ -233,11 +260,20 @@ export class ProjectManager {
     }
 
     /**
+     * Handle when a file is closed in the editor (this mostly just handles removing standalone projects)
+     */
+    public async handleFileClose(event: { srcPath: string }) {
+        this.removeStandaloneProject(event.srcPath);
+        //most other methods on this class are async, might as well make this one async too for consistency and future expansion
+        await Promise.resolve();
+    }
+
+    /**
      * Given a project, forcibly reload it by removing it and re-adding it
      */
     private async reloadProject(project: LspProject) {
         this.removeProject(project);
-        await this.createProject(project.activateOptions);
+        project = await this.createAndActivateProject(project.activateOptions);
         this.emit('project-reload', { project: project });
     }
 
@@ -471,8 +507,10 @@ export class ProjectManager {
      * @returns a project, or undefined if no project was found
      */
     private getProject(param: string | { projectPath: string }) {
-        const projectPath = (typeof param === 'string') ? param : param.projectPath;
-        return this.projects.find(x => x.projectPath === s`${projectPath}`);
+        const projectPath = util.standardizePath(
+            (typeof param === 'string') ? param : param.projectPath
+        );
+        return this.projects.find(x => x.projectPath === projectPath);
     }
 
     /**
@@ -492,11 +530,10 @@ export class ProjectManager {
     private static projectNumberSequence = 0;
 
     /**
-     * Create a project for the given config
+     * Constructs a project for the given config. Just makes the project, doesn't activate it
      * @returns a new project, or the existing project if one already exists with this config info
      */
-    @TrackBusyStatus
-    private async createProject(config: ProjectConfig): Promise<LspProject> {
+    private constructProject(config: ProjectConfig): LspProject {
         //skip this project if we already have it
         if (this.hasProject(config.projectPath)) {
             return this.getProject(config.projectPath);
@@ -516,7 +553,20 @@ export class ProjectManager {
             } as any);
         });
         config.projectNumber ??= ProjectManager.projectNumberSequence++;
+        return project;
+    }
 
+    /**
+     * Constructs a project for the given config
+     * @returns a new project, or the existing project if one already exists with this config info
+     */
+    @TrackBusyStatus
+    private async createAndActivateProject(config: ProjectConfig): Promise<LspProject> {
+        //skip this project if we already have it
+        if (this.hasProject(config.projectPath)) {
+            return this.getProject(config.projectPath);
+        }
+        const project = this.constructProject(config);
         await project.activate(config);
         return project;
     }
@@ -566,6 +616,13 @@ export interface WorkspaceConfig {
      * Should the projects in this workspace be run in their own dedicated worker threads, or all run on the main thread
      */
     enableThreading?: boolean;
+}
+
+interface StandaloneProject extends LspProject {
+    /**
+     * The path to the file that this project represents
+     */
+    srcPath: string;
 }
 
 /**

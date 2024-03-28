@@ -21,8 +21,8 @@ export class Project implements LspProject {
      */
     public async activate(options: ProjectConfig): Promise<ActivateResponse> {
         this.activateOptions = options;
-        this.projectPath = options.projectPath;
-        this.workspaceFolder = options.workspaceFolder;
+        this.projectPath = options.projectPath ? util.standardizePath(options.projectPath) : options.projectPath;
+        this.workspaceFolder = options.workspaceFolder ? util.standardizePath(options.workspaceFolder) : options.workspaceFolder;
         this.projectNumber = options.projectNumber;
         this.bsconfigPath = await this.getConfigFilePath(options);
 
@@ -399,7 +399,7 @@ export class Project implements LspProject {
         if (config?.configFilePath) {
             configFilePath = path.resolve(config.projectPath, config.configFilePath);
             if (await util.pathExists(configFilePath)) {
-                return configFilePath;
+                return util.standardizePath(configFilePath);
             } else {
                 this.emit('critical-failure', {
                     message: `Cannot find config file specified in user or workspace settings at '${configFilePath}'`
@@ -415,13 +415,13 @@ export class Project implements LspProject {
         //default to config file path found in the root of the workspace
         configFilePath = s`${config.projectPath}/bsconfig.json`;
         if (await util.pathExists(configFilePath)) {
-            return configFilePath;
+            return util.standardizePath(configFilePath);
         }
 
         //look for the deprecated `brsconfig.json` file
         configFilePath = s`${config.projectPath}/brsconfig.json`;
         if (await util.pathExists(configFilePath)) {
-            return configFilePath;
+            return util.standardizePath(configFilePath);
         }
 
         //no config file could be found

@@ -38,10 +38,10 @@ export class WorkerThreadProject implements LspProject {
 
     public async activate(options: ProjectConfig) {
         this.activateOptions = options;
-        this.projectPath = options.projectPath;
-        this.workspaceFolder = options.workspaceFolder;
+        this.projectPath = options.projectPath ? util.standardizePath(options.projectPath) : options.projectPath;
+        this.workspaceFolder = options.workspaceFolder ? util.standardizePath(options.workspaceFolder) : options.workspaceFolder;
         this.projectNumber = options.projectNumber;
-        this.bsconfigPath = options.bsconfigPath;
+        this.bsconfigPath = options.bsconfigPath ? util.standardizePath(options.bsconfigPath) : options.bsconfigPath;
 
         // start a new worker thread or get an unused existing thread
         this.worker = workerPool.getWorker();

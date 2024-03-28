@@ -257,17 +257,9 @@ export class LanguageServer {
 
     @AddStackToErrorMessage
     private async onDocumentClose(event: TextDocumentChangeEvent<TextDocument>): Promise<void> {
-        //TODO handle closing standalone project
-        // const { document } = event;
-        // let filePath = URI.parse(document.uri).fsPath;
-        // let standaloneFileProject = this.standaloneFileProjects[filePath];
-        // //if this was a temp file, close it
-        // if (standaloneFileProject) {
-        //     await standaloneFileProject.firstRunPromise;
-        //     standaloneFileProject.builder.dispose();
-        //     delete this.standaloneFileProjects[filePath];
-        //     await this.sendDiagnostics();
-        // }
+        await this.projectManager.handleFileClose({
+            srcPath: util.uriToPath(event.document.uri)
+        });
     }
 
     /**
