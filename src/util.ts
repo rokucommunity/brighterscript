@@ -1073,7 +1073,11 @@ export class Util {
     private rangeCache = new Map<number, Range>();
 
     /**
-     * Helper for creating `Range` objects. Prefer using this function because vscode-languageserver's `Range.create()` is significantly slower
+     * Helper for creating `Range` objects. Prefer using this function because vscode-languageserver's `Range.create()` is significantly slower.
+     *
+     * This function caches the `Range` objects to reduce garbage collection churn.
+     *
+     * See this jsbench for why we chose this method: https://jsbench.me/r1lub4hjro
      */
     public createRange(startLine: number, startCharacter: number, endLine: number, endCharacter: number): Range {
         //skip the cache if any number is higher than the max integer we can store for each key chunk (8191)
