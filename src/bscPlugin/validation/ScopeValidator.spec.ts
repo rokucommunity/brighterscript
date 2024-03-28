@@ -168,7 +168,7 @@ describe('ScopeValidator', () => {
             program.validate();
             //should have an error
             expectDiagnostics(program, [
-                DiagnosticMessages.mismatchArgumentCount('1-32', 0)
+                DiagnosticMessages.mismatchArgumentCount('1-63', 0)
             ]);
         });
 
@@ -2762,6 +2762,7 @@ describe('ScopeValidator', () => {
                 };
                 //emit an event to allow plugins to contribute to the file validation process
                 program.plugins.emit('onFileValidate', validateFileEvent);
+                program.plugins.emit('afterFileValidate', validateFileEvent);
             }
 
             const commonContents = `

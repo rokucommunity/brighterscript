@@ -13,11 +13,12 @@ import util from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
 import type { Token } from '../../lexer/Token';
-import { AstNodeKind, type AstNode } from '../../parser/AstNode';
+import { AstNodeKind } from '../../parser/AstNode';
+import type { AstNode } from '../../parser/AstNode';
 import type { Expression } from '../../parser/AstNode';
 import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression } from '../../parser/Expression';
 import { CallExpression } from '../../parser/Expression';
-import { WalkMode, createVisitor } from '../../astUtils/visitors';
+import { createVisitor } from '../../astUtils/visitors';
 import type { BscType } from '../../types/BscType';
 import type { BscFile } from '../../files/BscFile';
 import { InsideSegmentWalkMode } from '../../AstValidationSegmenter';
@@ -73,35 +74,38 @@ export class ScopeValidator {
     }
 
     private walkFiles() {
+        const hasChangeInfo = this.event.changedFiles && this.event.changedSymbols;
 
         //do many per-file checks for every file in this (and parent) scopes
         this.event.scope.enumerateBrsFiles((file) => {
-            this.diagnosticDetectFunctionCollisions(file);
+            if (!isBrsFile(file)) {
+                return;
+            }
+            const thisFileHasChanges = this.event.changedFiles.includes(file);
             this.detectVariableNamespaceCollisions(file);
-            this.detectNameCollisions(file);
+
+            if (thisFileHasChanges || this.doesFileProvideChangedSymbol(file, this.event.changedSymbols)) {
+                this.diagnosticDetectFunctionCollisions(file);
+                this.detectNameCollisions(file);
+            }
         });
 
         this.event.scope.enumerateOwnFiles((file) => {
             if (isBrsFile(file)) {
-                const hasChangeInfo = this.event.changedFiles && this.event.changedSymbols;
-
-                let thisFileRequiresChangedSymbol = false;
-                for (let requiredSymbol of file.requiredSymbols) {
-                    // eslint-disable-next-line no-bitwise
-                    for (const flag of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
-                        // eslint-disable-next-line no-bitwise
-                        if (flag & requiredSymbol.flags) {
-                            const changeSymbolSetForFlag = this.event.changedSymbols.get(flag);
-                            if (util.setContainsUnresolvedSymbol(changeSymbolSetForFlag, requiredSymbol)) {
-                                thisFileRequiresChangedSymbol = true;
-                            }
-                        }
-                    }
-                }
                 const thisFileHasChanges = this.event.changedFiles.includes(file);
-                if (hasChangeInfo && !thisFileRequiresChangedSymbol && !thisFileHasChanges) {
+
+                const thisFileRequiresChangedSymbol = this.doesFileRequireChangedSymbol(file);
+
+                const hasUnvalidatedSegments = file.validationSegmenter.hasUnvalidatedSegments();
+
+                if (hasChangeInfo && !thisFileRequiresChangedSymbol && !thisFileHasChanges && !hasUnvalidatedSegments) {
                     // this file does not require a symbol that has changed, and this file has not changed
-                    return;
+
+                    if (!this.doesFileAssignChangedSymbol(file)) {
+                        // this file does not have a variable assignment that needs to be checked
+                        return;
+                    }
+
                 }
                 if (thisFileHasChanges) {
                     this.event.scope.clearAstSegmentDiagnosticsByFile(file);
@@ -132,9 +136,29 @@ export class ScopeValidator {
                     },
                     AssignmentStatement: (assignStmt) => {
                         this.validateAssignmentStatement(file, assignStmt);
+                        // Note: this also includes For statements
+                        this.detectShadowedLocalVar(file, {
+                            name: assignStmt.tokens.name.text,
+                            type: assignStmt.getType({ flags: SymbolTypeFlag.runtime }),
+                            nameRange: assignStmt.tokens.name.range
+                        });
                     },
                     NewExpression: (newExpr) => {
                         this.validateNewExpression(file, newExpr);
+                    },
+                    ForEachStatement: (forEachStmt) => {
+                        this.detectShadowedLocalVar(file, {
+                            name: forEachStmt.tokens.item.text,
+                            type: forEachStmt.getType({ flags: SymbolTypeFlag.runtime }),
+                            nameRange: forEachStmt.tokens.item.range
+                        });
+                    },
+                    FunctionParameterExpression: (funcParam) => {
+                        this.detectShadowedLocalVar(file, {
+                            name: funcParam.tokens.name.text,
+                            type: funcParam.getType({ flags: SymbolTypeFlag.runtime }),
+                            nameRange: funcParam.tokens.name.range
+                        });
                     }
                 });
                 const segmentsToWalkForValidation = (thisFileHasChanges || !hasChangeInfo)
@@ -142,6 +166,9 @@ export class ScopeValidator {
                     : file.getValidationSegments(this.event.changedSymbols); // validate only what's needed in the file
 
                 for (const segment of segmentsToWalkForValidation) {
+                    if (!file.validationSegmenter.checkIfSegmentNeedRevalidation(segment)) {
+                        continue;
+                    }
                     this.currentSegmentBeingValidated = segment;
                     this.event.scope.clearAstSegmentDiagnostics(segment);
                     segment.walk(validationVisitor, {
@@ -151,6 +178,53 @@ export class ScopeValidator {
                 }
             }
         });
+    }
+
+    private doesFileRequireChangedSymbol(file: BrsFile) {
+        let thisFileRequiresChangedSymbol = false;
+        for (let requiredSymbol of file.requiredSymbols) {
+            // eslint-disable-next-line no-bitwise
+            for (const flag of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
+                // eslint-disable-next-line no-bitwise
+                if (flag & requiredSymbol.flags) {
+                    const changeSymbolSetForFlag = this.event.changedSymbols.get(flag);
+                    if (util.setContainsUnresolvedSymbol(changeSymbolSetForFlag, requiredSymbol)) {
+                        thisFileRequiresChangedSymbol = true;
+                        break;
+                    }
+                }
+            }
+        }
+        return thisFileRequiresChangedSymbol;
+    }
+
+    private doesFileProvideChangedSymbol(file: BrsFile, changedSymbols: Map<SymbolTypeFlag, Set<string>>) {
+        if (!changedSymbols) {
+            return true;
+        }
+        for (const flag of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
+            const providedSymbolKeysFlag = file.providedSymbols.symbolMap.get(flag).keys();
+            const changedSymbolSetForFlag = changedSymbols.get(flag);
+
+            for (let providedKey of providedSymbolKeysFlag) {
+                if (changedSymbolSetForFlag.has(providedKey)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private doesFileAssignChangedSymbol(file: BrsFile) {
+        let thisFileAssignsChangedSymbol = false;
+        const runTimeChangedSymbolSet = this.event.changedSymbols.get(SymbolTypeFlag.runtime);
+        for (let assignedSymbol of file.assignedSymbols) {
+            if (runTimeChangedSymbolSet.has(assignedSymbol.token.text.toLowerCase())) {
+                thisFileAssignsChangedSymbol = true;
+                break;
+            }
+        }
+        return thisFileAssignsChangedSymbol;
     }
 
     private currentSegmentBeingValidated: AstNode;
@@ -976,40 +1050,31 @@ export class ScopeValidator {
     }
 
     private detectNameCollisions(file: BrsFile) {
-        file.ast.walk(createVisitor({
-            NamespaceStatement: (nsStmt) => {
-                this.validateNameCollision(file, nsStmt, nsStmt.getNameParts()?.[0]);
-            },
-            ClassStatement: (classStmt) => {
-                this.validateNameCollision(file, classStmt, classStmt.tokens.name);
-            },
-            InterfaceStatement: (ifaceStmt) => {
-                this.validateNameCollision(file, ifaceStmt, ifaceStmt.tokens.name);
-            },
-            ConstStatement: (constStmt) => {
-                this.validateNameCollision(file, constStmt, constStmt.tokens.name);
-            },
-            EnumStatement: (enumStmt) => {
-                this.validateNameCollision(file, enumStmt, enumStmt.tokens.name);
-            },
-            AssignmentStatement: (assignStmt) => {
-                // Note: this also includes For statements
-                this.detectShadowedLocalVar(file, {
-                    name: assignStmt.tokens.name.text,
-                    type: assignStmt.getType({ flags: SymbolTypeFlag.runtime }),
-                    nameRange: assignStmt.tokens.name.range
-                });
-            },
-            ForEachStatement: (forEachStmt) => {
-                this.detectShadowedLocalVar(file, {
-                    name: forEachStmt.tokens.item.text,
-                    type: forEachStmt.getType({ flags: SymbolTypeFlag.runtime }),
-                    nameRange: forEachStmt.tokens.item.range
-                });
-            }
-        }), {
-            walkMode: WalkMode.visitAllRecursive
-        });
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        for (let nsStmt of file['_cachedLookups'].namespaceStatements) {
+            this.validateNameCollision(file, nsStmt, nsStmt.getNameParts()?.[0]);
+
+        }
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        for (let classStmt of file['_cachedLookups'].classStatements) {
+            this.validateNameCollision(file, classStmt, classStmt.tokens.name);
+
+        }
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        for (let ifaceStmt of file['_cachedLookups'].interfaceStatements) {
+            this.validateNameCollision(file, ifaceStmt, ifaceStmt.tokens.name);
+
+        }
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        for (let constStmt of file['_cachedLookups'].constStatements) {
+            this.validateNameCollision(file, constStmt, constStmt.tokens.name);
+        }
+
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        for (let enumStmt of file['_cachedLookups'].enumStatements) {
+            this.validateNameCollision(file, enumStmt, enumStmt.tokens.name);
+
+        }
     }
 
 
@@ -1022,7 +1087,7 @@ export class ScopeValidator {
 
         const containingNamespace = node.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
         const containingNamespaceLower = containingNamespace?.toLowerCase();
-        const links = this.event.scope.getAllFileLinks(name, containingNamespace);
+        const links = this.event.scope.getAllFileLinks(name, containingNamespace, !isNamespaceStatement(node));
         for (let link of links) {
             if (!link || link.item === node) {
                 // refers to same node
@@ -1075,10 +1140,9 @@ export class ScopeValidator {
 
     }
 
-    private detectShadowedLocalVar(file: BrsFile, varDeclaration: { name: string; type: BscType; nameRange: Range }) {
+    public detectShadowedLocalVar(file: BrsFile, varDeclaration: { name: string; type: BscType; nameRange: Range }) {
         const varName = varDeclaration.name;
         const lowerVarName = varName.toLowerCase();
-        const classMap = this.event.scope.getClassMap();
         const callableContainerMap = this.event.scope.getCallableContainerMap();
 
         const varIsFunction = () => {
@@ -1131,21 +1195,23 @@ export class ScopeValidator {
                 });
             }
             //has the same name as an in-scope class
-        } else if (classMap.has(lowerVarName)) {
-            const classStmtLink = classMap.get(lowerVarName);
-            this.addMultiScopeDiagnostic({
-                ...DiagnosticMessages.localVarSameNameAsClass(classStmtLink?.item?.getName(ParseMode.BrighterScript)),
-                range: varDeclaration.nameRange,
-                file: file,
-                origin: DiagnosticOrigin.Scope,
-                relatedInformation: [{
-                    message: 'Class declared here',
-                    location: util.createLocation(
-                        URI.file(classStmtLink.file.srcPath).toString(),
-                        classStmtLink?.item.tokens.name.range
-                    )
-                }]
-            });
+        } else {
+            const classStmtLink = this.event.scope.getClassFileLink(lowerVarName);
+            if (classStmtLink) {
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.localVarSameNameAsClass(classStmtLink?.item?.getName(ParseMode.BrighterScript)),
+                    range: varDeclaration.nameRange,
+                    file: file,
+                    origin: DiagnosticOrigin.Scope,
+                    relatedInformation: [{
+                        message: 'Class declared here',
+                        location: util.createLocation(
+                            URI.file(classStmtLink.file.srcPath).toString(),
+                            classStmtLink?.item.tokens.name.range
+                        )
+                    }]
+                });
+            }
         }
     }
 
@@ -1301,7 +1367,7 @@ export class ScopeValidator {
      * for diagnostics where scope isn't important. (i.e. CreateObject validations)
      */
     private addDiagnosticOnce(diagnostic: BsDiagnostic) {
-        this.onceCache.getOrAdd(`${diagnostic.code} -${diagnostic.message} -${util.rangeToString(diagnostic.range)} `, () => {
+        this.onceCache.getOrAdd(`${diagnostic.code} - ${diagnostic.message} - ${util.rangeToString(diagnostic.range)} `, () => {
             const diagnosticWithOrigin = { ...diagnostic } as BsDiagnosticWithOrigin;
             if (!diagnosticWithOrigin.origin) {
                 // diagnostic does not have origin.
@@ -1332,7 +1398,7 @@ export class ScopeValidator {
      * Add a diagnostic (to the first scope) that will have `relatedInformation` for each affected scope
      */
     private addMultiScopeDiagnostic(diagnostic: BsDiagnostic | BsDiagnosticWithOrigin) {
-        diagnostic = this.multiScopeCache.getOrAdd(`${diagnostic.file?.srcPath} -${diagnostic.code} -${diagnostic.message} -${util.rangeToString(diagnostic.range)} `, () => {
+        diagnostic = this.multiScopeCache.getOrAdd(`${diagnostic.file?.srcPath} - ${diagnostic.code} - ${diagnostic.message} - ${util.rangeToString(diagnostic.range)} `, () => {
 
             if (!diagnostic.relatedInformation) {
                 diagnostic.relatedInformation = [];

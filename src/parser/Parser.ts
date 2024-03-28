@@ -849,13 +849,6 @@ export class Parser {
             let typeExpression: TypeExpression;
             if (!this.check(TokenKind.RightParen)) {
                 do {
-                    if (params.length >= CallExpression.MaximumArguments) {
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.tooManyCallableParameters(params.length, CallExpression.MaximumArguments),
-                            range: this.peek().range
-                        });
-                    }
-
                     params.push(this.functionParameter());
                 } while (this.match(TokenKind.Comma));
             }

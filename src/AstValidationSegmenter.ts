@@ -6,6 +6,7 @@ import type { AstNode } from './parser/AstNode';
 import { util } from './util';
 import type { NamespaceStatement } from './parser/Statement';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
+import type { Token } from './lexer/Token';
 
 // eslint-disable-next-line no-bitwise
 export const InsideSegmentWalkMode = WalkMode.visitStatements | WalkMode.visitExpressions | WalkMode.recurseChildFunctions;
@@ -17,12 +18,18 @@ export interface UnresolvedSymbol {
     containingNamespaces: string[];
 }
 
+export interface AssignedSymbol {
+    token: Token;
+    node: AstNode;
+}
+
 export class AstValidationSegmenter {
 
     public validatedSegments = new Map<AstNode, boolean>();
     public segmentsForValidation = new Array<AstNode>();
     public singleValidationSegments = new Set<AstNode>();
     public unresolvedSegmentsSymbols = new Map<AstNode, Set<UnresolvedSymbol>>();
+    public assignedTokensInSegment = new Map<AstNode, Set<AssignedSymbol>>();
     public ast: AstNode;
 
     reset() {
@@ -42,7 +49,7 @@ export class AstValidationSegmenter {
         });
     }
 
-    checkExpressionForUnresolved(segment: AstNode, expression: VariableExpression | DottedGetExpression | TypeExpression, assignedSymbols?: Set<string>) {
+    checkExpressionForUnresolved(segment: AstNode, expression: VariableExpression | DottedGetExpression | TypeExpression, assignedSymbolsNames?: Set<string>) {
         if (!expression) {
             return false;
         }
@@ -56,14 +63,14 @@ export class AstValidationSegmenter {
         const nodeType = expression.getType(options);
         if (!nodeType?.isResolvable()) {
             let symbolsSet: Set<UnresolvedSymbol>;
-            if (!assignedSymbols?.has(typeChain[0].name.toLowerCase())) {
+            if (!assignedSymbolsNames?.has(typeChain[0].name.toLowerCase())) {
                 if (!this.unresolvedSegmentsSymbols.has(segment)) {
                     symbolsSet = new Set<UnresolvedSymbol>();
                     this.unresolvedSegmentsSymbols.set(segment, symbolsSet);
                 } else {
                     symbolsSet = this.unresolvedSegmentsSymbols.get(segment);
                 }
-
+                this.validatedSegments.set(segment, false);
                 symbolsSet.add({ typeChain: typeChain, flags: typeChain[0].data.flags, endChainFlags: flag, containingNamespaces: this.currentNamespaceStatement?.getNameParts()?.map(t => t.text) });
             }
             return true;
@@ -104,30 +111,37 @@ export class AstValidationSegmenter {
         this.validatedSegments.set(segment, false);
         let foundUnresolvedInSegment = false;
         const skipper = new ChildrenSkipper();
-        const assignedSymbols = new Set<string>();
+        const assignedSymbols = new Set<AssignedSymbol>();
+        const assignedSymbolsNames = new Set<string>();
         this.currentNamespaceStatement = segment.findAncestor(isNamespaceStatement);
 
         segment.walk(createVisitor({
             AssignmentStatement: (stmt) => {
-                assignedSymbols.add(stmt.tokens.name.text.toLowerCase());
+                assignedSymbols.add({ token: stmt.tokens.name, node: stmt });
+                assignedSymbolsNames.add(stmt.tokens.name.text.toLowerCase());
             },
             FunctionParameterExpression: (expr) => {
-                assignedSymbols.add(expr.tokens.name.text.toLowerCase());
+                assignedSymbols.add({ token: expr.tokens.name, node: expr });
+                assignedSymbolsNames.add(expr.tokens.name.text.toLowerCase());
+            },
+            ForEachStatement: (stmt) => {
+                assignedSymbols.add({ token: stmt.tokens.item, node: stmt });
+                assignedSymbolsNames.add(stmt.tokens.item.text.toLowerCase());
             },
             VariableExpression: (expr) => {
-                if (!assignedSymbols.has(expr.tokens.name.text.toLowerCase())) {
-                    const expressionIsUnresolved = this.checkExpressionForUnresolved(segment, expr, assignedSymbols);
+                if (!assignedSymbolsNames.has(expr.tokens.name.text.toLowerCase())) {
+                    const expressionIsUnresolved = this.checkExpressionForUnresolved(segment, expr, assignedSymbolsNames);
                     foundUnresolvedInSegment = expressionIsUnresolved || foundUnresolvedInSegment;
                 }
                 skipper.skip();
             },
             DottedGetExpression: (expr) => {
-                const expressionIsUnresolved = this.checkExpressionForUnresolved(segment, expr, assignedSymbols);
+                const expressionIsUnresolved = this.checkExpressionForUnresolved(segment, expr, assignedSymbolsNames);
                 foundUnresolvedInSegment = expressionIsUnresolved || foundUnresolvedInSegment;
                 skipper.skip();
             },
             TypeExpression: (expr) => {
-                const expressionIsUnresolved = this.checkExpressionForUnresolved(segment, expr, assignedSymbols);
+                const expressionIsUnresolved = this.checkExpressionForUnresolved(segment, expr, assignedSymbolsNames);
                 foundUnresolvedInSegment = expressionIsUnresolved || foundUnresolvedInSegment;
                 skipper.skip();
             }
@@ -135,6 +149,7 @@ export class AstValidationSegmenter {
             walkMode: InsideSegmentWalkMode,
             skipChildren: skipper
         });
+        this.assignedTokensInSegment.set(segment, assignedSymbols);
         if (!foundUnresolvedInSegment) {
             this.singleValidationSegments.add(segment);
         }
@@ -143,6 +158,7 @@ export class AstValidationSegmenter {
 
     getSegments(changedSymbols: Map<SymbolTypeFlag, Set<string>>): AstNode[] {
         const segmentsToWalkForValidation: AstNode[] = [];
+        const allChangedSymbolNames = [...changedSymbols.get(SymbolTypeFlag.runtime), ...changedSymbols.get(SymbolTypeFlag.typetime)];
         for (const segment of this.segmentsForValidation) {
             const symbolsRequired = this.unresolvedSegmentsSymbols.get(segment);
 
@@ -152,16 +168,28 @@ export class AstValidationSegmenter {
 
             if (symbolsRequired) {
                 for (const requiredSymbol of symbolsRequired.values()) {
-                    // eslint-disable-next-line no-bitwise
-                    const runTimeOrTypeTimeSymbolFlag = requiredSymbol.flags & (SymbolTypeFlag.runtime | SymbolTypeFlag.typetime);
-                    const changeSymbolSetForFlag = changedSymbols.get(runTimeOrTypeTimeSymbolFlag);
-                    if (util.setContainsUnresolvedSymbol(changeSymbolSetForFlag, requiredSymbol)) {
-                        segmentsToWalkForValidation.push(segment);
-                        break;
+                    for (const flagType of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
+                        // eslint-disable-next-line no-bitwise
+                        const runTimeOrTypeTimeSymbolFlag = requiredSymbol.flags & flagType;
+                        const changeSymbolSetForFlag = changedSymbols.get(runTimeOrTypeTimeSymbolFlag);
+                        if (!changeSymbolSetForFlag) {
+                            // This symbol has no flag - it is of unknown usage
+                            // This can happen when testing if a function exists
+                        } else if (util.setContainsUnresolvedSymbol(changeSymbolSetForFlag, requiredSymbol)) {
+                            segmentsToWalkForValidation.push(segment);
+                            break;
+                        }
                     }
                 }
             } else if (segmentNeedsRevalidation) {
                 segmentsToWalkForValidation.push(segment);
+            } else {
+                for (let assignedToken of this.assignedTokensInSegment?.get(segment)?.values() ?? []) {
+                    if (allChangedSymbolNames.includes(assignedToken.token.text.toLowerCase())) {
+                        segmentsToWalkForValidation.push(segment);
+                        break;
+                    }
+                }
             }
         }
         return segmentsToWalkForValidation;
@@ -169,5 +197,43 @@ export class AstValidationSegmenter {
 
     markSegmentAsValidated(segment: AstNode) {
         this.validatedSegments.set(segment, true);
+    }
+
+    unValidateAllSegments() {
+        for (const segment of this.validatedSegments.keys()) {
+            this.validatedSegments.set(segment, false);
+        }
+    }
+
+
+    hasUnvalidatedSegments() {
+        return Array.from(this.validatedSegments.values()).includes(false);
+    }
+
+
+    checkIfSegmentNeedRevalidation(segment: AstNode) {
+        if (!this.validatedSegments.get(segment)) {
+            return true;
+        }
+        const unresolved = this.unresolvedSegmentsSymbols.get(segment);
+        if (unresolved?.size > 0) {
+            return true;
+        } /*
+         const assignedTokens = this.assignedTokensInSegment.get(segment);
+         if (assignedTokens?.size > 0) {
+             return true;
+         }*/
+        return false;
+    }
+
+    markSegmentsInvalidatedBySymbol(symbolName: string, flag: SymbolTypeFlag) {
+        for (let [segment, unresolvedSet] of this.unresolvedSegmentsSymbols) {
+            for (let unresolvedSymbol of unresolvedSet.values()) {
+                if (unresolvedSymbol.typeChain.join('.').toLowerCase() === symbolName) {
+                    this.validatedSegments.set(segment, false);
+                    break;
+                }
+            }
+        }
     }
 }

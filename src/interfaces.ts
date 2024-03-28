@@ -579,7 +579,7 @@ export interface OnFileValidateEvent<T extends BscFile = BscFile> {
     program: Program;
     file: T;
 }
-export type AfterFileValidateEvent = OnFileValidateEvent;
+export type AfterFileValidateEvent<T extends BscFile = BscFile> = OnFileValidateEvent;
 
 export interface OnFileValidateEvent<T extends BscFile = BscFile> {
     program: Program;
@@ -590,10 +590,12 @@ export interface TranspileEntry {
     outputPath: string;
 }
 
+
 export interface ScopeValidationOptions {
     changedFiles?: BscFile[];
     changedSymbols?: Map<SymbolTypeFlag, Set<string>>;
     force?: boolean;
+    initialValidation?: boolean;
 }
 
 export interface OnScopeValidateEvent {

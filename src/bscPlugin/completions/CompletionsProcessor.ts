@@ -298,7 +298,7 @@ export class CompletionsProcessor {
             let ignoreAllPropertyNames = false;
 
             // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
-            switch (tokenBefore.kind) {
+            switch (tokenBefore?.kind) {
                 case TokenKind.New:
                     //we are after a new keyword; so we can only be namespaces that have a class or classes at this point
                     currentSymbols = currentSymbols.filter(symbol => isClassType(symbol.type) || this.isNamespaceTypeWithMemberType(symbol.type, isClassType));
@@ -322,7 +322,13 @@ export class CompletionsProcessor {
 
     private getScopeSymbolCompletions(file: BrsFile, scope: Scope, symbolTableLookupFlag: SymbolTypeFlag) {
         // get all scope available symbols
-        const scopeAvailableSymbols = scope.symbolTable.getOwnSymbols(symbolTableLookupFlag).filter(sym => {
+
+        let scopeSymbols = file.parseMode === ParseMode.BrighterScript
+            ? [...scope.symbolTable.getOwnSymbols(symbolTableLookupFlag), ...scope.allNamespaceTypeTable.getOwnSymbols(symbolTableLookupFlag)]
+            : scope.symbolTable.getOwnSymbols(symbolTableLookupFlag);
+
+
+        const scopeAvailableSymbols = scopeSymbols.filter(sym => {
             if (file.parseMode === ParseMode.BrighterScript) {
                 // eslint-disable-next-line no-bitwise
                 if (sym.flags & SymbolTypeFlag.postTranspile) {

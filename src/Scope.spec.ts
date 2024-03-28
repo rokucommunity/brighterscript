@@ -924,7 +924,7 @@ describe('Scope', () => {
                 }]);
             });
 
-            it('detects local function with same name as scope function', () => {
+            it('detects local variable with same name as scope function', () => {
                 program.setFile(`source/main.brs`, `
                     sub main()
                         getHello = "override"
@@ -938,6 +938,22 @@ describe('Scope', () => {
                 expectDiagnostics(program, [{
                     message: DiagnosticMessages.localVarShadowedByScopedFunction().message,
                     range: Range.create(2, 24, 2, 32)
+                }]);
+            });
+
+            it('detects function param with same name as scope function', () => {
+                program.setFile(`source/main.brs`, `
+                    sub main(getHello = "hello")
+                        print getHello ' prints <Function: gethello> (i.e. local variable override does NOT work for same-scope-defined methods)
+                    end sub
+                    function getHello()
+                        return "hello"
+                    end function
+                `);
+                program.validate();
+                expectDiagnostics(program, [{
+                    message: DiagnosticMessages.localVarShadowedByScopedFunction().message,
+                    range: Range.create(1, 29, 1, 37)
                 }]);
             });
 
@@ -3167,7 +3183,7 @@ describe('Scope', () => {
             });
 
 
-            it('should set correct type on for loops', () => {
+            it('should set correct type on for each loop items', () => {
                 let mainFile = program.setFile<BrsFile>('source/main.bs', `
                     sub sum(nums as integer[]) as integer
                         total = 0
@@ -3179,12 +3195,39 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const processFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
-                const symbolTable = processFnScope.symbolTable;
+                const forEachStmt = mainFile.ast.findChild<ForEachStatement>(isForEachStatement);
+                const symbolTable = forEachStmt.getSymbolTable();
                 const opts = { flags: SymbolTypeFlag.runtime };
                 expectTypeToBe(symbolTable.getSymbolType('total', opts), IntegerType);
                 expectTypeToBe(symbolTable.getSymbolType('num', opts), IntegerType);
                 expectTypeToBe(symbolTable.getSymbolType('nums', opts), ArrayType);
+            });
+
+            it('should set correct type on for each loop items when looping a const array in a namespace', () => {
+                let mainFile = program.setFile<BrsFile>('source/main.bs', `
+                    namespace Alpha
+                        const data = [1,2,3]
+
+                        function printData()
+                            for each item in Alpha.data
+                                print item
+                            end for
+                        end function
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const forEachStmt = mainFile.ast.findChild<ForEachStatement>(isForEachStatement);
+                const symbolTable = forEachStmt.getSymbolTable();
+                const opts = { flags: SymbolTypeFlag.runtime };
+                expectTypeToBe(symbolTable.getSymbolType('data', opts), ArrayType);
+                expectTypeToBe((symbolTable.getSymbolType('data', opts) as ArrayType).defaultType, IntegerType);
+
+                expectTypeToBe(symbolTable.getSymbolType('Alpha', opts).getMemberType('data', opts), ArrayType);
+                expectTypeToBe(((symbolTable.getSymbolType('Alpha', opts).getMemberType('data', opts)) as ArrayType).defaultType, IntegerType);
+
+                expectTypeToBe(symbolTable.getSymbolType('item', opts), IntegerType);
+
             });
 
             it('should set correct type on array literals', () => {
@@ -3408,6 +3451,18 @@ describe('Scope', () => {
                     end function
                 end namespace
             `);
+
+            program.setFile<BrsFile>('source/lib2.bs', `
+                namespace alpha.beta.charlie
+                    function foxtrot()
+                    end function
+                end namespace
+
+                namespace alpha.beta.charlie
+                    function hotel()
+                    end function
+                end namespace
+            `);
             const scope = program.getScopeByName('source');
 
             scope.linkSymbolTable();
@@ -3416,30 +3471,39 @@ describe('Scope', () => {
 
             function getSymbolTableList() {
                 const namespaceContainingDelta = file.ast.findChild(x => isFunctionStatement(x) && x.tokens.name.text === 'delta').findAncestor(x => isNamespaceStatement(x));
-                return [
-                    (namespaceContainingDelta as NamespaceStatement).getSymbolTable(),
-                    scope.symbolTable.getSymbolType('alpha', opts).memberTable,
-                    scope.symbolTable.getSymbolType('alpha', opts).getMemberType('beta', opts).memberTable,
-                    scope.symbolTable.getSymbolType('alpha', opts).getMemberType('beta', opts).getMemberType('charlie', opts).memberTable
-                ];
+                return {
+                    statements: [
+                        (namespaceContainingDelta as NamespaceStatement).getSymbolTable()
+                    ],
+                    types: [
+                        scope.symbolTable.getSymbolType('alpha', opts).memberTable,
+                        scope.symbolTable.getSymbolType('alpha', opts).getMemberType('beta', opts).memberTable,
+                        scope.symbolTable.getSymbolType('alpha', opts).getMemberType('beta', opts).getMemberType('charlie', opts).memberTable
+                    ]
+                };
             }
-
+            // Statements get linked/unlinked at scope linking time.
+            // Namespace types exist at file level, and will not change
             let symbolTables = getSymbolTableList();
 
-            symbolTables.forEach(x => expect(x['siblings'].size).to.eql(1, `${x.name} has wrong number of siblings`));
+            symbolTables.statements.forEach(x => expect(x['siblings'].size).to.eql(1, `${x.name} has wrong number of siblings`));
+            symbolTables.types.forEach(x => expect(x['siblings'].size).to.eql(1, `${x.name} has wrong number of siblings`));
 
             scope.unlinkSymbolTable();
-            symbolTables.forEach(x => expect(x['siblings'].size).to.eql(0, `${x.name} has wrong number of siblings`));
+            symbolTables.statements.forEach(x => expect(x['siblings'].size).to.eql(0, `${x.name} has wrong number of siblings`));
+            symbolTables.types.forEach(x => expect(x['siblings'].size).to.eql(1, `${x.name} has wrong number of siblings`));
 
             //do it again, make sure we don't end up with additional siblings
             scope.linkSymbolTable();
 
             // get the member tables again, as the types were re-created
             symbolTables = getSymbolTableList();
-            symbolTables.forEach(x => expect(x['siblings'].size).to.eql(1, `${x.name} has wrong number of siblings`));
-            scope.unlinkSymbolTable();
-            symbolTables.forEach(x => expect(x['siblings'].size).to.eql(0, `${x.name} has wrong number of siblings`));
+            symbolTables.statements.forEach(x => expect(x['siblings'].size).to.eql(1, `${x.name} has wrong number of siblings`));
+            symbolTables.types.forEach(x => expect(x['siblings'].size).to.eql(1, `${x.name} has wrong number of siblings`));
 
+            scope.unlinkSymbolTable();
+            symbolTables.statements.forEach(x => expect(x['siblings'].size).to.eql(0, `${x.name} has wrong number of siblings`));
+            symbolTables.types.forEach(x => expect(x['siblings'].size).to.eql(1, `${x.name} has wrong number of siblings`));
         });
     });
 
@@ -3695,7 +3759,7 @@ describe('Scope', () => {
             expectZeroDiagnostics(program);
             expect(file1.requiredSymbols.length).to.eq(1);
             expect(file1.requiredSymbols[0].containingNamespaces).to.have.members(['Alpha']);
-            expect(file1.requiredSymbols[0].flags).to.eq(SymbolTypeFlag.typetime);
+            expect(file1.requiredSymbols[0].endChainFlags).to.eq(SymbolTypeFlag.typetime);
             expect(file1.requiredSymbols[0].typeChain.length).to.eq(4);
             expect(file1.requiredSymbols[0].typeChain.map(x => x.name)).to.have.members(['Alpha', 'Beta', 'Charlie', 'SomeEnum']);
             expect(file2.requiredSymbols.length).to.eq(0);
@@ -3782,7 +3846,7 @@ describe('Scope', () => {
             let runTimeChanges = symbolChanges.get(SymbolTypeFlag.runtime);
             let typeTimeChanges = symbolChanges.get(SymbolTypeFlag.typetime);
 
-            expect(runTimeChanges.size).to.equal(2); // both the underscored and dotted versions of doesItWork
+            expect(runTimeChanges.size).to.equal(0); // mc.internal.commands.doesItWork did not change
             expect(typeTimeChanges.size).to.equal(1); // mc.internal.commands.ICommandTask
 
             program.validate();
@@ -3832,11 +3896,128 @@ describe('Scope', () => {
             let runTimeChanges = symbolChanges.get(SymbolTypeFlag.runtime);
             let typeTimeChanges = symbolChanges.get(SymbolTypeFlag.typetime);
 
-            expect(runTimeChanges.size).to.equal(2); // both the underscored and dotted versions of doesItWork
+            expect(runTimeChanges.size).to.equal(0); // mc.internal.commands.doesItWork did not change
             expect(typeTimeChanges.size).to.equal(1); // mc.internal.commands.ICommandTask
 
             program.validate();
             expectZeroDiagnostics(program);
+        });
+
+        it('revalidates if import file changes', () => {
+            program.setFile<BrsFile>('source/file1.bs', `
+                import "pkg:/source/file2.bs"
+
+                    function test()
+                        print test2()
+                    end function
+            `);
+            program.setFile<BrsFile>('source/file2.bs', ``);
+            //let widgetXml =
+            program.setFile<BrsFile>('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <script uri="pkg:/source/file1.bs"/>
+                </component>
+            `);
+            program.setFile<BrsFile>('components/Widget.bs', trim`
+                sub init()
+                    test()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('test2').message
+            ]);
+
+            program.setFile<BrsFile>('source/file2.bs', `
+                function test2()
+                    return 2
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        describe('namespaces', () => {
+
+            it('does not require symbols found in same namespace', () => {
+                let file1 = program.setFile<BrsFile>('source/file1.bs', `
+                    namespace alpha
+                        const PI = 3.14
+
+                        const ABC = "abc"
+
+                        function test()
+                            print ABC
+                            return 2*alpha.PI
+                        end function
+
+                    end namespace
+                `);
+                program.setFile<BrsFile>('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script uri="Widget.bs"/>
+                        <script uri="pkg:/source/file1.bs"/>
+                    </component>
+                `);
+                program.setFile<BrsFile>('components/Widget.bs', trim`
+                    sub init()
+                        print alpha.test()
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                expect(file1.requiredSymbols.length).to.eq(0);
+                const validationSegments = file1.getValidationSegments(file1.providedSymbols.changes);
+                expect(validationSegments).to.not.undefined;
+            });
+
+            it('does not require symbols found in namespace of import', () => {
+                let file1 = program.setFile<BrsFile>('source/file1.bs', `
+                    import "pkg:/source/file2.bs"
+
+                    namespace alpha
+                        const PI = 3.14
+
+                        const ABC = "abc"
+
+                        function test()
+                            print ABC + beta.XYZ + alpha.alpha2.DEF
+                            return 2*alpha.PI
+                        end function
+
+                    end namespace
+                `);
+                program.setFile<BrsFile>('source/file2.bs', `
+                    namespace beta
+                        const XYZ = "XYZ"
+                    end namespace
+
+                    namespace alpha.alpha2
+                        const DEF = "def"
+                    end namespace
+                `);
+                //let widgetXml =
+                program.setFile<BrsFile>('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script uri="Widget.bs"/>
+                        <script uri="pkg:/source/file1.bs"/>
+                    </component>
+                `);
+                program.setFile<BrsFile>('components/Widget.bs', trim`
+                    sub init()
+                        print alpha.test()
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                expect(file1.requiredSymbols.length).to.eq(0);
+                const validationSegments = file1.getValidationSegments(file1.providedSymbols.changes);
+                expect(validationSegments).to.not.undefined;
+            });
         });
 
     });

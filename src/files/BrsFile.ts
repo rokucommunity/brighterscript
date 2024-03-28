@@ -21,12 +21,12 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isNamespaceStatement, isVariableExpression, isImportStatement, isFieldStatement, isEnumStatement, isConstStatement, isAnyReferenceType } from '../astUtils/reflection';
+import { isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isNamespaceStatement, isVariableExpression, isImportStatement, isFieldStatement, isEnumStatement, isConstStatement, isAnyReferenceType, isNamespaceType, isReferenceType, isCallableType, isBrsFile } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
-import type { DependencyGraph } from '../DependencyGraph';
+import type { DependencyChangedEvent, DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import type { AstNode, Expression, Statement } from '../parser/AstNode';
-import type { UnresolvedSymbol } from '../AstValidationSegmenter';
+import type { AssignedSymbol, UnresolvedSymbol } from '../AstValidationSegmenter';
 import { AstValidationSegmenter } from '../AstValidationSegmenter';
 import type { BscSymbol } from '../SymbolTable';
 import { SymbolTable } from '../SymbolTable';
@@ -36,6 +36,8 @@ import { CachedLookups } from '../astUtils/CachedLookups';
 import { Editor } from '../astUtils/Editor';
 import type { BscFile } from './BscFile';
 import { ReferencesProvider } from '../bscPlugin/references/ReferencesProvider';
+import type { BscType } from '../types/BscType';
+import { NamespaceType } from '../types';
 
 export type ProvidedSymbolMap = Map<SymbolTypeFlag, Map<string, BscSymbol>>;
 export type ChangedSymbolMap = Map<SymbolTypeFlag, Set<string>>;
@@ -333,8 +335,13 @@ export class BrsFile implements BscFile {
         this.hasTypedef = !!this.typedefFile;
     }
 
-    public onDependenciesChanged() {
+    public onDependenciesChanged(event: DependencyChangedEvent) {
         this.resolveTypedef();
+        this.unlinkNamespaceSymbolTables();
+        this.cache?.delete('namespaceSymbolTable');
+        this.cache?.delete('requiredSymbols');
+
+        this.validationSegmenter.unValidateAllSegments();
     }
 
     /**
@@ -1120,9 +1127,105 @@ export class BrsFile implements BscFile {
 
     public validationSegmenter = new AstValidationSegmenter();
 
+    public getNamespaceSymbolTable(allowCache = true) {
+        const makeImportTreeNamespaceTable = () => {
+            const nsTable = new SymbolTable(`File Complete NamespaceTypes ${this.destPath}`, () => this.program.globalScope.symbolTable);
+            this.updateWithDependenciesNamespaceTables(nsTable, new Set());
+            return nsTable;
+        };
+        if (!allowCache) {
+            return makeImportTreeNamespaceTable();
+        }
+        return this.cache?.getOrAdd(`namespaceSymbolTable`, makeImportTreeNamespaceTable);
+    }
+
+    private updateWithDependenciesNamespaceTables(symbolTableToUpdate: SymbolTable, filesToSkip: Set<string>) {
+        symbolTableToUpdate.mergeNamespaceSymbolTables(this.getOwnNamespaceSymbolTable());
+        filesToSkip.add(this.destPath.toLowerCase());
+        for (const filePath of this.dependencies) {
+            if (filesToSkip.has(filePath.toLowerCase())) {
+                continue;
+            }
+            const importedFile = this.program.getFile<BrsFile>(filePath);
+            if (!isBrsFile(importedFile) || importedFile === this) {
+                continue;
+            }
+            importedFile.updateWithDependenciesNamespaceTables(symbolTableToUpdate, filesToSkip);
+        }
+    }
+
+    public getOwnNamespaceSymbolTable() {
+        return this.cache?.getOrAdd(`ownNamespaceSymbolTable`, () => {
+            const nsTable = new SymbolTable(`File NamespaceTypes ${this.destPath}`, () => this.program.globalScope.symbolTable);
+            this.populateNameSpaceSymbolTable(nsTable);
+            return nsTable;
+        });
+    }
+
     public processSymbolInformation() {
+        // Get namespaces across imported files
+        const nsTable = this.getNamespaceSymbolTable(false);
+        this.linkSymbolTableDisposables.push(this.ast.symbolTable.addSibling(nsTable));
+
         this.validationSegmenter.processTree(this.ast);
         this.program.addFileSymbolInfo(this);
+        this.unlinkNamespaceSymbolTables();
+    }
+
+    public unlinkNamespaceSymbolTables() {
+        for (let disposable of this.linkSymbolTableDisposables) {
+            disposable();
+        }
+        this.linkSymbolTableDisposables = [];
+    }
+
+    private linkSymbolTableDisposables = [];
+
+
+    public populateNameSpaceSymbolTable(namespaceSymbolTable: SymbolTable) {
+        //Add namespace aggregates to namespace member tables
+        const namespaceTypesKnown = new Map<string, BscType>();
+        // eslint-disable-next-line no-bitwise
+        let getTypeOptions = { flags: SymbolTypeFlag.runtime | SymbolTypeFlag.typetime };
+        for (const [nsName, nsContainer] of this.getNamespaceLookupObject()) {
+            let currentNSType: BscType = null;
+            let parentNSType: BscType = null;
+            const existingNsStmt = nsContainer.namespaceStatements?.[0];
+
+            if (!nsContainer.isTopLevel) {
+                parentNSType = namespaceTypesKnown.get(nsContainer.parentNameLower);
+                if (!parentNSType) {
+                    // we don't know about the parent namespace... uh, oh!
+                    this.program.logger.error(`Unable to find parent namespace type for namespace ${nsName}`);
+                    break;
+                }
+                currentNSType = parentNSType.getMemberType(nsContainer.fullNameLower, getTypeOptions);
+            } else {
+                currentNSType = namespaceSymbolTable.getSymbolType(nsContainer.fullNameLower, getTypeOptions);
+            }
+            if (!isNamespaceType(currentNSType)) {
+                if (!currentNSType || isReferenceType(currentNSType) || isCallableType(currentNSType)) {
+                    currentNSType = existingNsStmt
+                        ? existingNsStmt.getType(getTypeOptions)
+                        : new NamespaceType(nsName);
+                    if (parentNSType) {
+                        // adding as a member of existing NS
+                        parentNSType.addMember(nsContainer.lastPartName, { definingNode: existingNsStmt }, currentNSType, getTypeOptions.flags);
+                    } else {
+                        namespaceSymbolTable.addSymbol(nsContainer.lastPartName, { definingNode: existingNsStmt }, currentNSType, getTypeOptions.flags);
+                    }
+                } else {
+                    // Something else already used the name this namespace is using.
+                    continue;
+                }
+            } else {
+                // Existing known namespace
+            }
+            if (!namespaceTypesKnown.has(nsName)) {
+                namespaceTypesKnown.set(nsName, currentNSType);
+            }
+            currentNSType.memberTable.addSibling(nsContainer.symbolTable);
+        }
     }
 
     public getValidationSegments(changedSymbols: Map<SymbolTypeFlag, Set<string>>) {
@@ -1142,19 +1245,20 @@ export class BrsFile implements BscFile {
             for (const setOfSymbols of allNeededSymbolSets) {
                 for (const symbol of setOfSymbols) {
                     const fullSymbolKey = symbol.typeChain.map(tce => tce.name).join('.').toLowerCase();
-                    for (const flag of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
-                        // eslint-disable-next-line no-bitwise
-                        if (symbol.flags & flag) {
-                            if (this.providedSymbols.symbolMap.get(flag)?.has(fullSymbolKey)) {
-                                // this catches namespaced things
-                                continue;
-                            }
-                            if (!addedSymbols.get(flag)?.has(fullSymbolKey)) {
-                                requiredSymbols.push(symbol);
-                                addedSymbols.get(flag)?.add(fullSymbolKey);
-                            }
-                        }
+                    //for (const flag of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
+                    // eslint-disable-next-line no-bitwise
+                    const flag = symbol.endChainFlags;
+                    //  if (symbol.endChainFlags & flag) {
+                    if (this.providedSymbols.symbolMap.get(flag)?.has(fullSymbolKey)) {
+                        // this catches namespaced things
+                        continue;
                     }
+                    if (!addedSymbols.get(flag)?.has(fullSymbolKey)) {
+                        requiredSymbols.push(symbol);
+                        addedSymbols.get(flag)?.add(fullSymbolKey);
+                    }
+                    // }
+                    //}
                 }
             }
             return requiredSymbols;
@@ -1164,6 +1268,19 @@ export class BrsFile implements BscFile {
     public get providedSymbols() {
         return this.cache?.getOrAdd(`providedSymbols`, () => {
             return this.getProvidedSymbols();
+        });
+    }
+
+    public get assignedSymbols() {
+        return this.cache.getOrAdd(`assignedSymbols`, () => {
+            const allAssignedSymbolsEntries = this.validationSegmenter.assignedTokensInSegment.entries() ?? [];
+
+            let allAssignedSymbolsSet: AssignedSymbol[] = [];
+
+            for (const [_segment, assignedSymbolSet] of allAssignedSymbolsEntries) {
+                allAssignedSymbolsSet.push(...assignedSymbolSet.values());
+            }
+            return allAssignedSymbolsSet;
         });
     }
 

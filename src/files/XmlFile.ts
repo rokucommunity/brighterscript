@@ -10,7 +10,7 @@ import { standardizePath as s } from '../util';
 import SGParser from '../parser/SGParser';
 import chalk from 'chalk';
 import { Cache } from '../Cache';
-import type { DependencyGraph } from '../DependencyGraph';
+import type { DependencyChangedEvent, DependencyGraph } from '../DependencyGraph';
 import type { SGToken } from '../parser/SGTypes';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import type { IToken, TokenType } from 'chevrotain';
@@ -309,7 +309,7 @@ export class XmlFile implements BscFile {
 
     private dependencyGraph: DependencyGraph;
 
-    public onDependenciesChanged() {
+    public onDependenciesChanged(event: DependencyChangedEvent) {
         this.logDebug('clear cache because dependency graph changed');
         this.cache.clear();
     }

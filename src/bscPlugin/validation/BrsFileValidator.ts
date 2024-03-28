@@ -1,14 +1,15 @@
-import { isAALiteralExpression, isArrayType, isBody, isBrsFile, isClassStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
+import { isAALiteralExpression, isArrayType, isBody, isClassStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ExtraSymbolData, OnFileValidateEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
-import type { FunctionExpression, LiteralExpression } from '../../parser/Expression';
+import { CallExpression, type FunctionExpression, type LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, WhileStatement } from '../../parser/Statement';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
+import { ArrayDefaultTypeReferenceType } from '../../types/ReferenceType';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import { DynamicType } from '../../types/DynamicType';
 import util from '../../util';
@@ -35,10 +36,6 @@ export class BrsFileValidator {
         //only validate the file if it was actually parsed (skip files containing typedefs)
         if (!this.event.file.hasTypedef) {
             this.validateImportStatements();
-        }
-
-        if (isBrsFile(this.event.file)) {
-            this.event.file.processSymbolInformation();
         }
         unlinkGlobalSymbolTable();
     }
@@ -97,7 +94,10 @@ export class BrsFileValidator {
             ForEachStatement: (node) => {
                 //register the for loop variable
                 const loopTargetType = node.target.getType({ flags: SymbolTypeFlag.runtime });
-                const loopVarType = isArrayType(loopTargetType) ? loopTargetType.defaultType : DynamicType.instance;
+                let loopVarType = isArrayType(loopTargetType) ? loopTargetType.defaultType : DynamicType.instance;
+                if (!loopTargetType.isResolvable()) {
+                    loopVarType = new ArrayDefaultTypeReferenceType(loopTargetType);
+                }
                 node.parent.getSymbolTable()?.addSymbol(node.tokens.item.text, { definingNode: node }, loopVarType, SymbolTypeFlag.runtime);
             },
             NamespaceStatement: (node) => {
@@ -142,6 +142,7 @@ export class BrsFileValidator {
                 if (!node.symbolTable.hasSymbol('m', SymbolTypeFlag.runtime) || node.findAncestor(isAALiteralExpression)) {
                     node.symbolTable.addSymbol('m', undefined, new AssociativeArrayType(), SymbolTypeFlag.runtime);
                 }
+                this.validateFunctionParameterCount(node);
             },
             FunctionParameterExpression: (node) => {
                 const paramName = node.tokens.name?.text;
@@ -197,6 +198,18 @@ export class BrsFileValidator {
             ...DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel(keyword),
             range: rangeFactory?.() ?? statement.range
         });
+    }
+
+    private validateFunctionParameterCount(func: FunctionExpression) {
+        if (func.parameters.length > CallExpression.MaximumArguments) {
+            //flag every parameter over the limit
+            for (let i = CallExpression.MaximumArguments; i < func.parameters.length; i++) {
+                this.event.file.addDiagnostic({
+                    ...DiagnosticMessages.tooManyCallableParameters(func.parameters.length, CallExpression.MaximumArguments),
+                    range: func.parameters[i]?.tokens.name?.range ?? func.parameters[i]?.range ?? func.range
+                });
+            }
+        }
     }
 
     private validateEnumDeclaration(stmt: EnumStatement) {
