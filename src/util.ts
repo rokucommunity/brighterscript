@@ -1080,22 +1080,15 @@ export class Util {
      * See this jsbench for why we chose this method: https://jsbench.me/r1lub4hjro
      */
     public createRange(startLine: number, startCharacter: number, endLine: number, endCharacter: number): Range {
-        //skip the cache if any number is higher than the max integer we can store for each key chunk (8191)
-        if ((startLine > 8191) || (startCharacter > 8191) || (endLine > 8191) || (endCharacter > 8191)) {
-            return {
-                start: this.createPosition(startLine, startCharacter),
-                end: this.createPosition(endLine, endCharacter)
-            };
-        }
-
         // eslint-disable-next-line no-bitwise
-        const key = (startLine << 52) + (startCharacter << 39) + (endLine << 26) + (endCharacter << 13);
+        const key = (endCharacter << 24) + (endLine << 16) + (startLine << 8) + startCharacter;
         let range = this.rangeCache.get(key);
         if (!range) {
             range = {
                 start: this.createPosition(startLine, startCharacter),
                 end: this.createPosition(endLine, endCharacter)
             };
+            this.rangeCache.set(key, range);
         }
         return range;
     }
@@ -1182,14 +1175,8 @@ export class Util {
      * Create a `Position` object. Prefer this over `Position.create` for performance reasons
      */
     public createPosition(line: number, character: number) {
-        if (line > 8191 || character > 8191) {
-            return {
-                line: line,
-                character: character
-            };
-        }
         // eslint-disable-next-line no-bitwise
-        const key = (line << 13) + character;
+        const key = (line << 16) + character;
         let position = this.positionCache.get(key);
         if (!position) {
             position = {
