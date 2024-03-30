@@ -1175,6 +1175,12 @@ export class Util {
      * Create a `Position` object. Prefer this over `Position.create` for performance reasons
      */
     public createPosition(line: number, character: number) {
+        if (line > 8191 || character > 8191) {
+            return {
+                line: line,
+                character: character
+            };
+        }
         // eslint-disable-next-line no-bitwise
         const key = (line << 16) + character;
         let position = this.positionCache.get(key);

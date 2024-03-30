@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.29](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.28...v1.0.0-alpha.29) - 2024-03-28
+### Fixed
+ - transpile crash when token has no text ([#1109](https://github.com/rokucommunity/brighterscript/pull/1109))
+ - array type in const ([#1111](https://github.com/rokucommunity/brighterscript/pull/1111))
+ - more validation performance ([#1110](https://github.com/rokucommunity/brighterscript/pull/1110))
+ - significant validation improvement ([#1119](https://github.com/rokucommunity/brighterscript/pull/1119))
+ - fix bug in range and position caching ([#1126](https://github.com/rokucommunity/brighterscript/pull/1126))
+
+
+
 ## [1.0.0-alpha.28](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.27...v1.0.0-alpha.28) - 2024-03-13
 ### Added
 - type to const hovers and adds hover for for-each loop vars ([#1092](https://github.com/rokucommunity/brighterscript/pull/1092))
