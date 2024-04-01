@@ -1070,7 +1070,7 @@ export class Util {
      * A cache of `Range` objects. The key is a 52bit integer created from the 4 range integers and leveraging bitshifting.
      * The whole point of this cache is to reduce garbage collection churn, so we didn't want to use string concatenation for the key
      */
-    private rangeCache = new Map<number, Range>();
+    private rangeCache = new Map<number, Map<number, Range>>();
 
     /**
      * Helper for creating `Range` objects. Prefer using this function because vscode-languageserver's `Range.create()` is significantly slower.
@@ -1080,22 +1080,24 @@ export class Util {
      * See this jsbench for why we chose this method: https://jsbench.me/r1lub4hjro
      */
     public createRange(startLine: number, startCharacter: number, endLine: number, endCharacter: number): Range {
-        //skip the cache if any number is higher than the max integer we can store for each key chunk (8191)
-        if ((startLine > 8191) || (startCharacter > 8191) || (endLine > 8191) || (endCharacter > 8191)) {
-            return {
-                start: this.createPosition(startLine, startCharacter),
-                end: this.createPosition(endLine, endCharacter)
-            };
+        // eslint-disable-next-line no-bitwise
+        const startKey = (startLine << 15) + startCharacter;
+        // eslint-disable-next-line no-bitwise
+        const endKey = (endLine << 15) + endCharacter;
+
+        let rangeMap = this.rangeCache.get(startKey);
+        if (!rangeMap) {
+            rangeMap = new Map();
+            this.rangeCache.set(startKey, rangeMap);
         }
 
-        // eslint-disable-next-line no-bitwise
-        const key = (startLine << 52) + (startCharacter << 39) + (endLine << 26) + (endCharacter << 13);
-        let range = this.rangeCache.get(key);
+        let range = rangeMap.get(endKey);
         if (!range) {
             range = {
                 start: this.createPosition(startLine, startCharacter),
                 end: this.createPosition(endLine, endCharacter)
             };
+            rangeMap.set(endKey, range);
         }
         return range;
     }
@@ -1189,7 +1191,7 @@ export class Util {
             };
         }
         // eslint-disable-next-line no-bitwise
-        const key = (line << 13) + character;
+        const key = (line << 16) + character;
         let position = this.positionCache.get(key);
         if (!position) {
             position = {
