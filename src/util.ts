@@ -1070,7 +1070,7 @@ export class Util {
      * A cache of `Range` objects. The key is a 52bit integer created from the 4 range integers and leveraging bitshifting.
      * The whole point of this cache is to reduce garbage collection churn, so we didn't want to use string concatenation for the key
      */
-    private rangeCache = new Map<number, Range>();
+    private rangeCache = new Map<number, Map<number, Range>>();
 
     /**
      * Helper for creating `Range` objects. Prefer using this function because vscode-languageserver's `Range.create()` is significantly slower.
@@ -1081,14 +1081,23 @@ export class Util {
      */
     public createRange(startLine: number, startCharacter: number, endLine: number, endCharacter: number): Range {
         // eslint-disable-next-line no-bitwise
-        const key = (endCharacter << 24) + (endLine << 16) + (startLine << 8) + startCharacter;
-        let range = this.rangeCache.get(key);
+        const startKey = (startLine << 15) + startCharacter;
+        // eslint-disable-next-line no-bitwise
+        const endKey = (endLine << 15) + endCharacter;
+
+        let rangeMap = this.rangeCache.get(startKey);
+        if (!rangeMap) {
+            rangeMap = new Map();
+            this.rangeCache.set(startKey, rangeMap);
+        }
+
+        let range = rangeMap.get(endKey);
         if (!range) {
             range = {
                 start: this.createPosition(startLine, startCharacter),
                 end: this.createPosition(endLine, endCharacter)
             };
-            this.rangeCache.set(key, range);
+            rangeMap.set(endKey, range);
         }
         return range;
     }
