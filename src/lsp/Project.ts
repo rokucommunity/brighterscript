@@ -28,7 +28,6 @@ export class Project implements LspProject {
 
         this.builder = new ProgramBuilder();
         this.builder.logger.prefix = `[prj${this.projectNumber}]`;
-        this.builder.logger.log(`Created project #${this.projectNumber} for: "${this.projectPath}"`);
 
         let cwd: string;
         //if the config file exists, use it and its folder as cwd

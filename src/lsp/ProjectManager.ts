@@ -14,16 +14,27 @@ import { DocumentManager } from './DocumentManager';
 import type { FileChange, MaybePromise } from '../interfaces';
 import { BusyStatusTracker } from '../BusyStatusTracker';
 import * as fastGlob from 'fast-glob';
+import { PathFilterer } from './PathFilterer';
+import { Logger } from '../Logger';
 
 /**
  * Manages all brighterscript projects for the language server
  */
 export class ProjectManager {
-    constructor() {
+    constructor(options?: {
+        pathFilterer: PathFilterer;
+        logger?: Logger;
+    }) {
+        this.pathFilterer = options?.pathFilterer ?? new PathFilterer();
+        this.logger = options?.logger ?? new Logger();
         this.documentManager.on('flush', (event) => {
             void this.flushDocumentChanges(event).catch(e => console.error(e));
         });
     }
+
+    private pathFilterer: PathFilterer;
+
+    private logger: Logger;
 
     /**
      * Collection of all projects
@@ -150,6 +161,9 @@ export class ProjectManager {
                 })
             )).flat(1);
 
+            //filter the project paths to only include those that are allowed by the path filterer
+            projectConfigs = this.pathFilterer.filter(projectConfigs, x => x.projectPath);
+
             //delete projects not represented in the list
             for (const project of this.projects) {
                 //we can't find this existing project in our new list, so scrap it
@@ -196,6 +210,9 @@ export class ProjectManager {
      * This is safe to call any time. Changes will be queued and flushed at the correct times
      */
     public async handleFileChanges(changes: FileChange[]) {
+        //filter any changes that are not allowed by the path filterer
+        changes = this.pathFilterer.filter(changes, x => x.srcPath);
+
         //wait for the previous file change handling to finish, then handle these changes
         this.handleFileChangesPromise = this.handleFileChangesPromise.catch((e) => {
             console.error(e);
@@ -453,11 +470,14 @@ export class ProjectManager {
     private async getProjectPaths(workspaceConfig: WorkspaceConfig) {
         //get the list of exclude patterns, and negate them (so they actually work like excludes)
         const excludePatterns = (workspaceConfig.excludePatterns ?? []).map(x => s`!${x}`);
-        const files = await rokuDeploy.getFilePaths([
+        let files = await rokuDeploy.getFilePaths([
             '**/bsconfig.json',
             //exclude all files found in `files.exclude`
             ...excludePatterns
         ], workspaceConfig.workspaceFolder);
+
+        //filter the files to only include those that are allowed by the path filterer
+        files = this.pathFilterer.filter(files, x => x.src);
 
         //if we found at least one bsconfig.json, then ALL projects must have a bsconfig.json.
         if (files.length > 0) {
@@ -465,7 +485,7 @@ export class ProjectManager {
         }
 
         //look for roku project folders
-        const rokuLikeDirs = (await Promise.all(
+        let rokuLikeDirs = (await Promise.all(
             //find all folders containing a `manifest` file
             (await rokuDeploy.getFilePaths([
                 '**/manifest',
@@ -484,6 +504,10 @@ export class ProjectManager {
             })
             //throw out nulls
         )).filter(x => !!x);
+
+        //throw out any directories that are not allowed by the path filterer
+        rokuLikeDirs = this.pathFilterer.filter(rokuLikeDirs, srcPath => srcPath);
+
         if (rokuLikeDirs.length > 0) {
             return rokuLikeDirs;
         }
@@ -539,9 +563,13 @@ export class ProjectManager {
             return this.getProject(config.projectPath);
         }
 
+        config.projectNumber ??= ProjectManager.projectNumberSequence++;
+
         let project: LspProject = config.enableThreading
             ? new WorkerThreadProject()
             : new Project();
+
+        this.logger.log(`Created project #${config.projectNumber} for: "${config.projectPath}" (${config.enableThreading ? 'worker thread' : 'main thread'})`);
 
         this.projects.push(project);
 
@@ -552,7 +580,6 @@ export class ProjectManager {
                 project: project
             } as any);
         });
-        config.projectNumber ??= ProjectManager.projectNumberSequence++;
         return project;
     }
 

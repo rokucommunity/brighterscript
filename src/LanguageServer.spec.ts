@@ -22,6 +22,7 @@ import type { Project } from './lsp/Project';
 const sinon = createSandbox();
 
 const workspacePath = rootDir;
+const enableThreadingDefault = LanguageServer.enableThreadingDefault;
 
 describe.only('LanguageServer', () => {
     let server: LanguageServer;
@@ -29,8 +30,6 @@ describe.only('LanguageServer', () => {
 
     let workspaceFolders: string[] = [];
 
-    let vfs = {} as Record<string, string>;
-    let physicalFilePaths = [] as string[];
     let connection = {
         onInitialize: () => null,
         onInitialized: () => null,
@@ -71,6 +70,9 @@ describe.only('LanguageServer', () => {
         },
         tracer: {
             log: () => { }
+        },
+        client: {
+            register: () => Promise.resolve()
         }
     };
 
@@ -79,43 +81,18 @@ describe.only('LanguageServer', () => {
         server = new LanguageServer();
         server['busyStatusTracker'] = new BusyStatusTracker();
         workspaceFolders = [workspacePath];
-
-        //force the projects to run in-process
-        sinon.stub(server as any, 'getClientConfiguration').returns(Promise.resolve({
-            languageServer: {
-                enableThreading: false
-            }
-        }));
-
-        vfs = {};
-        physicalFilePaths = [];
-
-        //hijack the file resolver so we can inject in-memory files for our tests
-        let originalResolver = server['documentFileResolver'];
-        server['documentFileResolver'] = (srcPath: string) => {
-            if (vfs[srcPath]) {
-                return vfs[srcPath];
-            } else {
-                return originalResolver.call(server, srcPath);
-            }
-        };
+        LanguageServer.enableThreadingDefault = false;
 
         //mock the connection stuff
-        (server as any).establishConnection = () => {
+        sinon.stub(server as any, 'establishConnection').callsFake(() => {
             return connection;
-        };
+        });
         server['hasConfigurationCapability'] = true;
     });
-    afterEach(async () => {
+    afterEach(() => {
         fsExtra.emptyDirSync(tempDir);
-        try {
-            await Promise.all(
-                physicalFilePaths.map(srcPath => fsExtra.unlinkSync(srcPath))
-            );
-        } catch (e) {
-
-        }
         server['dispose']();
+        LanguageServer.enableThreadingDefault = enableThreadingDefault;
     });
 
     function addXmlFile(name: string, additionalXmlContents = '') {
@@ -227,13 +204,14 @@ describe.only('LanguageServer', () => {
             ]);
         });
 
-        it.skip('ignores bsconfig.json files from vscode ignored paths', async () => {
+        it('ignores bsconfig.json files from vscode ignored paths', async () => {
             server.run();
             sinon.stub(server['connection'].workspace, 'getConfiguration').returns(Promise.resolve({
                 exclude: {
                     '**/vendor': true
                 }
             }) as any);
+            await server.onInitialized();
 
             fsExtra.outputJsonSync(s`${workspacePath}/vendor/someProject/bsconfig.json`, {});
             //it always ignores node_modules

@@ -48,9 +48,16 @@ import type { WorkspaceConfig } from './lsp/ProjectManager';
 import { ProjectManager } from './lsp/ProjectManager';
 import type { LspDiagnostic, LspProject } from './lsp/LspProject';
 import type { Project } from './lsp/Project';
+import { PathFilterer } from './lsp/PathFilterer';
+import * as fsExtra from 'fs-extra';
+import ignore from 'ignore';
+import * as micromatch from 'micromatch';
 
 export class LanguageServer {
-
+    /**
+     * The default threading setting for the language server. Can be overridden by per-workspace settings
+     */
+    public static enableThreadingDefault = true;
     /**
      * The language server protocol connection, used to send and receive all requests and responses
      */
@@ -84,10 +91,16 @@ export class LanguageServer {
 
     private loggerSubscription: () => void;
 
-    //run the server
-    public run() {
-        this.projectManager = new ProjectManager();
+    /**
+     * Used to filter paths based on include/exclude lists (like .gitignore or vscode's `files.exclude`).
+     * This is used to prevent the language server from being overwhelmed by files we don't actually want to handle
+     */
+    private pathFilterer = new PathFilterer();
 
+    constructor() {
+        this.projectManager = new ProjectManager({
+            pathFilterer: this.pathFilterer
+        });
         //anytime a project emits a collection of diagnostics, send them to the client
         this.projectManager.on('diagnostics', (event) => {
             void this.sendDiagnostics(event);
@@ -114,7 +127,7 @@ export class LanguageServer {
         // Create a connection for the server. The connection uses Node's IPC as a transport.
         this.connection = this.establishConnection();
 
-        //listen to all of the output log events and pipe them into the debug channel in the extension
+        //listen to all of the output log events and pipe them into extension's output channel
         this.loggerSubscription = Logger.subscribe((text) => {
             this.connection.tracer.log(text);
         });
@@ -212,6 +225,9 @@ export class LanguageServer {
                 );
             }
 
+            //populate the path filterer with the client's include/exclude lists
+            await this.rebuildPathFilterer();
+
             await this.syncProjects();
 
             if (this.clientHasWorkspaceFolderCapability) {
@@ -249,14 +265,25 @@ export class LanguageServer {
      */
     @AddStackToErrorMessage
     public async onDidChangeWatchedFiles(params: DidChangeWatchedFilesParams) {
-        await this.projectManager.handleFileChanges(
-            params.changes.map(x => ({
-                srcPath: util.uriToPath(x.uri),
-                type: x.type,
-                //if this is an open document, allow this file to be loaded in a standalone project (if applicable)
-                allowStandaloneProject: this.documents.get(x.uri) !== undefined
-            }))
-        );
+        const changes = params.changes.map(x => ({
+            srcPath: util.uriToPath(x.uri),
+            type: x.type,
+            //if this is an open document, allow this file to be loaded in a standalone project (if applicable)
+            allowStandaloneProject: this.documents.get(x.uri) !== undefined
+        }));
+        //if the client changed any files containing include/exclude patterns, rebuild the path filterer before processing these changes
+        if (
+            micromatch.some(changes.map(x => x.srcPath), [
+                '**/.gitignore',
+                '**/.vscode/settings.json',
+                '**/*bsconfig*.json'
+            ])
+        ) {
+            await this.rebuildPathFilterer();
+        }
+
+        //handle the file changes
+        await this.projectManager.handleFileChanges(changes);
     }
 
     @AddStackToErrorMessage
@@ -278,6 +305,9 @@ export class LanguageServer {
 
     @AddStackToErrorMessage
     public async onDidChangeConfiguration(args: DidChangeConfigurationParams) {
+        //if configuration changed, rebuild the path filterer
+        await this.rebuildPathFilterer();
+
         //if the user changes any user/workspace config settings, just mass-reload all projects
         await this.syncProjects(true);
     }
@@ -315,7 +345,7 @@ export class LanguageServer {
         const srcPath = util.uriToPath(params.textDocument.uri);
         const result = await this.projectManager.getSignatureHelp({ srcPath: srcPath, position: params.position });
         if (result) {
-        return result;
+            return result;
         } else {
             return {
                 signatures: [],
@@ -391,11 +421,47 @@ export class LanguageServer {
     private busyStatusIndex = -1;
 
     /**
+     * Populate the path filterer with the client's include/exclude lists and the projects include lists
+     * @returns the instance of the path filterer
+     */
+    private async rebuildPathFilterer() {
+        this.pathFilterer.clear();
+        const workspaceFolders = await this.connection.workspace.getWorkspaceFolders();
+        await Promise.all(workspaceFolders.map(async (workspaceFolder) => {
+            const rootDir = util.uriToPath(workspaceFolder.uri);
+
+            //always exclude everything from these common folders
+            this.pathFilterer.registerExcludeList(rootDir, [
+                '**/node_modules/**/*',
+                '**/.git/**/*',
+                'out/**/*',
+                '**/.roku-deploy-staging/**/*'
+            ]);
+            //get any `files.exclude` patterns from the client from this workspace
+            const workspaceExcludeGlobs = await this.getWorkspaceExcludeGlobs(rootDir);
+            this.pathFilterer.registerExcludeList(rootDir, workspaceExcludeGlobs);
+
+            //get any .gitignore patterns from the client from this workspace
+            const gitignorePath = path.resolve(rootDir, '.gitignore');
+            if (await fsExtra.pathExists(gitignorePath)) {
+                const matcher = ignore().add(
+                    fsExtra.readFileSync(gitignorePath).toString()
+                );
+                this.pathFilterer.registerExcludeMatcher((path: string) => {
+                    return matcher.test(path).ignored;
+                });
+            }
+        }));
+        // TODO register every project's include lists
+        return this.pathFilterer;
+    }
+
+    /**
      * Ask the client for the list of `files.exclude` patterns. Useful when determining if we should process a file
      */
     private async getWorkspaceExcludeGlobs(workspaceFolder: string): Promise<string[]> {
         const config = await this.getClientConfiguration<{ exclude: string[] }>(workspaceFolder, 'files');
-        return Object
+        const result = Object
             .keys(config?.exclude ?? {})
             .filter(x => config?.exclude?.[x])
             //vscode files.exclude patterns support ignoring folders without needing to add `**/*`. So for our purposes, we need to
@@ -406,18 +472,12 @@ export class LanguageServer {
                 //treat the pattern as a directory (no harm in doing this because if it's a file, the pattern will just never match anything)
                 `${pattern}/**/*`
             ])
-            .flat(1)
-            .concat([
-                //always ignore projects from node_modules
-                '**/node_modules/**/*'
-            ]);
+            .flat(1);
+        return result;
     }
 
     /**
-     * Find all folders with bsconfig.json files in them, and treat each as a project.
-     * Treat workspaces that don't have a bsconfig.json as a project.
-     * Handle situations where bsconfig.json files were added or removed (to elevate/lower workspaceFolder projects accordingly)
-     * Leave existing projects alone if they are not affected by these changes
+     * Ask the project manager to sync all projects found within the list of workspaces
      * @param forceReload if true, all projects are discarded and recreated from scratch
      */
     private async syncProjects(forceReload = false) {
@@ -430,7 +490,7 @@ export class LanguageServer {
                     workspaceFolder: workspaceFolder,
                     excludePatterns: await this.getWorkspaceExcludeGlobs(workspaceFolder),
                     bsconfigPath: config.configFile,
-                    enableThreading: config.languageServer?.enableThreading ?? true
+                    enableThreading: config.languageServer?.enableThreading ?? LanguageServer.enableThreadingDefault
 
                 } as WorkspaceConfig;
             })

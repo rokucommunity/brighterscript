@@ -61,6 +61,13 @@ describe('Project', () => {
                 DiagnosticMessages.cannotFindName('alpha').message
             ]);
         });
+
+        it('prevents creating package on first run', async () => {
+            await project.activate({
+                projectPath: rootDir
+            } as any);
+            expect(project['builder'].program.options.copyToStaging).to.be.false;
+        });
     });
 
     describe('setFile', () => {

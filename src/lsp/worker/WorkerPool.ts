@@ -1,4 +1,5 @@
 import type { Worker } from 'worker_threads';
+import { Logger } from '../../Logger';
 
 export class WorkerPool {
     constructor(
@@ -6,6 +7,8 @@ export class WorkerPool {
     ) {
 
     }
+
+    private logger = new Logger();
 
     /**
      * List of workers that are free to be used by a new task
@@ -44,9 +47,11 @@ export class WorkerPool {
     public getWorker() {
         //we have no free workers. spin up a new one
         if (this.freeWorkers.length === 0) {
+            this.logger.log('Creating new worker thread');
             return this.createWorker();
         } else {
             //return an existing free worker
+            this.logger.log('Reusing existing worker thread');
             return this.freeWorkers.pop();
         }
     }
