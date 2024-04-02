@@ -769,6 +769,11 @@ export let DiagnosticMessages = {
         message: `'${symbol}' is not defined in scope`,
         code: 1147,
         severity: DiagnosticSeverity.Error
+    }),
+    duplicateSymbolInScope: (symbol: string, scopeName) => ({
+        message: `'${symbol}' is defined multiple times in scope '${scopeName}'`,
+        code: 1148,
+        severity: DiagnosticSeverity.Error
     })
 };
 export const defaultMaximumTruncationLength = 160;

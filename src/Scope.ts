@@ -77,6 +77,7 @@ export class Scope {
         return this.cache.getOrAdd('namespaceLookup', () => this.buildNamespaceLookup());
     }
 
+
     /**
      * Get a NamespaceContainer by its name, looking for a fully qualified version first, then global version next if not found
      */

@@ -1125,7 +1125,7 @@ export class BrsFile implements BscFile {
         }
     }
 
-    public validationSegmenter = new AstValidationSegmenter();
+    public validationSegmenter = new AstValidationSegmenter(this);
 
     public getNamespaceSymbolTable(allowCache = true) {
         const makeImportTreeNamespaceTable = () => {

@@ -52,7 +52,7 @@ import type { UnresolvedSymbol } from './AstValidationSegmenter';
 import { WalkMode, createVisitor } from './astUtils/visitors';
 import type { BscFile } from './files/BscFile';
 import { Stopwatch } from './Stopwatch';
-import { CrossScopeValidationInfo } from './CrossScopeValidationInfo';
+import { CrossScopeValidation } from './CrossScopeValidation';
 
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
@@ -836,7 +836,7 @@ export class Program {
     }
 
     public lastValidationInfo = new Map<string, ProgramValidationInfo>();
-    public crossScopeValidationInfo = new CrossScopeValidationInfo(this);
+    public crossScopeValidation = new CrossScopeValidation(this);
 
     private isFirstValidation = true;
 
@@ -882,8 +882,8 @@ export class Program {
                         file.isValidated = true;
                         if (isBrsFile(file)) {
                             brsFilesValidated.push(file);
-                            this.crossScopeValidationInfo.clearInfoForFile(file);
-                            this.crossScopeValidationInfo.clearInfoFromSourceFile(file);
+                            this.crossScopeValidation.clearInfoForFile(file);
+                            this.crossScopeValidation.clearInfoFromSourceFile(file);
                         }
                         afterValidateFiles.push(file);
                     }
@@ -1024,12 +1024,12 @@ export class Program {
                                     } else {
                                         // type in this scope is not compatible with other types for this symbol
                                         scopesAreInconsistent = true;
-                                        this.crossScopeValidationInfo.addIncompatibleScope(scopeFile, symbol, scope, file);
+                                        this.crossScopeValidation.addIncompatibleScope(scopeFile, symbol, scope, file);
                                     }
                                 }
                             }
                         } else {
-                            this.crossScopeValidationInfo.addMissingInScope(scopeFile, symbol, scope, file);
+                            this.crossScopeValidation.addMissingInScope(scopeFile, symbol, scope, file);
                         }
                     }
                     if (!symbolFoundInScope) {
@@ -1059,8 +1059,15 @@ export class Program {
 
 
     private addCrossScopeDiagnostics() {
+        const scopesForCrossScopeValidation = [];
+        for (let scopeName in this.scopes) {
+            let scope = this.scopes[scopeName];
+            if (this.globalScope !== scope && !scope.isValidated) {
+                scopesForCrossScopeValidation.push(scope);
+            }
+        }
 
-        this.crossScopeValidationInfo.addDiagnostics();
+        this.crossScopeValidation.addDiagnosticsForScopes(scopesForCrossScopeValidation);
 
         /*
         for (const [lowerFilePath, fileInfo] of this.lastValidationInfo.entries()) {

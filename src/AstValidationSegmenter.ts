@@ -7,6 +7,7 @@ import { util } from './util';
 import type { NamespaceStatement } from './parser/Statement';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { Token } from './lexer/Token';
+import type { BrsFile } from './files/BrsFile';
 
 // eslint-disable-next-line no-bitwise
 export const InsideSegmentWalkMode = WalkMode.visitStatements | WalkMode.visitExpressions | WalkMode.recurseChildFunctions;
@@ -16,6 +17,7 @@ export interface UnresolvedSymbol {
     flags: SymbolTypeFlag;
     endChainFlags: SymbolTypeFlag;
     containingNamespaces: string[];
+    file: BrsFile;
 }
 
 export interface AssignedSymbol {
@@ -31,6 +33,8 @@ export class AstValidationSegmenter {
     public unresolvedSegmentsSymbols = new Map<AstNode, Set<UnresolvedSymbol>>();
     public assignedTokensInSegment = new Map<AstNode, Set<AssignedSymbol>>();
     public ast: AstNode;
+
+    constructor(public file: BrsFile) { }
 
     reset() {
         this.validatedSegments.clear();
@@ -71,7 +75,13 @@ export class AstValidationSegmenter {
                     symbolsSet = this.unresolvedSegmentsSymbols.get(segment);
                 }
                 this.validatedSegments.set(segment, false);
-                symbolsSet.add({ typeChain: typeChain, flags: typeChain[0].data.flags, endChainFlags: flag, containingNamespaces: this.currentNamespaceStatement?.getNameParts()?.map(t => t.text) });
+                symbolsSet.add({
+                    typeChain: typeChain,
+                    flags: typeChain[0].data.flags,
+                    endChainFlags: flag,
+                    containingNamespaces: this.currentNamespaceStatement?.getNameParts()?.map(t => t.text),
+                    file: this.file
+                });
             }
             return true;
         }
