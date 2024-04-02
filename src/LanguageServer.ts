@@ -452,7 +452,6 @@ export class LanguageServer {
                 });
             }
         }));
-        // TODO register every project's include lists
         return this.pathFilterer;
     }
 

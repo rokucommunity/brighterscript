@@ -28,6 +28,7 @@ export class Project implements LspProject {
 
         this.builder = new ProgramBuilder();
         this.builder.logger.prefix = `[prj${this.projectNumber}]`;
+        this.disposables.push(this.builder);
 
         let cwd: string;
         //if the config file exists, use it and its folder as cwd
@@ -82,7 +83,8 @@ export class Project implements LspProject {
 
         return {
             bsconfigPath: this.bsconfigPath,
-            rootDir: this.builder.program.options.rootDir
+            rootDir: this.builder.program.options.rootDir,
+            filePatterns: this.filePatterns
         };
     }
 
@@ -93,6 +95,15 @@ export class Project implements LspProject {
 
     public get rootDir() {
         return this.builder.program.options.rootDir;
+    }
+    /**
+     * The file patterns from bsconfig.json that were used to find all files for this project
+     */
+    public get filePatterns() {
+        const patterns = rokuDeploy.normalizeFilesArray(this.builder.program.options.files);
+        return patterns.map(x => {
+            return typeof x === 'string' ? x : x.src;
+        });
     }
 
     /**
@@ -448,8 +459,14 @@ export class Project implements LspProject {
     }
     private emitter = new EventEmitter();
 
+    public disposables: LspProject['disposables'] = [];
+
     public dispose() {
-        this.builder?.dispose();
+        for (let disposable of this.disposables ?? []) {
+            disposable?.dispose?.();
+        }
+        this.disposables = [];
+
         this.emitter?.removeAllListeners();
         if (this.activationDeferred?.isCompleted === false) {
             this.activationDeferred.reject(

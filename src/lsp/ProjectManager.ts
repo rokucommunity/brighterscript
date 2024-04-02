@@ -97,7 +97,7 @@ export class ProjectManager {
         const project = this.constructProject(projectOptions) as StandaloneProject;
         project.srcPath = srcPath;
         this.standaloneProjects.push(project);
-        await project.activate(projectOptions);
+        await this.activateProject(project, projectOptions);
     }
 
     private removeStandaloneProject(srcPath: string) {
@@ -594,8 +594,16 @@ export class ProjectManager {
             return this.getProject(config.projectPath);
         }
         const project = this.constructProject(config);
-        await project.activate(config);
+        await this.activateProject(project, config);
         return project;
+    }
+
+    private async activateProject(project: LspProject, config: ProjectConfig) {
+        await project.activate(config);
+
+        //register this project's list of files with the path filterer
+        const unregister = this.pathFilterer.registerIncludeList(project.rootDir, project.filePatterns);
+        project.disposables.push({ dispose: unregister });
     }
 
     public on(eventName: 'critical-failure', handler: (data: { project: LspProject; message: string }) => MaybePromise<void>);

@@ -30,6 +30,11 @@ export interface LspProject {
     rootDir: string;
 
     /**
+     * The file patterns from bsconfig.json that were used to find all files for this project
+     */
+    filePatterns: string[];
+
+    /**
      * Path to a bsconfig.json file that will be used for this project.
      * Only available after `.activate()` has completed
      */
@@ -143,6 +148,11 @@ export interface LspProject {
     on(eventName: 'all', handler: (eventName: string, data: Record<string, any>) => void);
 
     /**
+     * List of items to dispose when this project is disposed
+     */
+    disposables: Array<{ dispose(): void }>;
+
+    /**
      * Release all resources so this file can be safely garbage collected
      */
     dispose(): void;
@@ -200,4 +210,8 @@ export interface ActivateResponse {
      * The path to the config file (i.e. `bsconfig.json`) that was used to load this project
      */
     bsconfigPath: string;
+    /**
+     * The file patterns from bsconfig.json that were used to find all files for this project
+     */
+    filePatterns: string[];
 }

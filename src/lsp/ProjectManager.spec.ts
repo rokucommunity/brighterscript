@@ -193,6 +193,12 @@ describe('ProjectManager', () => {
             fsExtra.outputFileSync(`${rootDir}/source/file1.md`, ``);
             fsExtra.outputFileSync(`${rootDir}/source/file2.brs`, ``);
 
+            fsExtra.outputJsonSync(`${rootDir}/bsconfig.json`, {
+                files: [
+                    'source/**/*.brs'
+                ]
+            });
+
             await manager.syncProjects([{
                 workspaceFolder: rootDir
             }]);
@@ -221,6 +227,36 @@ describe('ProjectManager', () => {
             ]);
 
             onFlush = manager['documentManager'].once('flush');
+            expect(
+                (await onFlush)?.actions.map(x => x.srcPath)
+            ).to.eql([
+                s`${rootDir}/source/file1.md`,
+                s`${rootDir}/source/file2.brs`
+            ]);
+        });
+
+        it('keeps files from bsconfig.json even if the path matches an exclude list', async () => {
+            fsExtra.outputFileSync(`${rootDir}/source/file1.md`, ``);
+            fsExtra.outputFileSync(`${rootDir}/source/file2.brs`, ``);
+
+            fsExtra.outputJsonSync(`${rootDir}/bsconfig.json`, {
+                files: ['source/**/*']
+            });
+
+            await manager.syncProjects([{
+                workspaceFolder: rootDir
+            }]);
+
+            //register an exclusion filter
+            pathFilterer.registerExcludeList(rootDir, [
+                '**/*.md'
+            ]);
+            //make sure the .md file is included because of its project's files array
+            await manager.handleFileChanges([
+                { srcPath: `${rootDir}/source/file1.md`, type: FileChangeType.Created },
+                { srcPath: `${rootDir}/source/file2.brs`, type: FileChangeType.Created }
+            ]);
+            let onFlush = manager['documentManager'].once('flush');
             expect(
                 (await onFlush)?.actions.map(x => x.srcPath)
             ).to.eql([

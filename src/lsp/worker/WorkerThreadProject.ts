@@ -51,10 +51,12 @@ export class WorkerThreadProject implements LspProject {
             onRequest: this.processRequest.bind(this),
             onUpdate: this.processUpdate.bind(this)
         });
+        this.disposables.push(this.messageHandler);
 
         const activateResponse = await this.messageHandler.sendRequest<ActivateResponse>('activate', { data: [options] });
         this.bsconfigPath = activateResponse.data.bsconfigPath;
         this.rootDir = activateResponse.data.rootDir;
+        this.filePatterns = activateResponse.data.filePatterns;
 
         //populate a few properties with data from the thread so we can use them for some synchronous checks
         this.filePaths = new Set(await this.getFilePaths());
@@ -74,6 +76,11 @@ export class WorkerThreadProject implements LspProject {
      * The root directory of the project
      */
     public rootDir: string;
+
+    /**
+     * The file patterns from bsconfig.json that were used to find all files for this project
+     */
+    public filePatterns: string[];
 
     /**
      * Path to a bsconfig.json file that will be used for this project
@@ -254,12 +261,18 @@ export class WorkerThreadProject implements LspProject {
     }
     private emitter = new EventEmitter();
 
+    public disposables: LspProject['disposables'] = [];
+
     public dispose() {
+        for (let disposable of this.disposables ?? []) {
+            disposable?.dispose?.();
+        }
+        this.disposables = [];
+
         //move the worker back to the pool so it can be used again
         if (this.worker) {
             workerPool.releaseWorker(this.worker);
         }
-        this.messageHandler?.dispose();
         this.emitter?.removeAllListeners();
     }
 }
