@@ -1,3 +1,4 @@
+import * as path from 'path';
 import 'array-flat-polyfill';
 import type {
     CompletionItem,
@@ -106,9 +107,12 @@ export class LanguageServer {
         this.projectManager.busyStatusTracker.on('change', (event) => {
             this.sendBusyStatus();
         });
+    }
 
+    //run the server
+    public run() {
         // Create a connection for the server. The connection uses Node's IPC as a transport.
-        this.establishConnection();
+        this.connection = this.establishConnection();
 
         //listen to all of the output log events and pipe them into the debug channel in the extension
         this.loggerSubscription = Logger.subscribe((text) => {
@@ -117,7 +121,7 @@ export class LanguageServer {
 
         //bind all our on* methods that share the same name from connection
         for (const name of Object.getOwnPropertyNames(LanguageServer.prototype)) {
-            if (/on+/.test(name) && typeof this.connection[name] === 'function') {
+            if (/on+/.test(name) && typeof this.connection?.[name] === 'function') {
                 this.connection[name](this[name].bind(this));
             }
         }
@@ -310,7 +314,16 @@ export class LanguageServer {
     public async onSignatureHelp(params: SignatureHelpParams) {
         const srcPath = util.uriToPath(params.textDocument.uri);
         const result = await this.projectManager.getSignatureHelp({ srcPath: srcPath, position: params.position });
+        if (result) {
         return result;
+        } else {
+            return {
+                signatures: [],
+                activeSignature: null,
+                activeParameter: null
+            };
+        }
+
     }
 
     @AddStackToErrorMessage
@@ -342,7 +355,10 @@ export class LanguageServer {
     @AddStackToErrorMessage
     public async onExecuteCommand(params: ExecuteCommandParams) {
         if (params.command === CustomCommands.TranspileFile) {
-            const result = await this.projectManager.transpileFile(params.arguments[0]);
+            const args = {
+                srcPath: params.arguments[0] as string
+            };
+            const result = await this.projectManager.transpileFile(args);
             //back-compat: include `pathAbsolute` property so older vscode versions still work
             (result as any).pathAbsolute = result.srcPath;
             return result;
@@ -356,6 +372,7 @@ export class LanguageServer {
         if (!this.connection) {
             this.connection = createConnection(ProposedFeatures.all);
         }
+        return this.connection;
     }
 
     /**
@@ -413,8 +430,7 @@ export class LanguageServer {
                     workspaceFolder: workspaceFolder,
                     excludePatterns: await this.getWorkspaceExcludeGlobs(workspaceFolder),
                     bsconfigPath: config.configFile,
-                    //TODO we need to solidify the actual name of this flag in user/workspace settings
-                    enableThreading: config.languageServer.enableThreading ?? true
+                    enableThreading: config.languageServer?.enableThreading ?? true
 
                 } as WorkspaceConfig;
             })
