@@ -179,7 +179,7 @@ export class CrossScopeValidation {
     addDiagnosticsForScopes(scopes: Scope[]) {
 
         this.resolutionsMap.clear();
-
+        const addDuplicateSymbolDiagnostics = false;
         const missingSymbolInScope = new Map<BrsFile, Map<UnresolvedSymbol, Set<Scope>>>();
 
         // Check scope for duplicates and missing symbols
@@ -189,15 +189,17 @@ export class CrossScopeValidation {
 
 
             const { missingSymbols, duplicatesMap } = this.getIssuesForScope(scope);
-            for (const [_flag, dupeSet] of duplicatesMap.entries()) {
-                for (const dupe of dupeSet.values()) {
-                    if (dupe.symbol.data?.definingNode?.range) {
-                        scope.addDiagnostics([{
-                            ...DiagnosticMessages.duplicateSymbolInScope(dupe.symbol.name, scope.name),
-                            origin: DiagnosticOrigin.CrossScope,
-                            file: dupe.file,
-                            range: dupe.symbol.data?.definingNode.range
-                        }]);
+            if (addDuplicateSymbolDiagnostics) {
+                for (const [_flag, dupeSet] of duplicatesMap.entries()) {
+                    for (const dupe of dupeSet.values()) {
+                        if (dupe.symbol.data?.definingNode?.range) {
+                            scope.addDiagnostics([{
+                                ...DiagnosticMessages.duplicateSymbolInScope(dupe.symbol.name, scope.name),
+                                origin: DiagnosticOrigin.CrossScope,
+                                file: dupe.file,
+                                range: dupe.symbol.data?.definingNode.range
+                            }]);
+                        }
                     }
                 }
             }
