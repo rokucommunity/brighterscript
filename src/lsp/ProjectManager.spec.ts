@@ -10,13 +10,18 @@ import { getWakeWorkerThreadPromise } from './worker/WorkerThreadProject.spec';
 import type { LspDiagnostic } from './LspProject';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { FileChangeType } from 'vscode-languageserver-protocol';
+import { PathFilterer } from './PathFilterer';
 const sinon = createSandbox();
 
 describe('ProjectManager', () => {
     let manager: ProjectManager;
+    let pathFilterer: PathFilterer;
 
     beforeEach(() => {
-        manager = new ProjectManager();
+        pathFilterer = new PathFilterer();
+        manager = new ProjectManager({
+            pathFilterer: pathFilterer
+        });
         fsExtra.emptyDirSync(tempDir);
         sinon.restore();
         diagnosticsListeners = [];
@@ -184,6 +189,46 @@ describe('ProjectManager', () => {
     });
 
     describe('handleFileChanges', () => {
+        it('excludes files based on global exclude patterns', async () => {
+            fsExtra.outputFileSync(`${rootDir}/source/file1.md`, ``);
+            fsExtra.outputFileSync(`${rootDir}/source/file2.brs`, ``);
+
+            await manager.syncProjects([{
+                workspaceFolder: rootDir
+            }]);
+
+            //register an exclusion filter
+            pathFilterer.registerExcludeList(rootDir, [
+                '**/*.md'
+            ]);
+            //make sure the .md file is ignored
+            await manager.handleFileChanges([
+                { srcPath: `${rootDir}/source/file1.md`, type: FileChangeType.Created },
+                { srcPath: `${rootDir}/source/file2.brs`, type: FileChangeType.Created }
+            ]);
+            let onFlush = manager['documentManager'].once('flush');
+            expect(
+                (await onFlush)?.actions.map(x => x.srcPath)
+            ).to.eql([
+                s`${rootDir}/source/file2.brs`
+            ]);
+
+            //remove all filters, make sure the markdown file is included
+            pathFilterer.clear();
+            await manager.handleFileChanges([
+                { srcPath: `${rootDir}/source/file1.md`, type: FileChangeType.Created },
+                { srcPath: `${rootDir}/source/file2.brs`, type: FileChangeType.Created }
+            ]);
+
+            onFlush = manager['documentManager'].once('flush');
+            expect(
+                (await onFlush)?.actions.map(x => x.srcPath)
+            ).to.eql([
+                s`${rootDir}/source/file1.md`,
+                s`${rootDir}/source/file2.brs`
+            ]);
+        });
+
         it('converts a missing file to a delete', async () => {
             await manager.syncProjects([{
                 workspaceFolder: rootDir
