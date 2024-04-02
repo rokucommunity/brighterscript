@@ -19,7 +19,7 @@ export class PathFilterer {
      * @param fetcher a function that can extract the path from the entry if it's not a string
      * @returns the filtered list of entries
      */
-    public filter<T = string>(entries: T[], fetcher: (path: T) => string) {
+    public filter<T = string>(entries: T[], fetcher?: (path: T) => string) {
         //if there are no exclude lists, then all files should be included
         if (this.excludeCollections.length === 0) {
             return entries;
@@ -29,7 +29,7 @@ export class PathFilterer {
 
         //process each path
         for (let entry of entries) {
-            let srcPath = fetcher?.(entry) ?? entry as string;
+            let srcPath = fetcher?.(entry) ?? entry as unknown as string;
 
             //if this path is excluded
             if (this.isExclusionsMatch(srcPath)) {

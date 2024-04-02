@@ -598,6 +598,7 @@ export class ProjectManager {
         return project;
     }
 
+    @TrackBusyStatus
     private async activateProject(project: LspProject, config: ProjectConfig) {
         await project.activate(config);
 
