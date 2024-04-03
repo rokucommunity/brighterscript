@@ -211,7 +211,8 @@ export class Project implements LspProject {
             didChangeFiles = didChangeFiles || didChangeThisFile;
         }
         if (didChangeFiles) {
-            await this.validate();
+            //trigger a validation (but don't wait for it. That way we can cancel it sooner if we get new incoming data or requests)
+            void this.validate();
         }
         return result;
     }
@@ -367,6 +368,7 @@ export class Project implements LspProject {
             };
             return result;
         }
+        return undefined;
     }
 
     /**

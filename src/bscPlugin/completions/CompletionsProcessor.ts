@@ -36,6 +36,8 @@ export class CompletionsProcessor {
 
         //if there are no scopes, include the global scope so we at least get the built-in functions
         scopesForFile = scopesForFile.length > 0 ? scopesForFile : [this.event.program.globalScope];
+        //only iterate on the first few scopes. This might result in missing completions, but it's better than wasting TONS of cycles building essentially the same completions over and over
+        scopesForFile = scopesForFile.slice(0, 4);
 
         //get the completions from all scopes for this file
         let allCompletions = util.flatMap(

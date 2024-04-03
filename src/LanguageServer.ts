@@ -41,7 +41,7 @@ import {
 import { URI } from 'vscode-uri';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { util } from './util';
-import { Logger } from './Logger';
+import { LogLevel, Logger } from './Logger';
 import { DiagnosticCollection } from './DiagnosticCollection';
 import { encodeSemanticTokens, semanticTokensLegend } from './SemanticTokenUtils';
 import type { WorkspaceConfig } from './lsp/ProjectManager';
@@ -96,6 +96,8 @@ export class LanguageServer {
      * This is used to prevent the language server from being overwhelmed by files we don't actually want to handle
      */
     private pathFilterer = new PathFilterer();
+
+    private logger = new Logger(LogLevel.log, 'lsp');
 
     constructor() {
         this.projectManager = new ProjectManager({
@@ -298,8 +300,10 @@ export class LanguageServer {
      */
     @AddStackToErrorMessage
     public async onCompletion(params: CompletionParams, token: CancellationToken, workDoneProgress: WorkDoneProgressReporter, resultProgress: ResultProgressReporter<CompletionItem[]>): Promise<CompletionList> {
+        this.logger.debug('onCompletion');
         const srcPath = util.uriToPath(params.textDocument.uri);
         const completions = await this.projectManager.getCompletions({ srcPath: srcPath, position: params.position });
+        this.logger.debug('onCompletion end');
         return completions;
     }
 
