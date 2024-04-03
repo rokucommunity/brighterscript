@@ -13,7 +13,7 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import { FileChangeType } from 'vscode-languageserver-protocol';
 import { PathFilterer } from './PathFilterer';
 import { Deferred } from '../deferred';
-import { DocumentActionWithStatus } from './DocumentManager';
+import type { DocumentActionWithStatus } from './DocumentManager';
 const sinon = createSandbox();
 
 describe('ProjectManager', () => {
@@ -332,6 +332,25 @@ describe('ProjectManager', () => {
                 s`${rootDir}/source/file1.md`,
                 s`${rootDir}/source/file2.brs`
             ]);
+        });
+
+        it('does not create a standalone project for files that exist in a known project', async () => {
+            fsExtra.outputFileSync(s`${rootDir}/source/main.brs`, `sub main() : end sub`);
+
+            await manager.syncProjects([{
+                workspaceFolder: rootDir
+            }]);
+
+            await onNextDiagnostics();
+
+            await manager.handleFileChanges([
+                { srcPath: s`${rootDir}/source/main.brs`, type: FileChangeType.Changed, fileContents: `'test`, allowStandaloneProject: true }
+            ]);
+
+            await onNextDiagnostics();
+
+            //there should NOT be a standalone project
+            expect(manager['standaloneProjects'].length).to.eql(0);
         });
 
         it('converts a missing file to a delete', async () => {

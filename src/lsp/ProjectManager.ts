@@ -84,12 +84,12 @@ export class ProjectManager {
         const flatResponses = responses.flat();
         for (const action of actions) {
             //skip this action if it doesn't support standalone projects
-            if (!action.allowStandaloneProject) {
+            if (!action.allowStandaloneProject || action.type === 'delete') {
                 continue;
             }
 
-            const wasHandled = flatResponses.some(x => x.id === action.id && x.type !== 'set');
-            // create a standalone project if this action was handled by zero projects
+            // create a standalone project if this action was handled by zero projects and was a 'set' operation
+            const wasHandled = flatResponses.some(x => x.id === action.id && action.type === 'set');
             if (wasHandled === false) {
                 await this.createStandaloneProject(action.srcPath);
             }
