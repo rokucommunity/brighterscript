@@ -15,79 +15,79 @@ export interface UnresolvedSymbolInfo {
 }
 
 
-export class CrossScopeValidation {
+export class CrossScopeValidator {
 
     // targetFile.pkgPath -> source.pkgPath -> unresolvedSymbol (in targetFile) -> info
     public crossScopeValidation = new Map<string, Map<string, Map<UnresolvedSymbol, UnresolvedSymbolInfo>>>();
 
     constructor(public program: Program) { }
 
+    /*
+       private getSymbolInfo(targetFile: BrsFile, sourceFile: BrsFile, symbol: UnresolvedSymbol) {
+           const targetFilePathLower = targetFile.pkgPath.toLowerCase();
+           const sourceFilePathLower = sourceFile.pkgPath.toLowerCase();
 
-    private getSymbolInfo(targetFile: BrsFile, sourceFile: BrsFile, symbol: UnresolvedSymbol) {
-        const targetFilePathLower = targetFile.pkgPath.toLowerCase();
-        const sourceFilePathLower = sourceFile.pkgPath.toLowerCase();
+           let sourceFileMap = this.crossScopeValidation.get(targetFilePathLower);
+           if (!sourceFileMap) {
+               sourceFileMap = new Map<string, Map<UnresolvedSymbol, UnresolvedSymbolInfo>>();
+               this.crossScopeValidation.set(targetFilePathLower, sourceFileMap);
+           }
 
-        let sourceFileMap = this.crossScopeValidation.get(targetFilePathLower);
-        if (!sourceFileMap) {
-            sourceFileMap = new Map<string, Map<UnresolvedSymbol, UnresolvedSymbolInfo>>();
-            this.crossScopeValidation.set(targetFilePathLower, sourceFileMap);
-        }
+           let symbolMap = sourceFileMap.get(sourceFilePathLower);
 
-        let symbolMap = sourceFileMap.get(sourceFilePathLower);
+           if (!symbolMap) {
+               symbolMap = new Map<UnresolvedSymbol, UnresolvedSymbolInfo>();
+               sourceFileMap.set(sourceFilePathLower, symbolMap);
+           }
 
-        if (!symbolMap) {
-            symbolMap = new Map<UnresolvedSymbol, UnresolvedSymbolInfo>();
-            sourceFileMap.set(sourceFilePathLower, symbolMap);
-        }
+           let symbolInfo = symbolMap.get(symbol);
+           if (!symbolInfo) {
+               symbolInfo = {
+                   incompatibleScopes: new Set<Scope>(),
+                   missingInScopes: new Set<Scope>()
+               };
+               symbolMap.set(symbol, symbolInfo);
+           }
+           return symbolInfo;
+       }
 
-        let symbolInfo = symbolMap.get(symbol);
-        if (!symbolInfo) {
-            symbolInfo = {
-                incompatibleScopes: new Set<Scope>(),
-                missingInScopes: new Set<Scope>()
-            };
-            symbolMap.set(symbol, symbolInfo);
-        }
-        return symbolInfo;
-    }
+           addIncompatibleScope(file: BrsFile, symbol: UnresolvedSymbol, scope: Scope, sourceFile: BrsFile) {
+               this.getSymbolInfo(file, sourceFile, symbol).incompatibleScopes.add(scope);
+           }
 
-    addIncompatibleScope(file: BrsFile, symbol: UnresolvedSymbol, scope: Scope, sourceFile: BrsFile) {
-        this.getSymbolInfo(file, sourceFile, symbol).incompatibleScopes.add(scope);
-    }
+           addMissingInScope(file: BrsFile, symbol: UnresolvedSymbol, scope: Scope, sourceFile: BrsFile) {
+               this.getSymbolInfo(file, sourceFile, symbol).missingInScopes.add(scope);
+           }
 
-    addMissingInScope(file: BrsFile, symbol: UnresolvedSymbol, scope: Scope, sourceFile: BrsFile) {
-        this.getSymbolInfo(file, sourceFile, symbol).missingInScopes.add(scope);
-    }
+           clearInfoForFile(file: BrsFile) {
+               const filePathLower = file.pkgPath.toLowerCase();
+               this.crossScopeValidation.delete(filePathLower);
+           }
 
-    clearInfoForFile(file: BrsFile) {
-        const filePathLower = file.pkgPath.toLowerCase();
-        this.crossScopeValidation.delete(filePathLower);
-    }
+           clearInfoFromSourceFile(sourceFile: BrsFile) {
+               const filePathLower = sourceFile.pkgPath.toLowerCase();
+               for (const sourceFileMap of this.crossScopeValidation.values()) {
+                   sourceFileMap.delete(filePathLower);
+               }
+           }
 
-    clearInfoFromSourceFile(sourceFile: BrsFile) {
-        const filePathLower = sourceFile.pkgPath.toLowerCase();
-        for (const sourceFileMap of this.crossScopeValidation.values()) {
-            sourceFileMap.delete(filePathLower);
-        }
-    }
-
-    cleanUpOldSymbols(targetFile: BrsFile) {
-        const filePathLower = targetFile.pkgPath.toLowerCase();
-        for (const sourceFileMap of this.crossScopeValidation.get(filePathLower)?.values() ?? []) {
-            for (const unresolvedSymbol of sourceFileMap.keys() ?? []) {
-                if (!targetFile.requiredSymbols.includes(unresolvedSymbol)) {
-                    sourceFileMap.delete(unresolvedSymbol);
-                }
-            }
-        }
-    }
-
+           cleanUpOldSymbols(targetFile: BrsFile) {
+               const filePathLower = targetFile.pkgPath.toLowerCase();
+               for (const sourceFileMap of this.crossScopeValidation.get(filePathLower)?.values() ?? []) {
+                   for (const unresolvedSymbol of sourceFileMap.keys() ?? []) {
+                       if (!targetFile.requiredSymbols.includes(unresolvedSymbol)) {
+                           sourceFileMap.delete(unresolvedSymbol);
+                       }
+                   }
+               }
+           }
+       */
 
     private symbolMapKey(symbol: UnresolvedSymbol) {
-        return symbol.typeChain?.map(tce => tce.name).join('.').toLowerCase();
+        return [...(symbol.containingNamespaces ?? []), ...symbol.typeChain.map(tce => tce.name)].join('.').toLowerCase();
     }
 
-    resolutionsMap = new Map<UnresolvedSymbol, Array<{ scope: Scope; sourceFile: BrsFile; providedSymbol: BscSymbol }>>();
+    resolutionsMap = new Map<UnresolvedSymbol, Set<{ scope: Scope; sourceFile: BrsFile; providedSymbol: BscSymbol }>>();
 
 
     getRequiredMap(scope: Scope) {
@@ -156,14 +156,14 @@ export class CrossScopeValidation {
                 //symbol is available in global scope. ignore it
                 continue;
             }
-            const foundSymbol = providedMap.get(unresolvedSymbol.flags)?.get(symbolKey);
+            const foundSymbol = providedMap.get(unresolvedSymbol.endChainFlags)?.get(symbolKey);
             if (foundSymbol) {
                 let resolvedListForSymbol = this.resolutionsMap.get(unresolvedSymbol);
                 if (!resolvedListForSymbol) {
-                    resolvedListForSymbol = new Array<{ scope: Scope; sourceFile: BrsFile; providedSymbol: BscSymbol }>();
+                    resolvedListForSymbol = new Set<{ scope: Scope; sourceFile: BrsFile; providedSymbol: BscSymbol }>();
                     this.resolutionsMap.set(unresolvedSymbol, resolvedListForSymbol);
                 }
-                resolvedListForSymbol.push({
+                resolvedListForSymbol.add({
                     scope: scope,
                     sourceFile: foundSymbol.file,
                     providedSymbol: foundSymbol.symbol
@@ -176,11 +176,34 @@ export class CrossScopeValidation {
         return { missingSymbols: missingSymbols, duplicatesMap: duplicatesMap };
     }
 
+    clearResolutionsForFile(file: BrsFile) {
+        for (const symbol of this.resolutionsMap.keys()) {
+            if (symbol.file === file) {
+                this.resolutionsMap.delete(symbol);
+            }
+        }
+    }
+
+    clearResolutionsForScopes(scopes: Scope[]) {
+        for (const [symbol, resolutionInfos] of this.resolutionsMap.entries()) {
+            for (const info of resolutionInfos.values()) {
+                if (scopes.includes(info.scope)) {
+                    resolutionInfos.delete(info);
+                }
+            }
+            if (resolutionInfos.size === 0) {
+                this.resolutionsMap.delete(symbol);
+            }
+        }
+    }
+
     addDiagnosticsForScopes(scopes: Scope[]) {
 
-        this.resolutionsMap.clear();
+        //this.resolutionsMap.clear();
         const addDuplicateSymbolDiagnostics = false;
         const missingSymbolInScope = new Map<BrsFile, Map<UnresolvedSymbol, Set<Scope>>>();
+
+        this.clearResolutionsForScopes(scopes);
 
         // Check scope for duplicates and missing symbols
         for (const scope of scopes) {
@@ -224,13 +247,13 @@ export class CrossScopeValidation {
             const scopesForFile = this.program.getScopesForFile(file.srcPath);
             for (const [symbol, scopeList] of missingSymbolPerFile) {
                 const typeChainResult = util.processTypeChain(symbol.typeChain);
-                if (scopeList.size === scopesForFile.length) {
+                if (scopeList.size >= scopesForFile.length) {
                     // do not add diagnostic if thing is not in ANY scopes
                     continue;
                 }
                 for (const scope of scopeList) {
                     scope.addDiagnostics([{
-                        ...DiagnosticMessages.symbolNotDefinedInScope(typeChainResult.fullNameOfItem),
+                        ...DiagnosticMessages.symbolNotDefinedInScope(typeChainResult.fullNameOfItem, scope.name),
                         origin: DiagnosticOrigin.CrossScope,
                         file: file,
                         range: typeChainResult.range
@@ -242,16 +265,17 @@ export class CrossScopeValidation {
 
         // check all resolutions and check if there are resolutions that are not compatible across scopes
         for (const [symbol, resolutionDetails] of this.resolutionsMap.entries()) {
-            if (resolutionDetails.length < 2) {
+            if (resolutionDetails.size < 2) {
                 // there is only one resolution... no worries
                 continue;
             }
-            const prime = resolutionDetails[0];
+            const resolutionsList = [...resolutionDetails];
+            const prime = resolutionsList[0];
             let incompatibleScopes = new Set<Scope>();
             let addedPrime = false;
-            for (let i = 1; i < resolutionDetails.length; i++) {
+            for (let i = 1; i < resolutionsList.length; i++) {
                 let providedSymbolType = prime.providedSymbol.type;
-                const symbolInThisScope = resolutionDetails[i].providedSymbol;
+                const symbolInThisScope = resolutionsList[i].providedSymbol;
 
                 //get more general type
                 if (providedSymbolType.isEqual(symbolInThisScope.type)) {
@@ -267,7 +291,7 @@ export class CrossScopeValidation {
                         incompatibleScopes.add(prime.scope);
                         addedPrime = true;
                     }
-                    incompatibleScopes.add(resolutionDetails[i].scope);
+                    incompatibleScopes.add(resolutionsList[i].scope);
                 }
             }
 
@@ -275,9 +299,10 @@ export class CrossScopeValidation {
                 const typeChainResult = util.processTypeChain(symbol.typeChain);
                 const scopeListName = [...incompatibleScopes.values()].map(s => s.name).join(', ');
                 this.program.addDiagnostics([{
-                    ...DiagnosticMessages.incompatibleSymbolDefinition(typeChainResult.fullNameOfItem, scopeListName),
+                    ...DiagnosticMessages.incompatibleSymbolDefinition(typeChainResult.fullChainName, scopeListName),
                     file: symbol.file,
-                    range: typeChainResult.range
+                    range: typeChainResult.range,
+                    origin: DiagnosticOrigin.CrossScope
                 }]);
 
             }
@@ -285,61 +310,62 @@ export class CrossScopeValidation {
         }
     }
 
+    /*
+        addDiagnostics() {
+            for (const [filePath, sourceFileMap] of this.crossScopeValidation.entries()) {
+                const file = this.program.getFile(filePath);
+                const scopesForFile = this.program.getScopesForFile(filePath);
 
-    addDiagnostics() {
-        for (const [filePath, sourceFileMap] of this.crossScopeValidation.entries()) {
-            const file = this.program.getFile(filePath);
-            const scopesForFile = this.program.getScopesForFile(filePath);
+                const mergedMissingScopes = new Map<UnresolvedSymbol, Set<Scope>>();
+                const mergedIncompatibleScopes = new Map<UnresolvedSymbol, Set<Scope>>();
 
-            const mergedMissingScopes = new Map<UnresolvedSymbol, Set<Scope>>();
-            const mergedIncompatibleScopes = new Map<UnresolvedSymbol, Set<Scope>>();
+                for (const symbolMap of sourceFileMap.values()) {
+                    for (const [unresolvedSymbol, symbolInfo] of symbolMap.entries()) {
+                        let missingScopes = mergedMissingScopes.get(unresolvedSymbol);
+                        if (!missingScopes) {
+                            missingScopes = new Set<Scope>();
 
-            for (const symbolMap of sourceFileMap.values()) {
-                for (const [unresolvedSymbol, symbolInfo] of symbolMap.entries()) {
-                    let missingScopes = mergedMissingScopes.get(unresolvedSymbol);
-                    if (!missingScopes) {
-                        missingScopes = new Set<Scope>();
+                        }
+                        missingScopes = new Set([...missingScopes, ...symbolInfo.missingInScopes]);
+                        mergedMissingScopes.set(unresolvedSymbol, missingScopes);
 
+                        let incompatibleScopes = mergedIncompatibleScopes.get(unresolvedSymbol);
+                        if (!incompatibleScopes) {
+                            incompatibleScopes = new Set<Scope>();
+                        }
+                        incompatibleScopes = new Set([...incompatibleScopes, ...symbolInfo.incompatibleScopes]);
+                        mergedIncompatibleScopes.set(unresolvedSymbol, incompatibleScopes);
                     }
-                    missingScopes = new Set([...missingScopes, ...symbolInfo.missingInScopes]);
-                    mergedMissingScopes.set(unresolvedSymbol, missingScopes);
+                }
 
-                    let incompatibleScopes = mergedIncompatibleScopes.get(unresolvedSymbol);
-                    if (!incompatibleScopes) {
-                        incompatibleScopes = new Set<Scope>();
+                for (const [symbol, scopeList] of mergedMissingScopes) {
+                    const typeChainResult = util.processTypeChain(symbol.typeChain);
+                    console.log(typeChainResult.fullNameOfItem, scopeList.size, scopesForFile.length);
+                    if (scopeList.size === scopesForFile.length) {
+                        // do not add diagnostic if thing is not in ANY scopes
+                        continue;
                     }
-                    incompatibleScopes = new Set([...incompatibleScopes, ...symbolInfo.incompatibleScopes]);
-                    mergedIncompatibleScopes.set(unresolvedSymbol, incompatibleScopes);
+                    for (const scope of scopeList) {
+                        scope.addDiagnostics([{
+                            ...DiagnosticMessages.symbolNotDefinedInScope(typeChainResult.fullNameOfItem, scope.name),
+                            origin: DiagnosticOrigin.CrossScope,
+                            file: file,
+                            range: typeChainResult.range
+                        }]);
+                    }
                 }
-            }
 
-            for (const [symbol, scopeList] of mergedMissingScopes) {
-                const typeChainResult = util.processTypeChain(symbol.typeChain);
-                if (scopeList.size === scopesForFile.length) {
-                    // do not add diagnostic if thing is not in ANY scopes
-                    continue;
-                }
-                for (const scope of scopeList) {
-                    scope.addDiagnostics([{
-                        ...DiagnosticMessages.symbolNotDefinedInScope(typeChainResult.fullNameOfItem),
-                        origin: DiagnosticOrigin.CrossScope,
+                for (const [symbol, scopeList] of mergedIncompatibleScopes) {
+                    const typeChainResult = util.processTypeChain(symbol.typeChain);
+                    const scopeListName = [...scopeList.values()].map(s => s.name).join(', ');
+                    this.program.addDiagnostics([{
+                        ...DiagnosticMessages.incompatibleSymbolDefinition(typeChainResult.fullNameOfItem, scopeListName),
                         file: file,
                         range: typeChainResult.range
                     }]);
                 }
             }
-
-            for (const [symbol, scopeList] of mergedIncompatibleScopes) {
-                const typeChainResult = util.processTypeChain(symbol.typeChain);
-                const scopeListName = [...scopeList.values()].map(s => s.name).join(', ');
-                this.program.addDiagnostics([{
-                    ...DiagnosticMessages.incompatibleSymbolDefinition(typeChainResult.fullNameOfItem, scopeListName),
-                    file: file,
-                    range: typeChainResult.range
-                }]);
-            }
-        }
-    }
+    }*/
 
 }
 

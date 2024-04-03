@@ -7,7 +7,7 @@ import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { BrsFile, ProvidedSymbolInfo } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, BeforeFileAddEvent, BeforeFileRemoveEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj, BsDiagnosticWithOrigin } from './interfaces';
+import { type BsDiagnostic, type FileObj, type SemanticToken, type FileLink, type ProvideHoverEvent, type ProvideCompletionsEvent, type Hover, type ProvideDefinitionEvent, type ProvideReferencesEvent, type BeforeFileAddEvent, type BeforeFileRemoveEvent, type PrepareFileEvent, type PrepareProgramEvent, type ProvideFileEvent, type SerializedFile, type TranspileObj, type BsDiagnosticWithOrigin, DiagnosticOrigin } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -52,7 +52,7 @@ import type { UnresolvedSymbol } from './AstValidationSegmenter';
 import { WalkMode, createVisitor } from './astUtils/visitors';
 import type { BscFile } from './files/BscFile';
 import { Stopwatch } from './Stopwatch';
-import { CrossScopeValidation } from './CrossScopeValidation';
+import { CrossScopeValidator } from './CrossScopeValidator';
 
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
@@ -231,9 +231,7 @@ export class Program {
      * A set of diagnostics. This does not include any of the scope diagnostics.
      * Should only be set from `this.validate()`
      */
-    private diagnostics = [] as BsDiagnostic[];
-
-    private crossScopeDiagnostics = [] as BsDiagnosticWithOrigin[];
+    private diagnostics = [] as Array<BsDiagnostic | BsDiagnosticWithOrigin>;
 
     private fileSymbolInformation = new Map<string, { provides: ProvidedSymbolInfo; requires: UnresolvedSymbol[] }>();
 
@@ -483,7 +481,7 @@ export class Program {
         });
     }
 
-    public addDiagnostics(diagnostics: BsDiagnostic[]) {
+    public addDiagnostics(diagnostics: Array<BsDiagnostic | BsDiagnosticWithOrigin>) {
         this.diagnostics.push(...diagnostics);
     }
 
@@ -815,9 +813,12 @@ export class Program {
             //if this is a pkg:/source file, notify the `source` scope that it has changed
             if (this.isSourceBrsFile(file)) {
                 this.dependencyGraph.removeDependency('scope:source', file.dependencyGraphKey);
+            }
+            if (isBrsFile(file)) {
                 if (!keepSymbolInformation) {
                     this.fileSymbolInformation.delete(file.pkgPath);
                 }
+                this.crossScopeValidation.clearResolutionsForFile(file);
             }
 
             //if this is a component, remove it from our components map
@@ -836,7 +837,7 @@ export class Program {
     }
 
     public lastValidationInfo = new Map<string, ProgramValidationInfo>();
-    public crossScopeValidation = new CrossScopeValidation(this);
+    public crossScopeValidation = new CrossScopeValidator(this);
 
     private isFirstValidation = true;
 
@@ -882,8 +883,6 @@ export class Program {
                         file.isValidated = true;
                         if (isBrsFile(file)) {
                             brsFilesValidated.push(file);
-                            this.crossScopeValidation.clearInfoForFile(file);
-                            this.crossScopeValidation.clearInfoFromSourceFile(file);
                         }
                         afterValidateFiles.push(file);
                     }
@@ -971,7 +970,6 @@ export class Program {
         this.lastValidationInfo.clear();
         for (const file of brsFilesValidated) {
             const lowerFilePath = file.srcPath.toLowerCase();
-            this.clearCrossScopeDiagnosticsByFilepath(lowerFilePath);
 
             const fileInfo: ProgramValidationInfo = {
                 symbolsNotDefinedInEveryScope: [],
@@ -1024,12 +1022,12 @@ export class Program {
                                     } else {
                                         // type in this scope is not compatible with other types for this symbol
                                         scopesAreInconsistent = true;
-                                        this.crossScopeValidation.addIncompatibleScope(scopeFile, symbol, scope, file);
+                                        // this.crossScopeValidation.addIncompatibleScope(scopeFile, symbol, scope, file);
                                     }
                                 }
                             }
                         } else {
-                            this.crossScopeValidation.addMissingInScope(scopeFile, symbol, scope, file);
+                            //  this.crossScopeValidation.addMissingInScope(scopeFile, symbol, scope, file);
                         }
                     }
                     if (!symbolFoundInScope) {
@@ -1053,8 +1051,13 @@ export class Program {
         this.logger.info(`Validation Metrics: ${logs.join(', ')}`);
     }
 
-    clearCrossScopeDiagnosticsByFilepath(lowerFilePath: string) {
-        this.crossScopeDiagnostics = this.crossScopeDiagnostics.filter(diag => diag.filePath === lowerFilePath);
+    clearCrossScopeDiagnostics() {
+        this.diagnostics = this.diagnostics.filter((diag) => {
+            if ((diag as BsDiagnosticWithOrigin).origin === DiagnosticOrigin.CrossScope) {
+                return false;
+            }
+            return true;
+        });
     }
 
 

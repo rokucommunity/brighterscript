@@ -1984,6 +1984,7 @@ export class Util {
         let parentTypeName = '';
         let errorRange: Range;
         let containsDynamic = false;
+        let continueEverything = true;
         for (let i = 0; i < typeChain.length; i++) {
             const chainItem = typeChain[i];
             const dotSep = chainItem.separatorToken?.text ?? '.';
@@ -1991,14 +1992,16 @@ export class Util {
                 fullChainName += dotSep;
             }
             fullChainName += chainItem.name;
-            parentTypeName = previousTypeName;
-            fullErrorName = previousTypeName ? `${previousTypeName}${dotSep}${chainItem.name}` : chainItem.name;
-            previousTypeName = chainItem.type?.toString() ?? '';
-            itemName = chainItem.name;
-            containsDynamic = containsDynamic || (isDynamicType(chainItem.type) && !isAnyReferenceType(chainItem.type));
-            if (!chainItem.isResolved) {
-                errorRange = chainItem.range;
-                break;
+            if (continueEverything) {
+                parentTypeName = previousTypeName;
+                fullErrorName = previousTypeName ? `${previousTypeName}${dotSep}${chainItem.name}` : chainItem.name;
+                previousTypeName = chainItem.type?.toString() ?? '';
+                itemName = chainItem.name;
+                containsDynamic = containsDynamic || (isDynamicType(chainItem.type) && !isAnyReferenceType(chainItem.type));
+                if (!chainItem.isResolved) {
+                    errorRange = chainItem.range;
+                    continueEverything = false;
+                }
             }
         }
         return {

@@ -28,7 +28,6 @@ import { ArrayType } from './types/ArrayType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { InterfaceType } from './types/InterfaceType';
 import { ComponentType } from './types/ComponentType';
-import * as path from 'path';
 import { WalkMode } from './astUtils/visitors';
 import type { FunctionExpression } from './parser/Expression';
 
@@ -3670,40 +3669,6 @@ describe('Scope', () => {
             expect(file1.requiredSymbols[0].typeChain[0].name).to.eq('MyInterface');
             let file1Info = program.lastValidationInfo.get(file1.srcPath.toLowerCase());
             expect(file1Info.symbolsNotDefinedInEveryScope.length).to.eq(0);
-        });
-
-        it('finds symbols inconsistent across scopes', () => {
-            program.setFile<BrsFile>('source/file1.bs', `
-                function callsOther() as string
-                    return otherFunc()
-                end function
-            `);
-            program.setFile<BrsFile>('source/file2.bs', `
-                function otherFunc() as string
-                    return "hello"
-                end function
-            `);
-
-            program.setFile<BrsFile>('components/Widget.xml', trim`
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="Widget" extends="Group">
-                    <script uri="Widget.bs"/>
-                    <script uri="pkg:/source/file1.bs"/>
-                </component>
-            `);
-            program.setFile<BrsFile>('components/Widget.bs', `
-                sub init()
-                    callsOther()
-                end sub
-
-                function otherFunc() as integer
-                    return 42
-                end function
-            `);
-            program.validate();
-            expectDiagnosticsIncludes(program, [
-                DiagnosticMessages.incompatibleSymbolDefinition('otherFunc', `source, components${path.sep}Widget.xml`).message
-            ]);
         });
 
         it('a class can reference itself', () => {
