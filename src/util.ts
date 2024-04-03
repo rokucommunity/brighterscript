@@ -1070,22 +1070,34 @@ export class Util {
      * A cache of `Range` objects. The key is a 52bit integer created from the 4 range integers and leveraging bitshifting.
      * The whole point of this cache is to reduce garbage collection churn, so we didn't want to use string concatenation for the key
      */
-    private rangeCache = new Map<number, Range>();
+    private rangeCache = new Map<number, Map<number, Range>>();
 
     /**
-     * Helper for creating `Range` objects. Prefer using this function because vscode-languageserver's `Range.create()` is significantly slower
+     * Helper for creating `Range` objects. Prefer using this function because vscode-languageserver's `Range.create()` is significantly slower.
+     *
+     * This function caches the `Range` objects to reduce garbage collection churn.
+     *
+     * See this jsbench for why we chose this method: https://jsbench.me/r1lub4hjro
      */
     public createRange(startLine: number, startCharacter: number, endLine: number, endCharacter: number): Range {
         // eslint-disable-next-line no-bitwise
-        const key = (startLine << 39) + (startCharacter << 26) + (endLine << 13) + endCharacter;
+        const startKey = (startLine << 15) + startCharacter;
+        // eslint-disable-next-line no-bitwise
+        const endKey = (endLine << 15) + endCharacter;
 
-        let range = this.rangeCache.get(key);
+        let rangeMap = this.rangeCache.get(startKey);
+        if (!rangeMap) {
+            rangeMap = new Map();
+            this.rangeCache.set(startKey, rangeMap);
+        }
+
+        let range = rangeMap.get(endKey);
         if (!range) {
             range = {
                 start: this.createPosition(startLine, startCharacter),
                 end: this.createPosition(endLine, endCharacter)
             };
-            this.rangeCache.set(key, range);
+            rangeMap.set(endKey, range);
         }
         return range;
     }
@@ -1172,8 +1184,14 @@ export class Util {
      * Create a `Position` object. Prefer this over `Position.create` for performance reasons
      */
     public createPosition(line: number, character: number) {
+        if (line > 8191 || character > 8191) {
+            return {
+                line: line,
+                character: character
+            };
+        }
         // eslint-disable-next-line no-bitwise
-        const key = (line << 13) + character;
+        const key = (line << 16) + character;
         let position = this.positionCache.get(key);
         if (!position) {
             position = {
