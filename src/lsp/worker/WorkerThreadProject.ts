@@ -58,9 +58,6 @@ export class WorkerThreadProject implements LspProject {
         this.rootDir = activateResponse.data.rootDir;
         this.filePatterns = activateResponse.data.filePatterns;
 
-        //populate a few properties with data from the thread so we can use them for some synchronous checks
-        this.filePaths = new Set(await this.getFilePaths());
-
         this.activationDeferred.resolve();
         return activateResponse.data;
     }
@@ -134,22 +131,9 @@ export class WorkerThreadProject implements LspProject {
         return response.data;
     }
 
-    /**
-     * A local copy of all the file paths loaded in this program, stored in lower case.
-     * This needs to stay in sync with any files we add/delete in the worker thread so we can keep doing in-process `.hasFile()` checks.
-     */
-    private filePaths: Set<string>;
-
     public async getDiagnostics() {
         const response = await this.messageHandler.sendRequest<LspDiagnostic[]>('getDiagnostics');
         return response.data;
-    }
-
-    /**
-     * Does this project have the specified file. Should only be called after `.activate()` has finished.
-     */
-    public hasFile(srcPath: string) {
-        return this.filePaths.has(srcPath.toLowerCase());
     }
 
     /**
@@ -161,13 +145,6 @@ export class WorkerThreadProject implements LspProject {
             data: [documentActions]
         });
         return response.data;
-    }
-
-    /**
-     * Get the list of all file paths that are currently loaded in the project
-     */
-    public async getFilePaths() {
-        return (await this.messageHandler.sendRequest<string[]>('getFilePaths')).data;
     }
 
     /**

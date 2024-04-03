@@ -167,15 +167,6 @@ export class Project implements LspProject {
     }
 
     /**
-     * Determine if this project has the specified file
-     * @param srcPath the absolute path to the file
-     * @returns true if the project has the file, false if it does not
-     */
-    public hasFile(srcPath: string) {
-        return this.builder.program.hasFile(srcPath);
-    }
-
-    /**
      * Add or replace the in-memory contents of the file at the specified path. This is typically called as the user is typing.
      * This will cancel any pending validation cycles and queue a future validation cycle instead.
      */
@@ -183,13 +174,31 @@ export class Project implements LspProject {
         await this.onIdle();
         let didChangeFiles = false;
         const result = documentActions as DocumentActionWithStatus[];
-        for (const action of result) {
+        // eslint-disable-next-line @typescript-eslint/prefer-for-of
+        for (let i = 0; i < result.length; i++) {
+            const action = result[i];
             let didChangeThisFile = false;
             //if this is a `set` and the file matches the project's files array, set it
             if (action.type === 'set' && this.willAcceptFile(action.srcPath)) {
-                didChangeThisFile = this.setFile(action.srcPath, action.fileContents);
-                //this file was accepted by the program
-                action.status = 'accepted';
+                //load the file contents from disk if we don't have an in memory copy
+                const fileContents = action.fileContents ?? util.readFileSync(action.srcPath)?.toString();
+
+                //if we got file contents, set the file on the program
+                if (fileContents) {
+                    didChangeThisFile = this.setFile(action.srcPath, fileContents);
+                    //this file was accepted by the program
+                    action.status = 'accepted';
+
+                    //if we can't get file contents, apply this as a delete
+                } else {
+                    action.status = 'accepted';
+                    result.push({
+                        srcPath: action.srcPath,
+                        type: 'delete',
+                        status: undefined
+                    });
+                    continue;
+                }
 
                 //try to delete the file or directory
             } else if (action.type === 'delete') {
@@ -270,20 +279,6 @@ export class Project implements LspProject {
         }
         //return true if we removed at least one file
         return removedSomeFiles;
-    }
-
-    /**
-     * Get the list of all file paths that are currently loaded in the project
-     */
-    public getFilePaths() {
-        //get all the files in the program
-        return Object.values(this.builder.program.files)
-            //grab their srcPath values, and toLowerCase them here in case we're in a different thread just to save cycles from the main thread
-            .map(x => x.srcPath?.toLowerCase())
-            //exclude nulls
-            .filter(x => !!x)
-            //sort them so it's easier to reason about downstream
-            .sort();
     }
 
     /**

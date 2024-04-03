@@ -1,6 +1,5 @@
 import { standardizePath as s, util } from '../util';
 import { rokuDeploy } from 'roku-deploy';
-import * as fsExtra from 'fs-extra';
 import * as path from 'path';
 import * as EventEmitter from 'eventemitter3';
 import type { LspDiagnostic, LspProject, ProjectConfig } from './LspProject';
@@ -255,17 +254,11 @@ export class ProjectManager {
 
                 //this is a new file. set the file contents
             } else {
-                try {
-                    const fileContents = change.fileContents ?? (await fsExtra.readFile(change.srcPath, 'utf8')).toString();
-                    this.documentManager.set(change.srcPath, fileContents, change.allowStandaloneProject);
-                } catch (e) {
-                    //this file is not accessible, and we don't know why. Register it as a "delete" instead so it gets cleared out of the system.
-                    //future changes to this file should flow through as normal
-                    return this.handleFileChange({
-                        srcPath: change.srcPath,
-                        type: FileChangeType.Deleted
-                    });
-                }
+                this.documentManager.set({
+                    srcPath: change.srcPath,
+                    fileContents: change.fileContents,
+                    allowStandaloneProject: change.allowStandaloneProject
+                });
             }
         }
 

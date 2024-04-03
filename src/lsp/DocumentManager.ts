@@ -27,16 +27,16 @@ export class DocumentManager {
     /**
      * Add/set the contents of a file
      */
-    public set(srcPath: string, fileContents: string, allowStandaloneProject = false) {
-        srcPath = util.standardizePath(srcPath);
+    public set(options: { srcPath: string; fileContents?: string; allowStandaloneProject?: boolean }) {
+        const srcPath = util.standardizePath(options.srcPath);
         if (this.queue.has(srcPath)) {
             this.queue.delete(srcPath);
         }
         this.queue.set(srcPath, {
             type: 'set',
             srcPath: srcPath,
-            fileContents: fileContents,
-            allowStandaloneProject: allowStandaloneProject
+            fileContents: options.fileContents,
+            allowStandaloneProject: options.allowStandaloneProject ?? false
         });
         //schedule a future flush
         this.throttle();

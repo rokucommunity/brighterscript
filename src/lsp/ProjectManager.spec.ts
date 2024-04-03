@@ -266,27 +266,33 @@ describe('ProjectManager', () => {
         });
 
         it('converts a missing file to a delete', async () => {
+            //write these files to disk
+            fsExtra.outputFileSync(`${rootDir}/source/missing1.brs`, '');
+            fsExtra.outputFileSync(`${rootDir}/source/missing2.brs`, '');
+
             await manager.syncProjects([{
                 workspaceFolder: rootDir
             }]);
+            await onNextDiagnostics();
 
-            //monitor the document manager to see what it does
-            const onFlush = manager['documentManager'].once('flush');
+            const program = (manager.projects[0] as Project)['builder'].program;
 
-            //emit created and changed events for files that don't exist
+            //make sure the project has these files
+            expect(program.hasFile(`${rootDir}/source/missing1.brs`)).to.be.true;
+            expect(program.hasFile(`${rootDir}/source/missing2.brs`)).to.be.true;
+
+            //emit created and changed events for files that don't exist. These turn into delete events
             await manager.handleFileChanges([
                 { srcPath: `${rootDir}/source/missing1.brs`, type: FileChangeType.Created },
                 { srcPath: `${rootDir}/source/missing2.brs`, type: FileChangeType.Changed }
             ]);
 
-            expect(
-                await onFlush
-            ).to.eql({
-                actions: [
-                    { srcPath: s`${rootDir}/source/missing1.brs`, type: 'delete' },
-                    { srcPath: s`${rootDir}/source/missing2.brs`, type: 'delete' }
-                ]
-            });
+            //wait for the next set of diagnostics to arrive (signifying the files have been applied)
+            await onNextDiagnostics();
+
+            //make sure the project has these files
+            expect(program.hasFile(`${rootDir}/source/missing1.brs`)).to.be.false;
+            expect(program.hasFile(`${rootDir}/source/missing2.brs`)).to.be.false;
         });
 
         it('properly syncs changes', async () => {

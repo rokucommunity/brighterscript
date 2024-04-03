@@ -63,11 +63,6 @@ export interface LspProject {
     cancelValidate(): MaybePromise<void>;
 
     /**
-     * Get the list of all file paths that are currently loaded in the project
-     */
-    getFilePaths(): MaybePromise<string[]>;
-
-    /**
      * Get the list of all diagnostics from this project
      */
     getDiagnostics(): MaybePromise<LspDiagnostic[]>;
@@ -125,11 +120,6 @@ export interface LspProject {
      * Get the completions for the specified file and position
      */
     getCompletions(options: { srcPath: string; position: Position }): Promise<CompletionList>;
-
-    /**
-     * Does this project have the specified file. Should only be called after `.activate()` has completed.
-     */
-    hasFile(srcPath: string): MaybePromise<boolean>;
 
     /**
      * Apply a series of file changes to the program.

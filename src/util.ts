@@ -87,6 +87,19 @@ export class Util {
     }
 
     /**
+     * Read a file from disk. If a failure occurrs, simply return undefined
+     * @param filePath path to the file
+     * @returns the string contents, or undefined if the file doesn't exist
+     */
+    public readFileSync(filePath: string): Buffer | undefined {
+        try {
+            return fsExtra.readFileSync(filePath);
+        } catch (e) {
+            return undefined;
+        }
+    }
+
+    /**
      * Given a pkg path of any kind, transform it to a roku-specific pkg path (i.e. "pkg:/some/path.brs")
      */
     public sanitizePkgPath(pkgPath: string) {

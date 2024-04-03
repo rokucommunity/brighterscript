@@ -12,11 +12,11 @@ describe('DocumentManager', () => {
 
     it('throttles multiple events', async () => {
         const actionsPromise = manager.once('flush');
-        manager.set('alpha', 'one');
+        manager.set({ srcPath: 'alpha', fileContents: 'one' });
         await util.sleep(1);
-        manager.set('alpha', 'two');
+        manager.set({ srcPath: 'alpha', fileContents: 'two' });
         await util.sleep(1);
-        manager.set('alpha', 'three');
+        manager.set({ srcPath: 'alpha', fileContents: 'three' });
         expect(
             await actionsPromise
         ).to.eql({
@@ -34,16 +34,16 @@ describe('DocumentManager', () => {
     it('any file change delays the first one', async () => {
         const actionsPromise = manager.once('flush');
 
-        manager.set('alpha', 'one');
+        manager.set({ srcPath: 'alpha', fileContents: 'one' });
         await util.sleep(1);
 
-        manager.set('beta', 'two');
+        manager.set({ srcPath: 'beta', fileContents: 'two' });
         await util.sleep(1);
 
-        manager.set('alpha', 'three');
+        manager.set({ srcPath: 'alpha', fileContents: 'three' });
         await util.sleep(1);
 
-        manager.set('beta', 'four');
+        manager.set({ srcPath: 'beta', fileContents: 'four' });
         await util.sleep(1);
 
         expect(
@@ -66,7 +66,7 @@ describe('DocumentManager', () => {
     });
 
     it('keeps the last-in change', async () => {
-        manager.set('alpha', 'one');
+        manager.set({ srcPath: 'alpha', fileContents: 'one' });
         manager.delete('alpha');
         expect(
             await manager.once('flush')
@@ -79,9 +79,9 @@ describe('DocumentManager', () => {
             ]
         });
 
-        manager.set('alpha', 'two');
+        manager.set({ srcPath: 'alpha', fileContents: 'two' });
         manager.delete('alpha');
-        manager.set('alpha', 'three');
+        manager.set({ srcPath: 'alpha', fileContents: 'three' });
         expect(
             await manager.once('flush')
         ).to.eql({
