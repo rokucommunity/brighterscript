@@ -173,7 +173,7 @@ export class Project implements LspProject {
     public async applyFileChanges(documentActions: DocumentAction[]): Promise<DocumentActionWithStatus[]> {
         await this.onIdle();
         let didChangeFiles = false;
-        const result = documentActions as DocumentActionWithStatus[];
+        const result = [...documentActions] as DocumentActionWithStatus[];
         // eslint-disable-next-line @typescript-eslint/prefer-for-of
         for (let i = 0; i < result.length; i++) {
             const action = result[i];
@@ -184,7 +184,7 @@ export class Project implements LspProject {
                 const fileContents = action.fileContents ?? util.readFileSync(action.srcPath)?.toString();
 
                 //if we got file contents, set the file on the program
-                if (fileContents) {
+                if (fileContents !== undefined) {
                     didChangeThisFile = this.setFile(action.srcPath, fileContents);
                     //this file was accepted by the program
                     action.status = 'accepted';
@@ -193,9 +193,11 @@ export class Project implements LspProject {
                 } else {
                     action.status = 'accepted';
                     result.push({
+                        id: action.id,
                         srcPath: action.srcPath,
                         type: 'delete',
-                        status: undefined
+                        status: undefined,
+                        allowStandaloneProject: false
                     });
                     continue;
                 }

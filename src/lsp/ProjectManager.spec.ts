@@ -3,6 +3,7 @@ import { ProjectManager } from './ProjectManager';
 import { tempDir, rootDir, expectZeroDiagnostics, expectDiagnostics } from '../testHelpers.spec';
 import * as fsExtra from 'fs-extra';
 import { standardizePath as s } from '../util';
+import type { SinonStub } from 'sinon';
 import { createSandbox } from 'sinon';
 import { Project } from './Project';
 import { WorkerThreadProject } from './worker/WorkerThreadProject';
@@ -11,6 +12,8 @@ import type { LspDiagnostic } from './LspProject';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { FileChangeType } from 'vscode-languageserver-protocol';
 import { PathFilterer } from './PathFilterer';
+import { Deferred } from '../deferred';
+import { DocumentActionWithStatus } from './DocumentManager';
 const sinon = createSandbox();
 
 describe('ProjectManager', () => {
@@ -189,6 +192,72 @@ describe('ProjectManager', () => {
     });
 
     describe('handleFileChanges', () => {
+        it('only sends files to the project that match the include patterns for that project', async () => {
+            fsExtra.outputFileSync(`${rootDir}/source/lib1/a.brs`, ``);
+            fsExtra.outputFileSync(`${rootDir}/source/lib2/a.brs`, ``);
+
+            fsExtra.outputFileSync(`${rootDir}/source/lib1/b.brs`, ``);
+            fsExtra.outputFileSync(`${rootDir}/source/lib2/b.brs`, ``);
+
+            fsExtra.outputJsonSync(`${rootDir}/project1/bsconfig.json`, {
+                rootDir: rootDir,
+                files: [
+                    'source/**/a.brs'
+                ]
+            });
+            fsExtra.outputJsonSync(`${rootDir}/project2/bsconfig.json`, {
+                rootDir: rootDir,
+                files: [
+                    'source/**/b.brs'
+                ]
+            });
+
+            await manager.syncProjects([{
+                workspaceFolder: rootDir
+            }]);
+
+            let deferred1 = new Deferred();
+            let deferred2 = new Deferred();
+            const project1 = manager.projects.find(x => x.bsconfigPath.includes('project1')) as Project;
+            const project2 = manager.projects.find(x => x.bsconfigPath.includes('project2')) as Project;
+
+            const project1Stub: SinonStub = sinon.stub(project1, 'applyFileChanges').callsFake(async (...args) => {
+                const result = await project1Stub.wrappedMethod.apply(project1, args);
+                deferred1.resolve();
+                return result;
+            });
+            const project2Stub: SinonStub = sinon.stub(project2, 'applyFileChanges').callsFake(async (...args) => {
+                const result = await project2Stub.wrappedMethod.apply(project1, args);
+                deferred2.resolve();
+                return result;
+            });
+
+            await manager.handleFileChanges([
+                { srcPath: `${rootDir}/source/lib1/a.brs`, type: FileChangeType.Changed },
+                { srcPath: `${rootDir}/source/lib2/a.brs`, type: FileChangeType.Changed },
+                { srcPath: `${rootDir}/source/lib1/b.brs`, type: FileChangeType.Changed },
+                { srcPath: `${rootDir}/source/lib2/b.brs`, type: FileChangeType.Changed }
+            ]);
+
+            //wait for the functions to finish being called
+            await Promise.all([
+                deferred1.promise,
+                deferred2.promise
+            ]);
+
+            //project1 should only receive a.brs files
+            expect(project1Stub.getCall(0).args[0].map(x => x.srcPath)).to.eql([
+                s`${rootDir}/source/lib1/a.brs`,
+                s`${rootDir}/source/lib2/a.brs`
+            ]);
+
+            //project2 should only receive b.brs files
+            expect(project2Stub.getCall(0).args[0].map(x => x.srcPath)).to.eql([
+                s`${rootDir}/source/lib1/b.brs`,
+                s`${rootDir}/source/lib2/b.brs`
+            ]);
+        });
+
         it('excludes files based on global exclude patterns', async () => {
             fsExtra.outputFileSync(`${rootDir}/source/file1.md`, ``);
             fsExtra.outputFileSync(`${rootDir}/source/file2.brs`, ``);
@@ -266,20 +335,19 @@ describe('ProjectManager', () => {
         });
 
         it('converts a missing file to a delete', async () => {
-            //write these files to disk
-            fsExtra.outputFileSync(`${rootDir}/source/missing1.brs`, '');
-            fsExtra.outputFileSync(`${rootDir}/source/missing2.brs`, '');
-
             await manager.syncProjects([{
                 workspaceFolder: rootDir
             }]);
             await onNextDiagnostics();
 
-            const program = (manager.projects[0] as Project)['builder'].program;
+            let applyFileChangesDeferred = new Deferred<DocumentActionWithStatus[]>();
+            const project1 = manager.projects[0] as Project;
 
-            //make sure the project has these files
-            expect(program.hasFile(`${rootDir}/source/missing1.brs`)).to.be.true;
-            expect(program.hasFile(`${rootDir}/source/missing2.brs`)).to.be.true;
+            const project1Stub = sinon.stub(project1, 'applyFileChanges').callsFake(async (...args) => {
+                const result = await project1Stub.wrappedMethod.apply(project1, args);
+                applyFileChangesDeferred.resolve(result);
+                return result;
+            });
 
             //emit created and changed events for files that don't exist. These turn into delete events
             await manager.handleFileChanges([
@@ -288,11 +356,26 @@ describe('ProjectManager', () => {
             ]);
 
             //wait for the next set of diagnostics to arrive (signifying the files have been applied)
-            await onNextDiagnostics();
+            const result = await applyFileChangesDeferred.promise;
 
             //make sure the project has these files
-            expect(program.hasFile(`${rootDir}/source/missing1.brs`)).to.be.false;
-            expect(program.hasFile(`${rootDir}/source/missing2.brs`)).to.be.false;
+            expect(
+                result.map(x => {
+                    return { type: x.type, srcPath: x.srcPath };
+                })
+            ).to.eql([{
+                srcPath: s`${rootDir}/source/missing1.brs`,
+                type: 'set'
+            }, {
+                srcPath: s`${rootDir}/source/missing2.brs`,
+                type: 'set'
+            }, {
+                srcPath: s`${rootDir}/source/missing1.brs`,
+                type: 'delete'
+            }, {
+                srcPath: s`${rootDir}/source/missing2.brs`,
+                type: 'delete'
+            }]);
         });
 
         it('properly syncs changes', async () => {

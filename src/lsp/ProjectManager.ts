@@ -8,12 +8,12 @@ import { WorkerThreadProject } from './worker/WorkerThreadProject';
 import { FileChangeType } from 'vscode-languageserver-protocol';
 import type { Hover, Position, Range, Location, SignatureHelp, DocumentSymbol, SymbolInformation, WorkspaceSymbol, CompletionList } from 'vscode-languageserver-protocol';
 import { Deferred } from '../deferred';
-import type { FlushEvent } from './DocumentManager';
+import type { DocumentActionWithStatus, FlushEvent } from './DocumentManager';
 import { DocumentManager } from './DocumentManager';
 import type { FileChange, MaybePromise } from '../interfaces';
 import { BusyStatusTracker } from '../BusyStatusTracker';
 import * as fastGlob from 'fast-glob';
-import { PathFilterer } from './PathFilterer';
+import { PathCollection, PathFilterer } from './PathFilterer';
 import { Logger } from '../Logger';
 
 /**
@@ -59,17 +59,38 @@ export class ProjectManager {
     @TrackBusyStatus
     @OnReady
     private async flushDocumentChanges(event: FlushEvent) {
+        const actions = [...event.actions] as DocumentActionWithStatus[];
+
+        let idSequence = 0;
+        //add an ID to every action (so we can track which actions were handled by which projects)
+        for (const action of actions) {
+            action.id = idSequence++;
+        }
+
         //apply all of the document actions to each project in parallel
         const responses = await Promise.all(this.projects.map(async (project) => {
-            return project.applyFileChanges(event.actions);
+            const filterer = new PathCollection({
+                rootDir: project.rootDir,
+                globs: project.filePatterns
+            });
+            // only include files that are applicable to this specific project (still allow deletes to flow through since they're cheap)
+            const projectActions = actions.filter(action => {
+                return action.type === 'delete' || filterer.isMatch(action.srcPath);
+            });
+            return project.applyFileChanges(projectActions);
         }));
 
-        //find actions not handled by any project
-        for (let i = 0; i < event.actions.length; i++) {
-            const action = event.actions[i];
-            const handledCount = responses.map(x => x[i]).filter(x => x.status === 'accepted').length;
-            //if this action was handled by zero projects and is not a delete and creating a standalone project is supported, then create a a project for it
-            if (handledCount === 0 && action.type !== 'delete' && action.allowStandaloneProject === true) {
+        //create standalone projects for any files not handled by any project
+        const flatResponses = responses.flat();
+        for (const action of actions) {
+            //skip this action if it doesn't support standalone projects
+            if (!action.allowStandaloneProject) {
+                continue;
+            }
+
+            const wasHandled = flatResponses.some(x => x.id === action.id && x.type !== 'set');
+            // create a standalone project if this action was handled by zero projects
+            if (wasHandled === false) {
                 await this.createStandaloneProject(action.srcPath);
             }
         }

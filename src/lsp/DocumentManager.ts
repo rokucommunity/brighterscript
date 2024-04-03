@@ -122,18 +122,19 @@ export class DocumentManager {
 }
 
 export interface SetDocumentAction {
+    srcPath: string;
     type: 'set';
     allowStandaloneProject?: boolean;
-    srcPath: string;
     fileContents: string;
 }
 export interface DeleteDocumentAction {
-    type: 'delete';
     srcPath: string;
+    type: 'delete';
+    allowStandaloneProject?: boolean;
 }
 
 export type DocumentAction = SetDocumentAction | DeleteDocumentAction;
-export type DocumentActionWithStatus = DocumentAction & { status: 'accepted' | 'rejected' };
+export type DocumentActionWithStatus = DocumentAction & { id: number; status: 'accepted' | 'rejected' };
 
 export interface FlushEvent {
     actions: DocumentAction[];

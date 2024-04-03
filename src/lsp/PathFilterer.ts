@@ -144,7 +144,7 @@ export class PathFilterer {
     }
 }
 
-class PathCollection {
+export class PathCollection {
     constructor(options: {
         rootDir: string;
         globs: string[];
