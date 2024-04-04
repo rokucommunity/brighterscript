@@ -19,6 +19,14 @@ export const rootDir = s`${tempDir}/rootDir`;
 export const stagingDir = s`${tempDir}/stagingDir`;
 
 export const trim = undent;
+const sinon = createSandbox();
+
+beforeEach(() => {
+    sinon.restore();
+});
+afterEach(() => {
+    sinon.restore();
+});
 
 type DiagnosticCollection = { getDiagnostics(): Array<Diagnostic> } | { diagnostics: Diagnostic[] } | Diagnostic[];
 type DiagnosticCollectionAsync = DiagnosticCollection | { getDiagnostics(): Promise<Array<Diagnostic>> };
@@ -382,4 +390,20 @@ export function stripConsoleColors(inputString) {
 
     // Remove all occurrences of ANSI escape codes
     return inputString.replace(colorPattern, '');
+}
+
+type FunctionReturnType<T> = T extends (...args: any[]) => infer R ? R : any;
+
+/**
+ * Mock something, and get a promise when it has been called once
+ */
+export async function onCalledOnce<T, K extends keyof T>(thing: T, method: K): Promise<FunctionReturnType<T[K]>> {
+    return new Promise((resolve, reject) => {
+        const stub = sinon.stub(thing, method).callsFake(async function _(this: any, ...args: any[]) {
+            const result = await stub.wrappedMethod.apply(this, args);
+            sinon.restore();
+            resolve(result);
+            return result;
+        });
+    });
 }

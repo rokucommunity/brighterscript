@@ -47,8 +47,9 @@ export class ProjectManager {
     private standaloneProjects: StandaloneProject[] = [];
 
     private documentManager = new DocumentManager({
-        delay: 150
+        delay: ProjectManager.documentManagerDelay
     });
+    public static documentManagerDelay = 150;
 
     public busyStatusTracker = new BusyStatusTracker();
 
@@ -69,6 +70,9 @@ export class ProjectManager {
 
         //apply all of the document actions to each project in parallel
         const responses = await Promise.all(this.projects.map(async (project) => {
+            //wait for this project to finish activating
+            await project.whenActivated();
+
             const filterer = new PathCollection({
                 rootDir: project.rootDir,
                 globs: project.filePatterns
@@ -148,7 +152,9 @@ export class ProjectManager {
             //make sure we're not in the middle of a sync
             this.syncPromise,
             //make sure all pending file changes have been flushed
-            this.documentManager.onSettle()
+            this.documentManager.onSettle(),
+            //make sure all projects are activated
+            ...this.projects.map(x => x.whenActivated())
         ]);
     }
     /**
@@ -225,25 +231,33 @@ export class ProjectManager {
      */
     private handleFileChangesPromise: Promise<any> = Promise.resolve();
 
-    /**
-     * Handle when files or directories are added, changed, or deleted in the workspace.
-     * This is safe to call any time. Changes will be queued and flushed at the correct times
-     */
     public async handleFileChanges(changes: FileChange[]) {
-        //filter any changes that are not allowed by the path filterer
-        changes = this.pathFilterer.filter(changes, x => x.srcPath);
-
         //wait for the previous file change handling to finish, then handle these changes
         this.handleFileChangesPromise = this.handleFileChangesPromise.catch((e) => {
             console.error(e);
             //ignore errors, they will be handled by the previous caller
         }).then(() => {
-            //process all file changes in parallel
-            return Promise.all(changes.map(async (change) => {
-                await this.handleFileChange(change);
-            }));
+            //wait for the initial sync to finish
+            return this._handleFileChanges(changes);
         });
         return this.handleFileChangesPromise;
+    }
+
+    /**
+     * Handle when files or directories are added, changed, or deleted in the workspace.
+     * This is safe to call any time. Changes will be queued and flushed at the correct times
+     */
+    public async _handleFileChanges(changes: FileChange[]) {
+        //wait for any pending syncs to finish
+        await this.onReady();
+
+        //filter any changes that are not allowed by the path filterer
+        changes = this.pathFilterer.filter(changes, x => x.srcPath);
+
+        //process all file changes in parallel
+        await Promise.all(changes.map(async (change) => {
+            await this.handleFileChange(change);
+        }));
     }
 
     /**

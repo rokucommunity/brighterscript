@@ -66,7 +66,11 @@ export class Project implements LspProject {
             builderOptions.files = options.files;
         }
 
-        await this.builder.run(builderOptions);
+        //run the builder to initialize the program. Skip validation for now, we'll trigger it soon in a more cancellable way
+        await this.builder.run({
+            ...builderOptions,
+            skipInitialValidation: true
+        });
 
         //if we found a deprecated brsconfig.json, add a diagnostic warning the user
         if (this.bsconfigPath && path.basename(this.bsconfigPath) === 'brsconfig.json') {
@@ -100,6 +104,9 @@ export class Project implements LspProject {
      * The file patterns from bsconfig.json that were used to find all files for this project
      */
     public get filePatterns() {
+        if (!this.builder) {
+            return undefined;
+        }
         const patterns = rokuDeploy.normalizeFilesArray(this.builder.program.options.files);
         return patterns.map(x => {
             return typeof x === 'string' ? x : x.src;
@@ -469,7 +476,7 @@ export class Project implements LspProject {
         this.emitter?.removeAllListeners();
         if (this.activationDeferred?.isCompleted === false) {
             this.activationDeferred.reject(
-                new Error('Project was disposed, activation has been aborted')
+                new Error('Project was disposed, activation has been cancelled')
             );
         }
     }
