@@ -30,8 +30,12 @@ export class ProjectManager {
             void this.flushDocumentChanges(event).catch(e => console.error(e));
         });
 
-        this.on('validate-begin', () => { });
-        this.on('validate-end', () => { });
+        this.on('validate-begin', (event) => {
+            this.busyStatusTracker.pushScoped(event.program, 'validate');
+        });
+        this.on('validate-end', (event) => {
+            this.busyStatusTracker.popScoped(event.program, 'validate');
+        });
     }
 
     private pathFilterer: PathFilterer;
@@ -638,8 +642,8 @@ export class ProjectManager {
         project.disposables.push({ dispose: unregister });
     }
 
-    public on(eventName: 'validation-begin', handler: (data: { project: LspProject }) => MaybePromise<void>);
-    public on(eventName: 'validation-end', handler: (data: { project: LspProject }) => MaybePromise<void>);
+    public on(eventName: 'validate-begin', handler: (data: { project: LspProject }) => MaybePromise<void>);
+    public on(eventName: 'validate-end', handler: (data: { project: LspProject }) => MaybePromise<void>);
     public on(eventName: 'critical-failure', handler: (data: { project: LspProject; message: string }) => MaybePromise<void>);
     public on(eventName: 'project-reload', handler: (data: { project: LspProject }) => MaybePromise<void>);
     public on(eventName: 'diagnostics', handler: (data: { project: LspProject; diagnostics: LspDiagnostic[] }) => MaybePromise<void>);
@@ -650,8 +654,8 @@ export class ProjectManager {
         };
     }
 
-    private emit(eventName: 'validation-begin', data: { project: LspProject });
-    private emit(eventName: 'validation-end', data: { project: LspProject });
+    private emit(eventName: 'validate-begin', data: { project: LspProject });
+    private emit(eventName: 'validate-end', data: { project: LspProject });
     private emit(eventName: 'critical-failure', data: { project: LspProject; message: string });
     private emit(eventName: 'project-reload', data: { project: LspProject });
     private emit(eventName: 'diagnostics', data: { project: LspProject; diagnostics: LspDiagnostic[] });

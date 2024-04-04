@@ -449,8 +449,8 @@ export class Project implements LspProject {
         return undefined;
     }
 
-    public on(eventName: 'validation-begin', handler: (data: any) => MaybePromise<void>);
-    public on(eventName: 'validation-end', handler: (data: any) => MaybePromise<void>);
+    public on(eventName: 'validate-begin', handler: (data: any) => MaybePromise<void>);
+    public on(eventName: 'validate-end', handler: (data: any) => MaybePromise<void>);
     public on(eventName: 'critical-failure', handler: (data: { message: string }) => MaybePromise<void>);
     public on(eventName: 'diagnostics', handler: (data: { diagnostics: LspDiagnostic[] }) => MaybePromise<void>);
     public on(eventName: 'all', handler: (eventName: string, data: any) => MaybePromise<void>);
@@ -461,8 +461,8 @@ export class Project implements LspProject {
         };
     }
 
-    private emit(eventName: 'validation-begin', data: any);
-    private emit(eventName: 'validation-end', data: any);
+    private emit(eventName: 'validate-begin', data: any);
+    private emit(eventName: 'validate-end', data: any);
     private emit(eventName: 'critical-failure', data: { message: string });
     private emit(eventName: 'diagnostics', data: { diagnostics: LspDiagnostic[] });
     private async emit(eventName: string, data?) {

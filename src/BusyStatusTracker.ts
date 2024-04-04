@@ -13,6 +13,8 @@ export class BusyStatusTracker {
         startTime?: Date;
     }>();
 
+    private scopedRuns = new Map<any, any>();
+
     /**
      * Start a new piece of work
      */
