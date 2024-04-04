@@ -139,10 +139,15 @@ export class Project implements LspProject {
         //store
         this.validationCancelToken = new CancellationTokenSource();
 
-        await this.builder.program.validate({
-            async: true,
-            cancellationToken: this.validationCancelToken.token
-        });
+        try {
+            this.emit('validate-begin', {});
+            await this.builder.program.validate({
+                async: true,
+                cancellationToken: this.validationCancelToken.token
+            });
+        } finally {
+            this.emit('validate-end', {});
+        }
     }
 
     /**
@@ -444,7 +449,9 @@ export class Project implements LspProject {
         return undefined;
     }
 
-    public on(eventName: 'critical-failure', handler: (data: { project: Project; message: string }) => MaybePromise<void>);
+    public on(eventName: 'validation-begin', handler: (data: any) => MaybePromise<void>);
+    public on(eventName: 'validation-end', handler: (data: any) => MaybePromise<void>);
+    public on(eventName: 'critical-failure', handler: (data: { message: string }) => MaybePromise<void>);
     public on(eventName: 'diagnostics', handler: (data: { diagnostics: LspDiagnostic[] }) => MaybePromise<void>);
     public on(eventName: 'all', handler: (eventName: string, data: any) => MaybePromise<void>);
     public on(eventName: string, handler: (...args: any[]) => MaybePromise<void>) {
@@ -454,6 +461,8 @@ export class Project implements LspProject {
         };
     }
 
+    private emit(eventName: 'validation-begin', data: any);
+    private emit(eventName: 'validation-end', data: any);
     private emit(eventName: 'critical-failure', data: { message: string });
     private emit(eventName: 'diagnostics', data: { diagnostics: LspDiagnostic[] });
     private async emit(eventName: string, data?) {

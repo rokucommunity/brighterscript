@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { ProjectManager } from './ProjectManager';
 import { tempDir, rootDir, expectZeroDiagnostics, expectDiagnostics } from '../testHelpers.spec';
 import * as fsExtra from 'fs-extra';
-import { standardizePath as s } from '../util';
+import util, { standardizePath as s } from '../util';
 import type { SinonStub } from 'sinon';
 import { createSandbox } from 'sinon';
 import { Project } from './Project';
@@ -73,6 +73,35 @@ describe('ProjectManager', () => {
 
             await manager['emit']('diagnostics', { project: undefined, diagnostics: [] });
             expect(stub.callCount).to.eql(2);
+        });
+    });
+
+    describe('validation tracking', () => {
+        it.only('tracks validation state', async () => {
+            await manager.syncProjects([{
+                workspaceFolder: rootDir
+            }]);
+            const project = manager.projects[0] as Project;
+
+            //force validation to take a while
+            sinon.stub(project['builder'].program, 'validate').callsFake(async () => {
+                await util.sleep(100);
+            });
+
+            expect(manager.busyStatusTracker.status).to.eql('idle');
+
+            //run several validations (which cancel the previous)
+            void project.validate();
+            await util.sleep(10);
+
+            void project.validate();
+            await util.sleep(10);
+
+            void project.validate();
+            await util.sleep(10);
+
+            //busy status should be active
+            expect(manager.busyStatusTracker.status).to.eql('busy');
         });
     });
 
