@@ -31,10 +31,10 @@ export class ProjectManager {
         });
 
         this.on('validate-begin', (event) => {
-            this.busyStatusTracker.pushScoped(event.program, 'validate');
+            this.busyStatusTracker.beginScopedRun(event.project, `validate-project-${event.project.projectNumber}`);
         });
         this.on('validate-end', (event) => {
-            this.busyStatusTracker.popScoped(event.program, 'validate');
+            void this.busyStatusTracker.endScopedRun(event.project, `validate-project-${event.project.projectNumber}`);
         });
     }
 
@@ -581,6 +581,7 @@ export class ProjectManager {
             this.projects.splice(idx, 1);
         }
         project?.dispose();
+        this.busyStatusTracker.endAllRunsForScope(project);
     }
 
     /**

@@ -149,4 +149,46 @@ describe('BusyStatusTracker', () => {
         });
         expect(tracker.status).to.eql(BusyStatus.idle);
     });
+
+    describe('scopedTracking', () => {
+        const scope1 = {};
+
+        it('supports scoped tracking', async () => {
+            let onStatus = tracker.once('change');
+            tracker.beginScopedRun(scope1, 'run1');
+            expect(
+                await onStatus
+            ).to.eql(BusyStatus.busy);
+
+            tracker.beginScopedRun(scope1, 'run2');
+            expect(latestStatus).to.eql(BusyStatus.busy);
+
+            await tracker.endScopedRun(scope1, 'run1');
+            expect(latestStatus).to.eql(BusyStatus.busy);
+
+            onStatus = tracker.once('change');
+            await tracker.endScopedRun(scope1, 'run2');
+            expect(
+                await onStatus
+            ).to.eql(BusyStatus.idle);
+        });
+
+        it('clears runs for scope', async () => {
+            let onChange = tracker.once('change');
+            tracker.beginScopedRun(scope1, 'run1');
+            tracker.beginScopedRun(scope1, 'run1');
+            tracker.beginScopedRun(scope1, 'run1');
+
+            expect(
+                await onChange
+            ).to.eql(BusyStatus.busy);
+
+            onChange = tracker.once('change');
+
+            tracker.endAllRunsForScope(scope1);
+            expect(
+                await onChange
+            ).to.eql(BusyStatus.idle);
+        });
+    });
 });
