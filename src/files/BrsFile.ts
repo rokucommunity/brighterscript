@@ -337,11 +337,6 @@ export class BrsFile implements BscFile {
 
     public onDependenciesChanged(event: DependencyChangedEvent) {
         this.resolveTypedef();
-        //this.unlinkNamespaceSymbolTables();
-        //this.cache?.delete('namespaceSymbolTable');
-        //this.cache?.delete('requiredSymbols');
-
-        //this.validationSegmenter.unValidateAllSegments();
     }
 
     /**
