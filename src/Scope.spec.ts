@@ -3508,8 +3508,6 @@ describe('Scope', () => {
 
     describe('provides & requires', () => {
 
-
-
         it('a class can reference itself', () => {
             program.setFile<BrsFile>('source/klass.bs', `
                 class Klass
