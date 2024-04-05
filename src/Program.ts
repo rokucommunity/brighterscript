@@ -45,7 +45,6 @@ import { rokuDeploy } from 'roku-deploy';
 import type { SGNodeData, BRSComponentData, BRSEventData, BRSInterfaceData } from './roku-types';
 import { nodes, components, interfaces, events } from './roku-types';
 import { ComponentType } from './types/ComponentType';
-import type { BscType } from './types/BscType';
 import { InterfaceType } from './types/InterfaceType';
 import { BuiltInInterfaceAdder } from './types/BuiltInInterfaceAdder';
 import type { UnresolvedSymbol } from './AstValidationSegmenter';
@@ -62,12 +61,6 @@ export interface SignatureInfoObj {
     index: number;
     key: string;
     signature: SignatureInformation;
-}
-
-export interface ProgramValidationInfo {
-    symbolsNotDefinedInEveryScope: { symbol: UnresolvedSymbol; scope: Scope }[];
-    duplicateSymbolsInSameScope: { symbol: UnresolvedSymbol; scope: Scope }[];
-    symbolsNotConsistentAcrossScopes: { symbol: UnresolvedSymbol; scopes: Scope[] }[];
 }
 
 export class Program {
@@ -837,7 +830,7 @@ export class Program {
         }
     }
 
-    public lastValidationInfo = new Map<string, ProgramValidationInfo>();
+    //public lastValidationInfo = new Map<string, ProgramValidationInfo>();
     public crossScopeValidation = new CrossScopeValidator(this);
 
     private isFirstValidation = true;
@@ -910,11 +903,6 @@ export class Program {
                 this.componentSymbolsToUpdate.clear();
             });
 
-            metrics.fileInfoGenerationTime = validationStopwatch.getDurationTextFor(() => {
-                // build list of all changed symbols in each file that changed
-                this.updateLastValidationFileInfo(brsFilesValidated);
-            }).durationText;
-
             metrics.crossScopeValidationTime = validationStopwatch.getDurationTextFor(() => {
                 this.addCrossScopeDiagnostics(brsFilesValidated);
             }).durationText;
@@ -937,7 +925,7 @@ export class Program {
             this.logger.time(LogLevel.info, ['Validate all scopes'], () => {
                 const filesToBeValidatedInScopeContext = new Set<BscFile>(afterValidateFiles);
                 //sort the scope names so we get consistent results
-                const scopeNames = Object.keys(this.scopes).sort();
+                const scopeNames = this.getSortedScopeNames();
                 for (let scopeName of scopeNames) {
                     let scope = this.scopes[scopeName];
                     const scopeValidated = scope.validate({
@@ -971,6 +959,7 @@ export class Program {
         });
     }
 
+    /*
     private updateLastValidationFileInfo(brsFilesValidated: BrsFile[]) {
         this.lastValidationInfo.clear();
         for (const file of brsFilesValidated) {
@@ -1030,8 +1019,6 @@ export class Program {
                                     }
                                 }
                             }
-                        } else {
-                            //  this.crossScopeValidation.addMissingInScope(scopeFile, symbol, scope, file);
                         }
                     }
                     if (!symbolFoundInScope) {
@@ -1044,7 +1031,7 @@ export class Program {
             }
             this.lastValidationInfo.set(lowerFilePath, fileInfo);
         }
-    }
+    }*/
 
     // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
     private logValidationMetrics(metrics: { [key: string]: number | string }) {
@@ -1067,7 +1054,7 @@ export class Program {
 
     private addCrossScopeDiagnostics(changedFiles: BrsFile[]) {
         const scopesForCrossScopeValidation = [];
-        for (let scopeName in this.scopes) {
+        for (let scopeName of this.getSortedScopeNames()) {
             let scope = this.scopes[scopeName];
             if (this.globalScope !== scope && !scope.isValidated) {
                 scopesForCrossScopeValidation.push(scope);
@@ -1151,6 +1138,30 @@ export class Program {
     }
 
     /**
+     * Gets a sorted list of all scopeNames, always beginning with "global", "source", then any others in alphabetical order
+     */
+    private getSortedScopeNames() {
+        return Object.keys(this.scopes).sort((a, b) => {
+            if (a === 'global') {
+                return -1;
+            } else if (b === 'global') {
+                return 1;
+            }
+            if (a === 'source') {
+                return -1;
+            } else if (b === 'source') {
+                return 1;
+            }
+            if (a < b) {
+                return -1;
+            } else if (b < a) {
+                return 1;
+            }
+            return 0;
+        });
+    }
+
+    /**
      * Get a list of all scopes the file is loaded into
      * @param file the file
      */
@@ -1159,7 +1170,7 @@ export class Program {
 
         let result = [] as Scope[];
         if (resolvedFile) {
-            const scopeKeys = Object.keys(this.scopes).sort();
+            const scopeKeys = this.getSortedScopeNames();
             for (let key of scopeKeys) {
                 let scope = this.scopes[key];
 
@@ -1175,7 +1186,7 @@ export class Program {
      * Get the first found scope for a file.
      */
     public getFirstScopeForFile(file: BscFile): Scope | undefined {
-        const scopeKeys = Object.keys(this.scopes).sort();
+        const scopeKeys = this.getSortedScopeNames();
         for (let key of scopeKeys) {
             let scope = this.scopes[key];
 

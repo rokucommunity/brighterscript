@@ -5,7 +5,7 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import type { Program } from './Program';
 import util from './util';
 import { DiagnosticOrigin } from './interfaces';
-import type { SymbolTypeFlag } from './SymbolTypeFlag';
+import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { BscSymbol } from './SymbolTable';
 import { isNamespaceType } from './astUtils/reflection';
 
@@ -21,20 +21,22 @@ export class CrossScopeValidator {
 
     private symbolMapKeys(symbol: UnresolvedSymbol) {
         const unnamespacedNameLower = symbol.typeChain.map(tce => tce.name).join('.').toLowerCase();
+        const lowerFirst = symbol.typeChain[0]?.name?.toLowerCase() ?? '';
         let namespacedName = '';
         if (symbol.containingNamespaces?.length > 0 && symbol.typeChain[0]?.name.toLowerCase() !== symbol.containingNamespaces[0].toLowerCase()) {
             namespacedName = `${(symbol.containingNamespaces ?? []).join('.')}.${unnamespacedNameLower}`;
         }
         return {
-            key: unnamespacedNameLower,
-            namespacedKey: namespacedName
+            potentialTypeKey: lowerFirst, // first entry in type chain (useful for enum types, typecasts, etc.)
+            key: unnamespacedNameLower, //full name used in code (useful for namespaced symbols)
+            namespacedKey: namespacedName // full name including namespaces (useful for relative symbols in a namespace)
         };
     }
 
     resolutionsMap = new Map<UnresolvedSymbol, Set<{ scope: Scope; sourceFile: BrsFile; providedSymbol: BscSymbol }>>();
 
     getRequiredMap(scope: Scope) {
-        const map = new Map<{ key: string; namespacedKey: string }, UnresolvedSymbol>();
+        const map = new Map<{ potentialTypeKey: string; key: string; namespacedKey: string }, UnresolvedSymbol>();
         scope.enumerateBrsFiles((file) => {
             for (const symbol of file.requiredSymbols) {
                 map.set(this.symbolMapKeys(symbol), symbol);
@@ -87,7 +89,14 @@ export class CrossScopeValidator {
                 continue;
             }
             const providedMapForFlag = providedMap.get(unresolvedSymbol.endChainFlags);
-            const foundSymbol = providedMapForFlag?.get(symbolKeys.namespacedKey) ?? providedMapForFlag?.get(symbolKeys.key);
+            let foundSymbol = providedMapForFlag?.get(symbolKeys.namespacedKey) ??
+                providedMapForFlag?.get(symbolKeys.key);
+
+            if (!foundSymbol && symbolKeys.potentialTypeKey !== symbolKeys.key) {
+                // we have a situation where we're looking for <Type>.<Member>
+                foundSymbol = providedMap.get(SymbolTypeFlag.typetime).get(symbolKeys.potentialTypeKey);
+            }
+
             if (foundSymbol) {
                 let resolvedListForSymbol = this.resolutionsMap.get(unresolvedSymbol);
                 if (!resolvedListForSymbol) {
@@ -192,6 +201,24 @@ export class CrossScopeValidator {
             }
         }
 
+        for (const resolution of this.getIncompatibleSymbolResolutions()) {
+            const symbol = resolution.symbol;
+            const incompatibleScopes = resolution.incompatibleScopes;
+            if (incompatibleScopes.size > 1) {
+                const typeChainResult = util.processTypeChain(symbol.typeChain);
+                const scopeListName = [...incompatibleScopes.values()].map(s => s.name).join(', ');
+                this.program.addDiagnostics([{
+                    ...DiagnosticMessages.incompatibleSymbolDefinition(typeChainResult.fullChainName, scopeListName),
+                    file: symbol.file,
+                    range: typeChainResult.range,
+                    origin: DiagnosticOrigin.CrossScope
+                }]);
+            }
+        }
+    }
+
+    getIncompatibleSymbolResolutions() {
+        const incompatibleResolutions = new Array<{ symbol: UnresolvedSymbol; incompatibleScopes: Set<Scope> }>();
         // check all resolutions and check if there are resolutions that are not compatible across scopes
         for (const [symbol, resolutionDetails] of this.resolutionsMap.entries()) {
             if (resolutionDetails.size < 2) {
@@ -225,15 +252,12 @@ export class CrossScopeValidator {
             }
 
             if (incompatibleScopes.size > 1) {
-                const typeChainResult = util.processTypeChain(symbol.typeChain);
-                const scopeListName = [...incompatibleScopes.values()].map(s => s.name).join(', ');
-                this.program.addDiagnostics([{
-                    ...DiagnosticMessages.incompatibleSymbolDefinition(typeChainResult.fullChainName, scopeListName),
-                    file: symbol.file,
-                    range: typeChainResult.range,
-                    origin: DiagnosticOrigin.CrossScope
-                }]);
+                incompatibleResolutions.push({
+                    symbol: symbol,
+                    incompatibleScopes: incompatibleScopes
+                });
             }
         }
+        return incompatibleResolutions;
     }
 }
