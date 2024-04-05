@@ -53,6 +53,7 @@ import { WalkMode, createVisitor } from './astUtils/visitors';
 import type { BscFile } from './files/BscFile';
 import { Stopwatch } from './Stopwatch';
 import { CrossScopeValidator } from './CrossScopeValidator';
+import { firstBy } from 'thenby';
 
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
@@ -870,7 +871,9 @@ export class Program {
             const afterValidateFiles: BscFile[] = [];
 
             metrics.fileValidationTime = validationStopwatch.getDurationTextFor(() => {
-                for (const file of Object.values(this.files)) {
+                //sort files by path so we get consistent results
+                const files = Object.values(this.files).sort(firstBy(x => x.srcPath));
+                for (const file of files) {
                     //for every unvalidated file, validate it
                     if (!file.isValidated) {
                         const validateFileEvent = {
@@ -933,7 +936,9 @@ export class Program {
             let scopesValidated = 0;
             this.logger.time(LogLevel.info, ['Validate all scopes'], () => {
                 const filesToBeValidatedInScopeContext = new Set<BscFile>(afterValidateFiles);
-                for (let scopeName in this.scopes) {
+                //sort the scope names so we get consistent results
+                const scopeNames = Object.keys(this.scopes).sort();
+                for (let scopeName of scopeNames) {
                     let scope = this.scopes[scopeName];
                     const scopeValidated = scope.validate({
                         filesToBeValidatedInScopeContext: filesToBeValidatedInScopeContext,
@@ -1155,7 +1160,8 @@ export class Program {
 
         let result = [] as Scope[];
         if (resolvedFile) {
-            for (let key in this.scopes) {
+            const scopeKeys = Object.keys(this.scopes).sort();
+            for (let key of scopeKeys) {
                 let scope = this.scopes[key];
 
                 if (scope.hasFile(resolvedFile)) {
@@ -1170,7 +1176,8 @@ export class Program {
      * Get the first found scope for a file.
      */
     public getFirstScopeForFile(file: BscFile): Scope | undefined {
-        for (let key in this.scopes) {
+        const scopeKeys = Object.keys(this.scopes).sort();
+        for (let key of scopeKeys) {
             let scope = this.scopes[key];
 
             if (scope.hasFile(file)) {
