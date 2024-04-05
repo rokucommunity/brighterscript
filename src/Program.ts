@@ -1027,7 +1027,6 @@ export class Program {
                                     } else {
                                         // type in this scope is not compatible with other types for this symbol
                                         scopesAreInconsistent = true;
-                                        // this.crossScopeValidation.addIncompatibleScope(scopeFile, symbol, scope, file);
                                     }
                                 }
                             }
