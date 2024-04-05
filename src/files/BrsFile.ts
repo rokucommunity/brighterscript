@@ -1236,6 +1236,9 @@ export class BrsFile implements BscFile {
 
     public get requiredSymbols() {
         return this.cache.getOrAdd(`requiredSymbols`, () => {
+            if (this.validationSegmenter.validatedSegments.size === 0) {
+                this.processSymbolInformation();
+            }
             const allNeededSymbolSets = this.validationSegmenter.unresolvedSegmentsSymbols.values();
 
             const requiredSymbols: UnresolvedSymbol[] = [];

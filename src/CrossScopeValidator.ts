@@ -22,18 +22,26 @@ export class CrossScopeValidator {
 
     constructor(public program: Program) { }
 
-    private symbolMapKey(symbol: UnresolvedSymbol) {
-        return [...(symbol.containingNamespaces ?? []), ...symbol.typeChain.map(tce => tce.name)].join('.').toLowerCase();
+    private symbolMapKeys(symbol: UnresolvedSymbol) {
+        const unnamespacedNameLower = symbol.typeChain.map(tce => tce.name).join('.').toLowerCase();
+        let namespacedName = '';
+        if (symbol.containingNamespaces?.length > 0 && symbol.typeChain[0]?.name.toLowerCase() !== symbol.containingNamespaces[0].toLowerCase()) {
+            namespacedName = `${(symbol.containingNamespaces ?? []).join('.')}.${unnamespacedNameLower}`;
+        }
+        return {
+            key: unnamespacedNameLower,
+            namespacedKey: namespacedName
+        };
     }
 
     resolutionsMap = new Map<UnresolvedSymbol, Set<{ scope: Scope; sourceFile: BrsFile; providedSymbol: BscSymbol }>>();
 
 
     getRequiredMap(scope: Scope) {
-        const map = new Map<string, UnresolvedSymbol>();
+        const map = new Map<{ key: string; namespacedKey: string }, UnresolvedSymbol>();
         scope.enumerateBrsFiles((file) => {
             for (const symbol of file.requiredSymbols) {
-                map.set(this.symbolMapKey(symbol), symbol);
+                map.set(this.symbolMapKeys(symbol), symbol);
             }
         });
         return map;
@@ -75,14 +83,15 @@ export class CrossScopeValidator {
 
         const missingSymbols = new Set<UnresolvedSymbol>();
 
-        for (const [symbolKey, unresolvedSymbol] of requiredMap.entries()) {
+        for (const [symbolKeys, unresolvedSymbol] of requiredMap.entries()) {
 
             // check global scope for components
             if (unresolvedSymbol.typeChain.length === 1 && this.program.globalScope.symbolTable.getSymbol(unresolvedSymbol.typeChain[0].name, unresolvedSymbol.flags)) {
                 //symbol is available in global scope. ignore it
                 continue;
             }
-            const foundSymbol = providedMap.get(unresolvedSymbol.endChainFlags)?.get(symbolKey);
+            const providedMapForFlag = providedMap.get(unresolvedSymbol.endChainFlags);
+            const foundSymbol = providedMapForFlag?.get(symbolKeys.namespacedKey) ?? providedMapForFlag?.get(symbolKeys.key);
             if (foundSymbol) {
                 let resolvedListForSymbol = this.resolutionsMap.get(unresolvedSymbol);
                 if (!resolvedListForSymbol) {

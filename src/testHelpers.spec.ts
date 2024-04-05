@@ -152,19 +152,19 @@ export function expectDiagnosticsIncludes(arg: DiagnosticCollection, expected: P
             return result as unknown as BsDiagnostic;
         });
 
-    let expectedFound = 0;
 
+    const foundDiagnostics: PartialDiagnostic | string | number | Array<PartialDiagnostic | string | number> = [];
     for (const expectedDiagnostic of expectedDiagnostics) {
-        const foundDiag = actualDiagnostics.find((actualDiag) => {
+        actualDiagnostics.find((actualDiag) => {
             const actualDiagnosticClone = cloneDiagnostic(actualDiag, expectedDiagnostic);
-            return JSON.stringify(actualDiagnosticClone) === JSON.stringify(expectedDiagnostic);
+            if (JSON.stringify(actualDiagnosticClone) === JSON.stringify(expectedDiagnostic)) {
+                foundDiagnostics.push(actualDiagnosticClone);
+                return true;
+            }
+            return false;
         });
-        if (foundDiag) {
-            expectedFound++;
-        }
-
     }
-    expect(expectedFound).to.eql(expectedDiagnostics.length);
+    expect(foundDiagnostics).to.eql(expectedDiagnostics);
 }
 
 /**
