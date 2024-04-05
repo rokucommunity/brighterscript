@@ -77,7 +77,7 @@ describe('ProjectManager', () => {
     });
 
     describe('validation tracking', () => {
-        it.only('tracks validation state', async () => {
+        it('tracks validation state', async () => {
             await manager.syncProjects([{
                 workspaceFolder: rootDir
             }]);
