@@ -3,6 +3,7 @@ import type { ProvideCompletionsEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { XmlScope } from '../../XmlScope';
 import { util } from '../../util';
+import { firstBy } from 'thenby';
 
 export class CompletionsProcessor {
     constructor(
@@ -31,17 +32,26 @@ export class CompletionsProcessor {
             return;
         }
 
-        //find the scopes for this file
-        let scopesForFile = this.event.program.getScopesForFile(this.event.file);
+        //find the scopes for this file (sort by name so these results are always consistent)
+        let scopesForFile = this.event.program.getScopesForFile(this.event.file).sort(firstBy(x => x.name));
 
         //if there are no scopes, include the global scope so we at least get the built-in functions
         scopesForFile = scopesForFile.length > 0 ? scopesForFile : [this.event.program.globalScope];
-        //only iterate on the first few scopes. This might result in missing completions, but it's better than wasting TONS of cycles building essentially the same completions over and over
-        scopesForFile = scopesForFile.slice(0, 4);
+
+        // Only process the first few scopes. This might result in missing completions,
+        // but it's better than wasting TONS of cycles building essentially the same completions over and over
+        const scopesToProcess = scopesForFile.slice(0, 3);
+
+        // always include the source scope if applicable to this file
+        let sourceScope = scopesForFile.find(x => x.name === 'source');
+        if (!scopesToProcess.includes(sourceScope)) {
+            //replace the first scope with the source scope so we always process exactly 3 scopes
+            scopesToProcess[0] = sourceScope;
+        }
 
         //get the completions from all scopes for this file
         let allCompletions = util.flatMap(
-            scopesForFile.map(scope => {
+            scopesToProcess.map(scope => {
                 return this.event.file.getCompletions(this.event.position, scope);
             }),
             c => c
@@ -52,7 +62,7 @@ export class CompletionsProcessor {
         for (let completion of allCompletions) {
             let key = `${completion.label}-${completion.kind}`;
             keyCounts.set(key, keyCounts.has(key) ? keyCounts.get(key) + 1 : 1);
-            if (keyCounts.get(key) === scopesForFile.length) {
+            if (keyCounts.get(key) === scopesToProcess.length) {
                 this.event.completions.push(completion);
             }
         }
