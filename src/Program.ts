@@ -850,7 +850,6 @@ export class Program {
             const metrics = {
                 filesValidated: 0,
                 fileValidationTime: '',
-                fileInfoGenerationTime: '',
                 crossScopeValidationTime: '',
                 scopesValidated: 0,
                 totalLinkTime: '',
