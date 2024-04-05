@@ -4260,7 +4260,8 @@ describe('Scope', () => {
 
         // eslint-disable-next-line func-names, prefer-arrow-callback
         it.skip('namespace linking performance', function () {
-            // this test takes a long time!
+            this.timeout(5000);
+            // this test takes a few seconds (2-3) it is skipped just to make regular test running faster
             program.options.autoImportComponentScript = true;
             const constFileContents = `
                 import "pkg:/source/consts2.bs"

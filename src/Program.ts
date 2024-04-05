@@ -1071,44 +1071,6 @@ export class Program {
         }
 
         this.crossScopeValidation.addDiagnosticsForScopes(scopesForCrossScopeValidation, changedFiles);
-
-        /*
-        for (const [lowerFilePath, fileInfo] of this.lastValidationInfo.entries()) {
-            const file = this.files[lowerFilePath];
-            const scopesForFile = this.getScopesForFile(file);
-            for (const symbolAndScopes of fileInfo.symbolsNotConsistentAcrossScopes) {
-                const typeChainResult = util.processTypeChain(symbolAndScopes.symbol.typeChain);
-                const scopeListName = symbolAndScopes.scopes.map(s => s.name).join(', ');
-                this.crossScopeDiagnostics.push({
-                    ...DiagnosticMessages.incompatibleSymbolDefinition(typeChainResult.fullNameOfItem, scopeListName),
-                    origin: DiagnosticOrigin.CrossScopeByFile,
-                    filePath: lowerFilePath,
-                    file: file,
-                    range: typeChainResult.range
-                });
-            }
-            const mapOfSymbolsAndMissingScopes = new Map<UnresolvedSymbol, Scope[]>();
-            for (const symbolAndScope of fileInfo.symbolsNotDefinedInEveryScope) {
-                if (!mapOfSymbolsAndMissingScopes.has(symbolAndScope.symbol)) {
-                    mapOfSymbolsAndMissingScopes.set(symbolAndScope.symbol, []);
-                }
-                mapOfSymbolsAndMissingScopes.get(symbolAndScope.symbol).push(symbolAndScope.scope);
-            }
-            for (const [symbol, scopes] of mapOfSymbolsAndMissingScopes.entries()) {
-                if (scopes.length === scopesForFile.length) {
-                    // do not add diagnostic if thing is not in ANY scopes
-                    continue;
-                }
-                const typeChainResult = util.processTypeChain(symbol.typeChain);
-                const scopeListName = scopes.map(s => s.name).join(', ');
-                this.crossScopeDiagnostics.push({
-                    ...DiagnosticMessages.symbolNotDefinedInScopes(typeChainResult.fullNameOfItem, scopeListName),
-                    origin: DiagnosticOrigin.CrossScopeByFile,
-                    file: file,
-                    range: typeChainResult.range
-                });
-            }
-        }*/
     }
 
     /**

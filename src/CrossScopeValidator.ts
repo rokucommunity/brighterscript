@@ -17,9 +17,6 @@ export interface UnresolvedSymbolInfo {
 
 export class CrossScopeValidator {
 
-    // targetFile.pkgPath -> source.pkgPath -> unresolvedSymbol (in targetFile) -> info
-    public crossScopeValidation = new Map<string, Map<string, Map<UnresolvedSymbol, UnresolvedSymbolInfo>>>();
-
     constructor(public program: Program) { }
 
     private symbolMapKeys(symbol: UnresolvedSymbol) {
@@ -35,7 +32,6 @@ export class CrossScopeValidator {
     }
 
     resolutionsMap = new Map<UnresolvedSymbol, Set<{ scope: Scope; sourceFile: BrsFile; providedSymbol: BscSymbol }>>();
-
 
     getRequiredMap(scope: Scope) {
         const map = new Map<{ key: string; namespacedKey: string }, UnresolvedSymbol>();
@@ -142,9 +138,7 @@ export class CrossScopeValidator {
 
         // Check scope for duplicates and missing symbols
         for (const scope of scopes) {
-
             scope.clearCrossScopeDiagnostics();
-
 
             const { missingSymbols, duplicatesMap } = this.getIssuesForScope(scope);
             if (addDuplicateSymbolDiagnostics) {
@@ -198,7 +192,6 @@ export class CrossScopeValidator {
             }
         }
 
-
         // check all resolutions and check if there are resolutions that are not compatible across scopes
         for (const [symbol, resolutionDetails] of this.resolutionsMap.entries()) {
             if (resolutionDetails.size < 2) {
@@ -240,12 +233,7 @@ export class CrossScopeValidator {
                     range: typeChainResult.range,
                     origin: DiagnosticOrigin.CrossScope
                 }]);
-
             }
-
         }
     }
-
 }
-
-
