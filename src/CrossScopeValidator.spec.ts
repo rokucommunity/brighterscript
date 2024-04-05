@@ -352,7 +352,7 @@ describe('CrossScopeValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.symbolNotDefinedInScope('otherFunc', 'components/Widget2.xml').message
+                DiagnosticMessages.symbolNotDefinedInScope('otherFunc', `components${path.sep}Widget2.xml`).message
             ]);
         });
 
@@ -400,7 +400,7 @@ describe('CrossScopeValidator', () => {
             `);
             program.validate();
             expectDiagnosticsIncludes(program, [
-                DiagnosticMessages.symbolNotDefinedInScope('iface2', 'components/Widget2.xml').message
+                DiagnosticMessages.symbolNotDefinedInScope('iface2', `components${path.sep}Widget2.xml`).message
             ]);
         });
 
@@ -452,7 +452,7 @@ describe('CrossScopeValidator', () => {
             `);
             program.validate();
             expectDiagnosticsIncludes(program, [
-                DiagnosticMessages.symbolNotDefinedInScope('iface2', 'components/Widget2.xml').message
+                DiagnosticMessages.symbolNotDefinedInScope('iface2', `components${path.sep}Widget2.xml`).message
             ]);
         });
 
@@ -504,7 +504,7 @@ describe('CrossScopeValidator', () => {
 
             program.validate();
             expectDiagnosticsIncludes(program, [
-                DiagnosticMessages.symbolNotDefinedInScope('alpha.beta.someFunc', 'components/Widget.xml').message
+                DiagnosticMessages.symbolNotDefinedInScope('alpha.beta.someFunc', `components${path.sep}Widget.xml`).message
             ]);
         });
     });
