@@ -21,7 +21,7 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isNamespaceStatement, isVariableExpression, isImportStatement, isFieldStatement, isEnumStatement, isConstStatement, isAnyReferenceType, isNamespaceType, isReferenceType, isCallableType, isBrsFile } from '../astUtils/reflection';
+import { isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isNamespaceStatement, isVariableExpression, isImportStatement, isFieldStatement, isEnumStatement, isConstStatement, isAnyReferenceType, isNamespaceType, isReferenceType, isCallableType } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyChangedEvent, DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
@@ -337,11 +337,11 @@ export class BrsFile implements BscFile {
 
     public onDependenciesChanged(event: DependencyChangedEvent) {
         this.resolveTypedef();
-        this.unlinkNamespaceSymbolTables();
-        this.cache?.delete('namespaceSymbolTable');
-        this.cache?.delete('requiredSymbols');
+        //this.unlinkNamespaceSymbolTables();
+        //this.cache?.delete('namespaceSymbolTable');
+        //this.cache?.delete('requiredSymbols');
 
-        this.validationSegmenter.unValidateAllSegments();
+        //this.validationSegmenter.unValidateAllSegments();
     }
 
     /**
@@ -1128,38 +1128,16 @@ export class BrsFile implements BscFile {
     public validationSegmenter = new AstValidationSegmenter(this);
 
     public getNamespaceSymbolTable(allowCache = true) {
-        const makeImportTreeNamespaceTable = () => {
-            const nsTable = new SymbolTable(`File Complete NamespaceTypes ${this.destPath}`, () => this.program.globalScope.symbolTable);
-            this.updateWithDependenciesNamespaceTables(nsTable, new Set());
-            return nsTable;
-        };
         if (!allowCache) {
-            return makeImportTreeNamespaceTable();
+            return this.constructNamespaceSymbolTable();
         }
-        return this.cache?.getOrAdd(`namespaceSymbolTable`, makeImportTreeNamespaceTable);
+        return this.cache?.getOrAdd(`namespaceSymbolTable`, () => this.constructNamespaceSymbolTable());
     }
 
-    private updateWithDependenciesNamespaceTables(symbolTableToUpdate: SymbolTable, filesToSkip: Set<string>) {
-        symbolTableToUpdate.mergeNamespaceSymbolTables(this.getOwnNamespaceSymbolTable());
-        filesToSkip.add(this.destPath.toLowerCase());
-        for (const filePath of this.dependencies) {
-            if (filesToSkip.has(filePath.toLowerCase())) {
-                continue;
-            }
-            const importedFile = this.program.getFile<BrsFile>(filePath);
-            if (!isBrsFile(importedFile) || importedFile === this) {
-                continue;
-            }
-            importedFile.updateWithDependenciesNamespaceTables(symbolTableToUpdate, filesToSkip);
-        }
-    }
-
-    public getOwnNamespaceSymbolTable() {
-        return this.cache?.getOrAdd(`ownNamespaceSymbolTable`, () => {
-            const nsTable = new SymbolTable(`File NamespaceTypes ${this.destPath}`, () => this.program.globalScope.symbolTable);
-            this.populateNameSpaceSymbolTable(nsTable);
-            return nsTable;
-        });
+    private constructNamespaceSymbolTable() {
+        const nsTable = new SymbolTable(`File NamespaceTypes ${this.destPath}`, () => this.program.globalScope.symbolTable);
+        this.populateNameSpaceSymbolTable(nsTable);
+        return nsTable;
     }
 
     public processSymbolInformation() {
@@ -1236,9 +1214,6 @@ export class BrsFile implements BscFile {
 
     public get requiredSymbols() {
         return this.cache.getOrAdd(`requiredSymbols`, () => {
-            if (this.validationSegmenter.validatedSegments.size === 0) {
-                this.processSymbolInformation();
-            }
             const allNeededSymbolSets = this.validationSegmenter.unresolvedSegmentsSymbols.values();
 
             const requiredSymbols: UnresolvedSymbol[] = [];
@@ -1248,10 +1223,7 @@ export class BrsFile implements BscFile {
             for (const setOfSymbols of allNeededSymbolSets) {
                 for (const symbol of setOfSymbols) {
                     const fullSymbolKey = symbol.typeChain.map(tce => tce.name).join('.').toLowerCase();
-                    //for (const flag of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
-                    // eslint-disable-next-line no-bitwise
                     const flag = symbol.endChainFlags;
-                    //  if (symbol.endChainFlags & flag) {
                     if (this.providedSymbols.symbolMap.get(flag)?.has(fullSymbolKey)) {
                         // this catches namespaced things
                         continue;
@@ -1260,8 +1232,6 @@ export class BrsFile implements BscFile {
                         requiredSymbols.push(symbol);
                         addedSymbols.get(flag)?.add(fullSymbolKey);
                     }
-                    // }
-                    //}
                 }
             }
             return requiredSymbols;

@@ -132,7 +132,7 @@ export class CrossScopeValidator {
         }
     }
 
-    addDiagnosticsForScopes(scopes: Scope[]) {
+    addDiagnosticsForScopes(scopes: Scope[], changedFiles: BrsFile[]) {
 
         //this.resolutionsMap.clear();
         const addDuplicateSymbolDiagnostics = false;
@@ -182,13 +182,14 @@ export class CrossScopeValidator {
             const scopesForFile = this.program.getScopesForFile(file.srcPath);
             for (const [symbol, scopeList] of missingSymbolPerFile) {
                 const typeChainResult = util.processTypeChain(symbol.typeChain);
-                if (scopeList.size >= scopesForFile.length) {
+                if (changedFiles.includes(file) && scopeList.size >= scopesForFile.length) {
                     // do not add diagnostic if thing is not in ANY scopes
+                    // it will be handled by scope validation
                     continue;
                 }
                 for (const scope of scopeList) {
                     scope.addDiagnostics([{
-                        ...DiagnosticMessages.symbolNotDefinedInScope(typeChainResult.fullNameOfItem, scope.name),
+                        ...DiagnosticMessages.symbolNotDefinedInScope(typeChainResult.fullChainName, scope.name),
                         origin: DiagnosticOrigin.CrossScope,
                         file: file,
                         range: typeChainResult.range

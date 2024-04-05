@@ -456,7 +456,7 @@ describe('CrossScopeValidator', () => {
             ]);
         });
 
-        it.only('should validate when namespaced symbol in second scope is missing because of file change', () => {
+        it('should validate when namespaced symbol in second scope is missing because of file change', () => {
             program.setFile<BrsFile>('source/file1.bs', `
                 namespace alpha
                     namespace beta
@@ -472,6 +472,11 @@ describe('CrossScopeValidator', () => {
                 end sub
             `);
 
+            program.setFile<BrsFile>('source/file3.bs', `
+                import "file1.bs"
+                import "file2.bs"
+            `);
+
             program.setFile<BrsFile>('components/Widget.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Widget" extends="Group">
@@ -480,7 +485,7 @@ describe('CrossScopeValidator', () => {
             `);
 
             program.setFile<BrsFile>('components/Widget.bs', `
-                import "pkg:/source/file1.bs"
+                import "pkg:/source/file3.bs"
 
                 sub init()
                     alpha.beta.someFunc()
@@ -490,24 +495,17 @@ describe('CrossScopeValidator', () => {
             program.validate();
             expectZeroDiagnostics(program);
 
-            // change file1 so  alpha.beta.someFunc is not available
-            program.setFile<BrsFile>('pkg:/source/file1.bs', `
-                namespace alpha
-                    namespace beta
-                        function notSomeFunc() as string
-                            return "hello"
-                        end function
-                  end namespace
+            // change file3 so  alpha.beta.someFunc is not available
+            program.setFile<BrsFile>('pkg:/source/file3.bs', `
+                namespace alpha.beta ' need to define the namespace, but not someFunc()
+                    const pi = 3.14
                 end namespace
             `);
 
             program.validate();
             expectDiagnosticsIncludes(program, [
-                DiagnosticMessages.cannotFindName('someFunc').message, // not found in source scope from source/file2.bs
-                DiagnosticMessages.symbolNotDefinedInScope('alpha.beta.someFunc', 'components/Widget2.xml').message
+                DiagnosticMessages.symbolNotDefinedInScope('alpha.beta.someFunc', 'components/Widget.xml').message
             ]);
         });
     });
-
-
 });

@@ -913,7 +913,7 @@ export class Program {
             }).durationText;
 
             metrics.crossScopeValidationTime = validationStopwatch.getDurationTextFor(() => {
-                this.addCrossScopeDiagnostics();
+                this.addCrossScopeDiagnostics(brsFilesValidated);
             }).durationText;
 
             const changedSymbolsMapArr = brsFilesValidated?.map(f => {
@@ -1061,7 +1061,7 @@ export class Program {
     }
 
 
-    private addCrossScopeDiagnostics() {
+    private addCrossScopeDiagnostics(changedFiles: BrsFile[]) {
         const scopesForCrossScopeValidation = [];
         for (let scopeName in this.scopes) {
             let scope = this.scopes[scopeName];
@@ -1070,7 +1070,7 @@ export class Program {
             }
         }
 
-        this.crossScopeValidation.addDiagnosticsForScopes(scopesForCrossScopeValidation);
+        this.crossScopeValidation.addDiagnosticsForScopes(scopesForCrossScopeValidation, changedFiles);
 
         /*
         for (const [lowerFilePath, fileInfo] of this.lastValidationInfo.entries()) {

@@ -3939,7 +3939,7 @@ describe('Scope', () => {
                 expect(validationSegments).to.not.undefined;
             });
 
-            it('does not require symbols found in namespace of import', () => {
+            it('does require symbols found in namespace of import', () => {
                 let file1 = program.setFile<BrsFile>('source/file1.bs', `
                     import "pkg:/source/file2.bs"
 
@@ -3979,7 +3979,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                expect(file1.requiredSymbols.length).to.eq(0);
+                expect(file1.requiredSymbols.length).to.eq(2);
                 const validationSegments = file1.getValidationSegments(file1.providedSymbols.changes);
                 expect(validationSegments).to.not.undefined;
             });

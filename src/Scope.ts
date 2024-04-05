@@ -799,24 +799,25 @@ export class Scope {
             this.logDebug('validate(): already validated');
             return false;
         }
+        /*
+                const hasChangedSymbols = validationOptions.changedSymbols?.get(SymbolTypeFlag.runtime).size > 0 || validationOptions.changedSymbols?.get(SymbolTypeFlag.typetime).size > 0;
 
-        const hasChangedSymbols = validationOptions.changedSymbols?.get(SymbolTypeFlag.runtime).size > 0 || validationOptions.changedSymbols?.get(SymbolTypeFlag.typetime).size > 0;
+                // let immediateFileChanged = false;
 
-        let immediateFileChanged = false;
-        if (!validationOptions.initialValidation && validationOptions.changedSymbols && !hasChangedSymbols && validationOptions.filesToBeValidatedInScopeContext) {
-            for (let file of this.getImmediateFiles()) {
-                if (validationOptions.filesToBeValidatedInScopeContext?.has(file)) {
-                    immediateFileChanged = true;
-                    break;
-                }
-            }
+                if (!validationOptions.initialValidation && validationOptions.changedSymbols && !hasChangedSymbols && validationOptions.filesToBeValidatedInScopeContext) {
+                    for (let file of this.getImmediateFiles()) {
+                        if (validationOptions.filesToBeValidatedInScopeContext?.has(file)) {
+                            immediateFileChanged = true;
+                            break;
+                        }
+                    }
 
-            if (!immediateFileChanged) {
-                // There was no need to validate this scope.
-                (this as any).isValidated = true;
-                return false;
-            }
-        }
+                    if (!immediateFileChanged) {
+                        // There was no need to validate this scope.
+                        (this as any).isValidated = true;
+                        return false;
+                    }
+                }*/
 
         if (!validationOptions.initialValidation && validationOptions.filesToBeValidatedInScopeContext?.size === 0) {
             // There was no need to validate this scope.
@@ -947,19 +948,20 @@ export class Scope {
 
             }
         }
-        const directFiles = this.getImmediateFiles();
-        for (const file of directFiles) {
-            if (isBrsFile(file)) {
-                const namespaceTypes = file.getNamespaceSymbolTable();
+        // const directFiles = this.getImmediateFiles();
+        // for (const file of directFiles) {
+        this.enumerateBrsFiles((file) => {
+            // if (isBrsFile(file)) {
+            const namespaceTypes = file.getNamespaceSymbolTable();
 
-                this.linkSymbolTableDisposables.push(
-                    ...this._allNamespaceTypeTable.mergeNamespaceSymbolTables(namespaceTypes)
-                );
-                /* this.linkSymbolTableDisposables.push(
-                     () => file.unlinkNamespaceSymbolTables()
-                 );*/
-            }
-        }
+            this.linkSymbolTableDisposables.push(
+                ...this._allNamespaceTypeTable.mergeNamespaceSymbolTables(namespaceTypes)
+            );
+            /* this.linkSymbolTableDisposables.push(
+                 () => file.unlinkNamespaceSymbolTables()
+             );*/
+            //     }
+        });
         for (const [_, nsContainer] of this.namespaceLookup) {
             for (let nsStmt of nsContainer.namespaceStatements) {
                 this.linkSymbolTableDisposables.push(

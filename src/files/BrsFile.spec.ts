@@ -3947,7 +3947,7 @@ describe('BrsFile', () => {
             expect(mainFile.requiredSymbols.length).to.eq(0);
         });
 
-        it('should not include symbols in imported file', () => {
+        it('should include symbols in imported file', () => {
             const otherFile: BrsFile = program.setFile('source/other.bs', `
                 namespace alpha
                     const PI = 3.14
@@ -3962,10 +3962,10 @@ describe('BrsFile', () => {
                 end namespace
             `);
             validateFile(otherFile, mainFile);
-            expect(mainFile.requiredSymbols.length).to.eq(0);
+            expect(mainFile.requiredSymbols.length).to.eq(1);
         });
 
-        it('should not include symbols in imported file of imported file', () => {
+        it('should  include symbols in imported file of imported file', () => {
             const deepFile: BrsFile = program.setFile('source/deep.bs', `
                 namespace alpha
                     const SOME_VALUE = 2
@@ -3986,10 +3986,10 @@ describe('BrsFile', () => {
                 end namespace
             `);
             validateFile(otherFile, mainFile, deepFile);
-            expect(mainFile.requiredSymbols.length).to.eq(0);
+            expect(mainFile.requiredSymbols.length).to.eq(2);
         });
 
-        it('should not have problems with circular references of imports', () => {
+        it('should ignore imports even with circular references', () => {
             const deepFile: BrsFile = program.setFile('source/deep.bs', `
                 import "pkg:/source/main.bs"
                 namespace alpha
@@ -4014,7 +4014,7 @@ describe('BrsFile', () => {
                 end namespace
             `);
             validateFile(otherFile, mainFile, deepFile);
-            expect(mainFile.requiredSymbols.length).to.eq(0);
+            expect(mainFile.requiredSymbols.length).to.eq(2);
         });
     });
 
