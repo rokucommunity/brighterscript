@@ -1,10 +1,10 @@
 import type { DottedGetExpression, TypeExpression, VariableExpression } from './parser/Expression';
-import { isBody, isClassStatement, isInterfaceStatement, isNamespaceStatement, isVariableExpression } from './astUtils/reflection';
+import { isBody, isClassStatement, isDottedGetExpression, isInterfaceStatement, isNamespaceStatement, isVariableExpression } from './astUtils/reflection';
 import { ChildrenSkipper, WalkMode, createVisitor } from './astUtils/visitors';
 import type { GetTypeOptions, TypeChainEntry } from './interfaces';
-import type { AstNode } from './parser/AstNode';
+import type { AstNode, Expression } from './parser/AstNode';
 import { util } from './util';
-import type { NamespaceStatement } from './parser/Statement';
+import type { ClassStatement, NamespaceStatement } from './parser/Statement';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { Token } from './lexer/Token';
 import type { BrsFile } from './files/BrsFile';
@@ -57,9 +57,17 @@ export class AstValidationSegmenter {
         if (!expression) {
             return false;
         }
-        if (isVariableExpression(expression) && expression.tokens.name.text.toLowerCase() === 'm') {
-            return false;
+        let startOfDottedGet = expression as Expression;
+        while (isDottedGetExpression(startOfDottedGet)) {
+            startOfDottedGet = startOfDottedGet.obj;
         }
+        if (isVariableExpression(startOfDottedGet)) {
+            const firstTokenTextLower = startOfDottedGet.tokens.name.text.toLowerCase();
+            if (firstTokenTextLower === 'm' || (this.currentClassStatement && firstTokenTextLower === 'super')) {
+                return false;
+            }
+        }
+
         const flag = util.isInTypeExpression(expression) ? SymbolTypeFlag.typetime : SymbolTypeFlag.runtime;
         const typeChain: TypeChainEntry[] = [];
         const options: GetTypeOptions = { flags: flag, onlyCacheResolvedTypes: true, typeChain: typeChain, data: {} };
@@ -89,6 +97,7 @@ export class AstValidationSegmenter {
     }
 
     private currentNamespaceStatement: NamespaceStatement;
+    private currentClassStatement: ClassStatement;
 
     checkSegmentWalk(segment: AstNode) {
         if (isNamespaceStatement(segment) || isBody(segment)) {
@@ -125,6 +134,7 @@ export class AstValidationSegmenter {
         const skipper = new ChildrenSkipper();
         const assignedSymbols = new Set<AssignedSymbol>();
         const assignedSymbolsNames = new Set<string>();
+        this.currentClassStatement = segment.findAncestor(isClassStatement);
 
         segment.walk(createVisitor({
             AssignmentStatement: (stmt) => {
@@ -164,6 +174,9 @@ export class AstValidationSegmenter {
         if (!foundUnresolvedInSegment) {
             this.singleValidationSegments.add(segment);
         }
+        this.currentClassStatement = undefined;
+        this.currentClassStatement = undefined;
+
     }
 
 
