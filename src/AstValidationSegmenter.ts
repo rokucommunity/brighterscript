@@ -94,6 +94,8 @@ export class AstValidationSegmenter {
         if (isNamespaceStatement(segment) || isBody(segment)) {
             return;
         }
+        this.currentNamespaceStatement = segment.findAncestor(isNamespaceStatement);
+
         if (isClassStatement(segment)) {
             if (segment.parentClassName) {
                 this.segmentsForValidation.push(segment.parentClassName);
@@ -123,7 +125,6 @@ export class AstValidationSegmenter {
         const skipper = new ChildrenSkipper();
         const assignedSymbols = new Set<AssignedSymbol>();
         const assignedSymbolsNames = new Set<string>();
-        this.currentNamespaceStatement = segment.findAncestor(isNamespaceStatement);
 
         segment.walk(createVisitor({
             AssignmentStatement: (stmt) => {

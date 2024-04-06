@@ -23,23 +23,32 @@ export class CrossScopeValidator {
         const unnamespacedNameLower = symbol.typeChain.map(tce => tce.name).join('.').toLowerCase();
         const lowerFirst = symbol.typeChain[0]?.name?.toLowerCase() ?? '';
         let namespacedName = '';
+        let lowerNamespacePrefix = '';
+        let namespacedPotentialTypeKey = '';
         if (symbol.containingNamespaces?.length > 0 && symbol.typeChain[0]?.name.toLowerCase() !== symbol.containingNamespaces[0].toLowerCase()) {
-            namespacedName = `${(symbol.containingNamespaces ?? []).join('.')}.${unnamespacedNameLower}`;
+            lowerNamespacePrefix = `${(symbol.containingNamespaces ?? []).join('.')}`.toLowerCase();
         }
+        if (lowerNamespacePrefix) {
+            namespacedName = `${lowerNamespacePrefix}.${unnamespacedNameLower}`;
+            namespacedPotentialTypeKey = `${lowerNamespacePrefix}.${lowerFirst}`;
+        }
+
         return {
             potentialTypeKey: lowerFirst, // first entry in type chain (useful for enum types, typecasts, etc.)
             key: unnamespacedNameLower, //full name used in code (useful for namespaced symbols)
-            namespacedKey: namespacedName // full name including namespaces (useful for relative symbols in a namespace)
+            namespacedKey: namespacedName, // full name including namespaces (useful for relative symbols in a namespace)
+            namespacedPotentialTypeKey: namespacedPotentialTypeKey //first entry in chain, prefixed with current namespace
         };
     }
 
     resolutionsMap = new Map<UnresolvedSymbol, Set<{ scope: Scope; sourceFile: BrsFile; providedSymbol: BscSymbol }>>();
 
     getRequiredMap(scope: Scope) {
-        const map = new Map<{ potentialTypeKey: string; key: string; namespacedKey: string }, UnresolvedSymbol>();
+        const map = new Map<{ potentialTypeKey: string; key: string; namespacedKey: string; namespacedPotentialTypeKey: string }, UnresolvedSymbol>();
         scope.enumerateBrsFiles((file) => {
             for (const symbol of file.requiredSymbols) {
-                map.set(this.symbolMapKeys(symbol), symbol);
+                const symbolKeys = this.symbolMapKeys(symbol);
+                map.set(symbolKeys, symbol);
             }
         });
         return map;
@@ -95,6 +104,10 @@ export class CrossScopeValidator {
             if (!foundSymbol && symbolKeys.potentialTypeKey !== symbolKeys.key) {
                 // we have a situation where we're looking for <Type>.<Member>
                 foundSymbol = providedMap.get(SymbolTypeFlag.typetime).get(symbolKeys.potentialTypeKey);
+            }
+            if (!foundSymbol && symbolKeys.namespacedPotentialTypeKey) {
+                // we have a situation where we're looking for <Type>.<Member>
+                foundSymbol = providedMap.get(SymbolTypeFlag.typetime).get(symbolKeys.namespacedPotentialTypeKey);
             }
 
             if (foundSymbol) {

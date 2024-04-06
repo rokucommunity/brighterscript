@@ -714,5 +714,49 @@ describe('CrossScopeValidator', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+
+        it('should find member symbols in other file when editing', () => {
+            program.setFile<BrsFile>('source/file1.bs', `
+                namespace alpha.beta
+                    enum Direction
+                        up
+                        down
+                    end enum
+
+                    class Foo
+                         dir as Direction
+                    end class
+                end namespace
+            `);
+
+            program.setFile<BrsFile>('source/file2.bs', `
+                namespace Alpha.Beta
+                    class Bar extends Foo
+                        sub goDown()
+                            m.dir = Direction.down
+                        end sub
+                    end class
+                end namespace
+            `);
+
+            const file3Text = `
+                namespace Alpha.Beta
+                    class Other
+                        function getPi() as float
+                            return 3.14
+                        end function
+                    end class
+                end namespace
+            `;
+
+            program.setFile<BrsFile>('source/file3.bs', file3Text);
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            program.setFile<BrsFile>('source/file3.bs', file3Text); // NO CHANGE!!
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 });
