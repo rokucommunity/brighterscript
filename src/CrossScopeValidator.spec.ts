@@ -678,5 +678,41 @@ describe('CrossScopeValidator', () => {
                 DiagnosticMessages.symbolNotDefinedInScope('alpha.beta.someFunc', `components${path.sep}Widget.xml`).message
             ]);
         });
+
+        it('should find relative namespace items defined in another file', () => {
+            program.setFile<BrsFile>('source/file1.bs', `
+                namespace alpha.beta
+                    enum Direction
+                        up
+                        down
+                    end enum
+
+                    class Foo
+                        x as integer
+                        dir as Direction
+                    end class
+                end namespace
+            `);
+            program.setFile<BrsFile>('source/file2.bs', `
+                namespace alpha.beta
+                    interface Data
+                        name as string
+                        id as integer
+                    end interface
+                end namespace
+            `);
+
+            program.setFile<BrsFile>('source/file3.bs', `
+                namespace Alpha.Beta
+                    class Bar extends Foo
+                        function getData() as Data
+                            return {name: m.dir.toStr(), id: m.x}
+                        end function
+                    end class
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 });
