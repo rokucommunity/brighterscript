@@ -16,6 +16,14 @@ export interface UnresolvedSymbolInfo {
     incompatibleScopes: Set<Scope>;
     missingInScopes: Set<Scope>;
 }
+class ProvidedNode {
+    key: string;
+
+    namespaces = new Map<string, ProvidedNode[]>();
+    symbols = new Map<string, BscSymbol>();
+}
+
+
 
 
 export class CrossScopeValidator {
