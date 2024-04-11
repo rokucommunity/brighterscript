@@ -614,11 +614,5 @@ describe('ProjectManager', () => {
             });
             expect(manager['standaloneProjects']).to.be.empty;
         });
-
-        it('it does NOT load plugins for standalone projects', async () => {
-            //     manager.handleFileChanges
-            //     await project.activate();
-            //     expect(project.plugins).to.be.length(0);
-        });
     });
 });
