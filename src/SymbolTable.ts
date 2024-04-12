@@ -167,7 +167,10 @@ export class SymbolTable implements SymbolTypeGetter {
      * Adds a new symbol to the table
      */
     addSymbol(name: string, data: ExtraSymbolData, type: BscType, bitFlags: SymbolTypeFlag) {
-        const key = name.toLowerCase();
+        if (!name) {
+            return;
+        }
+        const key = name?.toLowerCase();
         if (!this.symbolMap.has(key)) {
             this.symbolMap.set(key, []);
         }

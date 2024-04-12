@@ -4,6 +4,8 @@ import { Program } from './Program';
 import * as path from 'path';
 import type { BrsFile } from './files/BrsFile';
 import { trim, expectZeroDiagnostics, expectDiagnostics, expectDiagnosticsIncludes } from './testHelpers.spec';
+import { expect } from 'chai';
+import { SymbolTypeFlag } from './SymbolTypeFlag';
 
 describe('CrossScopeValidator', () => {
     let sinon = sinonImport.createSandbox();
@@ -18,6 +20,170 @@ describe('CrossScopeValidator', () => {
     afterEach(() => {
         sinon.restore();
         program.dispose();
+    });
+
+
+    describe('provides & requires', () => {
+        it('finds a required symbol in another file', () => {
+            let file1 = program.setFile<BrsFile>('source/file1.bs', `
+                sub callOutsideFunc()
+                    outsideFunc()
+                end sub
+            `);
+            let file2 = program.setFile<BrsFile>('source/file2.bs', `
+                sub outsideFunc()
+                    print "hello"
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(file1.requiredSymbols.length).to.eq(1);
+            expect(file2.requiredSymbols.length).to.eq(0);
+            const sourceScopeIssues = program.crossScopeValidation.getIssuesForScope(program.getScopeByName('source'));
+            expect(sourceScopeIssues.missingSymbols.size).to.eq(0);
+        });
+
+        it('finds a required symbol in another file for each scope', () => {
+            let file1 = program.setFile<BrsFile>('source/file1.bs', `
+                sub callOutsideFunc()
+                    outsideFunc()
+                end sub
+            `);
+            let file2 = program.setFile<BrsFile>('source/file2.bs', `
+                sub outsideFunc()
+                    print "hello from source"
+                end sub
+            `);
+
+            program.setFile<BrsFile>('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <script uri="pkg:/source/file1.bs"/>
+                </component>
+            `);
+            let widgetBs = program.setFile<BrsFile>('components/Widget.bs', `
+                sub init()
+                    callOutsideFunc()
+                end sub
+
+                sub outsideFunc()
+                    print "hello from widget"
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(file1.requiredSymbols.length).to.eq(1);
+            expect(file2.requiredSymbols.length).to.eq(0);
+            expect(widgetBs.requiredSymbols.length).to.eq(1);
+            const sourceScopeIssues = program.crossScopeValidation.getIssuesForScope(program.getScopeByName('source'));
+            expect(sourceScopeIssues.missingSymbols.size).to.eq(0);
+            const widgetScopeIssues = program.crossScopeValidation.getIssuesForScope(program.getScopeByName(`components${path.sep}Widget.xml`));
+            expect(widgetScopeIssues.missingSymbols.size).to.eq(0);
+        });
+
+        it('finds a required symbol in a namespace in another file', () => {
+            let file1 = program.setFile<BrsFile>('source/file1.bs', `
+                namespace alpha
+                    sub callOutsideFunc()
+                        outsideFunc()
+                    end sub
+                end namespace
+            `);
+            let file2 = program.setFile<BrsFile>('source/file2.bs', `
+                namespace alpha
+                    sub outsideFunc()
+                        print "hello from source"
+                    end sub
+                end namespace
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(file1.requiredSymbols.length).to.eq(1);
+            expect(file2.requiredSymbols.length).to.eq(0);
+            const sourceScopeIssues = program.crossScopeValidation.getIssuesForScope(program.getScopeByName('source'));
+            expect(sourceScopeIssues.missingSymbols.size).to.eq(0);
+        });
+
+
+        it('finds if a required symbol is defined different in different scopes', () => {
+            let file1 = program.setFile<BrsFile>('source/file1.bs', `
+                sub callOutsideFunc()
+                    print outsideFunc()
+                end sub
+            `);
+            let file2 = program.setFile<BrsFile>('source/file2.bs', `
+                function outsideFunc() as string
+                    return "hello from source"
+                end function
+            `);
+
+            program.setFile<BrsFile>('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <script uri="pkg:/source/file1.bs"/>
+                </component>
+            `);
+            let widgetBs = program.setFile<BrsFile>('components/Widget.bs', `
+                sub init()
+                    print callOutsideFunc()
+                end sub
+
+                function outsideFunc() as integer
+                    return 123
+                end function
+            `);
+            program.validate();
+            //expectZeroDiagnostics(program);
+            expect(file1.requiredSymbols.length).to.eq(1);
+            expect(file2.requiredSymbols.length).to.eq(0);
+            expect(widgetBs.requiredSymbols.length).to.eq(1);
+            const incompatibleResolutions = program.crossScopeValidation.getIncompatibleSymbolResolutions();
+            expect(incompatibleResolutions.length).to.eq(1);
+            expect(incompatibleResolutions[0].incompatibleScopes.size).to.eq(2);
+        });
+
+        it('finds types defined in different file', () => {
+            let file1 = program.setFile<BrsFile>('source/file1.bs', `
+                function takesIface(z as MyInterface) as string
+                    return z.name
+                end function
+            `);
+            program.setFile<BrsFile>('source/file2.bs', `
+                interface MyInterface
+                    name as string
+                end interface
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(file1.requiredSymbols.length).to.eq(1);
+            expect(file1.requiredSymbols[0].flags).to.eq(SymbolTypeFlag.typetime);
+            expect(file1.requiredSymbols[0].typeChain[0].name).to.eq('MyInterface');
+            const sourceScopeIssues = program.crossScopeValidation.getIssuesForScope(program.getScopeByName('source'));
+            expect(sourceScopeIssues.missingSymbols.size).to.eq(0);
+        });
+
+        it('finds members of typecasts of types defined in different file', () => {
+            let file1 = program.setFile<BrsFile>('source/file1.bs', `
+                function takesIface(z) as string
+                    return (z as MyInterface).name
+                end function
+            `);
+            program.setFile<BrsFile>('source/file2.bs', `
+                interface MyInterface
+                    name as string
+                end interface
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(file1.requiredSymbols.length).to.eq(1);
+            expect(file1.requiredSymbols[0].flags).to.eq(SymbolTypeFlag.typetime);
+            expect(file1.requiredSymbols[0].typeChain[0].name).to.eq('MyInterface');
+            const sourceScopeIssues = program.crossScopeValidation.getIssuesForScope(program.getScopeByName('source'));
+            expect(sourceScopeIssues.missingSymbols.size).to.eq(0);
+        });
     });
 
     describe('incompatibleSymbolDefinition', () => {
@@ -57,7 +223,8 @@ describe('CrossScopeValidator', () => {
         it('finds symbols inconsistent across scopes', () => {
             program.setFile<BrsFile>('source/file1.bs', `
                 function callsOther() as string
-                    return otherFunc()
+                     otherFunc()
+                     return "test"
                 end function
             `);
             program.setFile<BrsFile>('source/file2.bs', `
@@ -91,7 +258,8 @@ describe('CrossScopeValidator', () => {
         it('finds namespaced symbols inconsistent across scopes', () => {
             program.setFile<BrsFile>('source/file1.bs', `
                 function callsAlphaBetaOther() as string
-                    return alpha.beta.otherFunc()
+                     alpha.beta.otherFunc()
+                     return "test"
                 end function
             `);
             program.setFile<BrsFile>('source/file2.bs', `
@@ -130,7 +298,8 @@ describe('CrossScopeValidator', () => {
             program.setFile<BrsFile>('source/file1.bs', `
                 namespace alpha.beta
                     function callsOther() as string
-                        return otherFunc()
+                        otherFunc()
+                        return "test"
                     end function
                 end namespace
             `);
@@ -310,7 +479,8 @@ describe('CrossScopeValidator', () => {
         it('should find when a non-namespaced symbols are not in a second scope', () => {
             program.setFile<BrsFile>('source/file1.bs', `
                 function callsOther() as string
-                    return otherFunc()
+                    otherFunc()
+                    return "test"
                 end function
             `);
             program.setFile<BrsFile>('source/file2.bs', `
@@ -351,6 +521,7 @@ describe('CrossScopeValidator', () => {
                 end sub
             `);
             program.validate();
+
             expectDiagnostics(program, [
                 DiagnosticMessages.cannotFindName('otherFunc', `components${path.sep}Widget2.xml`).message
             ]);
@@ -506,6 +677,86 @@ describe('CrossScopeValidator', () => {
             expectDiagnosticsIncludes(program, [
                 DiagnosticMessages.cannotFindName('someFunc', 'alpha.beta.someFunc').message
             ]);
+        });
+
+        it('should find relative namespace items defined in another file', () => {
+            program.setFile<BrsFile>('source/file1.bs', `
+                namespace alpha.beta
+                    enum Direction
+                        up
+                        down
+                    end enum
+
+                    class Foo
+                        x as integer
+                        dir as Direction
+                    end class
+                end namespace
+            `);
+            program.setFile<BrsFile>('source/file2.bs', `
+                namespace alpha.beta
+                    interface Data
+                        name as string
+                        id as integer
+                    end interface
+                end namespace
+            `);
+
+            program.setFile<BrsFile>('source/file3.bs', `
+                namespace Alpha.Beta
+                    class Bar extends Foo
+                        function getData() as Data
+                            return {name: m.dir.toStr(), id: m.x}
+                        end function
+                    end class
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+
+        it('should find member symbols in other file when editing', () => {
+            program.setFile<BrsFile>('source/file1.bs', `
+                namespace alpha.beta
+                    enum Direction
+                        up
+                        down
+                    end enum
+
+                    class Foo
+                         dir as Direction
+                    end class
+                end namespace
+            `);
+
+            program.setFile<BrsFile>('source/file2.bs', `
+                namespace Alpha.Beta
+                    class Bar extends Foo
+                        sub goDown()
+                            m.dir = Direction.down
+                        end sub
+                    end class
+                end namespace
+            `);
+
+            const file3Text = `
+                namespace Alpha.Beta
+                    class Other
+                        function getPi() as float
+                            return 3.14
+                        end function
+                    end class
+                end namespace
+            `;
+
+            program.setFile<BrsFile>('source/file3.bs', file3Text);
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            program.setFile<BrsFile>('source/file3.bs', file3Text); // NO CHANGE!!
+            program.validate();
+            expectZeroDiagnostics(program);
         });
     });
 });
