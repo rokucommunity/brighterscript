@@ -765,11 +765,6 @@ export let DiagnosticMessages = {
         code: 1146,
         severity: DiagnosticSeverity.Error
     }),
-    symbolNotDefinedInScope: (symbol: string, scopeName: string) => ({
-        message: `'${symbol}' is not defined in scope '${scopeName}'`,
-        code: 1147,
-        severity: DiagnosticSeverity.Error
-    }),
     duplicateSymbolInScope: (symbol: string, scopeName: string) => ({
         message: `'${symbol}' is defined multiple times in scope '${scopeName}'`,
         code: 1148,
