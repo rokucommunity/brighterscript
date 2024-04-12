@@ -4,10 +4,13 @@ import type { BrsFile } from './files/BrsFile';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { Program } from './Program';
 import util from './util';
+import type { BsDiagnosticWithOrigin } from './interfaces';
 import { DiagnosticOrigin } from './interfaces';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { BscSymbol } from './SymbolTable';
-import { isNamespaceType } from './astUtils/reflection';
+import { isNamespaceType, isXmlScope } from './astUtils/reflection';
+import { Cache } from './Cache';
+import { URI } from 'vscode-uri';
 
 export interface UnresolvedSymbolInfo {
     incompatibleScopes: Set<Scope>;
@@ -204,12 +207,12 @@ export class CrossScopeValidator {
                     continue;
                 }
                 for (const scope of scopeList) {
-                    scope.addDiagnostics([{
-                        ...DiagnosticMessages.symbolNotDefinedInScope(typeChainResult.fullChainName, scope.name),
+                    this.addMultiScopeDiagnostic(scope, {
+                        ...DiagnosticMessages.cannotFindName(typeChainResult.fullChainName, scope.name),
                         origin: DiagnosticOrigin.CrossScope,
                         file: file,
                         range: typeChainResult.range
-                    }]);
+                    });
                 }
             }
         }
@@ -273,4 +276,40 @@ export class CrossScopeValidator {
         }
         return incompatibleResolutions;
     }
+
+    /**
+     * Add a diagnostic (to the first scope) that will have `relatedInformation` for each affected scope
+     */
+    private addMultiScopeDiagnostic(scope: Scope, diagnostic: BsDiagnosticWithOrigin) {
+        diagnostic = this.multiScopeCache.getOrAdd(
+            `${diagnostic.file?.srcPath}-${diagnostic.code}-${diagnostic.message}-${util.rangeToString(diagnostic.range)}`,
+            () => {
+                if (!diagnostic.relatedInformation) {
+                    diagnostic.relatedInformation = [];
+                }
+
+                scope.addDiagnostic(diagnostic);
+                return diagnostic;
+            }
+        );
+        if (isXmlScope(scope) && scope.xmlFile?.srcPath) {
+            diagnostic.relatedInformation.push({
+                message: `In component scope '${scope?.xmlFile?.componentName?.text}'`,
+                location: util.createLocation(
+                    URI.file(scope.xmlFile.srcPath).toString(),
+                    scope?.xmlFile?.ast?.componentElement?.getAttribute('name')?.tokens?.value?.range ?? util.createRange(0, 0, 0, 10)
+                )
+            });
+        } else {
+            diagnostic.relatedInformation.push({
+                message: `In scope '${scope.name}'`,
+                location: util.createLocation(
+                    URI.file(diagnostic.file.srcPath).toString(),
+                    diagnostic.range
+                )
+            });
+        }
+    }
+
+    private multiScopeCache = new Cache<string, BsDiagnosticWithOrigin>();
 }

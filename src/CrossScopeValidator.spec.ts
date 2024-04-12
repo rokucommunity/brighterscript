@@ -382,7 +382,7 @@ describe('CrossScopeValidator', () => {
         });
     });
 
-    describe('symbolNotDefinedInScope', () => {
+    describe('cannotFindName', () => {
         it('should not complain when all non-namespaced symbols are found', () => {
             program.setFile<BrsFile>('source/file1.bs', `
                 function callsOther() as string
@@ -521,9 +521,9 @@ describe('CrossScopeValidator', () => {
                 end sub
             `);
             program.validate();
-            expectDiagnosticsIncludes(program, [
-                DiagnosticMessages.cannotFindName('otherFunc').message,
-                DiagnosticMessages.symbolNotDefinedInScope('otherFunc', `components${path.sep}Widget2.xml`).message
+
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('otherFunc', `components${path.sep}Widget2.xml`).message
             ]);
         });
 
@@ -571,7 +571,7 @@ describe('CrossScopeValidator', () => {
             `);
             program.validate();
             expectDiagnosticsIncludes(program, [
-                DiagnosticMessages.symbolNotDefinedInScope('iface2', `components${path.sep}Widget2.xml`).message
+                DiagnosticMessages.cannotFindName('iface2', `components${path.sep}Widget2.xml`).message
             ]);
         });
 
@@ -623,7 +623,7 @@ describe('CrossScopeValidator', () => {
             `);
             program.validate();
             expectDiagnosticsIncludes(program, [
-                DiagnosticMessages.symbolNotDefinedInScope('iface2', `components${path.sep}Widget2.xml`).message
+                DiagnosticMessages.cannotFindName('iface2', `components${path.sep}Widget2.xml`).message
             ]);
         });
 
@@ -675,7 +675,7 @@ describe('CrossScopeValidator', () => {
 
             program.validate();
             expectDiagnosticsIncludes(program, [
-                DiagnosticMessages.symbolNotDefinedInScope('alpha.beta.someFunc', `components${path.sep}Widget.xml`).message
+                DiagnosticMessages.cannotFindName('someFunc', 'alpha.beta.someFunc').message
             ]);
         });
 
