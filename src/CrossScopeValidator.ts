@@ -12,18 +12,78 @@ import { isNamespaceType, isXmlScope } from './astUtils/reflection';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 
-export interface UnresolvedSymbolInfo {
-    incompatibleScopes: Set<Scope>;
-    missingInScopes: Set<Scope>;
-}
-class ProvidedNode {
-    key: string;
 
-    namespaces = new Map<string, ProvidedNode[]>();
-    symbols = new Map<string, BscSymbol>();
+interface FileSymbolPair {
+    file: BrsFile;
+    symbol: BscSymbol;
 }
 
+export class ProvidedNode {
 
+    namespaces = new Map<string, ProvidedNode>();
+    symbols = new Map<string, FileSymbolPair>();
+
+    constructor(public key: string = '') { }
+
+
+    getSymbol(symbolName: string): FileSymbolPair {
+        let lowerSymbolNameParts = symbolName.toLowerCase().split('.');
+        return this.getSymbolByNameParts(lowerSymbolNameParts);
+    }
+
+    private getSymbolByNameParts(lowerSymbolNameParts: string[]): FileSymbolPair {
+        const first = lowerSymbolNameParts?.[0];
+        const rest = lowerSymbolNameParts.slice(1);
+        if (!first) {
+            return;
+        }
+        if (this.symbols.has(first)) {
+            let result = this.symbols.get(first);
+            for (const namePart of rest) {
+                const memberSymbol = result.symbol.type.getMemberTable().getSymbol(namePart, SymbolTypeFlag.runtime);
+                if (!memberSymbol) {
+                    return;
+                }
+                result.symbol = memberSymbol[0];
+            }
+            return result;
+        } else if (rest && this.namespaces.has(first)) {
+            const node = this.namespaces.get(first);
+            return node.getSymbolByNameParts(rest);
+        }
+    }
+
+    addSymbol(symbolName: string, symbolPair: FileSymbolPair) {
+        let lowerSymbolNameParts = symbolName.toLowerCase().split('.');
+        return this.addSymbolByNameParts(lowerSymbolNameParts, symbolPair);
+    }
+
+    private addSymbolByNameParts(lowerSymbolNameParts: string[], symbolPair: FileSymbolPair) {
+        const first = lowerSymbolNameParts?.[0];
+        const rest = lowerSymbolNameParts?.slice(1);
+        let isDuplicate = false;
+        if (!first) {
+            return;
+        }
+        if (rest?.length > 0) {
+            // first must be a namespace
+            let namespaceNode = this.namespaces.get(first);
+            if (!namespaceNode) {
+                namespaceNode = new ProvidedNode(first);
+                this.namespaces.set(first, namespaceNode);
+            }
+            return namespaceNode.addSymbolByNameParts(rest, symbolPair);
+        } else {
+            // just add it to the symbols
+            if (!this.symbols.get(first)) {
+                this.symbols.set(first, symbolPair);
+            } else {
+                isDuplicate = true;
+            }
+        }
+        return isDuplicate;
+    }
+}
 
 
 export class CrossScopeValidator {
@@ -66,8 +126,9 @@ export class CrossScopeValidator {
     }
 
     getProvidedMap(scope: Scope) {
-        const providedMap = new Map<SymbolTypeFlag, Map<string, { file: BrsFile; symbol: BscSymbol }>>();
-        const duplicatesMap = new Map<string, Set<{ file: BrsFile; symbol: BscSymbol }>>();
+        const providedMap = new Map<SymbolTypeFlag, Map<string, FileSymbolPair>>();
+        const providedTree = new ProvidedNode();
+        const duplicatesMap = new Map<string, Set<FileSymbolPair>>();
         scope.enumerateBrsFiles((file) => {
             for (const [flags, nameMap] of file.providedSymbols.symbolMap.entries()) {
                 let fileMapForFlag = providedMap.get(flags);
@@ -79,25 +140,27 @@ export class CrossScopeValidator {
                     if (isNamespaceType(symbol.type)) {
                         continue;
                     }
-                    if (fileMapForFlag.has(symbolName)) {
+
+                    const isDupe = providedTree.addSymbol(symbolName, { file: file, symbol: symbol });
+                    if (isDupe) { //fileMapForFlag.has(symbolName)) {
                         let dupes = duplicatesMap.get(symbolName);
                         if (!dupes) {
                             dupes = new Set<{ file: BrsFile; symbol: BscSymbol }>();
                             duplicatesMap.set(symbolName, dupes);
+                            dupes.add(providedTree.getSymbol(symbolName));
                         }
-                        dupes.add(fileMapForFlag.get(symbolName));
                         dupes.add({ file: file, symbol: symbol });
                     }
                     fileMapForFlag.set(symbolName, { file: file, symbol: symbol });
                 }
             }
         });
-        return { providedMap: providedMap, duplicatesMap: duplicatesMap };
+        return { providedMap: providedMap, duplicatesMap: duplicatesMap, providedTree: providedTree };
     }
 
     getIssuesForScope(scope: Scope) {
         const requiredMap = this.getRequiredMap(scope);
-        const { providedMap, duplicatesMap } = this.getProvidedMap(scope);
+        const { providedTree, duplicatesMap } = this.getProvidedMap(scope);
 
         const missingSymbols = new Set<UnresolvedSymbol>();
 
@@ -108,6 +171,7 @@ export class CrossScopeValidator {
                 //symbol is available in global scope. ignore it
                 continue;
             }
+            /*
             const providedMapForFlag = providedMap.get(unresolvedSymbol.endChainFlags);
             let foundSymbol = providedMapForFlag?.get(symbolKeys.namespacedKey) ??
                 providedMapForFlag?.get(symbolKeys.key);
@@ -120,6 +184,8 @@ export class CrossScopeValidator {
                 // we have a situation where we're looking for <Type>.<Member>
                 foundSymbol = providedMap.get(SymbolTypeFlag.typetime).get(symbolKeys.namespacedPotentialTypeKey);
             }
+*/
+            const foundSymbol = providedTree.getSymbol(symbolKeys.namespacedKey) ?? providedTree.getSymbol(symbolKeys.key);
 
             if (foundSymbol) {
                 let resolvedListForSymbol = this.resolutionsMap.get(unresolvedSymbol);

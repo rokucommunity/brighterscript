@@ -22,6 +22,105 @@ describe('CrossScopeValidator', () => {
         program.dispose();
     });
 
+    describe('providedNodes', () => {
+        it('builds a tree', () => {
+            program.setFile<BrsFile>('source/file1.bs', `
+                sub callOutsideFunc()
+                    outsideFunc()
+                end sub
+            `);
+            program.setFile<BrsFile>('source/file2.bs', `
+                sub outsideFunc()
+                    print "hello"
+                end sub
+
+                class Klass
+                    x as integer
+                end class
+
+                interface IFace
+                    x as float
+                    y as float
+                end interface
+            `);
+            program.validate();
+            const sourceScope = program.getScopeByName('source');
+            const results = program.crossScopeValidation.getProvidedMap(sourceScope);
+            const tree = results.providedTree;
+            expect(tree.getSymbol('callOutsideFunc')).to.exist;
+            expect(tree.getSymbol('outsideFunc')).to.exist;
+            expect(tree.getSymbol('Klass')).to.exist;
+            expect(tree.getSymbol('IFace')).to.exist;
+        });
+
+        it('finds duplicates', () => {
+            program.setFile<BrsFile>('source/file1.bs', `
+                namespace alpha.beta
+                    sub thing()
+                       alpha.outsideFunc()
+                    end sub
+                end namespace
+            `);
+            program.setFile<BrsFile>('source/file2.bs', `
+                namespace alpha
+                    sub outsideFunc()
+                        print "hello"
+                    end sub
+
+                    namespace beta
+                        class Thing
+                            x as integer
+                        end class
+                end namespace
+            `);
+            program.validate();
+            const sourceScope = program.getScopeByName('source');
+            const results = program.crossScopeValidation.getProvidedMap(sourceScope);
+            const tree = results.providedTree;
+            expect(tree.getSymbol('alpha.beta.Thing')).to.exist;
+            expect(results.duplicatesMap.has('alpha.beta.thing')).to.true;
+        });
+
+        it('builds a tree from namespaces', () => {
+            program.setFile<BrsFile>('source/file1.bs', `
+                namespace alpha.beta
+                    sub callOutsideFunc()
+                       alpha.outsideFunc()
+                    end sub
+                end namespace
+            `);
+            program.setFile<BrsFile>('source/file2.bs', `
+                sub outsideFunc()
+                end sub
+
+                namespace alpha
+                    sub outsideFunc()
+                        print "hello"
+                    end sub
+
+                    namespace beta
+                        class Klass
+                            x as integer
+                        end class
+
+                        interface IFace
+                            x as float
+                            y as float
+                        end interface
+                    end namespace
+                end namespace
+            `);
+            program.validate();
+            const sourceScope = program.getScopeByName('source');
+            const results = program.crossScopeValidation.getProvidedMap(sourceScope);
+            const tree = results.providedTree;
+            expect(tree.getSymbol('alpha.beta.callOutsideFunc')).to.exist;
+            expect(tree.getSymbol('outsideFunc')).to.exist;
+            expect(tree.getSymbol('alpha.outsideFunc')).to.exist;
+            expect(tree.getSymbol('alpha.beta.Klass')).to.exist;
+            expect(tree.getSymbol('alpha.beta.IFace')).to.exist;
+        });
+    });
 
     describe('provides & requires', () => {
         it('finds a required symbol in another file', () => {
