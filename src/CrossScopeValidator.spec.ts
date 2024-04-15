@@ -45,7 +45,7 @@ describe('CrossScopeValidator', () => {
             `);
             program.validate();
             const sourceScope = program.getScopeByName('source');
-            const results = program.crossScopeValidation.getProvidedMap(sourceScope);
+            const results = program.crossScopeValidation.getProvidedTree(sourceScope);
             const tree = results.providedTree;
             expect(tree.getSymbol('callOutsideFunc')).to.exist;
             expect(tree.getSymbol('outsideFunc')).to.exist;
@@ -75,7 +75,7 @@ describe('CrossScopeValidator', () => {
             `);
             program.validate();
             const sourceScope = program.getScopeByName('source');
-            const results = program.crossScopeValidation.getProvidedMap(sourceScope);
+            const results = program.crossScopeValidation.getProvidedTree(sourceScope);
             const tree = results.providedTree;
             expect(tree.getSymbol('alpha.beta.Thing')).to.exist;
             expect(results.duplicatesMap.has('alpha.beta.thing')).to.true;
@@ -112,7 +112,7 @@ describe('CrossScopeValidator', () => {
             `);
             program.validate();
             const sourceScope = program.getScopeByName('source');
-            const results = program.crossScopeValidation.getProvidedMap(sourceScope);
+            const results = program.crossScopeValidation.getProvidedTree(sourceScope);
             const tree = results.providedTree;
             expect(tree.getSymbol('alpha.beta.callOutsideFunc')).to.exist;
             expect(tree.getSymbol('outsideFunc')).to.exist;
@@ -856,6 +856,43 @@ describe('CrossScopeValidator', () => {
             program.setFile<BrsFile>('source/file3.bs', file3Text); // NO CHANGE!!
             program.validate();
             expectZeroDiagnostics(program);
+        });
+
+        describe('const values', () => {
+            it('should allow const values to be composed of other const values from namespaces', () => {
+                program.setFile('source/constants.bs', `
+                    const top_pi = alpha.beta.pi
+                    const top_two = alpha.gamma.two
+                    const top_twoPi = top_two * top_pi
+                `);
+                program.setFile('source/ns.bs', `
+                    namespace alpha.beta
+                        const pi = 3.14
+                    end namespace
+
+                    namespace alpha.gamma
+                        const two = 2
+                    end namespace
+                `);
+
+                program.setFile('components/widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script uri="pkg:/components/widget.bs"/>
+                    </component>
+                `);
+
+                program.setFile('components/widget.bs', `
+                    import "pkg:/source/constants.bs"
+                    import "pkg:/source/ns.bs"
+
+                    sub init()
+                        print top_twoPi
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
         });
     });
 });

@@ -1256,6 +1256,9 @@ export class BrsFile implements BscFile {
         const symbolMap = new Map<SymbolTypeFlag, Map<string, BscSymbol>>();
         const runTimeSymbolMap = new Map<string, BscSymbol>();
         const typeTimeSymbolMap = new Map<string, BscSymbol>();
+        const referenceSymbolMap = new Map<SymbolTypeFlag, Map<string, BscSymbol>>();
+        const referenceRunTimeSymbolMap = new Map<string, BscSymbol>();
+        const referenceTypeTimeSymbolMap = new Map<string, BscSymbol>();
 
         const tablesToGetSymbolsFrom: Array<{ table: SymbolTable; namePrefixLower?: string }> = [{
             table: this.parser.symbolTable
@@ -1273,26 +1276,33 @@ export class BrsFile implements BscFile {
             const typeTimeSymbols = symbolTable.table.getOwnSymbols(SymbolTypeFlag.typetime);
 
             for (const symbol of runTimeSymbols) {
+                const symbolNameLower = symbolTable.namePrefixLower
+                    ? `${symbolTable.namePrefixLower}.${symbol.name.toLowerCase()}`
+                    : symbol.name.toLowerCase();
                 if (!isAnyReferenceType(symbol.type)) {
-                    const symbolNameLower = symbolTable.namePrefixLower
-                        ? `${symbolTable.namePrefixLower}.${symbol.name.toLowerCase()}`
-                        : symbol.name.toLowerCase();
                     runTimeSymbolMap.set(symbolNameLower, symbol);
+                } else {
+                    referenceRunTimeSymbolMap.set(symbolNameLower, symbol);
                 }
             }
 
             for (const symbol of typeTimeSymbols) {
+                const symbolNameLower = symbolTable.namePrefixLower
+                    ? `${symbolTable.namePrefixLower}.${symbol.name.toLowerCase()}`
+                    : symbol.name.toLowerCase();
                 if (!isAnyReferenceType(symbol.type)) {
-                    const symbolNameLower = symbolTable.namePrefixLower
-                        ? `${symbolTable.namePrefixLower}.${symbol.name.toLowerCase()}`
-                        : symbol.name.toLowerCase();
                     typeTimeSymbolMap.set(symbolNameLower, symbol);
+                } else {
+                    referenceTypeTimeSymbolMap.set(symbolNameLower, symbol);
                 }
             }
         }
 
         symbolMap.set(SymbolTypeFlag.runtime, runTimeSymbolMap);
         symbolMap.set(SymbolTypeFlag.typetime, typeTimeSymbolMap);
+
+        referenceSymbolMap.set(SymbolTypeFlag.runtime, referenceRunTimeSymbolMap);
+        referenceSymbolMap.set(SymbolTypeFlag.typetime, referenceTypeTimeSymbolMap);
 
         const changes = new Map<SymbolTypeFlag, Set<string>>();
         changes.set(SymbolTypeFlag.runtime, new Set<string>());
@@ -1334,7 +1344,8 @@ export class BrsFile implements BscFile {
         }
         return {
             symbolMap: symbolMap,
-            changes: changes
+            changes: changes,
+            referenceSymbolMap: referenceSymbolMap
         };
     }
 

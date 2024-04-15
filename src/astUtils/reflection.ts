@@ -23,7 +23,7 @@ import type { ObjectType } from '../types/ObjectType';
 import type { AstNode, Expression, Statement } from '../parser/AstNode';
 import type { AssetFile } from '../files/AssetFile';
 import { AstNodeKind } from '../parser/AstNode';
-import type { TypePropertyReferenceType, ReferenceType, BinaryOperatorReferenceType, ArrayDefaultTypeReferenceType } from '../types/ReferenceType';
+import type { TypePropertyReferenceType, ReferenceType, BinaryOperatorReferenceType, ArrayDefaultTypeReferenceType, AnyReferenceType } from '../types/ReferenceType';
 import type { EnumMemberType, EnumType } from '../types/EnumType';
 import type { UnionType } from '../types/UnionType';
 import type { UninitializedType } from '../types/UninitializedType';
@@ -363,7 +363,7 @@ export function isCallableType(target): target is BaseFunctionType {
     return isFunctionType(target) || isTypedFunctionType(target);
 }
 
-export function isAnyReferenceType(target): target is ReferenceType | TypePropertyReferenceType | BinaryOperatorReferenceType | ArrayDefaultTypeReferenceType {
+export function isAnyReferenceType(target): target is AnyReferenceType {
     const name = target?.__reflection?.name;
     return name === 'ReferenceType' || name === 'TypePropertyReferenceType' || name === 'BinaryOperatorReferenceType' || name === 'ArrayDefaultTypeReferenceType';
 }

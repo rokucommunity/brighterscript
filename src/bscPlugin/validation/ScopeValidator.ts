@@ -536,11 +536,11 @@ export class ScopeValidator {
         const actualRHSType = assignStmt.value?.getType(getTypeOpts);
         const compatibilityData: TypeCompatibilityData = {};
         if (!expectedLHSType || !expectedLHSType.isResolvable()) {
-            this.addMultiScopeDiagnostic({
-                ...DiagnosticMessages.cannotFindName(assignStmt.typeExpression.getName(ParseMode.BrighterScript)),
-                range: assignStmt.typeExpression.range,
-                file: file
-            });
+            /* this.addMultiScopeDiagnostic({
+                 ...DiagnosticMessages.cannotFindName(assignStmt.typeExpression.getName(ParseMode.BrighterScript)),
+                 range: assignStmt.typeExpression.range,
+                 file: file
+             });*/
         } else if (!expectedLHSType?.isTypeCompatible(actualRHSType, compatibilityData)) {
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.assignmentTypeMismatch(actualRHSType.toString(), expectedLHSType.toString(), compatibilityData),
@@ -720,7 +720,21 @@ export class ScopeValidator {
                     ...DiagnosticMessages.cannotFindName(typeChainScan.itemName, typeChainScan.fullNameOfItem),
                     range: typeChainScan.range
                 });
-            }
+            }/*else if (!isUsedAsType) {
+                const typeChainScan = util.processTypeChain(typeChain);
+
+                if (isDottedGetExpression(expression)) {
+                    const objType = expression.obj.getType({ flags: symbolType });
+                    if (isCallableType(objType)) {
+                        // dotted get expression, with the name of a class before the property
+                        this.addMultiScopeDiagnostic({
+                            file: file as BscFile,
+                            ...DiagnosticMessages.cannotFindName(typeChainScan.itemName, typeChainScan.fullNameOfItem),
+                            range: typeChainScan.range
+                        });
+                    }
+                }
+            }*/
 
         }
         if (isUsedAsType) {

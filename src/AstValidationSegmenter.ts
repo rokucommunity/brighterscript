@@ -8,6 +8,7 @@ import type { ClassStatement, NamespaceStatement } from './parser/Statement';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { Token } from './lexer/Token';
 import type { BrsFile } from './files/BrsFile';
+import { TokenKind } from './lexer/TokenKind';
 
 // eslint-disable-next-line no-bitwise
 export const InsideSegmentWalkMode = WalkMode.visitStatements | WalkMode.visitExpressions | WalkMode.recurseChildFunctions;
@@ -138,8 +139,11 @@ export class AstValidationSegmenter {
 
         segment.walk(createVisitor({
             AssignmentStatement: (stmt) => {
-                assignedSymbols.add({ token: stmt.tokens.name, node: stmt });
-                assignedSymbolsNames.add(stmt.tokens.name.text.toLowerCase());
+                if (stmt.tokens.equals.kind === TokenKind.Equal) {
+                    // this is a straight assignment, not a compound assignment
+                    assignedSymbols.add({ token: stmt.tokens.name, node: stmt });
+                    assignedSymbolsNames.add(stmt.tokens.name.text.toLowerCase());
+                }
             },
             FunctionParameterExpression: (expr) => {
                 assignedSymbols.add({ token: expr.tokens.name, node: expr });

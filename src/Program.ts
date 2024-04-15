@@ -958,80 +958,6 @@ export class Program {
         });
     }
 
-    /*
-    private updateLastValidationFileInfo(brsFilesValidated: BrsFile[]) {
-        this.lastValidationInfo.clear();
-        for (const file of brsFilesValidated) {
-            const lowerFilePath = file.srcPath.toLowerCase();
-
-            const fileInfo: ProgramValidationInfo = {
-                symbolsNotDefinedInEveryScope: [],
-                duplicateSymbolsInSameScope: [],
-                symbolsNotConsistentAcrossScopes: []
-            };
-            const scopesToCheckForConsistency = this.getScopesForFile(file);
-            for (const symbol of file.requiredSymbols) {
-                let providedSymbolType: BscType;
-                let scopesDefiningSymbol: Scope[] = [];
-                let scopesAreInconsistent = false;
-
-                // check global scope for components
-                if (symbol.typeChain.length === 1 && this.globalScope.symbolTable.getSymbol(symbol.typeChain[0].name, symbol.flags)) {
-                    //symbol is available in global scope. ignore it
-                    continue;
-                }
-
-                for (const scope of scopesToCheckForConsistency) {
-                    let symbolFoundInScope = false;
-                    for (const scopeFile of scope.getAllFiles()) {
-                        if (!isBrsFile(scopeFile) || scopeFile.isTypedef || scopeFile.hasTypedef) {
-                            continue;
-                        }
-                        const lowerFirstSymbolName = symbol.typeChain?.[0]?.name.toLowerCase();
-                        let symbolInThisScope = scopeFile.providedSymbols.symbolMap?.get(symbol.flags)?.get(lowerFirstSymbolName);
-                        if (!symbolInThisScope && symbol.containingNamespaces?.length > 0) {
-                            const fullNameWithNamespaces = (symbol.containingNamespaces.join('.') + '.' + lowerFirstSymbolName).toLowerCase();
-                            symbolInThisScope = scopeFile.providedSymbols.symbolMap?.get(symbol.flags)?.get(fullNameWithNamespaces);
-                        }
-                        if (symbolInThisScope) {
-                            if (symbolFoundInScope) {
-                                // this is duplicately defined!
-                                fileInfo.duplicateSymbolsInSameScope.push({ symbol: symbol, scope: scope });
-                            } else {
-                                symbolFoundInScope = true;
-                                scopesDefiningSymbol.push(scope);
-                                //check for consistency across scopes
-                                if (!providedSymbolType) {
-                                    providedSymbolType = symbolInThisScope.type;
-                                } else {
-                                    //get more general type
-                                    if (providedSymbolType.isEqual(symbolInThisScope.type)) {
-                                        //type in this scope is the same as one we're already checking
-                                    } else if (providedSymbolType.isTypeCompatible(symbolInThisScope.type)) {
-                                        //type in this scope is compatible with one we're storing. use most generic
-                                        providedSymbolType = symbolInThisScope.type;
-                                    } else if (symbolInThisScope.type.isTypeCompatible(providedSymbolType)) {
-                                        // type we're storing is more generic that the type in this scope
-                                    } else {
-                                        // type in this scope is not compatible with other types for this symbol
-                                        scopesAreInconsistent = true;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    if (!symbolFoundInScope) {
-                        fileInfo.symbolsNotDefinedInEveryScope.push({ symbol: symbol, scope: scope });
-                    }
-                }
-                if (scopesAreInconsistent) {
-                    fileInfo.symbolsNotConsistentAcrossScopes.push({ symbol: symbol, scopes: scopesDefiningSymbol });
-                }
-            }
-            this.lastValidationInfo.set(lowerFilePath, fileInfo);
-        }
-    }*/
-
     // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
     private logValidationMetrics(metrics: { [key: string]: number | string }) {
         let logs = [] as string[];
@@ -1059,7 +985,6 @@ export class Program {
                 scopesForCrossScopeValidation.push(scope);
             }
         }
-
         this.crossScopeValidation.addDiagnosticsForScopes(scopesForCrossScopeValidation, changedFiles);
     }
 

@@ -2713,7 +2713,7 @@ describe('ScopeValidator', () => {
                 end namespace
             `);
             program.validate();
-            expectDiagnosticsIncludes(program, [DiagnosticMessages.cannotFindName('SomeEnum').message]);
+            expectDiagnosticsIncludes(program, [DiagnosticMessages.cannotFindName('Alpha.Beta.Charlie.SomeEnum').message]);
         });
 
         it('revalidates when a class defined in a different namespace changes', () => {
