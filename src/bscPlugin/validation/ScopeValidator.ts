@@ -5,8 +5,7 @@ import { Cache } from '../../Cache';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
-import { DiagnosticOrigin } from '../../interfaces';
-import type { BsDiagnostic, BsDiagnosticWithOrigin, CallableContainer, ExtraSymbolData, FileReference, OnScopeValidateEvent, TypeChainEntry, TypeCompatibilityData } from '../../interfaces';
+import type { BsDiagnostic, CallableContainer, ExtraSymbolData, FileReference, OnScopeValidateEvent, TypeChainEntry, TypeCompatibilityData } from '../../interfaces';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import type { AssignmentStatement, ClassStatement, DottedSetStatement, EnumStatement, NamespaceStatement, ReturnStatement } from '../../parser/Statement';
 import util from '../../util';
@@ -73,7 +72,7 @@ export class ScopeValidator {
 
     public reset() {
         this.event = undefined;
-        this.onceCache.clear();
+        //this.onceCache.clear();
         //this.multiScopeCache.clear();
     }
 
@@ -268,7 +267,6 @@ export class ScopeValidator {
      * Flag duplicate enums
      */
     private detectDuplicateEnums() {
-        const diagnostics: BsDiagnosticWithOrigin[] = [];
         const enumLocationsByName = new Cache<string, Array<{ file: BrsFile; statement: EnumStatement }>>();
         this.event.scope.enumerateBrsFiles((file) => {
             // eslint-disable-next-line @typescript-eslint/dot-notation
@@ -300,7 +298,7 @@ export class ScopeValidator {
             const primaryEnum = enumLocations.shift();
             const fullName = primaryEnum.statement.fullName;
             for (const duplicateEnumInfo of enumLocations) {
-                diagnostics.push({
+                this.addDiagnostic({
                     ...DiagnosticMessages.duplicateEnumDeclaration(this.event.scope.name, fullName),
                     file: duplicateEnumInfo.file,
                     range: duplicateEnumInfo.statement.tokens.name.range,
@@ -310,12 +308,10 @@ export class ScopeValidator {
                             URI.file(primaryEnum.file.srcPath).toString(),
                             primaryEnum.statement.tokens.name.range
                         )
-                    }],
-                    origin: DiagnosticOrigin.Scope
+                    }]
                 });
             }
         }
-        this.event.scope.addDiagnostics(diagnostics);
     }
 
     /**
@@ -348,21 +344,21 @@ export class ScopeValidator {
             //add diagnostic for unknown components
             const unquotedComponentName = componentName?.text?.replace(/"/g, '');
             if (unquotedComponentName && !platformNodeNames.has(unquotedComponentName.toLowerCase()) && !this.event.program.getComponent(unquotedComponentName)) {
-                this.addDiagnosticOnce({
+                this.addDiagnostic({
                     file: file as BscFile,
                     ...DiagnosticMessages.unknownRoSGNode(unquotedComponentName),
                     range: componentName.range
                 });
             } else if (call?.args.length !== 2) {
                 // roSgNode should only ever have 2 args in `createObject`
-                this.addDiagnosticOnce({
+                this.addDiagnostic({
                     file: file as BscFile,
                     ...DiagnosticMessages.mismatchCreateObjectArgumentCount(firstParamStringValue, [2], call?.args.length),
                     range: call.range
                 });
             }
         } else if (!platformComponentNames.has(firstParamStringValueLower)) {
-            this.addDiagnosticOnce({
+            this.addDiagnostic({
                 file: file as BscFile,
                 ...DiagnosticMessages.unknownBrightScriptComponent(firstParamStringValue),
                 range: firstParamToken.range
@@ -379,7 +375,7 @@ export class ScopeValidator {
             }
             if (!validArgCounts.includes(call?.args.length)) {
                 // Incorrect number of arguments included in `createObject()`
-                this.addDiagnosticOnce({
+                this.addDiagnostic({
                     file: file as BscFile,
                     ...DiagnosticMessages.mismatchCreateObjectArgumentCount(firstParamStringValue, validArgCounts, call?.args.length),
                     range: call.range
@@ -388,7 +384,7 @@ export class ScopeValidator {
 
             // Test for deprecation
             if (brightScriptComponent?.isDeprecated) {
-                this.addDiagnosticOnce({
+                this.addDiagnostic({
                     file: file as BscFile,
                     ...DiagnosticMessages.deprecatedBrightScriptComponent(firstParamStringValue, brightScriptComponent.deprecatedDescription),
                     range: call.range
@@ -1353,7 +1349,7 @@ export class ScopeValidator {
      * Adds a diagnostic to the first scope for this key. Prevents duplicate diagnostics
      * for diagnostics where scope isn't important. (i.e. CreateObject validations)
      */
-    private addDiagnosticOnce(diagnostic: BsDiagnostic) {
+    /*private addDiagnosticOnce(diagnostic: BsDiagnostic) {
         this.onceCache.getOrAdd(`${diagnostic.code} - ${diagnostic.message} - ${util.rangeToString(diagnostic.range)} `, () => {
             const diagnosticWithOrigin = { ...diagnostic } as BsDiagnosticWithOrigin;
             if (!diagnosticWithOrigin.origin) {
@@ -1363,11 +1359,11 @@ export class ScopeValidator {
                 diagnosticWithOrigin.astSegment = this.currentSegmentBeingValidated;
             }
 
-            this.event.scope.addDiagnostics([diagnosticWithOrigin]);
+            this.event.program.diagnosticManager.register([diagnosticWithOrigin]);
             return true;
         });
     }
-    private onceCache = new Cache<string, boolean>();
+    private onceCache = new Cache<string, boolean>();*/
 
     private addDiagnostic(diagnostic: BsDiagnostic) {
         this.event.program.diagnosticManager.register(diagnostic, {
@@ -1380,8 +1376,6 @@ export class ScopeValidator {
      * Add a diagnostic (to the first scope) that will have `relatedInformation` for each affected scope
      */
     private addMultiScopeDiagnostic(diagnostic: BsDiagnostic) {
-
-
         this.event.program.diagnosticManager.register(diagnostic, {
             tags: [ScopeValidatorDiagnosticTag],
             segment: this.currentSegmentBeingValidated,

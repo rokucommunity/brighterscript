@@ -119,7 +119,7 @@ export class Program {
         globalFile.isValidated = true;
         this.globalScope.validate();
         //for now, disable validation of global scope because the global files have some duplicate method declarations
-        this.globalScope.getDiagnostics = () => [];
+        //  this.globalScope.getDiagnostics = () => [];
         //TODO we might need to fix this because the isValidated clears stuff now
         (this.globalScope as any).isValidated = true;
     }
@@ -451,6 +451,7 @@ export class Program {
 
             let diagnostics = [...this.diagnostics, ...this.diagnosticManager.getDiagnostics()];
 
+            /*
             //get the diagnostics from all scopes
             for (let scopeName in this.scopes) {
                 let scope = this.scopes[scopeName];
@@ -465,7 +466,7 @@ export class Program {
                 diagnostics.push(
                     ...file.diagnostics
                 );
-            }
+            }*/
             const filteredDiagnostics = this.logger.time(LogLevel.debug, ['filter diagnostics'], () => {
                 //filter out diagnostics based on our diagnostic filters
                 let finalDiagnostics = this.diagnosticFilterer.filter({
@@ -789,6 +790,7 @@ export class Program {
             if (!file || !this.hasFile(file.srcPath)) {
                 continue;
             }
+            this.diagnosticManager.clearForFile(file);
 
             const event: BeforeFileRemoveEvent = { file: file, program: this };
             this.plugins.emit('beforeFileRemove', event);

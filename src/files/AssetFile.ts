@@ -1,4 +1,3 @@
-import type { BsDiagnostic } from '../interfaces';
 import type { BscFile } from './BscFile';
 import { standardizePath as s } from '../util';
 import type { FileData } from './LazyFileData';
@@ -30,8 +29,6 @@ export class AssetFile implements BscFile {
     public srcPath: string;
     public destPath: string;
     public pkgPath: string;
-
-    public diagnostics: BsDiagnostic[] = [];
 
     public dependencyGraphKey: string;
 

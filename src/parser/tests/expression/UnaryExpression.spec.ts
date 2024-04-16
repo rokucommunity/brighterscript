@@ -46,6 +46,6 @@ describe('UnaryExpression', () => {
                 print x.toStr() + y.toStr() + w.toStr() + h.toStr()
             End Sub
         `);
-        expectZeroDiagnostics(file);
+        expectZeroDiagnostics(program);
     });
 });

@@ -21,6 +21,7 @@ import { createDottedIdentifier, createVariableExpression } from './astUtils/cre
 import { Parser } from './parser/Parser';
 import type { FunctionStatement } from './parser/Statement';
 import { ComponentType } from './types/ComponentType';
+import type { BrsFile } from './files/BrsFile';
 
 const sinon = createSandbox();
 
@@ -75,7 +76,7 @@ describe('util', () => {
     describe('diagnosticIsSuppressed', () => {
         it('does not crash when diagnostic is missing location information', () => {
             const program = new Program({});
-            const file = program.setFile('source/main.brs', '');
+            const file = program.setFile('source/main.brs', '') as BrsFile;
             const diagnostic: BsDiagnostic = {
                 file: file,
                 message: 'crash',
@@ -89,7 +90,7 @@ describe('util', () => {
                 file: file,
                 range: util.createRange(1, 2, 3, 4)
             });
-            file.diagnostics.push(diagnostic);
+            program.diagnosticManager.register(diagnostic);
 
             util.diagnosticIsSuppressed(diagnostic);
 

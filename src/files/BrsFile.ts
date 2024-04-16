@@ -1,6 +1,6 @@
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
-import type { CompletionItem, Position, Location, Diagnostic } from 'vscode-languageserver';
+import type { CompletionItem, Position, Location } from 'vscode-languageserver';
 import { CancellationTokenSource } from 'vscode-languageserver';
 import { CompletionItemKind, SymbolKind, DocumentSymbol, SymbolInformation } from 'vscode-languageserver';
 import chalk from 'chalk';
@@ -158,25 +158,15 @@ export class BrsFile implements BscFile {
     /**
      * A collection of diagnostics related to this file
      */
-    public diagnostics = [] as BsDiagnostic[];
+    // public diagnostics = [] as BsDiagnostic[];
 
-    /**
-     * @deprecated use `.diagnostics` instead
-     */
-    public getDiagnostics() {
-        return this.diagnostics;
-    }
-
-    public addDiagnostic(diagnostic: Diagnostic & { file?: BscFile }) {
-        if (!diagnostic.file) {
-            diagnostic.file = this;
-        }
-        this.diagnostics.push(diagnostic as any);
-    }
-
-    public addDiagnostics(diagnostics: BsDiagnostic[]) {
-        this.diagnostics.push(...diagnostics);
-    }
+    /*
+        public addDiagnostic(diagnostic: Diagnostic & { file?: BscFile }) {
+            if (!diagnostic.file) {
+                diagnostic.file = this;
+            }
+            this.program?.diagnosticManager.register(diagnostic as BsDiagnostic);
+        }*/
 
     public commentFlags = [] as CommentFlag[];
 
@@ -371,9 +361,10 @@ export class BrsFile implements BscFile {
      * @param fileContents the raw source code to parse
      */
     public parse(fileContents: string) {
+        const diagnostics = [];
+
         try {
             this.fileContents = fileContents;
-            this.diagnostics = [];
 
             //if we have a typedef file, skip parsing this file
             if (this.hasTypedef) {
@@ -402,8 +393,8 @@ export class BrsFile implements BscFile {
                 });
             } catch (error: any) {
                 //if the thrown error is DIFFERENT than any errors from the preprocessor, add that error to the list as well
-                if (this.diagnostics.find((x) => x === error) === undefined) {
-                    this.diagnostics.push(error);
+                if (diagnostics.find((x) => x === error) === undefined) {
+                    diagnostics.push(error);
                 }
             }
 
@@ -418,24 +409,25 @@ export class BrsFile implements BscFile {
             });
 
             //absorb all lexing/preprocessing/parsing diagnostics
-            this.diagnostics.push(
+            diagnostics.push(
                 ...lexer.diagnostics as BsDiagnostic[],
                 ...preprocessor.diagnostics as BsDiagnostic[],
                 ...this._parser.diagnostics as BsDiagnostic[]
             );
 
             //attach this file to every diagnostic
-            for (let diagnostic of this.diagnostics) {
+            for (let diagnostic of diagnostics) {
                 diagnostic.file = this;
             }
         } catch (e) {
             this._parser = new Parser();
-            this.diagnostics.push({
+            diagnostics.push({
                 file: this,
                 range: util.createRange(0, 0, 0, Number.MAX_VALUE),
                 ...DiagnosticMessages.genericParserMessage('Critical error parsing file: ' + JSON.stringify(serializeError(e)))
             });
         }
+        this.program?.diagnosticManager.registerMultiple(diagnostics);
     }
 
     /**
@@ -497,7 +489,7 @@ export class BrsFile implements BscFile {
             }
         }
         this.commentFlags.push(...processor.commentFlags);
-        this.diagnostics.push(...processor.diagnostics);
+        this.program?.diagnosticManager.registerMultiple(processor.diagnostics);
     }
 
     public scopesByFunc = new Map<FunctionExpression, FunctionScope>();

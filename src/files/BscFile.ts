@@ -1,6 +1,6 @@
 import type { SourceMapGenerator } from 'source-map';
 import type { Editor } from '../astUtils/Editor';
-import type { BsDiagnostic, CommentFlag } from '../interfaces';
+import type { CommentFlag } from '../interfaces';
 import type { DependencyChangedEvent } from '../DependencyGraph';
 
 export interface BscFile {
@@ -55,10 +55,7 @@ export interface BscFile {
      * Called when any of this file's dependencies change (i.e. file depends on `a.brs`, and `a.brs` changes)
      */
     onDependenciesChanged?: (event: DependencyChangedEvent) => void;
-    /**
-     * A list of diagnostics associated with this file
-     */
-    diagnostics?: BsDiagnostic[];
+
     /**
      * Indicates whether the file has been validated. This flag is auto-set by the program during the validation cycle.
      * You can set this to `true` to skip validation for this file or if you've validated the file yourself already
@@ -106,7 +103,7 @@ export interface SerializeFileResult {
  * Create a basic `File` object.
  */
 export function createFile(props: Partial<BscFile>) {
-    props.diagnostics ??= [];
+    //props.diagnostics ??= [];
     props.dependencies ??= [];
     props.dependencyGraphKey ??= props.destPath;
     props.disposables ??= [];

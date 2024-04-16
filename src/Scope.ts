@@ -1,8 +1,7 @@
 /* eslint-disable @typescript-eslint/dot-notation */
 import * as path from 'path';
 import chalk from 'chalk';
-import { DiagnosticOrigin } from './interfaces';
-import type { CallableContainer, BsDiagnosticWithOrigin, FileReference, FileLink, Callable, NamespaceContainer, ScopeValidationOptions, BsDiagnostic } from './interfaces';
+import type { CallableContainer, BsDiagnosticWithOrigin, FileReference, FileLink, Callable, NamespaceContainer, ScopeValidationOptions } from './interfaces';
 import type { Program } from './Program';
 import { type NamespaceStatement, type ClassStatement, type EnumStatement, type InterfaceStatement, type EnumMemberStatement, type ConstStatement } from './parser/Statement';
 import { ParseMode } from './parser/Parser';
@@ -18,7 +17,7 @@ import type { BscFile } from './files/BscFile';
 import { referenceTypeFactory } from './types/ReferenceType';
 import { unionTypeFactory } from './types/UnionType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
-import type { AstNode, Statement } from './parser/AstNode';
+import type { Statement } from './parser/AstNode';
 import { performance } from 'perf_hooks';
 
 /**
@@ -605,27 +604,28 @@ export class Scope {
         });
     }
 
+
     /**
      * Get the list of errors for this scope. It's calculated on the fly, so call this sparingly.
      */
-    public getDiagnostics() {
-        //add diagnostics from every referenced file
-        const diagnostics: BsDiagnostic[] = [
-            //diagnostics raised on this scope
-            ...this.diagnostics,
-            //get diagnostics from all files
-            ...this.getOwnFiles().map(x => x.diagnostics ?? []).flat()
-        ]
-            //exclude diagnostics that match any of the comment flags
-            .filter((x) => {
-                return !util.diagnosticIsSuppressed(x);
-            });
-        return diagnostics;
-    }
+    /*public getDiagnostics() {
+      //add diagnostics from every referenced file
+      const diagnostics: BsDiagnostic[] = [
+          //diagnostics raised on this scope
+          ...this.diagnostics,
+          //get diagnostics from all files
+          ...this.getOwnFiles().map(x => x.diagnostics ?? []).flat()
+      ]
+          //exclude diagnostics that match any of the comment flags
+          .filter((x) => {
+              return !util.diagnosticIsSuppressed(x);
+          });
+      return diagnostics;
+  }
 
-    public addDiagnostics(diagnostics: BsDiagnosticWithOrigin[]) {
-        this.diagnostics.push(...diagnostics);
-    }
+  public addDiagnostics(diagnostics: BsDiagnosticWithOrigin[]) {
+      this.diagnostics.push(...diagnostics);
+  }*/
 
     /**
      * Get the list of callables available in this scope (either declared in this scope or in a parent scope)

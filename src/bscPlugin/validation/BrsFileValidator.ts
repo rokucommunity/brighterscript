@@ -55,7 +55,8 @@ export class BrsFileValidator {
             },
             CallfuncExpression: (node) => {
                 if (node.args.length > 5) {
-                    this.event.file.addDiagnostic({
+                    this.event.program.diagnosticManager.register({
+                        file: this.event.file,
                         ...DiagnosticMessages.callfuncHasToManyArgs(node.args.length),
                         range: node.tokens.methodName.range
                     });
@@ -194,7 +195,8 @@ export class BrsFileValidator {
             return;
         }
         //the statement was defined in the wrong place. Flag it.
-        this.event.file.addDiagnostic({
+        this.event.program.diagnosticManager.register({
+            file: this.event.file,
             ...DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel(keyword),
             range: rangeFactory?.() ?? statement.range
         });
@@ -204,7 +206,8 @@ export class BrsFileValidator {
         if (func.parameters.length > CallExpression.MaximumArguments) {
             //flag every parameter over the limit
             for (let i = CallExpression.MaximumArguments; i < func.parameters.length; i++) {
-                this.event.file.addDiagnostic({
+                this.event.program.diagnosticManager.register({
+                    file: this.event.file,
                     ...DiagnosticMessages.tooManyCallableParameters(func.parameters.length, CallExpression.MaximumArguments),
                     range: func.parameters[i]?.tokens.name?.range ?? func.parameters[i]?.range ?? func.range
                 });
@@ -224,7 +227,8 @@ export class BrsFileValidator {
              * flag duplicate member names
              */
             if (memberNames.has(memberNameLower)) {
-                this.event.file.addDiagnostic({
+                this.event.program.diagnosticManager.register({
+                    file: this.event.file,
                     ...DiagnosticMessages.duplicateIdentifier(member.name),
                     range: member.range
                 });
@@ -254,7 +258,8 @@ export class BrsFileValidator {
             //has value, that value is not a literal
             (memberValue && !isLiteralExpression(memberValue))
         ) {
-            this.event.file.addDiagnostic({
+            this.event.program.diagnosticManager.register({
+                file: this.event.file,
                 ...DiagnosticMessages.enumValueMustBeType(
                     enumValueKind.replace(/literal$/i, '').toLowerCase()
                 ),
@@ -268,7 +273,8 @@ export class BrsFileValidator {
             if (memberValueKind) {
                 //member value is same as enum
                 if (memberValueKind !== enumValueKind) {
-                    this.event.file.addDiagnostic({
+                    this.event.program.diagnosticManager.register({
+                        file: this.event.file,
                         ...DiagnosticMessages.enumValueMustBeType(
                             enumValueKind.replace(/literal$/i, '').toLowerCase()
                         ),
@@ -278,7 +284,7 @@ export class BrsFileValidator {
 
                 //default value missing
             } else {
-                this.event.file.addDiagnostic({
+                this.event.program.diagnosticManager.register({
                     file: this.event.file,
                     ...DiagnosticMessages.enumValueIsRequired(
                         enumValueKind.replace(/literal$/i, '').toLowerCase()
@@ -309,7 +315,8 @@ export class BrsFileValidator {
                     !isImportStatement(statement) &&
                     !isConstStatement(statement)
                 ) {
-                    this.event.file.addDiagnostic({
+                    this.event.program.diagnosticManager.register({
+                        file: this.event.file,
                         ...DiagnosticMessages.unexpectedStatementOutsideFunction(),
                         range: statement.range
                     });
@@ -341,13 +348,13 @@ export class BrsFileValidator {
             //then add a diagnostic explaining that it is invalid
             if (!topOfFileIncludeStatements.includes(result)) {
                 if (isLibraryStatement(result)) {
-                    this.event.file.diagnostics.push({
+                    this.event.program.diagnosticManager.register({
                         ...DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile(),
                         range: result.range,
                         file: this.event.file
                     });
                 } else if (isImportStatement(result)) {
-                    this.event.file.diagnostics.push({
+                    this.event.program.diagnosticManager.register({
                         ...DiagnosticMessages.importStatementMustBeDeclaredAtTopOfFile(),
                         range: result.range,
                         file: this.event.file
@@ -363,7 +370,8 @@ export class BrsFileValidator {
             expectedLoopType = expectedLoopType === TokenKind.ForEach ? TokenKind.For : expectedLoopType;
             const actualLoopType = statement.tokens.loopType;
             if (actualLoopType && expectedLoopType?.toLowerCase() !== actualLoopType.text?.toLowerCase()) {
-                this.event.file.addDiagnostic({
+                this.event.program.diagnosticManager.register({
+                    file: this.event.file,
                     range: statement.tokens.loopType.range,
                     ...DiagnosticMessages.expectedToken(expectedLoopType)
                 });
@@ -385,7 +393,8 @@ export class BrsFileValidator {
         });
         //flag continue statements found outside of a loop
         if (!parent) {
-            this.event.file.addDiagnostic({
+            this.event.program.diagnosticManager.register({
+                file: this.event.file,
                 range: statement.range,
                 ...DiagnosticMessages.illegalContinueStatement()
             });
@@ -418,7 +427,8 @@ export class BrsFileValidator {
                     range = node.range;
                 }
 
-                this.event.file.addDiagnostic({
+                this.event.program.diagnosticManager.register({
+                    file: this.event.file,
                     ...DiagnosticMessages.noOptionalChainingInLeftHandSideOfAssignment(),
                     range: range
                 });
