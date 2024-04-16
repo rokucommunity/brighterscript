@@ -2,8 +2,11 @@ import chalk from 'chalk';
 import * as moment from 'moment';
 import { EventEmitter } from 'eventemitter3';
 import { Stopwatch } from './Stopwatch';
-
-export class Logger {
+import { LogLevelNumeric as LogLevel } from '@rokucommunity/logger';
+/**
+ * @deprecated use the `createLogger` function instead
+ */
+export class Logger2 {
 
     public static subscribe(callback) {
         this.emitter.on('log', callback);
@@ -63,8 +66,8 @@ export class Logger {
         allArgs.push(this.indent);
 
         method.call(console, ...allArgs, ...finalArgs);
-        if (Logger.emitter.listenerCount('log') > 0) {
-            Logger.emitter.emit('log', finalArgs.join(' '));
+        if (Logger2.emitter.listenerCount('log') > 0) {
+            Logger2.emitter.emit('log', finalArgs.join(' '));
         }
     }
 
@@ -169,12 +172,4 @@ export function noop() {
 
 }
 
-export enum LogLevel {
-    off = 0,
-    error = 1,
-    warn = 2,
-    log = 3,
-    info = 4,
-    debug = 5,
-    trace = 6
-}
+export { LogLevelNumeric as LogLevel } from '@rokucommunity/logger';

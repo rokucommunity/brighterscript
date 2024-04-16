@@ -40,7 +40,6 @@ import { Deferred } from './deferred';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { ProgramBuilder } from './ProgramBuilder';
 import { standardizePath as s, util } from './util';
-import { Logger } from './Logger';
 import { Throttler } from './Throttler';
 import { KeyedThrottler } from './KeyedThrottler';
 import { DiagnosticCollection } from './DiagnosticCollection';
@@ -48,6 +47,7 @@ import { isBrsFile } from './astUtils/reflection';
 import { encodeSemanticTokens, semanticTokensLegend } from './SemanticTokenUtils';
 import type { BusyStatus } from './BusyStatusTracker';
 import { BusyStatusTracker } from './BusyStatusTracker';
+import { logger } from './logging';
 
 export class LanguageServer {
     private connection = undefined as any as Connection;
@@ -112,8 +112,8 @@ export class LanguageServer {
         });
 
         //listen to all of the output log events and pipe them into the debug channel in the extension
-        this.loggerSubscription = Logger.subscribe((text) => {
-            this.connection.tracer.log(text);
+        this.loggerSubscription = logger.subscribe((message) => {
+            this.connection.tracer.log(message.argsText);
         });
 
         this.connection.onInitialize(this.onInitialize.bind(this));

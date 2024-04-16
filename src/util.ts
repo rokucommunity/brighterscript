@@ -23,7 +23,7 @@ import { StringType } from './types/StringType';
 import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
 import type { DottedGetExpression, VariableExpression } from './parser/Expression';
-import { Logger, LogLevel } from './Logger';
+import { LogLevel, createLogger } from './logging';
 import type { Identifier, Locatable, Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
 import { isAssignmentStatement, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isExpression, isFunctionParameterExpression, isIndexedGetExpression, isNamespacedVariableNameExpression, isNewExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
@@ -1147,7 +1147,7 @@ export class Util {
      * Load and return the list of plugins
      */
     public loadPlugins(cwd: string, pathOrModules: string[], onError?: (pathOrModule: string, err: Error) => void): CompilerPlugin[] {
-        const logger = new Logger();
+        const logger = createLogger();
         return pathOrModules.reduce<CompilerPlugin[]>((acc, pathOrModule) => {
             if (typeof pathOrModule === 'string') {
                 try {
