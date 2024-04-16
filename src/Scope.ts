@@ -828,7 +828,7 @@ export class Scope {
                 parentScope.validate(validationOptions);
             }
             //clear the scope's errors list (we will populate them from this method)
-            this.clearScopeLevelDiagnostics();
+
 
             //Since statements from files are shared across multiple scopes, we need to link those statements to the current scope
 
@@ -851,19 +851,6 @@ export class Scope {
             (this as any).isValidated = true;
         });
         return true;
-    }
-
-    clearAstSegmentDiagnostics(astSegment: AstNode) {
-        this.diagnostics = this.diagnostics.filter(diag => !(diag.origin === DiagnosticOrigin.ASTSegment && diag.astSegment === astSegment));
-    }
-
-    clearAstSegmentDiagnosticsByFile(file: BscFile) {
-        const lowerSrcPath = file.srcPath.toLowerCase();
-        this.diagnostics = this.diagnostics.filter(diag => !(diag.origin === DiagnosticOrigin.ASTSegment && diag.file.srcPath.toLowerCase() === lowerSrcPath));
-    }
-
-    clearScopeLevelDiagnostics() {
-        this.diagnostics = this.diagnostics.filter(diag => diag.origin !== DiagnosticOrigin.Scope);
     }
 
     /**

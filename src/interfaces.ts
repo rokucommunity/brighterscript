@@ -41,6 +41,18 @@ export interface BsDiagnosticWithOrigin extends BsDiagnostic {
     astSegment?: AstNode;
 }
 
+export interface DiagnosticContext {
+    scopeSpecific?: boolean;
+    scope?: Scope;
+    tags?: string[];
+    segment?: AstNode;
+}
+
+export interface DiagnosticContextPair {
+    diagnostic: BsDiagnostic;
+    context?: DiagnosticContext;
+}
+
 export interface Callable {
     file: BscFile;
     name: string;

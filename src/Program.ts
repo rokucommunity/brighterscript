@@ -52,6 +52,7 @@ import type { UnresolvedSymbol } from './AstValidationSegmenter';
 import { WalkMode, createVisitor } from './astUtils/visitors';
 import type { BscFile } from './files/BscFile';
 import { Stopwatch } from './Stopwatch';
+import { DiagnosticManager } from './DiagnosticManager';
 
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
@@ -210,6 +211,8 @@ export class Program {
      *      lib2.brs -> [lib3.brs] //via an import statement
      */
     private dependencyGraph = new DependencyGraph();
+
+    public diagnosticManager = new DiagnosticManager();
 
     private diagnosticFilterer = new DiagnosticFilterer();
 
@@ -446,7 +449,7 @@ export class Program {
     public getDiagnostics() {
         return this.logger.time(LogLevel.info, ['Program.getDiagnostics()'], () => {
 
-            let diagnostics = [...this.diagnostics];
+            let diagnostics = [...this.diagnostics, ...this.diagnosticManager.getDiagnostics()];
 
             //get the diagnostics from all scopes
             for (let scopeName in this.scopes) {
