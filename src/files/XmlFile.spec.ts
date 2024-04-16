@@ -451,16 +451,6 @@ describe('XmlFile', () => {
         expect(program.getScopesForFile(xmlFile2)[0].isValidated).to.be.true;
     });
 
-    /*it('allows adding diagnostics', () => {
-        const expected: BsDiagnostic = {
-            message: 'message',
-            file: undefined as any,
-            range: undefined as any
-        };
-        program.diagnosticManager.register(expected);
-        expectDiagnostics(program, [expected]);
-    });*/
-
     describe('component extends', () => {
         it('works for single-line', () => {
             file = program.setFile(

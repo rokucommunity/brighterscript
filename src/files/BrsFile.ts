@@ -154,20 +154,6 @@ export class BrsFile implements BscFile {
      */
     public extension: string;
 
-
-    /**
-     * A collection of diagnostics related to this file
-     */
-    // public diagnostics = [] as BsDiagnostic[];
-
-    /*
-        public addDiagnostic(diagnostic: Diagnostic & { file?: BscFile }) {
-            if (!diagnostic.file) {
-                diagnostic.file = this;
-            }
-            this.program?.diagnosticManager.register(diagnostic as BsDiagnostic);
-        }*/
-
     public commentFlags = [] as CommentFlag[];
 
     private _functionScopes: FunctionScope[];

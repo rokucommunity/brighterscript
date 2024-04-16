@@ -36,11 +36,6 @@ export enum DiagnosticOrigin {
     ASTSegment = 'AstSegment'
 }
 
-export interface BsDiagnosticWithOrigin extends BsDiagnostic {
-    origin: DiagnosticOrigin;
-    astSegment?: AstNode;
-}
-
 export interface DiagnosticContext {
     scopeSpecific?: boolean;
     scope?: Scope;

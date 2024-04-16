@@ -72,8 +72,6 @@ export class ScopeValidator {
 
     public reset() {
         this.event = undefined;
-        //this.onceCache.clear();
-        //this.multiScopeCache.clear();
     }
 
     private walkFiles() {
@@ -1345,26 +1343,6 @@ export class ScopeValidator {
         }
     }
 
-    /**
-     * Adds a diagnostic to the first scope for this key. Prevents duplicate diagnostics
-     * for diagnostics where scope isn't important. (i.e. CreateObject validations)
-     */
-    /*private addDiagnosticOnce(diagnostic: BsDiagnostic) {
-        this.onceCache.getOrAdd(`${diagnostic.code} - ${diagnostic.message} - ${util.rangeToString(diagnostic.range)} `, () => {
-            const diagnosticWithOrigin = { ...diagnostic } as BsDiagnosticWithOrigin;
-            if (!diagnosticWithOrigin.origin) {
-                // diagnostic does not have origin.
-                // set the origin to the current astSegment
-                diagnosticWithOrigin.origin = DiagnosticOrigin.ASTSegment;
-                diagnosticWithOrigin.astSegment = this.currentSegmentBeingValidated;
-            }
-
-            this.event.program.diagnosticManager.register([diagnosticWithOrigin]);
-            return true;
-        });
-    }
-    private onceCache = new Cache<string, boolean>();*/
-
     private addDiagnostic(diagnostic: BsDiagnostic) {
         this.event.program.diagnosticManager.register(diagnostic, {
             tags: [ScopeValidatorDiagnosticTag],
@@ -1381,45 +1359,5 @@ export class ScopeValidator {
             segment: this.currentSegmentBeingValidated,
             scope: this.event.scope
         });
-
-        /*
-
-                diagnostic = this.multiScopeCache.getOrAdd(`${diagnostic.file?.srcPath} - ${diagnostic.code} - ${diagnostic.message} - ${util.rangeToString(diagnostic.range)} `, () => {
-
-                    if (!diagnostic.relatedInformation) {
-                        diagnostic.relatedInformation = [];
-                    }
-
-                    const diagnosticWithOrigin = { ...diagnostic } as BsDiagnosticWithOrigin;
-                    if (!diagnosticWithOrigin.origin) {
-                        // diagnostic does not have origin.
-                        // set the origin to the current astSegment
-                        diagnosticWithOrigin.origin = DiagnosticOrigin.ASTSegment;
-                        diagnosticWithOrigin.astSegment = this.currentSegmentBeingValidated;
-                    }
-
-                    this.addDiagnostic(diagnosticWithOrigin);
-                    return diagnosticWithOrigin;
-                });
-                if (isXmlScope(this.event.scope) && this.event.scope.xmlFile?.srcPath) {
-                    diagnostic.relatedInformation.push({
-                        message: `In component scope '${this.event.scope?.xmlFile?.componentName?.text}'`,
-                        location: util.createLocation(
-                            URI.file(this.event.scope.xmlFile.srcPath).toString(),
-                            this.event.scope?.xmlFile?.ast?.componentElement?.getAttribute('name')?.tokens?.value?.range ?? util.createRange(0, 0, 0, 10)
-                        )
-                    });
-                } else {
-                    diagnostic.relatedInformation.push({
-                        message: `In scope '${this.event.scope.name}'`,
-                        location: util.createLocation(
-                            URI.file(diagnostic.file.srcPath).toString(),
-                            diagnostic.range
-                        )
-                    });
-                }*/
     }
-
-    // private multiScopeCache = new Cache<string, BsDiagnosticWithOrigin>();
-
 }

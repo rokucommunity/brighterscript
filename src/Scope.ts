@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/dot-notation */
 import * as path from 'path';
 import chalk from 'chalk';
-import type { CallableContainer, BsDiagnosticWithOrigin, FileReference, FileLink, Callable, NamespaceContainer, ScopeValidationOptions } from './interfaces';
+import type { CallableContainer, FileReference, FileLink, Callable, NamespaceContainer, ScopeValidationOptions } from './interfaces';
 import type { Program } from './Program';
 import { type NamespaceStatement, type ClassStatement, type EnumStatement, type InterfaceStatement, type EnumMemberStatement, type ConstStatement } from './parser/Statement';
 import { ParseMode } from './parser/Parser';
@@ -443,11 +443,6 @@ export class Scope {
         });
     }
 
-    /**
-     * The list of diagnostics found specifically for this scope. Individual file diagnostics are stored on the files themselves.
-     */
-    protected diagnostics = [] as BsDiagnosticWithOrigin[];
-
     protected onDependenciesChanged(event: DependencyChangedEvent) {
         this.logDebug('invalidated because dependency graph said [', event.sourceKey, '] changed');
         this.invalidate();
@@ -603,29 +598,6 @@ export class Scope {
             return result;
         });
     }
-
-
-    /**
-     * Get the list of errors for this scope. It's calculated on the fly, so call this sparingly.
-     */
-    /*public getDiagnostics() {
-      //add diagnostics from every referenced file
-      const diagnostics: BsDiagnostic[] = [
-          //diagnostics raised on this scope
-          ...this.diagnostics,
-          //get diagnostics from all files
-          ...this.getOwnFiles().map(x => x.diagnostics ?? []).flat()
-      ]
-          //exclude diagnostics that match any of the comment flags
-          .filter((x) => {
-              return !util.diagnosticIsSuppressed(x);
-          });
-      return diagnostics;
-  }
-
-  public addDiagnostics(diagnostics: BsDiagnosticWithOrigin[]) {
-      this.diagnostics.push(...diagnostics);
-  }*/
 
     /**
      * Get the list of callables available in this scope (either declared in this scope or in a parent scope)

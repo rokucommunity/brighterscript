@@ -81,7 +81,6 @@ export class ProgramBuilder {
             // eslint-disable-next-line @typescript-eslint/dot-notation
             file['pathAbsolute'] = file.srcPath;
             diagnostic.file = file;
-            file.diagnostics = [diagnostic as any];
         }
 
         diagnostic.file = file;
