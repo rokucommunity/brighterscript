@@ -3,6 +3,8 @@ import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { AfterProgramValidateEvent } from '../../interfaces';
 import util from '../../util';
 
+export const ProgramValidatorDiagnosticsTag = 'ProgramValidator';
+
 export class ProgramValidator {
     constructor(
         private event: AfterProgramValidateEvent
@@ -28,11 +30,11 @@ export class ProgramValidator {
                 continue;
             }
 
-            this.event.program.addDiagnostics([{
+            this.event.program.diagnosticManager.register({
                 ...DiagnosticMessages.fileNotReferencedByAnyOtherFile(),
                 file: file,
                 range: util.createRange(0, 0, 0, Number.MAX_VALUE)
-            }]);
+            }, { tags: [ProgramValidatorDiagnosticsTag] });
         }
     }
 }

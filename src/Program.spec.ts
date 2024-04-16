@@ -32,7 +32,6 @@ import { ComponentType } from './types/ComponentType';
 import { ArrayType } from './types/ArrayType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { BooleanType } from './types/BooleanType';
-import type { BsDiagnostic } from './interfaces';
 import { DoubleType } from './types';
 
 const sinon = createSandbox();
@@ -290,17 +289,6 @@ describe('Program', () => {
                     message: 'Also defined here'
                 }]
             }]);
-        });
-
-        it('allows adding diagnostics', () => {
-            const expected = [{
-                message: 'message',
-                file: undefined,
-                range: undefined
-            }] as any as BsDiagnostic[];
-            program.addDiagnostics(expected);
-            const actual = (program as any).diagnostics;
-            expect(actual).to.deep.equal(expected);
         });
 
         it('does not produce duplicate parse errors for different component scopes', () => {
