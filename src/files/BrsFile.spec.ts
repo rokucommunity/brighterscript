@@ -238,16 +238,6 @@ describe('BrsFile', () => {
         expect(file.ownScriptImports.map(x => x.text)).to.eql(['pkg:/source/lib.brs']);
     });
 
-    /* it('allows adding diagnostics', () => {
-         const expected: BsDiagnostic = {
-             message: 'message',
-             file: undefined as any,
-             range: undefined as any
-         };
-         file.addDiagnostic(expected);
-         expectDiagnostics(program, [expected]);
-     });*/
-
     describe('getPartialVariableName', () => {
         let entry = {
             src: `${rootDir}/source/lib.brs`,

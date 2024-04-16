@@ -212,18 +212,6 @@ describe('Scope', () => {
         ]);
     });
 
-    /*it('allows adding diagnostics', () => {
-        const source = program.getScopeByName('source');
-        const expected = [{
-            message: 'message',
-            file: undefined,
-            range: undefined,
-            origin: DiagnosticOrigin.Scope
-        }];
-        source.addDiagnostics(expected);
-        expectDiagnostics(source, expected);
-    });*/
-
     it('allows getting all scopes', () => {
         const scopes = program.getScopes();
         expect(scopes.length).to.equal(2);
