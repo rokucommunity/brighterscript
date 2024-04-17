@@ -105,6 +105,7 @@ export class LanguageServer {
         });
         //anytime a project emits a collection of diagnostics, send them to the client
         this.projectManager.on('diagnostics', (event) => {
+            this.logger.info(`Received ${event.diagnostics.length} diagnostics from project ${event.project.projectNumber}`);
             void this.sendDiagnostics(event);
         });
 
