@@ -18,7 +18,7 @@ import util, { standardizePath as s } from '../util';
 import PluginInterface from '../PluginInterface';
 import { expectCompletionsIncludes, expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
 import { ParseMode, Parser } from '../parser/Parser';
-import { Logger } from '../Logger';
+import { createLogger } from '../logging';
 import { ImportStatement } from '../parser/Statement';
 import { createToken } from '../astUtils/creators';
 import * as fsExtra from 'fs-extra';
@@ -3844,7 +3844,7 @@ describe('BrsFile', () => {
                 util.loadPlugins(tempDir, [
                     s`${tempDir}/plugins/${pluginFileName}`
                 ]),
-                { logger: new Logger() }
+                { logger: createLogger() }
             );
             const file = program.setFile<any>('source/MAIN.brs', '');
             expect(file._customProp).to.exist;
@@ -3855,7 +3855,7 @@ describe('BrsFile', () => {
                 util.loadPlugins(tempDir, [
                     `./plugins/${pluginFileName}`
                 ]),
-                { logger: new Logger() }
+                { logger: createLogger() }
             );
             const file = program.setFile<any>('source/MAIN.brs', '');
             expect(file._customProp).to.exist;
