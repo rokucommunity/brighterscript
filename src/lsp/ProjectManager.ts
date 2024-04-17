@@ -175,6 +175,7 @@ export class ProjectManager {
     public async syncProjects(workspaceConfigs: WorkspaceConfig[], forceReload = false) {
         //if we're force reloading, destroy all projects and start fresh
         if (forceReload) {
+            this.logger.log('Force reloading all projects');
             for (const project of this.projects) {
                 this.removeProject(project);
             }

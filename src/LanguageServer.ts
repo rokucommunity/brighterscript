@@ -212,6 +212,8 @@ export class LanguageServer {
      */
     @AddStackToErrorMessage
     public async onInitialized() {
+        this.logger.log('onInitialized');
+
         try {
             if (this.hasConfigurationCapability) {
                 // register for when the user changes workspace or user settings
@@ -273,6 +275,9 @@ export class LanguageServer {
             //if this is an open document, allow this file to be loaded in a standalone project (if applicable)
             allowStandaloneProject: this.documents.get(x.uri) !== undefined
         }));
+
+        this.logger.info('onDidChangeWatchedFiles', changes);
+
         //if the client changed any files containing include/exclude patterns, rebuild the path filterer before processing these changes
         if (
             micromatch.some(changes.map(x => x.srcPath), [
@@ -309,6 +314,8 @@ export class LanguageServer {
 
     @AddStackToErrorMessage
     public async onDidChangeConfiguration(args: DidChangeConfigurationParams) {
+        this.logger.log('configuration changed. Reloading all projects');
+
         //if configuration changed, rebuild the path filterer
         await this.rebuildPathFilterer();
 
@@ -456,6 +463,8 @@ export class LanguageServer {
                 });
             }
         }));
+        this.logger.log('rebuilt path filterer');
+
         return this.pathFilterer;
     }
 
