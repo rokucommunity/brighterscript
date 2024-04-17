@@ -40,16 +40,6 @@ export class Project implements LspProject {
             this.bsconfigPath = undefined;
         }
 
-        //flush diagnostics every time the program finishes validating
-        this.builder.plugins.add({
-            name: 'bsc-language-server',
-            afterProgramValidate: () => {
-                const diagnostics = this.getDiagnostics();
-                this.emit('diagnostics', {
-                    diagnostics: diagnostics
-                });
-            }
-        } as CompilerPlugin);
         const builderOptions = {
             cwd: cwd,
             project: this.bsconfigPath,
@@ -71,6 +61,18 @@ export class Project implements LspProject {
             ...builderOptions,
             skipInitialValidation: true
         });
+
+        //flush diagnostics every time the program finishes validating
+        //this plugin must be added LAST to the program to ensure we can see all diagnostics
+        this.builder.plugins.add({
+            name: 'bsc-language-server',
+            afterProgramValidate: () => {
+                const diagnostics = this.getDiagnostics();
+                this.emit('diagnostics', {
+                    diagnostics: diagnostics
+                });
+            }
+        } as CompilerPlugin);
 
         //if we found a deprecated brsconfig.json, add a diagnostic warning the user
         if (this.bsconfigPath && path.basename(this.bsconfigPath) === 'brsconfig.json') {

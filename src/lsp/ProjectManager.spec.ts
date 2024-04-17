@@ -158,6 +158,43 @@ describe('ProjectManager', () => {
             ]);
         });
 
+        it('gets diagnostics from plugins added in afterProgramValidate', async () => {
+            fsExtra.outputFileSync(`${rootDir}/plugin.js`, `
+                module.exports = function () {
+                    return {
+                        afterProgramValidate: function(program) {
+                            var file = program.getFile('source/main.brs');
+                            //add a diagnostic from a plugin
+                            file.addDiagnostic({
+                                message: 'Test diagnostic',
+                                code: 'test-123',
+                                severity: 1
+                            });
+                        }
+                    }
+                }
+            `);
+
+            fsExtra.outputJsonSync(`${rootDir}/bsconfig.json`, {
+                plugins: [
+                    './plugin.js'
+                ]
+            });
+            fsExtra.outputFileSync(`${rootDir}/source/main.brs`, `
+                sub test()
+                    print nameNotDefined
+                end sub
+            `);
+            fsExtra.outputFileSync(`${rootDir}/manifest`, '');
+            await manager.syncProjects([{
+                workspaceFolder: rootDir
+            }]);
+            expectDiagnostics(await onNextDiagnostics(), [
+                DiagnosticMessages.cannotFindName('nameNotDefined').message,
+                'Test diagnostic'
+            ]);
+        });
+
         it('uses subdir when manifest and brightscript file found', async () => {
             fsExtra.outputFileSync(`${rootDir}/subdir/manifest`, '');
             fsExtra.outputFileSync(`${rootDir}/subdir/source/main.brs`, '');
