@@ -6,7 +6,7 @@ import { LogLevelNumeric as LogLevel } from '@rokucommunity/logger';
 /**
  * @deprecated use the `createLogger` function instead
  */
-export class Logger2 {
+export class Logger {
 
     public static subscribe(callback) {
         this.emitter.on('log', callback);
@@ -66,8 +66,8 @@ export class Logger2 {
         allArgs.push(this.indent);
 
         method.call(console, ...allArgs, ...finalArgs);
-        if (Logger2.emitter.listenerCount('log') > 0) {
-            Logger2.emitter.emit('log', finalArgs.join(' '));
+        if (Logger.emitter.listenerCount('log') > 0) {
+            Logger.emitter.emit('log', finalArgs.join(' '));
         }
     }
 
