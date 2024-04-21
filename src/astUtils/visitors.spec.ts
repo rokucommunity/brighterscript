@@ -17,8 +17,6 @@ import { Parser } from '../parser/Parser';
 import type { Statement, Expression, AstNode } from '../parser/AstNode';
 import { expectZeroDiagnostics } from '../testHelpers.spec';
 import type { FunctionExpression } from '../parser/Expression';
-import { token } from '../parser/tests/Parser.spec';
-
 describe('astUtils visitors', () => {
     const rootDir = process.cwd();
     let program: Program;
