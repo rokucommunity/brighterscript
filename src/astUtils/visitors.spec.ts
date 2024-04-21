@@ -17,6 +17,7 @@ import { Parser } from '../parser/Parser';
 import type { Statement, Expression, AstNode } from '../parser/AstNode';
 import { expectZeroDiagnostics } from '../testHelpers.spec';
 import type { FunctionExpression } from '../parser/Expression';
+import { token } from '../parser/tests/Parser.spec';
 
 describe('astUtils visitors', () => {
     const rootDir = process.cwd();
@@ -1164,6 +1165,77 @@ describe('astUtils visitors', () => {
                 'IncrementStatement',
                 'VariableExpression'
             ]);
+        });
+
+        describe('visitComments', () => {
+
+            it('visits a comment when walkmode includes visitComments', () => {
+                const items = [];
+                const { ast } = Parser.parse(`
+                    '1
+                    sub main()
+                      '2
+                      '3
+                      print "hello"
+                    end sub
+                    '4
+                `);
+                ast.walk(createVisitor({
+                    CommentToken: (comment, parent, owner, key) => {
+                        items.push(comment.text);
+                    }
+                }), {
+                    // eslint-disable-next-line no-bitwise
+                    walkMode: WalkMode.visitAllRecursive | WalkMode.visitComments
+                });
+                expect(items).to.be.length(4);
+            });
+
+            it('has access to the next statement', () => {
+                const { ast } = Parser.parse(`
+                    sub main()
+                      'comment
+                      print "hello"
+                    end sub
+                `);
+                ast.walk(createVisitor({
+                    CommentToken: (comment, parent, owner, key) => {
+                        expect(comment.text).to.eq('\'comment');
+                        expect(isPrintStatement(parent)).to.true;
+                        expect(parent.getLeadingTrivia()).to.eq(owner);
+                        expect(key).to.eq(2); //0: newline, 1: whitespace, 2: COMMENT, 3: newline, 4:whitespace
+                    }
+                }), {
+                    // eslint-disable-next-line no-bitwise
+                    walkMode: WalkMode.visitAllRecursive | WalkMode.visitComments
+                });
+            });
+
+            it('can change the value of teh comment', () => {
+                const { ast } = Parser.parse(`
+                    sub main()
+                      'comment
+                      print "hello"
+                    end sub
+                `);
+                ast.walk(createVisitor({
+                    CommentToken: (comment, parent, owner, key) => {
+                        return createToken(TokenKind.Comment, 'changed');
+                    }
+                }), {
+                    // eslint-disable-next-line no-bitwise
+                    walkMode: WalkMode.visitAllRecursive | WalkMode.visitComments
+                });
+                ast.walk(createVisitor({
+                    CommentToken: (comment, parent, owner, key) => {
+                        expect(comment.text).to.eq('changed');
+                    }
+                }), {
+                    // eslint-disable-next-line no-bitwise
+                    walkMode: WalkMode.visitAllRecursive | WalkMode.visitComments
+                });
+            });
+
         });
     });
 });
