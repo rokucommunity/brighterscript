@@ -3415,3 +3415,68 @@ export class ContinueStatement extends Statement {
         return this.tokens.continue?.leadingTrivia ?? [];
     }
 }
+
+
+export class TypeCastMStatement extends Statement {
+    constructor(options: {
+        typeCast?: Token;
+        as?: Token;
+        m?: Token;
+        typeExpression: TypeExpression;
+    }
+    ) {
+        super();
+        this.tokens = {
+            typeCast: options.typeCast,
+            as: options.as,
+            m: options.m
+        };
+        this.typeExpression = options.typeExpression;
+        this.range = util.createBoundingRange(
+            this.tokens.typeCast,
+            this.tokens.m,
+            this.tokens.as,
+            this.typeExpression
+        );
+    }
+
+    public readonly tokens: {
+        readonly typeCast?: Token;
+        readonly m?: Token;
+        readonly as?: Token;
+    };
+
+    public readonly typeExpression: TypeExpression;
+
+    public readonly kind = AstNodeKind.TypeCastMStatement;
+
+    public readonly range: Range;
+
+    transpile(state: BrsTranspileState) {
+        //the typecast statement is a comment just for debugging purposes
+        return [
+            `'`,
+            state.transpileToken(this.tokens.typeCast, 'typecast'),
+            ' ',
+            state.transpileToken(this.tokens.m, 'm'),
+            ' ',
+            state.transpileToken(this.tokens.as, 'as'),
+            ' ',
+            this.typeExpression.transpile(state)
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            this.typeExpression.walk(visitor, options);
+        }
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.typeCast?.leadingTrivia ?? [];
+    }
+
+    getType(options: GetTypeOptions): BscType {
+        return this.typeExpression.getType(options);
+    }
+}

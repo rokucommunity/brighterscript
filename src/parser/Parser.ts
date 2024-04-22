@@ -54,7 +54,8 @@ import {
     StopStatement,
     ThrowStatement,
     TryCatchStatement,
-    WhileStatement
+    WhileStatement,
+    TypeCastMStatement
 } from './Statement';
 import type { DiagnosticInfo } from '../DiagnosticMessages';
 import { DiagnosticMessages } from '../DiagnosticMessages';
@@ -1030,6 +1031,10 @@ export class Parser {
             return this.importStatement();
         }
 
+        if (this.check(TokenKind.TypeCast) && this.checkNextText(TokenKind.Identifier, 'm')) {
+            return this.typeCastMStatement();
+        }
+
         if (this.check(TokenKind.Stop)) {
             return this.stopStatement();
         }
@@ -1441,6 +1446,29 @@ export class Parser {
         });
 
         return importStatement;
+    }
+
+    private typeCastMStatement() {
+        this.warnIfNotBrighterScriptMode('typecast m statements');
+        const typeCastToken = this.advance();
+        if (!this.checkText(TokenKind.Identifier, 'm')) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.expectedIdentifierAfterKeyword('typecast', 'm'),
+                range: util.getRange(typeCastToken, this.peek())
+            });
+            throw this.lastDiagnosticAsError();
+        }
+        const mToken = this.advance();
+        const [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
+
+        let typeCastMStatement = new TypeCastMStatement({
+            typeCast: typeCastToken,
+            m: mToken,
+            as: asToken,
+            typeExpression: typeExpression
+        });
+
+        return typeCastMStatement;
     }
 
     private annotationExpression() {
@@ -3009,6 +3037,28 @@ export class Parser {
         }
         const nextKind = this.peekNext().kind;
         return tokenKinds.includes(nextKind);
+    }
+
+    private checkText(tokenKind: TokenKind, text: string, caseInsensitive = true): boolean {
+        if (this.isAtEnd()) {
+            return false;
+        }
+        const current = this.peek();
+        if (caseInsensitive) {
+            return current.kind === tokenKind && current.text.toLowerCase() === text.toLowerCase();
+        }
+        return current.kind === tokenKind && current.text === text;
+    }
+
+    private checkNextText(tokenKind: TokenKind, text: string, caseInsensitive = true): boolean {
+        if (this.isAtEnd()) {
+            return false;
+        }
+        const next = this.peekNext();
+        if (caseInsensitive) {
+            return next.kind === tokenKind && next.text.toLowerCase() === text.toLowerCase();
+        }
+        return next.kind === tokenKind && next.text === text;
     }
 
     private isAtEnd(): boolean {
