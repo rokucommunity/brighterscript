@@ -1,12 +1,19 @@
 import { expect } from '../../chai-config.spec';
 import type { BrsFile } from '../../files/BrsFile';
 import type { AALiteralExpression, DottedGetExpression } from '../../parser/Expression';
-import type { ClassStatement, FunctionStatement, NamespaceStatement, PrintStatement } from '../../parser/Statement';
+import type { AssignmentStatement, ClassStatement, FunctionStatement, NamespaceStatement, PrintStatement } from '../../parser/Statement';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
-import { expectDiagnostics, expectZeroDiagnostics } from '../../testHelpers.spec';
+import { expectDiagnostics, expectTypeToBe, expectZeroDiagnostics } from '../../testHelpers.spec';
 import { Program } from '../../Program';
 import { isClassStatement, isNamespaceStatement } from '../../astUtils/reflection';
 import util from '../../util';
+import { WalkMode, createVisitor } from '../../astUtils/visitors';
+import { SymbolTypeFlag } from '../../SymbolTypeFlag';
+import { ClassType } from '../../types/ClassType';
+import { FloatType } from '../../types/FloatType';
+import { IntegerType } from '../../types/IntegerType';
+import { InterfaceType } from '../../types/InterfaceType';
+import { StringType } from '../../types/StringType';
 
 describe('BrsFileValidator', () => {
     let program: Program;
@@ -318,5 +325,188 @@ describe('BrsFileValidator', () => {
             ...DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel('const'),
             range: util.createRange(4, 20, 4, 30)
         }]);
+    });
+
+    describe('typecast m', () => {
+        it('allows being at start of file', () => {
+            program.setFile('source/other.bs', `
+            `);
+
+            program.setFile('source/main.bs', `
+                import "other.bs"
+                typecast m as object
+
+                sub noop()
+                end sub
+
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('has diagnostic if not first in file', () => {
+            program.setFile('source/main.bs', `
+                sub noop()
+                end sub
+
+                typecast m as object
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.typeCastMStatementMustBeDeclaredAtStart().message
+            ]);
+        });
+
+        it('allows being at start of function ', () => {
+            program.setFile('source/main.bs', `
+                interface Thing
+                    value as integer
+                end interface
+
+                sub noop()
+                    typecast m as Thing
+                    print m.value
+                end sub
+
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('has diagnostic when not at start of function', () => {
+            program.setFile('source/main.bs', `
+                interface Thing
+                    value as integer
+                end interface
+
+                sub noop()
+                    print m.value
+                    typecast m as Thing
+                end sub
+
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.typeCastMStatementMustBeDeclaredAtStart().message
+            ]);
+        });
+
+        it('sets the type of m', () => {
+            program.setFile('source/types.bs', `
+                interface Thing1
+                    value as integer
+                end interface
+
+                interface Thing2
+                    value as string
+                end interface
+
+                interface Thing3
+                    value as float
+                end interface
+            `);
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                import "types.bs"
+                typecast m as Thing1
+
+                sub func1()
+                    x = m.value
+                    print x
+                end sub
+
+                sub func2()
+                    typecast m as Thing2
+                    x = m.value
+                    print x
+                end sub
+
+                sub func3()
+                    aa = {
+                        innerFunc: sub()
+                            typecast m as Thing3
+                            x = m.value
+                            print x
+                        end sub
+                    }
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const assigns = [] as Array<AssignmentStatement>;
+
+            // find places in AST where "x" is assigned
+            file.ast.walk(createVisitor({
+                AssignmentStatement: (stmt) => {
+                    if (stmt.tokens.name.text.toLowerCase() === 'x') {
+                        assigns.push(stmt);
+                    }
+                }
+            }), { walkMode: WalkMode.visitAllRecursive });
+
+            // func1 - uses file level typecast
+            expectTypeToBe(assigns[0].getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime }), InterfaceType);
+            expect(assigns[0].getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime }).toString()).to.eq('Thing1');
+            expectTypeToBe(assigns[0].getSymbolTable().getSymbolType('x', { flags: SymbolTypeFlag.runtime }), IntegerType);
+
+            // func2 - uses func level typecast
+            expectTypeToBe(assigns[1].getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime }), InterfaceType);
+            expect(assigns[1].getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime }).toString()).to.eq('Thing2');
+            expectTypeToBe(assigns[1].getSymbolTable().getSymbolType('x', { flags: SymbolTypeFlag.runtime }), StringType);
+
+            // func3 - uses innerFunc level typecast
+            expectTypeToBe(assigns[2].getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime }), InterfaceType);
+            expect(assigns[2].getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime }).toString()).to.eq('Thing3');
+            expectTypeToBe(assigns[2].getSymbolTable().getSymbolType('x', { flags: SymbolTypeFlag.runtime }), FloatType);
+        });
+
+        it('should allow classes to override m typecast', () => {
+            program.setFile('source/types.bs', `
+                interface Thing1
+                    value as integer
+                end interface
+            `);
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                import "types.bs"
+                typecast m as Thing1
+
+                class TestKlass
+                    value as string
+
+                    sub method1()
+                        x = m.value
+                        print x
+                    end sub
+
+                    sub method2()
+                        typecast m as Thing1
+                        x = m.value
+                        print x
+                    end sub
+                end class
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const assigns = [] as Array<AssignmentStatement>;
+
+            // find places in AST where "x" is assigned
+            file.ast.walk(createVisitor({
+                AssignmentStatement: (stmt) => {
+                    if (stmt.tokens.name.text.toLowerCase() === 'x') {
+                        assigns.push(stmt);
+                    }
+                }
+            }), { walkMode: WalkMode.visitAllRecursive });
+
+
+            // method1 - uses class 'm'
+            expectTypeToBe(assigns[0].getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime }), ClassType);
+            expect(assigns[0].getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime }).toString()).to.eq('TestKlass');
+            expectTypeToBe(assigns[0].getSymbolTable().getSymbolType('x', { flags: SymbolTypeFlag.runtime }), StringType);
+
+            // method2 - uses func level typecast
+            expectTypeToBe(assigns[1].getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime }), InterfaceType);
+            expect(assigns[1].getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime }).toString()).to.eq('Thing1');
+            expectTypeToBe(assigns[1].getSymbolTable().getSymbolType('x', { flags: SymbolTypeFlag.runtime }), IntegerType);
+        });
     });
 });

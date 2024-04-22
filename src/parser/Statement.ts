@@ -3468,7 +3468,7 @@ export class TypeCastMStatement extends Statement {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
-            this.typeExpression.walk(visitor, options);
+            walk(this, 'typeExpression', visitor, options);
         }
     }
 

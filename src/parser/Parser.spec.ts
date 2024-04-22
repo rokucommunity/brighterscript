@@ -17,7 +17,6 @@ import { IntegerType } from '../types/IntegerType';
 import { FloatType } from '../types/FloatType';
 import { StringType } from '../types/StringType';
 import { ArrayType, UnionType } from '../types';
-import { AssociativeArrayType } from '../types/AssociativeArrayType';
 
 describe('parser', () => {
     it('emits empty object when empty token list is provided', () => {

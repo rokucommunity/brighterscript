@@ -764,6 +764,11 @@ export let DiagnosticMessages = {
         message: `Member '${memberName}' is ${accessModifierNameFromFlag(accessModifierFlag)}${accessModifierAdditionalInfo(accessModifierFlag, definingClassName)}`, // TODO: Add scopes where it was defined
         code: 1146,
         severity: DiagnosticSeverity.Error
+    }),
+    typeCastMStatementMustBeDeclaredAtStart: () => ({
+        message: `'typecast m' statement must be declared at the top of the file or beginning of function`,
+        code: 1147,
+        severity: DiagnosticSeverity.Error
     })
 };
 export const defaultMaximumTruncationLength = 160;
