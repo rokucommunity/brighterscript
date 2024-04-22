@@ -13,7 +13,8 @@ import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
 import { DependencyGraph } from './DependencyGraph';
-import { Logger, LogLevel } from './Logger';
+import type { Logger } from './logging';
+import { LogLevel, createLogger } from './logging';
 import chalk from 'chalk';
 import { globalFile } from './globalCallables';
 import { parseManifest, getBsConst } from './preprocessor/Manifest';
@@ -65,7 +66,7 @@ export class Program {
         plugins?: PluginInterface
     ) {
         this.options = util.normalizeConfig(options);
-        this.logger = logger || new Logger(options.logLevel as LogLevel);
+        this.logger = logger ?? createLogger(options);
         this.plugins = plugins || new PluginInterface([], { logger: this.logger });
 
         //inject the bsc plugin as the first plugin in the stack.

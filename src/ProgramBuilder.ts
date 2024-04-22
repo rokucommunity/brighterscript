@@ -1,13 +1,14 @@
 import * as debounce from 'debounce-promise';
 import * as path from 'path';
 import { rokuDeploy } from 'roku-deploy';
+import type { LogLevel as RokuDeployLogLevel } from 'roku-deploy/dist/Logger';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import type { BscFile, BsDiagnostic, FileObj, FileResolver } from './interfaces';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
 import { Watcher } from './Watcher';
 import { DiagnosticSeverity } from 'vscode-languageserver';
-import { Logger, LogLevel } from './Logger';
+import { LogLevel, createLogger } from './logging';
 import PluginInterface from './PluginInterface';
 import * as diagnosticUtils from './diagnosticUtils';
 import * as fsExtra from 'fs-extra';
@@ -37,7 +38,7 @@ export class ProgramBuilder {
     private isRunning = false;
     private watcher: Watcher | undefined;
     public program: Program | undefined;
-    public logger = new Logger();
+    public logger = createLogger();
     public plugins: PluginInterface = new PluginInterface([], { logger: this.logger });
     private fileResolvers = [] as FileResolver[];
 
@@ -98,7 +99,7 @@ export class ProgramBuilder {
     }
 
     public async run(options: BsConfig & { skipInitialValidation?: boolean }) {
-        this.logger.logLevel = options.logLevel as LogLevel;
+        this.logger.logLevel = options.logLevel;
 
         if (this.isRunning) {
             throw new Error('Server is already running');
@@ -129,7 +130,7 @@ export class ProgramBuilder {
             //For now, just use a default options object so we have a functioning program
             this.options = util.normalizeConfig({});
         }
-        this.logger.logLevel = this.options.logLevel as LogLevel;
+        this.logger.logLevel = this.options.logLevel;
 
         this.createProgram();
 
@@ -413,7 +414,7 @@ export class ProgramBuilder {
                 await this.logger.time(LogLevel.log, [`Creating package at ${this.options.outFile}`], async () => {
                     await rokuDeploy.zipPackage({
                         ...this.options,
-                        logLevel: this.options.logLevel as LogLevel,
+                        logLevel: this.options.logLevel as unknown as RokuDeployLogLevel,
                         outDir: util.getOutDir(this.options),
                         outFile: path.basename(this.options.outFile)
                     });
@@ -431,7 +432,7 @@ export class ProgramBuilder {
             let options = util.cwdWork(this.options.cwd, () => {
                 return rokuDeploy.getOptions({
                     ...this.options,
-                    logLevel: this.options.logLevel as LogLevel,
+                    logLevel: this.options.logLevel as unknown as RokuDeployLogLevel,
                     outDir: util.getOutDir(this.options),
                     outFile: path.basename(this.options.outFile)
 
@@ -479,7 +480,7 @@ export class ProgramBuilder {
             await this.logger.time(LogLevel.log, ['Deploying package to', this.options.host], async () => {
                 await rokuDeploy.publish({
                     ...this.options,
-                    logLevel: this.options.logLevel as LogLevel,
+                    logLevel: this.options.logLevel as unknown as RokuDeployLogLevel,
                     outDir: util.getOutDir(this.options),
                     outFile: path.basename(this.options.outFile)
                 });

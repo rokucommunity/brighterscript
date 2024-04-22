@@ -41,17 +41,17 @@ import {
 import { URI } from 'vscode-uri';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { util } from './util';
-import { LogLevel, Logger } from './Logger';
 import { DiagnosticCollection } from './DiagnosticCollection';
 import { encodeSemanticTokens, semanticTokensLegend } from './SemanticTokenUtils';
+import { LogLevel, createLogger, logger } from './logging';
+import ignore from 'ignore';
+import micromatch from 'micromatch';
+import type { LspProject, LspDiagnostic } from './lsp/LspProject';
+import { PathFilterer } from './lsp/PathFilterer';
+import type { Project } from './lsp/Project';
 import type { WorkspaceConfig } from './lsp/ProjectManager';
 import { ProjectManager } from './lsp/ProjectManager';
-import type { LspDiagnostic, LspProject } from './lsp/LspProject';
-import type { Project } from './lsp/Project';
-import { PathFilterer } from './lsp/PathFilterer';
 import * as fsExtra from 'fs-extra';
-import ignore from 'ignore';
-import * as micromatch from 'micromatch';
 
 export class LanguageServer {
     /**
@@ -97,7 +97,10 @@ export class LanguageServer {
      */
     private pathFilterer = new PathFilterer();
 
-    private logger = new Logger(LogLevel.log, 'lsp');
+    private logger = createLogger({
+        logLevel: LogLevel.log,
+        prefix: '[lsp]'
+    });
 
     constructor() {
         this.projectManager = new ProjectManager({
@@ -130,9 +133,9 @@ export class LanguageServer {
         // Create a connection for the server. The connection uses Node's IPC as a transport.
         this.connection = this.establishConnection();
 
-        //listen to all of the output log events and pipe them into extension's output channel
-        this.loggerSubscription = Logger.subscribe((text) => {
-            this.connection.tracer.log(text);
+        //listen to all of the output log events and pipe them into the debug channel in the extension
+        this.loggerSubscription = logger.subscribe((message) => {
+            this.connection.tracer.log(message.argsText);
         });
 
         //bind all our on* methods that share the same name from connection
