@@ -487,15 +487,19 @@ export default function () {
         afterFileValidate: (file: File) => {
             if (isBrsFile(file)) {
                 // visit function statements and validate their name
-                file.parser.references.functionStatements.forEach((fun) => {
-                    if (fun.name.text.includes('_')) {
-                        file.addDiagnostics([{
-                            code: 9000,
-                            message: 'Do not use underscores in function names',
-                            range: fun.name.range,
-                            file
-                        }]);
+                event.file.ast.walk(createVisitor({
+                    FunctionStatement: (funcStmt) => {
+                        if (funcStmt.tokens.name.text.includes('_')) {
+                            file.addDiagnostics([{
+                                code: 9000,
+                                message: 'Do not use underscores in function names',
+                                range: funcStmt.tokens.name.range,
+                                file
+                            }]);
+                        }
                     }
+                }, {
+                    walkMode: WalkMode.visitStatements
                 });
             }
         }
@@ -548,6 +552,10 @@ This plugin will search through every LiteralExpression in the entire project, a
 ## Remove Comment and Print Statements
 
 Another common use case is to remove print statements and comments. Here's a plugin to do that:
+
+Note: Comments are not regular nodes in the AST, so to visit comments, there is an additional requirement to specify
+that the AST walk should also `visitComments`. In the case of comments, the first argument of the visitor function is a `Token`, not an `AstNode`.
+
 ```typescript
 import { isBrsFile, createVisitor, WalkMode, BeforeFileTranspileEvent, CompilerPlugin } from 'brighterscript';
 
@@ -556,19 +564,19 @@ export default function plugin() {
         name: 'removeCommentAndPrintStatements',
         beforeFileTranspile: (event: BeforeFileTranspileEvent) => {
             if (isBrsFile(event.file)) {
-                // visit functions bodies and replace `PrintStatement` nodes with `EmptyStatement`
-                for (const func of event.file.parser.references.functionExpressions) {
-                    func.body.walk(createVisitor({
-                        PrintStatement: (statement) => {
-                            event.editor.overrideTranspileResult(statement, '');
-                        },
-                        CommentStatement: (statement) => {
-                            event.editor.overrideTranspileResult(statement, '');
-                        }
-                    }), {
-                        walkMode: WalkMode.visitStatements
-                    });
-                }
+                // visit functions bodies
+                event.file.ast.walk(createVisitor({
+                    PrintStatement: (statement) => {
+                        //replace `PrintStatement` transpilation with empty string
+                        event.editor.overrideTranspileResult(statement, '');
+                    },
+                    CommentToken: (_token, _parent, owner, key) => {
+                        //remove comment tokens
+                        event.editor.removeProperty(owner, key);
+                    }
+                }), {
+                    walkMode: WalkMode.visitStatements | WalkMode.visitComments
+                });
             }
         }
     } as CompilerPlugin;
