@@ -55,7 +55,7 @@ import {
     ThrowStatement,
     TryCatchStatement,
     WhileStatement,
-    TypeCastMStatement
+    TypecastMStatement
 } from './Statement';
 import type { DiagnosticInfo } from '../DiagnosticMessages';
 import { DiagnosticMessages } from '../DiagnosticMessages';
@@ -83,7 +83,7 @@ import {
     TemplateStringExpression,
     TemplateStringQuasiExpression,
     TernaryExpression,
-    TypeCastExpression,
+    TypecastExpression,
     TypeExpression,
     TypedArrayExpression,
     UnaryExpression,
@@ -1031,8 +1031,8 @@ export class Parser {
             return this.importStatement();
         }
 
-        if (this.check(TokenKind.TypeCast) && this.checkNextText(TokenKind.Identifier, 'm')) {
-            return this.typeCastMStatement();
+        if (this.check(TokenKind.Typecast) && this.checkNextText(TokenKind.Identifier, 'm')) {
+            return this.typecastMStatement();
         }
 
         if (this.check(TokenKind.Stop)) {
@@ -1448,27 +1448,27 @@ export class Parser {
         return importStatement;
     }
 
-    private typeCastMStatement() {
+    private typecastMStatement() {
         this.warnIfNotBrighterScriptMode('typecast m statements');
-        const typeCastToken = this.advance();
+        const typecastToken = this.advance();
         if (!this.checkText(TokenKind.Identifier, 'm')) {
             this.diagnostics.push({
                 ...DiagnosticMessages.expectedIdentifierAfterKeyword('typecast', 'm'),
-                range: util.getRange(typeCastToken, this.peek())
+                range: util.getRange(typecastToken, this.peek())
             });
             throw this.lastDiagnosticAsError();
         }
         const mToken = this.advance();
         const [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
 
-        let typeCastMStatement = new TypeCastMStatement({
-            typeCast: typeCastToken,
+        let typecastMStatement = new TypecastMStatement({
+            typecast: typecastToken,
             m: mToken,
             as: asToken,
             typeExpression: typeExpression
         });
 
-        return typeCastMStatement;
+        return typecastMStatement;
     }
 
     private annotationExpression() {
@@ -2274,11 +2274,11 @@ export class Parser {
         this.pendingAnnotations = parentAnnotations;
     }
 
-    private expression(findTypeCast = true): Expression {
+    private expression(findTypecast = true): Expression {
         let expression = this.anonymousFunction();
         let asToken: Token;
         let typeExpression: TypeExpression;
-        if (findTypeCast) {
+        if (findTypecast) {
             do {
                 if (this.check(TokenKind.As)) {
                     this.warnIfNotBrighterScriptMode('type cast');
@@ -2287,7 +2287,7 @@ export class Parser {
                     // myVal = foo() as dynamic as string
                     [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
                     if (asToken && typeExpression) {
-                        expression = new TypeCastExpression({ obj: expression, as: asToken, typeExpression: typeExpression });
+                        expression = new TypecastExpression({ obj: expression, as: asToken, typeExpression: typeExpression });
                     }
                 } else {
                     break;

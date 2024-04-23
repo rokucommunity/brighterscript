@@ -1,4 +1,4 @@
-import { isAALiteralExpression, isArrayType, isBody, isClassStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isTypeCastMStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
+import { isAALiteralExpression, isArrayType, isBody, isClassStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isTypecastMStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -7,7 +7,7 @@ import { TokenKind } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
 import { CallExpression, type FunctionExpression, type LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
-import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, TypeCastMStatement, WhileStatement } from '../../parser/Statement';
+import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, TypecastMStatement, WhileStatement } from '../../parser/Statement';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { ArrayDefaultTypeReferenceType } from '../../types/ReferenceType';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
@@ -173,7 +173,7 @@ export class BrsFileValidator {
             ContinueStatement: (node) => {
                 this.validateContinueStatement(node);
             },
-            TypeCastMStatement: (node) => {
+            TypecastMStatement: (node) => {
                 node.parent.getSymbolTable().addSymbol('m', { definingNode: node }, node.getType({ flags: SymbolTypeFlag.typetime }), SymbolTypeFlag.runtime);
             }
         });
@@ -311,7 +311,7 @@ export class BrsFileValidator {
                     !isLibraryStatement(statement) &&
                     !isImportStatement(statement) &&
                     !isConstStatement(statement) &&
-                    !isTypeCastMStatement(statement)
+                    !isTypecastMStatement(statement)
                 ) {
                     this.event.file.addDiagnostic({
                         ...DiagnosticMessages.unexpectedStatementOutsideFunction(),
@@ -323,10 +323,10 @@ export class BrsFileValidator {
     }
 
     private validateTopOfFileStatements() {
-        let topOfFileIncludeStatements = [] as Array<LibraryStatement | ImportStatement | TypeCastMStatement>;
+        let topOfFileIncludeStatements = [] as Array<LibraryStatement | ImportStatement | TypecastMStatement>;
         for (let stmt of this.event.file.parser.ast.statements) {
             //if we found a non-library statement, this statement is not at the top of the file
-            if (isLibraryStatement(stmt) || isImportStatement(stmt) || isTypeCastMStatement(stmt)) {
+            if (isLibraryStatement(stmt) || isImportStatement(stmt) || isTypecastMStatement(stmt)) {
                 topOfFileIncludeStatements.push(stmt);
             } else {
                 //break out of the loop, we found all of our library statements
@@ -340,7 +340,7 @@ export class BrsFileValidator {
             // eslint-disable-next-line @typescript-eslint/dot-notation
             ...this.event.file['_cachedLookups'].importStatements,
             // eslint-disable-next-line @typescript-eslint/dot-notation
-            ...this.event.file['_cachedLookups'].typeCastMStatements
+            ...this.event.file['_cachedLookups'].typecastMStatements
         ];
         for (let result of statements) {
             //if this statement is not one of the top-of-file statements,
@@ -358,24 +358,24 @@ export class BrsFileValidator {
                         range: result.range,
                         file: this.event.file
                     });
-                } else if (isTypeCastMStatement(result)) {
+                } else if (isTypecastMStatement(result)) {
                     if (result.parent === this.event.file.ast) {
                         this.event.file.diagnostics.push({
-                            ...DiagnosticMessages.typeCastMStatementMustBeDeclaredAtStart(),
+                            ...DiagnosticMessages.typecastMStatementMustBeDeclaredAtStart(),
                             range: result.range,
                             file: this.event.file
                         });
                     } else if (isFunctionExpression(result.parent?.parent)) {
                         if (result.parent.parent.body.statements[0] !== result) {
                             this.event.file.diagnostics.push({
-                                ...DiagnosticMessages.typeCastMStatementMustBeDeclaredAtStart(),
+                                ...DiagnosticMessages.typecastMStatementMustBeDeclaredAtStart(),
                                 range: result.range,
                                 file: this.event.file
                             });
                         }
                     } else {
                         this.event.file.diagnostics.push({
-                            ...DiagnosticMessages.typeCastMStatementMustBeDeclaredAtStart(),
+                            ...DiagnosticMessages.typecastMStatementMustBeDeclaredAtStart(),
                             range: result.range,
                             file: this.event.file
                         });

@@ -1,14 +1,14 @@
 import { expect, assert } from '../chai-config.spec';
 import { Lexer } from '../lexer/Lexer';
 import { ReservedWords, TokenKind } from '../lexer/TokenKind';
-import type { AAMemberExpression, BinaryExpression, TypeCastExpression, UnaryExpression } from './Expression';
+import type { AAMemberExpression, BinaryExpression, TypecastExpression, UnaryExpression } from './Expression';
 import { TernaryExpression, NewExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression, VariableExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
-import type { AssignmentStatement, ClassStatement, InterfaceStatement, ReturnStatement, TypeCastMStatement } from './Statement';
+import type { AssignmentStatement, ClassStatement, InterfaceStatement, ReturnStatement, TypecastMStatement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isClassStatement, isDottedGetExpression, isExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypeCastExpression, isTypeCastMStatement, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isClassStatement, isDottedGetExpression, isExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypecastExpression, isTypecastMStatement, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import { expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics } from '../testHelpers.spec';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { Expression, Statement } from './AstNode';
@@ -1251,8 +1251,8 @@ describe('parser', () => {
             expect(fn.func.body.statements).to.exist;
             let assignment = fn.func.body.statements[0] as AssignmentStatement;
             expect(isAssignmentStatement(assignment)).to.be.true;
-            expect(isTypeCastExpression(assignment.value)).to.be.true;
-            expect(isCallExpression((assignment.value as TypeCastExpression).obj)).to.be.true;
+            expect(isTypecastExpression(assignment.value)).to.be.true;
+            expect(isCallExpression((assignment.value as TypecastExpression).obj)).to.be.true;
             expectTypeToBe(assignment.getType({ flags: SymbolTypeFlag.typetime }), IntegerType);
         });
 
@@ -1275,7 +1275,7 @@ describe('parser', () => {
             expect(isCallExpression(assignment.value)).to.be.true;
             expect(isDottedGetExpression(assignment.value.callee)).to.be.true;
             expect(isGroupingExpression(assignment.value.callee.obj)).to.be.true;
-            expect(isTypeCastExpression(assignment.value.callee.obj.expression)).to.be.true;
+            expect(isTypecastExpression(assignment.value.callee.obj.expression)).to.be.true;
             //grouping expression is an integer
             expectTypeToBe(assignment.value.callee.obj.getType({ flags: SymbolTypeFlag.typetime }), IntegerType);
         });
@@ -1298,8 +1298,8 @@ describe('parser', () => {
             expect(isPrintStatement(print)).to.be.true;
             expect(isCallExpression(print.expressions[0])).to.be.true;
             let fnCall = print.expressions[0] as CallExpression;
-            expect(isTypeCastExpression(fnCall.args[0])).to.be.true;
-            let arg = fnCall.args[0] as TypeCastExpression;
+            expect(isTypecastExpression(fnCall.args[0])).to.be.true;
+            let arg = fnCall.args[0] as TypecastExpression;
             //argument type is float
             expectTypeToBe(arg.getType({ flags: SymbolTypeFlag.typetime }), FloatType);
         });
@@ -1316,7 +1316,7 @@ describe('parser', () => {
             expect(fn.func.body.statements).to.exist;
             let print = fn.func.body.statements[0] as any;
             expect(isPrintStatement(print)).to.be.true;
-            expect(isTypeCastExpression(print.expressions[0])).to.be.true;
+            expect(isTypecastExpression(print.expressions[0])).to.be.true;
             //argument type is float
             expectTypeToBe(print.expressions[0].getType({ flags: SymbolTypeFlag.typetime }), StringType);
         });
@@ -1861,12 +1861,12 @@ describe('parser', () => {
     describe('typecast m', () => {
         it('allows typecast m statement ', () => {
             let { diagnostics, statements } = parse(`
-                typeCast m AS roAssociativeArray
+                typecast m AS roAssociativeArray
             `, ParseMode.BrighterScript);
             expectZeroDiagnostics(diagnostics);
-            expect(isTypeCastMStatement(statements[0])).to.be.true;
-            const stmt = statements[0] as TypeCastMStatement;
-            expect(stmt.tokens.typeCast.text).to.eq('typeCast');
+            expect(isTypecastMStatement(statements[0])).to.be.true;
+            const stmt = statements[0] as TypecastMStatement;
+            expect(stmt.tokens.typecast.text).to.eq('typecast');
             expect(stmt.tokens.m.text).to.eq('m');
             expect(stmt.tokens.as.text).to.eq('AS');
             expect(stmt.typeExpression.expression).to.exist;
@@ -1874,7 +1874,7 @@ describe('parser', () => {
 
         it('is disallowed in brightscript mode', () => {
             let { diagnostics } = parse(`
-                typeCast m AS roAssociativeArray
+                typecast m AS roAssociativeArray
             `, ParseMode.BrightScript);
             expectDiagnosticsIncludes(diagnostics, [
                 DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('typecast m statements')

@@ -3417,9 +3417,9 @@ export class ContinueStatement extends Statement {
 }
 
 
-export class TypeCastMStatement extends Statement {
+export class TypecastMStatement extends Statement {
     constructor(options: {
-        typeCast?: Token;
+        typecast?: Token;
         as?: Token;
         m?: Token;
         typeExpression: TypeExpression;
@@ -3427,13 +3427,13 @@ export class TypeCastMStatement extends Statement {
     ) {
         super();
         this.tokens = {
-            typeCast: options.typeCast,
+            typecast: options.typecast,
             as: options.as,
             m: options.m
         };
         this.typeExpression = options.typeExpression;
         this.range = util.createBoundingRange(
-            this.tokens.typeCast,
+            this.tokens.typecast,
             this.tokens.m,
             this.tokens.as,
             this.typeExpression
@@ -3441,14 +3441,14 @@ export class TypeCastMStatement extends Statement {
     }
 
     public readonly tokens: {
-        readonly typeCast?: Token;
+        readonly typecast?: Token;
         readonly m?: Token;
         readonly as?: Token;
     };
 
     public readonly typeExpression: TypeExpression;
 
-    public readonly kind = AstNodeKind.TypeCastMStatement;
+    public readonly kind = AstNodeKind.TypecastMStatement;
 
     public readonly range: Range;
 
@@ -3456,7 +3456,7 @@ export class TypeCastMStatement extends Statement {
         //the typecast statement is a comment just for debugging purposes
         return [
             `'`,
-            state.transpileToken(this.tokens.typeCast, 'typecast'),
+            state.transpileToken(this.tokens.typecast, 'typecast'),
             ' ',
             state.transpileToken(this.tokens.m, 'm'),
             ' ',
@@ -3473,7 +3473,7 @@ export class TypeCastMStatement extends Statement {
     }
 
     getLeadingTrivia(): Token[] {
-        return this.tokens.typeCast?.leadingTrivia ?? [];
+        return this.tokens.typecast?.leadingTrivia ?? [];
     }
 
     getType(options: GetTypeOptions): BscType {

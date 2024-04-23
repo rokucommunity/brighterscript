@@ -1,5 +1,5 @@
 import type { AALiteralExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionExpression, VariableExpression } from '../parser/Expression';
-import type { AssignmentStatement, ClassStatement, ConstStatement, EnumStatement, FunctionStatement, ImportStatement, InterfaceStatement, LibraryStatement, NamespaceStatement, TypeCastMStatement } from '../parser/Statement';
+import type { AssignmentStatement, ClassStatement, ConstStatement, EnumStatement, FunctionStatement, ImportStatement, InterfaceStatement, LibraryStatement, NamespaceStatement, TypecastMStatement } from '../parser/Statement';
 import { Cache } from '../Cache';
 import { WalkMode, createVisitor } from './visitors';
 import type { Expression } from '../parser/AstNode';
@@ -53,8 +53,8 @@ export class CachedLookups {
         return this.getFromCache<Array<ImportStatement>>('importStatements');
     }
 
-    get typeCastMStatements(): TypeCastMStatement[] {
-        return this.getFromCache<Array<TypeCastMStatement>>('typeCastMStatements');
+    get typecastMStatements(): TypecastMStatement[] {
+        return this.getFromCache<Array<TypecastMStatement>>('typecastMStatements');
     }
 
     /**
@@ -164,7 +164,7 @@ export class CachedLookups {
         const assignmentStatements: AssignmentStatement[] = [];
         const libraryStatements: LibraryStatement[] = [];
         const importStatements: ImportStatement[] = [];
-        const typeCastMStatements: TypeCastMStatement[] = [];
+        const typecastMStatements: TypecastMStatement[] = [];
         const functionStatements: FunctionStatement[] = [];
         const functionExpressions: FunctionExpression[] = [];
 
@@ -257,8 +257,8 @@ export class CachedLookups {
             ImportStatement: s => {
                 importStatements.push(s);
             },
-            TypeCastMStatement: s => {
-                typeCastMStatements.push(s);
+            TypecastMStatement: s => {
+                typecastMStatements.push(s);
             },
             LibraryStatement: s => {
                 libraryStatements.push(s);
@@ -340,7 +340,7 @@ export class CachedLookups {
         this.cache.set('assignmentStatements', assignmentStatements);
         this.cache.set('libraryStatements', libraryStatements);
         this.cache.set('importStatements', importStatements);
-        this.cache.set('typeCastMStatements', typeCastMStatements);
+        this.cache.set('typecastMStatements', typecastMStatements);
         this.cache.set('functionStatements', functionStatements);
         this.cache.set('functionExpressions', functionExpressions);
         this.cache.set('propertyHints', propertyHints);

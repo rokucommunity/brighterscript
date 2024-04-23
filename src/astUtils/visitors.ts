@@ -1,7 +1,7 @@
 /* eslint-disable no-bitwise */
 import type { CancellationToken } from 'vscode-languageserver';
-import type { Body, AssignmentStatement, Block, ExpressionStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, EnumStatement, EnumMemberStatement, DimStatement, TryCatchStatement, CatchStatement, ThrowStatement, InterfaceStatement, InterfaceFieldStatement, InterfaceMethodStatement, FieldStatement, MethodStatement, ConstStatement, ContinueStatement, TypeCastMStatement } from '../parser/Statement';
-import type { AALiteralExpression, AAMemberExpression, AnnotationExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, EscapedCharCodeLiteralExpression, FunctionExpression, FunctionParameterExpression, GroupingExpression, IndexedGetExpression, LiteralExpression, NewExpression, NullCoalescingExpression, RegexLiteralExpression, SourceLiteralExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, TernaryExpression, TypeCastExpression, TypeExpression, UnaryExpression, VariableExpression, XmlAttributeGetExpression } from '../parser/Expression';
+import type { Body, AssignmentStatement, Block, ExpressionStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, EnumStatement, EnumMemberStatement, DimStatement, TryCatchStatement, CatchStatement, ThrowStatement, InterfaceStatement, InterfaceFieldStatement, InterfaceMethodStatement, FieldStatement, MethodStatement, ConstStatement, ContinueStatement, TypecastMStatement } from '../parser/Statement';
+import type { AALiteralExpression, AAMemberExpression, AnnotationExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, EscapedCharCodeLiteralExpression, FunctionExpression, FunctionParameterExpression, GroupingExpression, IndexedGetExpression, LiteralExpression, NewExpression, NullCoalescingExpression, RegexLiteralExpression, SourceLiteralExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, TernaryExpression, TypecastExpression, TypeExpression, UnaryExpression, VariableExpression, XmlAttributeGetExpression } from '../parser/Expression';
 import { isExpression, isStatement } from './reflection';
 import type { Editor } from './Editor';
 import type { Statement, Expression, AstNode } from '../parser/AstNode';
@@ -127,7 +127,7 @@ export function createVisitor(
         LibraryStatement?: (statement: LibraryStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
         NamespaceStatement?: (statement: NamespaceStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
         ImportStatement?: (statement: ImportStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
-        TypeCastMStatement?: (statement: TypeCastMStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        TypecastMStatement?: (statement: TypecastMStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
         InterfaceStatement?: (statement: InterfaceStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
         InterfaceFieldStatement?: (statement: InterfaceFieldStatement, parent?: Statement) => Statement | void;
         InterfaceMethodStatement?: (statement: InterfaceMethodStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
@@ -168,7 +168,7 @@ export function createVisitor(
         NullCoalescingExpression?: (expression: NullCoalescingExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
         RegexLiteralExpression?: (expression: RegexLiteralExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
         TypeExpression?: (expression: TypeExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
-        TypeCastExpression?: (expression: TypeCastExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        TypecastExpression?: (expression: TypecastExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
     }
 ) {
     return <WalkVisitor>((statement: Statement, parent?: Statement, owner?: any, key?: any): Statement | void => {

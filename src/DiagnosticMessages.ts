@@ -765,7 +765,7 @@ export let DiagnosticMessages = {
         code: 1146,
         severity: DiagnosticSeverity.Error
     }),
-    typeCastMStatementMustBeDeclaredAtStart: () => ({
+    typecastMStatementMustBeDeclaredAtStart: () => ({
         message: `'typecast m' statement must be declared at the top of the file or beginning of function`,
         code: 1147,
         severity: DiagnosticSeverity.Error

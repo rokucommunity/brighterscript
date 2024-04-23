@@ -353,7 +353,7 @@ describe('BrsFileValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.typeCastMStatementMustBeDeclaredAtStart().message
+                DiagnosticMessages.typecastMStatementMustBeDeclaredAtStart().message
             ]);
         });
 
@@ -387,7 +387,7 @@ describe('BrsFileValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.typeCastMStatementMustBeDeclaredAtStart().message
+                DiagnosticMessages.typecastMStatementMustBeDeclaredAtStart().message
             ]);
         });
 
