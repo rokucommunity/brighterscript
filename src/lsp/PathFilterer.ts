@@ -1,5 +1,7 @@
 import * as micromatch from 'micromatch';
 import * as path from 'path';
+import type { Logger } from '../logging';
+import { createLogger } from '../logging';
 
 /**
  * Manage collections of glob patterns used to filter paths.
@@ -8,6 +10,15 @@ import * as path from 'path';
  * If the path matches an includeList, it will be included. If not, it will remain excluded.
  */
 export class PathFilterer {
+    public constructor(
+        options?: {
+            logger?: Logger;
+        }
+    ) {
+        this.logger = options?.logger ?? createLogger();
+    }
+
+    private logger: Logger;
 
     private includeCollections: PathCollection[] = [];
 
@@ -79,6 +90,7 @@ export class PathFilterer {
      * These should be things like the `files` array from a bsconfig.json
      */
     public registerIncludeList(rootDir: string, globs: string[]) {
+        this.logger.debug('registerIncludeList', { rootDir: rootDir, globs: globs });
         let collection = new PathCollection({
             rootDir: rootDir,
             globs: globs
@@ -105,6 +117,7 @@ export class PathFilterer {
      * would exclude all files in the `.git` and `node_modules` directories, but would include the `node_modules/@rokucommunity/bslib` directory
      */
     public registerExcludeList(rootDir: string, globs: string[]) {
+        this.logger.debug('registerExcludeList', { rootDir: rootDir, globs: globs });
         let collection = new PathCollection({
             rootDir: rootDir,
             globs: globs
@@ -116,6 +129,8 @@ export class PathFilterer {
     }
 
     public registerExcludeMatcher(matcher: (path: string) => boolean) {
+        this.logger.debug('registerExcludeMatcher', matcher);
+
         const collection = new PathCollection({
             matcher: matcher
         });

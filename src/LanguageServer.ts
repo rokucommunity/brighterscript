@@ -52,7 +52,9 @@ import type { Project } from './lsp/Project';
 import type { WorkspaceConfig } from './lsp/ProjectManager';
 import { ProjectManager } from './lsp/ProjectManager';
 import * as fsExtra from 'fs-extra';
+import { Trace } from './common/Decorators';
 
+@Trace()
 export class LanguageServer {
     /**
      * The default threading setting for the language server. Can be overridden by per-workspace settings
@@ -95,17 +97,20 @@ export class LanguageServer {
      * Used to filter paths based on include/exclude lists (like .gitignore or vscode's `files.exclude`).
      * This is used to prevent the language server from being overwhelmed by files we don't actually want to handle
      */
-    private pathFilterer = new PathFilterer();
+    private pathFilterer: PathFilterer;
 
-    private logger = createLogger({
+    public logger = createLogger({
         logLevel: LogLevel.log
     });
 
     constructor() {
+        this.pathFilterer = new PathFilterer({ logger: this.logger });
+
         this.projectManager = new ProjectManager({
             pathFilterer: this.pathFilterer,
             logger: this.logger
         });
+
         //anytime a project emits a collection of diagnostics, send them to the client
         this.projectManager.on('diagnostics', (event) => {
             this.logger.info(`Received ${event.diagnostics.length} diagnostics from project ${event.project.projectNumber}`);
@@ -116,10 +121,14 @@ export class LanguageServer {
         // and may not have the latest unsaved file changes. Any existing projects that already use these files will just ignore the changes
         // because the file contents haven't changed.
         this.projectManager.on('project-reload', (event) => {
-            for (const document of this.documents.all()) {
-                void this.onTextDocumentDidChangeContent({
-                    document: document
-                });
+            const documents = [...this.documents.all()];
+            if (documents.length > 0) {
+                this.logger.log(`Project ${event.project.projectNumber} reloaded. Resending all open document changes.`, documents.map(x => x.uri));
+                for (const document of this.documents.all()) {
+                    void this.onTextDocumentDidChangeContent({
+                        document: document
+                    });
+                }
             }
         });
 
@@ -467,7 +476,7 @@ export class LanguageServer {
                 });
             }
         }));
-        this.logger.log('rebuilt path filterer');
+        this.logger.log('pathFilterer successfully reconstructed');
 
         return this.pathFilterer;
     }

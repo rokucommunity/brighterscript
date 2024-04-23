@@ -16,17 +16,19 @@ import * as fastGlob from 'fast-glob';
 import { PathCollection, PathFilterer } from './PathFilterer';
 import type { Logger } from '../logging';
 import { createLogger } from '../logging';
+import { Trace } from '../common/Decorators';
 
 /**
  * Manages all brighterscript projects for the language server
  */
+@Trace()
 export class ProjectManager {
     constructor(options?: {
         pathFilterer: PathFilterer;
         logger?: Logger;
     }) {
-        this.pathFilterer = options?.pathFilterer ?? new PathFilterer();
         this.logger = options?.logger ?? createLogger();
+        this.pathFilterer = options?.pathFilterer ?? new PathFilterer({ logger: options?.logger });
         this.documentManager.on('flush', (event) => {
             void this.flushDocumentChanges(event).catch(e => console.error(e));
         });
