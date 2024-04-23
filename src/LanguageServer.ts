@@ -45,7 +45,7 @@ import { DiagnosticCollection } from './DiagnosticCollection';
 import { encodeSemanticTokens, semanticTokensLegend } from './SemanticTokenUtils';
 import { LogLevel, createLogger, logger } from './logging';
 import ignore from 'ignore';
-import micromatch from 'micromatch';
+import * as micromatch from 'micromatch';
 import type { LspProject, LspDiagnostic } from './lsp/LspProject';
 import { PathFilterer } from './lsp/PathFilterer';
 import type { Project } from './lsp/Project';
