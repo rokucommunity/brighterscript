@@ -14,7 +14,8 @@ import type { FileChange, MaybePromise } from '../interfaces';
 import { BusyStatusTracker } from '../BusyStatusTracker';
 import * as fastGlob from 'fast-glob';
 import { PathCollection, PathFilterer } from './PathFilterer';
-import { Logger } from '../Logger';
+import type { Logger } from '../logging';
+import { createLogger } from '../logging';
 
 /**
  * Manages all brighterscript projects for the language server
@@ -25,7 +26,7 @@ export class ProjectManager {
         logger?: Logger;
     }) {
         this.pathFilterer = options?.pathFilterer ?? new PathFilterer();
-        this.logger = options?.logger ?? new Logger();
+        this.logger = options?.logger ?? createLogger();
         this.documentManager.on('flush', (event) => {
             void this.flushDocumentChanges(event).catch(e => console.error(e));
         });

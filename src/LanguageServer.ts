@@ -98,13 +98,13 @@ export class LanguageServer {
     private pathFilterer = new PathFilterer();
 
     private logger = createLogger({
-        logLevel: LogLevel.log,
-        prefix: '[lsp]'
+        logLevel: LogLevel.log
     });
 
     constructor() {
         this.projectManager = new ProjectManager({
-            pathFilterer: this.pathFilterer
+            pathFilterer: this.pathFilterer,
+            logger: this.logger
         });
         //anytime a project emits a collection of diagnostics, send them to the client
         this.projectManager.on('diagnostics', (event) => {
