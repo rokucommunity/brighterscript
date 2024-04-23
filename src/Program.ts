@@ -669,7 +669,7 @@ export class Program {
     public validate(options: { async: false; cancellationToken?: CancellationToken }): void;
     public validate(options: { async: true; cancellationToken?: CancellationToken }): Promise<void>;
     public validate(options?: { async?: boolean; cancellationToken?: CancellationToken }) {
-        const timeEnd = this.logger.timeStart(LogLevel.log as any, `Validating project${(this.logger.logLevel as LogLevel) > LogLevel.log ? ` (run ${this.validationRunSequence++})` : ''}`);
+        const timeEnd = this.logger.timeStart(LogLevel.log, `Validating project${(this.logger.logLevel as LogLevel) > LogLevel.log ? ` (run ${this.validationRunSequence++})` : ''}`);
 
         const sequencer = new Sequencer({
             name: 'program.validate',
