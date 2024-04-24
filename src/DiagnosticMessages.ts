@@ -100,8 +100,8 @@ export let DiagnosticMessages = {
         code: 1015,
         severity: DiagnosticSeverity.Error
     }),
-    expectedIdentifierAfterKeyword: (keywordText: string, expectedText = '') => ({
-        message: `Expected identifier ${expectedText ? `'${expectedText}' ` : ''}after '${keywordText}' keyword`,
+    expectedIdentifierAfterKeyword: (keywordText: string) => ({
+        message: `Expected identifier after '${keywordText}' keyword`,
         code: 1016,
         severity: DiagnosticSeverity.Error
     }),
