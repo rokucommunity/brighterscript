@@ -54,7 +54,8 @@ import {
     StopStatement,
     ThrowStatement,
     TryCatchStatement,
-    WhileStatement
+    WhileStatement,
+    TypecastStatement
 } from './Statement';
 import type { DiagnosticInfo } from '../DiagnosticMessages';
 import { DiagnosticMessages } from '../DiagnosticMessages';
@@ -82,7 +83,7 @@ import {
     TemplateStringExpression,
     TemplateStringQuasiExpression,
     TernaryExpression,
-    TypeCastExpression,
+    TypecastExpression,
     TypeExpression,
     TypedArrayExpression,
     UnaryExpression,
@@ -91,7 +92,7 @@ import {
 } from './Expression';
 import type { Diagnostic, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
-import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression } from '../astUtils/reflection';
+import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isTypecastExpression } from '../astUtils/reflection';
 import { createStringLiteral } from '../astUtils/creators';
 import type { Expression, Statement } from './AstNode';
 import type { DeepWriteable } from '../interfaces';
@@ -1030,6 +1031,10 @@ export class Parser {
             return this.importStatement();
         }
 
+        if (this.check(TokenKind.Typecast) && this.checkAnyNext(TokenKind.Identifier, ...this.allowedLocalIdentifiers)) {
+            return this.typecastStatement();
+        }
+
         if (this.check(TokenKind.Stop)) {
             return this.stopStatement();
         }
@@ -1441,6 +1446,23 @@ export class Parser {
         });
 
         return importStatement;
+    }
+
+    private typecastStatement() {
+        this.warnIfNotBrighterScriptMode('typecast statements');
+        const typecastToken = this.advance();
+        const typecastExpr = this.expression();
+        if (isTypecastExpression(typecastExpr)) {
+            return new TypecastStatement({
+                typecast: typecastToken,
+                typecastExpression: typecastExpr
+            });
+        }
+        this.diagnostics.push({
+            ...DiagnosticMessages.expectedIdentifierAfterKeyword('typecast'),
+            range: util.getRange(typecastToken, this.peek())
+        });
+        throw this.lastDiagnosticAsError();
     }
 
     private annotationExpression() {
@@ -2246,11 +2268,11 @@ export class Parser {
         this.pendingAnnotations = parentAnnotations;
     }
 
-    private expression(findTypeCast = true): Expression {
+    private expression(findTypecast = true): Expression {
         let expression = this.anonymousFunction();
         let asToken: Token;
         let typeExpression: TypeExpression;
-        if (findTypeCast) {
+        if (findTypecast) {
             do {
                 if (this.check(TokenKind.As)) {
                     this.warnIfNotBrighterScriptMode('type cast');
@@ -2259,7 +2281,7 @@ export class Parser {
                     // myVal = foo() as dynamic as string
                     [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
                     if (asToken && typeExpression) {
-                        expression = new TypeCastExpression({ obj: expression, as: asToken, typeExpression: typeExpression });
+                        expression = new TypecastExpression({ obj: expression, as: asToken, typeExpression: typeExpression });
                     }
                 } else {
                     break;

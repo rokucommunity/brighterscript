@@ -1,7 +1,7 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
 import { CompoundAssignmentOperators, TokenKind } from '../lexer/TokenKind';
-import type { BinaryExpression, DottedGetExpression, FunctionExpression, FunctionParameterExpression, LiteralExpression, TypeExpression } from './Expression';
+import type { BinaryExpression, DottedGetExpression, FunctionExpression, FunctionParameterExpression, LiteralExpression, TypeExpression, TypecastExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
 import type { Range } from 'vscode-languageserver';
@@ -3413,5 +3413,62 @@ export class ContinueStatement extends Statement {
 
     public getLeadingTrivia(): Token[] {
         return this.tokens.continue?.leadingTrivia ?? [];
+    }
+}
+
+
+export class TypecastStatement extends Statement {
+    constructor(options: {
+        typecast?: Token;
+        typecastExpression: TypecastExpression;
+    }
+    ) {
+        super();
+        this.tokens = {
+            typecast: options.typecast
+        };
+        this.typecastExpression = options.typecastExpression;
+        this.range = util.createBoundingRange(
+            this.tokens.typecast,
+            this.typecastExpression
+        );
+    }
+
+    public readonly tokens: {
+        readonly typecast?: Token;
+    };
+
+    public readonly typecastExpression: TypecastExpression;
+
+    public readonly kind = AstNodeKind.TypecastStatement;
+
+    public readonly range: Range;
+
+    transpile(state: BrsTranspileState) {
+        //the typecast statement is a comment just for debugging purposes
+        return [
+            `'`,
+            state.transpileToken(this.tokens.typecast, 'typecast'),
+            ' ',
+            this.typecastExpression.obj.transpile(state),
+            ' ',
+            state.transpileToken(this.typecastExpression.tokens.as, 'as'),
+            ' ',
+            this.typecastExpression.typeExpression.transpile(state)
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'typecastExpression', visitor, options);
+        }
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.typecast?.leadingTrivia ?? [];
+    }
+
+    getType(options: GetTypeOptions): BscType {
+        return this.typecastExpression.getType(options);
     }
 }

@@ -164,6 +164,7 @@ export enum TokenKind {
     EndInterface = 'EndInterface',
     Const = 'Const',
     Continue = 'Continue',
+    Typecast = 'Typecast',
 
     //brighterscript source literals
     LineNumLiteral = 'LineNumLiteral',
@@ -323,7 +324,8 @@ export const Keywords: Record<string, TokenKind> = {
     throw: TokenKind.Throw,
     'end interface': TokenKind.EndInterface,
     endinterface: TokenKind.EndInterface,
-    const: TokenKind.Const
+    const: TokenKind.Const,
+    typecast: TokenKind.Typecast
 };
 //hide the constructor prototype method because it causes issues
 Keywords.constructor = undefined;
@@ -449,7 +451,8 @@ export const AllowedProperties = [
     TokenKind.Throw,
     TokenKind.EndInterface,
     TokenKind.Const,
-    TokenKind.Continue
+    TokenKind.Continue,
+    TokenKind.Typecast
 ];
 
 /** List of TokenKind that are allowed as local var identifiers. */
@@ -485,7 +488,8 @@ export const AllowedLocalIdentifiers = [
     TokenKind.EndTry,
     TokenKind.Const,
     TokenKind.Continue,
-    TokenKind.In
+    TokenKind.In,
+    TokenKind.Typecast
 ];
 
 export const BrighterScriptSourceLiterals = [

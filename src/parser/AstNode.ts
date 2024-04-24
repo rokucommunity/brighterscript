@@ -261,6 +261,7 @@ export enum AstNodeKind {
     ContinueStatement = 'ContinueStatement',
     Block = 'Block',
     TypeExpression = 'TypeExpression',
-    TypeCastExpression = 'TypeCastExpression',
-    TypedArrayExpression = 'TypedArrayExpression'
+    TypecastExpression = 'TypecastExpression',
+    TypedArrayExpression = 'TypedArrayExpression',
+    TypecastStatement = 'TypecastStatement'
 }
