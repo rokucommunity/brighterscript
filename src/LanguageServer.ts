@@ -54,6 +54,7 @@ import { ProjectManager } from './lsp/ProjectManager';
 import * as fsExtra from 'fs-extra';
 import { Trace } from './common/Decorators';
 import type { MaybePromise } from './interfaces';
+import { workerPool } from './lsp/worker/WorkerThreadProject';
 
 @Trace()
 export class LanguageServer {
@@ -105,6 +106,12 @@ export class LanguageServer {
     });
 
     constructor() {
+        //disable logger color when running the LSP (i.e. anytime we create a LanguageServer instance)
+        logger.enableColor = false;
+
+        //replace the workerPool logger with our own so logging info can be synced
+        workerPool.logger = this.logger.createLogger();
+
         this.pathFilterer = new PathFilterer({ logger: this.logger });
 
         this.projectManager = new ProjectManager({
@@ -285,11 +292,17 @@ export class LanguageServer {
         ): Promise<{ logLevel: LogLevel; logLevelText: string; item: T }> => {
             const logLevels = await Promise.all(
                 items.map(async (item) => {
-                    const value = await fetcher(item);
-                    if (value === undefined) {
-                        return -1;
+                    let value = await fetcher(item);
+                    //force string values to lower case (so we can support things like 'log' or 'Log' or 'LOG')
+                    if (typeof value === 'string') {
+                        value = value.toLowerCase();
+                    }
+                    const logLevelNumeric = this.logger.getLogLevelNumeric(value as any);
+
+                    if (typeof logLevelNumeric === 'number') {
+                        return logLevelNumeric;
                     } else {
-                        return this.logger.getLogLevelNumeric(value as any);
+                        return -1;
                     }
                 })
             );
@@ -308,18 +321,19 @@ export class LanguageServer {
         let workspaceResult = await getLogLevel(
             await this.connection.workspace.getWorkspaceFolders(),
             async (workspace) => {
-                return (await this.getClientConfiguration<BrightScriptClientConfiguration>(workspace.uri, 'brightscript'))?.languageServer?.logLevel;
+                const config = (await this.getClientConfiguration<BrightScriptClientConfiguration>(workspace.uri, 'brightscript'));
+                return config?.languageServer?.logLevel;
             }
         );
         if (workspaceResult) {
-            this.logger.log(`Setting logLevel to '${workspaceResult.logLevelText}' based on configuration from workspace '${workspaceResult.item.uri}'`);
+            this.logger.log(`Setting logLevel to '${workspaceResult.logLevelText}' based on configuration from workspace '${workspaceResult?.item?.uri}'`);
             this.logger.logLevel = workspaceResult.logLevel;
             return;
         }
 
         let projectResult = await getLogLevel(this.projectManager.projects, (project) => project.logger.logLevel);
         if (projectResult) {
-            this.logger.log(`Setting logLevel to '${projectResult.logLevelText}' based on project #${projectResult.item.projectNumber}`);
+            this.logger.log(`Setting logLevel to '${projectResult.logLevelText}' based on project #${projectResult?.item?.projectNumber}`);
             this.logger.logLevel = projectResult.logLevel;
             return;
         }

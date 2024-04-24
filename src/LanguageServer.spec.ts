@@ -18,6 +18,7 @@ import { URI } from 'vscode-uri';
 import { BusyStatusTracker } from './BusyStatusTracker';
 import type { BscFile } from '.';
 import type { Project } from './lsp/Project';
+import { LogLevel, Logger, createLogger } from './logging';
 
 const sinon = createSandbox();
 
@@ -269,6 +270,122 @@ describe('LanguageServer', () => {
                 s`${tempDir}/project1`,
                 s`${tempDir}/sub/dir/project2`
             ]);
+        });
+    });
+
+    describe('syncLogLevel', () => {
+        beforeEach(() => {
+            //disable logging for these tests
+            sinon.stub(Logger.prototype, 'write').callsFake(() => { });
+        });
+
+        it('uses a default value when no workspace or projects are present', async () => {
+            server.run();
+            await server['syncLogLevel']();
+            expect(server.logger.logLevel).to.eql(LogLevel.log);
+        });
+
+        it('recovers when workspace sends unsupported value', async () => {
+            server.run();
+
+            sinon.stub(server as any, 'getClientConfiguration').returns(Promise.resolve({
+                languageServer: {
+                    logLevel: 'not-valid'
+                }
+            }));
+            await server['syncLogLevel']();
+            expect(server.logger.logLevel).to.eql(LogLevel.log);
+        });
+
+        it('uses logLevel from workspace', async () => {
+            server.run();
+
+            sinon.stub(server as any, 'getClientConfiguration').returns(Promise.resolve({
+                languageServer: {
+                    logLevel: 'trace'
+                }
+            }));
+            await server['syncLogLevel']();
+            expect(server.logger.logLevel).to.eql(LogLevel.trace);
+        });
+
+        it('uses the higher-verbosity logLevel from multiple workspaces', async () => {
+            server.run();
+
+            //mock multiple workspaces
+            sinon.stub(server['connection'].workspace, 'getWorkspaceFolders').returns(Promise.resolve([
+                {
+                    name: 'workspace1',
+                    uri: getFileProtocolPath(s`${tempDir}/project1`)
+                },
+                {
+                    name: 'workspace1',
+                    uri: getFileProtocolPath(s`${tempDir}/project2`)
+                }
+            ]));
+
+            sinon.stub(server as any, 'getClientConfiguration').onFirstCall().returns(Promise.resolve({
+                languageServer: {
+                    logLevel: 'trace'
+                }
+            })).onSecondCall().returns(Promise.resolve({
+                languageServer: {
+                    logLevel: 'info'
+                }
+            }));
+            await server['syncLogLevel']();
+
+            expect(server.logger.logLevel).to.eql(LogLevel.trace);
+        });
+
+        it('uses valid workspace value when one of them is invalid', async () => {
+            server.run();
+
+            //mock multiple workspaces
+            sinon.stub(server['connection'].workspace, 'getWorkspaceFolders').returns(Promise.resolve([
+                {
+                    name: 'workspace1',
+                    uri: getFileProtocolPath(s`${tempDir}/project1`)
+                },
+                {
+                    name: 'workspace1',
+                    uri: getFileProtocolPath(s`${tempDir}/project2`)
+                }
+            ]));
+
+            sinon.stub(server as any, 'getClientConfiguration').onFirstCall().returns(Promise.resolve({
+                languageServer: {
+                    logLevel: 'trace1'
+                }
+            })).onSecondCall().returns(Promise.resolve({
+                languageServer: {
+                    logLevel: 'info'
+                }
+            }));
+            await server['syncLogLevel']();
+
+            expect(server.logger.logLevel).to.eql(LogLevel.info);
+        });
+
+        it('uses value from projects when not found in workspace', async () => {
+            server.run();
+
+            //mock multiple workspaces
+            sinon.stub(server['connection'].workspace, 'getWorkspaceFolders').returns(Promise.resolve([{
+                name: 'workspace1',
+                uri: getFileProtocolPath(s`${tempDir}/project2`)
+            }]));
+
+            server['projectManager'].projects.push({
+                logger: createLogger({
+                    logLevel: LogLevel.info
+                }),
+                projectNumber: 2
+            } as any);
+
+            await server['syncLogLevel']();
+
+            expect(server.logger.logLevel).to.eql(LogLevel.info);
         });
     });
 

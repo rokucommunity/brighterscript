@@ -1,5 +1,5 @@
 import type { Worker } from 'worker_threads';
-import { Logger } from '../../Logger';
+import { createLogger } from '../../logging';
 
 export class WorkerPool {
     constructor(
@@ -8,7 +8,7 @@ export class WorkerPool {
 
     }
 
-    private logger = new Logger();
+    public logger = createLogger();
 
     /**
      * List of workers that are free to be used by a new task
