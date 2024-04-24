@@ -38,6 +38,7 @@ Rules:
 - There can be a maximum of one `typecast` statement per block
 - Only runtime symbols can be typecast
 - Currently only `m` is supported
+- When used in a namespace, only the current namespace statement is affected - other namespace statements that contibute to the same namespaces do not have the typecast applied
 
 This is very usefuly for components, so that the actual type of Associative Array `m` can narrowed to provide better validation.
 
