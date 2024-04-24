@@ -8,6 +8,7 @@ import { Program } from './Program';
 import { standardizePath as s, util } from './util';
 import { Watcher } from './Watcher';
 import { DiagnosticSeverity } from 'vscode-languageserver';
+import type { Logger } from './logging';
 import { LogLevel, createLogger } from './logging';
 import PluginInterface from './PluginInterface';
 import * as diagnosticUtils from './diagnosticUtils';
@@ -21,7 +22,14 @@ import { URI } from 'vscode-uri';
  */
 export class ProgramBuilder {
 
-    public constructor() {
+    public constructor(
+        options?: {
+            logger?: Logger;
+        }
+    ) {
+        this.logger = options?.logger ?? createLogger();
+        this.plugins = new PluginInterface([], { logger: this.logger });
+
         //add the default file resolver (used to load source file contents).
         this.addFileResolver((filePath) => {
             return fsExtra.readFile(filePath).then((value) => {
@@ -38,8 +46,8 @@ export class ProgramBuilder {
     private isRunning = false;
     private watcher: Watcher | undefined;
     public program: Program | undefined;
-    public logger = createLogger();
-    public plugins: PluginInterface = new PluginInterface([], { logger: this.logger });
+    public logger: Logger;
+    public plugins: PluginInterface;
     private fileResolvers = [] as FileResolver[];
 
     /**
@@ -107,6 +115,10 @@ export class ProgramBuilder {
         this.isRunning = true;
         try {
             this.options = util.normalizeAndResolveConfig(options);
+            if (this.options?.logLevel !== undefined) {
+                this.logger.logLevel = this.options?.logLevel;
+            }
+
             if (this.options.noProject) {
                 this.logger.log(`'no-project' flag is set so bsconfig.json loading is disabled'`);
             } else if (this.options.project) {

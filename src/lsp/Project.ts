@@ -14,8 +14,21 @@ import { CancellationTokenSource } from 'vscode-languageserver-protocol';
 import type { DocumentAction, DocumentActionWithStatus } from './DocumentManager';
 import type { SignatureInfoObj } from '../Program';
 import type { BsConfig } from '../BsConfig';
+import type { LogLevel } from '../Logger';
+import type { Logger } from '../logging';
+import { createLogger } from '../logging';
+import { Trace } from '../common/Decorators';
 
+@Trace()
 export class Project implements LspProject {
+    public constructor(
+        options?: {
+            logger?: Logger;
+        }
+    ) {
+        this.logger = options?.logger ?? createLogger();
+    }
+
     /**
      * Activates this project. Every call to `activate` should completely reset the project, clear all used ram and start from scratch.
      */
@@ -26,7 +39,11 @@ export class Project implements LspProject {
         this.projectNumber = options.projectNumber;
         this.bsconfigPath = await this.getConfigFilePath(options);
 
-        this.builder = new ProgramBuilder();
+        this.builder = new ProgramBuilder({
+            //share our logger with ProgramBuilder, which will keep our level in sync with the one in the program
+            logger: this.logger
+        });
+
         this.builder.logger.prefix = `[prj${this.projectNumber}]`;
         this.disposables.push(this.builder);
 
@@ -89,10 +106,13 @@ export class Project implements LspProject {
 
         return {
             bsconfigPath: this.bsconfigPath,
+            logLevel: this.builder.program.options.logLevel as LogLevel,
             rootDir: this.builder.program.options.rootDir,
             filePatterns: this.filePatterns
         };
     }
+
+    public logger: Logger;
 
     /**
      * Options used to activate this project

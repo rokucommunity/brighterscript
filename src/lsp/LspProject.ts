@@ -2,11 +2,17 @@ import type { Diagnostic, Position, Range, Location, DocumentSymbol, WorkspaceSy
 import type { Hover, MaybePromise, SemanticToken } from '../interfaces';
 import type { DocumentAction, DocumentActionWithStatus } from './DocumentManager';
 import type { FileTranspileResult, SignatureInfoObj } from '../Program';
+import type { Logger, LogLevel } from '../logging';
 
 /**
  * Defines the contract between the ProjectManager and the main or worker thread Project classes
  */
 export interface LspProject {
+
+    /**
+     * A logger instance used for logging in this project
+     */
+    logger: Logger;
 
     /**
      * The config used to activate this project
@@ -204,4 +210,8 @@ export interface ActivateResponse {
      * The file patterns from bsconfig.json that were used to find all files for this project
      */
     filePatterns: string[];
+    /**
+     * The logLevel used for this project's logger
+     */
+    logLevel: LogLevel;
 }

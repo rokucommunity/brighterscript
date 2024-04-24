@@ -53,6 +53,7 @@ import type { WorkspaceConfig } from './lsp/ProjectManager';
 import { ProjectManager } from './lsp/ProjectManager';
 import * as fsExtra from 'fs-extra';
 import { Trace } from './common/Decorators';
+import type { MaybePromise } from './interfaces';
 
 @Trace()
 export class LanguageServer {
@@ -108,7 +109,7 @@ export class LanguageServer {
 
         this.projectManager = new ProjectManager({
             pathFilterer: this.pathFilterer,
-            logger: this.logger
+            logger: this.logger.createLogger()
         });
 
         //anytime a project emits a collection of diagnostics, send them to the client
@@ -121,6 +122,10 @@ export class LanguageServer {
         // and may not have the latest unsaved file changes. Any existing projects that already use these files will just ignore the changes
         // because the file contents haven't changed.
         this.projectManager.on('project-reload', (event) => {
+            //keep logLevel in sync with the most verbose log level found across all projects
+            void this.syncLogLevel();
+
+            //resend all open document changes
             const documents = [...this.documents.all()];
             if (documents.length > 0) {
                 this.logger.log(`Project ${event.project.projectNumber} reloaded. Resending all open document changes.`, documents.map(x => x.uri));
@@ -227,6 +232,9 @@ export class LanguageServer {
     public async onInitialized() {
         this.logger.log('onInitialized');
 
+        //set our logger to the most verbose loglevel found across any project
+        await this.syncLogLevel();
+
         try {
             if (this.hasConfigurationCapability) {
                 // register for when the user changes workspace or user settings
@@ -262,6 +270,62 @@ export class LanguageServer {
             );
             throw e;
         }
+    }
+
+    /**
+     * Set our logLevel to the most verbose log level found across all projects and workspaces
+     */
+    private async syncLogLevel() {
+        /**
+         * helper to get the logLevel from a list of items and return the item and level (if found), or undefined if not
+         */
+        const getLogLevel = async<T>(
+            items: T[],
+            fetcher: (item: T) => MaybePromise<LogLevel | string>
+        ): Promise<{ logLevel: LogLevel; logLevelText: string; item: T }> => {
+            const logLevels = await Promise.all(
+                items.map(async (item) => {
+                    const value = await fetcher(item);
+                    if (value === undefined) {
+                        return -1;
+                    } else {
+                        return this.logger.getLogLevelNumeric(value as any);
+                    }
+                })
+            );
+            let idx = logLevels.findIndex(x => x > -1);
+            if (idx > -1) {
+                const mostVerboseLogLevel = Math.max(...logLevels);
+                return {
+                    logLevel: mostVerboseLogLevel,
+                    logLevelText: this.logger.getLogLevelText(mostVerboseLogLevel),
+                    //find the first item having the most verbose logLevel
+                    item: items[logLevels.findIndex(x => x === mostVerboseLogLevel)]
+                };
+            }
+        };
+
+        let workspaceResult = await getLogLevel(
+            await this.connection.workspace.getWorkspaceFolders(),
+            async (workspace) => {
+                return (await this.getClientConfiguration<BrightScriptClientConfiguration>(workspace.uri, 'brightscript'))?.languageServer?.logLevel;
+            }
+        );
+        if (workspaceResult) {
+            this.logger.log(`Setting logLevel to '${workspaceResult.logLevelText}' based on configuration from workspace '${workspaceResult.item.uri}'`);
+            this.logger.logLevel = workspaceResult.logLevel;
+            return;
+        }
+
+        let projectResult = await getLogLevel(this.projectManager.projects, (project) => project.logger.logLevel);
+        if (projectResult) {
+            this.logger.log(`Setting logLevel to '${projectResult.logLevelText}' based on project #${projectResult.item.projectNumber}`);
+            this.logger.logLevel = projectResult.logLevel;
+            return;
+        }
+
+        //use a default level if no other level was found
+        this.logger.logLevel = LogLevel.log;
     }
 
     @AddStackToErrorMessage
@@ -522,6 +586,9 @@ export class LanguageServer {
         );
 
         await this.projectManager.syncProjects(workspaces, forceReload);
+
+        //set our logLevel to the most verbose log level found across all projects and workspaces
+        await this.syncLogLevel();
     }
 
     /**
@@ -631,5 +698,6 @@ interface BrightScriptClientConfiguration {
     configFile: string;
     languageServer: {
         enableThreading: boolean;
+        logLevel: LogLevel | string;
     };
 }

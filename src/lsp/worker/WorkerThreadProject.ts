@@ -13,6 +13,9 @@ import type { DocumentAction, DocumentActionWithStatus } from '../DocumentManage
 import { Deferred } from '../../deferred';
 import type { FileTranspileResult, SignatureInfoObj } from '../../Program';
 import type { Position, Range, Location, DocumentSymbol, WorkspaceSymbol, CodeAction, CompletionList } from 'vscode-languageserver-protocol';
+import type { Logger } from '../../logging';
+import { createLogger } from '../../logging';
+import { Trace } from '../../common/Decorators';
 
 export const workerPool = new WorkerPool(() => {
     return new Worker(
@@ -34,7 +37,15 @@ if (!isMainThread) {
     runner.run(parentPort);
 }
 
+@Trace()
 export class WorkerThreadProject implements LspProject {
+    public constructor(
+        options?: {
+            logger?: Logger;
+        }
+    ) {
+        this.logger = options?.logger ?? createLogger();
+    }
 
     public async activate(options: ProjectConfig) {
         this.activateOptions = options;
@@ -57,10 +68,13 @@ export class WorkerThreadProject implements LspProject {
         this.bsconfigPath = activateResponse.data.bsconfigPath;
         this.rootDir = activateResponse.data.rootDir;
         this.filePatterns = activateResponse.data.filePatterns;
+        this.logger.logLevel = activateResponse.data.logLevel;
 
         this.activationDeferred.resolve();
         return activateResponse.data;
     }
+
+    public logger: Logger;
 
     private activationDeferred = new Deferred();
 

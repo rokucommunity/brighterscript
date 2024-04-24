@@ -606,8 +606,12 @@ export class ProjectManager {
         config.projectNumber ??= ProjectManager.projectNumberSequence++;
 
         let project: LspProject = config.enableThreading
-            ? new WorkerThreadProject()
-            : new Project();
+            ? new WorkerThreadProject({
+                logger: this.logger.createLogger()
+            })
+            : new Project({
+                logger: this.logger.createLogger()
+            });
 
         this.logger.log(`Created project #${config.projectNumber} for: "${config.projectPath}" (${config.enableThreading ? 'worker thread' : 'main thread'})`);
 
