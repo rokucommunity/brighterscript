@@ -3356,6 +3356,97 @@ describe('Scope', () => {
             });
         });
 
+
+        describe('roAssociativeArray type', () => {
+
+            it('allows accessing built-in member of AA', () => {
+                program.setFile<BrsFile>('source/aa.bs', `
+                    function getSize(aa as roAssociativeArray) as integer
+                        return aa.count()
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows assigning to prop of AA', () => {
+                program.setFile<BrsFile>('source/aa.bs', `
+                    sub addName(aa as roAssociativeArray)
+                        aa.name = "foo"
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows accessing random prop of typecasted AA', () => {
+                program.setFile<BrsFile>('source/aa.bs', `
+                    sub foo()
+                        print (m as roAssociativeArray).whatever.whatever
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows asscessing prop of AA through square brackets', () => {
+                program.setFile<BrsFile>('source/aa.bs', `
+                    sub addName(aa as roAssociativeArray)
+                        aa["whatEver"] = "hello"
+                        print aa["whatEver"]
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+        });
+
+        describe('roArray type', () => {
+
+            it('allows accessing built-in member of array', () => {
+                program.setFile<BrsFile>('source/array.bs', `
+                    function getSize(aa as roArray) as integer
+                        return aa.count()
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows assigning to prop of item in array', () => {
+                program.setFile<BrsFile>('source/array.bs', `
+                    sub addName(aa as roArray)
+                        aa[0].name = "foo"
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows accessing random prop item in array of typecasted array', () => {
+                program.setFile<BrsFile>('source/array.bs', `
+                    sub foo()
+                        print (m as roArray)[0].whatever
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows asscessing prop of AA through square brackets', () => {
+                program.setFile<BrsFile>('source/array.bs', `
+                    sub addName(myArray as roArray)
+                        myArray[0] = "hello"
+                        print myArray[0]
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+        });
+
         it('classes in namespaces that reference themselves without namespace work', () => {
             program.setFile<BrsFile>('source/class.bs', `
                 namespace Alpha
