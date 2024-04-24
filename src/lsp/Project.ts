@@ -26,7 +26,10 @@ export class Project implements LspProject {
             logger?: Logger;
         }
     ) {
-        this.logger = options?.logger ?? createLogger();
+        this.logger = options?.logger ?? createLogger({
+            //when running inside a worker thread, we don't want to use colors
+            enableColor: false
+        });
     }
 
     /**
