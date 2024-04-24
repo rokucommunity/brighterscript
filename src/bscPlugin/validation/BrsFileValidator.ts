@@ -175,7 +175,7 @@ export class BrsFileValidator {
                 this.validateContinueStatement(node);
             },
             TypecastStatement: (node) => {
-                node.parent.getSymbolTable().addSymbol('m', { definingNode: node }, node.getType({ flags: SymbolTypeFlag.typetime }), SymbolTypeFlag.runtime);
+                node.parent.getSymbolTable().addSymbol('m', { definingNode: node, doNotMerge: true }, node.getType({ flags: SymbolTypeFlag.typetime }), SymbolTypeFlag.runtime);
             }
         });
 
