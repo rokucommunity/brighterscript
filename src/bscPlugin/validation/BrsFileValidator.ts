@@ -14,7 +14,6 @@ import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import { DynamicType } from '../../types/DynamicType';
 import util from '../../util';
 import type { Range } from 'vscode-languageserver';
-import { isIdentifier } from '../../lexer/Token';
 
 export class BrsFileValidator {
     constructor(
@@ -392,7 +391,7 @@ export class BrsFileValidator {
             if (isBadTypecastObj) {
                 this.event.file.diagnostics.push({
                     ...DiagnosticMessages.invalidTypecastStatementApplication(util.getAllDottedGetPartsAsString(result.typecastExpression.obj)),
-                    range: result.range,
+                    range: result.typecastExpression.obj.range,
                     file: this.event.file
                 });
             }

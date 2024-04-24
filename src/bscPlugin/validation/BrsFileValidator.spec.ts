@@ -329,19 +329,56 @@ describe('BrsFileValidator', () => {
 
     describe('typecast statement', () => {
         it('allows being at start of file', () => {
-            program.setFile('source/other.bs', `
-            `);
-
             program.setFile('source/main.bs', `
-                import "other.bs"
                 typecast m as object
 
                 sub noop()
                 end sub
-
             `);
             program.validate();
             expectZeroDiagnostics(program);
+        });
+
+        it('has diagnostic if more than one usage per block', () => {
+            program.setFile('source/main.bs', `
+                typecast m as object
+                typecast m as integer
+
+                sub noop()
+                    typecast m as object
+                    typecast m as string
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.typecastStatementMustBeDeclaredAtStart().message,
+                DiagnosticMessages.typecastStatementMustBeDeclaredAtStart().message
+            ]);
+        });
+
+        it('has diagnostic if not typecasting m', () => {
+            program.setFile('source/main.bs', `
+                typecast alpha.beta.notM as object ' error
+
+                const notM = "also not m"
+
+                sub noop()
+                    typecast notM as object ' error
+                end sub
+
+                sub foo()
+                    typecast M as object ' no error!
+                end sub
+
+                namespace alpha.beta
+                    const notM = "namespaced not m"
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.invalidTypecastStatementApplication('alpha.beta.notM').message,
+                DiagnosticMessages.invalidTypecastStatementApplication('notM').message
+            ]);
         });
 
         it('has diagnostic if not first in file', () => {
@@ -367,7 +404,6 @@ describe('BrsFileValidator', () => {
                     typecast m as Thing
                     print m.value
                 end sub
-
             `);
             program.validate();
             expectZeroDiagnostics(program);
@@ -383,7 +419,6 @@ describe('BrsFileValidator', () => {
                     print m.value
                     typecast m as Thing
                 end sub
-
             `);
             program.validate();
             expectDiagnostics(program, [
@@ -497,7 +532,6 @@ describe('BrsFileValidator', () => {
                 }
             }), { walkMode: WalkMode.visitAllRecursive });
 
-
             // method1 - uses class 'm'
             expectTypeToBe(assigns[0].getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime }), ClassType);
             expect(assigns[0].getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime }).toString()).to.eq('TestKlass');
@@ -555,7 +589,6 @@ describe('BrsFileValidator', () => {
                     }
                 }
             }), { walkMode: WalkMode.visitAllRecursive });
-
 
             // method1 - uses Thing1 'm'
             expectTypeToBe(assigns[0].getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime }), InterfaceType);
