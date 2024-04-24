@@ -1305,7 +1305,7 @@ export class BrsFile implements BscFile {
             const typeTimeSymbols = symbolTable.table.getOwnSymbols(SymbolTypeFlag.typetime);
 
             for (const symbol of runTimeSymbols) {
-                if (!isAnyReferenceType(symbol.type)) {
+                if (!isAnyReferenceType(symbol.type) && symbol.name.toLowerCase() !== 'm') {
                     const symbolNameLower = symbolTable.namePrefixLower
                         ? `${symbolTable.namePrefixLower}.${symbol.name.toLowerCase()}`
                         : symbol.name.toLowerCase();

@@ -8,7 +8,7 @@ import PluginInterface from './PluginInterface';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, trim } from './testHelpers.spec';
 import { Logger } from './Logger';
 import type { BrsFile } from './files/BrsFile';
-import type { ForEachStatement, NamespaceStatement } from './parser/Statement';
+import type { AssignmentStatement, ForEachStatement, NamespaceStatement } from './parser/Statement';
 import type { CompilerPlugin, OnScopeValidateEvent } from './interfaces';
 import { DiagnosticOrigin } from './interfaces';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
@@ -29,7 +29,7 @@ import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { InterfaceType } from './types/InterfaceType';
 import { ComponentType } from './types/ComponentType';
 import * as path from 'path';
-import { WalkMode } from './astUtils/visitors';
+import { WalkMode, createVisitor } from './astUtils/visitors';
 import type { FunctionExpression } from './parser/Expression';
 
 describe('Scope', () => {
@@ -3526,6 +3526,53 @@ describe('Scope', () => {
             const forEachStmt = file.parser.ast.findChildren(isForEachStatement, { walkMode: WalkMode.visitAllRecursive })[0] as ForEachStatement;
             const mType = forEachStmt.getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime });
             expectTypeToBe(mType, AssociativeArrayType);
+        });
+
+        it('does not propagate a typecast m across namespace statements', () => {
+            const file1 = program.setFile<BrsFile>('source/one.bs', `
+                interface Thing1
+                    value as integer
+                end interface
+
+                namespace Alpha.Beta
+                    typecast m as Thing1
+
+                    sub method1()
+                        x = m.value
+                        print x
+                    end sub
+                end namespace
+            `);
+            const file2 = program.setFile<BrsFile>('source/two.bs', `
+                namespace Alpha.Beta
+                    sub method2()
+                        x = m.value
+                        print x
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            // find places in AST where "x" is assigned
+            const assigns = [] as Array<AssignmentStatement>;
+            const assignmentVisitor = createVisitor({
+                AssignmentStatement: (stmt) => {
+                    if (stmt.tokens.name.text.toLowerCase() === 'x') {
+                        assigns.push(stmt);
+                    }
+                }
+            });
+            file1.ast.walk(assignmentVisitor, { walkMode: WalkMode.visitAllRecursive });
+            file2.ast.walk(assignmentVisitor, { walkMode: WalkMode.visitAllRecursive });
+
+            // method1 - uses Thing1 'm'
+            expectTypeToBe(assigns[0].getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime }), InterfaceType);
+            expect(assigns[0].getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime }).toString()).to.eq('Thing1');
+            expectTypeToBe(assigns[0].getSymbolTable().getSymbolType('x', { flags: SymbolTypeFlag.runtime }), IntegerType);
+
+            // method1 - uses untypecast 'm'
+            expectTypeToBe(assigns[1].getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime }), AssociativeArrayType);
+            expectTypeToBe(assigns[1].getSymbolTable().getSymbolType('x', { flags: SymbolTypeFlag.runtime }), DynamicType);
         });
     });
 
