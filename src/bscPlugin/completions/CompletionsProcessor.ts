@@ -380,7 +380,7 @@ export class CompletionsProcessor {
             return CompletionItemKind.Class;
         } else if (isCallableType(type)) {
             if (isTypedFunctionType(type) && !nameMatchesType) {
-                if (symbolNameLower === type.name.replaceAll('.', '_').toLowerCase()) {
+                if (symbolNameLower === type.name.replace(/\./gi, '_').toLowerCase()) {
                     nameMatchesType = true;
                 }
             }
