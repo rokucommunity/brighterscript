@@ -55,7 +55,7 @@ import {
     ThrowStatement,
     TryCatchStatement,
     WhileStatement,
-    TypecastMStatement
+    TypecastStatement
 } from './Statement';
 import type { DiagnosticInfo } from '../DiagnosticMessages';
 import { DiagnosticMessages } from '../DiagnosticMessages';
@@ -92,7 +92,7 @@ import {
 } from './Expression';
 import type { Diagnostic, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
-import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression } from '../astUtils/reflection';
+import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isTypecastExpression } from '../astUtils/reflection';
 import { createStringLiteral } from '../astUtils/creators';
 import type { Expression, Statement } from './AstNode';
 import type { DeepWriteable } from '../interfaces';
@@ -1031,8 +1031,8 @@ export class Parser {
             return this.importStatement();
         }
 
-        if (this.check(TokenKind.Typecast) && this.checkNextText(TokenKind.Identifier, 'm')) {
-            return this.typecastMStatement();
+        if (this.check(TokenKind.Typecast) && this.checkAnyNext(TokenKind.Identifier, ...this.allowedLocalIdentifiers)) {
+            return this.typecastStatement();
         }
 
         if (this.check(TokenKind.Stop)) {
@@ -1448,27 +1448,21 @@ export class Parser {
         return importStatement;
     }
 
-    private typecastMStatement() {
-        this.warnIfNotBrighterScriptMode('typecast m statements');
+    private typecastStatement() {
+        this.warnIfNotBrighterScriptMode('typecast statements');
         const typecastToken = this.advance();
-        if (!this.checkText(TokenKind.Identifier, 'm')) {
-            this.diagnostics.push({
-                ...DiagnosticMessages.expectedIdentifierAfterKeyword('typecast', 'm'),
-                range: util.getRange(typecastToken, this.peek())
+        const typecastExpr = this.expression();
+        if (isTypecastExpression(typecastExpr)) {
+            return new TypecastStatement({
+                typecast: typecastToken,
+                typecastExpression: typecastExpr
             });
-            throw this.lastDiagnosticAsError();
         }
-        const mToken = this.advance();
-        const [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
-
-        let typecastMStatement = new TypecastMStatement({
-            typecast: typecastToken,
-            m: mToken,
-            as: asToken,
-            typeExpression: typeExpression
+        this.diagnostics.push({
+            ...DiagnosticMessages.expectedIdentifierAfterKeyword('typecast'),
+            range: util.getRange(typecastToken, this.peek())
         });
-
-        return typecastMStatement;
+        throw this.lastDiagnosticAsError();
     }
 
     private annotationExpression() {
@@ -3037,28 +3031,6 @@ export class Parser {
         }
         const nextKind = this.peekNext().kind;
         return tokenKinds.includes(nextKind);
-    }
-
-    private checkText(tokenKind: TokenKind, text: string, caseInsensitive = true): boolean {
-        if (this.isAtEnd()) {
-            return false;
-        }
-        const current = this.peek();
-        if (caseInsensitive) {
-            return current.kind === tokenKind && current.text.toLowerCase() === text.toLowerCase();
-        }
-        return current.kind === tokenKind && current.text === text;
-    }
-
-    private checkNextText(tokenKind: TokenKind, text: string, caseInsensitive = true): boolean {
-        if (this.isAtEnd()) {
-            return false;
-        }
-        const next = this.peekNext();
-        if (caseInsensitive) {
-            return next.kind === tokenKind && next.text.toLowerCase() === text.toLowerCase();
-        }
-        return next.kind === tokenKind && next.text === text;
     }
 
     private isAtEnd(): boolean {

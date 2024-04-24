@@ -4,11 +4,11 @@ import { ReservedWords, TokenKind } from '../lexer/TokenKind';
 import type { AAMemberExpression, BinaryExpression, TypecastExpression, UnaryExpression } from './Expression';
 import { TernaryExpression, NewExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression, VariableExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
-import type { AssignmentStatement, ClassStatement, InterfaceStatement, ReturnStatement, TypecastMStatement } from './Statement';
+import type { AssignmentStatement, ClassStatement, InterfaceStatement, ReturnStatement, TypecastStatement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isClassStatement, isDottedGetExpression, isExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypecastExpression, isTypecastMStatement, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isClassStatement, isDottedGetExpression, isExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypecastExpression, isTypecastStatement, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import { expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics } from '../testHelpers.spec';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { Expression, Statement } from './AstNode';
@@ -1858,18 +1858,16 @@ describe('parser', () => {
         });
     });
 
-    describe('typecast m', () => {
-        it('allows typecast m statement ', () => {
+    describe('typecast statement', () => {
+        it('allows typecast statement ', () => {
             let { diagnostics, statements } = parse(`
-                typecast m AS roAssociativeArray
+                typeCAST m AS roAssociativeArray
             `, ParseMode.BrighterScript);
             expectZeroDiagnostics(diagnostics);
-            expect(isTypecastMStatement(statements[0])).to.be.true;
-            const stmt = statements[0] as TypecastMStatement;
-            expect(stmt.tokens.typecast.text).to.eq('typecast');
-            expect(stmt.tokens.m.text).to.eq('m');
-            expect(stmt.tokens.as.text).to.eq('AS');
-            expect(stmt.typeExpression.expression).to.exist;
+            expect(isTypecastStatement(statements[0])).to.be.true;
+            const stmt = statements[0] as TypecastStatement;
+            expect(stmt.tokens.typecast.text).to.eq('typeCAST');
+            expect(stmt.typecastExpression).to.exist;
         });
 
         it('is disallowed in brightscript mode', () => {
@@ -1877,7 +1875,7 @@ describe('parser', () => {
                 typecast m AS roAssociativeArray
             `, ParseMode.BrightScript);
             expectDiagnosticsIncludes(diagnostics, [
-                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('typecast m statements')
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('typecast statements')
             ]);
         });
 

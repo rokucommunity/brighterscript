@@ -1,7 +1,7 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
 import { CompoundAssignmentOperators, TokenKind } from '../lexer/TokenKind';
-import type { BinaryExpression, DottedGetExpression, FunctionExpression, FunctionParameterExpression, LiteralExpression, TypeExpression } from './Expression';
+import type { BinaryExpression, DottedGetExpression, FunctionExpression, FunctionParameterExpression, LiteralExpression, TypeExpression, TypecastExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
 import type { Range } from 'vscode-languageserver';
@@ -3417,38 +3417,30 @@ export class ContinueStatement extends Statement {
 }
 
 
-export class TypecastMStatement extends Statement {
+export class TypecastStatement extends Statement {
     constructor(options: {
         typecast?: Token;
-        as?: Token;
-        m?: Token;
-        typeExpression: TypeExpression;
+        typecastExpression: TypecastExpression;
     }
     ) {
         super();
         this.tokens = {
-            typecast: options.typecast,
-            as: options.as,
-            m: options.m
+            typecast: options.typecast
         };
-        this.typeExpression = options.typeExpression;
+        this.typecastExpression = options.typecastExpression;
         this.range = util.createBoundingRange(
             this.tokens.typecast,
-            this.tokens.m,
-            this.tokens.as,
-            this.typeExpression
+            this.typecastExpression
         );
     }
 
     public readonly tokens: {
         readonly typecast?: Token;
-        readonly m?: Token;
-        readonly as?: Token;
     };
 
-    public readonly typeExpression: TypeExpression;
+    public readonly typecastExpression: TypecastExpression;
 
-    public readonly kind = AstNodeKind.TypecastMStatement;
+    public readonly kind = AstNodeKind.TypecastStatement;
 
     public readonly range: Range;
 
@@ -3458,17 +3450,17 @@ export class TypecastMStatement extends Statement {
             `'`,
             state.transpileToken(this.tokens.typecast, 'typecast'),
             ' ',
-            state.transpileToken(this.tokens.m, 'm'),
+            this.typecastExpression.obj.transpile(state),
             ' ',
-            state.transpileToken(this.tokens.as, 'as'),
+            state.transpileToken(this.typecastExpression.tokens.as, 'as'),
             ' ',
-            this.typeExpression.transpile(state)
+            this.typecastExpression.typeExpression.transpile(state)
         ];
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
-            walk(this, 'typeExpression', visitor, options);
+            walk(this, 'typecastExpression', visitor, options);
         }
     }
 
@@ -3477,6 +3469,6 @@ export class TypecastMStatement extends Statement {
     }
 
     getType(options: GetTypeOptions): BscType {
-        return this.typeExpression.getType(options);
+        return this.typecastExpression.getType(options);
     }
 }

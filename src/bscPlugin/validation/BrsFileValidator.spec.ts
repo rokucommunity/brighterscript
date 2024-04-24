@@ -3,7 +3,7 @@ import type { BrsFile } from '../../files/BrsFile';
 import type { AALiteralExpression, DottedGetExpression } from '../../parser/Expression';
 import type { AssignmentStatement, ClassStatement, FunctionStatement, NamespaceStatement, PrintStatement } from '../../parser/Statement';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
-import { expectDiagnostics, expectTypeToBe, expectZeroDiagnostics } from '../../testHelpers.spec';
+import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics } from '../../testHelpers.spec';
 import { Program } from '../../Program';
 import { isClassStatement, isNamespaceStatement } from '../../astUtils/reflection';
 import util from '../../util';
@@ -327,7 +327,7 @@ describe('BrsFileValidator', () => {
         }]);
     });
 
-    describe('typecast m', () => {
+    describe('typecast statement', () => {
         it('allows being at start of file', () => {
             program.setFile('source/other.bs', `
             `);
@@ -353,7 +353,7 @@ describe('BrsFileValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.typecastMStatementMustBeDeclaredAtStart().message
+                DiagnosticMessages.typecastStatementMustBeDeclaredAtStart().message
             ]);
         });
 
@@ -387,7 +387,7 @@ describe('BrsFileValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.typecastMStatementMustBeDeclaredAtStart().message
+                DiagnosticMessages.typecastStatementMustBeDeclaredAtStart().message
             ]);
         });
 
@@ -507,6 +507,60 @@ describe('BrsFileValidator', () => {
             expectTypeToBe(assigns[1].getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime }), InterfaceType);
             expect(assigns[1].getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime }).toString()).to.eq('Thing1');
             expectTypeToBe(assigns[1].getSymbolTable().getSymbolType('x', { flags: SymbolTypeFlag.runtime }), IntegerType);
+        });
+
+        it('has diagnostic when used in a class', () => {
+            program.setFile('source/main.bs', `
+                class TestKlass
+                    typecast m as object
+
+                    value as string
+
+                    sub method1()
+                        x = m.value
+                        print x
+                    end sub
+                end class
+            `);
+            program.validate();
+            expectHasDiagnostics(program);
+        });
+
+        it('is allowed in namespace', () => {
+            program.setFile('source/types.bs', `
+                interface Thing1
+                    value as integer
+                end interface
+            `);
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                import "types.bs"
+
+                namespace Alpha.Beta
+                    typecast m as Thing1
+
+                    sub method1()
+                        x = m.value
+                        print x
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            // find places in AST where "x" is assigned
+            const assigns = [] as Array<AssignmentStatement>;
+            file.ast.walk(createVisitor({
+                AssignmentStatement: (stmt) => {
+                    if (stmt.tokens.name.text.toLowerCase() === 'x') {
+                        assigns.push(stmt);
+                    }
+                }
+            }), { walkMode: WalkMode.visitAllRecursive });
+
+
+            // method1 - uses Thing1 'm'
+            expectTypeToBe(assigns[0].getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime }), InterfaceType);
+            expect(assigns[0].getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime }).toString()).to.eq('Thing1');
+            expectTypeToBe(assigns[0].getSymbolTable().getSymbolType('x', { flags: SymbolTypeFlag.runtime }), IntegerType);
         });
     });
 });
