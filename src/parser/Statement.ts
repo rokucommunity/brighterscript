@@ -434,7 +434,7 @@ export class FunctionStatement extends Statement implements TypedefProvider {
 
     getType(options: GetTypeOptions) {
         const funcExprType = this.func.getType(options);
-        funcExprType.setName(this.tokens.name?.text);
+        funcExprType.setName(this.getName(ParseMode.BrighterScript));
         return funcExprType;
     }
 }
