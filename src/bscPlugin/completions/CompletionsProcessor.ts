@@ -371,7 +371,6 @@ export class CompletionsProcessor {
     private getCompletionKindFromSymbol(symbol: BscSymbol, areMembers = false) {
         const type = symbol?.type;
         const extraData = symbol?.data;
-        // eslint-disable-next-line no-bitwise
         const finalTypeNameLower = type?.toString().split('.').pop().toLowerCase();
         const symbolNameLower = symbol?.name.toLowerCase();
         let nameMatchesType = symbolNameLower === finalTypeNameLower;
