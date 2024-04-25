@@ -79,6 +79,11 @@ export class ProjectManager {
             action.id = idSequence++;
         }
 
+        console.info(`Flushing ${actions.length} document changes`, actions.map(x => ({
+            type: x.type,
+            srcPath: x.srcPath
+        })));
+
         //apply all of the document actions to each project in parallel
         const responses = await Promise.all(this.projects.map(async (project) => {
             //wait for this project to finish activating
@@ -116,6 +121,9 @@ export class ProjectManager {
      */
     private async createStandaloneProject(srcPath: string) {
         srcPath = util.standardizePath(srcPath);
+
+        this.logger.log(`Creating standalone project for '${srcPath}'`);
+
         const projectNumber = ProjectManager.projectNumberSequence++;
         const rootDir = path.join(__dirname, `standalone-project-${projectNumber}`);
         const projectOptions = {
