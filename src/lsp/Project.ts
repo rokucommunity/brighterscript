@@ -14,12 +14,12 @@ import { CancellationTokenSource } from 'vscode-languageserver-protocol';
 import type { DocumentAction, DocumentActionWithStatus } from './DocumentManager';
 import type { SignatureInfoObj } from '../Program';
 import type { BsConfig } from '../BsConfig';
-import type { LogLevel } from '../Logger';
+import { LogLevel } from '../Logger';
 import type { Logger } from '../logging';
 import { createLogger } from '../logging';
 import { Trace } from '../common/Decorators';
 
-@Trace()
+@Trace(LogLevel.debug)
 export class Project implements LspProject {
     public constructor(
         options?: {

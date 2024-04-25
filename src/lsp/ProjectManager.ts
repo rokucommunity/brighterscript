@@ -15,14 +15,14 @@ import { BusyStatusTracker } from '../BusyStatusTracker';
 import * as fastGlob from 'fast-glob';
 import { PathCollection, PathFilterer } from './PathFilterer';
 import type { Logger } from '../logging';
-import { createLogger } from '../logging';
+import { LogLevel, createLogger } from '../logging';
 import { Trace } from '../common/Decorators';
 import { Cache } from '../Cache';
 
 /**
  * Manages all brighterscript projects for the language server
  */
-@Trace()
+@Trace(LogLevel.debug)
 export class ProjectManager {
     constructor(options?: {
         pathFilterer: PathFilterer;
