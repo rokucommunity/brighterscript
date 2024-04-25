@@ -602,6 +602,9 @@ export class ProjectManager {
      *  - If we've already seen this config before, use the same project number as before
      */
     private getProjectNumber(config: ProjectConfig) {
+        if (config.projectNumber !== undefined) {
+            return config.projectNumber;
+        }
         return ProjectManager.projectNumberCache.getOrAdd(`${s(config.projectPath)}-${s(config.workspaceFolder)}-${config.bsconfigPath}`, () => {
             return ProjectManager.projectNumberSequence++;
         });
