@@ -128,7 +128,7 @@
   },
   "dependencies": {
     "@rokucommunity/bslib": "^0.1.1",
-    "@rokucommunity/logger": "^0.3.6",
+    "@rokucommunity/logger": "^0.3.7",
     "@xml-tools/parser": "^1.0.7",
     "array-flat-polyfill": "^1.0.1",
     "chalk": "^2.4.2",
