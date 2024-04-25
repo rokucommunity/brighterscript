@@ -1,5 +1,6 @@
 import type { CompilerPlugin } from './interfaces';
-import { LogLevel, createLogger, type Logger } from './logging';
+import { LogLevel, createLogger } from './logging';
+import type { Logger } from './logging';
 /*
  * we use `Required` everywhere here because we expect that the methods on plugin objects will
  * be optional, and we don't want to deal with `undefined`.
