@@ -17,6 +17,7 @@ import { PathCollection, PathFilterer } from './PathFilterer';
 import type { Logger } from '../logging';
 import { createLogger } from '../logging';
 import { Trace } from '../common/Decorators';
+import { Cache } from '../Cache';
 
 /**
  * Manages all brighterscript projects for the language server
@@ -593,6 +594,19 @@ export class ProjectManager {
      */
     private static projectNumberSequence = 0;
 
+    private static projectNumberCache = new Cache<string, number>();
+
+    /**
+     * Get a projectNumber for a given config. Try to reuse project numbers when we've seen this project before
+     *  - If the config already has one, use that.
+     *  - If we've already seen this config before, use the same project number as before
+     */
+    private getProjectNumber(config: ProjectConfig) {
+        return ProjectManager.projectNumberCache.getOrAdd(`${s(config.projectPath)}-${s(config.workspaceFolder)}-${config.bsconfigPath}`, () => {
+            return ProjectManager.projectNumberSequence++;
+        });
+    }
+
     /**
      * Constructs a project for the given config. Just makes the project, doesn't activate it
      * @returns a new project, or the existing project if one already exists with this config info
@@ -603,7 +617,7 @@ export class ProjectManager {
             return this.getProject(config.projectPath);
         }
 
-        config.projectNumber ??= ProjectManager.projectNumberSequence++;
+        config.projectNumber = this.getProjectNumber(config);
 
         let project: LspProject = config.enableThreading
             ? new WorkerThreadProject({
