@@ -43,7 +43,7 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { util } from './util';
 import { DiagnosticCollection } from './DiagnosticCollection';
 import { encodeSemanticTokens, semanticTokensLegend } from './SemanticTokenUtils';
-import { LogLevel, createLogger, logger } from './logging';
+import { LogLevel, createLogger, logger, setLspLoggerProps } from './logging';
 import ignore from 'ignore';
 import * as micromatch from 'micromatch';
 import type { LspProject, LspDiagnostic } from './lsp/LspProject';
@@ -106,9 +106,7 @@ export class LanguageServer {
     });
 
     constructor() {
-        //disable logger color when running the LSP (i.e. anytime we create a LanguageServer instance)
-        logger.enableColor = false;
-
+        setLspLoggerProps();
         //replace the workerPool logger with our own so logging info can be synced
         workerPool.logger = this.logger.createLogger();
 
@@ -326,14 +324,14 @@ export class LanguageServer {
             }
         );
         if (workspaceResult) {
-            this.logger.log(`Setting logLevel to '${workspaceResult.logLevelText}' based on configuration from workspace '${workspaceResult?.item?.uri}'`);
+            this.logger.log(`Setting global logLevel to '${workspaceResult.logLevelText}' based on configuration from workspace '${workspaceResult?.item?.uri}'`);
             this.logger.logLevel = workspaceResult.logLevel;
             return;
         }
 
         let projectResult = await getLogLevel(this.projectManager.projects, (project) => project.logger.logLevel);
         if (projectResult) {
-            this.logger.log(`Setting logLevel to '${projectResult.logLevelText}' based on project #${projectResult?.item?.projectNumber}`);
+            this.logger.log(`Setting global logLevel to '${projectResult.logLevelText}' based on project #${projectResult?.item?.projectNumber}`);
             this.logger.logLevel = projectResult.logLevel;
             return;
         }

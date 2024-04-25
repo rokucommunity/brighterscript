@@ -1,3 +1,4 @@
+import { setLspLoggerProps } from '../../logging';
 import type { LspProject } from '../LspProject';
 import { Project } from '../Project';
 import type { MethodNames, WorkerMessage } from './MessageHandler';
@@ -16,6 +17,9 @@ export class WorkerThreadProjectRunner {
     private messageHandler: MessageHandler<LspProject>;
 
     public run(parentPort: MessagePort) {
+        //ensure the lgoger is configured for LSP mode
+        setLspLoggerProps();
+
         this.messageHandler = new MessageHandler({
             name: 'WorkerThread',
             port: parentPort,
