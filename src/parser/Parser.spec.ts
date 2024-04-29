@@ -2033,6 +2033,41 @@ describe('parser', () => {
             expect(isAssignmentStatement(lastElse.statements[0])).to.true;
         });
 
+        it('allows empty conditional compilation blocks', () => {
+            let { diagnostics, ast } = parse(`
+                #if DEBUG
+                #else if PROD
+                #else
+                #end if
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            const ccStmt = ast.statements[0] as ConditionalCompileStatement;
+            expect(isConditionalCompileStatement(ccStmt)).to.true;
+            expect(ccStmt.thenBranch.statements.length).to.eq(0);
+            expect((ccStmt.elseBranch as ConditionalCompileStatement).thenBranch.statements.length).to.eq(0);
+            expect(((ccStmt.elseBranch as ConditionalCompileStatement).elseBranch as Block).statements.length).to.eq(0);
+        });
+
+        it('allows only comments in compilation blocks', () => {
+            let { diagnostics, ast } = parse(`
+                ' before if
+                #if DEBUG
+                    ' this is debug
+                #else if PROD
+                    ' this is prod
+                #else
+                    ' this is neither
+                #end if
+                ' after if
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            const ccStmt = ast.statements[0] as ConditionalCompileStatement;
+            expect(isConditionalCompileStatement(ccStmt)).to.true;
+            expect(ccStmt.thenBranch.statements.length).to.eq(0);
+            expect((ccStmt.elseBranch as ConditionalCompileStatement).thenBranch.statements.length).to.eq(0);
+            expect(((ccStmt.elseBranch as ConditionalCompileStatement).elseBranch as Block).statements.length).to.eq(0);
+        });
+
         it('has no error when safely closing block', () => {
             let { diagnostics } = parse(`
                 sub foo()

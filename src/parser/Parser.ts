@@ -12,7 +12,8 @@ import {
     DisallowedFunctionIdentifiersText,
     DisallowedLocalIdentifiersText,
     TokenKind,
-    BlockTerminators
+    BlockTerminators,
+    ReservedWords
 } from '../lexer/TokenKind';
 import type {
     PrintSeparatorSpace,
@@ -1937,14 +1938,30 @@ export class Parser {
         const hashIfToken = this.advance();
         const startingRange = hashIfToken.range;
 
+        if (!this.checkAny(TokenKind.True, TokenKind.False, TokenKind.Identifier)) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.invalidHashIfValue(),
+                range: this.peek()?.range
+            });
+        }
+
         const condition = this.advance();
+
         let thenBranch: Block;
         let elseBranch: ConditionalCompileStatement | Block | undefined;
 
         let hashEndIfToken: Token | undefined;
         let hashElseToken: Token | undefined;
 
+        //keep track of the current error count
+        //if this is `#if false` remove all diagnostics.
+        let diagnosticsLengthBeforeBlock = this.diagnostics.length;
+
         thenBranch = this.blockConditionalCompileBranch(hashIfToken);
+        if (condition.text.toLowerCase() === 'false') {
+            //throw out any new diagnostics created as a result of a false block
+            this.diagnostics.splice(diagnosticsLengthBeforeBlock, this.diagnostics.length - diagnosticsLengthBeforeBlock);
+        }
 
         this.ensureNewLine();
         this.advance();
@@ -1957,7 +1974,13 @@ export class Parser {
 
         } else if (this.check(TokenKind.HashElse)) {
             hashElseToken = this.advance();
+            let diagnosticsLengthBeforeBlock = this.diagnostics.length;
             elseBranch = this.blockConditionalCompileBranch(hashIfToken);
+
+            if (condition.text.toLowerCase() === 'true') {
+                //throw out any new diagnostics created as a result of a false block
+                this.diagnostics.splice(diagnosticsLengthBeforeBlock, this.diagnostics.length - diagnosticsLengthBeforeBlock);
+            }
             this.ensureNewLine();
             this.advance();
         }
@@ -2095,6 +2118,17 @@ export class Parser {
     private conditionalCompileConstStatement() {
         const hashConstToken = this.advance();
 
+        const constName = this.peek();
+        //disallow using keywords for const names
+        if (ReservedWords.has(constName?.text.toLowerCase())) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.constNameCannotBeReservedWord(),
+                range: constName?.range
+            });
+
+            this.lastDiagnosticAsError();
+            return;
+        }
         const assignment = this.assignment([TokenKind.Equal]);
         if (assignment) {
             // check for something other than #const <name> = <otherName|true|false>
@@ -2105,6 +2139,9 @@ export class Parser {
                 });
                 this.lastDiagnosticAsError();
             }
+
+
+
             if (isVariableExpression(assignment.value) || isLiteralBoolean(assignment.value)) {
                 //value is an identifier or a boolean
                 //check for valid identifiers will happen in program validation
@@ -2139,7 +2176,7 @@ export class Parser {
 
     private ensureNewLine() {
         //ensure newline before next keyword
-        if (this.checkPrevious(TokenKind.Newline)) {
+        if (!this.check(TokenKind.Newline)) {
             this.diagnostics.push({
                 ...DiagnosticMessages.expectedNewlineInConditionalCompile(),
                 range: this.peek().range

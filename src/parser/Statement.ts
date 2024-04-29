@@ -3518,12 +3518,10 @@ export class ConditionalCompileStatement extends Statement {
         let results = [] as TranspileResult;
         //if   (already indented by block)
         if (!state.conditionalCompileStatement) {
+            // only transpile the #if in the case when we're not in a conditionalCompileStatement already
             results.push(state.transpileToken(this.tokens.hashIf ?? createToken(TokenKind.HashIf)));
-        } else {
-            // this is an #else if, so it should not have a hashIf
-            results.push(' ');
-            results.push('if');
         }
+
         results.push(' ');
         //conditions
         results.push(state.transpileToken(this.tokens.condition));
@@ -3537,11 +3535,13 @@ export class ConditionalCompileStatement extends Statement {
         }
         //else branch
         if (this.elseBranch) {
-
+            const elseIsCC = isConditionalCompileStatement(this.elseBranch);
+            const endBlockToken = elseIsCC ? (this.elseBranch as ConditionalCompileStatement).tokens.hashIf ?? createToken(TokenKind.HashElseIf) : this.tokens.hashElse;
             //else
-            results.push(...state.transpileEndBlockToken(this.thenBranch, this.tokens.hashElse, createToken(TokenKind.HashEndIf).text));
 
-            if (isConditionalCompileStatement(this.elseBranch)) {
+            results.push(...state.transpileEndBlockToken(this.thenBranch, endBlockToken, createToken(TokenKind.HashElse).text));
+
+            if (elseIsCC) {
                 //chained else if
                 state.lineage.unshift(this.elseBranch);
 
@@ -3555,7 +3555,6 @@ export class ConditionalCompileStatement extends Statement {
 
                 if (body.length > 0) {
                     //zero or more spaces between the `else` and the `if`
-                    results.push(this.elseBranch.tokens.hashIf.leadingWhitespace!);
                     results.push(...body);
 
                     // stop here because chained if will transpile the rest

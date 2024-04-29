@@ -14,12 +14,18 @@ import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import { DynamicType } from '../../types/DynamicType';
 import util from '../../util';
 import type { Range } from 'vscode-languageserver';
+import { getBsConst } from '../../preprocessor/Manifest';
+import type { Token } from '../../lexer/Token';
 
 export class BrsFileValidator {
     constructor(
         public event: OnFileValidateEvent<BrsFile>
     ) {
+        this.bsConsts = getBsConst(this.event.program.getManifest());
     }
+
+
+    private bsConsts = new Map<string, boolean>();
 
     public process() {
         const unlinkGlobalSymbolTable = this.event.file.parser.symbolTable.pushParentProvider(() => this.event.program.globalScope.symbolTable);
@@ -45,6 +51,8 @@ export class BrsFileValidator {
      * Walk the full AST
      */
     private walk() {
+
+
         const visitor = createVisitor({
             MethodStatement: (node) => {
                 //add the `super` symbol to class methods
@@ -176,6 +184,22 @@ export class BrsFileValidator {
             },
             TypecastStatement: (node) => {
                 node.parent.getSymbolTable().addSymbol('m', { definingNode: node, doNotMerge: true }, node.getType({ flags: SymbolTypeFlag.typetime }), SymbolTypeFlag.runtime);
+            },
+            ConditionalCompileConstStatement: (node) => {
+                const assign = node.assignment;
+                const constNameLower = assign.tokens.name?.text.toLowerCase();
+                if (isLiteralExpression(assign.value)) {
+                    this.bsConsts.set(constNameLower, assign.value.tokens.value.text.toLowerCase() === 'true');
+                } else if (isVariableExpression(assign.value)) {
+                    if (this.validateConditionalCompileConst(assign.value.tokens.name)) {
+                        this.bsConsts.set(constNameLower, this.bsConsts.get(assign.value.tokens.name.text.toLowerCase()));
+                    }
+                }
+            },
+            ConditionalCompileStatement: (node) => {
+                if (!this.validateConditionalCompileConst(node.tokens.condition)) {
+
+                }
             }
         });
 
@@ -291,6 +315,20 @@ export class BrsFileValidator {
                 });
             }
         }
+    }
+
+
+    private validateConditionalCompileConst(ccConst: Token) {
+        const isBool = ccConst.kind === TokenKind.True || ccConst.kind === TokenKind.False;
+        if (!isBool && !this.bsConsts.has(ccConst.text.toLowerCase())) {
+            this.event.file.addDiagnostic({
+                file: this.event.file,
+                ...DiagnosticMessages.referencedConstDoesNotExist(),
+                range: ccConst.range
+            });
+            return false;
+        }
+        return true;
     }
 
     /**

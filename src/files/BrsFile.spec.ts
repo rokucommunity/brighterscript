@@ -609,7 +609,15 @@ describe('BrsFile', () => {
                 expectZeroDiagnostics(program);
                 await testTranspile(file.fileContents, `
                     sub main()
-                        print "if"
+                        #\t const thing = true
+                        #\t if thing
+                            print "if"
+                        #\t elseif false
+                            print "elseif"
+                            #\t error crash
+                        #\t else
+                            print "else"
+                        #\t endif
                     end sub
                 `);
             });
@@ -648,6 +656,7 @@ describe('BrsFile', () => {
                         #ENDIF
                     end sub
                 `);
+                program.validate();
                 expectZeroDiagnostics(file);
             });
 
@@ -662,6 +671,7 @@ describe('BrsFile', () => {
                         #endif
                     end sub
                 `);
+                program.validate();
                 expectZeroDiagnostics(file);
             });
 
@@ -676,6 +686,7 @@ describe('BrsFile', () => {
                         #end if
                     end sub
                 `);
+                program.validate();
                 expectZeroDiagnostics(file);
             });
 
@@ -687,6 +698,7 @@ describe('BrsFile', () => {
                         #end if
                     end sub
                 `);
+                program.validate();
                 expectZeroDiagnostics(file);
             });
 
@@ -698,6 +710,7 @@ describe('BrsFile', () => {
                         #end if
                     end sub
                 `);
+                program.validate();
                 expectDiagnostics(file, [
                     DiagnosticMessages.referencedConstDoesNotExist()
                 ]);
@@ -724,8 +737,7 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 expectDiagnostics(file, [
-                    DiagnosticMessages.constNameCannotBeReservedWord(),
-                    DiagnosticMessages.unexpectedToken('#const')
+                    DiagnosticMessages.constNameCannotBeReservedWord()
                 ]);
             });
 
