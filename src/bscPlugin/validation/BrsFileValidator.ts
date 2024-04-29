@@ -1,4 +1,4 @@
-import { isAALiteralExpression, isArrayType, isBlock, isBody, isClassStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isTypecastStatement, isUnaryExpression, isVariableExpression, isWhileStatement } from '../../astUtils/reflection';
+import { isAALiteralExpression, isArrayType, isBlock, isBody, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isTypecastStatement, isUnaryExpression, isVariableExpression, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -218,9 +218,20 @@ export class BrsFileValidator {
      */
     private validateDeclarationLocations(statement: Statement, keyword: string, rangeFactory?: () => (Range | undefined)) {
         //if nested inside a namespace, or defined at the root of the AST (i.e. in a body that has no parent)
-        if (isNamespaceStatement(statement.parent?.parent) || (isBody(statement.parent) && !statement.parent?.parent)) {
+        const isOkDeclarationLocation = (parentNode) => {
+            return isNamespaceStatement(parentNode?.parent) || (isBody(parentNode) && !parentNode?.parent);
+        };
+        if (isOkDeclarationLocation(statement.parent)) {
             return;
         }
+
+        // is this in a top levelconditional compile?
+        if (isConditionalCompileStatement(statement.parent?.parent)) {
+            if (isOkDeclarationLocation(statement.parent.parent.parent)) {
+                return;
+            }
+        }
+
         //the statement was defined in the wrong place. Flag it.
         this.event.file.addDiagnostic({
             ...DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel(keyword),
@@ -350,7 +361,10 @@ export class BrsFileValidator {
                     !isLibraryStatement(statement) &&
                     !isImportStatement(statement) &&
                     !isConstStatement(statement) &&
-                    !isTypecastStatement(statement)
+                    !isTypecastStatement(statement) &&
+                    !isConditionalCompileConstStatement(statement) &&
+                    !isConditionalCompileErrorStatement(statement) &&
+                    !isConditionalCompileStatement(statement)
                 ) {
                     this.event.file.addDiagnostic({
                         ...DiagnosticMessages.unexpectedStatementOutsideFunction(),

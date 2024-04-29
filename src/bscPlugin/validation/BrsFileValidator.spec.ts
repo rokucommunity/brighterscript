@@ -596,4 +596,35 @@ describe('BrsFileValidator', () => {
             expectTypeToBe(assigns[0].getSymbolTable().getSymbolType('x', { flags: SymbolTypeFlag.runtime }), IntegerType);
         });
     });
+
+    describe('conditional compile', () => {
+        it('allows top level definitions inside #if block', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                #const debug = true
+                #if debug
+                function f()
+                    return 3.14
+                end function
+                #end if
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('dows not allow top level definitions inside #if block inside a function', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                #const debug = true
+                function f()
+                    #if debug
+                    namespace alpha
+                    end namespace
+                    #end if
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel('namespace')
+            ]);
+        });
+    });
 });
