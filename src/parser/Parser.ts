@@ -2140,8 +2140,6 @@ export class Parser {
                 this.lastDiagnosticAsError();
             }
 
-
-
             if (isVariableExpression(assignment.value) || isLiteralBoolean(assignment.value)) {
                 //value is an identifier or a boolean
                 //check for valid identifiers will happen in program validation
