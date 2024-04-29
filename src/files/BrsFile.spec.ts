@@ -592,6 +592,22 @@ describe('BrsFile', () => {
 
         describe('conditional compile', () => {
 
+            it('transpiles conditional compilation directives', async () => {
+                await testTranspile(`
+                    sub main()
+                        #const thing = true
+                        #if thing
+                            print "if"
+                        #elseif false
+                            print "elseif"
+                            #error crash
+                        #else
+                            print "else"
+                        #endif
+                    end sub
+                `);
+            });
+
             it('supports whitespace-separated directives', async () => {
                 const file = program.setFile<BrsFile>('source/main.bs', `
                     sub main()
