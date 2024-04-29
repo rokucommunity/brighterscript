@@ -1,7 +1,7 @@
 import type { Range } from 'vscode-languageserver';
 import { Editor } from '../astUtils/Editor';
 import type { BrsFile } from '../files/BrsFile';
-import type { ClassStatement } from './Statement';
+import type { ClassStatement, ConditionalCompileStatement } from './Statement';
 import { TranspileState } from './TranspileState';
 
 export class BrsTranspileState extends TranspileState {
@@ -35,4 +35,9 @@ export class BrsTranspileState extends TranspileState {
      * TODO remove this before file_api is merged
      */
     public editor = new Editor();
+
+    /**
+     * Used by ConditionalCompileStatement to determine if there's already an conditional compile going on
+     */
+    public conditionalCompileStatement?: ConditionalCompileStatement;
 }

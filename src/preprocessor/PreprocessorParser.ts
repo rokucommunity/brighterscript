@@ -132,7 +132,7 @@ export class PreprocessorParser {
             }
 
             this.consume(
-                DiagnosticMessages.expectedHashElseIfToCloseHashIf(startingLine),
+                DiagnosticMessages.expectedHashEndIfToCloseHashIf(startingLine),
                 TokenKind.HashEndIf
             );
             this.match(TokenKind.Newline);

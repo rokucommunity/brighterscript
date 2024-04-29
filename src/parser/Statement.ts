@@ -9,7 +9,7 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
-import { isCallExpression, isEnumMemberStatement, isExpression, isExpressionStatement, isFieldStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypedefProvider, isUnaryExpression, isVoidType } from '../astUtils/reflection';
+import { isCallExpression, isConditionalCompileStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFieldStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypedefProvider, isUnaryExpression, isVoidType } from '../astUtils/reflection';
 import { TypeChainEntry, type GetTypeOptions, type TranspileResult, type TypedefProvider } from '../interfaces';
 import { createInvalidLiteral, createMethodStatement, createToken } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
@@ -3470,5 +3470,128 @@ export class TypecastStatement extends Statement {
 
     getType(options: GetTypeOptions): BscType {
         return this.typecastExpression.getType(options);
+    }
+}
+
+
+export class ConditionalCompileStatement extends Statement {
+    constructor(options: {
+        hashIf?: Token;
+        condition: Token;
+        hashElse?: Token;
+        hashEndIf?: Token;
+        thenBranch: Block;
+        elseBranch?: ConditionalCompileStatement | Block;
+    }) {
+        super();
+        this.thenBranch = options.thenBranch;
+        this.elseBranch = options.elseBranch;
+
+        this.tokens = {
+            hashIf: options.hashIf,
+            condition: options.condition,
+            hashElse: options.hashElse,
+            hashEndIf: options.hashEndIf
+        };
+
+        this.range = util.createBoundingRange(
+            util.createBoundingRangeFromTokens(this.tokens),
+            this.thenBranch,
+            this.elseBranch
+        );
+    }
+
+    readonly tokens: {
+        readonly hashIf?: Token;
+        readonly condition: Token;
+        readonly hashElse?: Token;
+        readonly hashEndIf?: Token;
+    };
+    public readonly thenBranch: Block;
+    public readonly elseBranch?: ConditionalCompileStatement | Block;
+
+    public readonly kind = AstNodeKind.ConditionalCompileStatement;
+
+    public readonly range: Range | undefined;
+
+    transpile(state: BrsTranspileState) {
+        let results = [] as TranspileResult;
+        //if   (already indented by block)
+        if (!state.conditionalCompileStatement) {
+            results.push(state.transpileToken(this.tokens.hashIf ?? createToken(TokenKind.HashIf)));
+        } else {
+            // this is an #else if, so it should not have a hashIf
+            results.push(' ');
+            results.push('if');
+        }
+        results.push(' ');
+        //conditions
+        results.push(state.transpileToken(this.tokens.condition));
+        state.lineage.unshift(this);
+
+        //if statement body
+        let thenNodes = this.thenBranch.transpile(state);
+        state.lineage.shift();
+        if (thenNodes.length > 0) {
+            results.push(thenNodes);
+        }
+        //else branch
+        if (this.elseBranch) {
+
+            //else
+            results.push(...state.transpileEndBlockToken(this.thenBranch, this.tokens.hashElse, createToken(TokenKind.HashEndIf).text));
+
+            if (isConditionalCompileStatement(this.elseBranch)) {
+                //chained else if
+                state.lineage.unshift(this.elseBranch);
+
+                // transpile following #if with knowledge of current
+                const existingCCStmt = state.conditionalCompileStatement;
+                state.conditionalCompileStatement = this;
+                let body = this.elseBranch.transpile(state);
+                state.conditionalCompileStatement = existingCCStmt;
+
+                state.lineage.shift();
+
+                if (body.length > 0) {
+                    //zero or more spaces between the `else` and the `if`
+                    results.push(this.elseBranch.tokens.hashIf.leadingWhitespace!);
+                    results.push(...body);
+
+                    // stop here because chained if will transpile the rest
+                    return results;
+                } else {
+                    results.push('\n');
+                }
+
+            } else {
+                //else body
+                state.lineage.unshift(this.tokens.hashElse!);
+                let body = this.elseBranch.transpile(state);
+                state.lineage.shift();
+
+                if (body.length > 0) {
+                    results.push(...body);
+                }
+            }
+        }
+
+        //end if
+        results.push(...state.transpileEndBlockToken(this.elseBranch ?? this.thenBranch, this.tokens.hashEndIf, '#end if'));
+
+        return results;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkStatements) {
+            walk(this, 'thenBranch', visitor, options);
+        }
+        if (this.elseBranch && options.walkMode & InternalWalkMode.walkStatements) {
+            walk(this, 'elseBranch', visitor, options);
+        }
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.hashIf?.leadingTrivia ?? [];
     }
 }

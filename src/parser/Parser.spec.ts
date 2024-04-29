@@ -4,12 +4,12 @@ import { ReservedWords, TokenKind } from '../lexer/TokenKind';
 import type { AAMemberExpression, BinaryExpression, TypecastExpression, UnaryExpression } from './Expression';
 import { TernaryExpression, NewExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression, VariableExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
-import type { AssignmentStatement, ClassStatement, InterfaceStatement, ReturnStatement, TypecastStatement } from './Statement';
+import type { AssignmentStatement, Block, ClassStatement, ConditionalCompileStatement, InterfaceStatement, ReturnStatement, TypecastStatement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isClassStatement, isDottedGetExpression, isExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypecastExpression, isTypecastStatement, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
-import { expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics } from '../testHelpers.spec';
+import { isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isClassStatement, isConditionalCompileStatement, isDottedGetExpression, isExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypecastExpression, isTypecastStatement, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics } from '../testHelpers.spec';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { Expression, Statement } from './AstNode';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
@@ -1930,6 +1930,154 @@ describe('parser', () => {
             `, ParseMode.BrighterScript);
             expectZeroDiagnostics(diagnostics);
         });
+    });
+
+    describe('conditional compilation', () => {
+
+        it('contains code from conditional compile blocks', () => {
+            let { diagnostics, ast } = parse(`
+                sub foo()
+                #if DEBUG
+                    print "hello"
+                #end if
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            const funcBlock = (ast.statements[0] as FunctionStatement).func.body;
+            expect(funcBlock.statements.length).to.eq(1);
+            const ccStmt = funcBlock.statements[0] as ConditionalCompileStatement;
+            expect(isConditionalCompileStatement(ccStmt)).to.true;
+            const printStmt = ccStmt.thenBranch.statements[0];
+            expect(isPrintStatement(printStmt)).to.true;
+        });
+
+        it('contains code from conditional compile else blocks', () => {
+            let { diagnostics, ast } = parse(`
+                sub foo()
+                #if DEBUG
+                    m.pi = 3.14
+                #else
+                    print "hello"
+                #end if
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            const funcBlock = (ast.statements[0] as FunctionStatement).func.body;
+            const ccStmt = funcBlock.statements[0] as ConditionalCompileStatement;
+            expect(isConditionalCompileStatement(ccStmt)).to.true;
+            expect(ccStmt.elseBranch).to.exist;
+            expect(isBlock(ccStmt.elseBranch)).to.true;
+            const printStmt = (ccStmt.elseBranch as Block).statements[0];
+            expect(isPrintStatement(printStmt)).to.true;
+        });
+
+        it('contains code from conditional compile else if blocks', () => {
+            let { diagnostics, ast } = parse(`
+                sub foo()
+                #if DEBUG
+                    m.pi = 3.14
+                #else if PROD
+                    print "hello"
+                #end if
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            const funcBlock = (ast.statements[0] as FunctionStatement).func.body;
+            const ccStmt = funcBlock.statements[0] as ConditionalCompileStatement;
+            expect(isConditionalCompileStatement(ccStmt)).to.true;
+            expect(ccStmt.elseBranch).to.exist;
+            const elseBranch = ccStmt.elseBranch as ConditionalCompileStatement;
+            expect(isConditionalCompileStatement(elseBranch)).to.true;
+            expect(elseBranch.tokens.condition.text).to.eq('PROD');
+            const printStmt = elseBranch.thenBranch.statements[0];
+            expect(isPrintStatement(printStmt)).to.true;
+        });
+
+        it('contains code from multiple conditional compile else if blocks', () => {
+            let { diagnostics, ast } = parse(`
+                sub foo()
+                #if DEBUG
+                    m.pi = 3.14
+                #else if PROD
+                    print "hello"
+                #else if ABC
+                    print "hello"
+                #else if DEF
+                    print "hello"
+                #else if HIJ
+                    print "hello"
+                #else
+                    x = 78
+                #end if
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            const funcBlock = (ast.statements[0] as FunctionStatement).func.body;
+            const ccStmt = funcBlock.statements[0] as ConditionalCompileStatement;
+            expect(isConditionalCompileStatement(ccStmt)).to.true;
+            expect(ccStmt.elseBranch).to.exist;
+            let elseBranch = ccStmt.elseBranch as ConditionalCompileStatement;
+            expect(isConditionalCompileStatement(elseBranch)).to.true;
+            expect(elseBranch.tokens.condition.text).to.eq('PROD');
+            elseBranch = elseBranch.elseBranch as ConditionalCompileStatement;
+            expect(isConditionalCompileStatement(elseBranch)).to.true;
+            expect(elseBranch.tokens.condition.text).to.eq('ABC');
+            elseBranch = elseBranch.elseBranch as ConditionalCompileStatement;
+            expect(isConditionalCompileStatement(elseBranch)).to.true;
+            expect(elseBranch.tokens.condition.text).to.eq('DEF');
+            elseBranch = elseBranch.elseBranch as ConditionalCompileStatement;
+            expect(isConditionalCompileStatement(elseBranch)).to.true;
+            expect(elseBranch.tokens.condition.text).to.eq('HIJ');
+            let lastElse = elseBranch.elseBranch as Block;
+            expect(isBlock(lastElse)).to.true;
+            expect(isAssignmentStatement(lastElse.statements[0])).to.true;
+        });
+
+        it('has no error when safely closing block', () => {
+            let { diagnostics } = parse(`
+                sub foo()
+                #if DEBUG
+                    if m.enabled
+                        print "hello"
+                    end if
+                #end if
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('has error when unsafely closing block', () => {
+            let { diagnostics } = parse(`
+                sub foo()
+                    if m.enabled
+                #if DEBUG
+                        print "hello"
+                    end if
+                #end if
+                end sub
+            `, ParseMode.BrighterScript);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.unsafeUnmatchedTerminatorInConditionalCompileBlock('end if').message
+            ]);
+        });
+
+
+        it('has error when unsafely opening block', () => {
+            let { diagnostics } = parse(`
+                sub foo()
+                #if DEBUG
+                    if m.enabled
+                        print "hello"
+                #end if
+                    end if
+                end sub
+            `, ParseMode.BrighterScript);
+            expectDiagnostics(diagnostics, [
+                DiagnosticMessages.expectedEndIfToCloseIfStatement({ line: 3, character: 20 }).message,
+                DiagnosticMessages.unexpectedToken('end if').message
+            ]);
+        });
+
     });
 });
 

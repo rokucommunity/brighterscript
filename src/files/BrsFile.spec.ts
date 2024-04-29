@@ -591,6 +591,7 @@ describe('BrsFile', () => {
         });
 
         describe('conditional compile', () => {
+
             it('supports whitespace-separated directives', async () => {
                 const file = program.setFile<BrsFile>('source/main.bs', `
                     sub main()

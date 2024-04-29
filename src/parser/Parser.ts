@@ -11,7 +11,8 @@ import {
     BrighterScriptSourceLiterals,
     DisallowedFunctionIdentifiersText,
     DisallowedLocalIdentifiersText,
-    TokenKind
+    TokenKind,
+    BlockTerminators
 } from '../lexer/TokenKind';
 import type {
     PrintSeparatorSpace,
@@ -25,6 +26,7 @@ import {
     ContinueStatement,
     ClassStatement,
     ConstStatement,
+    ConditionalCompileStatement,
     DimStatement,
     DottedSetStatement,
     EndStatement,
@@ -92,7 +94,7 @@ import {
 } from './Expression';
 import type { Diagnostic, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
-import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isTypecastExpression } from '../astUtils/reflection';
+import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isConditionalCompileStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isTypecastExpression } from '../astUtils/reflection';
 import { createStringLiteral } from '../astUtils/creators';
 import type { Expression, Statement } from './AstNode';
 import type { DeepWriteable } from '../interfaces';
@@ -282,6 +284,10 @@ export class Parser {
 
     private declaration(): Statement | AnnotationExpression | undefined {
         try {
+            if (this.checkAny(TokenKind.HashIf)) {
+                return this.conditionalCompileStatement();
+            }
+
             if (this.checkAny(TokenKind.Sub, TokenKind.Function)) {
                 return this.functionDeclaration(false);
             }
@@ -1919,6 +1925,177 @@ export class Parser {
         return branch;
     }
 
+    private conditionalCompileStatement(unsafeTerminators: TokenKind[] = []): ConditionalCompileStatement {
+
+        const hashIfToken = this.advance();
+        const startingRange = hashIfToken.range;
+
+        const condition = this.advance();
+        let thenBranch: Block;
+        let elseBranch: ConditionalCompileStatement | Block | undefined;
+
+        let hashEndIfToken: Token | undefined;
+        let hashElseToken: Token | undefined;
+
+        thenBranch = this.blockConditionalCompileBranch(hashIfToken);
+
+        const ensureNewLine = () => {
+            //ensure newline before next keyword
+            if (this.checkPrevious(TokenKind.Newline)) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.expectedNewlineInConditionalCompile(),
+                    range: this.peek().range
+                });
+                throw this.lastDiagnosticAsError();
+            }
+        };
+
+        ensureNewLine();
+        this.advance();
+
+        //else branch
+        if (this.check(TokenKind.HashElseIf)) {
+            // recurse-read `#else if`
+            elseBranch = this.conditionalCompileStatement();
+            ensureNewLine();
+
+        } else if (this.check(TokenKind.HashElse)) {
+            hashElseToken = this.advance();
+            elseBranch = this.blockConditionalCompileBranch(hashIfToken);
+            ensureNewLine();
+            this.advance();
+        }
+
+        if (!isConditionalCompileStatement(elseBranch)) {
+
+            if (this.check(TokenKind.HashEndIf)) {
+                hashEndIfToken = this.advance();
+
+            } else {
+                //missing #endif
+                this.diagnostics.push({
+                    ...DiagnosticMessages.expectedHashEndIfToCloseHashIf(startingRange.start.line),
+                    range: hashIfToken.range
+                });
+            }
+        }
+
+        return new ConditionalCompileStatement({
+            hashIf: hashIfToken,
+            hashElse: hashElseToken,
+            hashEndIf: hashEndIfToken,
+            condition: condition,
+            thenBranch: thenBranch,
+            elseBranch: elseBranch
+        });
+    }
+
+    //consume a conditional compile branch block of an `#if` statement
+    private blockConditionalCompileBranch(hashIfToken: Token) {
+        //keep track of the current error count, because if the then branch fails,
+        //we will trash them in favor of a single error on if
+        let diagnosticsLengthBeforeBlock = this.diagnostics.length;
+
+        //parsing until trailing "#end if", "#else", "#else if"
+        let branch = this.conditionalCompileBlock();
+
+        if (!branch) {
+            //throw out any new diagnostics created as a result of a `then` block parse failure.
+            //the block() function will discard the current line, so any discarded diagnostics will
+            //resurface if they are legitimate, and not a result of a malformed if statement
+            this.diagnostics.splice(diagnosticsLengthBeforeBlock, this.diagnostics.length - diagnosticsLengthBeforeBlock);
+
+            //this whole if statement is bogus...add error to the if token and hard-fail
+            this.diagnostics.push({
+                ...DiagnosticMessages.expectedTerminatorOnConditionalCompileBlock(),
+                range: hashIfToken.range
+            });
+            throw this.lastDiagnosticAsError();
+        }
+        return branch;
+    }
+
+    /**
+     * Parses a block, looking for a specific terminating TokenKind to denote completion.
+     * Always looks for `#end if` or `#else`
+     */
+    private conditionalCompileBlock(): Block | undefined {
+        const parentAnnotations = this.enterAnnotationBlock();
+
+        this.consumeStatementSeparators(true);
+        let startingToken = this.peek();
+        const unsafeTerminators = BlockTerminators;
+        const conditionalEndTokens = [TokenKind.HashElse, TokenKind.HashElseIf, TokenKind.HashEndIf];
+        const terminators = [...conditionalEndTokens, ...unsafeTerminators];
+        this.globalTerminators.push(conditionalEndTokens);
+        const statements: Statement[] = [];
+        while (!this.isAtEnd() && !this.checkAny(...terminators)) {
+            //grab the location of the current token
+            let loopCurrent = this.current;
+            let dec = this.declaration();
+            if (dec) {
+                if (!isAnnotationExpression(dec)) {
+                    this.consumePendingAnnotations(dec);
+                    statements.push(dec);
+                }
+
+                const peekKind = this.peek().kind;
+                if (conditionalEndTokens.includes(peekKind)) {
+                    // current conditional compile branch was closed by other statement, rewind to preceding newline
+                    this.current--;
+                }
+                //ensure statement separator
+                this.consumeStatementSeparators();
+
+            } else {
+                //something went wrong. reset to the top of the loop
+                this.current = loopCurrent;
+
+                //scrap the entire line (hopefully whatever failed has added a diagnostic)
+                this.consumeUntil(TokenKind.Newline, TokenKind.Colon, TokenKind.Eof);
+
+                //trash the next token. this prevents an infinite loop. not exactly sure why we need this,
+                //but there's already an error in the file being parsed, so just leave this line here
+                this.advance();
+
+                //consume potential separators
+                this.consumeStatementSeparators(true);
+            }
+        }
+        this.globalTerminators.pop();
+
+
+        if (this.isAtEnd()) {
+            return undefined;
+            // TODO: Figure out how to handle unterminated blocks well
+        } else {
+            //did we  hit an unsafe terminator?
+            //if so, we need to restore the statement separator
+            let prev = this.previous();
+            let prevKind = prev.kind;
+            let peek = this.peek();
+            let peekKind = this.peek().kind;
+            if (
+                (peekKind === TokenKind.HashEndIf || peekKind === TokenKind.HashElse || peekKind === TokenKind.HashElseIf) &&
+                (prevKind === TokenKind.Newline)
+            ) {
+                this.current--;
+            } else if (unsafeTerminators.includes(peekKind) &&
+                (prevKind === TokenKind.Newline || prevKind === TokenKind.Colon)
+            ) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.unsafeUnmatchedTerminatorInConditionalCompileBlock(peek.text),
+                    range: peek.range
+                });
+                throw this.lastDiagnosticAsError();
+            } else {
+                return undefined;
+            }
+        }
+        this.exitAnnotationBlock(parentAnnotations);
+        return new Block({ statements: statements, startingRange: startingToken.range });
+    }
+
     private ensureNewLineOrColon(silent = false) {
         const prev = this.previous().kind;
         if (prev !== TokenKind.Newline && prev !== TokenKind.Colon) {
@@ -2189,7 +2366,8 @@ export class Parser {
         let startingToken = this.peek();
 
         const statements: Statement[] = [];
-        while (!this.isAtEnd() && !this.checkAny(TokenKind.EndSub, TokenKind.EndFunction, ...terminators)) {
+        const flatGlobalTerminators = this.globalTerminators.flat().flat();
+        while (!this.isAtEnd() && !this.checkAny(TokenKind.EndSub, TokenKind.EndFunction, ...terminators, ...flatGlobalTerminators)) {
             //grab the location of the current token
             let loopCurrent = this.current;
             let dec = this.declaration();
