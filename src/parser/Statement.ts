@@ -3595,3 +3595,90 @@ export class ConditionalCompileStatement extends Statement {
         return this.tokens.hashIf?.leadingTrivia ?? [];
     }
 }
+
+
+export class ConditionalCompileConstStatement extends Statement {
+    constructor(options: {
+        hashConst?: Token;
+        assignment: AssignmentStatement;
+    }) {
+        super();
+        this.tokens = {
+            hashConst: options.hashConst
+        };
+        this.assignment = options.assignment;
+        this.range = util.createBoundingRange(util.createBoundingRangeFromTokens(this.tokens), this.assignment);
+    }
+
+    public readonly tokens: {
+        readonly hashConst?: Token;
+    };
+
+    public readonly assignment: AssignmentStatement;
+
+    public readonly kind = AstNodeKind.ConditionalCompileConstStatement;
+
+    public readonly range: Range | undefined;
+
+    transpile(state: BrsTranspileState) {
+        return [
+            state.transpileToken(this.tokens.hashConst, '#const'),
+            ' ',
+            state.transpileToken(this.assignment.tokens.name),
+            ' ',
+            state.transpileToken(this.assignment.tokens.equals, '='),
+            ' ',
+            ...this.assignment.value.transpile(state)
+        ];
+
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        // nothing to walk
+    }
+
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.hashConst.leadingTrivia ?? [];
+    }
+}
+
+export class ConditionalCompileErrorStatement extends Statement {
+    constructor(options: {
+        hashError?: Token;
+        message: Token;
+    }) {
+        super();
+        this.tokens = {
+            hashError: options.hashError,
+            message: options.message
+        };
+        this.range = util.createBoundingRange(util.createBoundingRangeFromTokens(this.tokens));
+    }
+
+    public readonly tokens: {
+        readonly hashError?: Token;
+        readonly message: Token;
+    };
+
+
+    public readonly kind = AstNodeKind.ConditionalCompileErrorStatement;
+
+    public readonly range: Range | undefined;
+
+    transpile(state: BrsTranspileState) {
+        return [
+            state.transpileToken(this.tokens.hashError, '#error'),
+            ' ',
+            state.transpileToken(this.tokens.message)
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        // nothing to walk
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.hashError.leadingTrivia ?? [];
+    }
+}

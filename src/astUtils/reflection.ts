@@ -1,4 +1,4 @@
-import type { Body, AssignmentStatement, Block, ExpressionStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, InterfaceFieldStatement, InterfaceMethodStatement, InterfaceStatement, EnumStatement, EnumMemberStatement, TryCatchStatement, CatchStatement, ThrowStatement, MethodStatement, FieldStatement, ConstStatement, ContinueStatement, TypecastStatement, ConditionalCompileStatement } from '../parser/Statement';
+import type { Body, AssignmentStatement, Block, ExpressionStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, InterfaceFieldStatement, InterfaceMethodStatement, InterfaceStatement, EnumStatement, EnumMemberStatement, TryCatchStatement, CatchStatement, ThrowStatement, MethodStatement, FieldStatement, ConstStatement, ContinueStatement, TypecastStatement, ConditionalCompileStatement, ConditionalCompileConstStatement, ConditionalCompileErrorStatement } from '../parser/Statement';
 import type { LiteralExpression, BinaryExpression, CallExpression, FunctionExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression, TypecastExpression, TypeExpression, TypedArrayExpression } from '../parser/Expression';
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
@@ -188,6 +188,12 @@ export function isTypecastStatement(element: AstNode | undefined): element is Ty
 }
 export function isConditionalCompileStatement(element: AstNode | undefined): element is ConditionalCompileStatement {
     return element?.kind === AstNodeKind.ConditionalCompileStatement;
+}
+export function isConditionalCompileConstStatement(element: AstNode | undefined): element is ConditionalCompileConstStatement {
+    return element?.kind === AstNodeKind.ConditionalCompileConstStatement;
+}
+export function isConditionalCompileErrorStatement(element: AstNode | undefined): element is ConditionalCompileErrorStatement {
+    return element?.kind === AstNodeKind.ConditionalCompileErrorStatement;
 }
 
 // Expressions reflection

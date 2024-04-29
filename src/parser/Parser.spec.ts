@@ -1,14 +1,14 @@
 import { expect, assert } from '../chai-config.spec';
 import { Lexer } from '../lexer/Lexer';
 import { ReservedWords, TokenKind } from '../lexer/TokenKind';
-import type { AAMemberExpression, BinaryExpression, TypecastExpression, UnaryExpression } from './Expression';
+import type { AAMemberExpression, BinaryExpression, LiteralExpression, TypecastExpression, UnaryExpression } from './Expression';
 import { TernaryExpression, NewExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression, VariableExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
-import type { AssignmentStatement, Block, ClassStatement, ConditionalCompileStatement, InterfaceStatement, ReturnStatement, TypecastStatement } from './Statement';
+import type { AssignmentStatement, Block, ClassStatement, ConditionalCompileConstStatement, ConditionalCompileErrorStatement, ConditionalCompileStatement, InterfaceStatement, ReturnStatement, TypecastStatement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isClassStatement, isConditionalCompileStatement, isDottedGetExpression, isExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypecastExpression, isTypecastStatement, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isDottedGetExpression, isExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypecastExpression, isTypecastStatement, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics } from '../testHelpers.spec';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { Expression, Statement } from './AstNode';
@@ -2076,6 +2076,95 @@ describe('parser', () => {
                 DiagnosticMessages.expectedEndIfToCloseIfStatement({ line: 3, character: 20 }).message,
                 DiagnosticMessages.unexpectedToken('end if').message
             ]);
+        });
+
+        describe('#const', () => {
+            it('parses #const', () => {
+                let { diagnostics, ast } = parse(`
+                    #const test = true
+                    sub foo()
+                        #const debug = test
+                    end sub
+                    #    const spaces = false
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(diagnostics);
+                //#const test = true
+                let ccc = ast.statements[0] as ConditionalCompileConstStatement;
+                expect(isConditionalCompileConstStatement(ccc)).to.be.true;
+                expect(ccc.assignment.tokens.name.text).to.eq('test');
+                expect(isLiteralExpression(ccc.assignment.value)).to.be.true;
+                expect((ccc.assignment.value as LiteralExpression).tokens.value.text).to.eq('true');
+                //#const debug = test
+                ccc = (ast.statements[1] as FunctionStatement).func.body.statements[0] as ConditionalCompileConstStatement;
+                expect(isConditionalCompileConstStatement(ccc)).to.be.true;
+                expect(ccc.assignment.tokens.name.text).to.eq('debug');
+                expect(isVariableExpression(ccc.assignment.value)).to.be.true;
+                expect((ccc.assignment.value as VariableExpression).tokens.name.text).to.eq('test');
+                //#    const spaces = false
+                ccc = ast.statements[2] as ConditionalCompileConstStatement;
+                expect(isConditionalCompileConstStatement(ccc)).to.be.true;
+                expect(ccc.assignment.tokens.name.text).to.eq('spaces');
+                expect(isLiteralExpression(ccc.assignment.value)).to.be.true;
+                expect((ccc.assignment.value as LiteralExpression).tokens.value.text).to.eq('false');
+            });
+
+            it('has diagnostic if no lhs', () => {
+                let { diagnostics } = parse(`
+                    #const test
+                `, ParseMode.BrighterScript);
+                expectDiagnostics(diagnostics, [
+                    DiagnosticMessages.expectedOperatorAfterIdentifier([TokenKind.Equal], 'test').message
+                ]);
+            });
+
+            it('has diagnostic if invalid operator', () => {
+                let { diagnostics } = parse(`
+                    #const test += other
+                `, ParseMode.BrighterScript);
+                expectDiagnostics(diagnostics, [
+                    DiagnosticMessages.expectedOperatorAfterIdentifier([TokenKind.Equal], 'test').message
+                ]);
+            });
+
+            it('has diagnostic if invalid lhs', () => {
+                let { diagnostics } = parse(`
+                    #const test = 4
+                `, ParseMode.BrighterScript);
+                expectDiagnostics(diagnostics, [
+                    DiagnosticMessages.invalidHashConstValue().message
+                ]);
+            });
+        });
+
+        describe('#error', () => {
+            it('parses #error', () => {
+                let { diagnostics, ast } = parse(`
+                    #error
+                    sub foo()
+                        #error this is a LONG "message" :: with colons, etc.
+                    end sub
+                    #    error this one has spaces
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(diagnostics);
+
+                //#error
+                let cce = ast.statements[0] as ConditionalCompileErrorStatement;
+                expect(isConditionalCompileErrorStatement(cce)).to.be.true;
+                expect(cce.tokens.message.kind).to.eq(TokenKind.HashErrorMessage);
+                expect(cce.tokens.message.text).to.eq('');
+
+                //#error this is a long "message" :: with colons, etc.
+                cce = (ast.statements[1] as FunctionStatement).func.body.statements[0] as ConditionalCompileErrorStatement;
+                expect(isConditionalCompileErrorStatement(cce)).to.be.true;
+                expect(cce.tokens.message.kind).to.eq(TokenKind.HashErrorMessage);
+                expect(cce.tokens.message.text).to.eq('this is a LONG "message" :: with colons, etc.');
+
+                //#    error this one has spaces
+                cce = ast.statements[2] as ConditionalCompileErrorStatement;
+                expect(isConditionalCompileErrorStatement(cce)).to.be.true;
+                expect(cce.tokens.message.kind).to.eq(TokenKind.HashErrorMessage);
+                expect(cce.tokens.message.text).to.eq('this one has spaces');
+            });
         });
 
     });
