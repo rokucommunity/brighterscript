@@ -206,6 +206,7 @@ export class Parser {
         this.pendingAnnotations = [];
 
         this.ast = this.body();
+        this.ast.bsConsts = options.bsConsts;
         //now that we've built the AST, link every node to its parent
         this.ast.link();
         return this;
@@ -1958,7 +1959,8 @@ export class Parser {
         let diagnosticsLengthBeforeBlock = this.diagnostics.length;
 
         thenBranch = this.blockConditionalCompileBranch(hashIfToken);
-        if (condition.text.toLowerCase() === 'false') {
+        const conditionTextLower = condition.text.toLowerCase();
+        if (!this.options.bsConsts?.get(conditionTextLower) || conditionTextLower === 'false') {
             //throw out any new diagnostics created as a result of a false block
             this.diagnostics.splice(diagnosticsLengthBeforeBlock, this.diagnostics.length - diagnosticsLengthBeforeBlock);
         }
@@ -3400,6 +3402,10 @@ export interface ParseOptions {
      * @default true
      */
     trackLocations?: boolean;
+    /**
+     *
+     */
+    bsConsts?: Map<string, boolean>;
 }
 
 

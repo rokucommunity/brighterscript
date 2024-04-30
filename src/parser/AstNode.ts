@@ -25,6 +25,11 @@ export abstract class AstNode {
     public abstract transpile(state: BrsTranspileState): TranspileResult;
 
     /**
+     * Optional property, set at the top level with a map of conditional compile consts and their values
+     */
+    public bsConsts?: Map<string, boolean>;
+
+    /**
      * When being considered by the walk visitor, this describes what type of element the current class is.
      */
     public visitMode = InternalWalkMode.visitStatements;
@@ -150,7 +155,8 @@ export abstract class AstNode {
     public link() {
         //the act of walking causes the nodes to be linked
         this.walk(() => { }, {
-            walkMode: WalkMode.visitAllRecursive
+            // eslint-disable-next-line no-bitwise
+            walkMode: WalkMode.visitAllRecursive & InternalWalkMode.visitFalseConditionalCompilationBlocks
         });
     }
 
@@ -170,6 +176,10 @@ export abstract class AstNode {
 
     public getLeadingTrivia(): Token[] {
         return [];
+    }
+
+    public getBsConsts() {
+        return this.bsConsts ?? this.parent?.getBsConsts();
     }
 }
 

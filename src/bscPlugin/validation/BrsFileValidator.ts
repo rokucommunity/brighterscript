@@ -14,18 +14,14 @@ import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import { DynamicType } from '../../types/DynamicType';
 import util from '../../util';
 import type { Range } from 'vscode-languageserver';
-import { getBsConst } from '../../preprocessor/Manifest';
 import type { Token } from '../../lexer/Token';
 
 export class BrsFileValidator {
     constructor(
         public event: OnFileValidateEvent<BrsFile>
     ) {
-        this.bsConsts = getBsConst(this.event.program.getManifest());
     }
 
-
-    private bsConsts = new Map<string, boolean>();
 
     public process() {
         const unlinkGlobalSymbolTable = this.event.file.parser.symbolTable.pushParentProvider(() => this.event.program.globalScope.symbolTable);
@@ -37,6 +33,9 @@ export class BrsFileValidator {
         // eslint-disable-next-line @typescript-eslint/dot-notation
         this.event.file['_cachedLookups'].invalidate();
 
+        // make a copy of the bsConsts, because they might be added to
+        const bsConstsBackup = new Map<string, boolean>(this.event.file.ast.getBsConsts());
+
         this.walk();
         this.flagTopLevelStatements();
         //only validate the file if it was actually parsed (skip files containing typedefs)
@@ -44,6 +43,8 @@ export class BrsFileValidator {
             this.validateTopOfFileStatements();
             this.validateTypecastStatements();
         }
+
+        this.event.file.ast.bsConsts = bsConstsBackup;
         unlinkGlobalSymbolTable();
     }
 
@@ -188,18 +189,23 @@ export class BrsFileValidator {
             ConditionalCompileConstStatement: (node) => {
                 const assign = node.assignment;
                 const constNameLower = assign.tokens.name?.text.toLowerCase();
+                const astBsConsts = this.event.file.ast.bsConsts;
                 if (isLiteralExpression(assign.value)) {
-                    this.bsConsts.set(constNameLower, assign.value.tokens.value.text.toLowerCase() === 'true');
+                    astBsConsts.set(constNameLower, assign.value.tokens.value.text.toLowerCase() === 'true');
                 } else if (isVariableExpression(assign.value)) {
                     if (this.validateConditionalCompileConst(assign.value.tokens.name)) {
-                        this.bsConsts.set(constNameLower, this.bsConsts.get(assign.value.tokens.name.text.toLowerCase()));
+                        astBsConsts.set(constNameLower, astBsConsts.get(assign.value.tokens.name.text.toLowerCase()));
                     }
                 }
             },
             ConditionalCompileStatement: (node) => {
-                if (!this.validateConditionalCompileConst(node.tokens.condition)) {
-
-                }
+                this.validateConditionalCompileConst(node.tokens.condition);
+            },
+            ConditionalCompileErrorStatement: (node) => {
+                this.event.file.addDiagnostic({
+                    ...DiagnosticMessages.hashError(node.tokens.message.text),
+                    range: node.range
+                });
             }
         });
 
@@ -331,7 +337,7 @@ export class BrsFileValidator {
 
     private validateConditionalCompileConst(ccConst: Token) {
         const isBool = ccConst.kind === TokenKind.True || ccConst.kind === TokenKind.False;
-        if (!isBool && !this.bsConsts.has(ccConst.text.toLowerCase())) {
+        if (!isBool && !this.event.file.ast.bsConsts.has(ccConst.text.toLowerCase())) {
             this.event.file.addDiagnostic({
                 file: this.event.file,
                 ...DiagnosticMessages.referencedConstDoesNotExist(),

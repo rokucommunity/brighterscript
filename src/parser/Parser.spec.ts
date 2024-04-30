@@ -1941,7 +1941,7 @@ describe('parser', () => {
                     print "hello"
                 #end if
                 end sub
-            `, ParseMode.BrighterScript);
+            `, ParseMode.BrighterScript, { debug: true });
             expectZeroDiagnostics(diagnostics);
             const funcBlock = (ast.statements[0] as FunctionStatement).func.body;
             expect(funcBlock.statements.length).to.eq(1);
@@ -2106,11 +2106,26 @@ describe('parser', () => {
                 #end if
                     end if
                 end sub
-            `, ParseMode.BrighterScript);
+            `, ParseMode.BrighterScript, { debug: true });
             expectDiagnostics(diagnostics, [
                 DiagnosticMessages.expectedEndIfToCloseIfStatement({ line: 3, character: 20 }).message,
                 DiagnosticMessages.unexpectedToken('end if').message
             ]);
+        });
+
+        it('has no diagnostics from false blocks', () => {
+            let { diagnostics } = parse(`
+                sub foo()
+                #if DEBUG
+                    blah blah blah
+                #end if
+
+                #if false
+                    there are no diagnostics here
+                #end if
+                end sub
+            `, ParseMode.BrighterScript, { debug: false });
+            expectZeroDiagnostics(diagnostics);
         });
 
         describe('#const', () => {
@@ -2205,10 +2220,15 @@ describe('parser', () => {
     });
 });
 
-export function parse(text: string, mode?: ParseMode) {
+export function parse(text: string, mode?: ParseMode, bsConsts?: Record<string, boolean>) {
     let { tokens } = Lexer.scan(text);
+    const bsConstMap = new Map<string, boolean>();
+    for (const constName in bsConsts) {
+        bsConstMap.set(constName, bsConsts[constName]);
+    }
     return Parser.parse(tokens, {
-        mode: mode!
+        mode: mode!,
+        bsConsts: bsConstMap
     });
 }
 

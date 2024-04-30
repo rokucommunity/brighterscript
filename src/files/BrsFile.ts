@@ -37,6 +37,7 @@ import type { BscFile } from './BscFile';
 import { ReferencesProvider } from '../bscPlugin/references/ReferencesProvider';
 import type { BscType } from '../types/BscType';
 import { NamespaceType } from '../types';
+import { getBsConst } from '../preprocessor/Manifest';
 
 export type ProvidedSymbolMap = Map<SymbolTypeFlag, Map<string, BscSymbol>>;
 export type ChangedSymbolMap = Map<SymbolTypeFlag, Set<string>>;
@@ -393,7 +394,8 @@ export class BrsFile implements BscFile {
             this.program.logger.time(LogLevel.debug, ['parser.parse', chalk.green(this.srcPath)], () => {
                 this._parser = Parser.parse(lexer.tokens, {
                     mode: this.parseMode,
-                    logger: this.program.logger
+                    logger: this.program.logger,
+                    bsConsts: getBsConst(this.program.getManifest())
                 });
             });
 

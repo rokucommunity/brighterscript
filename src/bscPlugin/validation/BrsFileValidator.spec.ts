@@ -611,7 +611,7 @@ describe('BrsFileValidator', () => {
             expectZeroDiagnostics(program);
         });
 
-        it('dows not allow top level definitions inside #if block inside a function', () => {
+        it('does not allow top level definitions inside #if block inside a function', () => {
             program.setFile<BrsFile>('source/main.bs', `
                 #const debug = true
                 function f()
@@ -625,6 +625,34 @@ describe('BrsFileValidator', () => {
             expectDiagnostics(program, [
                 DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel('namespace')
             ]);
+        });
+
+        it('shows diagnostic for #error', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                #const debug = true
+                function f()
+                    #if debug
+                    #error This is a conditional compile error
+                    #end if
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.hashError('This is a conditional compile error')
+            ]);
+        });
+
+        it('does not show diagnostic for #error when inside false CC block', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                #const debug = false
+                function f()
+                    #if debug
+                    #error This is a conditional compile error
+                    #end if
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
         });
     });
 });

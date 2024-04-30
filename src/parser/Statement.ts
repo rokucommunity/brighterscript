@@ -3583,10 +3583,14 @@ export class ConditionalCompileStatement extends Statement {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkStatements) {
-            walk(this, 'thenBranch', visitor, options);
-        }
-        if (this.elseBranch && options.walkMode & InternalWalkMode.walkStatements) {
-            walk(this, 'elseBranch', visitor, options);
+            const conditionTrue = options.bsConsts?.get(this.tokens.condition.text.toLowerCase());
+            const walkFalseBlocks = options.walkMode & InternalWalkMode.visitFalseConditionalCompilationBlocks;
+            if (conditionTrue || walkFalseBlocks) {
+                walk(this, 'thenBranch', visitor, options);
+            }
+            if (this.elseBranch && (!conditionTrue || walkFalseBlocks)) {
+                walk(this, 'elseBranch', visitor, options);
+            }
         }
     }
 

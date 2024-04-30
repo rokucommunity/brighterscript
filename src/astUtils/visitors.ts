@@ -41,6 +41,11 @@ export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: W
     //link this node to its parent
     element.parent = parent ?? owner as unknown as AstNode;
 
+    //get current bsConsts
+    if (!options.bsConsts) {
+        options.bsConsts = element.getBsConsts();
+    }
+
     //notify the visitor of this element
     if (element.visitMode & options.walkMode) {
         const result = visitor?.(element, element.parent as any, owner, key);
@@ -198,6 +203,10 @@ export interface WalkOptions {
      * but will continue walking sibling nodes
      */
     skipChildren?: ChildrenSkipper;
+    /**
+     * Map of Conditional compilation flags, with names in lowercase
+     */
+    bsConsts?: Map<string, boolean>;
 }
 
 export class ChildrenSkipper {
@@ -240,7 +249,11 @@ export enum InternalWalkMode {
     /**
      * If child function expressions are encountered, this will allow the walker to step into them.
      */
-    recurseChildFunctions = 16
+    recurseChildFunctions = 16,
+    /**
+     * Step into conditional compilation blocks that are guarded by a flag that evaluates to false
+     */
+    visitFalseConditionalCompilationBlocks = 64
 }
 
 /* eslint-disable @typescript-eslint/prefer-literal-enum-member */
