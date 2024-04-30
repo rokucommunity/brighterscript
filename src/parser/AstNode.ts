@@ -156,7 +156,7 @@ export abstract class AstNode {
         //the act of walking causes the nodes to be linked
         this.walk(() => { }, {
             // eslint-disable-next-line no-bitwise
-            walkMode: WalkMode.visitAllRecursive & InternalWalkMode.visitFalseConditionalCompilationBlocks
+            walkMode: WalkMode.visitAllRecursive | InternalWalkMode.visitFalseConditionalCompilationBlocks
         });
     }
 

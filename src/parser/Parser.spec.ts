@@ -2220,11 +2220,11 @@ describe('parser', () => {
     });
 });
 
-export function parse(text: string, mode?: ParseMode, bsConsts?: Record<string, boolean>) {
+export function parse(text: string, mode?: ParseMode, bsConsts: Record<string, boolean> = {}) {
     let { tokens } = Lexer.scan(text);
     const bsConstMap = new Map<string, boolean>();
     for (const constName in bsConsts) {
-        bsConstMap.set(constName, bsConsts[constName]);
+        bsConstMap.set(constName.toLowerCase(), bsConsts[constName]);
     }
     return Parser.parse(tokens, {
         mode: mode!,

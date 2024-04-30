@@ -8,12 +8,12 @@ import type { BrsFile } from '../files/BrsFile';
 import type { FunctionStatement } from '../parser/Statement';
 import { PrintStatement, Block, ReturnStatement, ExpressionStatement } from '../parser/Statement';
 import { TokenKind } from '../lexer/TokenKind';
-import { ChildrenSkipper, createVisitor, WalkMode, walkStatements } from './visitors';
+import { ChildrenSkipper, createVisitor, InternalWalkMode, WalkMode, walkStatements } from './visitors';
 import { isFunctionExpression, isPrintStatement } from './reflection';
 import { createCall, createToken, createVariableExpression } from './creators';
 import { createStackedVisitor } from './stackedVisitor';
 import { Editor } from './Editor';
-import { Parser } from '../parser/Parser';
+import { ParseMode, Parser } from '../parser/Parser';
 import type { Statement, Expression, AstNode } from '../parser/AstNode';
 import { expectZeroDiagnostics } from '../testHelpers.spec';
 import type { FunctionExpression } from '../parser/Expression';
@@ -1164,6 +1164,64 @@ describe('astUtils visitors', () => {
                 'IncrementStatement',
                 'VariableExpression'
             ]);
+        });
+
+        it('can set bsConst in walk', () => {
+            const { ast } = program.setFile<BrsFile>('source/main.brs', `
+                #if DEBUG
+                sub main()
+                end sub
+                #end if
+            `);
+            const bsConsts = new Map<string, boolean>();
+            let foundMainFunc = false;
+            const visitor = createVisitor({
+                FunctionStatement: (func) => {
+                    foundMainFunc ||= func.getName(ParseMode.BrighterScript) === 'main';
+                }
+            });
+            ast.walk(visitor, {
+                walkMode: WalkMode.visitStatements,
+                bsConsts: bsConsts
+            });
+            // did not walk false block
+            expect(foundMainFunc).to.be.false;
+            bsConsts.set('debug', true);
+            ast.walk(visitor, {
+                walkMode: WalkMode.visitStatements,
+                bsConsts: bsConsts
+            });
+            // debug is true, so it did walk block
+            expect(foundMainFunc).to.be.true;
+        });
+
+        it('can walk false cc blocks', () => {
+            const { ast } = program.setFile<BrsFile>('source/main.brs', `
+                #if false
+                sub main()
+                end sub
+                #end if
+            `);
+            const bsConsts = new Map<string, boolean>();
+            let foundMainFunc = false;
+            const visitor = createVisitor({
+                FunctionStatement: (func) => {
+                    foundMainFunc ||= func.getName(ParseMode.BrighterScript) === 'main';
+                }
+            });
+            ast.walk(visitor, {
+                walkMode: WalkMode.visitStatements,
+                bsConsts: bsConsts
+            });
+            // did not walk false block
+            expect(foundMainFunc).to.be.false;
+            ast.walk(visitor, {
+                // eslint-disable-next-line no-bitwise
+                walkMode: WalkMode.visitStatements | InternalWalkMode.visitFalseConditionalCompilationBlocks,
+                bsConsts: bsConsts
+            });
+            // did walk false block
+            expect(foundMainFunc).to.be.true;
         });
     });
 });
