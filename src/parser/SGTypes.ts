@@ -1,6 +1,6 @@
 import { SourceNode } from 'source-map';
 import type { Range } from 'vscode-languageserver';
-import { createSGAttribute, createSGInterface, createSGInterfaceField, createSGInterfaceFunction } from '../astUtils/creators';
+import { createSGAttribute, createSGInterface, createSGInterfaceField, createSGInterfaceFunction, createSGToken } from '../astUtils/creators';
 import type { FileReference, TranspileResult } from '../interfaces';
 import util from '../util';
 import type { TranspileState } from './TranspileState';
@@ -299,15 +299,18 @@ export class SGElement {
     }
 
     protected transpileBody(state: TranspileState) {
-        if (this.isSelfClosing) {
+        if (this.isSelfClosing && this.elements.length === 0) {
             return util.sourceNodeFromTranspileResult(null, null, null, [
                 ' ',
                 state.transpileToken(this.tokens.startTagClose, '/>'),
                 state.newline
             ]);
         } else {
+            // it is possible that the original tag isSelfClosing, but new elements have been added to it
+            // in that case, create a new startTagClose token for transpilation.
+            const startTagClose = this.isSelfClosing ? createSGToken('>', this.tokens.startTagClose.range) : this.tokens.startTagClose;
             const chunks: TranspileResult = [
-                state.transpileToken(this.tokens.startTagClose, '>'),
+                state.transpileToken(startTagClose, '>'),
                 state.newline
             ];
             state.blockDepth++;

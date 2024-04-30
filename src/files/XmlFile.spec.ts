@@ -1003,6 +1003,18 @@ describe('XmlFile', () => {
                 </component>
             `, 'none', 'components/SimpleScene.xml');
         });
+
+        it('includes script tags in self closing component', async () => {
+            await testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group" />
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/Comp.xml');
+        });
     });
 
     describe('Transform plugins', () => {
