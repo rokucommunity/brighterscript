@@ -774,6 +774,11 @@ export let DiagnosticMessages = {
         message: `'typecast' statement can only be applied to 'm', but was applied to '${foundApplication}'`,
         code: 1148,
         severity: DiagnosticSeverity.Error
+    }),
+    aliasStatementMustBeDeclaredAtTopOfFile: () => ({
+        message: `'alias' statement must be declared at the top of the file`,
+        code: 1149,
+        severity: DiagnosticSeverity.Error
     })
 };
 export const defaultMaximumTruncationLength = 160;

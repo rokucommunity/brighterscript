@@ -3505,7 +3505,7 @@ export class AliasStatement extends Statement {
 
     public readonly value: Expression;
 
-    public readonly kind = AstNodeKind.TypecastStatement;
+    public readonly kind = AstNodeKind.AliasStatement;
 
     public readonly range: Range;
 

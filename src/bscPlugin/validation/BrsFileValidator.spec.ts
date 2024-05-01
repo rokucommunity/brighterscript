@@ -1,6 +1,6 @@
 import { expect } from '../../chai-config.spec';
 import type { BrsFile } from '../../files/BrsFile';
-import type { AALiteralExpression, DottedGetExpression } from '../../parser/Expression';
+import type { AALiteralExpression, DottedGetExpression, FunctionExpression } from '../../parser/Expression';
 import type { AssignmentStatement, ClassStatement, FunctionStatement, NamespaceStatement, PrintStatement } from '../../parser/Statement';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics } from '../../testHelpers.spec';
@@ -14,6 +14,9 @@ import { FloatType } from '../../types/FloatType';
 import { IntegerType } from '../../types/IntegerType';
 import { InterfaceType } from '../../types/InterfaceType';
 import { StringType } from '../../types/StringType';
+import { Expression } from '../../parser/AstNode';
+import { TypedFunctionType } from '../../types';
+import { ParseMode } from '../../parser/Parser';
 
 describe('BrsFileValidator', () => {
     let program: Program;
@@ -595,5 +598,125 @@ describe('BrsFileValidator', () => {
             expect(assigns[0].getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime }).toString()).to.eq('Thing1');
             expectTypeToBe(assigns[0].getSymbolTable().getSymbolType('x', { flags: SymbolTypeFlag.runtime }), IntegerType);
         });
+    });
+
+    describe('alias statement', () => {
+        it('allows being at start of file', () => {
+            program.setFile('source/main.bs', `
+                alias x = lcase
+
+                sub noop()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('no diagnostic if more than one usage per block', () => {
+            program.setFile('source/main.bs', `
+                alias x = lcase
+                alias y = Str
+
+                sub noop()
+                   print x(y(1))
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('has diagnostic if used not at top of file', () => {
+            program.setFile('source/main.bs', `
+                namespace alpha
+                    alias x = lcase
+
+                    sub noop()
+                        alias y = str
+                        print "hello"
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.aliasStatementMustBeDeclaredAtTopOfFile().message,
+                DiagnosticMessages.aliasStatementMustBeDeclaredAtTopOfFile().message
+            ]);
+        });
+
+        it('sets the type of the name', () => {
+            program.setFile('source/types.bs', `
+                interface Thing1
+                    value as string
+                end interface
+
+                namespace alpha.beta
+                    function piAsStr()
+                        return "3.14"
+                    end function
+
+                    const eulerAsStr = "2.78"
+                end namespace
+
+                function lowercase(text as string) as string
+                    return lcase(text)
+                end function
+            `);
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                import "types.bs"
+                alias t = Thing1
+                alias p = alpha.beta.piAsStr
+                alias e = alpha.beta.eulerAsStr
+                alias l = lowercase
+
+                namespace ns1.ns2
+                    function lowercase(x as integer) as integer
+                        return x
+                    end function
+
+                    sub func1(usedAsType as t)
+                        x = usedAsType.value
+                        print
+                        print l(x)
+                        print l(p())
+                        print l(e)
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            let func: FunctionExpression;
+
+            // find places in AST where "x" is assigned
+            file.ast.walk(createVisitor({
+                FunctionStatement: (stmt) => {
+                    if (stmt.getName(ParseMode.BrighterScript) === 'ns1.ns2.func1') {
+                        func = stmt.func;
+                    }
+                }
+            }), { walkMode: WalkMode.visitAllRecursive });
+
+            const symbolTable = func.getSymbolTable();
+
+            expectTypeToBe(symbolTable.getSymbolType('t', { flags: SymbolTypeFlag.typetime }), InterfaceType);
+            const tType = symbolTable.getSymbolType('t', { flags: SymbolTypeFlag.typetime }) as InterfaceType;
+            expect(tType.name).to.eq('Thing1');
+            expectTypeToBe(symbolTable.getSymbolType('p', { flags: SymbolTypeFlag.runtime }), TypedFunctionType);
+            expectTypeToBe(symbolTable.getSymbolType('e', { flags: SymbolTypeFlag.runtime }), StringType);
+            expectTypeToBe(symbolTable.getSymbolType('l', { flags: SymbolTypeFlag.runtime }), TypedFunctionType);
+        });
+
+        it('has diagnostic when rhs not found', () => {
+            program.setFile('source/main.bs', `
+                alias x = notThere
+
+                sub noop()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('notThere').message
+            ]);
+        });
+
     });
 });

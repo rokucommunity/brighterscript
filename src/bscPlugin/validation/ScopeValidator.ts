@@ -1,6 +1,6 @@
 import { URI } from 'vscode-uri';
 import type { Range } from 'vscode-languageserver';
-import { isAssignmentStatement, isAssociativeArrayType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isConstStatement, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumStatement, isEnumType, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isObjectType, isPrimitiveType, isReferenceType, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
+import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isConstStatement, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumStatement, isEnumType, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isObjectType, isPrimitiveType, isReferenceType, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
@@ -699,11 +699,14 @@ export class ScopeValidator {
                         file: file
                     });
                 } else if (invalidlyUsedResolvedType && !isReferenceType(invalidlyUsedResolvedType)) {
-                    this.addMultiScopeDiagnostic({
-                        ...DiagnosticMessages.itemCannotBeUsedAsVariable(invalidlyUsedResolvedType.toString()),
-                        range: expression.range,
-                        file: file
-                    });
+                    if (!isAliasStatement(expression.parent)) {
+                        // alias rhs CAN be a type!
+                        this.addMultiScopeDiagnostic({
+                            ...DiagnosticMessages.itemCannotBeUsedAsVariable(invalidlyUsedResolvedType.toString()),
+                            range: expression.range,
+                            file: file
+                        });
+                    }
                 } else {
                     const typeChainScan = util.processTypeChain(typeChain);
                     this.addMultiScopeDiagnostic({
