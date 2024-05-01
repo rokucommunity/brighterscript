@@ -14,11 +14,11 @@ import {
     TokenKind
 } from '../lexer/TokenKind';
 import type {
-    AliasStatement,
     PrintSeparatorSpace,
     PrintSeparatorTab
 } from './Statement';
 import {
+    AliasStatement,
     AssignmentStatement,
     Block,
     Body,
@@ -1493,6 +1493,7 @@ export class Parser {
     }
 
     private aliasStatement(): AliasStatement | undefined {
+        this.warnIfNotBrighterScriptMode('alias statements');
         const aliasToken = this.advance();
         const name = this.tryConsume(
             DiagnosticMessages.expectedIdentifierAfterKeyword('alias'),
