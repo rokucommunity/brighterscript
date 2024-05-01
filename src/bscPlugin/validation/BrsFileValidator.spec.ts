@@ -14,7 +14,6 @@ import { FloatType } from '../../types/FloatType';
 import { IntegerType } from '../../types/IntegerType';
 import { InterfaceType } from '../../types/InterfaceType';
 import { StringType } from '../../types/StringType';
-import { Expression } from '../../parser/AstNode';
 import { TypedFunctionType } from '../../types';
 import { ParseMode } from '../../parser/Parser';
 
