@@ -2930,7 +2930,7 @@ describe('BrsFile', () => {
                     'import "pkg:/source/types.bs"
                     'alias sf = someFunc
                     sub alpha_someFunc()
-                        (someFunc)()
+                        someFunc()
                     end sub
                 `);
             });
@@ -3027,8 +3027,62 @@ describe('BrsFile', () => {
                     'alias abcfoo = alpha_beta_charlie_foo
                     'alias abcpi = alpha_beta_charlie_pi
                     sub SomeNamespace_foo()
-                        (alpha_beta_charlie_foo)(3.14.toStr())
+                        alpha_beta_charlie_foo(3.14.toStr())
                     end sub
+                `);
+            });
+
+            it('can alias a namespace', async () => {
+                await testTranspile(`
+                    alias get2 = get
+
+                    namespace http
+                        'Do an HTTP request
+                        sub get()
+                            print get2.aa()
+                            print get2.aa().name
+                            print get2.ABC
+                            print get2.beta.DEF
+                            print get2.beta.AnimalSounds.dog
+                            print get2.MY_AA.id
+                        end sub
+                    end namespace
+
+                    namespace get
+                        function aa()
+                            return {name: "John doe"}
+                        end function
+
+                        const ABC = "ABC"
+
+                        const MY_AA = {id: 0}
+
+                        namespace beta
+                            const DEF = "DEF"
+                            enum AnimalSounds
+                                dog = "bark"
+                                cat = "meow"
+                            end enum
+                        end namespace
+                    end namespace
+                `, `
+                    'alias get2 = get
+                    'Do an HTTP request
+                    sub http_get()
+                        print get_aa()
+                        print get_aa().name
+                        print "ABC"
+                        print "DEF"
+                        print "bark"
+                        print ({
+                            id: 0
+                        }).id
+                    end sub
+                    function get_aa()
+                        return {
+                            name: "John doe"
+                        }
+                    end function
                 `);
             });
         });

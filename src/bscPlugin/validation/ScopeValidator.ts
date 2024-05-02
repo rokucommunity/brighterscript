@@ -750,7 +750,7 @@ export class ScopeValidator {
 
         this.checkMemberAccessibility(file, expression, typeChain);
 
-        if (isNamespaceType(exprType)) {
+        if (isNamespaceType(exprType) && !isAliasStatement(expression.parent)) {
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.itemCannotBeUsedAsVariable('namespace'),
                 range: expression.range,
