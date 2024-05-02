@@ -1,14 +1,16 @@
 import { createToken } from '../../astUtils/creators';
 import type { Editor } from '../../astUtils/Editor';
-import { isDottedGetExpression, isLiteralExpression, isVariableExpression, isUnaryExpression } from '../../astUtils/reflection';
+import { isDottedGetExpression, isLiteralExpression, isVariableExpression, isUnaryExpression, isAliasStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BrsFile } from '../../files/BrsFile';
-import type { OnPrepareFileEvent } from '../../interfaces';
+import type { ExtraSymbolData, OnPrepareFileEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { Expression } from '../../parser/AstNode';
 import { LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
+import type { AliasStatement } from '../../parser/Statement';
 import type { Scope } from '../../Scope';
+import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import util from '../../util';
 import { BslibManager } from '../serialize/BslibManager';
 
@@ -89,14 +91,30 @@ export class BrsFilePreTranspileProcessor {
     }
 
     private processExpression(expression: Expression, scope: Scope | undefined) {
+        if (expression.findAncestor(isAliasStatement)) {
+            // skip any changes in an Alias Statement
+            return;
+        }
+
         let containingNamespace = this.event.file.getNamespaceStatementForPosition(expression.range.start)?.getName(ParseMode.BrighterScript);
+
 
         const parts = util.splitExpression(expression);
         const processedNames: string[] = [];
+
         for (let part of parts) {
             let entityName: string;
-            if (isVariableExpression(part) || isDottedGetExpression(part)) {
-                processedNames.push(part?.tokens.name?.text?.toLocaleLowerCase());
+
+            let firstPart = part === parts[0];
+            let actualNameExpression = firstPart ? this.replaceAlias(part) : part;
+            let isAlias = actualNameExpression !== part;
+
+            if (isAlias) {
+                entityName = util.getAllDottedGetPartsAsString(actualNameExpression);
+                processedNames.push(entityName);
+                containingNamespace = '';
+            } else if (isVariableExpression(part) || isDottedGetExpression(part)) {
+                processedNames.push(part?.tokens.name?.text?.toLowerCase());
                 entityName = processedNames.join('.');
             } else {
                 return;
@@ -113,6 +131,9 @@ export class BrsFilePreTranspileProcessor {
                 let enumInfo = this.getEnumInfo(entityName, containingNamespace, scope);
                 if (enumInfo?.value) {
                     value = enumInfo.value;
+                } else if (!enumInfo && isAlias) {
+                    // this was an aliased expression that is NOT am enum Name
+                    value = actualNameExpression;
                 }
             }
 
@@ -130,5 +151,40 @@ export class BrsFilePreTranspileProcessor {
                 return;
             }
         }
+    }
+
+
+    private replaceAlias(expression: Expression) {
+        let alias: AliasStatement;
+        let potentiallyAliased = expression;
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        const fileAliasStatements = this.event.file['_cachedLookups'].aliasStatements;
+
+        if (fileAliasStatements.length === 0) {
+            return expression;
+        }
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        let potentialAliasedTextsLower = fileAliasStatements.map(stmt => stmt.tokens.name.text.toLowerCase());
+
+        if (isVariableExpression(potentiallyAliased) && potentialAliasedTextsLower.includes(potentiallyAliased.getName().toLowerCase())) {
+            //check if it is an alias
+            let data = {} as ExtraSymbolData;
+
+            potentiallyAliased.getSymbolTable().getSymbolType(potentiallyAliased.getName(), {
+                data: data,
+                // eslint-disable-next-line no-bitwise
+                flags: SymbolTypeFlag.runtime | SymbolTypeFlag.typetime
+            });
+
+            if (data.isAlias && isAliasStatement(data.definingNode)) {
+                alias = data.definingNode;
+
+            }
+        }
+
+        if (alias && isVariableExpression(potentiallyAliased)) {
+            return alias.value;
+        }
+        return expression;
     }
 }

@@ -756,7 +756,7 @@ export class ScopeValidator {
                 range: expression.range,
                 file: file
             });
-        } else if (isEnumType(exprType)) {
+        } else if (isEnumType(exprType) && !isAliasStatement(expression.parent)) {
             const enumStatement = this.event.scope.getEnum(util.getAllDottedGetPartsAsString(expression));
             if (enumStatement) {
                 // there's an enum with this name
