@@ -137,7 +137,7 @@ sub http_get()
 end sub
 
 sub get_aa()
-    retrun {
+    return {
         data: "abc"
     }
 end sub
