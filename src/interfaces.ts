@@ -828,11 +828,30 @@ export interface FileLink<T> {
 }
 
 export interface ExtraSymbolData {
+    /**
+     * What AST node defined this symbol?
+     */
     definingNode?: AstNode;
+    /**
+     * Description of this symbol
+     */
     description?: string;
-    completionPriority?: number; // the higher the number, the lower the priority
+    /**
+     * the higher the number, the lower the priority
+     */
+    completionPriority?: number;
+    /**
+     * Flags for this symbol
+     */
     flags?: SymbolTypeFlag;
-    memberOfAncestor?: boolean; // this symbol comes from an ancestor symbol table
+    /**
+     * this symbol comes from an ancestor symbol table
+     */
+    memberOfAncestor?: boolean;
+    /**
+     * Do not merge this symbol when merging symbol tables
+     */
+    doNotMerge?: boolean;
 }
 
 export interface GetTypeOptions {

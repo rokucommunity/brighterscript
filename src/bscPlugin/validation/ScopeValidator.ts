@@ -786,7 +786,7 @@ export class ScopeValidator {
     }
 
     private checkTypeChainForClassUsedAsVar(typeChain: TypeChainEntry[], containingNamespaceName: string) {
-        const ignoreKinds = [AstNodeKind.TypeCastExpression, AstNodeKind.NewExpression];
+        const ignoreKinds = [AstNodeKind.TypecastExpression, AstNodeKind.NewExpression];
         let lowerNameSoFar = '';
         let classUsedAsVar;
         let isFirst = true;

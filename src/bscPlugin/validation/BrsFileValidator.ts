@@ -1,4 +1,4 @@
-import { isAALiteralExpression, isArrayType, isBody, isClassStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
+import { isAALiteralExpression, isArrayType, isBlock, isBody, isClassStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isTypecastStatement, isUnaryExpression, isVariableExpression, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -7,7 +7,7 @@ import { TokenKind } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
 import { CallExpression, type FunctionExpression, type LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
-import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, WhileStatement } from '../../parser/Statement';
+import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, Body, WhileStatement, TypecastStatement, Block } from '../../parser/Statement';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { ArrayDefaultTypeReferenceType } from '../../types/ReferenceType';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
@@ -35,7 +35,8 @@ export class BrsFileValidator {
         this.flagTopLevelStatements();
         //only validate the file if it was actually parsed (skip files containing typedefs)
         if (!this.event.file.hasTypedef) {
-            this.validateImportStatements();
+            this.validateTopOfFileStatements();
+            this.validateTypecastStatements();
         }
         unlinkGlobalSymbolTable();
     }
@@ -173,6 +174,9 @@ export class BrsFileValidator {
             },
             ContinueStatement: (node) => {
                 this.validateContinueStatement(node);
+            },
+            TypecastStatement: (node) => {
+                node.parent.getSymbolTable().addSymbol('m', { definingNode: node, doNotMerge: true }, node.getType({ flags: SymbolTypeFlag.typetime }), SymbolTypeFlag.runtime);
             }
         });
 
@@ -313,7 +317,8 @@ export class BrsFileValidator {
                     !isInterfaceStatement(statement) &&
                     !isLibraryStatement(statement) &&
                     !isImportStatement(statement) &&
-                    !isConstStatement(statement)
+                    !isConstStatement(statement) &&
+                    !isTypecastStatement(statement)
                 ) {
                     this.event.program.diagnosticManager.register({
                         file: this.event.file,
@@ -325,17 +330,22 @@ export class BrsFileValidator {
         }
     }
 
-    private validateImportStatements() {
-        let topOfFileIncludeStatements = [] as Array<LibraryStatement | ImportStatement>;
+    private getTopOfFileStatements() {
+        let topOfFileIncludeStatements = [] as Array<LibraryStatement | ImportStatement | TypecastStatement>;
         for (let stmt of this.event.file.parser.ast.statements) {
             //if we found a non-library statement, this statement is not at the top of the file
-            if (isLibraryStatement(stmt) || isImportStatement(stmt)) {
+            if (isLibraryStatement(stmt) || isImportStatement(stmt) || isTypecastStatement(stmt)) {
                 topOfFileIncludeStatements.push(stmt);
             } else {
                 //break out of the loop, we found all of our library statements
                 break;
             }
         }
+        return topOfFileIncludeStatements;
+    }
+
+    private validateTopOfFileStatements() {
+        let topOfFileStatements = this.getTopOfFileStatements();
 
         let statements = [
             // eslint-disable-next-line @typescript-eslint/dot-notation
@@ -346,7 +356,7 @@ export class BrsFileValidator {
         for (let result of statements) {
             //if this statement is not one of the top-of-file statements,
             //then add a diagnostic explaining that it is invalid
-            if (!topOfFileIncludeStatements.includes(result)) {
+            if (!topOfFileStatements.includes(result)) {
                 if (isLibraryStatement(result)) {
                     this.event.program.diagnosticManager.register({
                         ...DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile(),
@@ -360,6 +370,54 @@ export class BrsFileValidator {
                         file: this.event.file
                     });
                 }
+            }
+        }
+    }
+
+    private validateTypecastStatements() {
+        let topOfFileTypecastStatements = this.getTopOfFileStatements().filter(stmt => isTypecastStatement(stmt));
+
+        //check only one `typecast` statement at "top" of file (eg. before non import/library statements)
+        for (let i = 1; i < topOfFileTypecastStatements.length; i++) {
+            const typecastStmt = topOfFileTypecastStatements[i];
+            this.event.file.diagnostics.push({
+                ...DiagnosticMessages.typecastStatementMustBeDeclaredAtStart(),
+                range: typecastStmt.range,
+                file: this.event.file
+            });
+        }
+
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        for (let result of this.event.file['_cachedLookups'].typecastStatements) {
+            let isBadTypecastObj = false;
+            if (!isVariableExpression(result.typecastExpression.obj)) {
+                isBadTypecastObj = true;
+            } else if (result.typecastExpression.obj.tokens.name.text.toLowerCase() !== 'm') {
+                isBadTypecastObj = true;
+            }
+            if (isBadTypecastObj) {
+                this.event.file.diagnostics.push({
+                    ...DiagnosticMessages.invalidTypecastStatementApplication(util.getAllDottedGetPartsAsString(result.typecastExpression.obj)),
+                    range: result.typecastExpression.obj.range,
+                    file: this.event.file
+                });
+            }
+
+            if (topOfFileTypecastStatements.includes(result)) {
+                // already validated
+                continue;
+            }
+
+            const block = result.findAncestor<Body | Block>(node => (isBody(node) || isBlock(node)));
+            const isFirst = block?.statements[0] === result;
+            const isAllowedBlock = (isBody(block) || isFunctionExpression(block.parent) || isNamespaceStatement(block.parent));
+
+            if (!isFirst || !isAllowedBlock) {
+                this.event.file.diagnostics.push({
+                    ...DiagnosticMessages.typecastStatementMustBeDeclaredAtStart(),
+                    range: result.range,
+                    file: this.event.file
+                });
             }
         }
     }

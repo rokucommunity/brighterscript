@@ -3,6 +3,7 @@ import { isInheritableType, isReferenceType } from '../astUtils/reflection';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { BscType } from './BscType';
 import type { ReferenceType } from './ReferenceType';
+import { DynamicType } from './DynamicType';
 
 export abstract class InheritableType extends BscType {
 
@@ -14,6 +15,12 @@ export abstract class InheritableType extends BscType {
     }
 
     getMemberType(memberName: string, options: GetTypeOptions) {
+        let hasRoAssociativeArrayAsAncestor = this.name.toLowerCase() === 'roassociativearray' || this.getAncestorTypeList()?.find(ancestorType => ancestorType.name.toLowerCase() === 'roassociativearray');
+
+        if (hasRoAssociativeArrayAsAncestor) {
+            return super.getMemberType(memberName, options) ?? DynamicType.instance;
+        }
+
         return super.getMemberType(memberName, { ...options, fullName: memberName, tableProvider: () => this.memberTable });
     }
 

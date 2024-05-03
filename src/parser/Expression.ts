@@ -10,7 +10,7 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallExpression, isCallableType, isCallfuncExpression, isComponentType, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isPrimitiveType, isReferenceType, isStringType, isTypeCastExpression, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallExpression, isCallableType, isCallfuncExpression, isComponentType, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isPrimitiveType, isReferenceType, isStringType, isTypecastExpression, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
@@ -746,7 +746,7 @@ export class GroupingExpression extends Expression {
     public readonly range: Range | undefined;
 
     transpile(state: BrsTranspileState) {
-        if (isTypeCastExpression(this.expression)) {
+        if (isTypecastExpression(this.expression)) {
             return this.expression.transpile(state);
         }
         return [
@@ -2179,7 +2179,7 @@ export class TypeExpression extends Expression implements TypedefProvider {
     }
 }
 
-export class TypeCastExpression extends Expression {
+export class TypecastExpression extends Expression {
     constructor(options: {
         obj: Expression;
         as?: Token;
@@ -2198,7 +2198,7 @@ export class TypeCastExpression extends Expression {
         );
     }
 
-    public readonly kind = AstNodeKind.TypeCastExpression;
+    public readonly kind = AstNodeKind.TypecastExpression;
 
     public readonly obj: Expression;
 

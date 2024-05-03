@@ -8,7 +8,7 @@ import PluginInterface from './PluginInterface';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, trim } from './testHelpers.spec';
 import { Logger } from './Logger';
 import type { BrsFile } from './files/BrsFile';
-import type { ForEachStatement, NamespaceStatement } from './parser/Statement';
+import type { AssignmentStatement, ForEachStatement, NamespaceStatement } from './parser/Statement';
 import type { CompilerPlugin, OnScopeValidateEvent } from './interfaces';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import { EnumMemberType, EnumType } from './types/EnumType';
@@ -28,7 +28,7 @@ import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { InterfaceType } from './types/InterfaceType';
 import { ComponentType } from './types/ComponentType';
 import * as path from 'path';
-import { WalkMode } from './astUtils/visitors';
+import { WalkMode, createVisitor } from './astUtils/visitors';
 import type { FunctionExpression } from './parser/Expression';
 
 describe('Scope', () => {
@@ -3343,6 +3343,97 @@ describe('Scope', () => {
             });
         });
 
+
+        describe('roAssociativeArray type', () => {
+
+            it('allows accessing built-in member of AA', () => {
+                program.setFile<BrsFile>('source/aa.bs', `
+                    function getSize(aa as roAssociativeArray) as integer
+                        return aa.count()
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows assigning to prop of AA', () => {
+                program.setFile<BrsFile>('source/aa.bs', `
+                    sub addName(aa as roAssociativeArray)
+                        aa.name = "foo"
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows accessing random prop of typecasted AA', () => {
+                program.setFile<BrsFile>('source/aa.bs', `
+                    sub foo()
+                        print (m as roAssociativeArray).whatever.whatever
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows asscessing prop of AA through square brackets', () => {
+                program.setFile<BrsFile>('source/aa.bs', `
+                    sub addName(aa as roAssociativeArray)
+                        aa["whatEver"] = "hello"
+                        print aa["whatEver"]
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+        });
+
+        describe('roArray type', () => {
+
+            it('allows accessing built-in member of array', () => {
+                program.setFile<BrsFile>('source/array.bs', `
+                    function getSize(aa as roArray) as integer
+                        return aa.count()
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows assigning to prop of item in array', () => {
+                program.setFile<BrsFile>('source/array.bs', `
+                    sub addName(aa as roArray)
+                        aa[0].name = "foo"
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows accessing random prop item in array of typecasted array', () => {
+                program.setFile<BrsFile>('source/array.bs', `
+                    sub foo()
+                        print (m as roArray)[0].whatever
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows asscessing prop of AA through square brackets', () => {
+                program.setFile<BrsFile>('source/array.bs', `
+                    sub addName(myArray as roArray)
+                        myArray[0] = "hello"
+                        print myArray[0]
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+        });
+
         it('classes in namespaces that reference themselves without namespace work', () => {
             program.setFile<BrsFile>('source/class.bs', `
                 namespace Alpha
@@ -3422,6 +3513,53 @@ describe('Scope', () => {
             const forEachStmt = file.parser.ast.findChildren(isForEachStatement, { walkMode: WalkMode.visitAllRecursive })[0] as ForEachStatement;
             const mType = forEachStmt.getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime });
             expectTypeToBe(mType, AssociativeArrayType);
+        });
+
+        it('does not propagate a typecast m across namespace statements', () => {
+            const file1 = program.setFile<BrsFile>('source/one.bs', `
+                interface Thing1
+                    value as integer
+                end interface
+
+                namespace Alpha.Beta
+                    typecast m as Thing1
+
+                    sub method1()
+                        x = m.value
+                        print x
+                    end sub
+                end namespace
+            `);
+            const file2 = program.setFile<BrsFile>('source/two.bs', `
+                namespace Alpha.Beta
+                    sub method2()
+                        x = m.value
+                        print x
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            // find places in AST where "x" is assigned
+            const assigns = [] as Array<AssignmentStatement>;
+            const assignmentVisitor = createVisitor({
+                AssignmentStatement: (stmt) => {
+                    if (stmt.tokens.name.text.toLowerCase() === 'x') {
+                        assigns.push(stmt);
+                    }
+                }
+            });
+            file1.ast.walk(assignmentVisitor, { walkMode: WalkMode.visitAllRecursive });
+            file2.ast.walk(assignmentVisitor, { walkMode: WalkMode.visitAllRecursive });
+
+            // method1 - uses Thing1 'm'
+            expectTypeToBe(assigns[0].getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime }), InterfaceType);
+            expect(assigns[0].getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime }).toString()).to.eq('Thing1');
+            expectTypeToBe(assigns[0].getSymbolTable().getSymbolType('x', { flags: SymbolTypeFlag.runtime }), IntegerType);
+
+            // method1 - uses untypecast 'm'
+            expectTypeToBe(assigns[1].getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime }), AssociativeArrayType);
+            expectTypeToBe(assigns[1].getSymbolTable().getSymbolType('x', { flags: SymbolTypeFlag.runtime }), DynamicType);
         });
     });
 
