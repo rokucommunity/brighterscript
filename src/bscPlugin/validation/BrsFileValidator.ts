@@ -380,7 +380,7 @@ export class BrsFileValidator {
         //check only one `typecast` statement at "top" of file (eg. before non import/library statements)
         for (let i = 1; i < topOfFileTypecastStatements.length; i++) {
             const typecastStmt = topOfFileTypecastStatements[i];
-            this.event.file.diagnostics.push({
+            this.event.program.diagnosticManager.register({
                 ...DiagnosticMessages.typecastStatementMustBeDeclaredAtStart(),
                 range: typecastStmt.range,
                 file: this.event.file
@@ -396,7 +396,7 @@ export class BrsFileValidator {
                 isBadTypecastObj = true;
             }
             if (isBadTypecastObj) {
-                this.event.file.diagnostics.push({
+                this.event.program.diagnosticManager.register({
                     ...DiagnosticMessages.invalidTypecastStatementApplication(util.getAllDottedGetPartsAsString(result.typecastExpression.obj)),
                     range: result.typecastExpression.obj.range,
                     file: this.event.file
@@ -413,7 +413,7 @@ export class BrsFileValidator {
             const isAllowedBlock = (isBody(block) || isFunctionExpression(block.parent) || isNamespaceStatement(block.parent));
 
             if (!isFirst || !isAllowedBlock) {
-                this.event.file.diagnostics.push({
+                this.event.program.diagnosticManager.register({
                     ...DiagnosticMessages.typecastStatementMustBeDeclaredAtStart(),
                     range: result.range,
                     file: this.event.file
