@@ -200,9 +200,15 @@ let runtimeFunctions: GlobalCallable[] = [{
         const componentName = isLiteralString(callExpr.args[0]) ? callExpr.args[0].tokens.value?.text?.replace(/"/g, '') : '';
         const nodeType = isLiteralString(callExpr.args[1]) ? callExpr.args[1].tokens.value?.text?.replace(/"/g, '') : '';
         if (componentName?.toLowerCase().startsWith('ro')) {
-            const interfaceType = componentName + nodeType;
+            const fullName = componentName + nodeType;
             const data = {};
-            const foundType = callExpr.getSymbolTable().getSymbolType(interfaceType, { flags: SymbolTypeFlag.typetime, data: data });
+            const symbolTable = callExpr.getSymbolTable();
+            const foundType = symbolTable.getSymbolType(fullName, {
+                flags: SymbolTypeFlag.typetime,
+                data: data,
+                tableProvider: () => callExpr?.getSymbolTable(),
+                fullName: fullName
+            });
             if (foundType) {
                 return foundType;
             }

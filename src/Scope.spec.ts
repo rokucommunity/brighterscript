@@ -18,7 +18,6 @@ import { BooleanType } from './types/BooleanType';
 import { StringType } from './types/StringType';
 import { IntegerType } from './types/IntegerType';
 import { DynamicType } from './types/DynamicType';
-import { ObjectType } from './types/ObjectType';
 import { FloatType } from './types/FloatType';
 import { NamespaceType } from './types/NamespaceType';
 import { DoubleType } from './types/DoubleType';
@@ -814,7 +813,7 @@ describe('Scope', () => {
                 ]);
             });
 
-            it.only('infers the correct type', () => {
+            it('infers the correct type', () => {
                 const file = program.setFile<BrsFile>(`source/file.brs`, `
                     sub main()
                         scene = CreateObject("roSGScreen")
@@ -836,7 +835,7 @@ describe('Scope', () => {
                 expect(listType.name).to.eq('MarkupList');
             });
 
-            it.only('infers custom component types', () => {
+            it('infers custom component types', () => {
                 program.setFile('components/Comp1.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
                     <component name="Comp1" extends="Group">
@@ -2653,9 +2652,9 @@ describe('Scope', () => {
             expect(mainFnScope).to.exist;
             const getTypeOptions = { flags: SymbolTypeFlag.runtime };
             let dtType = mainFnScope.symbolTable.getSymbolType('dt', getTypeOptions);
-            expectTypeToBe(dtType, ObjectType);
+            expectTypeToBe(dtType, InterfaceType);
             let hoursType = mainFnScope.symbolTable.getSymbolType('hours', getTypeOptions);
-            expectTypeToBe(hoursType, DynamicType);
+            expectTypeToBe(hoursType, IntegerType);
         });
 
         describe('union types', () => {

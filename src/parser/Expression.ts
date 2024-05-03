@@ -186,7 +186,7 @@ export class CallExpression extends Expression {
         }
         if (isTypedFunctionType(calleeType) && calleeType.returnTypeLookup) {
             const returnType = calleeType.returnTypeLookup(this);
-            if (returnType?.isResolvable()) {
+            if (returnType) {
                 return returnType;
             }
         }
