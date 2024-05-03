@@ -5,7 +5,7 @@ const sinon = createSandbox();
 import { Program } from './Program';
 import { ProgramBuilder } from './ProgramBuilder';
 import { standardizePath as s, util } from './util';
-import { Logger, LogLevel } from './Logger';
+import { LogLevel, createLogger } from './logging';
 import * as diagnosticUtils from './diagnosticUtils';
 import type { BscFile, BsDiagnostic } from '.';
 import { Deferred, Range } from '.';
@@ -34,7 +34,7 @@ describe('ProgramBuilder', () => {
             rootDir: rootDir
         });
         builder.program = new Program(builder.options);
-        builder.logger = new Logger();
+        builder.logger = createLogger();
     });
 
     afterEach(() => {
