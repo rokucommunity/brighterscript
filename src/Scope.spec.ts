@@ -23,7 +23,7 @@ import { FloatType } from './types/FloatType';
 import { NamespaceType } from './types/NamespaceType';
 import { DoubleType } from './types/DoubleType';
 import { UnionType } from './types/UnionType';
-import { isForEachStatement, isFunctionExpression, isFunctionStatement, isNamespaceStatement } from './astUtils/reflection';
+import { isBlock, isForEachStatement, isFunctionExpression, isFunctionStatement, isNamespaceStatement } from './astUtils/reflection';
 import { ArrayType } from './types/ArrayType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { InterfaceType } from './types/InterfaceType';
@@ -812,6 +812,57 @@ describe('Scope', () => {
                 expectDiagnostics(program, [
                     DiagnosticMessages.unknownBrightScriptComponent('roFontMetrics')
                 ]);
+            });
+
+            it.only('infers the correct type', () => {
+                const file = program.setFile<BrsFile>(`source/file.brs`, `
+                    sub main()
+                        scene = CreateObject("roSGScreen")
+                        button = CreateObject("roSGNode", "Button")
+                        list = CreateObject("roSGNode", "MarkupList")
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const mainSymbolTable = file.ast.findChild(isBlock).getSymbolTable();
+                const sceneType = mainSymbolTable.getSymbolType('scene', { flags: SymbolTypeFlag.runtime }) as InterfaceType;
+                expectTypeToBe(sceneType, InterfaceType);
+                expect(sceneType.name).to.eq('roSGScreen');
+                const buttonType = mainSymbolTable.getSymbolType('button', { flags: SymbolTypeFlag.runtime }) as InterfaceType;
+                expectTypeToBe(buttonType, ComponentType);
+                expect(buttonType.name).to.eq('Button');
+                const listType = mainSymbolTable.getSymbolType('list', { flags: SymbolTypeFlag.runtime }) as InterfaceType;
+                expectTypeToBe(listType, ComponentType);
+                expect(listType.name).to.eq('MarkupList');
+            });
+
+            it.only('infers custom component types', () => {
+                program.setFile('components/Comp1.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Comp1" extends="Group">
+                    </component>
+                `);
+                program.setFile('components/Comp2.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Comp2" extends="Poster">
+                    </component>
+                `);
+                const file = program.setFile<BrsFile>(`source/file.brs`, `
+                    sub main()
+                        comp1 = CreateObject("roSGNode", "Comp1")
+                        comp2 = CreateObject("roSGNode", "Comp2")
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                program.getScopeByName('source').linkSymbolTable();
+                const mainSymbolTable = file.ast.findChild(isBlock).getSymbolTable();
+                const comp1Type = mainSymbolTable.getSymbolType('comp1', { flags: SymbolTypeFlag.runtime }) as InterfaceType;
+                expectTypeToBe(comp1Type, ComponentType);
+                expect(comp1Type.name).to.eq('Comp1');
+                const comp2Type = mainSymbolTable.getSymbolType('comp2', { flags: SymbolTypeFlag.runtime }) as InterfaceType;
+                expectTypeToBe(comp2Type, ComponentType);
+                expect(comp2Type.name).to.eq('Comp2');
             });
         });
 

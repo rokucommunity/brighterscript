@@ -5,10 +5,12 @@ import { BscTypeKind } from './BscTypeKind';
 import { isUnionTypeCompatible } from './helpers';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import type { TypeCompatibilityData } from '../interfaces';
+import type { CallExpression } from '../parser/Expression';
 
 export class TypedFunctionType extends BaseFunctionType {
     constructor(
-        public returnType: BscType
+        public returnType: BscType,
+        public returnTypeLookup?: (callExpr: CallExpression) => BscType
     ) {
         super();
     }

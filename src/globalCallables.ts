@@ -11,6 +11,9 @@ import { StringType } from './types/StringType';
 import { VoidType } from './types/VoidType';
 import util from './util';
 import { UnionType } from './types/UnionType';
+import type { CallExpression } from './parser/Expression';
+import { isLiteralString } from './astUtils/reflection';
+import { SymbolTypeFlag } from './SymbolTypeFlag';
 
 export let globalFile = new BrsFile({ srcPath: 'global', destPath: 'global', program: null });
 globalFile.parse('');
@@ -193,7 +196,19 @@ let mathFunctions: GlobalCallable[] = [{
 let runtimeFunctions: GlobalCallable[] = [{
     name: 'CreateObject',
     shortDescription: 'Creates a BrightScript Component of class classname specified. Return invalid if the object creation fails. Some Objects have optional parameters in their constructor that are passed after name.',
-    type: new TypedFunctionType(new ObjectType()),
+    type: new TypedFunctionType(new ObjectType(), (callExpr: CallExpression) => {
+        const componentName = isLiteralString(callExpr.args[0]) ? callExpr.args[0].tokens.value?.text?.replace(/"/g, '') : '';
+        const nodeType = isLiteralString(callExpr.args[1]) ? callExpr.args[1].tokens.value?.text?.replace(/"/g, '') : '';
+        if (componentName?.toLowerCase().startsWith('ro')) {
+            const interfaceType = componentName + nodeType;
+            const data = {};
+            const foundType = callExpr.getSymbolTable().getSymbolType(interfaceType, { flags: SymbolTypeFlag.typetime, data: data });
+            if (foundType) {
+                return foundType;
+            }
+        }
+        return new ObjectType();
+    }),
     file: globalFile,
     params: [{
         name: 'name',
