@@ -198,7 +198,7 @@ let runtimeFunctions: GlobalCallable[] = [{
     shortDescription: 'Creates a BrightScript Component of class classname specified. Return invalid if the object creation fails. Some Objects have optional parameters in their constructor that are passed after name.',
     type: new TypedFunctionType(new ObjectType(), (callExpr: CallExpression) => {
         const componentName = isLiteralString(callExpr.args[0]) ? callExpr.args[0].tokens.value?.text?.replace(/"/g, '') : '';
-        const nodeType = isLiteralString(callExpr.args[1]) ? callExpr.args[1].tokens.value?.text?.replace(/"/g, '') : '';
+        const nodeType = componentName.toLowerCase() === 'rosgnode' && isLiteralString(callExpr.args[1]) ? callExpr.args[1].tokens.value?.text?.replace(/"/g, '') : '';
         if (componentName?.toLowerCase().startsWith('ro')) {
             const fullName = componentName + nodeType;
             const data = {};

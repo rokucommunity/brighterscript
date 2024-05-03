@@ -30,6 +30,7 @@ import { ComponentType } from './types/ComponentType';
 import * as path from 'path';
 import { WalkMode, createVisitor } from './astUtils/visitors';
 import type { FunctionExpression } from './parser/Expression';
+import { ObjectType } from './types';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -862,6 +863,20 @@ describe('Scope', () => {
                 const comp2Type = mainSymbolTable.getSymbolType('comp2', { flags: SymbolTypeFlag.runtime }) as InterfaceType;
                 expectTypeToBe(comp2Type, ComponentType);
                 expect(comp2Type.name).to.eq('Comp2');
+            });
+
+            it('implies objectType by default', () => {
+                const file = program.setFile<BrsFile>(`source/file.brs`, `
+                    function getObj(myObjName)
+                        result = CreateObject(myObjName)
+                        return result
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const mainSymbolTable = file.ast.findChild(isBlock).getSymbolTable();
+                const resultType = mainSymbolTable.getSymbolType('result', { flags: SymbolTypeFlag.runtime });
+                expectTypeToBe(resultType, ObjectType);
             });
         });
 
