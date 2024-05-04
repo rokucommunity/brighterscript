@@ -141,8 +141,9 @@ export class DiagnosticManager {
     }
 
     public clearForFile(fileSrcPath: string) {
+        const fileSrcPathLower = fileSrcPath.toLowerCase();
         for (const [key, cachedData] of this.diagnosticsCache.entries()) {
-            if (cachedData.diagnostic.file.srcPath === fileSrcPath) {
+            if (cachedData.diagnostic.file.srcPath.toLowerCase() === fileSrcPathLower) {
                 this.diagnosticsCache.delete(key);
             }
         }

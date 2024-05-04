@@ -103,7 +103,6 @@ export interface SerializeFileResult {
  * Create a basic `File` object.
  */
 export function createFile(props: Partial<BscFile>) {
-    //props.diagnostics ??= [];
     props.dependencies ??= [];
     props.dependencyGraphKey ??= props.destPath;
     props.disposables ??= [];

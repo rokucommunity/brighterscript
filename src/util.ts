@@ -1963,7 +1963,7 @@ export class Util {
         let parentTypeName = '';
         let errorRange: Range;
         let containsDynamic = false;
-        let continueEverything = true;
+        let continueResolvingAllItems = true;
         for (let i = 0; i < typeChain.length; i++) {
             const chainItem = typeChain[i];
             const dotSep = chainItem.separatorToken?.text ?? '.';
@@ -1971,7 +1971,7 @@ export class Util {
                 fullChainName += dotSep;
             }
             fullChainName += chainItem.name;
-            if (continueEverything) {
+            if (continueResolvingAllItems) {
                 parentTypeName = previousTypeName;
                 fullErrorName = previousTypeName ? `${previousTypeName}${dotSep}${chainItem.name}` : chainItem.name;
                 previousTypeName = chainItem.type?.toString() ?? '';
@@ -1979,7 +1979,7 @@ export class Util {
                 containsDynamic = containsDynamic || (isDynamicType(chainItem.type) && !isAnyReferenceType(chainItem.type));
                 if (!chainItem.isResolved) {
                     errorRange = chainItem.range;
-                    continueEverything = false;
+                    continueResolvingAllItems = false;
                 }
             }
         }
@@ -2013,7 +2013,6 @@ export class Util {
     }
 
     public setContainsUnresolvedSymbol(symbolLowerNameSet: Set<string>, symbol: UnresolvedSymbol) {
-
         const possibleOriginalSymbolNamesLower = [];
         let nameSoFar = '';
         for (const tce of symbol.typeChain) {
