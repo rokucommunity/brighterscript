@@ -637,8 +637,8 @@ describe('BrsFileValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.aliasStatementMustBeDeclaredAtTopOfFile().message,
-                DiagnosticMessages.aliasStatementMustBeDeclaredAtTopOfFile().message
+                DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('alias').message,
+                DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('alias').message
             ]);
         });
 

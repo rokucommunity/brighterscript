@@ -871,6 +871,11 @@ export class ScopeValidator {
      * and make sure we can find a class with that name
      */
     private validateNewExpression(file: BrsFile, newExpression: NewExpression) {
+        const newExprType = newExpression.getType({ flags: SymbolTypeFlag.typetime });
+        if (isClassType(newExprType)) {
+            return;
+        }
+
         let potentialClassName = newExpression.className.getName(ParseMode.BrighterScript);
         const namespaceName = newExpression.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
         let newableClass = this.event.scope.getClass(potentialClassName, namespaceName);

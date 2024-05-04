@@ -1132,7 +1132,7 @@ describe('BrsFile', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.importStatementMustBeDeclaredAtTopOfFile()
+                DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('import')
             ]);
         });
 
@@ -1151,7 +1151,7 @@ describe('BrsFile', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile()
+                DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('library')
             ]);
         });
 
@@ -1163,7 +1163,7 @@ describe('BrsFile', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile()
+                DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('library')
             ]);
         });
 
@@ -3085,6 +3085,28 @@ describe('BrsFile', () => {
                     end function
                 `);
             });
+
+            it('can alias a class', async () => {
+                program.setFile('source/types.bs', `
+                    class Person
+                    end class
+                `);
+                await testTranspile(`
+                    import "types.bs"
+                    alias Person2 = Person
+                    sub test()
+                        dude = new Person2()
+                    end sub
+                `, `
+                    'import "types.bs"
+                    'alias Person2 = Person
+
+                    sub test()
+                        dude = Person()
+                    end sub
+                `);
+            });
+
         });
     });
 

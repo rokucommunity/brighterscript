@@ -363,19 +363,19 @@ export class BrsFileValidator {
             if (!topOfFileStatements.includes(result)) {
                 if (isLibraryStatement(result)) {
                     this.event.file.diagnostics.push({
-                        ...DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile(),
+                        ...DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('library'),
                         range: result.range,
                         file: this.event.file
                     });
                 } else if (isImportStatement(result)) {
                     this.event.file.diagnostics.push({
-                        ...DiagnosticMessages.importStatementMustBeDeclaredAtTopOfFile(),
+                        ...DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('import'),
                         range: result.range,
                         file: this.event.file
                     });
                 } else if (isAliasStatement(result)) {
                     this.event.file.diagnostics.push({
-                        ...DiagnosticMessages.aliasStatementMustBeDeclaredAtTopOfFile(),
+                        ...DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('alias'),
                         range: result.range,
                         file: this.event.file
                     });

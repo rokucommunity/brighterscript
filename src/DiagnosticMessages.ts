@@ -140,7 +140,7 @@ export let DiagnosticMessages = {
         code: 1023,
         severity: DiagnosticSeverity.Error
     }),
-    importStatementMustBeDeclaredAtTopOfFile: () => ({
+    __unused6: () => ({
         message: `'import' statement must be declared at the top of the file`,
         code: 1024,
         severity: DiagnosticSeverity.Error
@@ -311,7 +311,7 @@ export let DiagnosticMessages = {
         code: 1056,
         severity: DiagnosticSeverity.Error
     }),
-    libraryStatementMustBeDeclaredAtTopOfFile: () => ({
+    __unused5: () => ({
         message: `'library' statement must be declared at the top of the file`,
         code: 1057,
         severity: DiagnosticSeverity.Error
@@ -775,8 +775,8 @@ export let DiagnosticMessages = {
         code: 1148,
         severity: DiagnosticSeverity.Error
     }),
-    aliasStatementMustBeDeclaredAtTopOfFile: () => ({
-        message: `'alias' statement must be declared at the top of the file`,
+    statementMustBeDeclaredAtTopOfFile: (statmentKeyword: string) => ({
+        message: `'${statmentKeyword}' statement must be declared at the top of the file`,
         code: 1149,
         severity: DiagnosticSeverity.Error
     })
