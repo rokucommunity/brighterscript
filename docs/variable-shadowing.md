@@ -105,7 +105,7 @@ end namespace
 
 ## Aliasing Shadowed Names
 
-If there is a need to reference a shadowed name, you can `alias` the name at the beginning of the file, theus providing a different name to use.
+If there is a need to reference a shadowed name, you can `alias` the name at the beginning of the file, thus providing a different name to use.
 
 For example, in the following, the namespace `get` is shadowed by the function `http.get`.
 To work around that, an alias is used to create a new name that can be used to reference the `get` namespace.
