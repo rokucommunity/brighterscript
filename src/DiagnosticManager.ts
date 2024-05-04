@@ -4,53 +4,97 @@ import type { AstNode } from './parser/AstNode';
 import type { Scope } from './Scope';
 import { util } from './util';
 import { Cache } from './Cache';
-import { isXmlScope } from './astUtils/reflection';
+import { isBsDiagnostic, isXmlScope } from './astUtils/reflection';
 import type { BscFile } from './files/BscFile';
 import type { DiagnosticRelatedInformation } from 'vscode-languageserver-protocol';
+import { LogLevel, type Logger } from './Logger';
+import { DiagnosticFilterer } from './DiagnosticFilterer';
+import { DiagnosticSeverityAdjuster } from './DiagnosticSeverityAdjuster';
+import type { FinalizedBsConfig } from './BsConfig';
+import chalk from 'chalk';
 
-
+/**
+ * Manages all diagnostics for a program.
+ * Diagnostics can be added specific to a certain file/range and optionally scope or an AST node
+ * and can be tagged with arbitrary keys.
+ * Diagnostics can be cleared based on file, scope, and/or AST node.
+ * If multiple diagnostics are added related to the same range of code, they will be consolidated as related information
+ */
 export class DiagnosticManager {
 
-    private multiScopeCache = new Cache<string, { diagnostic: BsDiagnostic; contexts: Set<DiagnosticContext> }>();
+    private diagnosticsCache = new Cache<string, { diagnostic: BsDiagnostic; contexts: Set<DiagnosticContext> }>();
 
-    public register(diagnostic: BsDiagnostic, context?: DiagnosticContext) {
-        const key = this.getDiagnosticKey(diagnostic);
-        let fromCache = true;
-        const cacheData = this.multiScopeCache.getOrAdd(key, () => {
+    private diagnosticFilterer = new DiagnosticFilterer();
 
-            if (!diagnostic.relatedInformation) {
-                diagnostic.relatedInformation = [];
+    private diagnosticAdjuster = new DiagnosticSeverityAdjuster();
+
+    public logger: Logger;
+
+    public options: FinalizedBsConfig;
+
+    /**
+     * Registers a diagnostic (or multiple diagnostics) for a program.
+     * Diagnostics can optionally be associated with a context
+     */
+    public register(diagnostic: BsDiagnostic, context?: DiagnosticContext);
+    public register(diagnostics: Array<BsDiagnostic>);
+    public register(diagnostics: Array<DiagnosticContextPair>);
+    public register(diagnosticArg: BsDiagnostic | Array<BsDiagnostic | DiagnosticContextPair>, context?: DiagnosticContext) {
+        const diagnostics = Array.isArray(diagnosticArg) ? diagnosticArg : [{ diagnostic: diagnosticArg, context: context }];
+        for (const diagnosticData of diagnostics) {
+            const diagnostic = isBsDiagnostic(diagnosticData) ? diagnosticData : diagnosticData.diagnostic;
+            const diagContext = (diagnosticData as DiagnosticContextPair)?.context ?? context;
+            const key = this.getDiagnosticKey(diagnostic);
+            let fromCache = true;
+            const cacheData = this.diagnosticsCache.getOrAdd(key, () => {
+
+                if (!diagnostic.relatedInformation) {
+                    diagnostic.relatedInformation = [];
+                }
+                fromCache = false;
+                return { diagnostic: diagnostic, contexts: new Set<DiagnosticContext>() };
+            });
+
+            const cachedDiagnostic = cacheData.diagnostic;
+            if (!fromCache && diagnostic.relatedInformation) {
+                this.mergeRelatedInformation(cachedDiagnostic.relatedInformation, diagnostic.relatedInformation);
             }
-            fromCache = false;
-            return { diagnostic: diagnostic, contexts: new Set<DiagnosticContext>() };
-        });
-
-        const cachedDiagnostic = cacheData.diagnostic;
-        if (!fromCache && diagnostic.relatedInformation) {
-            this.mergeRelatedInformation(cachedDiagnostic.relatedInformation, diagnostic.relatedInformation);
-        }
-        const contexts = cacheData.contexts;
-        if (context) {
-            contexts.add(context);
+            const contexts = cacheData.contexts;
+            if (diagContext) {
+                contexts.add(diagContext);
+            }
         }
     }
 
-    public registerMultiple(diagnostics: Array<BsDiagnostic | DiagnosticContextPair>) {
-        for (const diag of diagnostics) {
-            if ((diag as any).diagnostic) {
-                const diagContextPair = (diag as DiagnosticContextPair);
-                this.register(diagContextPair.diagnostic, diagContextPair.context);
-            } else {
-                this.register((diag as BsDiagnostic));
-            }
-        }
-
-    }
-
-
+    /**
+     * Returns a list of all diagnostics, filtered by the in-file comment filters, filtered by BsConfig diagnostics and adjusted based on BsConfig
+     * If the same diagnostic is included in multiple contexts, they are included in a single diagnostic's relatedInformation
+     */
     public getDiagnostics() {
+        const doDiagnosticsGathering = () => {
+            const diagnostics = this.getNonSuppresedDiagnostics();
+            const filteredDiagnostics = this.logger?.time(LogLevel.debug, ['filter diagnostics'], () => {
+                return this.filterDiagnostics(diagnostics);
+            }) ?? this.filterDiagnostics(diagnostics);
+
+            if (this.logger) {
+                this.logger?.time(LogLevel.debug, ['adjust diagnostics severity'], () => {
+                    this.diagnosticAdjuster?.adjust(this.options ?? {}, filteredDiagnostics);
+                });
+            } else {
+                this.diagnosticAdjuster.adjust(this.options ?? {}, filteredDiagnostics);
+            }
+
+            this.logger?.info(`diagnostic counts: total=${chalk.yellow(diagnostics.length.toString())}, after filter=${chalk.yellow(filteredDiagnostics.length.toString())}`);
+            return filteredDiagnostics;
+        };
+
+        return this.logger?.time(LogLevel.info, ['DiagnosticsManager.getDiagnostics()'], doDiagnosticsGathering) ?? doDiagnosticsGathering();
+    }
+
+    private getNonSuppresedDiagnostics() {
         const results = [] as Array<BsDiagnostic>;
-        for (const cachedDiagnostic of this.multiScopeCache.values()) {
+        for (const cachedDiagnostic of this.diagnosticsCache.values()) {
             const diagnostic = { ...cachedDiagnostic.diagnostic };
             const relatedInformation = [...cachedDiagnostic.diagnostic.relatedInformation];
             for (const context of cachedDiagnostic.contexts.values()) {
@@ -83,20 +127,29 @@ export class DiagnosticManager {
         });
     }
 
-    public clear(file: BscFile) {
-        this.multiScopeCache.clear();
+    private filterDiagnostics(diagnostics: BsDiagnostic[]) {
+        //filter out diagnostics based on our diagnostic filters
+        let filteredDiagnostics = this.diagnosticFilterer.filter({
+            ...this.options ?? {},
+            rootDir: this.options?.rootDir
+        }, diagnostics);
+        return filteredDiagnostics;
     }
 
-    public clearForFile(file: BscFile) {
-        for (const [key, cachedData] of this.multiScopeCache.entries()) {
-            if (cachedData.diagnostic.file === file) {
-                this.multiScopeCache.delete(key);
+    public clear() {
+        this.diagnosticsCache.clear();
+    }
+
+    public clearForFile(fileSrcPath: string) {
+        for (const [key, cachedData] of this.diagnosticsCache.entries()) {
+            if (cachedData.diagnostic.file.srcPath === fileSrcPath) {
+                this.diagnosticsCache.delete(key);
             }
         }
     }
 
     public clearForScope(scope: Scope) {
-        for (const [key, cachedData] of this.multiScopeCache.entries()) {
+        for (const [key, cachedData] of this.diagnosticsCache.entries()) {
             let removedContext = false;
             for (const context of cachedData.contexts.values()) {
                 if (context.scope === scope) {
@@ -106,13 +159,13 @@ export class DiagnosticManager {
             }
             if (removedContext && cachedData.contexts.size === 0) {
                 // no more contexts for this diagnostic - remove diagnostic
-                this.multiScopeCache.delete(key);
+                this.diagnosticsCache.delete(key);
             }
         }
     }
 
     public clearForSegment(segment: AstNode) {
-        for (const [key, cachedData] of this.multiScopeCache.entries()) {
+        for (const [key, cachedData] of this.diagnosticsCache.entries()) {
             let removedContext = false;
             for (const context of cachedData.contexts.values()) {
                 if (context.segment === segment) {
@@ -121,45 +174,48 @@ export class DiagnosticManager {
             }
             if (removedContext && cachedData.contexts.size === 0) {
                 // no more contexts for this diagnostic - remove diagnostic
-                this.multiScopeCache.delete(key);
+                this.diagnosticsCache.delete(key);
             }
         }
     }
 
     public clearForTag(tag: string) {
-        for (const [key, cachedData] of this.multiScopeCache.entries()) {
+        for (const [key, cachedData] of this.diagnosticsCache.entries()) {
             for (const context of cachedData.contexts.values()) {
                 if (context.tags.includes(tag)) {
-                    this.multiScopeCache.delete(key);
+                    this.diagnosticsCache.delete(key);
                 }
             }
         }
     }
 
-    public clearByContext(inContext: { tag?: string; scope?: Scope; file?: BscFile; segment?: AstNode }) {
+    /**
+     * Clears all diagnostics that match all aspects of the filter provided
+     */
+    public clearByFilter(filter: DiagnosticContextFilter) {
 
         const needToMatch = {
-            tag: !!inContext.tag,
-            scope: !!inContext.scope,
-            file: !!inContext.file,
-            segment: !!inContext.segment
+            tag: !!filter.tag,
+            scope: !!filter.scope,
+            file: !!filter.file,
+            segment: !!filter.segment
         };
 
-        for (const [key, cachedData] of this.multiScopeCache.entries()) {
+        for (const [key, cachedData] of this.diagnosticsCache.entries()) {
             let removedContext = false;
             for (const context of cachedData.contexts.values()) {
                 let isMatch = true;
                 if (isMatch && needToMatch.tag) {
-                    isMatch = !!context.tags?.includes(inContext.tag);
+                    isMatch = !!context.tags?.includes(filter.tag);
                 }
                 if (isMatch && needToMatch.scope) {
-                    isMatch = context.scope === inContext.scope;
+                    isMatch = context.scope === filter.scope;
                 }
                 if (isMatch && needToMatch.file) {
-                    isMatch = cachedData.diagnostic.file === inContext.file;
+                    isMatch = cachedData.diagnostic.file === filter.file;
                 }
                 if (isMatch && needToMatch.segment) {
-                    isMatch = context.segment === inContext.segment;
+                    isMatch = context.segment === filter.segment;
                 }
 
                 if (isMatch) {
@@ -169,7 +225,7 @@ export class DiagnosticManager {
             }
             if (removedContext && cachedData.contexts.size === 0) {
                 // no more contexts for this diagnostic - remove diagnostic
-                this.multiScopeCache.delete(key);
+                this.diagnosticsCache.delete(key);
             }
         }
     }
@@ -194,4 +250,11 @@ export class DiagnosticManager {
         }
     }
 
+}
+
+interface DiagnosticContextFilter {
+    tag?: string;
+    scope?: Scope;
+    file?: BscFile;
+    segment?: AstNode;
 }

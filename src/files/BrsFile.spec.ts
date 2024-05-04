@@ -410,7 +410,7 @@ describe('BrsFile', () => {
                         something = true 'bs:disable-line: LINT1005
                     end sub
                 `) as BrsFile;
-                program.diagnosticManager.register({
+                program.diagnostics.register({
                     code: 'LINT1005',
                     file: file,
                     message: 'Something is not right',

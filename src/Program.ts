@@ -10,7 +10,6 @@ import type { XmlFile } from './files/XmlFile';
 import type { FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, BeforeFileAddEvent, BeforeFileRemoveEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
-import { DiagnosticFilterer } from './DiagnosticFilterer';
 import { DependencyGraph } from './DependencyGraph';
 import { Logger, LogLevel } from './Logger';
 import chalk from 'chalk';
@@ -25,7 +24,6 @@ import { Editor } from './astUtils/Editor';
 import type { Statement } from './parser/AstNode';
 import { CallExpressionInfo } from './bscPlugin/CallExpressionInfo';
 import { SignatureHelpUtil } from './bscPlugin/SignatureHelpUtil';
-import { DiagnosticSeverityAdjuster } from './DiagnosticSeverityAdjuster';
 import { IntegerType } from './types/IntegerType';
 import { StringType } from './types/StringType';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
@@ -77,11 +75,17 @@ export class Program {
          */
         options: BsConfig,
         logger?: Logger,
-        plugins?: PluginInterface
+        plugins?: PluginInterface,
+        diagnosticsManager?: DiagnosticManager
     ) {
         this.options = util.normalizeConfig(options);
         this.logger = logger || new Logger(options.logLevel as LogLevel);
         this.plugins = plugins || new PluginInterface([], { logger: this.logger });
+        this.diagnostics = diagnosticsManager || new DiagnosticManager();
+
+        // initialize teh diagnostics Manager
+        this.diagnostics.logger = this.logger;
+        this.diagnostics.options = this.options;
 
         //inject the bsc plugin as the first plugin in the stack.
         this.plugins.addFirst(new BscPlugin());
@@ -212,11 +216,7 @@ export class Program {
      */
     private dependencyGraph = new DependencyGraph();
 
-    public diagnosticManager = new DiagnosticManager();
-
-    private diagnosticFilterer = new DiagnosticFilterer();
-
-    private diagnosticAdjuster = new DiagnosticSeverityAdjuster();
+    public diagnostics: DiagnosticManager;
 
     /**
      * A scope that contains all built-in global functions.
@@ -436,30 +436,10 @@ export class Program {
     }
 
     /**
-     * Get the list of errors for the entire program. It's calculated on the fly
-     * by walking through every file, so call this sparingly.
+     * Get the list of errors for the entire program.
      */
     public getDiagnostics() {
-        return this.logger.time(LogLevel.info, ['Program.getDiagnostics()'], () => {
-
-            let diagnostics = this.diagnosticManager.getDiagnostics();
-
-            const filteredDiagnostics = this.logger.time(LogLevel.debug, ['filter diagnostics'], () => {
-                //filter out diagnostics based on our diagnostic filters
-                let finalDiagnostics = this.diagnosticFilterer.filter({
-                    ...this.options,
-                    rootDir: this.options.rootDir
-                }, diagnostics);
-                return finalDiagnostics;
-            });
-
-            this.logger.time(LogLevel.debug, ['adjust diagnostics severity'], () => {
-                this.diagnosticAdjuster.adjust(this.options, diagnostics);
-            });
-
-            this.logger.info(`diagnostic counts: total=${chalk.yellow(diagnostics.length.toString())}, after filter=${chalk.yellow(filteredDiagnostics.length.toString())}`);
-            return filteredDiagnostics;
-        });
+        return this.diagnostics.getDiagnostics();
     }
 
     /**
@@ -763,7 +743,7 @@ export class Program {
             if (!file || !this.hasFile(file.srcPath)) {
                 continue;
             }
-            this.diagnosticManager.clearForFile(file);
+            this.diagnostics.clearForFile(file.srcPath);
 
             const event: BeforeFileRemoveEvent = { file: file, program: this };
             this.plugins.emit('beforeFileRemove', event);
@@ -820,7 +800,7 @@ export class Program {
      */
     public validate() {
         this.logger.time(LogLevel.log, ['Validating project'], () => {
-            this.diagnosticManager.clearForTag(ProgramValidatorDiagnosticsTag);
+            this.diagnostics.clearForTag(ProgramValidatorDiagnosticsTag);
             const programValidateEvent = {
                 program: this
             };
@@ -1029,7 +1009,7 @@ export class Program {
             for (const symbolAndScopes of fileInfo.symbolsNotConsistentAcrossScopes) {
                 const typeChainResult = util.processTypeChain(symbolAndScopes.symbol.typeChain);
                 const scopeListName = symbolAndScopes.scopes.map(s => s.name).join(', ');
-                this.diagnosticManager.register({
+                this.diagnostics.register({
                     ...DiagnosticMessages.incompatibleSymbolDefinition(typeChainResult.fullNameOfItem, scopeListName),
                     file: file,
                     range: typeChainResult.range
@@ -1061,7 +1041,7 @@ export class Program {
             if (xmlFiles.length > 1) {
                 for (let xmlFile of xmlFiles) {
                     const { componentName } = xmlFile;
-                    this.diagnosticManager.register({
+                    this.diagnostics.register({
                         ...DiagnosticMessages.duplicateComponentName(componentName.text),
                         range: xmlFile.componentName.range,
                         file: xmlFile,

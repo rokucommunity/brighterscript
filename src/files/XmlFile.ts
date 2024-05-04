@@ -260,7 +260,7 @@ export class XmlFile implements BscFile {
             ...diagnostic,
             file: this
         }));
-        this.program?.diagnosticManager.registerMultiple(diagnostics);
+        this.program?.diagnostics.register(diagnostics);
         this.getCommentFlags(this.parser.tokens as any[]);
     }
 
@@ -293,7 +293,7 @@ export class XmlFile implements BscFile {
             }
         }
         this.commentFlags.push(...processor.commentFlags);
-        this.program?.diagnosticManager.registerMultiple(processor.diagnostics);
+        this.program?.diagnostics.register(processor.diagnostics);
     }
 
     private dependencyGraph: DependencyGraph;

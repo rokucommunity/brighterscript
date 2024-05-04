@@ -90,7 +90,7 @@ describe('util', () => {
                 file: file,
                 range: util.createRange(1, 2, 3, 4)
             });
-            program.diagnosticManager.register(diagnostic);
+            program.diagnostics.register(diagnostic);
 
             util.diagnosticIsSuppressed(diagnostic);
 

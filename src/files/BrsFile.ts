@@ -413,7 +413,7 @@ export class BrsFile implements BscFile {
                 ...DiagnosticMessages.genericParserMessage('Critical error parsing file: ' + JSON.stringify(serializeError(e)))
             });
         }
-        this.program?.diagnosticManager.registerMultiple(diagnostics);
+        this.program?.diagnostics.register(diagnostics);
     }
 
     /**
@@ -475,7 +475,7 @@ export class BrsFile implements BscFile {
             }
         }
         this.commentFlags.push(...processor.commentFlags);
-        this.program?.diagnosticManager.registerMultiple(processor.diagnostics);
+        this.program?.diagnostics.register(processor.diagnostics);
     }
 
     public scopesByFunc = new Map<FunctionExpression, FunctionScope>();

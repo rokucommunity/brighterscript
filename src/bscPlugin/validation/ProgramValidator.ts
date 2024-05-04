@@ -30,7 +30,7 @@ export class ProgramValidator {
                 continue;
             }
 
-            this.event.program.diagnosticManager.register({
+            this.event.program.diagnostics.register({
                 ...DiagnosticMessages.fileNotReferencedByAnyOtherFile(),
                 file: file,
                 range: util.createRange(0, 0, 0, Number.MAX_VALUE)

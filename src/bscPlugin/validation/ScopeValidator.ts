@@ -55,7 +55,7 @@ export class ScopeValidator {
         if (this.event.program.globalScope === this.event.scope) {
             return;
         }
-        this.event.program.diagnosticManager.clearByContext({ scope: this.event.scope, tag: ScopeValidatorDiagnosticTag });
+        this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, tag: ScopeValidatorDiagnosticTag });
 
         this.walkFiles();
         this.detectDuplicateEnums();
@@ -86,7 +86,7 @@ export class ScopeValidator {
             const thisFileHasChanges = this.event.changedFiles.includes(file);
 
             if (thisFileHasChanges) {
-                this.event.program.diagnosticManager.clearByContext({ scope: this.event.scope, file: file, tag: ScopeValidatorDiagnosticTag });
+                this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, file: file, tag: ScopeValidatorDiagnosticTag });
             }
 
             this.detectVariableNamespaceCollisions(file);
@@ -175,7 +175,7 @@ export class ScopeValidator {
                         continue;
                     }
                     this.currentSegmentBeingValidated = segment;
-                    this.event.program.diagnosticManager.clearByContext({ scope: this.event.scope, file: file, segment: segment });
+                    this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, file: file, segment: segment });
                     segment.walk(validationVisitor, {
                         walkMode: InsideSegmentWalkMode
                     });
@@ -1344,7 +1344,7 @@ export class ScopeValidator {
     }
 
     private addDiagnostic(diagnostic: BsDiagnostic) {
-        this.event.program.diagnosticManager.register(diagnostic, {
+        this.event.program.diagnostics.register(diagnostic, {
             tags: [ScopeValidatorDiagnosticTag],
             segment: this.currentSegmentBeingValidated
         });
@@ -1354,7 +1354,7 @@ export class ScopeValidator {
      * Add a diagnostic (to the first scope) that will have `relatedInformation` for each affected scope
      */
     private addMultiScopeDiagnostic(diagnostic: BsDiagnostic) {
-        this.event.program.diagnosticManager.register(diagnostic, {
+        this.event.program.diagnostics.register(diagnostic, {
             tags: [ScopeValidatorDiagnosticTag],
             segment: this.currentSegmentBeingValidated,
             scope: this.event.scope

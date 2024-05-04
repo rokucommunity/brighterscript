@@ -1921,7 +1921,7 @@ export class Util {
 
         let fileDepth = this.getParentDirectoryCount(destPath);
         if (fileDepth >= 8) {
-            file.program?.diagnosticManager.register({
+            file.program?.diagnostics.register({
                 ...DiagnosticMessages.detectedTooDeepFileSource(fileDepth),
                 file: file,
                 range: this.createRange(0, 0, 0, Number.MAX_VALUE)

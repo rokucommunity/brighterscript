@@ -1044,7 +1044,7 @@ describe('XmlFile', () => {
             afterProvideFile: (event) => {
                 for (const file of event.files) {
                     if (isXmlFile(file)) {
-                        program.diagnosticManager.register({
+                        program.diagnostics.register({
                             file: file,
                             message: 'Test diagnostic',
                             range: Range.create(0, 0, 0, 0),

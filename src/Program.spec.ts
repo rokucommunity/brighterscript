@@ -70,7 +70,7 @@ describe('Program', () => {
 
     it('allows diagnostics to be set on AssetFile', () => {
         const file = program.setFile<AssetFile>('manifest', ``);
-        program.diagnosticManager.register({
+        program.diagnostics.register({
             file: file,
             message: 'Manifest is totally bogus',
             range: util.createRange(0, 0, 0, 10),
