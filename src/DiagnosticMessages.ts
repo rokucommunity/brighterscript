@@ -775,8 +775,8 @@ export let DiagnosticMessages = {
         code: 1148,
         severity: DiagnosticSeverity.Error
     }),
-    statementMustBeDeclaredAtTopOfFile: (statmentKeyword: string) => ({
-        message: `'${statmentKeyword}' statement must be declared at the top of the file`,
+    statementMustBeDeclaredAtTopOfFile: (statementKeyword: string) => ({
+        message: `'${statementKeyword}' statement must be declared at the top of the file`,
         code: 1149,
         severity: DiagnosticSeverity.Error
     })
