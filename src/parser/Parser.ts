@@ -20,6 +20,7 @@ import type {
     PrintSeparatorTab
 } from './Statement';
 import {
+    AliasStatement,
     AssignmentStatement,
     Block,
     Body,
@@ -304,6 +305,10 @@ export class Parser {
 
             if (this.checkLibrary()) {
                 return this.libraryStatement();
+            }
+
+            if (this.checkAlias()) {
+                return this.aliasStatement();
             }
 
             if (this.check(TokenKind.Const) && this.checkAnyNext(TokenKind.Identifier, ...this.allowedLocalIdentifiers)) {
@@ -1038,6 +1043,24 @@ export class Parser {
         }
     }
 
+    private checkAlias() {
+        let isAliasToken = this.check(TokenKind.Alias);
+
+        //if we are at the top level, any line that starts with "alias" should be considered a alias statement
+        if (this.isAtRootLevel() && isAliasToken) {
+            return true;
+
+            //not at root level, alias statements are all invalid here, but try to detect if the tokens look
+            //like a alias statement (and let the alias function handle emitting the diagnostics)
+        } else if (isAliasToken && this.checkNext(TokenKind.Identifier)) {
+            return true;
+
+            //definitely not a alias statement
+        } else {
+            return false;
+        }
+    }
+
     private statement(): Statement | undefined {
         if (this.checkLibrary()) {
             return this.libraryStatement();
@@ -1049,6 +1072,10 @@ export class Parser {
 
         if (this.check(TokenKind.Typecast) && this.checkAnyNext(TokenKind.Identifier, ...this.allowedLocalIdentifiers)) {
             return this.typecastStatement();
+        }
+
+        if (this.checkAlias()) {
+            return this.aliasStatement();
         }
 
         if (this.check(TokenKind.Stop)) {
@@ -1479,6 +1506,30 @@ export class Parser {
             range: util.getRange(typecastToken, this.peek())
         });
         throw this.lastDiagnosticAsError();
+    }
+
+    private aliasStatement(): AliasStatement | undefined {
+        this.warnIfNotBrighterScriptMode('alias statements');
+        const aliasToken = this.advance();
+        const name = this.tryConsume(
+            DiagnosticMessages.expectedIdentifierAfterKeyword('alias'),
+            TokenKind.Identifier
+        );
+        const equals = this.tryConsume(
+            DiagnosticMessages.expectedToken(TokenKind.Equal),
+            TokenKind.Equal
+        );
+        let value = this.identifyingExpression();
+
+        let aliasStmt = new AliasStatement({
+            alias: aliasToken,
+            name: name,
+            equals: equals,
+            value: value
+
+        });
+
+        return aliasStmt;
     }
 
     private annotationExpression() {

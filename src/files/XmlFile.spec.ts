@@ -8,7 +8,7 @@ import type { BsDiagnostic, FileReference } from '../interfaces';
 import { Program } from '../Program';
 import { XmlFile } from './XmlFile';
 import { standardizePath as s } from '../util';
-import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
 import { ProgramBuilder } from '../ProgramBuilder';
 import { LogLevel } from '../Logger';
 import { isXmlFile } from '../astUtils/reflection';
@@ -159,12 +159,13 @@ describe('XmlFile', () => {
                     <script type="text/brightscript" uri="ChildScene.brs" />
                 </component>`
             );
-            expect(file.diagnostics).to.be.lengthOf(2);
-            expect(file.diagnostics[0]).to.deep.include({ // expecting opening tag but got prolog
+            const diagnostics = program.getDiagnostics();
+            expect(diagnostics).to.be.lengthOf(2);
+            expect(diagnostics[0]).to.deep.include({ // expecting opening tag but got prolog
                 code: DiagnosticMessages.xmlGenericParseError('').code,
                 range: Range.create(1, 16, 1, 22)
             });
-            expect(file.diagnostics[1]).to.deep.include({
+            expect(diagnostics[1]).to.deep.include({
                 ...DiagnosticMessages.xmlGenericParseError('Syntax error: whitespace found before the XML prolog'),
                 range: Range.create(0, 0, 1, 16)
             });
@@ -181,12 +182,13 @@ describe('XmlFile', () => {
                     <unexpectedToo />
                 </component>
             `);
-            expect(file.diagnostics).to.be.lengthOf(2);
-            expect(file.diagnostics[0]).to.deep.include({
+            const diagnostics = program.getDiagnostics();
+            expect(diagnostics).to.be.lengthOf(2);
+            expect(diagnostics[0]).to.deep.include({
                 ...DiagnosticMessages.xmlUnexpectedTag('unexpected'),
                 range: Range.create(3, 9, 3, 19)
             });
-            expect(file.diagnostics[1]).to.deep.include({
+            expect(diagnostics[1]).to.deep.include({
                 ...DiagnosticMessages.xmlUnexpectedTag('unexpectedToo'),
                 range: Range.create(5, 5, 5, 18)
             });
@@ -212,11 +214,10 @@ describe('XmlFile', () => {
                 </component>
             `);
             program.validate();
-            expect(file.diagnostics).to.be.lengthOf(1);
-            expect(file.diagnostics[0]).to.deep.include(<BsDiagnostic>{
+            expectDiagnosticsIncludes(program, [{
                 message: DiagnosticMessages.xmlComponentMissingNameAttribute().message,
                 range: Range.create(1, 1, 1, 10)
-            });
+            }]);
         });
 
         it('catches xml parse errors', () => {
@@ -226,9 +227,10 @@ describe('XmlFile', () => {
                 </component>
             `);
             program.validate();
-            expect(file.diagnostics).to.be.lengthOf(2);
-            expect(file.diagnostics[0].code).to.equal(DiagnosticMessages.xmlGenericParseError('').code); //unexpected character '1'
-            expect(file.diagnostics[1]).to.deep.include(<BsDiagnostic>{
+            const diagnostics = program.getDiagnostics();
+            expect(diagnostics).to.be.lengthOf(2);
+            expect(diagnostics[0].code).to.equal(DiagnosticMessages.xmlGenericParseError('').code); //unexpected character '1'
+            expect(diagnostics[1]).to.deep.include(<BsDiagnostic>{
                 code: DiagnosticMessages.xmlComponentMissingNameAttribute().code,
                 range: Range.create(1, 1, 1, 10)
             });
@@ -447,16 +449,6 @@ describe('XmlFile', () => {
         program.setFile(`source/lib.brs`, ``);
         expect(program.getScopesForFile(xmlFile1)[0].isValidated).to.be.false;
         expect(program.getScopesForFile(xmlFile2)[0].isValidated).to.be.true;
-    });
-
-    it('allows adding diagnostics', () => {
-        const expected: BsDiagnostic[] = [{
-            message: 'message',
-            file: undefined as any,
-            range: undefined as any
-        }];
-        file.addDiagnostics(expected);
-        expectDiagnostics(file, expected);
     });
 
     describe('component extends', () => {
@@ -1003,6 +995,18 @@ describe('XmlFile', () => {
                 </component>
             `, 'none', 'components/SimpleScene.xml');
         });
+
+        it('includes script tags in self closing component', async () => {
+            await testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group" />
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/Comp.xml');
+        });
     });
 
     describe('Transform plugins', () => {
@@ -1039,8 +1043,8 @@ describe('XmlFile', () => {
             name: 'Xml diagnostic test',
             afterProvideFile: (event) => {
                 for (const file of event.files) {
-                    if (file.srcPath.endsWith('.xml')) {
-                        file.diagnostics.push({
+                    if (isXmlFile(file)) {
+                        program.diagnostics.register({
                             file: file,
                             message: 'Test diagnostic',
                             range: Range.create(0, 0, 0, 0),

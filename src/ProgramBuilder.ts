@@ -17,6 +17,7 @@ import { AssetFile } from './files/AssetFile';
 import type { BscFile } from './files/BscFile';
 import type { BrsFile } from './files/BrsFile';
 import { URI } from 'vscode-uri';
+import { DiagnosticManager } from './DiagnosticManager';
 
 /**
  * A runner class that handles
@@ -63,10 +64,7 @@ export class ProgramBuilder {
         throw new Error(`Could not load file "${srcPath}"`);
     }
 
-    /**
-     * A list of diagnostics that are always added to the `getDiagnostics()` call.
-     */
-    private staticDiagnostics = [] as BsDiagnostic[];
+    public diagnostics = new DiagnosticManager();
 
     public addDiagnostic(srcPath: string, diagnostic: Partial<BsDiagnostic>) {
         if (!this.program) {
@@ -81,18 +79,14 @@ export class ProgramBuilder {
             // eslint-disable-next-line @typescript-eslint/dot-notation
             file['pathAbsolute'] = file.srcPath;
             diagnostic.file = file;
-            file.diagnostics = [diagnostic as any];
         }
 
         diagnostic.file = file;
-        this.staticDiagnostics.push(<any>diagnostic);
+        this.diagnostics.register(<any>diagnostic, { tags: ['ProgramBuilder'] });
     }
 
     public getDiagnostics() {
-        return [
-            ...this.staticDiagnostics,
-            ...(this.program?.getDiagnostics() ?? [])
-        ];
+        return this.diagnostics.getDiagnostics();
     }
 
     /**
@@ -113,7 +107,7 @@ export class ProgramBuilder {
         } catch (e: any) {
             if (e?.file && e.message && e.code) {
                 let err = e as BsDiagnostic;
-                this.staticDiagnostics.push(err);
+                this.diagnostics.register(err);
             } else {
                 //if this is not a diagnostic, something else is wrong...
                 throw e;
@@ -152,7 +146,7 @@ export class ProgramBuilder {
     }
 
     protected createProgram() {
-        this.program = new Program(this.options, this.logger, this.plugins);
+        this.program = new Program(this.options, this.logger, this.plugins, this.diagnostics);
 
         this.plugins.emit('afterProgramCreate', {
             builder: this,

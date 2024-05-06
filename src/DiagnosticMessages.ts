@@ -140,9 +140,9 @@ export let DiagnosticMessages = {
         code: 1023,
         severity: DiagnosticSeverity.Error
     }),
-    importStatementMustBeDeclaredAtTopOfFile: () => ({
-        message: `'import' statement must be declared at the top of the file`,
-        code: 1024,
+    statementMustBeDeclaredAtTopOfFile: (statementKeyword: string) => ({
+        message: `'${statementKeyword}' statement must be declared at the top of the file`,
+        code: 1149,
         severity: DiagnosticSeverity.Error
     }),
     methodDoesNotExistOnType: (methodName: string, className: string) => ({
@@ -311,7 +311,7 @@ export let DiagnosticMessages = {
         code: 1056,
         severity: DiagnosticSeverity.Error
     }),
-    libraryStatementMustBeDeclaredAtTopOfFile: () => ({
+    __unused5: () => ({
         message: `'library' statement must be declared at the top of the file`,
         code: 1057,
         severity: DiagnosticSeverity.Error
@@ -777,17 +777,17 @@ export let DiagnosticMessages = {
     }),
     expectedNewlineInConditionalCompile: () => ({
         message: `Expected newline in conditional compilation statement`,
-        code: 1149,
+        code: 1150,
         severity: DiagnosticSeverity.Error
     }),
     expectedTerminatorOnConditionalCompileBlock: () => ({
         message: `Expected '#end if', '#else if', or '#else' to terminate conditional compilation block`,
-        code: 1150,
+        code: 1151,
         severity: DiagnosticSeverity.Error
     }),
     unsafeUnmatchedTerminatorInConditionalCompileBlock: (terminator: string) => ({
         message: `Unsafe unmatched terminator '${terminator}' in conditional compilation block`,
-        code: 1151,
+        code: 1152,
         severity: DiagnosticSeverity.Error
     })
 };

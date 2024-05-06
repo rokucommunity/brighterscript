@@ -112,9 +112,9 @@ export class CallExpression extends Expression {
 
     constructor(options: {
         callee: Expression;
-        openingParen: Token;
+        openingParen?: Token;
         args?: Expression[];
-        closingParen: Token;
+        closingParen?: Token;
     }) {
         super();
         this.tokens = {
@@ -183,6 +183,10 @@ export class CallExpression extends Expression {
         }
         if (isNewExpression(this.parent)) {
             return calleeType;
+        }
+        const specialCaseReturnType = util.getSpecialCaseCallExpressionReturnType(this);
+        if (specialCaseReturnType) {
+            return specialCaseReturnType;
         }
         if (isCallableType(calleeType) && (!isReferenceType(calleeType.returnType) || calleeType.returnType?.isResolvable())) {
             return calleeType.returnType;

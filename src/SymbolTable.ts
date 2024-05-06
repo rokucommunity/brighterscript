@@ -227,6 +227,7 @@ export class SymbolTable implements SymbolTypeGetter {
             options.data.flags = foundFlags ?? options.flags;
             options.data.memberOfAncestor = data?.memberOfAncestor;
             options.data.doNotMerge = data?.doNotMerge;
+            options.data.isAlias = data?.isAlias;
         }
         return resolvedType;
     }

@@ -4,11 +4,11 @@ import { ReservedWords, TokenKind } from '../lexer/TokenKind';
 import type { AAMemberExpression, BinaryExpression, LiteralExpression, TypecastExpression, UnaryExpression } from './Expression';
 import { TernaryExpression, NewExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression, VariableExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
-import type { AssignmentStatement, Block, ClassStatement, ConditionalCompileConstStatement, ConditionalCompileErrorStatement, ConditionalCompileStatement, InterfaceStatement, ReturnStatement, TypecastStatement } from './Statement';
+import type { AliasStatement, AssignmentStatement, Block, ClassStatement, ConditionalCompileConstStatement, ConditionalCompileErrorStatement, ConditionalCompileStatement, InterfaceStatement, ReturnStatement, TypecastStatement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isDottedGetExpression, isExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypecastExpression, isTypecastStatement, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAliasStatement, isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isDottedGetExpression, isExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypecastExpression, isTypecastStatement, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics } from '../testHelpers.spec';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { Expression, Statement } from './AstNode';
@@ -2216,7 +2216,49 @@ describe('parser', () => {
                 expect(cce.tokens.message.text).to.eq('this one has spaces');
             });
         });
+    });
 
+    describe('alias statement', () => {
+        it('allows alias statement ', () => {
+            let { diagnostics, statements } = parse(`
+                ALIAS x = lcase
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(isAliasStatement(statements[0])).to.be.true;
+            const stmt = statements[0] as AliasStatement;
+            expect(stmt.tokens.alias.text).to.eq('ALIAS');
+            expect(stmt.value).to.exist;
+        });
+
+        it('is disallowed in brightscript mode', () => {
+            let { diagnostics } = parse(`
+                alias x = lcase
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('alias statements')
+            ]);
+        });
+
+        it('allows `alias` for function name', () => {
+            let { statements, diagnostics } = parse(`
+                function alias() as integer
+                    return 1
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect((statements[0] as FunctionStatement).tokens.name.text).to.eq('alias');
+        });
+
+        it('allows `alias` for variable name', () => {
+            let { statements, diagnostics } = parse(`
+                function foo() as integer
+                    alias = 1
+                    return alias
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(((statements[0] as FunctionStatement).func.body.statements[0] as AssignmentStatement).tokens.name.text).to.eq('alias');
+        });
     });
 });
 
@@ -2253,3 +2295,4 @@ function expectCommentWithText(stat: Statement, text: string) {
 export function failStatementType(stat: Statement, type: string) {
     assert.fail(`Statement ${stat.constructor.name} line ${stat.range.start.line} is not a ${type}`);
 }
+

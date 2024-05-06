@@ -3473,6 +3473,110 @@ export class TypecastStatement extends Statement {
     }
 }
 
+export class ConditionalCompileErrorStatement extends Statement {
+    constructor(options: {
+        hashError?: Token;
+        message: Token;
+    }) {
+        super();
+        this.tokens = {
+            hashError: options.hashError,
+            message: options.message
+        };
+        this.range = util.createBoundingRange(util.createBoundingRangeFromTokens(this.tokens));
+    }
+
+    public readonly tokens: {
+        readonly hashError?: Token;
+        readonly message: Token;
+    };
+
+
+    public readonly kind = AstNodeKind.ConditionalCompileErrorStatement;
+
+    public readonly range: Range | undefined;
+
+    transpile(state: BrsTranspileState) {
+        return [
+            state.transpileToken(this.tokens.hashError, '#error'),
+            ' ',
+            state.transpileToken(this.tokens.message)
+
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        // nothing to walk
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.hashError.leadingTrivia ?? [];
+    }
+}
+
+export class AliasStatement extends Statement {
+    constructor(options: {
+        alias?: Token;
+        name: Token;
+        equals?: Token;
+        value: VariableExpression | DottedGetExpression;
+    }
+    ) {
+        super();
+        this.tokens = {
+            alias: options.alias,
+            name: options.name,
+            equals: options.equals
+        };
+        this.value = options.value;
+        this.range = util.createBoundingRange(
+            this.tokens.alias,
+            this.tokens.name,
+            this.tokens.equals,
+            this.value
+        );
+    }
+
+    public readonly tokens: {
+        readonly alias?: Token;
+        readonly name: Token;
+        readonly equals?: Token;
+    };
+
+    public readonly value: Expression;
+
+    public readonly kind = AstNodeKind.AliasStatement;
+
+    public readonly range: Range;
+
+    transpile(state: BrsTranspileState) {
+        //the alias statement is a comment just for debugging purposes
+        return [
+            `'`,
+            state.transpileToken(this.tokens.alias, 'alias'),
+            ' ',
+            state.transpileToken(this.tokens.name),
+            ' ',
+            state.transpileToken(this.tokens.equals, '='),
+            ' ',
+            this.value.transpile(state)
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'value', visitor, options);
+        }
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.alias?.leadingTrivia ?? [];
+    }
+
+    getType(options: GetTypeOptions): BscType {
+        return this.value.getType(options);
+    }
+}
 
 export class ConditionalCompileStatement extends Statement {
     constructor(options: {
@@ -3646,42 +3750,4 @@ export class ConditionalCompileConstStatement extends Statement {
     }
 }
 
-export class ConditionalCompileErrorStatement extends Statement {
-    constructor(options: {
-        hashError?: Token;
-        message: Token;
-    }) {
-        super();
-        this.tokens = {
-            hashError: options.hashError,
-            message: options.message
-        };
-        this.range = util.createBoundingRange(util.createBoundingRangeFromTokens(this.tokens));
-    }
 
-    public readonly tokens: {
-        readonly hashError?: Token;
-        readonly message: Token;
-    };
-
-
-    public readonly kind = AstNodeKind.ConditionalCompileErrorStatement;
-
-    public readonly range: Range | undefined;
-
-    transpile(state: BrsTranspileState) {
-        return [
-            state.transpileToken(this.tokens.hashError, '#error'),
-            ' ',
-            state.transpileToken(this.tokens.message)
-        ];
-    }
-
-    walk(visitor: WalkVisitor, options: WalkOptions) {
-        // nothing to walk
-    }
-
-    getLeadingTrivia(): Token[] {
-        return this.tokens.hashError.leadingTrivia ?? [];
-    }
-}

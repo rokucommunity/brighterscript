@@ -274,6 +274,7 @@ export enum AstNodeKind {
     TypecastExpression = 'TypecastExpression',
     TypedArrayExpression = 'TypedArrayExpression',
     TypecastStatement = 'TypecastStatement',
+    AliasStatement = 'AliasStatement',
     ConditionalCompileStatement = 'ConditionalCompileStatement',
     ConditionalCompileConstStatement = 'ConditionalCompileConstStatement',
     ConditionalCompileErrorStatement = 'ConditionalCompileErrorStatement'

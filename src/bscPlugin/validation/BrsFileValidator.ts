@@ -1,4 +1,4 @@
-import { isAALiteralExpression, isArrayType, isBlock, isBody, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isTypecastStatement, isUnaryExpression, isVariableExpression, isWhileStatement } from '../../astUtils/reflection';
+import { isAALiteralExpression, isAliasStatement, isArrayType, isBlock, isBody, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isTypecastStatement, isUnaryExpression, isVariableExpression, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -7,7 +7,7 @@ import { TokenKind } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
 import { CallExpression, type FunctionExpression, type LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
-import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, Body, WhileStatement, TypecastStatement, Block } from '../../parser/Statement';
+import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, Body, WhileStatement, TypecastStatement, Block, AliasStatement } from '../../parser/Statement';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { ArrayDefaultTypeReferenceType } from '../../types/ReferenceType';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
@@ -65,7 +65,8 @@ export class BrsFileValidator {
             },
             CallfuncExpression: (node) => {
                 if (node.args.length > 5) {
-                    this.event.file.addDiagnostic({
+                    this.event.program.diagnostics.register({
+                        file: this.event.file,
                         ...DiagnosticMessages.callfuncHasToManyArgs(node.args.length),
                         range: node.tokens.methodName.range
                     });
@@ -202,10 +203,19 @@ export class BrsFileValidator {
                 this.validateConditionalCompileConst(node.tokens.condition);
             },
             ConditionalCompileErrorStatement: (node) => {
-                this.event.file.addDiagnostic({
+                this.event.program.diagnostics.register({
+                    file: this.event.file,
                     ...DiagnosticMessages.hashError(node.tokens.message.text),
                     range: node.range
                 });
+            },
+            AliasStatement: (node) => {
+                // eslint-disable-next-line no-bitwise
+                const targetType = node.value.getType({ flags: SymbolTypeFlag.typetime | SymbolTypeFlag.runtime });
+
+                // eslint-disable-next-line no-bitwise
+                node.parent.getSymbolTable().addSymbol(node.tokens.name.text, { definingNode: node, doNotMerge: true, isAlias: true }, targetType, SymbolTypeFlag.runtime | SymbolTypeFlag.typetime);
+
             }
         });
 
@@ -239,7 +249,8 @@ export class BrsFileValidator {
         }
 
         //the statement was defined in the wrong place. Flag it.
-        this.event.file.addDiagnostic({
+        this.event.program.diagnostics.register({
+            file: this.event.file,
             ...DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel(keyword),
             range: rangeFactory?.() ?? statement.range
         });
@@ -249,7 +260,8 @@ export class BrsFileValidator {
         if (func.parameters.length > CallExpression.MaximumArguments) {
             //flag every parameter over the limit
             for (let i = CallExpression.MaximumArguments; i < func.parameters.length; i++) {
-                this.event.file.addDiagnostic({
+                this.event.program.diagnostics.register({
+                    file: this.event.file,
                     ...DiagnosticMessages.tooManyCallableParameters(func.parameters.length, CallExpression.MaximumArguments),
                     range: func.parameters[i]?.tokens.name?.range ?? func.parameters[i]?.range ?? func.range
                 });
@@ -269,7 +281,8 @@ export class BrsFileValidator {
              * flag duplicate member names
              */
             if (memberNames.has(memberNameLower)) {
-                this.event.file.addDiagnostic({
+                this.event.program.diagnostics.register({
+                    file: this.event.file,
                     ...DiagnosticMessages.duplicateIdentifier(member.name),
                     range: member.range
                 });
@@ -299,7 +312,8 @@ export class BrsFileValidator {
             //has value, that value is not a literal
             (memberValue && !isLiteralExpression(memberValue))
         ) {
-            this.event.file.addDiagnostic({
+            this.event.program.diagnostics.register({
+                file: this.event.file,
                 ...DiagnosticMessages.enumValueMustBeType(
                     enumValueKind.replace(/literal$/i, '').toLowerCase()
                 ),
@@ -313,7 +327,8 @@ export class BrsFileValidator {
             if (memberValueKind) {
                 //member value is same as enum
                 if (memberValueKind !== enumValueKind) {
-                    this.event.file.addDiagnostic({
+                    this.event.program.diagnostics.register({
+                        file: this.event.file,
                         ...DiagnosticMessages.enumValueMustBeType(
                             enumValueKind.replace(/literal$/i, '').toLowerCase()
                         ),
@@ -323,7 +338,7 @@ export class BrsFileValidator {
 
                 //default value missing
             } else {
-                this.event.file.addDiagnostic({
+                this.event.program.diagnostics.register({
                     file: this.event.file,
                     ...DiagnosticMessages.enumValueIsRequired(
                         enumValueKind.replace(/literal$/i, '').toLowerCase()
@@ -338,7 +353,7 @@ export class BrsFileValidator {
     private validateConditionalCompileConst(ccConst: Token) {
         const isBool = ccConst.kind === TokenKind.True || ccConst.kind === TokenKind.False;
         if (!isBool && !this.event.file.ast.bsConsts.has(ccConst.text.toLowerCase())) {
-            this.event.file.addDiagnostic({
+            this.event.program.diagnostics.register({
                 file: this.event.file,
                 ...DiagnosticMessages.referencedConstDoesNotExist(),
                 range: ccConst.range
@@ -370,9 +385,11 @@ export class BrsFileValidator {
                     !isTypecastStatement(statement) &&
                     !isConditionalCompileConstStatement(statement) &&
                     !isConditionalCompileErrorStatement(statement) &&
-                    !isConditionalCompileStatement(statement)
+                    !isConditionalCompileStatement(statement) &&
+                    !isAliasStatement(statement)
                 ) {
-                    this.event.file.addDiagnostic({
+                    this.event.program.diagnostics.register({
+                        file: this.event.file,
                         ...DiagnosticMessages.unexpectedStatementOutsideFunction(),
                         range: statement.range
                     });
@@ -382,10 +399,10 @@ export class BrsFileValidator {
     }
 
     private getTopOfFileStatements() {
-        let topOfFileIncludeStatements = [] as Array<LibraryStatement | ImportStatement | TypecastStatement>;
+        let topOfFileIncludeStatements = [] as Array<LibraryStatement | ImportStatement | TypecastStatement | AliasStatement>;
         for (let stmt of this.event.file.parser.ast.statements) {
             //if we found a non-library statement, this statement is not at the top of the file
-            if (isLibraryStatement(stmt) || isImportStatement(stmt) || isTypecastStatement(stmt)) {
+            if (isLibraryStatement(stmt) || isImportStatement(stmt) || isTypecastStatement(stmt) || isAliasStatement(stmt)) {
                 topOfFileIncludeStatements.push(stmt);
             } else {
                 //break out of the loop, we found all of our library statements
@@ -402,21 +419,29 @@ export class BrsFileValidator {
             // eslint-disable-next-line @typescript-eslint/dot-notation
             ...this.event.file['_cachedLookups'].libraryStatements,
             // eslint-disable-next-line @typescript-eslint/dot-notation
-            ...this.event.file['_cachedLookups'].importStatements
+            ...this.event.file['_cachedLookups'].importStatements,
+            // eslint-disable-next-line @typescript-eslint/dot-notation
+            ...this.event.file['_cachedLookups'].aliasStatements
         ];
         for (let result of statements) {
             //if this statement is not one of the top-of-file statements,
             //then add a diagnostic explaining that it is invalid
             if (!topOfFileStatements.includes(result)) {
                 if (isLibraryStatement(result)) {
-                    this.event.file.diagnostics.push({
-                        ...DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile(),
+                    this.event.program.diagnostics.register({
+                        ...DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('library'),
                         range: result.range,
                         file: this.event.file
                     });
                 } else if (isImportStatement(result)) {
-                    this.event.file.diagnostics.push({
-                        ...DiagnosticMessages.importStatementMustBeDeclaredAtTopOfFile(),
+                    this.event.program.diagnostics.register({
+                        ...DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('import'),
+                        range: result.range,
+                        file: this.event.file
+                    });
+                } else if (isAliasStatement(result)) {
+                    this.event.program.diagnostics.register({
+                        ...DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('alias'),
                         range: result.range,
                         file: this.event.file
                     });
@@ -431,7 +456,7 @@ export class BrsFileValidator {
         //check only one `typecast` statement at "top" of file (eg. before non import/library statements)
         for (let i = 1; i < topOfFileTypecastStatements.length; i++) {
             const typecastStmt = topOfFileTypecastStatements[i];
-            this.event.file.diagnostics.push({
+            this.event.program.diagnostics.register({
                 ...DiagnosticMessages.typecastStatementMustBeDeclaredAtStart(),
                 range: typecastStmt.range,
                 file: this.event.file
@@ -447,7 +472,7 @@ export class BrsFileValidator {
                 isBadTypecastObj = true;
             }
             if (isBadTypecastObj) {
-                this.event.file.diagnostics.push({
+                this.event.program.diagnostics.register({
                     ...DiagnosticMessages.invalidTypecastStatementApplication(util.getAllDottedGetPartsAsString(result.typecastExpression.obj)),
                     range: result.typecastExpression.obj.range,
                     file: this.event.file
@@ -464,7 +489,7 @@ export class BrsFileValidator {
             const isAllowedBlock = (isBody(block) || isFunctionExpression(block.parent) || isNamespaceStatement(block.parent));
 
             if (!isFirst || !isAllowedBlock) {
-                this.event.file.diagnostics.push({
+                this.event.program.diagnostics.register({
                     ...DiagnosticMessages.typecastStatementMustBeDeclaredAtStart(),
                     range: result.range,
                     file: this.event.file
@@ -479,7 +504,8 @@ export class BrsFileValidator {
             expectedLoopType = expectedLoopType === TokenKind.ForEach ? TokenKind.For : expectedLoopType;
             const actualLoopType = statement.tokens.loopType;
             if (actualLoopType && expectedLoopType?.toLowerCase() !== actualLoopType.text?.toLowerCase()) {
-                this.event.file.addDiagnostic({
+                this.event.program.diagnostics.register({
+                    file: this.event.file,
                     range: statement.tokens.loopType.range,
                     ...DiagnosticMessages.expectedToken(expectedLoopType)
                 });
@@ -501,7 +527,8 @@ export class BrsFileValidator {
         });
         //flag continue statements found outside of a loop
         if (!parent) {
-            this.event.file.addDiagnostic({
+            this.event.program.diagnostics.register({
+                file: this.event.file,
                 range: statement.range,
                 ...DiagnosticMessages.illegalContinueStatement()
             });
@@ -534,7 +561,8 @@ export class BrsFileValidator {
                     range = node.range;
                 }
 
-                this.event.file.addDiagnostic({
+                this.event.program.diagnostics.register({
+                    file: this.event.file,
                     ...DiagnosticMessages.noOptionalChainingInLeftHandSideOfAssignment(),
                     range: range
                 });
