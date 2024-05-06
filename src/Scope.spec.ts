@@ -10,7 +10,6 @@ import { Logger } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { AssignmentStatement, ForEachStatement, NamespaceStatement } from './parser/Statement';
 import type { CompilerPlugin, OnScopeValidateEvent } from './interfaces';
-import { DiagnosticOrigin } from './interfaces';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import { EnumMemberType, EnumType } from './types/EnumType';
 import { ClassType } from './types/ClassType';
@@ -211,18 +210,6 @@ describe('Scope', () => {
                 range: util.createRange(5, 16, 5, 21)
             }
         ]);
-    });
-
-    it('allows adding diagnostics', () => {
-        const source = program.getScopeByName('source');
-        const expected = [{
-            message: 'message',
-            file: undefined,
-            range: undefined,
-            origin: DiagnosticOrigin.Scope
-        }];
-        source.addDiagnostics(expected);
-        expectDiagnostics(source, expected);
     });
 
     it('allows getting all scopes', () => {

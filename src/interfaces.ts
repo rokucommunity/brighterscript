@@ -36,9 +36,16 @@ export enum DiagnosticOrigin {
     ASTSegment = 'AstSegment'
 }
 
-export interface BsDiagnosticWithOrigin extends BsDiagnostic {
-    origin: DiagnosticOrigin;
-    astSegment?: AstNode;
+export interface DiagnosticContext {
+    scopeSpecific?: boolean;
+    scope?: Scope;
+    tags?: string[];
+    segment?: AstNode;
+}
+
+export interface DiagnosticContextPair {
+    diagnostic: BsDiagnostic;
+    context?: DiagnosticContext;
 }
 
 export interface Callable {
@@ -887,11 +894,29 @@ export class TypeChainEntry {
 }
 
 export interface TypeChainProcessResult {
+    /**
+     * The name of the last item in the chain, OR the first unresolved item in the chain
+     */
     itemName: string;
+    /**
+     * The name of the parent of the item of `itemName`
+     */
     itemParentTypeName: string;
+    /**
+     * The complete chain leading up to the item of `itemName`
+     */
     fullNameOfItem: string;
+    /**
+     * The complete chain (even including unresolved items)
+     */
     fullChainName: string;
+    /**
+     * the range of the first unresolved item
+     */
     range: Range;
+    /**
+     * Does the chain contain a dynamic type?
+     */
     containsDynamic: boolean;
 }
 
