@@ -140,9 +140,9 @@ export let DiagnosticMessages = {
         code: 1023,
         severity: DiagnosticSeverity.Error
     }),
-    __unused6: () => ({
-        message: `'import' statement must be declared at the top of the file`,
-        code: 1024,
+    statementMustBeDeclaredAtTopOfFile: (statementKeyword: string) => ({
+        message: `'${statementKeyword}' statement must be declared at the top of the file`,
+        code: 1149,
         severity: DiagnosticSeverity.Error
     }),
     methodDoesNotExistOnType: (methodName: string, className: string) => ({
@@ -773,11 +773,6 @@ export let DiagnosticMessages = {
     invalidTypecastStatementApplication: (foundApplication: string) => ({
         message: `'typecast' statement can only be applied to 'm', but was applied to '${foundApplication}'`,
         code: 1148,
-        severity: DiagnosticSeverity.Error
-    }),
-    statementMustBeDeclaredAtTopOfFile: (statementKeyword: string) => ({
-        message: `'${statementKeyword}' statement must be declared at the top of the file`,
-        code: 1149,
         severity: DiagnosticSeverity.Error
     })
 };
