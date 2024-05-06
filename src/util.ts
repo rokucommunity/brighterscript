@@ -26,7 +26,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { Logger, LogLevel } from './Logger';
 import { isToken, type Identifier, type Locatable, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLongIntegerType, isNewExpression, isNumberType, isStringType, isTypeExpression, isTypedArrayExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLiteralString, isLongIntegerType, isNewExpression, isNumberType, isStringType, isTypeExpression, isTypedArrayExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import * as requireRelative from 'require-relative';
@@ -2126,6 +2126,27 @@ export class Util {
             return true;
         }
         return false;
+    }
+
+    public getSpecialCaseCallExpressionReturnType(callExpr: CallExpression) {
+        if (isVariableExpression(callExpr.callee) && callExpr.callee.tokens.name.text.toLowerCase() === 'createobject') {
+            const componentName = isLiteralString(callExpr.args[0]) ? callExpr.args[0].tokens.value?.text?.replace(/"/g, '') : '';
+            const nodeType = componentName.toLowerCase() === 'rosgnode' && isLiteralString(callExpr.args[1]) ? callExpr.args[1].tokens.value?.text?.replace(/"/g, '') : '';
+            if (componentName?.toLowerCase().startsWith('ro')) {
+                const fullName = componentName + nodeType;
+                const data = {};
+                const symbolTable = callExpr.getSymbolTable();
+                const foundType = symbolTable.getSymbolType(fullName, {
+                    flags: SymbolTypeFlag.typetime,
+                    data: data,
+                    tableProvider: () => callExpr?.getSymbolTable(),
+                    fullName: fullName
+                });
+                if (foundType) {
+                    return foundType;
+                }
+            }
+        }
     }
 }
 
