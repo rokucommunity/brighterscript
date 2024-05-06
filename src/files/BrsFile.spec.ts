@@ -1,7 +1,7 @@
 import { assert, expect } from '../chai-config.spec';
 import * as sinonImport from 'sinon';
 import { Position, Range } from 'vscode-languageserver';
-import type { BsDiagnostic, Callable, CommentFlag, VariableDeclaration } from '../interfaces';
+import type { Callable, CommentFlag, VariableDeclaration } from '../interfaces';
 import { Program } from '../Program';
 import { DynamicType } from '../types/DynamicType';
 import { TypedFunctionType } from '../types/TypedFunctionType';
@@ -238,16 +238,6 @@ describe('BrsFile', () => {
         expect(file.ownScriptImports.map(x => x.text)).to.eql(['pkg:/source/lib.brs']);
     });
 
-    it('allows adding diagnostics', () => {
-        const expected: BsDiagnostic[] = [{
-            message: 'message',
-            file: undefined as any,
-            range: undefined as any
-        }];
-        file.addDiagnostics(expected);
-        expectDiagnostics(file, expected);
-    });
-
     describe('getPartialVariableName', () => {
         let entry = {
             src: `${rootDir}/source/lib.brs`,
@@ -419,15 +409,14 @@ describe('BrsFile', () => {
                     sub main()
                         something = true 'bs:disable-line: LINT1005
                     end sub
-                `);
-                file.diagnostics.push({
+                `) as BrsFile;
+                program.diagnostics.register({
                     code: 'LINT1005',
                     file: file,
                     message: 'Something is not right',
                     range: util.createRange(2, 16, 2, 26)
                 });
-                const scope = program.getScopesForFile(file)[0];
-                expectZeroDiagnostics(scope);
+                expectZeroDiagnostics(program);
             });
 
             it('adds diagnostics for unknown numeric diagnostic codes', () => {
@@ -571,23 +560,23 @@ describe('BrsFile', () => {
         });
 
         it('supports labels and goto statements', () => {
-            let file = program.setFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub Main()
                     'multiple goto statements on one line
                     goto myLabel : goto myLabel
                     myLabel:
                 end sub
             `);
-            expectZeroDiagnostics(file);
+            expectZeroDiagnostics(program);
         });
 
         it('supports empty print statements', () => {
-            let file = program.setFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                    print
                 end sub
             `);
-            expectZeroDiagnostics(file);
+            expectZeroDiagnostics(program);
         });
 
         describe('conditional compile', () => {
@@ -635,7 +624,7 @@ describe('BrsFile', () => {
             });
 
             it('works for upper case keywords', () => {
-                let file = program.setFile('source/main.brs', `
+                program.setFile('source/main.brs', `
                     sub main()
                         #CONST someFlag = true
                         #IF someFlag
@@ -647,11 +636,11 @@ describe('BrsFile', () => {
                         #ENDIF
                     end sub
                 `);
-                expectZeroDiagnostics(file);
+                expectZeroDiagnostics(program);
             });
 
             it('supports single-word #elseif and #endif', () => {
-                let file = program.setFile('source/main.brs', `
+                program.setFile('source/main.brs', `
                     sub main()
                         #const someFlag = true
                         #if someFlag
@@ -661,11 +650,11 @@ describe('BrsFile', () => {
                         #endif
                     end sub
                 `);
-                expectZeroDiagnostics(file);
+                expectZeroDiagnostics(program);
             });
 
             it('supports multi-word #else if and #end if', () => {
-                let file = program.setFile('source/main.brs', `
+                program.setFile('source/main.brs', `
                     sub main()
                         #const someFlag = true
                         #if someFlag
@@ -675,82 +664,82 @@ describe('BrsFile', () => {
                         #end if
                     end sub
                 `);
-                expectZeroDiagnostics(file);
+                expectZeroDiagnostics(program);
             });
 
             it('does not choke on invalid code inside a false conditional compile', () => {
-                let file = program.setFile('source/main.brs', `
+                program.setFile('source/main.brs', `
                     sub main()
                         #if false
                             non-commented code here should not cause parse errors
                         #end if
                     end sub
                 `);
-                expectZeroDiagnostics(file);
+                expectZeroDiagnostics(program);
             });
 
             it('detects syntax error in #if', () => {
-                let file = program.setFile('source/main.brs', `
+                program.setFile('source/main.brs', `
                     sub main()
                         #if true1
                             print "true"
                         #end if
                     end sub
                 `);
-                expectDiagnostics(file, [
+                expectDiagnostics(program, [
                     DiagnosticMessages.referencedConstDoesNotExist()
                 ]);
             });
 
             it('detects syntax error in #const', () => {
-                let file = program.setFile('source/main.brs', `
+                program.setFile('source/main.brs', `
                     sub main()
                         #if %
                             print "true"
                         #end if
                     end sub
                 `);
-                expectDiagnostics(file, [
+                expectDiagnostics(program, [
                     DiagnosticMessages.unexpectedCharacter('%'),
                     DiagnosticMessages.invalidHashIfValue()
                 ]);
             });
 
             it('detects #const name using reserved word', () => {
-                let file = program.setFile('source/main.brs', `
+                program.setFile('source/main.brs', `
                     sub main()
                         #const function = true
                     end sub
                 `);
-                expectDiagnostics(file, [
+                expectDiagnostics(program, [
                     DiagnosticMessages.constNameCannotBeReservedWord(),
                     DiagnosticMessages.unexpectedToken('#const')
                 ]);
             });
 
             it('detects syntax error in #const', () => {
-                let file = program.setFile('source/main.brs', `
+                program.setFile('source/main.brs', `
                     sub main()
                         #const someConst = 123
                     end sub
                 `);
-                expectDiagnostics(file, [
+                expectDiagnostics(program, [
                     DiagnosticMessages.invalidHashConstValue()
                 ]);
             });
         });
 
         it('supports stop statement', () => {
-            let file = program.setFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                    stop
                 end sub
             `);
-            expectZeroDiagnostics(file);
+            expectZeroDiagnostics(program);
         });
 
         it('supports single-line if statements', () => {
-            let file = program.setFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     if 1 < 2: return true: end if
                     if 1 < 2: return true
@@ -760,7 +749,7 @@ describe('BrsFile', () => {
                     if true then : test = sub() : print "yes" : end sub : end if
                 end sub
             `);
-            expectZeroDiagnostics(file);
+            expectZeroDiagnostics(program);
         });
 
         it('supports line_num as global variable', () => {
@@ -769,7 +758,7 @@ describe('BrsFile', () => {
                     print LINE_NUM
                 end sub
             `);
-            expectZeroDiagnostics(file);
+            expectZeroDiagnostics(program);
         });
 
         it('supports many keywords as object property names', () => {
@@ -836,7 +825,7 @@ describe('BrsFile', () => {
                     person.new = true
                 end sub
             `);
-            expectZeroDiagnostics(file);
+            expectZeroDiagnostics(program);
         });
         it('does not error on numeric literal type designators', () => {
             file.parse(`
@@ -850,7 +839,7 @@ describe('BrsFile', () => {
                     print 9876543210&
                 end sub
             `);
-            expectZeroDiagnostics(file);
+            expectZeroDiagnostics(program);
         });
 
         it('does not error when encountering sub with return type', () => {
@@ -859,7 +848,7 @@ describe('BrsFile', () => {
                     return
                 end sub
             `);
-            expectZeroDiagnostics(file);
+            expectZeroDiagnostics(program);
         });
 
         it('does not lose function scopes when mismatched end sub', () => {
@@ -897,7 +886,7 @@ describe('BrsFile', () => {
                     foo.bar = true and false or 3 > 4
                 end sub
             `);
-            expectZeroDiagnostics(file);
+            expectZeroDiagnostics(program);
         });
 
         it('does not error with boolean in RHS of set statement', () => {
@@ -911,7 +900,7 @@ describe('BrsFile', () => {
                     m.isTrue = m.isTrue = m.isTrue
                 end sub
             `);
-            expectZeroDiagnostics(file);
+            expectZeroDiagnostics(program);
         });
 
         it('supports variable names ending with type designators', () => {
@@ -924,7 +913,7 @@ describe('BrsFile', () => {
                   someHex& = 13
                 end sub
             `);
-            expectZeroDiagnostics(file);
+            expectZeroDiagnostics(program);
         });
 
         it('supports multiple spaces between two-word keywords', () => {
@@ -937,7 +926,7 @@ describe('BrsFile', () => {
                     end if
                 end sub
             `);
-            expectZeroDiagnostics(file);
+            expectZeroDiagnostics(program);
         });
 
         it('does not error with `stop` as object key', () => {
@@ -951,7 +940,7 @@ describe('BrsFile', () => {
                     return obj
                 end function
             `);
-            expectZeroDiagnostics(file);
+            expectZeroDiagnostics(program);
         });
 
         it('does not error with `run` as object key', () => {
@@ -965,7 +954,7 @@ describe('BrsFile', () => {
                     return obj
                 end function
             `);
-            expectZeroDiagnostics(file);
+            expectZeroDiagnostics(program);
         });
 
         it('supports assignment operators', () => {
@@ -983,7 +972,7 @@ describe('BrsFile', () => {
                     print x
                 end function
             `);
-            expectZeroDiagnostics(file);
+            expectZeroDiagnostics(program);
         });
 
         it('supports `then` as object property', () => {
@@ -996,7 +985,7 @@ describe('BrsFile', () => {
                     promise.then()
                 end function
             `);
-            expectZeroDiagnostics(file);
+            expectZeroDiagnostics(program);
         });
 
         it('supports function as parameter type', () => {
@@ -1007,7 +996,7 @@ describe('BrsFile', () => {
                     end function
                 end sub
             `);
-            expectZeroDiagnostics(file);
+            expectZeroDiagnostics(program);
         });
 
         it('supports increment operator', () => {
@@ -1017,7 +1006,7 @@ describe('BrsFile', () => {
                     x++
                 end function
             `);
-            expectZeroDiagnostics(file);
+            expectZeroDiagnostics(program);
         });
 
         it('supports decrement operator', () => {
@@ -1027,7 +1016,7 @@ describe('BrsFile', () => {
                     x--
                 end function
             `);
-            expectZeroDiagnostics(file);
+            expectZeroDiagnostics(program);
         });
 
         it('supports writing numbers with decimal but no trailing digit', () => {
@@ -1037,7 +1026,7 @@ describe('BrsFile', () => {
                     print x
                 end function
             `);
-            expectZeroDiagnostics(file);
+            expectZeroDiagnostics(program);
         });
 
         it('supports assignment operators against object properties', () => {
@@ -1060,7 +1049,7 @@ describe('BrsFile', () => {
                     print m.age
                 end function
             `);
-            expectZeroDiagnostics(file);
+            expectZeroDiagnostics(program);
         });
 
         //skipped until `brs` supports this
@@ -1073,7 +1062,7 @@ describe('BrsFile', () => {
                     print x
                 end function
             `);
-            expectZeroDiagnostics(file);
+            expectZeroDiagnostics(program);
         });
 
         //skipped until `brs` supports this
@@ -1086,7 +1075,7 @@ describe('BrsFile', () => {
                         print m.x
                     end function
                 `);
-            expectZeroDiagnostics(file);
+            expectZeroDiagnostics(program);
         });
 
         it('supports leading and trailing periods for numeric literals', () => {
@@ -1098,7 +1087,7 @@ describe('BrsFile', () => {
                     print pointOne
                 end function
             `);
-            expectZeroDiagnostics(file);
+            expectZeroDiagnostics(program);
         });
 
         it('supports bitshift assignment operators on object properties accessed by array syntax', () => {
@@ -1110,7 +1099,7 @@ describe('BrsFile', () => {
                         print m.x
                     end function
                 `);
-            expectZeroDiagnostics(file);
+            expectZeroDiagnostics(program);
         });
 
         it('supports weird period AA accessor', () => {
@@ -1120,7 +1109,7 @@ describe('BrsFile', () => {
                     print m.["_uuid"]
                 end function
             `);
-            expectZeroDiagnostics(file);
+            expectZeroDiagnostics(program);
         });
 
         it('adds error for library statements NOT at top of file', () => {
@@ -1173,7 +1162,7 @@ describe('BrsFile', () => {
                     obj = {x:0 : y: 1}
                 end sub
             `);
-            expectZeroDiagnostics(file);
+            expectZeroDiagnostics(program);
         });
 
         it('succeeds when finding variables with "sub" in them', () => {
@@ -1290,9 +1279,9 @@ describe('BrsFile', () => {
                 function DoSomething
                 end function
             `);
-            expectHasDiagnostics(file);
-            expect(file.getDiagnostics()[0].file).to.equal(file);
-            expect(file.getDiagnostics()[0].range.start.line).to.equal(1);
+            expectHasDiagnostics(program);
+            expect(program.getDiagnostics()[0].file).to.equal(file);
+            expect(program.getDiagnostics()[0].range.start.line).to.equal(1);
         });
 
         it('supports using the `next` keyword in a for loop', () => {
@@ -1308,7 +1297,7 @@ describe('BrsFile', () => {
                     next
                 end sub
             `);
-            expectZeroDiagnostics(file);
+            expectZeroDiagnostics(program);
         });
 
         //test is not working yet, but will be enabled when brs supports this syntax
@@ -1326,7 +1315,7 @@ describe('BrsFile', () => {
                     end sub
                 end function
             `);
-            expectZeroDiagnostics(file);
+            expectZeroDiagnostics(program);
         });
 
         it('supports parameter types in functions in AA literals', () => {
@@ -1639,7 +1628,7 @@ describe('BrsFile', () => {
     });
 
     it('handles mixed case `then` partions of conditionals', () => {
-        let mainFile = program.setFile('source/main.brs', `
+        program.setFile('source/main.brs', `
             sub Main()
                 if true then
                     print "works"
@@ -1647,24 +1636,24 @@ describe('BrsFile', () => {
             end sub
         `);
 
-        expectZeroDiagnostics(mainFile);
-        mainFile = program.setFile('source/main.brs', `
+        expectZeroDiagnostics(program);
+        program.setFile('source/main.brs', `
             sub Main()
                 if true Then
                     print "works"
                 end if
             end sub
         `);
-        expectZeroDiagnostics(mainFile);
+        expectZeroDiagnostics(program);
 
-        mainFile = program.setFile('source/main.brs', `
+        program.setFile('source/main.brs', `
             sub Main()
                 if true THEN
                     print "works"
                 end if
             end sub
         `);
-        expectZeroDiagnostics(mainFile);
+        expectZeroDiagnostics(program);
     });
 
     it('does not throw when encountering incomplete import statement', () => {
