@@ -1898,6 +1898,86 @@ describe('CompletionsProcessor', () => {
 
     });
 
+    describe('typed variables', () => {
+        it('shows variables of type interface as CompletionItemKind.Variable', () => {
+            program.setFile('source/main.bs', `
+                sub foo(thing as SomeInterface)
+                    print thi|
+                end sub
+
+                interface SomeInterface
+                    optional name as string
+                    optional data
+                    optional function doStuff()
+                end interface
+            `);
+            program.validate();
+            //  print thi|
+            const completions = program.getCompletions('source/main.bs', util.createPosition(2, 33));
+            expectCompletionsIncludes(completions, [{
+                label: 'thing',
+                kind: CompletionItemKind.Variable
+            }]);
+        });
+
+        it('shows variables of type class as CompletionItemKind.Variable', () => {
+            program.setFile('source/main.bs', `
+                sub foo(thing as SomeKlass)
+                    print thi|
+                end sub
+
+                class SomeKlass
+                    name as string
+                    data
+                    function doStuff()
+                    end function
+                end class
+            `);
+            program.validate();
+            //  print thi|
+            const completions = program.getCompletions('source/main.bs', util.createPosition(2, 33));
+            expectCompletionsIncludes(completions, [{
+                label: 'thing',
+                kind: CompletionItemKind.Variable
+            }]);
+        });
+
+        it('shows variables of type enum as CompletionItemKind.Variable', () => {
+            program.setFile('source/main.bs', `
+                sub foo(thing as SomeEnum)
+                    print thi|
+                end sub
+
+                enum SomeEnum
+                    up
+                    down
+                end end
+            `);
+            program.validate();
+            //  print thi|
+            const completions = program.getCompletions('source/main.bs', util.createPosition(2, 33));
+            expectCompletionsIncludes(completions, [{
+                label: 'thing',
+                kind: CompletionItemKind.Variable
+            }]);
+        });
+
+        it('shows variables of type function as CompletionItemKind.Variable', () => {
+            program.setFile('source/main.bs', `
+                sub foo(thing as function)
+                    print thi|
+                end sub
+            `);
+            program.validate();
+            //  print thi|
+            const completions = program.getCompletions('source/main.bs', util.createPosition(2, 33));
+            expectCompletionsIncludes(completions, [{
+                label: 'thing',
+                kind: CompletionItemKind.Variable
+            }]);
+        });
+
+    });
 
     describe('brighterscript vs brightscript', () => {
         it('should not include transpiled versions of symbols in brighterscript code', () => {

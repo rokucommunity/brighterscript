@@ -18,6 +18,7 @@ import type {
     PrintSeparatorTab
 } from './Statement';
 import {
+    AliasStatement,
     AssignmentStatement,
     Block,
     Body,
@@ -54,7 +55,8 @@ import {
     StopStatement,
     ThrowStatement,
     TryCatchStatement,
-    WhileStatement
+    WhileStatement,
+    TypecastStatement
 } from './Statement';
 import type { DiagnosticInfo } from '../DiagnosticMessages';
 import { DiagnosticMessages } from '../DiagnosticMessages';
@@ -82,7 +84,7 @@ import {
     TemplateStringExpression,
     TemplateStringQuasiExpression,
     TernaryExpression,
-    TypeCastExpression,
+    TypecastExpression,
     TypeExpression,
     TypedArrayExpression,
     UnaryExpression,
@@ -91,7 +93,7 @@ import {
 } from './Expression';
 import type { Diagnostic, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
-import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression } from '../astUtils/reflection';
+import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isTypecastExpression } from '../astUtils/reflection';
 import { createStringLiteral } from '../astUtils/creators';
 import type { Expression, Statement } from './AstNode';
 import type { DeepWriteable } from '../interfaces';
@@ -287,6 +289,10 @@ export class Parser {
 
             if (this.checkLibrary()) {
                 return this.libraryStatement();
+            }
+
+            if (this.checkAlias()) {
+                return this.aliasStatement();
             }
 
             if (this.check(TokenKind.Const) && this.checkAnyNext(TokenKind.Identifier, ...this.allowedLocalIdentifiers)) {
@@ -1021,6 +1027,24 @@ export class Parser {
         }
     }
 
+    private checkAlias() {
+        let isAliasToken = this.check(TokenKind.Alias);
+
+        //if we are at the top level, any line that starts with "alias" should be considered a alias statement
+        if (this.isAtRootLevel() && isAliasToken) {
+            return true;
+
+            //not at root level, alias statements are all invalid here, but try to detect if the tokens look
+            //like a alias statement (and let the alias function handle emitting the diagnostics)
+        } else if (isAliasToken && this.checkNext(TokenKind.Identifier)) {
+            return true;
+
+            //definitely not a alias statement
+        } else {
+            return false;
+        }
+    }
+
     private statement(): Statement | undefined {
         if (this.checkLibrary()) {
             return this.libraryStatement();
@@ -1028,6 +1052,14 @@ export class Parser {
 
         if (this.check(TokenKind.Import)) {
             return this.importStatement();
+        }
+
+        if (this.check(TokenKind.Typecast) && this.checkAnyNext(TokenKind.Identifier, ...this.allowedLocalIdentifiers)) {
+            return this.typecastStatement();
+        }
+
+        if (this.checkAlias()) {
+            return this.aliasStatement();
         }
 
         if (this.check(TokenKind.Stop)) {
@@ -1441,6 +1473,47 @@ export class Parser {
         });
 
         return importStatement;
+    }
+
+    private typecastStatement() {
+        this.warnIfNotBrighterScriptMode('typecast statements');
+        const typecastToken = this.advance();
+        const typecastExpr = this.expression();
+        if (isTypecastExpression(typecastExpr)) {
+            return new TypecastStatement({
+                typecast: typecastToken,
+                typecastExpression: typecastExpr
+            });
+        }
+        this.diagnostics.push({
+            ...DiagnosticMessages.expectedIdentifierAfterKeyword('typecast'),
+            range: util.getRange(typecastToken, this.peek())
+        });
+        throw this.lastDiagnosticAsError();
+    }
+
+    private aliasStatement(): AliasStatement | undefined {
+        this.warnIfNotBrighterScriptMode('alias statements');
+        const aliasToken = this.advance();
+        const name = this.tryConsume(
+            DiagnosticMessages.expectedIdentifierAfterKeyword('alias'),
+            TokenKind.Identifier
+        );
+        const equals = this.tryConsume(
+            DiagnosticMessages.expectedToken(TokenKind.Equal),
+            TokenKind.Equal
+        );
+        let value = this.identifyingExpression();
+
+        let aliasStmt = new AliasStatement({
+            alias: aliasToken,
+            name: name,
+            equals: equals,
+            value: value
+
+        });
+
+        return aliasStmt;
     }
 
     private annotationExpression() {
@@ -2246,11 +2319,11 @@ export class Parser {
         this.pendingAnnotations = parentAnnotations;
     }
 
-    private expression(findTypeCast = true): Expression {
+    private expression(findTypecast = true): Expression {
         let expression = this.anonymousFunction();
         let asToken: Token;
         let typeExpression: TypeExpression;
-        if (findTypeCast) {
+        if (findTypecast) {
             do {
                 if (this.check(TokenKind.As)) {
                     this.warnIfNotBrighterScriptMode('type cast');
@@ -2259,7 +2332,7 @@ export class Parser {
                     // myVal = foo() as dynamic as string
                     [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
                     if (asToken && typeExpression) {
-                        expression = new TypeCastExpression({ obj: expression, as: asToken, typeExpression: typeExpression });
+                        expression = new TypecastExpression({ obj: expression, as: asToken, typeExpression: typeExpression });
                     }
                 } else {
                     break;

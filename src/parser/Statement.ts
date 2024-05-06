@@ -1,7 +1,7 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
 import { CompoundAssignmentOperators, TokenKind } from '../lexer/TokenKind';
-import type { BinaryExpression, DottedGetExpression, FunctionExpression, FunctionParameterExpression, LiteralExpression, TypeExpression } from './Expression';
+import type { BinaryExpression, DottedGetExpression, FunctionExpression, FunctionParameterExpression, LiteralExpression, TypeExpression, TypecastExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
 import type { Range } from 'vscode-languageserver';
@@ -434,7 +434,7 @@ export class FunctionStatement extends Statement implements TypedefProvider {
 
     getType(options: GetTypeOptions) {
         const funcExprType = this.func.getType(options);
-        funcExprType.setName(this.tokens.name?.text);
+        funcExprType.setName(this.getName(ParseMode.BrighterScript));
         return funcExprType;
     }
 }
@@ -3413,5 +3413,127 @@ export class ContinueStatement extends Statement {
 
     public getLeadingTrivia(): Token[] {
         return this.tokens.continue?.leadingTrivia ?? [];
+    }
+}
+
+
+export class TypecastStatement extends Statement {
+    constructor(options: {
+        typecast?: Token;
+        typecastExpression: TypecastExpression;
+    }
+    ) {
+        super();
+        this.tokens = {
+            typecast: options.typecast
+        };
+        this.typecastExpression = options.typecastExpression;
+        this.range = util.createBoundingRange(
+            this.tokens.typecast,
+            this.typecastExpression
+        );
+    }
+
+    public readonly tokens: {
+        readonly typecast?: Token;
+    };
+
+    public readonly typecastExpression: TypecastExpression;
+
+    public readonly kind = AstNodeKind.TypecastStatement;
+
+    public readonly range: Range;
+
+    transpile(state: BrsTranspileState) {
+        //the typecast statement is a comment just for debugging purposes
+        return [
+            `'`,
+            state.transpileToken(this.tokens.typecast, 'typecast'),
+            ' ',
+            this.typecastExpression.obj.transpile(state),
+            ' ',
+            state.transpileToken(this.typecastExpression.tokens.as, 'as'),
+            ' ',
+            this.typecastExpression.typeExpression.transpile(state)
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'typecastExpression', visitor, options);
+        }
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.typecast?.leadingTrivia ?? [];
+    }
+
+    getType(options: GetTypeOptions): BscType {
+        return this.typecastExpression.getType(options);
+    }
+}
+
+
+export class AliasStatement extends Statement {
+    constructor(options: {
+        alias?: Token;
+        name: Token;
+        equals?: Token;
+        value: VariableExpression | DottedGetExpression;
+    }
+    ) {
+        super();
+        this.tokens = {
+            alias: options.alias,
+            name: options.name,
+            equals: options.equals
+        };
+        this.value = options.value;
+        this.range = util.createBoundingRange(
+            this.tokens.alias,
+            this.tokens.name,
+            this.tokens.equals,
+            this.value
+        );
+    }
+
+    public readonly tokens: {
+        readonly alias?: Token;
+        readonly name: Token;
+        readonly equals?: Token;
+    };
+
+    public readonly value: Expression;
+
+    public readonly kind = AstNodeKind.AliasStatement;
+
+    public readonly range: Range;
+
+    transpile(state: BrsTranspileState) {
+        //the alias statement is a comment just for debugging purposes
+        return [
+            `'`,
+            state.transpileToken(this.tokens.alias, 'alias'),
+            ' ',
+            state.transpileToken(this.tokens.name),
+            ' ',
+            state.transpileToken(this.tokens.equals, '='),
+            ' ',
+            this.value.transpile(state)
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'value', visitor, options);
+        }
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.alias?.leadingTrivia ?? [];
+    }
+
+    getType(options: GetTypeOptions): BscType {
+        return this.value.getType(options);
     }
 }

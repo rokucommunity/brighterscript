@@ -1,4 +1,4 @@
-import { isBlock, isBrsFile, isCallableType, isClassStatement, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isFunctionExpression, isInterfaceType, isMethodStatement, isNamespaceStatement, isNamespaceType, isNativeType, isXmlFile, isXmlScope } from '../../astUtils/reflection';
+import { isBlock, isBrsFile, isCallableType, isClassStatement, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isFunctionExpression, isInterfaceType, isMethodStatement, isNamespaceStatement, isNamespaceType, isNativeType, isTypedFunctionType, isXmlFile, isXmlScope } from '../../astUtils/reflection';
 import type { FileReference, ProvideCompletionsEvent } from '../../interfaces';
 import type { BscFile } from '../../files/BscFile';
 import { AllowedTriviaTokens, DeclarableTypes, Keywords, TokenKind } from '../../lexer/TokenKind';
@@ -371,21 +371,31 @@ export class CompletionsProcessor {
     private getCompletionKindFromSymbol(symbol: BscSymbol, areMembers = false) {
         const type = symbol?.type;
         const extraData = symbol?.data;
+        const finalTypeNameLower = type?.toString().split('.').pop().toLowerCase();
+        const symbolNameLower = symbol?.name.toLowerCase();
+        let nameMatchesType = symbolNameLower === finalTypeNameLower;
         if (isConstStatement(extraData?.definingNode)) {
             return CompletionItemKind.Constant;
-        } else if (isClassType(type)) {
+        } else if (isClassType(type) && nameMatchesType) {
             return CompletionItemKind.Class;
         } else if (isCallableType(type)) {
-            return areMembers ? CompletionItemKind.Method : CompletionItemKind.Function;
-        } else if (isInterfaceType(type)) {
+            if (isTypedFunctionType(type) && !nameMatchesType) {
+                if (symbolNameLower === type.name.replace(/\./gi, '_').toLowerCase()) {
+                    nameMatchesType = true;
+                }
+            }
+            if (nameMatchesType) {
+                return areMembers ? CompletionItemKind.Method : CompletionItemKind.Function;
+            }
+        } else if (isInterfaceType(type) && nameMatchesType) {
             return CompletionItemKind.Interface;
-        } else if (isEnumType(type)) {
+        } else if (isEnumType(type) && nameMatchesType) {
             return CompletionItemKind.Enum;
         } else if (isEnumMemberType(type)) {
             return CompletionItemKind.EnumMember;
         } else if (isNamespaceType(type)) {
             return CompletionItemKind.Module;
-        } else if (isComponentType(type)) {
+        } else if (isComponentType(type) && (nameMatchesType || symbolNameLower === 'rosgnode')) {
             return CompletionItemKind.Interface;
         }
         if (areMembers) {

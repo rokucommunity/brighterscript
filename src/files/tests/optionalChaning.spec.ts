@@ -80,12 +80,12 @@ describe('optional chaining', () => {
                 print arr?.value
                 print obj?.[0]
                 print obj?.getName()?.first?.second
-                print createObject("roByteArray")?.value
+                print createObject("roByteArray")?.Count
                 print createObject("roByteArray")?["0"]
-                print createObject("roList")?.value
+                print createObject("roList")?.Count
                 print createObject("roList")?["0"]
                 print createObject("roXmlList")?["0"]
-                print createObject("roDateTime")?.value
+                print createObject("roDateTime")?.GetYear
                 print createObject("roDateTime")?.GetTimeZoneOffset
                 print createObject("roSGNode", "Node")?[0]
                 print obj?.first?.second

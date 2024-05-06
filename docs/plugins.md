@@ -475,6 +475,8 @@ Diagnostics must run every time it is relevant:
 
 Note: in a language-server context, Scope validation happens every time a file changes.
 
+To add a diagnostic, register it with the `DiagnosticManager`, available from the `program` property of any event.
+
 ```typescript
 // bsc-plugin-no-underscores.ts
 import { CompilerPlugin, File, isBrsFile } from 'brighterscript';
@@ -484,13 +486,16 @@ export default function () {
     return {
         name: 'no-underscores',
         // post-parsing validation
-        afterFileValidate: (file: File) => {
-            if (isBrsFile(file)) {
+        afterFileValidate: (event: AfterFileValidateEvent) => {
+            if (isBrsFile(event.file)) {
+                // clear existing diagnostics
+                event.program.diagnosticManager.clearByContext({file: file, tag: 'no-underscores-plugin'});
+
                 // visit function statements and validate their name
                 event.file.ast.walk(createVisitor({
                     FunctionStatement: (funcStmt) => {
                         if (funcStmt.tokens.name.text.includes('_')) {
-                            file.addDiagnostics([{
+                            event.program.diagnostics.register([{
                                 code: 9000,
                                 message: 'Do not use underscores in function names',
                                 range: funcStmt.tokens.name.range,
