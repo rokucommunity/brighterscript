@@ -154,6 +154,5 @@ describe('TypedFunctionType', () => {
         let variFunc2 = new TypedFunctionType(DynamicType.instance);
         variFunc2.isVariadic = true;
         expect(variFunc1.isTypeCompatible(variFunc2)).to.be.true;
-
     });
 });

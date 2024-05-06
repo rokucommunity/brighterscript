@@ -23,7 +23,7 @@ export class XmlFileValidator {
         const { rootElement, componentElement } = ast;
         if (!componentElement) {
             //not a SG component
-            this.event.file.diagnostics.push({
+            this.event.program.diagnostics.register({
                 ...DiagnosticMessages.xmlComponentMissingComponentDeclaration(),
                 range: rootElement.range,
                 file: this.event.file
@@ -33,14 +33,14 @@ export class XmlFileValidator {
 
         //component name/extends
         if (!componentElement.name) {
-            this.event.file.diagnostics.push({
+            this.event.program.diagnostics.register({
                 ...DiagnosticMessages.xmlComponentMissingNameAttribute(),
                 range: componentElement.tokens.startTagName.range,
                 file: this.event.file
             });
         }
         if (!componentElement.extends) {
-            this.event.file.diagnostics.push({
+            this.event.program.diagnostics.register({
                 ...DiagnosticMessages.xmlComponentMissingExtendsAttribute(),
                 range: componentElement.tokens.startTagName.range,
                 file: this.event.file
@@ -54,7 +54,7 @@ export class XmlFileValidator {
             ? scriptTagImports.find(x => this.event.file.possibleCodebehindDestPaths.includes(x.destPath))
             : undefined;
         if (explicitCodebehindScriptTag) {
-            this.event.file.diagnostics.push({
+            this.event.program.diagnostics.register({
                 ...DiagnosticMessages.unnecessaryCodebehindScriptImport(),
                 file: this.event.file,
                 range: explicitCodebehindScriptTag.filePathRange

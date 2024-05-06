@@ -12,7 +12,7 @@ describe('UnaryExpression', () => {
     });
 
     it('handles advanced cases', async () => {
-        const { file } = await testTranspile(`
+        await testTranspile(`
             Sub Main()
                 x = 96
                 y = 56
@@ -46,6 +46,6 @@ describe('UnaryExpression', () => {
                 print x.toStr() + y.toStr() + w.toStr() + h.toStr()
             End Sub
         `);
-        expectZeroDiagnostics(file);
+        expectZeroDiagnostics(program);
     });
 });
