@@ -6,10 +6,6 @@ import { IntegerType } from './IntegerType';
 import { StringType } from './StringType';
 import { VoidType } from './VoidType';
 import { FloatType } from './FloatType';
-import { CallExpression, VariableExpression } from '../parser/Expression';
-import { SymbolTypeFlag } from '../SymbolTypeFlag';
-import { createIdentifier } from '../astUtils/creators';
-import { expectTypeToBe } from '../testHelpers.spec';
 
 describe('TypedFunctionType', () => {
     it('is equivalent to dynamic type', () => {
@@ -159,20 +155,4 @@ describe('TypedFunctionType', () => {
         variFunc2.isVariadic = true;
         expect(variFunc1.isTypeCompatible(variFunc2)).to.be.true;
     });
-
-    it('can use return type lookup function', () => {
-        const myFunc = new TypedFunctionType(DynamicType.instance, (callExpr: CallExpression) => {
-            return callExpr.args[0].getType({ flags: SymbolTypeFlag.typetime });
-        });
-
-        const funcNameExpr = new VariableExpression({ name: createIdentifier('foo') });
-        const stringExpr = new VariableExpression({ name: createIdentifier('string') });
-        const floatExpr = new VariableExpression({ name: createIdentifier('float') });
-
-        let callExpr = new CallExpression({ callee: funcNameExpr, args: [stringExpr] });
-        expectTypeToBe(myFunc.returnTypeLookup(callExpr), StringType);
-        callExpr = new CallExpression({ callee: funcNameExpr, args: [floatExpr] });
-        expectTypeToBe(myFunc.returnTypeLookup(callExpr), FloatType);
-    });
-
 });
