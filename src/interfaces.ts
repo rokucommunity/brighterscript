@@ -852,6 +852,10 @@ export interface ExtraSymbolData {
      * Do not merge this symbol when merging symbol tables
      */
     doNotMerge?: boolean;
+    /**
+     * is this symbol an alias?
+     */
+    isAlias?: boolean;
 }
 
 export interface GetTypeOptions {

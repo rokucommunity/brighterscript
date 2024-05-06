@@ -1,6 +1,6 @@
 import { URI } from 'vscode-uri';
 import type { Range } from 'vscode-languageserver';
-import { isAssignmentStatement, isAssociativeArrayType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isConstStatement, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumStatement, isEnumType, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isObjectType, isPrimitiveType, isReferenceType, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
+import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isConstStatement, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumStatement, isEnumType, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isObjectType, isPrimitiveType, isReferenceType, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
@@ -701,11 +701,14 @@ export class ScopeValidator {
                         file: file
                     });
                 } else if (invalidlyUsedResolvedType && !isReferenceType(invalidlyUsedResolvedType)) {
-                    this.addMultiScopeDiagnostic({
-                        ...DiagnosticMessages.itemCannotBeUsedAsVariable(invalidlyUsedResolvedType.toString()),
-                        range: expression.range,
-                        file: file
-                    });
+                    if (!isAliasStatement(expression.parent)) {
+                        // alias rhs CAN be a type!
+                        this.addMultiScopeDiagnostic({
+                            ...DiagnosticMessages.itemCannotBeUsedAsVariable(invalidlyUsedResolvedType.toString()),
+                            range: expression.range,
+                            file: file
+                        });
+                    }
                 } else {
                     const typeChainScan = util.processTypeChain(typeChain);
                     this.addMultiScopeDiagnostic({
@@ -749,13 +752,13 @@ export class ScopeValidator {
 
         this.checkMemberAccessibility(file, expression, typeChain);
 
-        if (isNamespaceType(exprType)) {
+        if (isNamespaceType(exprType) && !isAliasStatement(expression.parent)) {
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.itemCannotBeUsedAsVariable('namespace'),
                 range: expression.range,
                 file: file
             });
-        } else if (isEnumType(exprType)) {
+        } else if (isEnumType(exprType) && !isAliasStatement(expression.parent)) {
             const enumStatement = this.event.scope.getEnum(util.getAllDottedGetPartsAsString(expression));
             if (enumStatement) {
                 // there's an enum with this name
@@ -870,6 +873,11 @@ export class ScopeValidator {
      * and make sure we can find a class with that name
      */
     private validateNewExpression(file: BrsFile, newExpression: NewExpression) {
+        const newExprType = newExpression.getType({ flags: SymbolTypeFlag.typetime });
+        if (isClassType(newExprType)) {
+            return;
+        }
+
         let potentialClassName = newExpression.className.getName(ParseMode.BrighterScript);
         const namespaceName = newExpression.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
         let newableClass = this.event.scope.getClass(potentialClassName, namespaceName);

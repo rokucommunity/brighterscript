@@ -1121,7 +1121,7 @@ describe('BrsFile', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.importStatementMustBeDeclaredAtTopOfFile()
+                DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('import')
             ]);
         });
 
@@ -1140,7 +1140,7 @@ describe('BrsFile', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile()
+                DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('library')
             ]);
         });
 
@@ -1152,7 +1152,7 @@ describe('BrsFile', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile()
+                DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('library')
             ]);
         });
 
@@ -2865,6 +2865,237 @@ describe('BrsFile', () => {
                     print obj.data().key.len()
                 end sub
             `);
+        });
+
+        describe('alias', () => {
+            it('comments out the alias statement', async () => {
+                await testTranspile(`
+                    alias l = lcase
+                `, `
+                    'alias l = lcase
+                `);
+            });
+
+            it('replaces aliased consts', async () => {
+                program.setFile('source/types.bs', `
+                    const MyConst = 3.14
+                `);
+                await testTranspile(`
+                    import "pkg:/source/types.bs"
+                    alias myc = MyConst
+
+                    namespace alpha
+                        const MyConst = 100
+                        sub someFunc()
+                            print myc
+                        end sub
+                    end namespace
+                `, `
+                    'import "pkg:/source/types.bs"
+                    'alias myc = MyConst
+
+
+                    sub alpha_someFunc()
+                        print 3.14
+                    end sub
+                `);
+            });
+
+            it('replaces aliased function names', async () => {
+                program.setFile('source/types.bs', `
+                    sub someFunc()
+                    end sub
+                `);
+                await testTranspile(`
+                    import "pkg:/source/types.bs"
+                    alias sf = someFunc
+
+                    namespace alpha
+                        sub someFunc()
+                            sf()
+                        end sub
+                    end namespace
+                `, `
+                    'import "pkg:/source/types.bs"
+                    'alias sf = someFunc
+                    sub alpha_someFunc()
+                        someFunc()
+                    end sub
+                `);
+            });
+
+            it('replaces aliased consts', async () => {
+                program.setFile('source/types.bs', `
+                    const PI = 3.14
+                `);
+                await testTranspile(`
+                    import "pkg:/source/types.bs"
+                    alias p = PI
+
+                    namespace alpha
+                        function pi() as string
+                            return "apple"
+                        end function
+
+                        sub printPi()
+                            print p
+                        end sub
+                    end namespace
+                `, `
+                    'import "pkg:/source/types.bs"
+                    'alias p = PI
+                    function alpha_pi() as string
+                        return "apple"
+                    end function
+
+                    sub alpha_printPi()
+                        print 3.14
+                    end sub
+                `);
+            });
+
+            it('replaces aliased enums', async () => {
+                program.setFile('source/types.bs', `
+                    enum Direction
+                        north = "North"
+                        south = "South"
+                    end enum
+                `);
+                await testTranspile(`
+                    import "pkg:/source/types.bs"
+                    alias dir = Direction
+                    alias dirN = Direction.north
+
+                    namespace alpha
+                        function Direction() as string
+                            return "apple"
+                        end function
+
+                        sub printDir()
+                            print dir.north
+                            print dirN
+                        end sub
+                    end namespace
+                `, `
+                    'import "pkg:/source/types.bs"
+                    'alias dir = Direction
+                    'alias dirN = Direction.north
+                    function alpha_Direction() as string
+                        return "apple"
+                    end function
+
+                    sub alpha_printDir()
+                        print "North"
+                        print "North"
+                    end sub
+                `);
+            });
+
+            it('can deep alias a namespaced thing', async () => {
+                program.setFile('source/types.bs', `
+                    namespace alpha.beta.charlie
+                        sub foo(text as string)
+                            print text
+                        end sub
+
+                        const pi = 3.14
+                    end namespace
+                `);
+                await testTranspile(`
+                    import "pkg:/source/types.bs"
+                    alias abcfoo = alpha.beta.charlie.foo
+                    alias abcpi = alpha.beta.charlie.pi
+
+                    namespace SomeNamespace
+                        sub foo()
+                            abcfoo(abcpi.toStr())
+                        end sub
+                    end namespace
+                `, `
+                    'import "pkg:/source/types.bs"
+                    'alias abcfoo = alpha_beta_charlie_foo
+                    'alias abcpi = alpha_beta_charlie_pi
+                    sub SomeNamespace_foo()
+                        alpha_beta_charlie_foo(3.14.toStr())
+                    end sub
+                `);
+            });
+
+            it('can alias a namespace', async () => {
+                await testTranspile(`
+                    alias get2 = get
+
+                    namespace http
+                        'Do an HTTP request
+                        sub get()
+                            print get2.aa()
+                            print get2.aa().name
+                            print get2.ABC
+                            print get2.beta.DEF
+                            print get2.beta.AnimalSounds.dog
+                            print get2.MY_AA.id
+                        end sub
+                    end namespace
+
+                    namespace get
+                        function aa()
+                            return {name: "John doe"}
+                        end function
+
+                        const ABC = "ABC"
+
+                        const MY_AA = {id: 0}
+
+                        namespace beta
+                            const DEF = "DEF"
+                            enum AnimalSounds
+                                dog = "bark"
+                                cat = "meow"
+                            end enum
+                        end namespace
+                    end namespace
+                `, `
+                    'alias get2 = get
+                    'Do an HTTP request
+                    sub http_get()
+                        print get_aa()
+                        print get_aa().name
+                        print "ABC"
+                        print "DEF"
+                        print "bark"
+                        print ({
+                            id: 0
+                        }).id
+                    end sub
+                    function get_aa()
+                        return {
+                            name: "John doe"
+                        }
+                    end function
+                `);
+            });
+
+            it('can alias a class', async () => {
+                program.setFile('source/types.bs', `
+                    class Person
+                    end class
+                `);
+                await testTranspile(`
+                    import "types.bs"
+                    alias Person2 = Person
+                    sub test()
+                        dude = new Person2()
+                    end sub
+                `, `
+                    'import "types.bs"
+                    'alias Person2 = Person
+
+                    sub test()
+                        dude = Person()
+                    end sub
+                `);
+            });
+
         });
     });
 

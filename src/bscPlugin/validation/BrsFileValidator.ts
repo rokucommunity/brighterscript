@@ -1,4 +1,4 @@
-import { isAALiteralExpression, isArrayType, isBlock, isBody, isClassStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isTypecastStatement, isUnaryExpression, isVariableExpression, isWhileStatement } from '../../astUtils/reflection';
+import { isAALiteralExpression, isAliasStatement, isArrayType, isBlock, isBody, isClassStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isTypecastStatement, isUnaryExpression, isVariableExpression, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -7,7 +7,7 @@ import { TokenKind } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
 import { CallExpression, type FunctionExpression, type LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
-import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, Body, WhileStatement, TypecastStatement, Block } from '../../parser/Statement';
+import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, Body, WhileStatement, TypecastStatement, Block, AliasStatement } from '../../parser/Statement';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { ArrayDefaultTypeReferenceType } from '../../types/ReferenceType';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
@@ -177,6 +177,14 @@ export class BrsFileValidator {
             },
             TypecastStatement: (node) => {
                 node.parent.getSymbolTable().addSymbol('m', { definingNode: node, doNotMerge: true }, node.getType({ flags: SymbolTypeFlag.typetime }), SymbolTypeFlag.runtime);
+            },
+            AliasStatement: (node) => {
+                // eslint-disable-next-line no-bitwise
+                const targetType = node.value.getType({ flags: SymbolTypeFlag.typetime | SymbolTypeFlag.runtime });
+
+                // eslint-disable-next-line no-bitwise
+                node.parent.getSymbolTable().addSymbol(node.tokens.name.text, { definingNode: node, doNotMerge: true, isAlias: true }, targetType, SymbolTypeFlag.runtime | SymbolTypeFlag.typetime);
+
             }
         });
 
@@ -318,7 +326,8 @@ export class BrsFileValidator {
                     !isLibraryStatement(statement) &&
                     !isImportStatement(statement) &&
                     !isConstStatement(statement) &&
-                    !isTypecastStatement(statement)
+                    !isTypecastStatement(statement) &&
+                    !isAliasStatement(statement)
                 ) {
                     this.event.program.diagnostics.register({
                         file: this.event.file,
@@ -331,10 +340,10 @@ export class BrsFileValidator {
     }
 
     private getTopOfFileStatements() {
-        let topOfFileIncludeStatements = [] as Array<LibraryStatement | ImportStatement | TypecastStatement>;
+        let topOfFileIncludeStatements = [] as Array<LibraryStatement | ImportStatement | TypecastStatement | AliasStatement>;
         for (let stmt of this.event.file.parser.ast.statements) {
             //if we found a non-library statement, this statement is not at the top of the file
-            if (isLibraryStatement(stmt) || isImportStatement(stmt) || isTypecastStatement(stmt)) {
+            if (isLibraryStatement(stmt) || isImportStatement(stmt) || isTypecastStatement(stmt) || isAliasStatement(stmt)) {
                 topOfFileIncludeStatements.push(stmt);
             } else {
                 //break out of the loop, we found all of our library statements
@@ -351,7 +360,9 @@ export class BrsFileValidator {
             // eslint-disable-next-line @typescript-eslint/dot-notation
             ...this.event.file['_cachedLookups'].libraryStatements,
             // eslint-disable-next-line @typescript-eslint/dot-notation
-            ...this.event.file['_cachedLookups'].importStatements
+            ...this.event.file['_cachedLookups'].importStatements,
+            // eslint-disable-next-line @typescript-eslint/dot-notation
+            ...this.event.file['_cachedLookups'].aliasStatements
         ];
         for (let result of statements) {
             //if this statement is not one of the top-of-file statements,
@@ -359,13 +370,19 @@ export class BrsFileValidator {
             if (!topOfFileStatements.includes(result)) {
                 if (isLibraryStatement(result)) {
                     this.event.program.diagnostics.register({
-                        ...DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile(),
+                        ...DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('library'),
                         range: result.range,
                         file: this.event.file
                     });
                 } else if (isImportStatement(result)) {
                     this.event.program.diagnostics.register({
-                        ...DiagnosticMessages.importStatementMustBeDeclaredAtTopOfFile(),
+                        ...DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('import'),
+                        range: result.range,
+                        file: this.event.file
+                    });
+                } else if (isAliasStatement(result)) {
+                    this.event.program.diagnostics.register({
+                        ...DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('alias'),
                         range: result.range,
                         file: this.event.file
                     });

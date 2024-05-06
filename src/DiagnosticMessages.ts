@@ -140,9 +140,9 @@ export let DiagnosticMessages = {
         code: 1023,
         severity: DiagnosticSeverity.Error
     }),
-    importStatementMustBeDeclaredAtTopOfFile: () => ({
-        message: `'import' statement must be declared at the top of the file`,
-        code: 1024,
+    statementMustBeDeclaredAtTopOfFile: (statementKeyword: string) => ({
+        message: `'${statementKeyword}' statement must be declared at the top of the file`,
+        code: 1149,
         severity: DiagnosticSeverity.Error
     }),
     methodDoesNotExistOnType: (methodName: string, className: string) => ({
@@ -311,7 +311,7 @@ export let DiagnosticMessages = {
         code: 1056,
         severity: DiagnosticSeverity.Error
     }),
-    libraryStatementMustBeDeclaredAtTopOfFile: () => ({
+    __unused5: () => ({
         message: `'library' statement must be declared at the top of the file`,
         code: 1057,
         severity: DiagnosticSeverity.Error
