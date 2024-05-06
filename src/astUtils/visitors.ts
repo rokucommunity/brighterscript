@@ -101,6 +101,11 @@ export function walkArray<T = AstNode>(array: Array<T>, visitor: WalkVisitor, op
  */
 export function createVisitor(
     visitor: {
+        /**
+         * Called for every Statement or Expression encountered by a walker (while still honoring the WalkMode options)
+         * The more specific visitor functions will still be called.
+         */
+        AstNode?: (node: Statement | Expression, parent?: AstNode, owner?: any, key?: any) => AstNode | void;
         //statements
         Body?: (statement: Body, parent?: Statement, owner?: any, key?: any) => Statement | void;
         AssignmentStatement?: (statement: AssignmentStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
@@ -172,6 +177,9 @@ export function createVisitor(
     }
 ) {
     return <WalkVisitor>((statement: Statement, parent?: Statement, owner?: any, key?: any): Statement | void => {
+        //call the generic AstNode visitor first (if defined)
+        visitor.AstNode?.(statement, parent, owner, key);
+        //now call the specifically-named visitor
         return visitor[statement.constructor.name]?.(statement, parent, owner, key);
     });
 }

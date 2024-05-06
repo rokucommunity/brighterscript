@@ -94,6 +94,41 @@ describe('astUtils visitors', () => {
         };
     }
 
+    describe('createVisitor', () => {
+        it(`calls the 'AstNode' event for every node`, () => {
+            const file = program.setFile<BrsFile>('source/main.brs', `
+                sub Main()
+                    print "Hello"
+                end sub
+            `);
+            const nodes: AstNode[] = [];
+            function track(node: AstNode) {
+                nodes.push(node);
+            }
+            const visitor = createVisitor({
+                AstNode: track,
+                FunctionStatement: track,
+                FunctionExpression: track,
+                PrintStatement: track,
+                Block: track,
+                LiteralExpression: track
+            });
+            file.ast.walk(visitor, { walkMode: WalkMode.visitAllRecursive });
+            expect(nodes.map(x => x.constructor.name)).to.eql([
+                'FunctionStatement',
+                'FunctionStatement',
+                'FunctionExpression',
+                'FunctionExpression',
+                'Block',
+                'Block',
+                'PrintStatement',
+                'PrintStatement',
+                'LiteralExpression',
+                'LiteralExpression'
+            ]);
+        });
+    });
+
     describe('Statements', () => {
         it('Walks through all the statements with depth', () => {
             const actual: string[] = [];
