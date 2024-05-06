@@ -5,9 +5,6 @@ import type { AALiteralExpression, AAMemberExpression, AnnotationExpression, Arr
 import { isExpression, isStatement } from './reflection';
 import type { Editor } from './Editor';
 import type { Statement, Expression, AstNode } from '../parser/AstNode';
-import { TokenKind } from '../lexer/TokenKind';
-import { isToken, type Token } from '../lexer/Token';
-
 
 /**
  * Walks the statements of a block and descendent sub-blocks, and allow replacing statements
@@ -24,8 +21,6 @@ export function walkStatements(
 }
 
 export type WalkVisitor = <T = AstNode>(node: AstNode, parent?: AstNode, owner?: any, key?: any) => void | T;
-export type WalkTokenVisitor = <K = TokenKind>(token: Token & { kind: K }, parent?: AstNode, owner?: any, key?: any) => void | (Token & { kind: K });
-
 
 /**
  * A helper function for Statement and Expression `walkAll` calls.
@@ -47,25 +42,6 @@ export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: W
 
     //notify the visitor of this element
     if (element.visitMode & options.walkMode) {
-
-        if (options.walkMode & WalkMode.visitComments) {
-            const leadingTrivia = element.getLeadingTrivia();
-            for (let i = 0; i < leadingTrivia.length; i++) {
-                const trivia = leadingTrivia[i];
-                if (trivia.kind === TokenKind.Comment) {
-                    const result = (visitor as unknown as WalkTokenVisitor)?.(trivia, element as any, leadingTrivia, i);
-                    if (result && isToken(result)) {
-                        if (options.editor) {
-                            options.editor.setProperty(leadingTrivia, i, result as any);
-                        } else {
-                            leadingTrivia[i] = result;
-
-                        }
-                    }
-                }
-            }
-        }
-
         const result = visitor?.(element, element.parent as any, owner, key);
 
         //replace the value on the parent if the visitor returned a Statement or Expression (this is how visitors can edit AST)
@@ -193,14 +169,9 @@ export function createVisitor(
         RegexLiteralExpression?: (expression: RegexLiteralExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
         TypeExpression?: (expression: TypeExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
         TypecastExpression?: (expression: TypecastExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
-        //Tokens
-        CommentToken?: (token: Token & { kind: TokenKind.Comment }, parent?: AstNode, owner?: any, key?: any) => Token & { kind: TokenKind.Comment } | void;
     }
 ) {
-    return <WalkVisitor>((statement: Statement | Token, parent?: Statement, owner?: any, key?: any): Statement | void => {
-        if (isToken(statement)) {
-            return visitor[statement.kind + 'Token']?.(statement, parent, owner, key);
-        }
+    return <WalkVisitor>((statement: Statement, parent?: Statement, owner?: any, key?: any): Statement | void => {
         return visitor[statement.constructor.name]?.(statement, parent, owner, key);
     });
 }
@@ -266,11 +237,7 @@ export enum InternalWalkMode {
     /**
      * If child function expressions are encountered, this will allow the walker to step into them.
      */
-    recurseChildFunctions = 16,
-    /**
-     * If a visited node has comments in its leadingTrivia, visit those comments
-     */
-    visitComments = 32
+    recurseChildFunctions = 16
 }
 
 /* eslint-disable @typescript-eslint/prefer-literal-enum-member */
@@ -315,9 +282,5 @@ export enum WalkMode {
     /**
      * Visit all descendent statements and expressions, and DOES step into child functions
      */
-    visitAllRecursive = InternalWalkMode.walkStatements | InternalWalkMode.visitStatements | InternalWalkMode.walkExpressions | InternalWalkMode.visitExpressions | InternalWalkMode.recurseChildFunctions,
-    /**
-     * Visit comment tokens in leading trivia
-     */
-    visitComments = InternalWalkMode.visitComments
+    visitAllRecursive = InternalWalkMode.walkStatements | InternalWalkMode.visitStatements | InternalWalkMode.walkExpressions | InternalWalkMode.visitExpressions | InternalWalkMode.recurseChildFunctions
 }

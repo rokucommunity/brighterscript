@@ -558,8 +558,7 @@ This plugin will search through every LiteralExpression in the entire project, a
 
 Another common use case is to remove print statements and comments. Here's a plugin to do that:
 
-Note: Comments are not regular nodes in the AST, so to visit comments, there is an additional requirement to specify
-that the AST walk should also `visitComments`. In the case of comments, the first argument of the visitor function is a `Token`, not an `AstNode`.
+Note: Comments are not regular nodes in the AST. They're considered "trivia". To access them, you need to ask each AstNode for its trivia. to help with this, we've included the `AstNode` visitor method. Here's how you'd do that:
 
 ```typescript
 import { isBrsFile, createVisitor, WalkMode, BeforeFileTranspileEvent, CompilerPlugin } from 'brighterscript';
@@ -575,9 +574,15 @@ export default function plugin() {
                         //replace `PrintStatement` transpilation with empty string
                         event.editor.overrideTranspileResult(statement, '');
                     },
-                    CommentToken: (_token, _parent, owner, key) => {
-                        //remove comment tokens
-                        event.editor.removeProperty(owner, key);
+                    AstNode: (node: AstNode, _parent, owner, key) => {
+                        const trivia = node.getLeadingTrivia();
+                        for(let i = 0; i < trivia.length; i++) {
+                            let triviaItem = trivia[i].
+                            if (triviaItem.kind === TokenKind.Comment) {
+                                //remove comment tokens
+                                event.editor.removeProperty(trivia, i);
+                            }
+                        }
                     }
                 }), {
                     walkMode: WalkMode.visitStatements | WalkMode.visitComments
