@@ -134,12 +134,12 @@ describe('util', () => {
             let config = util.loadConfigFile(s`${rootDir}/child.json`);
             expect(config).to.deep.equal({
                 '_ancestors': [
-                    `${rootDir}/child.json`
+                    s`${rootDir}/child.json`
                 ],
-                'cwd': `${rootDir}/cwd`,
-                'outFile': `${rootDir}/out/app.zip`,
-                'rootDir': `${rootDir}/rootDir`,
-                'stagingDir': `${rootDir}/stagingDir`
+                'cwd': s`${rootDir}/cwd`,
+                'outFile': s`${rootDir}/out/app.zip`,
+                'rootDir': s`${rootDir}/rootDir`,
+                'stagingDir': s`${rootDir}/stagingDir`
             });
         });
 
