@@ -370,7 +370,7 @@ describe('Scope', () => {
             program.validate();
             expectDiagnostics(program, [
                 {
-                    message: DiagnosticMessages.cannotFindName('delta').message,
+                    ...DiagnosticMessages.cannotFindName('delta', 'constants.alpha.delta'),
                     file: {
                         srcPath: buttonPrimary.srcPath
                     },
@@ -378,7 +378,7 @@ describe('Scope', () => {
                         message: `In component scope 'ButtonPrimary'`
                     }]
                 }, {
-                    message: DiagnosticMessages.cannotFindName('delta').message,
+                    ...DiagnosticMessages.cannotFindName('delta', 'constants.alpha.delta'),
                     file: {
                         srcPath: buttonSecondary.srcPath
                     },

@@ -97,27 +97,31 @@ export class DiagnosticManager {
         for (const cachedDiagnostic of this.diagnosticsCache.values()) {
             const diagnostic = { ...cachedDiagnostic.diagnostic };
             const relatedInformation = [...cachedDiagnostic.diagnostic.relatedInformation];
+            const affectedScopes = new Set<Scope>();
             for (const context of cachedDiagnostic.contexts.values()) {
                 if (context.scope) {
-                    const scope = context.scope;
-                    if (isXmlScope(scope) && scope.xmlFile?.srcPath) {
-                        relatedInformation.push({
-                            message: `In component scope '${scope?.xmlFile?.componentName?.text}'`,
-                            location: util.createLocation(
-                                URI.file(scope.xmlFile.srcPath).toString(),
-                                scope?.xmlFile?.ast?.componentElement?.getAttribute('name')?.tokens?.value?.range ?? util.createRange(0, 0, 0, 10)
-                            )
-                        });
-                    } else {
-                        relatedInformation.push({
-                            message: `In scope '${scope.name}'`,
-                            location: util.createLocation(
-                                URI.file(diagnostic.file.srcPath).toString(),
-                                diagnostic.range
-                            )
-                        });
-                    }
+                    affectedScopes.add(context.scope);
                 }
+            }
+            for (const scope of affectedScopes) {
+                if (isXmlScope(scope) && scope.xmlFile?.srcPath) {
+                    relatedInformation.push({
+                        message: `In component scope '${scope?.xmlFile?.componentName?.text}'`,
+                        location: util.createLocation(
+                            URI.file(scope.xmlFile.srcPath).toString(),
+                            scope?.xmlFile?.ast?.componentElement?.getAttribute('name')?.tokens?.value?.range ?? util.createRange(0, 0, 0, 10)
+                        )
+                    });
+                } else {
+                    relatedInformation.push({
+                        message: `In scope '${scope.name}'`,
+                        location: util.createLocation(
+                            URI.file(diagnostic.file.srcPath).toString(),
+                            diagnostic.range
+                        )
+                    });
+                }
+
             }
             diagnostic.relatedInformation = relatedInformation;
             results.push(diagnostic);

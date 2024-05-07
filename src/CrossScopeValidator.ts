@@ -6,7 +6,7 @@ import type { Program } from './Program';
 import util from './util';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { BscSymbol } from './SymbolTable';
-import { isNamespaceType } from './astUtils/reflection';
+import { isAnyReferenceType, isNamespaceType, isReferenceType, isTypedFunctionType } from './astUtils/reflection';
 import { getAllRequiredSymbolNames } from './types';
 
 
@@ -41,7 +41,7 @@ export class ProvidedNode {
 
     getSymbol(symbolName: string): FileSymbolPair {
         let lowerSymbolNameParts = symbolName.toLowerCase().split('.');
-        return this.getSymbolByNameParts(lowerSymbolNameParts);
+        return this.getSymbolByNameParts(lowerSymbolNameParts, this);
     }
 
     getNamespace(namespaceName: string): ProvidedNode {
@@ -49,7 +49,7 @@ export class ProvidedNode {
         return this.getNamespaceByNameParts(lowerSymbolNameParts);
     }
 
-    getSymbolByNameParts(lowerSymbolNameParts: string[]): FileSymbolPair {
+    getSymbolByNameParts(lowerSymbolNameParts: string[], root: ProvidedNode): FileSymbolPair {
         const first = lowerSymbolNameParts?.[0];
         const rest = lowerSymbolNameParts.slice(1);
         if (!first) {
@@ -58,16 +58,32 @@ export class ProvidedNode {
         if (this.symbols.has(first)) {
             let result = this.symbols.get(first);
             for (const namePart of rest) {
-                const memberSymbol = result.symbol.type.getMemberTable().getSymbol(namePart, SymbolTypeFlag.runtime);
+                let memberTable = result.symbol.type.getMemberTable();
+                if (isTypedFunctionType(result.symbol.type)) {
+                    const returnType = result.symbol.type.returnType;
+                    if (returnType.isResolvable()) {
+                        memberTable = returnType.getMemberTable();
+                    } else if (isReferenceType(returnType)) {
+                        const fullName = returnType.fullName;
+                        if (fullName.includes('.')) {
+                            memberTable = root.getSymbol(fullName)?.symbol?.type?.getMemberTable();
+                        } else {
+                            memberTable = this.getSymbol(fullName)?.symbol.type.getMemberTable() ??
+                                root.getSymbol(fullName)?.symbol?.type?.getMemberTable();
+                        }
+                    }
+                }
+                const memberSymbol = memberTable?.getSymbol(namePart, SymbolTypeFlag.runtime);
                 if (!memberSymbol) {
                     return;
                 }
-                result.symbol = memberSymbol[0];
+                // get specific member
+                result = { ...result, symbol: memberSymbol[0] };
             }
             return result;
         } else if (rest && this.namespaces.has(first)) {
             const node = this.namespaces.get(first);
-            const parts = node.getSymbolByNameParts(rest);
+            const parts = node.getSymbolByNameParts(rest, root);
 
             return parts;
         }
