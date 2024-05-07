@@ -6,7 +6,7 @@ import type { Program } from './Program';
 import util from './util';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { BscSymbol } from './SymbolTable';
-import { isAnyReferenceType, isNamespaceType, isReferenceType, isTypedFunctionType } from './astUtils/reflection';
+import { isNamespaceType, isReferenceType, isTypedFunctionType } from './astUtils/reflection';
 import { getAllRequiredSymbolNames } from './types';
 
 
