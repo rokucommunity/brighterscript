@@ -17,7 +17,7 @@ import * as deepmerge from 'deepmerge';
 import { NodeHtmlMarkdown } from 'node-html-markdown';
 import { isVariableExpression } from '../src/astUtils/reflection';
 import { SymbolTable } from '../src/SymbolTable';
-import { SymbolTypeFlag } from '../src/SymbolTableFlag';
+import { SymbolTypeFlag } from '../src/SymbolTypeFlag';
 import { referenceTypeFactory } from '../src/types/ReferenceType';
 import { unionTypeFactory } from '../src/types/UnionType';
 
@@ -679,9 +679,17 @@ class Runner {
             if (method) {
                 manager.setDeprecatedData(method, methodHeader, nextMethodHeader);
 
-                method.description = manager.getNextToken<marked.Tokens.Paragraph>(
-                    manager.find(x => !!/description/i.exec(x?.text), methodHeader, nextMethodHeader)
-                )?.text;
+                method.description = (
+                    manager.find(x => {
+                        if (x === methodHeader || /^\**description/i.exec(x?.text) || /^_?available\s*since/i.exec(x?.text)) {
+                            return false;
+                        }
+                        return x.type === 'paragraph';
+                    }, methodHeader, nextMethodHeader) as marked.Tokens.Paragraph)?.text;
+
+                if (!method.description) {
+                    method.description = manager.getNextToken<marked.Tokens.Paragraph>(methodHeader)?.text;
+                }
 
                 method.returnDescription = manager.getNextToken<marked.Tokens.Paragraph>(
                     manager.find(x => !!/return\s*value/i.exec(x?.text), methodHeader, nextMethodHeader)
@@ -722,7 +730,13 @@ class Runner {
 
     private getMethod(text: string) {
         // var state = new TranspileState(new BrsFile({ srcPath: '', destPath: '', program: new Program({})});
-        const functionSignatureToParse = `function ${this.fixFunctionParams(this.sanitizeMarkdownSymbol(text))}\nend function`;
+        let functionSignatureToParse = `function ${this.fixFunctionParams(this.sanitizeMarkdownSymbol(text))}\nend function`;
+        const variadicRegex = new RegExp(/,?\s*\.\.\.\s*\)/, 'g'); // looks for  " ...)"
+        const variadicMatch = functionSignatureToParse.match(variadicRegex);
+        if (variadicMatch) {
+            functionSignatureToParse = functionSignatureToParse.replace(variadicRegex, ')');
+        }
+
         const { statements } = Parser.parse(functionSignatureToParse);
         if (statements.length > 0) {
             const func = statements[0] as FunctionStatement;
@@ -732,6 +746,10 @@ class Runner {
                 returnType: func.func.returnTypeExpression?.getType({ flags: SymbolTypeFlag.typetime })?.toTypeString() ?? 'Void'
             } as Func;
 
+            if (variadicMatch) {
+                signature.isVariadic = true;
+            }
+
 
             const paramsRegex = /\((.*?)\)/g;
             let match = paramsRegex.exec(text);
@@ -739,6 +757,9 @@ class Runner {
                 const foundParamTexts = match[1].split(',').map(x => x.replace(/['"]+/g, '').trim());
                 for (let i = 0; i < foundParamTexts.length; i++) {
                     const foundParam = foundParamTexts[i];
+                    if (foundParam === '...') {
+                        break;
+                    }
                     signature.params.push(this.getParamFromMarkdown(foundParam, `param${i}`));
                 }
             }
@@ -799,7 +820,7 @@ class Runner {
         });
 
         // Override ifSGNodeDict.callFunc
-        fixMethod(this.result.interfaces.ifsgnodedict, 'callfunc', {
+        /*fixMethod(this.result.interfaces.ifsgnodedict, 'callfunc', {
             // Taken from: https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsgnodedict.md#callfunc
             description: `callFunc() is a synchronized interface on roSGNode. It will always execute in the component's owning ScriptEngine and thread (by rendezvous if necessary), and it will always use the m and m.top of the owning component. Any context from the caller can be passed via one or more method parameters, which may be of any type (previously, callFunc() only supported a single associative array parameter).\n\nTo call the function, use the \`callFunc\` field with the required method signature. A return value, if any, can be an object that is similarly arbitrary. The method being called must determine how to interpret the parameters included in the \`callFunc\` field.`,
             name: 'callFunc',
@@ -815,7 +836,7 @@ class Runner {
             isVariadic: true,
             returnType: 'Dynamic',
             returnDescription: 'An arbitrary object'
-        });
+        });*/
 
         // fix ifStringOp overloads
         fixOverloadedMethod(this.result.interfaces.ifstringops, 'instr');

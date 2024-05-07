@@ -1,5 +1,5 @@
 {
-    "generatedDate": "2024-02-09T15:23:27.876Z",
+    "generatedDate": "2024-05-07T19:29:19.204Z",
     "nodes": {
         "animation": {
             "description": "Extends [**AnimationBase**](https://developer.roku.com/docs/references/scenegraph/abstract-nodes/animationbase.md\n\nThe Animation node class provides animations of renderable nodes, by applying interpolator functions to the values in specified renderable node fields. For an animation to take effect, an Animation node definition must include a child field interpolator node ([FloatFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/floatfieldinterpolator.md\"FloatFieldInterpolator\"), [Vector2DFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/vector2dfieldinterpolator.md\"Vector2DFieldInterpolator\"), [ColorFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/colorfieldinterpolator.md\"ColorFieldInterpolator\")) definition for each renderable node field that is animated.\n\nThe Animation node class provides a simple linear interpolator function, where the animation takes place smoothly and simply from beginning to end. The Animation node class also provides several more complex interpolator functions to allow custom animation effects. For example, you can move a graphic image around the screen at differing speeds and curved trajectories at different times in the animation by specifying the appropriate function in the easeFunction field (quadratic and exponential are two examples of functions that can be specified). The interpolator functions are divided into two parts: the beginning of the animation (ease-in), and the end of the animation (ease-out). You can apply a specified interpolator function to either or both ease-in and ease-out, or specify no function for either or both (which is the linear function). You can also change the portion of the animation that is ease-in and ease-out to arbitrary fractional values for a quadratic interpolator function applied to both ease-in and ease-out.",
@@ -637,7 +637,7 @@
                 },
                 {
                     "accessPermission": "READ_WRITE",
-                    "default": "1",
+                    "default": "2",
                     "description": "The number of seconds to complete a 360-degree rotation of the spinner image. A value of 0 will cause the spinner to remain stationary and not spin",
                     "name": "spinInterval",
                     "type": "time"
@@ -6018,6 +6018,10 @@
                     "url": "https://developer.roku.com/docs/references/brightscript/interfaces/ifarrayset.md"
                 },
                 {
+                    "name": "ifArraySlice",
+                    "url": "https://developer.roku.com/docs/references/brightscript/interfaces/ifarrayslice.md"
+                },
+                {
                     "name": "ifArraySort",
                     "url": "https://developer.roku.com/docs/references/brightscript/interfaces/ifarraysort.md"
                 },
@@ -7607,6 +7611,12 @@
             ],
             "methods": [
                 {
+                    "description": "Returns a roAssociativeArray that includes an exit code indicating why an app was terminated, a timestamp, the state of the app and Roku media player at the time the app was exited, and the memory limit exceeded (if applicable). This helps developers monitor and debug memory issues with their apps.",
+                    "name": "GetLastExitInfo",
+                    "params": [],
+                    "returnType": "Object"
+                },
+                {
                     "description": "Returns the user's screensaver wait time setting in number of minutes, or zero if the screensaver is disabled.",
                     "name": "GetScreensaverTimeout",
                     "params": [],
@@ -7753,6 +7763,12 @@
                     "params": [],
                     "returnDescription": "An integer indicating the estimated available memory remaining for the channel or the available memory for the device, whichever is lower.",
                     "returnType": "dynamic"
+                },
+                {
+                    "description": "Returns the amount of foreground and background memory the app may use and the maximum amount of memory that the RokuOS may allocate on behalf of the app (the memory that shows up in the channel's heap memory statistics). This helps developers debug memory issues and find out the maximum available memory for scenarios such as when their app has been suspended and is in the background, is playing a video, and so on.",
+                    "name": "GetChannelMemoryLimit",
+                    "params": [],
+                    "returnType": "Object"
                 },
                 {
                     "description": "Returns the usage percentage of memory limit for the channel.",
@@ -8010,10 +8026,23 @@
             "properties": [],
             "url": "https://developer.roku.com/docs/references/brightscript/interfaces/ifarrayset.md"
         },
+        "ifarrayslice": {
+            "implementers": [
+                {
+                    "description": "An array stores an indexed collection of BrightScript objects. Each entry of an array can be a different type, or they may all of the same type.",
+                    "name": "roArray",
+                    "url": "https://developer.roku.com/docs/references/brightscript/components/roarray.md"
+                }
+            ],
+            "methods": [],
+            "name": "ifArraySlice",
+            "properties": [],
+            "url": "https://developer.roku.com/docs/references/brightscript/interfaces/ifarrayslice.md"
+        },
         "ifarraysort": {
             "implementers": [
                 {
-                    "description": "Returns information about the application",
+                    "description": "An array stores an indexed collection of BrightScript objects. Each entry of an array can be a different type, or they may all of the same type.",
                     "name": "roArray",
                     "url": "https://developer.roku.com/docs/references/brightscript/components/roarray.md"
                 }
@@ -8112,7 +8141,8 @@
                             "type": "Object"
                         }
                     ],
-                    "returnType": "Void"
+                    "returnDescription": "The function returns `invalid`.",
+                    "returnType": "Object"
                 },
                 {
                     "description": "Remove all key/values from the associative array.",
@@ -8950,7 +8980,7 @@
                     "returnType": "Boolean"
                 },
                 {
-                    "description": "This test mode short circuits communication to the Roku Channel store. It makes other methods get their responses to async queries and operations from configuration files, rather than actual server communication.",
+                    "description": "It is recommended that developers use [billing testing](/docs/developer-program/roku-pay/testing/billing-testing.md) instead of this method.",
                     "name": "FakeServer",
                     "params": [
                         {
@@ -8983,6 +9013,7 @@
                     "returnType": "Object"
                 },
                 {
+                    "description": "Generates a signed JSON web token (JWT) in the Roku cloud and returns it to the channel application. This token can then be used by the publisher's web services to verify that a message originated from a genuine Roku device. The following example demonstrates how to generate the device attestation token:",
                     "name": "GetDeviceAttestation",
                     "params": [
                         {
@@ -9439,7 +9470,7 @@
                     "returnType": "String"
                 },
                 {
-                    "description": "Return Value",
+                    "description": "Description",
                     "name": "GetYear",
                     "params": [],
                     "returnType": "Integer"
@@ -9655,7 +9686,7 @@
                     "returnType": "Boolean"
                 },
                 {
-                    "description": "Parameters",
+                    "description": "A flag indicating whether lowGeneralMemoryLevel event notifications are enabled (true) or disabled (false).",
                     "name": "EnableLowGeneralMemoryEvent",
                     "params": [
                         {
@@ -9842,6 +9873,7 @@
                     "returnType": "Object"
                 },
                 {
+                    "description": "Checks for the DRM system used by the channel.",
                     "name": "GetDrmInfoEx",
                     "params": [],
                     "returnType": "Object"
@@ -9980,6 +10012,7 @@
                     "returnType": "Object"
                 },
                 {
+                    "description": "Returns the ISO 3166-1 (2-letter) country code associated with the user's Roku account.",
                     "name": "GetUserCountryCode",
                     "params": [],
                     "returnDescription": "An ISO 3166-1 (2-letter) country code.",
@@ -10040,6 +10073,12 @@
                     "params": [],
                     "returnDescription": "A flag indicating whether the screen reader is enabled.",
                     "returnType": "Dynamic"
+                },
+                {
+                    "description": "Returns a flag indicating whether autoplay is enabled on a device. Developers can use this function to ensure that the autoplay device setting is respected when customers browse content in their apps.",
+                    "name": "IsAutoplayEnabled",
+                    "params": [],
+                    "returnType": "Boolean"
                 },
                 {
                     "deprecatedDescription": "**This method is deprecated**.\n\nChannel developers must use the [ifHdmiStatus](/docs/references/brightscript/interfaces/ifhdmistatus.md) interface functions instead.\n",
@@ -10627,6 +10666,7 @@
                     "returnType": "Integer"
                 },
                 {
+                    "description": "Specifies the signing algorithm to be used for signing and verification.",
                     "name": "SetSignAlgorithm",
                     "params": [
                         {
@@ -11208,6 +11248,7 @@
                     "returnType": "Integer"
                 },
                 {
+                    "description": "Each glyph and the needed spacing between glyphs is measured. The returned number of pixels will be no larger than MaxWidth. MaxWidth is generally the amount of pixels available for rendering on this line.",
                     "name": "GetOneLineWidth",
                     "params": [
                         {
@@ -11391,11 +11432,13 @@
             ],
             "methods": [
                 {
+                    "description": "You can get a plain (non-referenced) version of the value by calling the this method.",
                     "name": "GetSub",
                     "params": [],
                     "returnType": "Function"
                 },
                 {
+                    "description": "This method can be used for in/out function parameters. If you have a boxed object, you can change the value in the object via this method, without changing the variable reference itself.",
                     "name": "SetSub",
                     "params": [
                         {
@@ -11626,6 +11669,7 @@
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Adds the specified HTTP header to the list of headers that will be sent in the HTTP request.",
                     "name": "AddHeader",
                     "params": [
                         {
@@ -11659,6 +11703,7 @@
                     "returnType": "Void"
                 },
                 {
+                    "description": "Returns any cookies from the cookie cache that match the specified domain and path. Expired cookies are not returned.",
                     "name": "GetCookies",
                     "params": [
                         {
@@ -11701,6 +11746,7 @@
                     "returnType": "Void"
                 },
                 {
+                    "description": "Set the certificates file used for SSL to the specified .pem file.",
                     "name": "SetCertificatesFile",
                     "params": [
                         {
@@ -11959,6 +12005,7 @@
                     "returnType": "Void"
                 },
                 {
+                    "description": "Removes all elements from the list",
                     "name": "Clear",
                     "params": [],
                     "returnType": "Void"
@@ -12060,6 +12107,7 @@
             ],
             "methods": [
                 {
+                    "description": "Returns an appropriate asset path based on the user's currently selected language.",
                     "name": "GetLocalizedAsset",
                     "params": [
                         {
@@ -12292,7 +12340,7 @@
                     "returnType": "Boolean"
                 },
                 {
-                    "description": "Return Value",
+                    "description": "An [roAssociativeArray](https://developer.roku.com/docs/references/brightscript/components/roassociativearray.md\"roAssociativeArray\") that contains the following keys:",
                     "name": "Split",
                     "params": [],
                     "returnDescription": "An [roAssociativeArray](/docs/references/brightscript/components/roassociativearray.md \"roAssociativeArray\") that contains the following keys:",
@@ -12845,6 +12893,7 @@
             ],
             "methods": [
                 {
+                    "description": "Deletes the specified key.",
                     "name": "Delete",
                     "params": [
                         {
@@ -12968,6 +13017,7 @@
             ],
             "methods": [
                 {
+                    "description": "Returns the model number of the specified Roku remote control. For example, this function returns 135 for an RC135 remote that is connected to the Roku device.",
                     "name": "GetModel",
                     "params": [
                         {
@@ -12987,7 +13037,7 @@
                     "params": [
                         {
                             "default": null,
-                            "description": "The feature to be checked, which may be one of the following values:  *   \"bluetooth\" *   \"wifi\" *   \"motion\" *   \"audio\" *   \"voicecapture\" *   \"findremote\"",
+                            "description": "The feature to be checked, which may be one of the following values:  *   \"bluetooth\" *   \"wifi\" *   \"motion\" *   \"audio\" *   \"voicecapture\" *   \"findremote\" *   \"hasMuteSwitch\" (_Available since Roku OS 13.0_; enables developers to check whether a Roku remote control includes a hands-free voice switch).",
                             "isRequired": true,
                             "name": "feature",
                             "type": "String"
@@ -13004,6 +13054,7 @@
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Checks whether the specified Roku remote control is awake.",
                     "name": "IsAwake",
                     "params": [
                         {
@@ -13032,6 +13083,7 @@
             ],
             "methods": [
                 {
+                    "description": "Specifies the digest algorithm to use for signing and verification.",
                     "name": "SetDigestAlgorithm",
                     "params": [
                         {
@@ -13060,6 +13112,7 @@
                     "returnType": "Integer"
                 },
                 {
+                    "description": "Specifies the public key to be used for verification.",
                     "name": "SetPublicKey",
                     "params": [
                         {
@@ -13672,22 +13725,21 @@
             ],
             "methods": [
                 {
-                    "description": "callFunc() is a synchronized interface on roSGNode. It will always execute in the component's owning ScriptEngine and thread (by rendezvous if necessary), and it will always use the m and m.top of the owning component. Any context from the caller can be passed via one or more method parameters, which may be of any type (previously, callFunc() only supported a single associative array parameter).\n\nTo call the function, use the `callFunc` field with the required method signature. A return value, if any, can be an object that is similarly arbitrary. The method being called must determine how to interpret the parameters included in the `callFunc` field.",
+                    "description": "callFunc() is a synchronized interface on roSGNode. It always executes in the component's owning ScriptEngine and thread (by rendezvous if necessary), and it will always use the m and m.top of the owning component. Any context from the caller can be passed via one or more method parameters, which may be of any type (previously, callFunc() only supported a single associative array parameter).",
                     "isVariadic": true,
                     "name": "callFunc",
                     "params": [
                         {
                             "default": null,
-                            "description": "The function name to call.",
                             "isRequired": true,
-                            "name": "functionName",
+                            "name": "funcName",
                             "type": "String"
                         }
                     ],
-                    "returnDescription": "An arbitrary object",
                     "returnType": "Dynamic"
                 },
                 {
+                    "description": "Returns a copy of the entire node tree or just a shallow copy.",
                     "name": "clone",
                     "params": [
                         {
@@ -14142,6 +14194,7 @@
                     "returnType": "Object"
                 },
                 {
+                    "description": "Sets an roHttpAgent object for the node.",
                     "name": "setHttpAgent",
                     "params": [
                         {
@@ -14252,6 +14305,7 @@
             ],
             "methods": [
                 {
+                    "description": "Performs an orderly close of socket. After a close, most operations on the socket will return invalid.",
                     "name": "Close",
                     "params": [],
                     "returnType": "Void"
@@ -14321,6 +14375,7 @@
                     "returnType": "Integer"
                 },
                 {
+                    "description": "Reads data from the socket and stores the result in a string.",
                     "name": "ReceiveStr",
                     "params": [
                         {
@@ -14430,6 +14485,7 @@
             ],
             "methods": [
                 {
+                    "description": "Returns the IPV4 address in dotted quad format (for example, \"192.168.1.120:8888\").",
                     "name": "GetAddress",
                     "params": [],
                     "returnDescription": "The IPV4 address.",
@@ -14736,6 +14792,7 @@
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Checks whether if the [listen()](#listenbacklog-as-integer-as-boolean) method has been successfully called on this socket.",
                     "name": "IsListening",
                     "params": [],
                     "returnDescription": "A flag indicating whether the [listen()](#listenbacklog-as-integer-as-boolean) method has been successfully called on this socket.",
@@ -15154,6 +15211,7 @@
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Checks whether there are no errors (the error number is 0).",
                     "name": "eSuccess",
                     "params": [],
                     "returnType": "Boolean"
@@ -15563,7 +15621,7 @@
                     "returnType": "String"
                 },
                 {
-                    "description": "**OVERLOADED METHOD**\n\n",
+                    "description": "**OVERLOADED METHOD**\n\nChecks whether the string ends with the substring specified in **matchString**, starting at the end of the string.\n\n or \n\nChecks whether the string ends with the substring specified in **matchString**, starting at the position specified in the **length** parameter.",
                     "name": "EndsWith",
                     "params": [
                         {
@@ -15589,6 +15647,14 @@
                     "name": "Escape",
                     "params": [],
                     "returnDescription": "The URL-encoded version of the specified string.",
+                    "returnType": "String"
+                },
+                {
+                    "description": "Returns a format conversion using the specified printf-like [format string](https://developer.roku.com/docs/references/brightscript/language/global-string-functions.mdformat-strings) and matching dynamic parameters.",
+                    "isVariadic": true,
+                    "name": "Format",
+                    "params": [],
+                    "returnDescription": "The formatted string.",
                     "returnType": "String"
                 },
                 {
@@ -15737,7 +15803,7 @@
                     "returnType": "Object"
                 },
                 {
-                    "description": "**OVERLOADED METHOD**\n\n",
+                    "description": "**OVERLOADED METHOD**\n\nChecks whether the string starts with the substring specified in **matchString**, starting at the beginning of the string (position 0).\n\n or \n\nChecks whether the string starts with the substring specified in **matchString**, starting at the **matchPos** parameter (0-based character offset).",
                     "name": "StartsWith",
                     "params": [
                         {
@@ -15835,7 +15901,7 @@
             "url": "https://developer.roku.com/docs/references/brightscript/interfaces/ifsystemlog.md"
         },
         "iftexttospeech": {
-            "description": "> To implement CVAA/screen reader support in your channel, use the [roAudioGuide](https://developer.roku.com/docs/references/brightscript/components/roaudioguide.md component object. The roTextToSpeech component object is typically used for book readers and other special-purpose applications.\n> \n> Please note this component is only available on the following devices: Roku Streaming Stick (3600X), Roku Express (3700X) and Express+ (3710X), Roku Premiere (4620X) and Premiere+ (4630X), Roku Ultra (4640X), and any Roku TV running Roku OS version 7.2 and later.",
+            "description": "> To implement CVAA/screen reader support in your channel, use the [roAudioGuide](https://developer.roku.com/docs/references/brightscript/components/roaudioguide.md component object. The roTextToSpeech component object is typically used for book readers and other special-purpose applications.",
             "implementers": [
                 {
                     "description": "The roTextToSpeech component provides text to speech capabilities to applications",
@@ -16246,6 +16312,20 @@
                     "name": "ToStr",
                     "params": [],
                     "returnDescription": "The string.",
+                    "returnType": "String"
+                },
+                {
+                    "description": "Returns the object's value formatted as a string according to the specified printf-like [format string](https://developer.roku.com/docs/references/brightscript/language/global-string-functions.mdformat-strings).",
+                    "name": "ToStr",
+                    "params": [
+                        {
+                            "default": null,
+                            "isRequired": true,
+                            "name": "format",
+                            "type": "String"
+                        }
+                    ],
+                    "returnDescription": "The formatted string.",
                     "returnType": "String"
                 }
             ],
@@ -16881,6 +16961,7 @@
                 },
                 {
                     "deprecatedDescription": "This function is deprecated. Roku no longer supports Macrovision and this function exists as a no-op so that legacy scripts do not break.",
+                    "description": "This function is deprecated. Roku no longer supports Macrovision and this function exists as a no-op so that legacy scripts do not break.",
                     "isDeprecated": true,
                     "name": "SetMacrovisionLevel",
                     "params": [
@@ -17165,6 +17246,7 @@
                     "returnType": "String"
                 },
                 {
+                    "description": "Checks whether the element has the specified attribute.",
                     "name": "HasAttribute",
                     "params": [
                         {
@@ -17338,66 +17420,79 @@
             ],
             "methods": [
                 {
+                    "description": "Checks whether a segment in an adaptive stream (HLS, Smooth, or DASH) has been downloaded. This method returns true if a segment in an adaptive stream (HLS, Smooth, or DASH) has been downloaded; otherwise, it returns false. Specific information about the event can be obtained by calling the GetMessage(), GetIndex() and GetInfo() methods on the event.",
                     "name": "isDownloadSegmentInfo",
                     "params": [],
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Checks whether an event has been fired when the format of all tracks in the media stream have been identified.",
                     "name": "isFormatDetected",
                     "params": [],
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Audio playback completed at end of content.",
                     "name": "isFullResult",
                     "params": [],
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "A stream has been selected to start playing.",
                     "name": "isListItemSelected",
                     "params": [],
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Audio playback was interrupted",
                     "name": "isPartialResult",
                     "params": [],
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Audio playback was paused by the user.",
                     "name": "isPaused",
                     "params": [],
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Audio playback failed due to an error",
                     "name": "isRequestFailed",
                     "params": [],
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Stream playback has completed successfully.",
                     "name": "isRequestSucceeded",
                     "params": [],
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Audio playback has resumed",
                     "name": "isResumed",
                     "params": [],
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Checks whether the individual segments in an HLS or smooth stream are about to be downloaded. This method returns true if segments in the stream are going to be downloaded; otherwise, it returns false.",
                     "name": "isSegmentDownloadStarted",
                     "params": [],
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Status information is available.",
                     "name": "isStatusMessage",
                     "params": [],
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Checks whether playback has begun of a segment in an HLS, DASH, or smooth stream. This method returns true if the playback of a segment in an HLS, DASH, or smooth stream has begun; otherwise, it returns false. Specific information about the event can be obtained by calling the GetMessage(), GetIndex() and GetInfo() methods on the event.",
                     "name": "isStreamSegmentInfo",
                     "params": [],
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "This event is fired when an ID3 timecode has passed with an event that includes key/value pairs for timed metadata that the Brightscript channel is interested in.",
                     "name": "isTimedMetaData",
                     "params": [],
                     "returnType": "Boolean"
@@ -17417,16 +17512,19 @@
             ],
             "methods": [
                 {
+                    "description": "The index value of this event is not used and is always set to 0.",
                     "name": "GetIndex",
                     "params": [],
                     "returnType": "Integer"
                 },
                 {
+                    "description": "Returns an associative array with the following key/value pairs:",
                     "name": "GetInfo",
                     "params": [],
                     "returnType": "Object"
                 },
                 {
+                    "description": "Returns the string \"CECStatus\".",
                     "name": "GetMessage",
                     "params": [],
                     "returnType": "String"
@@ -17446,16 +17544,19 @@
             ],
             "methods": [
                 {
+                    "description": "Checks whether the previous GET request has completed failed.",
                     "name": "isRequestFailed",
                     "params": [],
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Checks if the previous GET request did not complete. This method returns true if the request was not complete; otherwise, it returns false.",
                     "name": "isRequestInterrupted",
                     "params": [],
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Checks whether the previous GET request has completed successfully.",
                     "name": "isRequestSucceeded",
                     "params": [],
                     "returnType": "Boolean"
@@ -17475,11 +17576,13 @@
             ],
             "methods": [
                 {
+                    "description": "Indicates whether the user has changed the closed caption mode or track. This method returns true if the caption mode changed; otherwise, it returns false.",
                     "name": "isCaptionModeChanged",
                     "params": [],
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Checks if the device status has changed. This method returns true if the device status has changed; otherwise, it returns false.",
                     "name": "isStatusMessage",
                     "params": [],
                     "returnType": "Boolean"
@@ -17499,11 +17602,13 @@
             ],
             "methods": [
                 {
+                    "description": "Checks if a storage device was inserted in the USB port. This method returns true if a storage device was inserted; otherwise, it returns false.",
                     "name": "isStorageDeviceAdded",
                     "params": [],
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Checks if a storage device was removed from the USB port. This method returns true if a storage device was removed; otherwise, it returns false.",
                     "name": "isStorageDeviceRemoved",
                     "params": [],
                     "returnType": "Boolean"
@@ -17518,6 +17623,7 @@
             "implementers": [],
             "methods": [
                 {
+                    "description": "Checks if an HDMI status event has occurred. This method returns true if an HDMI status event has occurred; otherwise, it returns false.",
                     "name": "isHdmiStatus",
                     "params": [],
                     "returnType": "Boolean"
@@ -17537,11 +17643,13 @@
             ],
             "methods": [
                 {
+                    "description": "Returns an roAssociativeArray describing the input event, which may be one of the following values:",
                     "name": "GetInfo",
                     "params": [],
                     "returnType": "Object"
                 },
                 {
+                    "description": "Checks if an input event was received. This method returns true if an input event was received; otherwise, it returns false.",
                     "name": "isInput",
                     "params": [],
                     "returnType": "Boolean"
@@ -17561,11 +17669,13 @@
             ],
             "methods": [
                 {
+                    "description": "Checks if the microphone recording session has been closed. This method returns true if the recording session is closed; otherwise, it returns false.",
                     "name": "IsRecordingDone",
                     "params": [],
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Checks whether the microphone is open. This method returns true when the microphone is open; otherwise, it returns false.",
                     "name": "IsRecordingInfo",
                     "params": [],
                     "returnType": "Boolean"
@@ -17585,26 +17695,31 @@
             ],
             "methods": [
                 {
+                    "description": "Retrieves the new field value at the time of the change.",
                     "name": "getData",
                     "params": [],
                     "returnType": "Dynamic"
                 },
                 {
+                    "description": "Retrieves the name of the field that changed.",
                     "name": "getField",
                     "params": [],
                     "returnType": "Dynamic"
                 },
                 {
+                    "description": "Retrieves an AA that contains the values of selected \"context\" fields, which were [specified in an earlier-executed call](https://developer.roku.com/docs/references/brightscript/interfaces/ifsgnodefield.mdevent-field-aggregation) to `observeField()` or `observeFieldScoped()`. (If no such \"context\" fields were designated previously, `getInfo()` returns an empty AA.) The array is keyed on the names of the \"context\" fields, and the entry values are the instantaneous values of the corresponding fields, at the point when the observed field changed.",
                     "name": "getInfo",
                     "params": [],
                     "returnType": "Object"
                 },
                 {
+                    "description": "Retrieves the ID of the node that changed.",
                     "name": "getNode",
                     "params": [],
                     "returnType": "Dynamic"
                 },
                 {
+                    "description": "Retrieves a pointer to the node. This can be used for nodes without an ID.",
                     "name": "getRoSGNode",
                     "params": [],
                     "returnType": "Dynamic"
@@ -17624,6 +17739,7 @@
             ],
             "methods": [
                 {
+                    "description": "Checks whether the screen has been closed and is no longer displayed to the user. This method returns true if the screen was closed; otherwise, it returns false.",
                     "name": "isScreenClosed",
                     "params": [],
                     "returnType": "Boolean"
@@ -17647,6 +17763,7 @@
             ],
             "methods": [
                 {
+                    "description": "Returns the ID of the socket this event is for. The ID of a socket can be obtained from ifSocketAsync.GetID(). Use [ifSocketStatus](https://developer.roku.com/docs/references/brightscript/interfaces/ifsocketstatus.md\"ifSocketStatus\") or [ifSocketConnectionStatus](https://developer.roku.com/docs/references/brightscript/interfaces/ifsocketconnectionstatus.md\"ifSocketConnectionStatus\") on the indicated socket to query the new status for the socket.",
                     "name": "GetSocketID",
                     "params": [],
                     "returnType": "Integer"
@@ -17661,6 +17778,7 @@
             "implementers": [],
             "methods": [
                 {
+                    "description": "Returns an AssociativeArray containing information describing the event, which may be one of the following values:",
                     "name": "GetInfo",
                     "params": [],
                     "returnType": "Object"
@@ -17680,16 +17798,19 @@
             ],
             "methods": [
                 {
+                    "description": "Returns the description of the speech, which may be one of the following values:",
                     "name": "GetData",
                     "params": [],
                     "returnType": "Integer"
                 },
                 {
+                    "description": "The text to speech service may be shared among any number of clients; therefore, the IDs returned to a given client are not necessarily contiguous. The value is only meaningful if [GetData()](https://developer.roku.com/docs/references/brightscript/events/rotexttospeechevent.mdgetinfo-as-object \"GetData()\") returned 0, 1 or 2; it returns 0 otherwise.",
                     "name": "GetIndex",
                     "params": [],
                     "returnType": "Integer"
                 },
                 {
+                    "description": "Returns an associative array with the following key-value pairs, depending the value returned by the [GetData()](https://developer.roku.com/docs/references/brightscript/events/rotexttospeechevent.mdgetinfo-as-object \"GetData()\") method:",
                     "name": "GetInfo",
                     "params": [],
                     "returnType": "Object"
@@ -17709,21 +17830,25 @@
             ],
             "methods": [
                 {
+                    "description": "Returns an roBitmap from the request if the state is ready.",
                     "name": "GetBitmap",
                     "params": [],
                     "returnType": "Object"
                 },
                 {
+                    "description": "Returns the unique id of the request.",
                     "name": "GetId",
                     "params": [],
                     "returnType": "Integer"
                 },
                 {
+                    "description": "Returns the state of the request. See [ifTextureRequest](https://developer.roku.com/docs/references/brightscript/interfaces/iftexturerequest.md\"ifTextureRequest\").GetState() for the list of states.",
                     "name": "GetState",
                     "params": [],
                     "returnType": "Integer"
                 },
                 {
+                    "description": "Returns the URI of the request.",
                     "name": "GetURI",
                     "params": [],
                     "returnType": "String"
@@ -17743,31 +17868,37 @@
             ],
             "methods": [
                 {
+                    "description": "Returns the Unicode character value generated by a keyboard key press event.",
                     "name": "GetChar",
                     "params": [],
                     "returnType": "Integer"
                 },
                 {
+                    "description": "Returns the ID of the remote button or character value represented by the event. Values 0x20..0x10FFFF represent a Unicode character value. Other values represent a remote button ID. GetID() returns the same value for a release event as for the press event.",
                     "name": "GetID",
                     "params": [],
                     "returnType": "Integer"
                 },
                 {
+                    "description": "Returns an integer representing pressed or released keys on the remote. This table can be accessed at runtime by calling `bslCore.brs: bslUniversalControlEventCodes()`:",
                     "name": "GetInt",
                     "params": [],
                     "returnType": "Integer"
                 },
                 {
+                    "description": "Returns the ID of the remote button that generated an event.",
                     "name": "GetKey",
                     "params": [],
                     "returnType": "Integer"
                 },
                 {
+                    "description": "Returns an identifier associated with the type and ID of the remote control that generated the event. For example, if multiple wireless remotes are paired, this may be used to distinguish the event sources. Some remote controls, such as IR remotes, can not be distinguished using this API.",
                     "name": "GetRemoteID",
                     "params": [],
                     "returnType": "String"
                 },
                 {
+                    "description": "Checks whether a press event has occurred. This method returns true if a press event has occurred; otherwise, it returns false.",
                     "name": "IsPress",
                     "params": [],
                     "returnType": "Boolean"
@@ -17787,41 +17918,49 @@
             ],
             "methods": [
                 {
+                    "description": "Returns a description of the failure that occurred.",
                     "name": "GetFailureReason",
                     "params": [],
                     "returnType": "String"
                 },
                 {
+                    "description": "Returns the type of event, which may be one of the following values:",
                     "name": "GetInt",
                     "params": [],
                     "returnType": "Integer"
                 },
                 {
+                    "description": "Returns the protocol response code associated with this event. For a successful HTTP request this will be the HTTP status code 200. For unexpected errors the return value is negative. There are lots of possible negative errors from the CURL library but it's often best just to look at the text version via GetFailureReason().",
                     "name": "GetResponseCode",
                     "params": [],
                     "returnType": "Integer"
                 },
                 {
+                    "description": "Returns an [roAssociativeArray](https://developer.roku.com/docs/references/brightscript/components/roassociativearray.md\"roAssociativeArray\") containing all the headers returned by the server for appropriate protocols (such as HTTP). Headers are only returned when the status code is greater than or equal to 200 and less than 300",
                     "name": "GetResponseHeaders",
                     "params": [],
                     "returnType": "Object"
                 },
                 {
+                    "description": "This method returns an [roArray](https://developer.roku.com/docs/references/brightscript/components/roarray.md\"roArray\") of [roAssociativeArrays](https://developer.roku.com/docs/references/brightscript/components/roassociativearray.md\"roAssociativeArray\"), where each associative array contains a single header name/value pair. Use this function if you need access to duplicate headers, since GetResponseHeaders() returns only the last name/value pair for a given name. All headers are returned regardless of the status code",
                     "name": "GetResponseHeadersArray",
                     "params": [],
                     "returnType": "Object"
                 },
                 {
+                    "description": "Returns a magic number that can be matched with the value returned by the [roUrlTransfer.GetIdentity()](https://developer.roku.com/docs/references/brightscript/interfaces/ifurltransfer.mdgetidentity-as-integer) method to determine the source of the roUrlTransfer event.",
                     "name": "GetSourceIdentity",
                     "params": [],
                     "returnType": "Integer"
                 },
                 {
+                    "description": "For transfer complete AsyncGetToString, AsyncPostFromString and AsnycPostFromFile requests this will be the actual response body from the server. This method returns the string associated with the event.",
                     "name": "GetString",
                     "params": [],
                     "returnType": "String"
                 },
                 {
+                    "description": "Returns the IP address of the destination.",
                     "name": "GetTargetIpAddress",
                     "params": [],
                     "returnType": "String"
@@ -17841,86 +17980,103 @@
             ],
             "methods": [
                 {
+                    "description": "Returns current position in the stream (in seconds) from the beginning.",
                     "name": "GetIndex",
                     "params": [],
                     "returnType": "Integer"
                 },
                 {
+                    "description": "Returns an roAssociativeArray array with the following key-value pairs:",
                     "name": "GetInfo",
                     "params": [],
                     "returnType": "Object"
                 },
                 {
+                    "description": "Checks whether closed caption mode or track has been changed by the user. This method returns true if closed caption mode or track has been changed by the user; otherwise, it returns false. Specific information about the event can be obtained by calling the GetMessage(), GetIndex(), and GetInfo() methods on the event.",
                     "name": "isCaptionModeChanged",
                     "params": [],
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Checks whether a segment in an adaptive stream (HLS, Smooth, or DASH) has been downloaded. This method returns true if a segment in an adaptive stream (HLS, Smooth, or DASH) has been downloaded; otherwise, it returns false. Specific information about the event can be obtained by calling the GetMessage(), GetIndex() and GetInfo() methods on the event.",
                     "name": "isDownloadSegmentInfo",
                     "params": [],
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Checks whether an event has been fired when the format of all tracks in the media stream have been identified.",
                     "name": "isFormatDetected",
                     "params": [],
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Checks whether video playback has completed at the end of the content list. This method returns true if video playback has completed at the end of the content list; otherwise, it returns false.",
                     "name": "isFullResult",
                     "params": [],
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Checks whether the video player is about to start playing a new item in the content list. This method returns true if a new item in the content list was selected; otherwise, it returns false.",
                     "name": "isListItemSelected",
                     "params": [],
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Checks whether video playback was paused by the user. This method returns true if video playback was paused; otherwise, it returns false.",
                     "name": "isPaused",
                     "params": [],
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Checks whether the current position in the video stream has changed. This event is sent periodically while playing, as determined by the last call to [ifVideoPlayer.SetPositionNotificationPeriod](https://developer.roku.com/docs/references/brightscript/interfaces/ifvideoplayer.mdsetpositionnotificationperiodperiod-as-integer-as-void \"ifVideoPlayer.SetPositionNotificationPeriod\"). This method returns true if the current position in the video stream has changed; otherwise, it returns false. Specific information about the event can be obtained by calling the GetIndex() and GetInfo() methods on the event.",
                     "name": "isPlaybackPosition",
                     "params": [],
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Checks whether video playback has failed. This method returns true if video playback failed; otherwise, it returns false.",
                     "name": "isRequestFailed",
                     "params": [],
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Checks whether the player has finished playing an item in the content list. This method returns true if the player has finished playing a content list item; otherwise, it returns false. Specific information about the event can be obtained by calling the GetIndex() method on the event.",
                     "name": "isRequestSucceeded",
                     "params": [],
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Checks whether video playback has resumed. This method returns true if video playback has resumed; otherwise, it returns false.",
                     "name": "isResumed",
                     "params": [],
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Checks whether the individual segments in an HLS or smooth stream are about to be downloaded. This method returns true if segments in the stream are going to be downloaded; otherwise, it returns false.",
                     "name": "isSegmentDownloadStarted",
                     "params": [],
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Checks whether status information or other diagnostic message is available. This method returns true if status information or diagnostic message is available; otherwise, it returns false. Specific information about the event can be obtained by calling the GetMessage() method on the event.",
                     "name": "isStatusMessage",
                     "params": [],
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Checks whether playback has begun of a segment in an HLS, DASH, or smooth stream. This method returns true if the playback of a segment in an HLS, DASH, or smooth stream has begun; otherwise, it returns false. Specific information about the event can be obtained by calling the GetMessage(), GetIndex() and GetInfo() methods on the event.",
                     "name": "isStreamSegmentInfo",
                     "params": [],
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Checks whether the video stream has started playing. This method returns true if the video stream has started playing; otherwise, it returns false. Specific information about the event can be obtained by calling the GetIndex() and GetInfo() methods on the event.",
                     "name": "isStreamStarted",
                     "params": [],
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Checks whether an ID3 timecode has passed with an event that includes key-value pairs for timed metadata that the BrightScript channel is interested in.",
                     "name": "isTimedMetaData",
                     "params": [],
                     "returnType": "Boolean"
