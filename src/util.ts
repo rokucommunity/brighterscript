@@ -40,7 +40,7 @@ import { SymbolTypeFlag } from './SymbolTypeFlag';
 import { createIdentifier, createToken } from './astUtils/creators';
 import { MAX_RELATED_INFOS_COUNT } from './diagnosticUtils';
 import type { BscType } from './types/BscType';
-import { unionTypeFactory } from './types/UnionType';
+import { UnionType, unionTypeFactory } from './types/UnionType';
 import { ArrayType } from './types/ArrayType';
 import { BinaryOperatorReferenceType } from './types/ReferenceType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
@@ -1329,6 +1329,8 @@ export class Util {
             return getRect2dType();
         } else if (typeDescriptorLower === 'rect2darray') {
             return new ArrayType(getRect2dType());
+        } else if (typeDescriptorLower === 'font') {
+            return new UnionType([StringType.instance, ComponentType.instance]);
         } else if (lookupTable) {
             //try doing a lookup
             return lookupTable.getSymbolType(typeDescriptorLower, { flags: SymbolTypeFlag.typetime });

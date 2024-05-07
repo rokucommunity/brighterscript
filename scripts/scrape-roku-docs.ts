@@ -17,7 +17,7 @@ import * as deepmerge from 'deepmerge';
 import { NodeHtmlMarkdown } from 'node-html-markdown';
 import { isVariableExpression } from '../src/astUtils/reflection';
 import { SymbolTable } from '../src/SymbolTable';
-import { SymbolTypeFlag } from '../src/SymbolTableFlag';
+import { SymbolTypeFlag } from '../src/SymbolTypeFlag';
 import { referenceTypeFactory } from '../src/types/ReferenceType';
 import { unionTypeFactory } from '../src/types/UnionType';
 
