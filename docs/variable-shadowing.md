@@ -102,3 +102,43 @@ namespace alpha
     end sub
 end namespace
 ```
+
+## Aliasing Shadowed Names
+
+If there is a need to reference a shadowed name, you can `alias` the name at the beginning of the file, thus providing a different name to use.
+
+For example, in the following, the namespace `get` is shadowed by the function `http.get`.
+To work around that, an alias is used to create a new name that can be used to reference the `get` namespace.
+
+```BrighterScript
+alias get2 = get
+
+namespace http
+    'Do an HTTP request
+    sub get()
+        print get2.aa().data 'using `get2` aliased symbol here. it's now clear which item we intended to use
+    end sub
+end namespace
+
+namespace get
+    function aa()
+        return {
+            data: "abc"
+        }
+    end function
+end namespace
+```
+
+transpiles to
+
+```BrightScript
+sub http_get()
+    print get_aa().data
+end sub
+
+sub get_aa()
+    return {
+        data: "abc"
+    }
+end sub
+```

@@ -1,8 +1,8 @@
-import type { Body, AssignmentStatement, Block, ExpressionStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, InterfaceFieldStatement, InterfaceMethodStatement, InterfaceStatement, EnumStatement, EnumMemberStatement, TryCatchStatement, CatchStatement, ThrowStatement, MethodStatement, FieldStatement, ConstStatement, ContinueStatement } from '../parser/Statement';
-import type { LiteralExpression, BinaryExpression, CallExpression, FunctionExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression, TypeCastExpression, TypeExpression, TypedArrayExpression } from '../parser/Expression';
+import type { Body, AssignmentStatement, Block, ExpressionStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, InterfaceFieldStatement, InterfaceMethodStatement, InterfaceStatement, EnumStatement, EnumMemberStatement, TryCatchStatement, CatchStatement, ThrowStatement, MethodStatement, FieldStatement, ConstStatement, ContinueStatement, TypecastStatement, AliasStatement } from '../parser/Statement';
+import type { LiteralExpression, BinaryExpression, CallExpression, FunctionExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression, TypecastExpression, TypeExpression, TypedArrayExpression } from '../parser/Expression';
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
-import type { TypedefProvider } from '../interfaces';
+import type { BsDiagnostic, TypedefProvider } from '../interfaces';
 import type { InvalidType } from '../types/InvalidType';
 import type { VoidType } from '../types/VoidType';
 import { InternalWalkMode } from './visitors';
@@ -49,6 +49,11 @@ export function isXmlFile(file: (BscFile | XmlFile | undefined)): file is XmlFil
 export function isAssetFile(file: (BscFile | AssetFile | undefined)): file is AssetFile {
     return file?.constructor.name === 'AssetFile';
 }
+
+export function isBscFile(file: (BscFile | BscFile | XmlFile | AssetFile | undefined)): file is BscFile {
+    return isBrsFile(file) || isXmlFile(file) || isAssetFile(file);
+}
+
 
 export function isXmlScope(scope: (Scope | undefined)): scope is XmlScope {
     return scope?.constructor.name === 'XmlScope';
@@ -183,6 +188,12 @@ export function isCatchStatement(element: AstNode | undefined): element is Catch
 export function isThrowStatement(element: AstNode | undefined): element is ThrowStatement {
     return element?.kind === AstNodeKind.ThrowStatement;
 }
+export function isTypecastStatement(element: AstNode | undefined): element is TypecastStatement {
+    return element?.kind === AstNodeKind.TypecastStatement;
+}
+export function isAliasStatement(element: AstNode | undefined): element is AliasStatement {
+    return element?.kind === AstNodeKind.AliasStatement;
+}
 
 // Expressions reflection
 /**
@@ -269,8 +280,8 @@ export function isTypedefProvider(element: any): element is TypedefProvider {
 export function isTypeExpression(element: any): element is TypeExpression {
     return element?.kind === AstNodeKind.TypeExpression;
 }
-export function isTypeCastExpression(element: any): element is TypeCastExpression {
-    return element?.kind === AstNodeKind.TypeCastExpression;
+export function isTypecastExpression(element: any): element is TypecastExpression {
+    return element?.kind === AstNodeKind.TypecastExpression;
 }
 export function isTypedArrayExpression(element: any): element is TypedArrayExpression {
     return element?.kind === AstNodeKind.TypedArrayExpression;
@@ -424,4 +435,10 @@ export function isLiteralFloat(value: any): value is LiteralExpression & { type:
 }
 export function isLiteralDouble(value: any): value is LiteralExpression & { type: DoubleType } {
     return isLiteralExpression(value) && isDoubleType(value.getType());
+}
+
+// Diagnostics
+
+export function isBsDiagnostic(value: any): value is BsDiagnostic {
+    return isBscFile(value?.file) && value.range && value.message;
 }

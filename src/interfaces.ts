@@ -37,10 +37,16 @@ export enum DiagnosticOrigin {
     CrossScope = 'CrossScope'
 }
 
-export interface BsDiagnosticWithOrigin extends BsDiagnostic {
-    origin: DiagnosticOrigin;
-    astSegment?: AstNode;
-    filePath?: string;
+export interface DiagnosticContext {
+    scopeSpecific?: boolean;
+    scope?: Scope;
+    tags?: string[];
+    segment?: AstNode;
+}
+
+export interface DiagnosticContextPair {
+    diagnostic: BsDiagnostic;
+    context?: DiagnosticContext;
 }
 
 export interface Callable {
@@ -823,11 +829,34 @@ export interface FileLink<T> {
 }
 
 export interface ExtraSymbolData {
+    /**
+     * What AST node defined this symbol?
+     */
     definingNode?: AstNode;
+    /**
+     * Description of this symbol
+     */
     description?: string;
-    completionPriority?: number; // the higher the number, the lower the priority
+    /**
+     * the higher the number, the lower the priority
+     */
+    completionPriority?: number;
+    /**
+     * Flags for this symbol
+     */
     flags?: SymbolTypeFlag;
-    memberOfAncestor?: boolean; // this symbol comes from an ancestor symbol table
+    /**
+     * this symbol comes from an ancestor symbol table
+     */
+    memberOfAncestor?: boolean;
+    /**
+     * Do not merge this symbol when merging symbol tables
+     */
+    doNotMerge?: boolean;
+    /**
+     * is this symbol an alias?
+     */
+    isAlias?: boolean;
 }
 
 export interface GetTypeOptions {
@@ -856,11 +885,11 @@ export class TypeChainEntry {
         this.range = options.range;
         this.separatorToken = options.separatorToken ?? createToken(TokenKind.Dot);
         this.kind = options.kind;
-    }
-    get isResolved() {
-        return this.type?.isResolvable();
+        this.isResolved = this.type?.isResolvable();
+
     }
 
+    public isResolved: boolean;
     public readonly name: string;
     public readonly type: BscType;
     public readonly data: ExtraSymbolData;
@@ -870,11 +899,29 @@ export class TypeChainEntry {
 }
 
 export interface TypeChainProcessResult {
+    /**
+     * The name of the last item in the chain, OR the first unresolved item in the chain
+     */
     itemName: string;
+    /**
+     * The name of the parent of the item of `itemName`
+     */
     itemParentTypeName: string;
+    /**
+     * The complete chain leading up to the item of `itemName`
+     */
     fullNameOfItem: string;
+    /**
+     * The complete chain (even including unresolved items)
+     */
     fullChainName: string;
+    /**
+     * the range of the first unresolved item
+     */
     range: Range;
+    /**
+     * Does the chain contain a dynamic type?
+     */
     containsDynamic: boolean;
 }
 

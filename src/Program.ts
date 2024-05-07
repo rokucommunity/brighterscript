@@ -7,10 +7,9 @@ import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { BrsFile, ProvidedSymbolInfo } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
-import { type BsDiagnostic, type FileObj, type SemanticToken, type FileLink, type ProvideHoverEvent, type ProvideCompletionsEvent, type Hover, type ProvideDefinitionEvent, type ProvideReferencesEvent, type BeforeFileAddEvent, type BeforeFileRemoveEvent, type PrepareFileEvent, type PrepareProgramEvent, type ProvideFileEvent, type SerializedFile, type TranspileObj, type BsDiagnosticWithOrigin, DiagnosticOrigin } from './interfaces';
+import type { FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, BeforeFileAddEvent, BeforeFileRemoveEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
-import { DiagnosticFilterer } from './DiagnosticFilterer';
 import { DependencyGraph } from './DependencyGraph';
 import { Logger, LogLevel } from './Logger';
 import chalk from 'chalk';
@@ -25,7 +24,6 @@ import { Editor } from './astUtils/Editor';
 import type { Statement } from './parser/AstNode';
 import { CallExpressionInfo } from './bscPlugin/CallExpressionInfo';
 import { SignatureHelpUtil } from './bscPlugin/SignatureHelpUtil';
-import { DiagnosticSeverityAdjuster } from './DiagnosticSeverityAdjuster';
 import { IntegerType } from './types/IntegerType';
 import { StringType } from './types/StringType';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
@@ -51,8 +49,10 @@ import type { UnresolvedSymbol } from './AstValidationSegmenter';
 import { WalkMode, createVisitor } from './astUtils/visitors';
 import type { BscFile } from './files/BscFile';
 import { Stopwatch } from './Stopwatch';
-import { CrossScopeValidator } from './CrossScopeValidator';
 import { firstBy } from 'thenby';
+import { CrossScopeValidator } from './CrossScopeValidator';
+import { DiagnosticManager } from './DiagnosticManager';
+import { ProgramValidatorDiagnosticsTag } from './bscPlugin/validation/ProgramValidator';
 
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
@@ -70,11 +70,17 @@ export class Program {
          */
         options: BsConfig,
         logger?: Logger,
-        plugins?: PluginInterface
+        plugins?: PluginInterface,
+        diagnosticsManager?: DiagnosticManager
     ) {
         this.options = util.normalizeConfig(options);
         this.logger = logger || new Logger(options.logLevel as LogLevel);
         this.plugins = plugins || new PluginInterface([], { logger: this.logger });
+        this.diagnostics = diagnosticsManager || new DiagnosticManager();
+
+        // initialize teh diagnostics Manager
+        this.diagnostics.logger = this.logger;
+        this.diagnostics.options = this.options;
 
         //inject the bsc plugin as the first plugin in the stack.
         this.plugins.addFirst(new BscPlugin());
@@ -112,8 +118,7 @@ export class Program {
         this.globalScope.getAllFiles = () => [globalFile];
         globalFile.isValidated = true;
         this.globalScope.validate();
-        //for now, disable validation of global scope because the global files have some duplicate method declarations
-        this.globalScope.getDiagnostics = () => [];
+
         //TODO we might need to fix this because the isValidated clears stuff now
         (this.globalScope as any).isValidated = true;
     }
@@ -206,9 +211,7 @@ export class Program {
      */
     private dependencyGraph = new DependencyGraph();
 
-    private diagnosticFilterer = new DiagnosticFilterer();
-
-    private diagnosticAdjuster = new DiagnosticSeverityAdjuster();
+    public diagnostics: DiagnosticManager;
 
     /**
      * A scope that contains all built-in global functions.
@@ -220,12 +223,6 @@ export class Program {
      * Plugins which can provide extra diagnostics or transform AST
      */
     public plugins: PluginInterface;
-
-    /**
-     * A set of diagnostics. This does not include any of the scope diagnostics.
-     * Should only be set from `this.validate()`
-     */
-    private diagnostics = [] as Array<BsDiagnostic | BsDiagnosticWithOrigin>;
 
     private fileSymbolInformation = new Map<string, { provides: ProvidedSymbolInfo; requires: UnresolvedSymbol[] }>();
 
@@ -434,49 +431,10 @@ export class Program {
     }
 
     /**
-     * Get the list of errors for the entire program. It's calculated on the fly
-     * by walking through every file, so call this sparingly.
+     * Get the list of errors for the entire program.
      */
     public getDiagnostics() {
-        return this.logger.time(LogLevel.info, ['Program.getDiagnostics()'], () => {
-
-            let diagnostics = [...this.diagnostics];
-
-            //get the diagnostics from all scopes
-            for (let scopeName in this.scopes) {
-                let scope = this.scopes[scopeName];
-                diagnostics.push(
-                    ...scope.getDiagnostics()
-                );
-            }
-
-            //get the diagnostics from all unreferenced files
-            let unreferencedFiles = this.getUnreferencedFiles();
-            for (let file of unreferencedFiles) {
-                diagnostics.push(
-                    ...file.diagnostics
-                );
-            }
-            const filteredDiagnostics = this.logger.time(LogLevel.debug, ['filter diagnostics'], () => {
-                //filter out diagnostics based on our diagnostic filters
-                let finalDiagnostics = this.diagnosticFilterer.filter({
-                    ...this.options,
-                    rootDir: this.options.rootDir
-                }, diagnostics);
-                return finalDiagnostics;
-            });
-
-            this.logger.time(LogLevel.debug, ['adjust diagnostics severity'], () => {
-                this.diagnosticAdjuster.adjust(this.options, diagnostics);
-            });
-
-            this.logger.info(`diagnostic counts: total=${chalk.yellow(diagnostics.length.toString())}, after filter=${chalk.yellow(filteredDiagnostics.length.toString())}`);
-            return filteredDiagnostics;
-        });
-    }
-
-    public addDiagnostics(diagnostics: Array<BsDiagnostic | BsDiagnosticWithOrigin>) {
-        this.diagnostics.push(...diagnostics);
+        return this.diagnostics.getDiagnostics();
     }
 
     /**
@@ -780,6 +738,7 @@ export class Program {
             if (!file || !this.hasFile(file.srcPath)) {
                 continue;
             }
+            this.diagnostics.clearForFile(file.srcPath);
 
             const event: BeforeFileRemoveEvent = { file: file, program: this };
             this.plugins.emit('beforeFileRemove', event);
@@ -840,7 +799,7 @@ export class Program {
      */
     public validate() {
         this.logger.time(LogLevel.log, ['Validating project'], () => {
-            this.diagnostics = [];
+            this.diagnostics.clearForTag(ProgramValidatorDiagnosticsTag);
             const programValidateEvent = {
                 program: this
             };
@@ -967,16 +926,6 @@ export class Program {
         this.logger.info(`Validation Metrics: ${logs.join(', ')}`);
     }
 
-    clearCrossScopeDiagnostics() {
-        this.diagnostics = this.diagnostics.filter((diag) => {
-            if ((diag as BsDiagnosticWithOrigin).origin === DiagnosticOrigin.CrossScope) {
-                return false;
-            }
-            return true;
-        });
-    }
-
-
     private addCrossScopeDiagnostics(changedFiles: BrsFile[]) {
         const scopesForCrossScopeValidation = [];
         for (let scopeName of this.getSortedScopeNames()) {
@@ -1011,7 +960,7 @@ export class Program {
             if (xmlFiles.length > 1) {
                 for (let xmlFile of xmlFiles) {
                     const { componentName } = xmlFile;
-                    this.diagnostics.push({
+                    this.diagnostics.register({
                         ...DiagnosticMessages.duplicateComponentName(componentName.text),
                         range: xmlFile.componentName.range,
                         file: xmlFile,
@@ -1024,7 +973,7 @@ export class Program {
                                 message: 'Also defined here'
                             };
                         })
-                    });
+                    }, { tags: [ProgramValidatorDiagnosticsTag] });
                 }
             }
         }

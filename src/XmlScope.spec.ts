@@ -116,8 +116,7 @@ describe('XmlScope', () => {
                 end sub
             `);
             program.validate();
-            let childScope = program.getComponentScope('child')!;
-            expectDiagnostics(childScope, [{
+            expectDiagnostics(program, [{
                 ...DiagnosticMessages.xmlFunctionNotFound('func2'),
                 range: Range.create(4, 24, 4, 29)
             }, {
@@ -160,7 +159,7 @@ describe('XmlScope', () => {
                 end sub
             `);
             program.validate();
-            expectDiagnostics(program.getComponentScope('child')!, [{
+            expectDiagnostics(program, [{
                 ...DiagnosticMessages.xmlInvalidFieldType('no'),
                 range: Range.create(4, 33, 4, 35)
             }, {

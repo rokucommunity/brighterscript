@@ -628,7 +628,7 @@ describe('EnumStatement', () => {
             expectZeroDiagnostics(program);
         });
 
-        it('replaces enum values from separate file with literals', async () => {
+        it.only('replaces enum values from separate file with literals', async () => {
             program.setFile('source/enum.bs', `
                 enum CharacterType
                     Human = "Human"

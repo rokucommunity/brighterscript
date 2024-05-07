@@ -140,9 +140,9 @@ export let DiagnosticMessages = {
         code: 1023,
         severity: DiagnosticSeverity.Error
     }),
-    importStatementMustBeDeclaredAtTopOfFile: () => ({
-        message: `'import' statement must be declared at the top of the file`,
-        code: 1024,
+    statementMustBeDeclaredAtTopOfFile: (statementKeyword: string) => ({
+        message: `'${statementKeyword}' statement must be declared at the top of the file`,
+        code: 1149,
         severity: DiagnosticSeverity.Error
     }),
     methodDoesNotExistOnType: (methodName: string, className: string) => ({
@@ -311,7 +311,7 @@ export let DiagnosticMessages = {
         code: 1056,
         severity: DiagnosticSeverity.Error
     }),
-    libraryStatementMustBeDeclaredAtTopOfFile: () => ({
+    __unused5: () => ({
         message: `'library' statement must be declared at the top of the file`,
         code: 1057,
         severity: DiagnosticSeverity.Error
@@ -765,9 +765,19 @@ export let DiagnosticMessages = {
         code: 1146,
         severity: DiagnosticSeverity.Error
     }),
+    typecastStatementMustBeDeclaredAtStart: () => ({
+        message: `'typecast' statement must be declared at the top of the file or beginning of function or namespace`,
+        code: 1147,
+        severity: DiagnosticSeverity.Error
+    }),
+    invalidTypecastStatementApplication: (foundApplication: string) => ({
+        message: `'typecast' statement can only be applied to 'm', but was applied to '${foundApplication}'`,
+        code: 1148,
+        severity: DiagnosticSeverity.Error
+    }),
     duplicateSymbolInScope: (symbol: string, scopeName: string) => ({
         message: `'${symbol}' is defined multiple times in scope '${scopeName}'`,
-        code: 1148,
+        code: 1153,
         severity: DiagnosticSeverity.Error
     })
 };

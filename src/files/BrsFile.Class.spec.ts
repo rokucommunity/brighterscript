@@ -1560,10 +1560,7 @@ describe('BrsFile BrighterScript classes', () => {
             `);
             program.validate();
             expectDiagnostics(program, [{
-                ...DiagnosticMessages.cannotFindName('GroundedBird', 'Vertibrates.GroundedBird'),
-                relatedInformation: [{
-                    message: `In scope 'source'`
-                }]
+                ...DiagnosticMessages.cannotFindName('GroundedBird', 'Vertibrates.GroundedBird')
             }]);
         });
 

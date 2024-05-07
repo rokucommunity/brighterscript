@@ -3,7 +3,7 @@ import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
 import type { Location, Position, Range } from 'vscode-languageserver';
 import { DiagnosticCodeMap, diagnosticCodes } from '../DiagnosticMessages';
-import type { Callable, BsDiagnostic, FileReference, CommentFlag, SerializedCodeFile } from '../interfaces';
+import type { Callable, FileReference, CommentFlag, SerializedCodeFile } from '../interfaces';
 import type { Program } from '../Program';
 import util from '../util';
 import { standardizePath as s } from '../util';
@@ -188,23 +188,11 @@ export class XmlFile implements BscFile {
         });
     }
 
-    public getDiagnostics() {
-        return [...this.diagnostics];
-    }
-
-    public addDiagnostics(diagnostics: BsDiagnostic[]) {
-        this.diagnostics.push(...diagnostics);
-    }
 
     /**
      * The range of the entire file
      */
     public fileRange: Range;
-
-    /**
-     * Diagnostics for this file
-     */
-    public diagnostics = [] as BsDiagnostic[];
 
     public parser = new SGParser();
 
@@ -268,10 +256,11 @@ export class XmlFile implements BscFile {
         this.fileContents = fileContents;
 
         this.parser.parse(this.destPath, fileContents);
-        this.diagnostics = this.parser.diagnostics.map(diagnostic => ({
+        const diagnostics = this.parser.diagnostics.map(diagnostic => ({
             ...diagnostic,
             file: this
         }));
+        this.program?.diagnostics.register(diagnostics);
         this.getCommentFlags(this.parser.tokens as any[]);
     }
 
@@ -304,7 +293,7 @@ export class XmlFile implements BscFile {
             }
         }
         this.commentFlags.push(...processor.commentFlags);
-        this.diagnostics.push(...processor.diagnostics);
+        this.program?.diagnostics.register(processor.diagnostics);
     }
 
     private dependencyGraph: DependencyGraph;

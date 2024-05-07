@@ -26,7 +26,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { Logger, LogLevel } from './Logger';
 import { isToken, type Identifier, type Locatable, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLongIntegerType, isNewExpression, isNumberType, isStringType, isTypeExpression, isTypedArrayExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLiteralString, isLongIntegerType, isNewExpression, isNumberType, isStringType, isTypeExpression, isTypedArrayExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import * as requireRelative from 'require-relative';
@@ -1067,39 +1067,19 @@ export class Util {
     }
 
     /**
-     * A cache of `Range` objects. The key is a 52bit integer created from the 4 range integers and leveraging bitshifting.
-     * The whole point of this cache is to reduce garbage collection churn, so we didn't want to use string concatenation for the key
-     */
-    private rangeCache = new Map<number, Map<number, Range>>();
-
-    /**
      * Helper for creating `Range` objects. Prefer using this function because vscode-languageserver's `Range.create()` is significantly slower.
-     *
-     * This function caches the `Range` objects to reduce garbage collection churn.
-     *
-     * See this jsbench for why we chose this method: https://jsbench.me/r1lub4hjro
      */
     public createRange(startLine: number, startCharacter: number, endLine: number, endCharacter: number): Range {
-        // eslint-disable-next-line no-bitwise
-        const startKey = (startLine << 15) + startCharacter;
-        // eslint-disable-next-line no-bitwise
-        const endKey = (endLine << 15) + endCharacter;
-
-        let rangeMap = this.rangeCache.get(startKey);
-        if (!rangeMap) {
-            rangeMap = new Map();
-            this.rangeCache.set(startKey, rangeMap);
-        }
-
-        let range = rangeMap.get(endKey);
-        if (!range) {
-            range = {
-                start: this.createPosition(startLine, startCharacter),
-                end: this.createPosition(endLine, endCharacter)
-            };
-            rangeMap.set(endKey, range);
-        }
-        return range;
+        return {
+            start: {
+                line: startLine,
+                character: startCharacter
+            },
+            end: {
+                line: endLine,
+                character: endCharacter
+            }
+        };
     }
 
     /**
@@ -1175,32 +1155,13 @@ export class Util {
     }
 
     /**
-     * A cache of `Position` objects. The key is a 26bit integer created from line and character and leveraging bitshifting
-     * The whole point of this cache is to reduce garbage collection churn, so we didn't want to use string concatenation for the key
-     */
-    private positionCache = new Map<number, Position>();
-
-    /**
-     * Create a `Position` object. Prefer this over `Position.create` for performance reasons
+     * Create a `Position` object. Prefer this over `Position.create` for performance reasons.
      */
     public createPosition(line: number, character: number) {
-        if (line > 8191 || character > 8191) {
-            return {
-                line: line,
-                character: character
-            };
-        }
-        // eslint-disable-next-line no-bitwise
-        const key = (line << 16) + character;
-        let position = this.positionCache.get(key);
-        if (!position) {
-            position = {
-                line: line,
-                character: character
-            };
-            this.positionCache.set(key, position);
-        }
-        return position;
+        return {
+            line: line,
+            character: character
+        };
     }
 
     /**
@@ -1960,11 +1921,11 @@ export class Util {
 
         let fileDepth = this.getParentDirectoryCount(destPath);
         if (fileDepth >= 8) {
-            file.addDiagnostics([{
+            file.program?.diagnostics.register({
                 ...DiagnosticMessages.detectedTooDeepFileSource(fileDepth),
                 file: file,
                 range: this.createRange(0, 0, 0, Number.MAX_VALUE)
-            }]);
+            });
         }
     }
 
@@ -2002,7 +1963,7 @@ export class Util {
         let parentTypeName = '';
         let errorRange: Range;
         let containsDynamic = false;
-        let continueEverything = true;
+        let continueResolvingAllItems = true;
         for (let i = 0; i < typeChain.length; i++) {
             const chainItem = typeChain[i];
             const dotSep = chainItem.separatorToken?.text ?? '.';
@@ -2010,7 +1971,7 @@ export class Util {
                 fullChainName += dotSep;
             }
             fullChainName += chainItem.name;
-            if (continueEverything) {
+            if (continueResolvingAllItems) {
                 parentTypeName = previousTypeName;
                 fullErrorName = previousTypeName ? `${previousTypeName}${dotSep}${chainItem.name}` : chainItem.name;
                 previousTypeName = chainItem.type?.toString() ?? '';
@@ -2018,7 +1979,7 @@ export class Util {
                 containsDynamic = containsDynamic || (isDynamicType(chainItem.type) && !isAnyReferenceType(chainItem.type));
                 if (!chainItem.isResolved) {
                     errorRange = chainItem.range;
-                    continueEverything = false;
+                    continueResolvingAllItems = false;
                 }
             }
         }
@@ -2052,7 +2013,6 @@ export class Util {
     }
 
     public setContainsUnresolvedSymbol(symbolLowerNameSet: Set<string>, symbol: UnresolvedSymbol) {
-
         const possibleOriginalSymbolNamesLower = [];
         let nameSoFar = '';
         for (const tce of symbol.typeChain) {
@@ -2166,6 +2126,27 @@ export class Util {
             return true;
         }
         return false;
+    }
+
+    public getSpecialCaseCallExpressionReturnType(callExpr: CallExpression) {
+        if (isVariableExpression(callExpr.callee) && callExpr.callee.tokens.name.text.toLowerCase() === 'createobject') {
+            const componentName = isLiteralString(callExpr.args[0]) ? callExpr.args[0].tokens.value?.text?.replace(/"/g, '') : '';
+            const nodeType = componentName.toLowerCase() === 'rosgnode' && isLiteralString(callExpr.args[1]) ? callExpr.args[1].tokens.value?.text?.replace(/"/g, '') : '';
+            if (componentName?.toLowerCase().startsWith('ro')) {
+                const fullName = componentName + nodeType;
+                const data = {};
+                const symbolTable = callExpr.getSymbolTable();
+                const foundType = symbolTable.getSymbolType(fullName, {
+                    flags: SymbolTypeFlag.typetime,
+                    data: data,
+                    tableProvider: () => callExpr?.getSymbolTable(),
+                    fullName: fullName
+                });
+                if (foundType) {
+                    return foundType;
+                }
+            }
+        }
     }
 }
 

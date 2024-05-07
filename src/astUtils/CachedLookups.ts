@@ -1,5 +1,5 @@
 import type { AALiteralExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionExpression, VariableExpression } from '../parser/Expression';
-import type { AssignmentStatement, ClassStatement, ConstStatement, EnumStatement, FunctionStatement, ImportStatement, InterfaceStatement, LibraryStatement, NamespaceStatement } from '../parser/Statement';
+import type { AliasStatement, AssignmentStatement, ClassStatement, ConstStatement, EnumStatement, FunctionStatement, ImportStatement, InterfaceStatement, LibraryStatement, NamespaceStatement, TypecastStatement } from '../parser/Statement';
 import { Cache } from '../Cache';
 import { WalkMode, createVisitor } from './visitors';
 import type { Expression } from '../parser/AstNode';
@@ -51,6 +51,14 @@ export class CachedLookups {
 
     get importStatements(): ImportStatement[] {
         return this.getFromCache<Array<ImportStatement>>('importStatements');
+    }
+
+    get typecastStatements(): TypecastStatement[] {
+        return this.getFromCache<Array<TypecastStatement>>('typecastStatements');
+    }
+
+    get aliasStatements(): AliasStatement[] {
+        return this.getFromCache<Array<AliasStatement>>('aliasStatements');
     }
 
     /**
@@ -160,6 +168,8 @@ export class CachedLookups {
         const assignmentStatements: AssignmentStatement[] = [];
         const libraryStatements: LibraryStatement[] = [];
         const importStatements: ImportStatement[] = [];
+        const typecastStatements: TypecastStatement[] = [];
+        const aliasStatements: AliasStatement[] = [];
         const functionStatements: FunctionStatement[] = [];
         const functionExpressions: FunctionExpression[] = [];
 
@@ -252,8 +262,14 @@ export class CachedLookups {
             ImportStatement: s => {
                 importStatements.push(s);
             },
+            TypecastStatement: s => {
+                typecastStatements.push(s);
+            },
             LibraryStatement: s => {
                 libraryStatements.push(s);
+            },
+            AliasStatement: s => {
+                aliasStatements.push(s);
             },
             FunctionExpression: (expression, parent) => {
                 if (!isMethodStatement(parent)) {
@@ -332,6 +348,8 @@ export class CachedLookups {
         this.cache.set('assignmentStatements', assignmentStatements);
         this.cache.set('libraryStatements', libraryStatements);
         this.cache.set('importStatements', importStatements);
+        this.cache.set('typecastStatements', typecastStatements);
+        this.cache.set('aliasStatements', aliasStatements);
         this.cache.set('functionStatements', functionStatements);
         this.cache.set('functionExpressions', functionExpressions);
         this.cache.set('propertyHints', propertyHints);

@@ -1,8 +1,7 @@
 /* eslint-disable @typescript-eslint/dot-notation */
 import * as path from 'path';
 import chalk from 'chalk';
-import { DiagnosticOrigin } from './interfaces';
-import type { CallableContainer, BsDiagnosticWithOrigin, FileReference, FileLink, Callable, NamespaceContainer, ScopeValidationOptions, BsDiagnostic } from './interfaces';
+import type { CallableContainer, FileReference, FileLink, Callable, NamespaceContainer, ScopeValidationOptions } from './interfaces';
 import type { Program } from './Program';
 import { type NamespaceStatement, type ClassStatement, type EnumStatement, type InterfaceStatement, type EnumMemberStatement, type ConstStatement } from './parser/Statement';
 import { ParseMode } from './parser/Parser';
@@ -18,7 +17,7 @@ import type { BscFile } from './files/BscFile';
 import { referenceTypeFactory } from './types/ReferenceType';
 import { unionTypeFactory } from './types/UnionType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
-import type { AstNode, Statement } from './parser/AstNode';
+import type { Statement } from './parser/AstNode';
 import { performance } from 'perf_hooks';
 
 /**
@@ -445,11 +444,6 @@ export class Scope {
         });
     }
 
-    /**
-     * The list of diagnostics found specifically for this scope. Individual file diagnostics are stored on the files themselves.
-     */
-    protected diagnostics = [] as BsDiagnosticWithOrigin[];
-
     protected onDependenciesChanged(event: DependencyChangedEvent) {
         this.logDebug('invalidated because dependency graph said [', event.sourceKey, '] changed');
         this.invalidate();
@@ -604,28 +598,6 @@ export class Scope {
             this.logDebug('getImmediateFiles', () => result.map(x => x.destPath));
             return result;
         });
-    }
-
-    /**
-     * Get the list of errors for this scope. It's calculated on the fly, so call this sparingly.
-     */
-    public getDiagnostics() {
-        //add diagnostics from every referenced file
-        const diagnostics: BsDiagnostic[] = [
-            //diagnostics raised on this scope
-            ...this.diagnostics,
-            //get diagnostics from all files
-            ...this.getOwnFiles().map(x => x.diagnostics ?? []).flat()
-        ]
-            //exclude diagnostics that match any of the comment flags
-            .filter((x) => {
-                return !util.diagnosticIsSuppressed(x);
-            });
-        return diagnostics;
-    }
-
-    public addDiagnostics(diagnostics: BsDiagnosticWithOrigin[]) {
-        this.diagnostics.push(...diagnostics);
     }
 
     /**
@@ -818,7 +790,7 @@ export class Scope {
                 parentScope.validate(validationOptions);
             }
             //clear the scope's errors list (we will populate them from this method)
-            this.clearScopeLevelDiagnostics();
+
 
             //Since statements from files are shared across multiple scopes, we need to link those statements to the current scope
 
@@ -844,24 +816,6 @@ export class Scope {
             validationOptions.filesToBeValidatedInScopeContext?.delete(file);
         }
         return true;
-    }
-
-    clearAstSegmentDiagnostics(astSegment: AstNode) {
-        this.diagnostics = this.diagnostics.filter(diag => !(diag.origin === DiagnosticOrigin.ASTSegment && diag.astSegment === astSegment));
-    }
-
-    clearAstSegmentDiagnosticsByFile(file: BscFile) {
-        const lowerSrcPath = file.srcPath.toLowerCase();
-        this.diagnostics = this.diagnostics.filter(diag => !(diag.origin === DiagnosticOrigin.ASTSegment && diag.file.srcPath.toLowerCase() === lowerSrcPath));
-    }
-
-
-    clearCrossScopeDiagnostics() {
-        this.diagnostics = this.diagnostics.filter(diag => !(diag.origin === DiagnosticOrigin.CrossScope));
-    }
-
-    clearScopeLevelDiagnostics() {
-        this.diagnostics = this.diagnostics.filter(diag => diag.origin !== DiagnosticOrigin.Scope);
     }
 
     /**

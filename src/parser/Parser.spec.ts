@@ -1,14 +1,14 @@
 import { expect, assert } from '../chai-config.spec';
 import { Lexer } from '../lexer/Lexer';
 import { ReservedWords, TokenKind } from '../lexer/TokenKind';
-import type { AAMemberExpression, BinaryExpression, TypeCastExpression, UnaryExpression } from './Expression';
+import type { AAMemberExpression, BinaryExpression, TypecastExpression, UnaryExpression } from './Expression';
 import { TernaryExpression, NewExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression, VariableExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
-import type { AssignmentStatement, ClassStatement, InterfaceStatement, ReturnStatement } from './Statement';
+import type { AliasStatement, AssignmentStatement, ClassStatement, InterfaceStatement, ReturnStatement, TypecastStatement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isClassStatement, isDottedGetExpression, isExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypeCastExpression, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAliasStatement, isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isClassStatement, isDottedGetExpression, isExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypecastExpression, isTypecastStatement, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import { expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics } from '../testHelpers.spec';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { Expression, Statement } from './AstNode';
@@ -1251,8 +1251,8 @@ describe('parser', () => {
             expect(fn.func.body.statements).to.exist;
             let assignment = fn.func.body.statements[0] as AssignmentStatement;
             expect(isAssignmentStatement(assignment)).to.be.true;
-            expect(isTypeCastExpression(assignment.value)).to.be.true;
-            expect(isCallExpression((assignment.value as TypeCastExpression).obj)).to.be.true;
+            expect(isTypecastExpression(assignment.value)).to.be.true;
+            expect(isCallExpression((assignment.value as TypecastExpression).obj)).to.be.true;
             expectTypeToBe(assignment.getType({ flags: SymbolTypeFlag.typetime }), IntegerType);
         });
 
@@ -1275,7 +1275,7 @@ describe('parser', () => {
             expect(isCallExpression(assignment.value)).to.be.true;
             expect(isDottedGetExpression(assignment.value.callee)).to.be.true;
             expect(isGroupingExpression(assignment.value.callee.obj)).to.be.true;
-            expect(isTypeCastExpression(assignment.value.callee.obj.expression)).to.be.true;
+            expect(isTypecastExpression(assignment.value.callee.obj.expression)).to.be.true;
             //grouping expression is an integer
             expectTypeToBe(assignment.value.callee.obj.getType({ flags: SymbolTypeFlag.typetime }), IntegerType);
         });
@@ -1298,8 +1298,8 @@ describe('parser', () => {
             expect(isPrintStatement(print)).to.be.true;
             expect(isCallExpression(print.expressions[0])).to.be.true;
             let fnCall = print.expressions[0] as CallExpression;
-            expect(isTypeCastExpression(fnCall.args[0])).to.be.true;
-            let arg = fnCall.args[0] as TypeCastExpression;
+            expect(isTypecastExpression(fnCall.args[0])).to.be.true;
+            let arg = fnCall.args[0] as TypecastExpression;
             //argument type is float
             expectTypeToBe(arg.getType({ flags: SymbolTypeFlag.typetime }), FloatType);
         });
@@ -1316,7 +1316,7 @@ describe('parser', () => {
             expect(fn.func.body.statements).to.exist;
             let print = fn.func.body.statements[0] as any;
             expect(isPrintStatement(print)).to.be.true;
-            expect(isTypeCastExpression(print.expressions[0])).to.be.true;
+            expect(isTypecastExpression(print.expressions[0])).to.be.true;
             //argument type is float
             expectTypeToBe(print.expressions[0].getType({ flags: SymbolTypeFlag.typetime }), StringType);
         });
@@ -1855,6 +1855,124 @@ describe('parser', () => {
             expect(isUnaryExpression(insideReturn)).to.be.true;
             expect(isUnaryExpression((insideReturn as UnaryExpression).right)).to.be.true;
             expect(isUnaryExpression(((insideReturn as UnaryExpression).right as UnaryExpression).right)).to.be.true;
+        });
+    });
+
+    describe('typecast statement', () => {
+        it('allows typecast statement ', () => {
+            let { diagnostics, statements } = parse(`
+                typeCAST m AS roAssociativeArray
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(isTypecastStatement(statements[0])).to.be.true;
+            const stmt = statements[0] as TypecastStatement;
+            expect(stmt.tokens.typecast.text).to.eq('typeCAST');
+            expect(stmt.typecastExpression).to.exist;
+        });
+
+        it('is disallowed in brightscript mode', () => {
+            let { diagnostics } = parse(`
+                typecast m AS roAssociativeArray
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('typecast statements')
+            ]);
+        });
+
+        it('allows `typecast` for function name', () => {
+            let { statements, diagnostics } = parse(`
+                function typecast() as integer
+                    return 1
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect((statements[0] as FunctionStatement).tokens.name.text).to.eq('typecast');
+        });
+
+        it('allows `typecast` for variable name', () => {
+            let { statements, diagnostics } = parse(`
+                function foo() as integer
+                    typecast = 1
+                    return typecast
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(((statements[0] as FunctionStatement).func.body.statements[0] as AssignmentStatement).tokens.name.text).to.eq('typecast');
+        });
+
+        it('is allowed in function', () => {
+            let { diagnostics } = parse(`
+                function foo() as integer
+                    typecast m as MyObject
+                    return m.getNum()
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('is allowed in function literal', () => {
+            let { diagnostics } = parse(`
+                interface PiGetter
+                    pi as float
+                    function getPi() as float
+                end interface
+
+                function makePiGetter() as object
+                    x = {
+                        pi: 3.14,
+                        getPi: function() as float
+                            typecast m as PiGetter
+                            return m.pi
+                        end function
+                    }
+                    return x
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+    });
+
+
+    describe('alias statement', () => {
+        it('allows alias statement ', () => {
+            let { diagnostics, statements } = parse(`
+                ALIAS x = lcase
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(isAliasStatement(statements[0])).to.be.true;
+            const stmt = statements[0] as AliasStatement;
+            expect(stmt.tokens.alias.text).to.eq('ALIAS');
+            expect(stmt.value).to.exist;
+        });
+
+        it('is disallowed in brightscript mode', () => {
+            let { diagnostics } = parse(`
+                alias x = lcase
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('alias statements')
+            ]);
+        });
+
+        it('allows `alias` for function name', () => {
+            let { statements, diagnostics } = parse(`
+                function alias() as integer
+                    return 1
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect((statements[0] as FunctionStatement).tokens.name.text).to.eq('alias');
+        });
+
+        it('allows `alias` for variable name', () => {
+            let { statements, diagnostics } = parse(`
+                function foo() as integer
+                    alias = 1
+                    return alias
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(((statements[0] as FunctionStatement).func.body.statements[0] as AssignmentStatement).tokens.name.text).to.eq('alias');
         });
     });
 });

@@ -4,13 +4,9 @@ import type { BrsFile } from './files/BrsFile';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { Program } from './Program';
 import util from './util';
-import type { BsDiagnosticWithOrigin } from './interfaces';
-import { DiagnosticOrigin } from './interfaces';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { BscSymbol } from './SymbolTable';
-import { isNamespaceType, isXmlScope } from './astUtils/reflection';
-import { Cache } from './Cache';
-import { URI } from 'vscode-uri';
+import { isNamespaceType } from './astUtils/reflection';
 import { getAllRequiredSymbolNames } from './types';
 
 
@@ -18,6 +14,15 @@ interface FileSymbolPair {
     file: BrsFile;
     symbol: BscSymbol;
 }
+
+interface SymbolLookupKeys {
+    potentialTypeKey: string;
+    key: string;
+    namespacedKey: string;
+    namespacedPotentialTypeKey: string;
+}
+
+const CrossScopeValidatorDiagnosticTag = 'CrossScopeValidator';
 
 export class ProvidedNode {
 
@@ -27,12 +32,24 @@ export class ProvidedNode {
     constructor(public key: string = '') { }
 
 
+    getSymbolByKey(symbolKeys: SymbolLookupKeys): FileSymbolPair {
+        return this.getSymbol(symbolKeys.namespacedKey) ??
+            this.getSymbol(symbolKeys.key) ??
+            this.getSymbol(symbolKeys.namespacedPotentialTypeKey) ??
+            this.getSymbol(symbolKeys.potentialTypeKey);
+    }
+
     getSymbol(symbolName: string): FileSymbolPair {
         let lowerSymbolNameParts = symbolName.toLowerCase().split('.');
         return this.getSymbolByNameParts(lowerSymbolNameParts);
     }
 
-    private getSymbolByNameParts(lowerSymbolNameParts: string[]): FileSymbolPair {
+    getNamespace(namespaceName: string): ProvidedNode {
+        let lowerSymbolNameParts = namespaceName.toLowerCase().split('.');
+        return this.getNamespaceByNameParts(lowerSymbolNameParts);
+    }
+
+    getSymbolByNameParts(lowerSymbolNameParts: string[]): FileSymbolPair {
         const first = lowerSymbolNameParts?.[0];
         const rest = lowerSymbolNameParts.slice(1);
         if (!first) {
@@ -50,7 +67,22 @@ export class ProvidedNode {
             return result;
         } else if (rest && this.namespaces.has(first)) {
             const node = this.namespaces.get(first);
-            return node.getSymbolByNameParts(rest);
+            const parts = node.getSymbolByNameParts(rest);
+
+            return parts;
+        }
+    }
+
+    getNamespaceByNameParts(lowerSymbolNameParts: string[]): ProvidedNode {
+        const first = lowerSymbolNameParts?.[0]?.toLowerCase();
+        const rest = lowerSymbolNameParts.slice(1);
+        if (!first) {
+            return;
+        }
+        if (this.namespaces.has(first)) {
+            const node = this.namespaces.get(first);
+            const result = rest?.length > 0 ? node.getNamespaceByNameParts(rest) : node;
+            return result;
         }
     }
 
@@ -91,7 +123,7 @@ export class CrossScopeValidator {
 
     constructor(public program: Program) { }
 
-    private symbolMapKeys(symbol: UnresolvedSymbol) {
+    private symbolMapKeys(symbol: UnresolvedSymbol): SymbolLookupKeys {
         const unnamespacedNameLower = symbol.typeChain.map(tce => tce.name).join('.').toLowerCase();
         const lowerFirst = symbol.typeChain[0]?.name?.toLowerCase() ?? '';
         let namespacedName = '';
@@ -116,7 +148,7 @@ export class CrossScopeValidator {
     resolutionsMap = new Map<UnresolvedSymbol, Set<{ scope: Scope; sourceFile: BrsFile; providedSymbol: BscSymbol }>>();
 
     getRequiredMap(scope: Scope) {
-        const map = new Map<{ potentialTypeKey: string; key: string; namespacedKey: string; namespacedPotentialTypeKey: string }, UnresolvedSymbol>();
+        const map = new Map<SymbolLookupKeys, UnresolvedSymbol>();
         scope.enumerateBrsFiles((file) => {
             for (const symbol of file.requiredSymbols) {
                 const symbolKeys = this.symbolMapKeys(symbol);
@@ -205,7 +237,7 @@ export class CrossScopeValidator {
                 //symbol is available in global scope. ignore it
                 continue;
             }
-            const foundSymbol = providedTree.getSymbol(symbolKeys.namespacedKey) ?? providedTree.getSymbol(symbolKeys.key);
+            let foundSymbol = providedTree.getSymbolByKey(symbolKeys);
 
             if (foundSymbol) {
                 let resolvedListForSymbol = this.resolutionsMap.get(unresolvedSymbol);
@@ -220,6 +252,18 @@ export class CrossScopeValidator {
                 });
             } else {
                 // did not find symbol!
+                const missing = { ...unresolvedSymbol };
+                let namespaceNode = providedTree;
+                for (const chainEntry of missing.typeChain) {
+                    if (!chainEntry.isResolved) {
+                        namespaceNode = namespaceNode?.getNamespaceByNameParts([chainEntry.name]);
+                        if (namespaceNode) {
+                            chainEntry.isResolved = true;
+                        } else {
+                            break;
+                        }
+                    }
+                }
                 missingSymbols.add(unresolvedSymbol);
             }
         }
@@ -252,23 +296,27 @@ export class CrossScopeValidator {
         const missingSymbolInScope = new Map<BrsFile, Map<UnresolvedSymbol, Set<Scope>>>();
 
         this.clearResolutionsForScopes(scopes);
-        this.multiScopeCache.clear();
 
         // Check scope for duplicates and missing symbols
         for (const scope of scopes) {
-            scope.clearCrossScopeDiagnostics();
+            this.program.diagnostics.clearByFilter({
+                scope: scope,
+                tag: CrossScopeValidatorDiagnosticTag
+            });
 
             const { missingSymbols, duplicatesMap } = this.getIssuesForScope(scope);
             if (addDuplicateSymbolDiagnostics) {
                 for (const [_flag, dupeSet] of duplicatesMap.entries()) {
                     for (const dupe of dupeSet.values()) {
                         if (dupe.symbol.data?.definingNode?.range) {
-                            scope.addDiagnostics([{
+                            this.program.diagnostics.register({
                                 ...DiagnosticMessages.duplicateSymbolInScope(dupe.symbol.name, scope.name),
-                                origin: DiagnosticOrigin.CrossScope,
                                 file: dupe.file,
                                 range: dupe.symbol.data?.definingNode.range
-                            }]);
+                            }, {
+                                scope: scope,
+                                tags: [CrossScopeValidatorDiagnosticTag]
+                            });
                         }
                     }
                 }
@@ -295,11 +343,13 @@ export class CrossScopeValidator {
                 const typeChainResult = util.processTypeChain(symbol.typeChain);
 
                 for (const scope of scopeList) {
-                    this.addMultiScopeDiagnostic(scope, {
-                        ...DiagnosticMessages.cannotFindName(typeChainResult.fullNameOfItem),
-                        origin: DiagnosticOrigin.CrossScope,
+                    this.program.diagnostics.register({
+                        ...DiagnosticMessages.cannotFindName(typeChainResult.itemName, typeChainResult.fullNameOfItem),
                         file: file,
                         range: typeChainResult.range
+                    }, {
+                        scope: scope,
+                        tags: [CrossScopeValidatorDiagnosticTag]
                     });
                 }
             }
@@ -311,12 +361,13 @@ export class CrossScopeValidator {
             if (incompatibleScopes.size > 1) {
                 const typeChainResult = util.processTypeChain(symbol.typeChain);
                 const scopeListName = [...incompatibleScopes.values()].map(s => s.name).join(', ');
-                this.program.addDiagnostics([{
+                this.program.diagnostics.register({
                     ...DiagnosticMessages.incompatibleSymbolDefinition(typeChainResult.fullChainName, scopeListName),
                     file: symbol.file,
-                    range: typeChainResult.range,
-                    origin: DiagnosticOrigin.CrossScope
-                }]);
+                    range: typeChainResult.range
+                }, {
+                    tags: [CrossScopeValidatorDiagnosticTag]
+                });
             }
         }
     }
@@ -365,39 +416,4 @@ export class CrossScopeValidator {
         return incompatibleResolutions;
     }
 
-    /**
-     * Add a diagnostic (to the first scope) that will have `relatedInformation` for each affected scope
-     */
-    private addMultiScopeDiagnostic(scope: Scope, diagnostic: BsDiagnosticWithOrigin) {
-        diagnostic = this.multiScopeCache.getOrAdd(
-            `${diagnostic.file?.srcPath}-${diagnostic.code}-${diagnostic.message}-${util.rangeToString(diagnostic.range)}`,
-            () => {
-                if (!diagnostic.relatedInformation) {
-                    diagnostic.relatedInformation = [];
-                }
-
-                scope.addDiagnostics([diagnostic]);
-                return diagnostic;
-            }
-        );
-        if (isXmlScope(scope) && scope.xmlFile?.srcPath) {
-            diagnostic.relatedInformation.push({
-                message: `In component scope '${scope?.xmlFile?.componentName?.text}'`,
-                location: util.createLocation(
-                    URI.file(scope.xmlFile.srcPath).toString(),
-                    scope?.xmlFile?.ast?.componentElement?.getAttribute('name')?.tokens?.value?.range ?? util.createRange(0, 0, 0, 10)
-                )
-            });
-        } else {
-            diagnostic.relatedInformation.push({
-                message: `In scope '${scope.name}'`,
-                location: util.createLocation(
-                    URI.file(diagnostic.file.srcPath).toString(),
-                    diagnostic.range
-                )
-            });
-        }
-    }
-
-    private multiScopeCache = new Cache<string, BsDiagnosticWithOrigin>();
 }

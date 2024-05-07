@@ -106,11 +106,11 @@ describe('InterfaceStatement', () => {
     });
 
     it('supports empty interfaces', () => {
-        const file = program.setFile('source/main.bs', `
+        program.setFile('source/main.bs', `
            interface SomeInterface
            end interface
         `);
         program.validate();
-        expectZeroDiagnostics(file);
+        expectZeroDiagnostics(program);
     });
 });
