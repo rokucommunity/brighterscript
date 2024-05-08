@@ -182,10 +182,6 @@ export class Program {
             this.globalScope.symbolTable.addSymbol(ifaceData.name, { description: ifaceData.description }, nodeType, SymbolTypeFlag.typetime);
         }
 
-        for (const nodeData of Object.values(nodes) as SGNodeData[]) {
-            this.recursivelyAddNodeToSymbolTable(nodeData);
-        }
-
         for (const componentData of Object.values(components) as BRSComponentData[]) {
             const nodeType = new InterfaceType(componentData.name);
             nodeType.addBuiltInInterfaces();
@@ -193,6 +189,10 @@ export class Program {
                 // we will add `roSGNode` as shorthand for `roSGNodeNode`, since all roSgNode components are SceneGraph nodes
                 this.globalScope.symbolTable.addSymbol(componentData.name, { description: componentData.description }, nodeType, SymbolTypeFlag.typetime);
             }
+        }
+
+        for (const nodeData of Object.values(nodes) as SGNodeData[]) {
+            this.recursivelyAddNodeToSymbolTable(nodeData);
         }
 
         for (const eventData of Object.values(events) as BRSEventData[]) {

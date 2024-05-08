@@ -1049,7 +1049,7 @@ describe('CompletionsProcessor', () => {
 
             program.validate();
             // print |
-            let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 28));
+            let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(3, 28));
             expectCompletionsIncludes(completions, [{
                 label: 'myFuncParam',
                 kind: CompletionItemKind.Variable

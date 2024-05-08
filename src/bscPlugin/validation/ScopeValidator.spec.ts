@@ -1686,6 +1686,28 @@ describe('ScopeValidator', () => {
                 DiagnosticMessages.cannotFindName('Whatever')
             ]);
         });
+
+        it('allows function default params to reference earlier params', () => {
+            program.setFile('source/main.bs', `
+                function test(param1 as integer, param2 = param1 + 2)
+                    print param1; param2
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('has diagnostic when function default params reference unknown', () => {
+            program.setFile('source/main.bs', `
+                function test(param1 as integer, param2 = paramX + 2)
+                    print param1; param2
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('paramX').message
+            ]);
+        });
     });
 
     describe('itemCannotBeUsedAsVariable', () => {
@@ -2252,6 +2274,19 @@ describe('ScopeValidator', () => {
             expectDiagnostics(program, [
                 DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
             ]);
+        });
+
+
+        it('allows assigning string to font fields', () => {
+            program.setFile('source/util.bs', `
+                sub setLabelFont(label as roSGNodeLabel)
+                    label.font = "font:LargeSystemFont"
+                    label.font.size = 50
+                end sub
+            `);
+            program.validate();
+            //should have no errors
+            expectZeroDiagnostics(program);
         });
 
     });
