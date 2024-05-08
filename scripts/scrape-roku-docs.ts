@@ -1186,21 +1186,25 @@ class Runner {
             interfaces: {}
         });
 
-        // fix ifStringOp overloads
-        fixOverloadedMethod(this.result.interfaces.ifstringops, 'instr');
-        fixOverloadedMethod(this.result.interfaces.ifstringops, 'mid');
-        fixOverloadedMethod(this.result.interfaces.ifstringops, 'startsWith');
-        fixOverloadedMethod(this.result.interfaces.ifstringops, 'endswith');
+        // fix all overloaded methods in interfaces
+        for (const ifaceKey in this.result.interfaces) {
+            const iface = this.result.interfaces[ifaceKey];
+            const overloadedMethods = new Set<string>();
+            const methodDefs = new Set<string>();
+            for (const method of iface.methods) {
+                const lowerMethodName = method.name.toLowerCase();
+                if (methodDefs.has(lowerMethodName)) {
+                    overloadedMethods.add(lowerMethodName);
+                } else {
+                    methodDefs.add(lowerMethodName);
+                }
+            }
 
-        // fix ifSGNodeField overloads
-        fixOverloadedMethod(this.result.interfaces.ifsgnodefield, 'observeField');
-        fixOverloadedMethod(this.result.interfaces.ifsgnodefield, 'observeFieldScoped');
+            for (const methodName of overloadedMethods) {
+                fixOverloadedMethod(iface, methodName);
+            }
 
-        // fix ifdraw2d overloads
-        fixOverloadedMethod(this.result.interfaces.ifdraw2d, 'drawScaledObject');
-
-        // fix ifToStr overloads
-        fixOverloadedMethod(this.result.interfaces.iftostr, 'toStr');
+        }
 
         //fix roSGNodeContentNode overloads
         fixOverloadedField(this.result.nodes.contentnode, 'actors');
@@ -1288,6 +1292,7 @@ function fixOverloadedMethod(iface: RokuInterface, funcName: string) {
     iface.methods = iface.methods.filter(method => method.name.toLowerCase() !== funcName.toLowerCase());
     // add to list
     iface.methods.push(mergedFunc);
+    console.log('Fixed overloaded method', `${iface.name}.${funcName}`);
 }
 
 function fixOverloadedField(node: SceneGraphNode, fieldName: string) {
