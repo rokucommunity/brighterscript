@@ -17,7 +17,7 @@
     "dep-graph": "madge --image graph.svg --extensions ts ./src/parser",
     "docs": "ts-node scripts/compile-doc-examples.ts",
     "benchmark": "cd ./benchmarks && ts-node ./index.ts",
-    "scrape-roku-docs": "ts-node scripts/create-roku-types-data-json.ts && ts-node scripts/scrape-roku-docs.ts",
+    "scrape-roku-docs": "ts-node scripts/scrape-roku-docs.ts",
     "rescrape-roku-docs": "rm scripts/.cache.json && npm run scrape-roku-docs",
     "null-check": "tsc -p tsconfig-null-safe.json",
     "create-test-package": "ts-node scripts/create-test-package.ts"

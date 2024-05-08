@@ -52,7 +52,6 @@ class Runner {
 
     public async run() {
         const outPath = s`${__dirname}/../src/roku-types/data.json`;
-        fsExtra.removeSync(outPath);
 
         SymbolTable.referenceTypeFactory = referenceTypeFactory;
         SymbolTable.unionTypeFactory = unionTypeFactory;
