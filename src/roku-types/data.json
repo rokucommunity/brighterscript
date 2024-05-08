@@ -1,5 +1,5 @@
 {
-    "generatedDate": "2024-05-08T16:30:56.090Z",
+    "generatedDate": "2024-05-08T18:23:20.097Z",
     "nodes": {
         "animation": {
             "description": "Extends [**AnimationBase**](https://developer.roku.com/docs/references/scenegraph/abstract-nodes/animationbase.md\n\nThe Animation node class provides animations of renderable nodes, by applying interpolator functions to the values in specified renderable node fields. For an animation to take effect, an Animation node definition must include a child field interpolator node ([FloatFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/floatfieldinterpolator.md\"FloatFieldInterpolator\"), [Vector2DFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/vector2dfieldinterpolator.md\"Vector2DFieldInterpolator\"), [ColorFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/colorfieldinterpolator.md\"ColorFieldInterpolator\")) definition for each renderable node field that is animated.\n\nThe Animation node class provides a simple linear interpolator function, where the animation takes place smoothly and simply from beginning to end. The Animation node class also provides several more complex interpolator functions to allow custom animation effects. For example, you can move a graphic image around the screen at differing speeds and curved trajectories at different times in the animation by specifying the appropriate function in the easeFunction field (quadratic and exponential are two examples of functions that can be specified). The interpolator functions are divided into two parts: the beginning of the animation (ease-in), and the end of the animation (ease-out). You can apply a specified interpolator function to either or both ease-in and ease-out, or specify no function for either or both (which is the linear function). You can also change the portion of the animation that is ease-in and ease-out to arbitrary fractional values for a quadratic interpolator function applied to both ease-in and ease-out.",
@@ -9881,26 +9881,12 @@
                     "returnType": "Void"
                 },
                 {
-                    "description": "This method triggers the start of the audio resource sound playback. The effect of Trigger(volume) is identical to Trigger(volume, 0).",
+                    "description": "**OVERLOADED METHOD**\n\nThis method triggers the start of the audio resource sound playback. The effect of Trigger(volume) is identical to Trigger(volume, 0).\n\n or \n\nTriggers the start of the audio resource sound playback. This method will interrupt any playing sound when the index is the same. It will mix with any playing sound if the index is different.",
                     "name": "Trigger",
                     "params": [
                         {
                             "default": null,
-                            "description": "The volume is a number between 0 and 100 (percentage of full volume). A value of 50 should be used for normal volume.",
-                            "isRequired": true,
-                            "name": "volume",
-                            "type": "Integer"
-                        }
-                    ],
-                    "returnType": "Void"
-                },
-                {
-                    "description": "Triggers the start of the audio resource sound playback. This method will interrupt any playing sound when the index is the same. It will mix with any playing sound if the index is different.",
-                    "name": "Trigger",
-                    "params": [
-                        {
-                            "default": null,
-                            "description": "The volume is a number between 0 and 100 (percentage of full volume). 50 should be used for normal volume.",
+                            "description": "The volume is a number between 0 and 100 (percentage of full volume). A value of 50 should be used for normal volume. OR The volume is a number between 0 and 100 (percentage of full volume). 50 should be used for normal volume.",
                             "isRequired": true,
                             "name": "volume",
                             "type": "Integer"
@@ -9908,11 +9894,12 @@
                         {
                             "default": null,
                             "description": "The index is a value between 0 and [MaxSimulStreams()](#maxsimulstreams-as-integer) allowing for multiple sounds to be mixed.",
-                            "isRequired": true,
+                            "isRequired": false,
                             "name": "index",
                             "type": "Integer"
                         }
                     ],
+                    "returnDescription": "",
                     "returnType": "Void"
                 }
             ],
@@ -9966,27 +9953,12 @@
             ],
             "methods": [
                 {
-                    "description": "Appends the contents of the Byte Array to the specified file.",
+                    "description": "**OVERLOADED METHOD**\n\nAppends the contents of the Byte Array to the specified file.",
                     "name": "AppendFile",
                     "params": [
                         {
                             "default": null,
-                            "description": "The path to the file to be appended to the ByteArray.",
-                            "isRequired": true,
-                            "name": "path",
-                            "type": "String"
-                        }
-                    ],
-                    "returnDescription": "A flag indicating whether the file was successfully appended to the calling ByteArray.",
-                    "returnType": "Boolean"
-                },
-                {
-                    "description": "Appends the contents of the Byte Array to the specified file.",
-                    "name": "AppendFile",
-                    "params": [
-                        {
-                            "default": null,
-                            "description": "The path to the file to be appended to the Byte Array.",
+                            "description": "The path to the file to be appended to the ByteArray. OR The path to the file to be appended to the Byte Array.",
                             "isRequired": true,
                             "name": "path",
                             "type": "String"
@@ -9994,14 +9966,14 @@
                         {
                             "default": null,
                             "description": "The position in the file from which to start appending bytes.",
-                            "isRequired": true,
+                            "isRequired": false,
                             "name": "start\\_pos",
                             "type": "Integer"
                         },
                         {
                             "default": null,
                             "description": "The length of the bytes to be appended to the Byte Array, starting from the specified starting position.",
-                            "isRequired": true,
+                            "isRequired": false,
                             "name": "length",
                             "type": "Integer"
                         }
@@ -10052,27 +10024,20 @@
                     "returnType": "Void"
                 },
                 {
-                    "description": "Calculates a CRC-32 of the contents of the Byte Array.",
-                    "name": "GetCRC32",
-                    "params": [],
-                    "returnDescription": "The calculated CRC-32 checksum.",
-                    "returnType": "Integer"
-                },
-                {
-                    "description": "Calculates a CRC-32 of a subset of bytes within the Byte Array.",
+                    "description": "**OVERLOADED METHOD**\n\nCalculates a CRC-32 of the contents of the Byte Array.\n\n or \n\nCalculates a CRC-32 of a subset of bytes within the Byte Array.",
                     "name": "GetCRC32",
                     "params": [
                         {
                             "default": null,
                             "description": "The starting index of the subset of bytes to be used in the CRC-32 calculation.",
-                            "isRequired": true,
+                            "isRequired": false,
                             "name": "start",
                             "type": "Integer"
                         },
                         {
                             "default": null,
                             "description": "The length of the bytes to be included.",
-                            "isRequired": true,
+                            "isRequired": false,
                             "name": "length",
                             "type": "Integer"
                         }
@@ -10118,22 +10083,7 @@
                     "returnType": "Boolean"
                 },
                 {
-                    "description": "Reads the specified file into the Byte Array. Any data currently in the Byte Array is discarded.",
-                    "name": "ReadFile",
-                    "params": [
-                        {
-                            "default": null,
-                            "description": "The path to the file to be read.",
-                            "isRequired": true,
-                            "name": "path",
-                            "type": "String"
-                        }
-                    ],
-                    "returnDescription": "A flag indicating whether the bytes were successfully read into the Byte Array.",
-                    "returnType": "Boolean"
-                },
-                {
-                    "description": "Reads the specified file into the Byte Array. Any data currently in the Byte Array is discarded.",
+                    "description": "**OVERLOADED METHOD**\n\nReads the specified file into the Byte Array. Any data currently in the Byte Array is discarded.",
                     "name": "ReadFile",
                     "params": [
                         {
@@ -10146,14 +10096,14 @@
                         {
                             "default": null,
                             "description": "The index of the file from which to start reading bytes.",
-                            "isRequired": true,
+                            "isRequired": false,
                             "name": "start\\_pos",
                             "type": "Integer"
                         },
                         {
                             "default": null,
                             "description": "The length of the bytes to be read from the file, starting from the specified starting position.",
-                            "isRequired": true,
+                            "isRequired": false,
                             "name": "length",
                             "type": "Integer"
                         }
@@ -10204,22 +10154,7 @@
                     "returnType": "String"
                 },
                 {
-                    "description": "Writes the bytes contained in the Byte Array to the specified file.",
-                    "name": "WriteFile",
-                    "params": [
-                        {
-                            "default": null,
-                            "description": "The path to the file to which the bytes are to be written.",
-                            "isRequired": true,
-                            "name": "path",
-                            "type": "String"
-                        }
-                    ],
-                    "returnDescription": "A flag indicating whether the bytes were successfully written to the file.",
-                    "returnType": "Boolean"
-                },
-                {
-                    "description": "Writes a subset of the bytes contained in the Byte Array to the specified file.",
+                    "description": "**OVERLOADED METHOD**\n\nWrites the bytes contained in the Byte Array to the specified file.\n\n or \n\nWrites a subset of the bytes contained in the Byte Array to the specified file.",
                     "name": "WriteFile",
                     "params": [
                         {
@@ -10232,14 +10167,14 @@
                         {
                             "default": null,
                             "description": "The index of the calling ByteArray from which to start writing bytes.",
-                            "isRequired": true,
+                            "isRequired": false,
                             "name": "start\\_index",
                             "type": "Integer"
                         },
                         {
                             "default": null,
                             "description": "The length of the bytes to be written to the file, starting from the specified index.",
-                            "isRequired": true,
+                            "isRequired": false,
                             "name": "length",
                             "type": "Integer"
                         }
@@ -10839,24 +10774,18 @@
                     "returnType": "Void"
                 },
                 {
-                    "description": "Returns an ISO 8601 representation of the date/time value.",
-                    "name": "ToISOString",
-                    "params": [],
-                    "returnDescription": "ISO 8601 as String, e.g. \"2021-03-25T18:53:03+0000\"",
-                    "returnType": "String"
-                },
-                {
-                    "description": "Returns an ISO 8601 representation of the date/time value with milliseconds precision.",
+                    "description": "**OVERLOADED METHOD**\n\nReturns an ISO 8601 representation of the date/time value.\n\n or \n\nReturns an ISO 8601 representation of the date/time value with milliseconds precision.",
                     "name": "ToISOString",
                     "params": [
                         {
                             "default": null,
-                            "isRequired": true,
+                            "description": "",
+                            "isRequired": false,
                             "name": "format",
                             "type": "String"
                         }
                     ],
-                    "returnDescription": "ISO 8601 as String with milliseconds precision, e.g. \"2021-03-25T18:53:03.220+0000\"",
+                    "returnDescription": "ISO 8601 as String, e.g. \"2021-03-25T18:53:03+0000\"\n\n or \n\nISO 8601 as String with milliseconds precision, e.g. \"2021-03-25T18:53:03.220+0000\"",
                     "returnType": "String"
                 },
                 {
@@ -12674,39 +12603,32 @@
                     "returnType": "String"
                 },
                 {
-                    "description": "Returns the system font at its default size. Calling this method is the same as calling the [GetDefaultFont()](#getdefaultfontsize-as-integer-bold-as-boolean-italic-as-boolean-as-object) method with the following syntax: `reg.GetDefaultFont(reg.GetDefaultFontSize(), false, false)`.",
-                    "name": "GetDefaultFont",
-                    "params": [],
-                    "returnDescription": "The system font as its default size.",
-                    "returnType": "Object"
-                },
-                {
-                    "description": "Returns the system font. The system font is always available, even if the [Register()](#registerpath-as-string-as-boolean) method has not been called",
+                    "description": "**OVERLOADED METHOD**\n\nReturns the system font at its default size. Calling this method is the same as calling the [GetDefaultFont()](#getdefaultfontsize-as-integer-bold-as-boolean-italic-as-boolean-as-object) method with the following syntax: `reg.GetDefaultFont(reg.GetDefaultFontSize(), false, false)`.\n\n or \n\nReturns the system font. The system font is always available, even if the [Register()](#registerpath-as-string-as-boolean) method has not been called",
                     "name": "GetDefaultFont",
                     "params": [
                         {
                             "default": null,
                             "description": "The requested font size, in pixels, not points.",
-                            "isRequired": true,
+                            "isRequired": false,
                             "name": "size",
                             "type": "Integer"
                         },
                         {
                             "default": null,
                             "description": "\"bold\" specifies a font variant that may be (but is not always) supported by the font file.",
-                            "isRequired": true,
+                            "isRequired": false,
                             "name": "bold",
                             "type": "Boolean"
                         },
                         {
                             "default": null,
                             "description": "\"italic\" specifies a font variant that may be (but is not always) supported by the font file.",
-                            "isRequired": true,
+                            "isRequired": false,
                             "name": "italic",
                             "type": "Boolean"
                         }
                     ],
-                    "returnDescription": "An roFont object representing the system font.",
+                    "returnDescription": "The system font as its default size.\n\n or \n\nAn roFont object representing the system font.",
                     "returnType": "Object"
                 },
                 {
@@ -18234,52 +18156,39 @@
                     "returnType": "Void"
                 },
                 {
-                    "description": "Sets the target display window for the video.",
+                    "description": "**OVERLOADED METHOD**\n\nSets the target display window for the video.\n\n or \n\nSets the target display window for the video. This is similar to the [SetDestinationRect()](#setdestinationrectrect-as-object-as-void) function except that the values are specified as separate parameters.",
                     "name": "SetDestinationRect",
                     "params": [
                         {
                             "default": null,
-                            "description": "The parameters of the target display window, which include the x and y coordinates, width, and height {x:Integer, y:Integer, w:Integer, h:Integer}      The default value is: {x:0, y:0, w:0, h:0}, which is full screen.",
+                            "description": "The parameters of the target display window, which include the x and y coordinates, width, and height {x:Integer, y:Integer, w:Integer, h:Integer}      The default value is: {x:0, y:0, w:0, h:0}, which is full screen. OR The x coordinate of the target display window.",
                             "isRequired": true,
-                            "name": "rect",
-                            "type": "Object"
-                        }
-                    ],
-                    "returnType": "Void"
-                },
-                {
-                    "description": "Sets the target display window for the video. This is similar to the [SetDestinationRect()](#setdestinationrectrect-as-object-as-void) function except that the values are specified as separate parameters.",
-                    "name": "SetDestinationRect",
-                    "params": [
-                        {
-                            "default": null,
-                            "description": "The x coordinate of the target display window.",
-                            "isRequired": true,
-                            "name": "x",
-                            "type": "Integer"
+                            "name": "rectOrX",
+                            "type": "Object or Integer"
                         },
                         {
                             "default": null,
                             "description": "The y coordinate of the target display window.",
-                            "isRequired": true,
+                            "isRequired": false,
                             "name": "y",
                             "type": "Integer"
                         },
                         {
                             "default": null,
                             "description": "The width of the target display window.",
-                            "isRequired": true,
+                            "isRequired": false,
                             "name": "w",
                             "type": "Integer"
                         },
                         {
                             "default": null,
                             "description": "The height coordinate of the target display window.",
-                            "isRequired": true,
+                            "isRequired": false,
                             "name": "h",
                             "type": "Integer"
                         }
                     ],
+                    "returnDescription": "",
                     "returnType": "Void"
                 },
                 {

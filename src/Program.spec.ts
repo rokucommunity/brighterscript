@@ -2863,6 +2863,25 @@ describe('Program', () => {
             expectTypeToBe(trickBarType.getMemberType('trackImageUri', opts), StringType);
             expectTypeToBe(trickBarType.getMemberType('trackBlendColor', opts), UnionType);
         });
+
+        it('deals with roDateTime overloaded method', () => {
+            program.setFile('source/main.bs', `
+                namespace alpha
+                    function getDate() as roDateTime
+                        theDate = createObject("roDateTime")
+                        return theDate
+                    end function
+                end namespace
+
+                function toUtcTime(localTime as roDateTime) as roDateTime
+                    theDate = alpha.getDate()
+                    return theDate
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
     });
 
     describe('manifest', () => {
