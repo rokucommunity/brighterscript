@@ -57,23 +57,6 @@
                 "isDefault": true
             },
             "problemMatcher": []
-        },{
-            "label": "create-roku-types-data-json",
-            "type": "shell",
-            "command": "npx",
-            "args": [
-                "ts-node",
-                "./scripts/create-roku-types-data-json.ts"
-            ],
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": true,
-                "panel": "shared",
-                "showReuseMessage": true,
-                "clear": true
-            },
-            "problemMatcher": []
         },
         {
             "label": "scrape-roku-docs",

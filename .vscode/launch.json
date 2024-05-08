@@ -67,7 +67,6 @@
             "type": "pwa-node",
             "request": "launch",
             "runtimeExecutable": "node",
-            "preLaunchTask": "create-roku-types-data-json",
             "runtimeArgs": [
                 "--nolazy",
                 "-r",
