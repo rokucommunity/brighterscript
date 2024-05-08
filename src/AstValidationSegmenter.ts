@@ -1,5 +1,5 @@
 import type { DottedGetExpression, TypeExpression, VariableExpression } from './parser/Expression';
-import { isBody, isClassStatement, isDottedGetExpression, isInterfaceStatement, isNamespaceStatement, isVariableExpression } from './astUtils/reflection';
+import { isBinaryExpression, isBody, isClassStatement, isDottedGetExpression, isInterfaceStatement, isNamespaceStatement, isTypeExpression, isVariableExpression } from './astUtils/reflection';
 import { ChildrenSkipper, WalkMode, createVisitor } from './astUtils/visitors';
 import type { GetTypeOptions, TypeChainEntry } from './interfaces';
 import type { AstNode, Expression } from './parser/AstNode';
@@ -67,6 +67,10 @@ export class AstValidationSegmenter {
             if (firstTokenTextLower === 'm' || (this.currentClassStatement && firstTokenTextLower === 'super')) {
                 return false;
             }
+        }
+        if (isTypeExpression(expression) && isBinaryExpression(expression.expression)) {
+            return this.checkExpressionForUnresolved(segment, expression.expression.left as VariableExpression, assignedSymbolsNames) ||
+                this.checkExpressionForUnresolved(segment, expression.expression.right as VariableExpression, assignedSymbolsNames);
         }
 
         const flag = util.isInTypeExpression(expression) ? SymbolTypeFlag.typetime : SymbolTypeFlag.runtime;

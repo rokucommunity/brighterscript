@@ -894,5 +894,46 @@ describe('CrossScopeValidator', () => {
                 expectZeroDiagnostics(program);
             });
         });
+
+        it('allows union types from imports', () => {
+            program.setFile('components/namespaces.bs', `
+                namespace alpha
+                    namespace beta
+                        interface BaseCase
+                            name as string
+                        end interface
+                    end namespace
+                end namespace
+
+            `);
+            program.setFile('components/utils.bs', `
+                namespace alpha
+                    namespace beta
+                        interface OtherCase
+                            name as string
+                        end interface
+                    end namespace
+                end namespace
+
+            `);
+            program.setFile('components/widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="pkg:/components/widget.bs"/>
+                </component>
+            `);
+
+            program.setFile('components/widget.bs', `
+                import "pkg:/components/utils.bs"
+                import "pkg:/components/namespaces.bs"
+
+                sub foo(input as alpha.beta.BaseCase or alpha.beta.OtherCase)
+                    print input.name
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 });
