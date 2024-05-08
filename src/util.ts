@@ -1255,7 +1255,20 @@ export class Util {
      * @returns {BscType} the known type, or dynamic
      */
     public getNodeFieldType(typeDescriptor: string, lookupTable?: SymbolTable): BscType {
-        const typeDescriptorLower = typeDescriptor.toLowerCase().trim();
+        let typeDescriptorLower = typeDescriptor.toLowerCase().trim().replace(/\*/g, '');
+
+        if (typeDescriptorLower.startsWith('as ')) {
+            typeDescriptorLower = typeDescriptorLower.substring(3).trim();
+        }
+        const nodeFilter = (new RegExp(/^\[?(.* node)/, 'i')).exec(typeDescriptorLower);
+        if (nodeFilter?.[1]) {
+            typeDescriptorLower = nodeFilter[1].trim();
+        }
+        const parensFilter = (new RegExp(/(.*)\(.*\)/, 'gi')).exec(typeDescriptorLower);
+        if (parensFilter?.[1]) {
+            typeDescriptorLower = parensFilter[1].trim();
+        }
+
         const bscType = this.tokenToBscType(createToken(TokenKind.Identifier, typeDescriptorLower));
         if (bscType) {
             return bscType;
@@ -1274,9 +1287,19 @@ export class Util {
             return unionTypeFactory([IntegerType.instance, StringType.instance]);
         }
 
+        //check for uniontypes
+        const multipleTypes = typeDescriptorLower.split(' or ').map(s => s.trim());
+        if (multipleTypes.length > 1) {
+            const individualTypes = multipleTypes.map(t => this.getNodeFieldType(t, lookupTable));
+            return unionTypeFactory(individualTypes);
+        }
 
-        if (typeDescriptorLower.startsWith('array of ')) {
-            let arrayOfTypeName = typeDescriptorLower.substring(9); //cut off beginning 'array of'
+        const typeIsArray = typeDescriptorLower.startsWith('array of ') || typeDescriptorLower.startsWith('roarray of ');
+
+        if (typeIsArray) {
+            const ofSearch = ' of ';
+            const arrayPrefixLength = typeDescriptorLower.indexOf(ofSearch) + ofSearch.length;
+            let arrayOfTypeName = typeDescriptorLower.substring(arrayPrefixLength); //cut off beginnin, eg. 'array of' or 'roarray of'
             if (arrayOfTypeName.endsWith('s')) {
                 // remove "s" in "floats", etc.
                 arrayOfTypeName = arrayOfTypeName.substring(0, arrayOfTypeName.length - 1);
@@ -1293,6 +1316,8 @@ export class Util {
         } else if (typeDescriptorLower.startsWith('value ')) {
             const actualTypeName = typeDescriptorLower.substring('value '.length); //cut off beginning 'value '
             return this.getNodeFieldType(actualTypeName, lookupTable);
+        } else if (typeDescriptorLower === 'n/a') {
+            return DynamicType.instance;
         } else if (typeDescriptorLower === 'uri') {
             return StringType.instance;
         } else if (typeDescriptorLower === 'color') {
@@ -1317,9 +1342,12 @@ export class Util {
             return StringType.instance;
         } else if (typeDescriptorLower === 'bool') {
             return BooleanType.instance;
-        } else if (typeDescriptorLower === 'array') {
+        } else if (typeDescriptorLower === 'array' || typeDescriptorLower === 'roarray') {
             return new ArrayType();
-        } else if (typeDescriptorLower === 'assocarray' || typeDescriptorLower === 'associative array' || typeDescriptorLower === 'associativearray') {
+        } else if (typeDescriptorLower === 'assocarray' ||
+            typeDescriptorLower === 'associative array' ||
+            typeDescriptorLower === 'associativearray' ||
+            typeDescriptorLower === 'roassociativearray') {
             return new AssociativeArrayType();
         } else if (typeDescriptorLower === 'node') {
             return ComponentType.instance;
@@ -1329,12 +1357,21 @@ export class Util {
             return getRect2dType();
         } else if (typeDescriptorLower === 'rect2darray') {
             return new ArrayType(getRect2dType());
+        } else if (typeDescriptorLower === 'font') {
+            return this.getNodeFieldType('roSGNodeFont', lookupTable);
+        } else if (typeDescriptorLower === 'contentnode') {
+            return this.getNodeFieldType('roSGNodeContentNode', lookupTable);
+        } else if (typeDescriptorLower.endsWith(' node')) {
+            return this.getNodeFieldType('roSgNode' + typeDescriptorLower.substring(0, typeDescriptorLower.length - 5), lookupTable);
         } else if (lookupTable) {
             //try doing a lookup
-            return lookupTable.getSymbolType(typeDescriptorLower, { flags: SymbolTypeFlag.typetime });
+            return lookupTable.getSymbolType(typeDescriptorLower, {
+                flags: SymbolTypeFlag.typetime,
+                fullName: typeDescriptor,
+                tableProvider: () => lookupTable
+            });
         }
 
-        //  TODO: Handle  'rect2d', 'rect2dArray',
         return DynamicType.instance;
     }
 

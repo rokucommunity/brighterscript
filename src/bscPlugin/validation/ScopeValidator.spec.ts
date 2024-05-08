@@ -2276,6 +2276,19 @@ describe('ScopeValidator', () => {
             ]);
         });
 
+
+        it('allows assigning string to font fields', () => {
+            program.setFile('source/util.bs', `
+                sub setLabelFont(label as roSGNodeLabel)
+                    label.font = "font:LargeSystemFont"
+                    label.font.size = 50
+                end sub
+            `);
+            program.validate();
+            //should have no errors
+            expectZeroDiagnostics(program);
+        });
+
     });
 
     describe('operatorTypeMismatch', () => {
