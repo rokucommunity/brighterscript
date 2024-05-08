@@ -61,6 +61,10 @@ export class BuiltInInterfaceAdder {
             }
 
             for (const method of ifaceData.methods ?? []) {
+                if (ifaceData.name.toLowerCase() === 'ifintops' && method.name.toLowerCase() === 'tostr') {
+                    // handle special case - this messed up the .toStr() method on integers
+                    continue;
+                }
                 const methodFuncType = this.buildMethodFromDocData(method, overrides, thisType);
                 builtInMemberTable.addSymbol(method.name, { description: method.description, completionPriority: 1 }, methodFuncType, SymbolTypeFlag.runtime);
             }
