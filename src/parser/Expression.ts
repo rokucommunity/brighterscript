@@ -226,8 +226,12 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         this.returnTypeExpression = options.returnTypeExpression;
 
         //if there's a body, and it doesn't have a SymbolTable, assign one
-        if (this.body && !this.body.symbolTable) {
-            this.body.symbolTable = new SymbolTable(`Block`, () => this.getSymbolTable());
+        if (this.body) {
+            if (!this.body.symbolTable) {
+                this.body.symbolTable = new SymbolTable(`Block`, () => this.getSymbolTable());
+            } else {
+                this.body.symbolTable.pushParentProvider(() => this.getSymbolTable());
+            }
         }
         this.symbolTable = new SymbolTable('FunctionExpression', () => this.parent?.getSymbolTable());
     }
