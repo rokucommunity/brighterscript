@@ -1349,22 +1349,6 @@ async function getJson(url: string) {
     return JSON.parse(cache[url]);
 }
 
-async function get(url: string) {
-    if (!cache[url]) {
-        console.log('Fetching from web', url);
-        cache[url] = (await phin({
-            url: url,
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
-            }
-        })).body.toString();
-        saveCache();
-    } else {
-        console.log('Fetching from cache', url);
-    }
-    return cache[url];
-}
-
 function getDocUrl(docRelativePath: string) {
     if (docRelativePath) {
         return `https://developer.roku.com${docRelativePath}`;
