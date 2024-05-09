@@ -51,7 +51,7 @@ export class BrsFileValidator {
                 if (isClassStatement(node.parent) && node.parent.hasParentClass()) {
                     const data: ExtraSymbolData = {};
                     const parentClassType = node.parent.parentClassName.getType({ flags: SymbolTypeFlag.typetime, data: data });
-                    node.func.body.symbolTable.addSymbol('super', data, parentClassType, SymbolTypeFlag.runtime);
+                    node.func.body.getSymbolTable().addSymbol('super', data, parentClassType, SymbolTypeFlag.runtime);
                 }
             },
             CallfuncExpression: (node) => {
@@ -141,8 +141,11 @@ export class BrsFileValidator {
                 }
             },
             FunctionExpression: (node) => {
-                if (!node.symbolTable.hasSymbol('m', SymbolTypeFlag.runtime) || node.findAncestor(isAALiteralExpression)) {
-                    node.symbolTable.addSymbol('m', undefined, new AssociativeArrayType(), SymbolTypeFlag.runtime);
+                const funcSymbolTable = node.getSymbolTable();
+                if (!funcSymbolTable?.hasSymbol('m', SymbolTypeFlag.runtime) || node.findAncestor(isAALiteralExpression)) {
+                    if (!isTypecastStatement(node.body?.statements?.[0])) {
+                        funcSymbolTable?.addSymbol('m', undefined, new AssociativeArrayType(), SymbolTypeFlag.runtime);
+                    }
                 }
                 this.validateFunctionParameterCount(node);
             },

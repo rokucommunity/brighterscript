@@ -1708,6 +1708,19 @@ describe('ScopeValidator', () => {
                 DiagnosticMessages.cannotFindName('paramX').message
             ]);
         });
+
+        it('has diagnostic when trying to use a method on an union that does not exist in one type', () => {
+            program.setFile('source/main.bs', `
+                function typeHoverTest(x as string or integer)
+                    value = x.len()
+                    return value
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('len').message
+            ]);
+        });
     });
 
     describe('itemCannotBeUsedAsVariable', () => {

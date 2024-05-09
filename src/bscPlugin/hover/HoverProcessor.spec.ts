@@ -687,7 +687,6 @@ describe('HoverProcessor', () => {
             const file = program.setFile('source/util.bs', `
                 sub test()
                     myVar = "hello" ' setting type to string
-                    myVar = myVar.trim()
                     print 1; myVar
                     myVar = "hello".len()  ' setting type to integer
                     myVar = sqr(33)  ' setting type to float
@@ -700,15 +699,15 @@ describe('HoverProcessor', () => {
             program.validate();
             expectZeroDiagnostics(program);
             // print 1; my|Var
-            let hover = program.getHover(file.srcPath, util.createPosition(4, 31))[0];
+            let hover = program.getHover(file.srcPath, util.createPosition(3, 31))[0];
             expect(hover?.contents).eql([fence(expectedHoverStr)]);
 
             // my|Var = "hello".len()
-            hover = program.getHover(file.srcPath, util.createPosition(5, 23))[0];
+            hover = program.getHover(file.srcPath, util.createPosition(4, 23))[0];
             expect(hover?.contents).eql([fence(expectedHoverStr)]);
 
             // print 2; my|Var
-            hover = program.getHover(file.srcPath, util.createPosition(7, 31))[0];
+            hover = program.getHover(file.srcPath, util.createPosition(6, 31))[0];
             expect(hover?.contents).eql([fence(expectedHoverStr)]);
         });
 

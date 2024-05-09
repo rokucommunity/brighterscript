@@ -26,7 +26,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { Logger, LogLevel } from './Logger';
 import { isToken, type Identifier, type Locatable, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLiteralString, isLongIntegerType, isNewExpression, isNumberType, isStringType, isTypeExpression, isTypedArrayExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLiteralString, isLongIntegerType, isNewExpression, isNumberType, isStringType, isTypeExpression, isTypedArrayExpression, isUnionType, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import * as requireRelative from 'require-relative';
@@ -2011,7 +2011,8 @@ export class Util {
             if (continueResolvingAllItems) {
                 parentTypeName = previousTypeName;
                 fullErrorName = previousTypeName ? `${previousTypeName}${dotSep}${chainItem.name}` : chainItem.name;
-                previousTypeName = chainItem.type?.toString() ?? '';
+                const typeString = isUnionType(chainItem.type) ? `(${chainItem.type?.toString()})` : chainItem.type?.toString();
+                previousTypeName = typeString ?? '';
                 itemName = chainItem.name;
                 containsDynamic = containsDynamic || (isDynamicType(chainItem.type) && !isAnyReferenceType(chainItem.type));
                 if (!chainItem.isResolved) {
