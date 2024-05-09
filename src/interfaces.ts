@@ -904,7 +904,7 @@ export interface TypeChainProcessResult {
      */
     itemName: string;
     /**
-     * The type kind of  the item of `itemName`
+     * The TypeKind of the item of `itemName`
      */
     itemTypeKind: BscTypeKind | string;
     /**
