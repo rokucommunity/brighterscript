@@ -1,4 +1,4 @@
-import { isBrsFile, isCallfuncExpression, isClassStatement, isEnumMemberStatement, isEnumStatement, isEnumType, isInheritableType, isInterfaceStatement, isMemberField, isNamespaceStatement, isNamespaceType, isNewExpression, isTypedFunctionType, isXmlFile } from '../../astUtils/reflection';
+import { isAssignmentStatement, isBrsFile, isCallfuncExpression, isClassStatement, isEnumMemberStatement, isEnumStatement, isEnumType, isInheritableType, isInterfaceStatement, isMemberField, isNamespaceStatement, isNamespaceType, isNewExpression, isTypedFunctionType, isXmlFile } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
 import type { ExtraSymbolData, Hover, ProvideHoverEvent, TypeChainEntry } from '../../interfaces';
@@ -155,7 +155,12 @@ export class HoverProcessor {
                 const typeFlag = isInTypeExpression ? SymbolTypeFlag.typetime : SymbolTypeFlag.runtime;
                 const typeChain: TypeChainEntry[] = [];
                 const extraData = {} as ExtraSymbolData;
-                const exprType = expression.getType({ flags: typeFlag, typeChain: typeChain, data: extraData, ignoreCall: isCallfuncExpression(expression) });
+                let exprType = expression.getType({ flags: typeFlag, typeChain: typeChain, data: extraData, ignoreCall: isCallfuncExpression(expression) });
+
+                if (isAssignmentStatement(expression) && token === expression.tokens.name) {
+                    // if this is an assignment, but we're really interested in the LHS, need to a symbol lookup
+                    exprType = expression.getSymbolTable().getSymbolType(expression.tokens.name.text, { flags: typeFlag, typeChain: typeChain, data: extraData });
+                }
 
                 const processedTypeChain = util.processTypeChain(typeChain);
                 const fullName = processedTypeChain.fullNameOfItem || token.text;
