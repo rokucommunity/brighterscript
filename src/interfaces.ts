@@ -912,7 +912,7 @@ export interface TypeChainProcessResult {
      */
     itemParentTypeName: string;
     /**
-     * The type kind of  the parent of the item of `itemName`
+     * The TypeKind of the parent of the item of `itemName`
      */
     itemParentTypeKind: BscTypeKind | string;
     /**
