@@ -156,7 +156,7 @@ describe('import statements', () => {
         program.validate();
 
         expectDiagnostics(program, [
-            DiagnosticMessages.cannotFindName('Waddle')
+            DiagnosticMessages.cannotFindFunction('Waddle')
         ]);
 
         //add the missing function

@@ -932,7 +932,7 @@ describe('Scope', () => {
             //validate the scope
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('DoB')
+                DiagnosticMessages.cannotFindFunction('DoB')
             ]);
         });
 
@@ -948,7 +948,7 @@ describe('Scope', () => {
             //validate the scope
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('DoC')
+                DiagnosticMessages.cannotFindFunction('DoC')
             ]);
         });
 

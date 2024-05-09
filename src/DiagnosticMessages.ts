@@ -724,6 +724,20 @@ export let DiagnosticMessages = {
         message: `Optional chaining may not be used in the left-hand side of an assignment`,
         code: 1139,
         severity: DiagnosticSeverity.Error
+    }),
+    /**
+     *
+     * @param name for function calls where we can't find the name of the function
+     * @param fullName if a namespaced name, this is the full name `alpha.beta.charlie`, otherwise it's the same as `name`
+     */
+    cannotFindFunction: (name: string, fullName?: string) => ({
+        message: `Cannot find function '${name}'`,
+        code: 1140,
+        data: {
+            name: name,
+            fullName: fullName ?? name
+        },
+        severity: DiagnosticSeverity.Error
     })
 };
 
