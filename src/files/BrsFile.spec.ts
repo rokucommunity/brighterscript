@@ -1648,7 +1648,7 @@ describe('BrsFile', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('DoesNotExist')
+                DiagnosticMessages.cannotFindFunction('DoesNotExist')
             ]);
         });
 
