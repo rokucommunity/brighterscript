@@ -1,4 +1,4 @@
-import { isAnyReferenceType, isAssignmentStatement, isBrsFile, isCallfuncExpression, isClassStatement, isDottedGetExpression, isEnumMemberStatement, isEnumStatement, isEnumType, isInheritableType, isInterfaceStatement, isMemberField, isNamespaceStatement, isNamespaceType, isNewExpression, isTypedFunctionType, isXmlFile } from '../../astUtils/reflection';
+import { isAssignmentStatement, isBrsFile, isCallfuncExpression, isClassStatement, isDottedGetExpression, isEnumMemberStatement, isEnumStatement, isEnumType, isInheritableType, isInterfaceStatement, isMemberField, isNamespaceStatement, isNamespaceType, isNewExpression, isTypedFunctionType, isXmlFile } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
 import type { ExtraSymbolData, Hover, ProvideHoverEvent, TypeChainEntry } from '../../interfaces';

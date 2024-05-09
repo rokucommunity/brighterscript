@@ -26,7 +26,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { Logger, LogLevel } from './Logger';
 import { isToken, type Identifier, type Locatable, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLiteralString, isLongIntegerType, isNewExpression, isNumberType, isStringType, isTypeExpression, isTypedArrayExpression, isUnionType, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLiteralString, isLongIntegerType, isNewExpression, isNumberType, isStringType, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUnionType, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import * as requireRelative from 'require-relative';
@@ -1998,6 +1998,8 @@ export class Util {
         let itemName = '';
         let previousTypeName = '';
         let parentTypeName = '';
+        let itemTypeKind = '';
+        let parentTypeKind = '';
         let errorRange: Range;
         let containsDynamic = false;
         let continueResolvingAllItems = true;
@@ -2010,9 +2012,30 @@ export class Util {
             fullChainName += chainItem.name;
             if (continueResolvingAllItems) {
                 parentTypeName = previousTypeName;
+                parentTypeKind = itemTypeKind;
                 fullErrorName = previousTypeName ? `${previousTypeName}${dotSep}${chainItem.name}` : chainItem.name;
-                const typeString = isUnionType(chainItem.type) ? `(${chainItem.type?.toString()})` : chainItem.type?.toString();
+
+                let typeString = chainItem.type?.toString();
+                let typeToFindStringFor = chainItem.type;
+                while (typeToFindStringFor) {
+                    if (isUnionType(chainItem.type)) {
+                        typeString = `(${typeToFindStringFor.toString()})`;
+                        break;
+                    } else if (isCallableType(typeToFindStringFor)) {
+                        if (isTypedFunctionType(typeToFindStringFor) && i < typeChain.length - 1) {
+                            typeToFindStringFor = typeToFindStringFor.returnType;
+                        } else {
+                            typeString = 'function';
+                            break;
+                        }
+                    } else {
+                        typeString = typeToFindStringFor?.toString();
+                        break;
+                    }
+                }
+
                 previousTypeName = typeString ?? '';
+                itemTypeKind = (chainItem.type as any)?.kind;
                 itemName = chainItem.name;
                 containsDynamic = containsDynamic || (isDynamicType(chainItem.type) && !isAnyReferenceType(chainItem.type));
                 if (!chainItem.isResolved) {
@@ -2023,7 +2046,9 @@ export class Util {
         }
         return {
             itemName: itemName,
+            itemTypeKind: itemTypeKind,
             itemParentTypeName: parentTypeName,
+            itemParentTypeKind: parentTypeKind,
             fullNameOfItem: fullErrorName,
             fullChainName: fullChainName,
             range: errorRange,

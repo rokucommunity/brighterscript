@@ -1571,7 +1571,7 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('unknown', 'Klass.unknown')
+                DiagnosticMessages.cannotFindName('unknown', 'Klass.unknown', 'Klass')
             ]);
         });
 
@@ -1584,7 +1584,7 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('length', 'string.length')
+                DiagnosticMessages.cannotFindName('length', 'string.length', 'string')
             ]);
         });
 
@@ -1718,8 +1718,19 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('len').message
+                DiagnosticMessages.cannotFindName('len', null, '(string or integer)').message
             ]);
+        });
+
+        it('does not have diagnostic when accessing unknown member of union in Brightscript mode', () => {
+            program.setFile('source/main.brs', `
+                function typeHoverTest(x as string)
+                    x = x.len()
+                    return x
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
         });
     });
 
@@ -1812,7 +1823,7 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('name', 'function.name')
+                DiagnosticMessages.cannotFindName('name', 'function.name', 'function')
             ]);
         });
 
@@ -1830,7 +1841,7 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('name', 'function.name')
+                DiagnosticMessages.cannotFindName('name', 'function.name', 'function')
             ]);
         });
 
@@ -2228,7 +2239,7 @@ describe('ScopeValidator', () => {
                 end class
             `);
             program.validate();
-            expectDiagnostics(program, [DiagnosticMessages.cannotFindName('getPi', 'Thing.getPi')]);
+            expectDiagnostics(program, [DiagnosticMessages.cannotFindName('getPi', 'Thing.getPi', 'Thing')]);
         });
 
         it('validates class constructors', () => {
@@ -2761,7 +2772,7 @@ describe('ScopeValidator', () => {
                 end namespace
             `);
             program.validate();
-            expectDiagnosticsIncludes(program, [DiagnosticMessages.cannotFindName('SomeEnum').message]);
+            expectDiagnosticsIncludes(program, [DiagnosticMessages.cannotFindName('SomeEnum', null, 'Alpha.Beta.Charlie', 'namespace').message]);
         });
 
         it('revalidates when a class defined in a different namespace changes', () => {
