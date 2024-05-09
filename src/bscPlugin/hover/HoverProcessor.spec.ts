@@ -649,6 +649,23 @@ describe('HoverProcessor', () => {
             hover = program.getHover(file.srcPath, util.createPosition(3, 38))[0];
             expect(hover?.contents).to.be.undefined;
         });
+
+        it('should show unresolved members as invalid', () => {
+            const file = program.setFile('source/main.bs', `
+                    interface MyIFace
+                        name as string
+                    end interface
+
+                    sub doSomething(thing as MyIFace)
+                        print thing.member
+                    end sub
+                `);
+            program.validate();
+
+            // print thing.mem|ber
+            let hover = program.getHover(file.srcPath, util.createPosition(6, 40))[0];
+            expect(hover?.contents).eql([fence('MyIFace.member as invalid')]);
+        });
     });
 
     describe('callFunc', () => {
@@ -679,6 +696,7 @@ describe('HoverProcessor', () => {
             let hover = program.getHover(file.srcPath, util.createPosition(3, 35))[0];
             expect(hover?.contents).eql([fence('function roSGNodeWidget@.someFunc(input as string) as float')]);
         });
+
     });
 
     describe('multiple definition locations', () => {
