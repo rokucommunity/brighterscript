@@ -1,5 +1,5 @@
 {
-    "generatedDate": "2024-05-08T18:23:20.097Z",
+    "generatedDate": "2024-05-10T15:18:59.052Z",
     "nodes": {
         "animation": {
             "description": "Extends [**AnimationBase**](https://developer.roku.com/docs/references/scenegraph/abstract-nodes/animationbase.md\n\nThe Animation node class provides animations of renderable nodes, by applying interpolator functions to the values in specified renderable node fields. For an animation to take effect, an Animation node definition must include a child field interpolator node ([FloatFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/floatfieldinterpolator.md\"FloatFieldInterpolator\"), [Vector2DFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/vector2dfieldinterpolator.md\"Vector2DFieldInterpolator\"), [ColorFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/colorfieldinterpolator.md\"ColorFieldInterpolator\")) definition for each renderable node field that is animated.\n\nThe Animation node class provides a simple linear interpolator function, where the animation takes place smoothly and simply from beginning to end. The Animation node class also provides several more complex interpolator functions to allow custom animation effects. For example, you can move a graphic image around the screen at differing speeds and curved trajectories at different times in the animation by specifying the appropriate function in the easeFunction field (quadratic and exponential are two examples of functions that can be specified). The interpolator functions are divided into two parts: the beginning of the animation (ease-in), and the end of the animation (ease-out). You can apply a specified interpolator function to either or both ease-in and ease-out, or specify no function for either or both (which is the linear function). You can also change the portion of the animation that is ease-in and ease-out to arbitrary fractional values for a quadratic interpolator function applied to both ease-in and ease-out.",
@@ -9826,8 +9826,8 @@
                             "default": null,
                             "description": "The set of keys to be received from the timedMetaData event.      If the keys array is empty, all the timed metadata associated with the current stream is sent with the isTimedMetaData event.      If the keys array is invalid, then do not return any keys to the BrightScript channel.      Any keys not specified with this method are deleted by the Roku OS and never returned to the BrightScript application.",
                             "isRequired": true,
-                            "name": "keys\\[\\]",
-                            "type": "Dynamic"
+                            "name": "keys",
+                            "type": "roArray"
                         }
                     ],
                     "returnType": "Void"
@@ -9967,7 +9967,7 @@
                             "default": null,
                             "description": "The position in the file from which to start appending bytes.",
                             "isRequired": false,
-                            "name": "start\\_pos",
+                            "name": "start_pos",
                             "type": "Integer"
                         },
                         {
@@ -10097,7 +10097,7 @@
                             "default": null,
                             "description": "The index of the file from which to start reading bytes.",
                             "isRequired": false,
-                            "name": "start\\_pos",
+                            "name": "start_pos",
                             "type": "Integer"
                         },
                         {
@@ -10119,14 +10119,14 @@
                             "default": null,
                             "description": "The minimum size to which the calling Byte Array is to be expanded.",
                             "isRequired": true,
-                            "name": "min\\_size",
+                            "name": "min_size",
                             "type": "Integer"
                         },
                         {
                             "default": null,
                             "description": "A flag specifying whether auto resize is enabled on the calling Byte Array.",
                             "isRequired": true,
-                            "name": "auto\\_resize",
+                            "name": "auto_resize",
                             "type": "Boolean"
                         }
                     ],
@@ -10168,7 +10168,7 @@
                             "default": null,
                             "description": "The index of the calling ByteArray from which to start writing bytes.",
                             "isRequired": false,
-                            "name": "start\\_index",
+                            "name": "start_index",
                             "type": "Integer"
                         },
                         {
@@ -10874,7 +10874,7 @@
                             "default": null,
                             "description": "An associative array with the audio format to be checked. The general format of the associative arrays for CanDecodeAudio() is similar to the parameter and return associative arrays used in [CanDecodeVideo()](https://developer.roku.com/docs/references/brightscript/interfaces/ifdeviceinfo.mdcandecodevideovideo_format-as-object-as-object):  \n| Key        | Type    | Value                                                                                                                                                                                                                                                                                                                                                                                                                   | Requirement |\n| ---------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |\n| Codec      | string  | Specifies the audio codec: “aac”, “ac3”, “eac3”, \"alac\", \"flac\", “mp2”, “mp3”, “vorbis”, “wma” (sunset as of Roku OS 12.5), “wma pro” (sunset as of Roku OS 12.5), “dts”, \"ac4\"                                                                                                                                                                                                                                         | Required    |\n| Profile    | string  | Specifies the codec profile:CodecProfile\"h.265/h.265\"\"main\", \"high\", \"main 10\"\"vp9\"\"profile 0\", \"profile 2\"\"AAC codec profiles\"\"mp2 lc\", \"mp4 he\"                                                                                                                                                                                                                                                                       | Optional    |\n| Level      | String  | Specifies the codec level:CodecLevel\"h.265/h.265\"4.1, 4.2, 5.0, 5.1\"vp9\"3.0, 3.1, 4.0, 4.1, 5.0, 5.1                                                                                                                                                                                                                                                                                                                    | Optional    |\n| ChCnt      | integer | Specifies the required number of audio channels                                                                                                                                                                                                                                                                                                                                                                         | Optional    |\n| PassThru   | integer | Specifies whether the bitstream needs to be decoded on the device. By default, this reports the codec properties of both the Roku device and the attached HDMI device.You can filter the values returned by including one of the following options:**0** \\- Reports only codecs that are supported on the Roku device itself.**1** \\- Reports only codecs of the attached HDMI device (for example, an audio receiver). | Optional    |\n| Atmos      | Integer | Specifies whether atmos is required. Include 'atmos=1' if it is.                                                                                                                                                                                                                                                                                                                                                        | Optional    |\n| SampleRate | integer | Specifies the sample rate                                                                                                                                                                                                                                                                                                                                                                                               | Optional    |\n| BitRate    | integer | Specifies the bit rate in Kbit/sec                                                                                                                                                                                                                                                                                                                                                                                      | Optional    |\n| Container  | string  | Specifies the container format                                                                                                                                                                                                                                                                                                                                                                                          | Optional    |\n",
                             "isRequired": true,
-                            "name": "audio\\_format",
+                            "name": "audio_format",
                             "type": "Object"
                         }
                     ],
@@ -10889,7 +10889,7 @@
                             "default": null,
                             "description": "An associative array with the following key/value pairs specifying the video format to be checked:  \n| Key       | Type   | Value                                                                                                                                                                                                    | Requirement |\n| --------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |\n| Codec     | string | Specifies the video codec:CodecProfileLevel\"mpeg2\"n/a\"main\", \"high\"\"mpeg4 avc\" 1\"main\", \"high\"\"4.1\", \"4.2\"\"hevc\" 1\"main\", \"main 10\"\"4.1\", \"5.0\", \"5.1\"\"vp9\" 1\"profile 0\", \"profile 2\"\"4.1\", \"5.0\", \"5.1\" | Required    |\n| Profile   | string | Specifies the profile                                                                                                                                                                                    | Optional    |\n| Level     | string | Specifies the level                                                                                                                                                                                      | Optional    |\n| Container | string | Specifies the container format: “mp4”, “hls”, “mkv”, “ism”, “dash”, “ts”                                                                                                                                 | Optional    |\n",
                             "isRequired": true,
-                            "name": "video\\_format",
+                            "name": "video_format",
                             "type": "Object"
                         }
                     ],
@@ -14661,7 +14661,7 @@
                             "default": null,
                             "description": "An roArray of child nodes to be appended to the subject node.",
                             "isRequired": true,
-                            "name": "child\\_nodes",
+                            "name": "child_nodes",
                             "type": "Object"
                         }
                     ],
@@ -14691,7 +14691,7 @@
                             "default": null,
                             "description": "Number of new child nodes to be created.",
                             "isRequired": true,
-                            "name": "num\\_children",
+                            "name": "num_children",
                             "type": "Integer"
                         },
                         {
@@ -14749,7 +14749,7 @@
                             "default": null,
                             "description": "The number of child nodes to be retrieved.",
                             "isRequired": true,
-                            "name": "num\\_children",
+                            "name": "num_children",
                             "type": "Integer"
                         },
                         {
@@ -14820,7 +14820,7 @@
                             "default": null,
                             "description": "An roArray of child nodes to be inserted in the tree.",
                             "isRequired": true,
-                            "name": "child\\_nodes",
+                            "name": "child_nodes",
                             "type": "Object"
                         },
                         {
@@ -14872,7 +14872,7 @@
                             "default": null,
                             "description": "An roArray of child nodes to removed from the tree",
                             "isRequired": true,
-                            "name": "child\\_nodes",
+                            "name": "child_nodes",
                             "type": "Object"
                         }
                     ],
@@ -14887,7 +14887,7 @@
                             "default": null,
                             "description": "The number of child nodes to be removed.",
                             "isRequired": true,
-                            "name": "num\\_children",
+                            "name": "num_children",
                             "type": "Integer"
                         },
                         {
@@ -14953,7 +14953,7 @@
                             "default": null,
                             "description": "An roArray of child nodes to replace the nodes in the tree.",
                             "isRequired": true,
-                            "name": "child\\_nodes",
+                            "name": "child_nodes",
                             "type": "Object"
                         },
                         {
@@ -14968,24 +14968,25 @@
                     "returnType": "Boolean"
                 },
                 {
-                    "description": "Takes the key-value pairs in an roAssociativeArray and maps the values to the respective field name in the calling node.",
+                    "description": "**OVERLOADED METHOD**\n\nTakes the key-value pairs in an roAssociativeArray and maps the values to the respective field name in the calling node.\n\n or \n\nEach roAssociativeArray in the roArray is mapped to a node in the `children` field name of the calling node.",
                     "name": "update",
                     "params": [
                         {
                             "default": null,
-                            "description": "Contains key-value pairs corresponding to the fields in the subject node to be updated.",
+                            "description": "Contains key-value pairs corresponding to the fields in the subject node to be updated. OR Array of key-value pairs corresponding to the node fields to be set",
                             "isRequired": true,
                             "name": "fields",
-                            "type": "roAssociativeArray"
+                            "type": "roAssociativeArray or roArray"
                         },
                         {
                             "default": null,
-                            "description": "optional (default = false). If true, and a specified key is not yet present, add it and value to the node.",
+                            "description": "optional (default = false). If true, and a specified key is not yet present, add it and value to the node. OR optional (default = false). If true, new nodes will be added to the `children` field",
                             "isRequired": false,
                             "name": "addFields",
                             "type": "Boolean"
                         }
                     ],
+                    "returnDescription": "",
                     "returnType": "Void"
                 }
             ],
@@ -15480,7 +15481,7 @@
                             "default": null,
                             "description": "The roHttpAgent object to be set for the node.",
                             "isRequired": true,
-                            "name": "HTTP\\_agent",
+                            "name": "HTTP_agent",
                             "type": "Object"
                         }
                     ],
@@ -16951,7 +16952,7 @@
                             "default": null,
                             "description": "The substring within the roString object to be returned. OR The position in the roString object from which to start looking for and returning the **substring**.",
                             "isRequired": true,
-                            "name": "substringOrStart\\_index",
+                            "name": "substringOrStart_index",
                             "type": "String or Integer"
                         },
                         {
@@ -16995,14 +16996,14 @@
                             "default": null,
                             "description": "The position in the roString object from which to return the remaining characters. OR The position in the roString object from which to return the number of characters specified by num\\_chars.",
                             "isRequired": true,
-                            "name": "start\\_index",
+                            "name": "start_index",
                             "type": "Integer"
                         },
                         {
                             "default": null,
                             "description": "The number of characters in the remaining part of the roString object to be retrieved.",
                             "isRequired": false,
-                            "name": "num\\_chars",
+                            "name": "num_chars",
                             "type": "Integer"
                         }
                     ],
@@ -17921,14 +17922,14 @@
                             "default": null,
                             "description": "The minimum transfer rate required to transfer data.",
                             "isRequired": true,
-                            "name": "bytes\\_per\\_second",
+                            "name": "bytes_per_second",
                             "type": "Integer"
                         },
                         {
                             "default": null,
                             "description": "The interval to be used for averaging bytes\\_per\\_second.      For large file transfers and a small bytes\\_per\\_second, averaging over fifteen minutes or even longer might be appropriate.      If the transfer is being done over the internet, setting this to a small number because it may cause temporary drops in performance if network problems occur.",
                             "isRequired": true,
-                            "name": "period\\_in\\_seconds",
+                            "name": "period_in_seconds",
                             "type": "Integer"
                         }
                     ],
@@ -18291,8 +18292,8 @@
                             "default": null,
                             "description": "An array of timedMetaData keys for the channel to receive from the timedMetaData event.      If the keys array is empty, all the timed metadata associated with the current stream is sent with the isTimedMetaData event. If the keys array is invalid, then do not return any keys to the BrightScript channel. Any keys not specified with this method are deleted by the Roku OS and never returned to the BrightScript application.",
                             "isRequired": true,
-                            "name": "keys\\[\\]",
-                            "type": "Dynamic"
+                            "name": "keys",
+                            "type": "roArray"
                         }
                     ],
                     "returnType": "Void"
@@ -18411,7 +18412,7 @@
                             "default": null,
                             "description": "Specifies whether the output begins with a standard XML declaration specifying UTF-8 encoding.",
                             "isRequired": true,
-                            "name": "gen\\_header",
+                            "name": "gen_header",
                             "type": "Boolean"
                         }
                     ],
