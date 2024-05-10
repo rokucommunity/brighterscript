@@ -898,9 +898,6 @@ export class Scope {
                 this.linkSymbolTableDisposables.push(
                     ...this._allNamespaceTypeTable.mergeNamespaceSymbolTables(namespaceTypes)
                 );
-                /* this.linkSymbolTableDisposables.push(
-                     () => file.unlinkNamespaceSymbolTables()
-                 );*/
             }
         }
         for (const [_, nsContainer] of this.namespaceLookup) {

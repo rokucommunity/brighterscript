@@ -32,7 +32,7 @@ import { ComponentType } from './types/ComponentType';
 import { ArrayType } from './types/ArrayType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { BooleanType } from './types/BooleanType';
-import { DoubleType } from './types';
+import { DoubleType, UnionType } from './types';
 
 const sinon = createSandbox();
 
@@ -2807,6 +2807,81 @@ describe('Program', () => {
 
             expect(ifAAType.getMemberType('ifAssociativeArray', { flags: SymbolTypeFlag.runtime }).isResolvable()).to.be.false;
         });
+
+        it('has various hard to decipher field types', () => {
+            const table = program.globalScope.symbolTable;
+            const opts = { flags: SymbolTypeFlag.runtime };
+            const recType = table.getSymbolType('roSGNodeRectangle', { flags: SymbolTypeFlag.typetime });
+            expectTypeToBe(recType.getMemberType('color', opts), UnionType);
+
+            const stdKeyDialogType = table.getSymbolType('roSGNodeStandardKeyboardDialog', { flags: SymbolTypeFlag.typetime });
+            expectTypeToBe(stdKeyDialogType.getMemberType('textEditBox', opts), ComponentType);
+        });
+
+        it('has content node and all its attributes', () => {
+            const table = program.globalScope.symbolTable;
+            const opts = { flags: SymbolTypeFlag.runtime };
+            const cnType = table.getSymbolType('roSGNodeContentNode', { flags: SymbolTypeFlag.typetime });
+
+            expectTypeToBe(cnType.getMemberType('contentType', opts), StringType);
+
+            const actorsType = cnType.getMemberType('actors', opts) as UnionType;
+            expectTypeToBe(actorsType, UnionType);
+            expectTypeToBe(actorsType.types[0], ArrayType);
+            expectTypeToBe(actorsType.types[1], StringType);
+
+            const cdnConfigType = cnType.getMemberType('cdnConfig', opts) as ArrayType;
+            expectTypeToBe(cdnConfigType, ArrayType);
+            expectTypeToBe(cdnConfigType.defaultType, AssociativeArrayType);
+
+            const subTitleTracksType = cnType.getMemberType('SubtitleTracks', opts) as ArrayType;
+            expectTypeToBe(subTitleTracksType, ArrayType);
+            expectTypeToBe(subTitleTracksType.defaultType, AssociativeArrayType);
+
+            const subtitleConfigType = cnType.getMemberType('SUBTITLECONFIG', opts);
+            expectTypeToBe(subtitleConfigType, AssociativeArrayType);
+
+            const hdlisticonSelType = cnType.getMemberType('HDListItemIconSelectedURL', opts);
+            expectTypeToBe(hdlisticonSelType, StringType);
+        });
+
+        it('has video player internal nodes', () => {
+            const table = program.globalScope.symbolTable;
+            const opts = { flags: SymbolTypeFlag.runtime };
+            const videoType = table.getSymbolType('roSGNodeVideo', { flags: SymbolTypeFlag.typetime });
+            expectTypeToBe(videoType, ComponentType);
+
+            const bifDisplayType = videoType.getMemberType('bifDisplay', opts) as ComponentType;
+            expectTypeToBe(bifDisplayType, ComponentType);
+            expect(bifDisplayType.name).to.eq('BifDisplay');
+            expectTypeToBe(bifDisplayType.getMemberType('getNearestFrame', opts), DoubleType);
+            expectTypeToBe(bifDisplayType.getMemberType('frameBgImageUri', opts), StringType);
+
+            const trickBarType = videoType.getMemberType('trickPlayBar', opts) as ComponentType;
+            expectTypeToBe(trickBarType, ComponentType);
+            expect(trickBarType.name).to.eq('TrickPlayBar');
+            expectTypeToBe(trickBarType.getMemberType('trackImageUri', opts), StringType);
+            expectTypeToBe(trickBarType.getMemberType('trackBlendColor', opts), UnionType);
+        });
+
+        it('deals with roDateTime overloaded method', () => {
+            program.setFile('source/main.bs', `
+                namespace alpha
+                    function getDate() as roDateTime
+                        theDate = createObject("roDateTime")
+                        return theDate
+                    end function
+                end namespace
+
+                function toUtcTime(localTime as roDateTime) as roDateTime
+                    theDate = alpha.getDate()
+                    return theDate
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
     });
 
     describe('manifest', () => {

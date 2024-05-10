@@ -26,7 +26,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { Logger, LogLevel } from './Logger';
 import { isToken, type Identifier, type Locatable, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLiteralString, isLongIntegerType, isNewExpression, isNumberType, isStringType, isTypeExpression, isTypedArrayExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLiteralString, isLongIntegerType, isNewExpression, isNumberType, isStringType, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUnionType, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import * as requireRelative from 'require-relative';
@@ -1255,7 +1255,20 @@ export class Util {
      * @returns {BscType} the known type, or dynamic
      */
     public getNodeFieldType(typeDescriptor: string, lookupTable?: SymbolTable): BscType {
-        const typeDescriptorLower = typeDescriptor.toLowerCase().trim();
+        let typeDescriptorLower = typeDescriptor.toLowerCase().trim().replace(/\*/g, '');
+
+        if (typeDescriptorLower.startsWith('as ')) {
+            typeDescriptorLower = typeDescriptorLower.substring(3).trim();
+        }
+        const nodeFilter = (new RegExp(/^\[?(.* node)/, 'i')).exec(typeDescriptorLower);
+        if (nodeFilter?.[1]) {
+            typeDescriptorLower = nodeFilter[1].trim();
+        }
+        const parensFilter = (new RegExp(/(.*)\(.*\)/, 'gi')).exec(typeDescriptorLower);
+        if (parensFilter?.[1]) {
+            typeDescriptorLower = parensFilter[1].trim();
+        }
+
         const bscType = this.tokenToBscType(createToken(TokenKind.Identifier, typeDescriptorLower));
         if (bscType) {
             return bscType;
@@ -1274,9 +1287,19 @@ export class Util {
             return unionTypeFactory([IntegerType.instance, StringType.instance]);
         }
 
+        //check for uniontypes
+        const multipleTypes = typeDescriptorLower.split(' or ').map(s => s.trim());
+        if (multipleTypes.length > 1) {
+            const individualTypes = multipleTypes.map(t => this.getNodeFieldType(t, lookupTable));
+            return unionTypeFactory(individualTypes);
+        }
 
-        if (typeDescriptorLower.startsWith('array of ')) {
-            let arrayOfTypeName = typeDescriptorLower.substring(9); //cut off beginning 'array of'
+        const typeIsArray = typeDescriptorLower.startsWith('array of ') || typeDescriptorLower.startsWith('roarray of ');
+
+        if (typeIsArray) {
+            const ofSearch = ' of ';
+            const arrayPrefixLength = typeDescriptorLower.indexOf(ofSearch) + ofSearch.length;
+            let arrayOfTypeName = typeDescriptorLower.substring(arrayPrefixLength); //cut off beginnin, eg. 'array of' or 'roarray of'
             if (arrayOfTypeName.endsWith('s')) {
                 // remove "s" in "floats", etc.
                 arrayOfTypeName = arrayOfTypeName.substring(0, arrayOfTypeName.length - 1);
@@ -1293,6 +1316,8 @@ export class Util {
         } else if (typeDescriptorLower.startsWith('value ')) {
             const actualTypeName = typeDescriptorLower.substring('value '.length); //cut off beginning 'value '
             return this.getNodeFieldType(actualTypeName, lookupTable);
+        } else if (typeDescriptorLower === 'n/a') {
+            return DynamicType.instance;
         } else if (typeDescriptorLower === 'uri') {
             return StringType.instance;
         } else if (typeDescriptorLower === 'color') {
@@ -1317,9 +1342,12 @@ export class Util {
             return StringType.instance;
         } else if (typeDescriptorLower === 'bool') {
             return BooleanType.instance;
-        } else if (typeDescriptorLower === 'array') {
+        } else if (typeDescriptorLower === 'array' || typeDescriptorLower === 'roarray') {
             return new ArrayType();
-        } else if (typeDescriptorLower === 'assocarray' || typeDescriptorLower === 'associative array' || typeDescriptorLower === 'associativearray') {
+        } else if (typeDescriptorLower === 'assocarray' ||
+            typeDescriptorLower === 'associative array' ||
+            typeDescriptorLower === 'associativearray' ||
+            typeDescriptorLower === 'roassociativearray') {
             return new AssociativeArrayType();
         } else if (typeDescriptorLower === 'node') {
             return ComponentType.instance;
@@ -1329,12 +1357,21 @@ export class Util {
             return getRect2dType();
         } else if (typeDescriptorLower === 'rect2darray') {
             return new ArrayType(getRect2dType());
+        } else if (typeDescriptorLower === 'font') {
+            return this.getNodeFieldType('roSGNodeFont', lookupTable);
+        } else if (typeDescriptorLower === 'contentnode') {
+            return this.getNodeFieldType('roSGNodeContentNode', lookupTable);
+        } else if (typeDescriptorLower.endsWith(' node')) {
+            return this.getNodeFieldType('roSgNode' + typeDescriptorLower.substring(0, typeDescriptorLower.length - 5), lookupTable);
         } else if (lookupTable) {
             //try doing a lookup
-            return lookupTable.getSymbolType(typeDescriptorLower, { flags: SymbolTypeFlag.typetime });
+            return lookupTable.getSymbolType(typeDescriptorLower, {
+                flags: SymbolTypeFlag.typetime,
+                fullName: typeDescriptor,
+                tableProvider: () => lookupTable
+            });
         }
 
-        //  TODO: Handle  'rect2d', 'rect2dArray',
         return DynamicType.instance;
     }
 
@@ -1961,6 +1998,8 @@ export class Util {
         let itemName = '';
         let previousTypeName = '';
         let parentTypeName = '';
+        let itemTypeKind = '';
+        let parentTypeKind = '';
         let errorRange: Range;
         let containsDynamic = false;
         let continueResolvingAllItems = true;
@@ -1973,8 +2012,30 @@ export class Util {
             fullChainName += chainItem.name;
             if (continueResolvingAllItems) {
                 parentTypeName = previousTypeName;
+                parentTypeKind = itemTypeKind;
                 fullErrorName = previousTypeName ? `${previousTypeName}${dotSep}${chainItem.name}` : chainItem.name;
-                previousTypeName = chainItem.type?.toString() ?? '';
+
+                let typeString = chainItem.type?.toString();
+                let typeToFindStringFor = chainItem.type;
+                while (typeToFindStringFor) {
+                    if (isUnionType(chainItem.type)) {
+                        typeString = `(${typeToFindStringFor.toString()})`;
+                        break;
+                    } else if (isCallableType(typeToFindStringFor)) {
+                        if (isTypedFunctionType(typeToFindStringFor) && i < typeChain.length - 1) {
+                            typeToFindStringFor = typeToFindStringFor.returnType;
+                        } else {
+                            typeString = 'function';
+                            break;
+                        }
+                    } else {
+                        typeString = typeToFindStringFor?.toString();
+                        break;
+                    }
+                }
+
+                previousTypeName = typeString ?? '';
+                itemTypeKind = (chainItem.type as any)?.kind;
                 itemName = chainItem.name;
                 containsDynamic = containsDynamic || (isDynamicType(chainItem.type) && !isAnyReferenceType(chainItem.type));
                 if (!chainItem.isResolved) {
@@ -1985,7 +2046,9 @@ export class Util {
         }
         return {
             itemName: itemName,
+            itemTypeKind: itemTypeKind,
             itemParentTypeName: parentTypeName,
+            itemParentTypeKind: parentTypeKind,
             fullNameOfItem: fullErrorName,
             fullChainName: fullChainName,
             range: errorRange,

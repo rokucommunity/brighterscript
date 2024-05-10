@@ -45,6 +45,7 @@ describe('HoverProcessor', () => {
                     end function
                 end sub
             `);
+            program.validate();
 
             //hover over the `name = 1` line
             let hover = program.getHover(file.srcPath, util.createPosition(2, 24))[0];
@@ -422,7 +423,10 @@ describe('HoverProcessor', () => {
             let commentSep = `\n***\n`;
             //th|ing = new MyKlass()
             let hover = program.getHover('source/main.bs', util.createPosition(2, 24))[0];
-            expect(hover?.contents).to.eql([`${fence('thing as MyKlass')}${commentSep}A sample class`]);
+            expect(hover?.contents).to.eql([`${fence('thing as MyKlass')}`]);
+            //thing = new MyK|lass()
+            hover = program.getHover('source/main.bs', util.createPosition(2, 37))[0];
+            expect(hover?.contents).to.eql([`${fence('class MyKlass')}${commentSep}A sample class`]);
             //use|Klass(thing)
             hover = program.getHover('source/main.bs', util.createPosition(3, 24))[0];
             expect(hover?.contents).to.eql([`${fence('sub useKlass(thing as MyKlass) as void')}${commentSep}Prints a MyKlass.name`]);
@@ -645,6 +649,23 @@ describe('HoverProcessor', () => {
             hover = program.getHover(file.srcPath, util.createPosition(3, 38))[0];
             expect(hover?.contents).to.be.undefined;
         });
+
+        it('should show unresolved members as invalid', () => {
+            const file = program.setFile('source/main.bs', `
+                    interface MyIFace
+                        name as string
+                    end interface
+
+                    sub doSomething(thing as MyIFace)
+                        print thing.member
+                    end sub
+                `);
+            program.validate();
+
+            // print thing.mem|ber
+            let hover = program.getHover(file.srcPath, util.createPosition(6, 40))[0];
+            expect(hover?.contents).eql([fence('MyIFace.member as invalid')]);
+        });
     });
 
     describe('callFunc', () => {
@@ -675,5 +696,95 @@ describe('HoverProcessor', () => {
             let hover = program.getHover(file.srcPath, util.createPosition(3, 35))[0];
             expect(hover?.contents).eql([fence('function roSGNodeWidget@.someFunc(input as string) as float')]);
         });
+
+    });
+
+    describe('multiple definition locations', () => {
+
+        it('shows correct type in all locations', () => {
+            const file = program.setFile('source/util.bs', `
+                sub test()
+                    myVar = "hello" ' setting type to string
+                    print 1; myVar
+                    myVar = "hello".len()  ' setting type to integer
+                    myVar = sqr(33)  ' setting type to float
+                    print 2; myVar
+                end sub
+            `);
+
+            const expectedHoverStr = `myVar as string or integer or float`;
+
+            program.validate();
+            expectZeroDiagnostics(program);
+            // print 1; my|Var
+            let hover = program.getHover(file.srcPath, util.createPosition(3, 31))[0];
+            expect(hover?.contents).eql([fence(expectedHoverStr)]);
+
+            // my|Var = "hello".len()
+            hover = program.getHover(file.srcPath, util.createPosition(4, 23))[0];
+            expect(hover?.contents).eql([fence(expectedHoverStr)]);
+
+            // print 2; my|Var
+            hover = program.getHover(file.srcPath, util.createPosition(6, 31))[0];
+            expect(hover?.contents).eql([fence(expectedHoverStr)]);
+        });
+
+        it('reusing same variable for multiple types', () => {
+            const file = program.setFile('source/util.bs', `
+                namespace stringUtil
+                    function pad(x as string or integer) as string
+                        return "0"+x.toStr()
+                    end function
+                end namespace
+
+                ' Formats a timestamp into a user friendly string.
+                ' @param {Integer} time - The unix time stamp to format.
+                ' @param {String} meridiemStyle - A style key to be wrapped around the meridiem for MultiStyleLabels.
+                ' @return {String} - The formatted time
+                function formatTime(time as integer, meridiemStyle = "" as string) as string
+                    dateObj = createObject("roDateTime")
+                    deviceInfo = createObject("roDeviceInfo")
+                    dateObj.fromSeconds(time)
+                    hour = dateObj.getHours()
+                    minutes = dateObj.getMinutes()
+
+                    ' Get the Meridiem value
+                    if hour > 11 then
+                        meridiem = "pm"
+                    else
+                        meridiem = "am"
+                    end if
+
+                    if meridiemStyle <> "" then
+                        meridiem = "<" + meridiemStyle + ">" + meridiem + "</" + meridiemStyle + ">"
+                    end if
+
+                    minutes = stringUtil.pad(minutes)
+
+                    if deviceInfo.getClockFormat() = "24h" then
+                        hour = stringUtil.pad(hour)
+                        ' "22:01" | "01:01"
+                        return substitute("{0}:{1}", hour, minutes as string)
+                    else
+                        hour = hour mod 12
+                        if hour = 0 then hour = 12
+                        ' "10:01 AM" | "1:01 AM"
+                        return substitute("{0}:{1} {2}", hour, minutes as string, meridiem)
+                    end if
+                end function
+            `);
+            const expectedHourHoverStr = `hour as dynamic`;
+
+            program.validate();
+            expectZeroDiagnostics(program);
+            // ho|ur = stringUtil.pad(hour)
+            let hover = program.getHover(file.srcPath, util.createPosition(32, 27))[0];
+            expect(hover?.contents).eql([fence(expectedHourHoverStr)]);
+
+            // ho|ur = hour mod 12
+            hover = program.getHover(file.srcPath, util.createPosition(36, 27))[0];
+            expect(hover?.contents).eql([fence(expectedHourHoverStr)]);
+        });
+
     });
 });

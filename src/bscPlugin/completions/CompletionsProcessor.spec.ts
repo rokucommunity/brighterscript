@@ -1049,12 +1049,31 @@ describe('CompletionsProcessor', () => {
 
             program.validate();
             // print |
-            let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 28));
+            let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(3, 28));
             expectCompletionsIncludes(completions, [{
                 label: 'myFuncParam',
                 kind: CompletionItemKind.Variable
             }, {
                 label: 'myValue',
+                kind: CompletionItemKind.Variable
+            }]);
+        });
+
+        it('includes function parameters at the end of the function in namespace', () => {
+            program.setFile('source/main.bs', `
+                namespace alpha
+                    function main(param)
+                        print
+                        myValue = 234
+                    end function
+                end namespace
+            `);
+
+            program.validate();
+            // print |
+            let completions = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(3, 33));
+            expectCompletionsIncludes(completions, [{
+                label: 'param',
                 kind: CompletionItemKind.Variable
             }]);
         });
