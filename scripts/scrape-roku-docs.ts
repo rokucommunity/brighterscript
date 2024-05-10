@@ -1188,7 +1188,28 @@ class Runner {
                 }
             },
             events: {},
-            interfaces: {}
+            interfaces: {
+                ifsgnodechildren: {
+                    methods: [{
+                        name: 'update',
+                        description: 'Each roAssociativeArray in the roArray is mapped to a node in the `children` field name of the calling node.',
+                        params: [{
+                            default: null,
+                            description: 'Array of key-value pairs corresponding to the node fields to be set',
+                            isRequired: true,
+                            name: 'fields',
+                            type: 'roArray'
+                        }, {
+                            default: false,
+                            description: 'optional (default = false). If true, new nodes will be added to the `children` field',
+                            isRequired: false,
+                            name: 'addFields',
+                            type: 'Boolean'
+                        }],
+                        returnType: 'Void'
+                    }]
+                }
+            }
         });
 
         // fix all overloaded methods in interfaces
