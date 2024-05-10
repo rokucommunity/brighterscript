@@ -156,6 +156,26 @@ describe('util', () => {
             ].map(p => util.pathSepNormalize(p, '/')));
         });
 
+        it('resolves path relatively to config file', () => {
+            const mockConfig: BsConfig = {
+                outFile: 'out/app.zip',
+                rootDir: 'rootDir',
+                cwd: 'cwd',
+                stagingDir: 'stagingDir'
+            };
+            fsExtra.outputFileSync(s`${rootDir}/child.json`, JSON.stringify(mockConfig));
+            let config = util.loadConfigFile(s`${rootDir}/child.json`);
+            expect(config).to.deep.equal({
+                '_ancestors': [
+                    s`${rootDir}/child.json`
+                ],
+                'cwd': s`${rootDir}/cwd`,
+                'outFile': s`${rootDir}/out/app.zip`,
+                'rootDir': s`${rootDir}/rootDir`,
+                'stagingDir': s`${rootDir}/stagingDir`
+            });
+        });
+
         it('removes duplicate plugins and undefined values', () => {
             const config: BsConfig = {
                 plugins: [

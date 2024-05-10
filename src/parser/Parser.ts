@@ -92,7 +92,8 @@ import {
     XmlAttributeGetExpression
 } from './Expression';
 import type { Diagnostic, Range } from 'vscode-languageserver';
-import { Logger } from '../Logger';
+import type { Logger } from '../logging';
+import { createLogger } from '../logging';
 import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isTypecastExpression } from '../astUtils/reflection';
 import { createStringLiteral } from '../astUtils/creators';
 import type { Expression, Statement } from './AstNode';
@@ -180,7 +181,7 @@ export class Parser {
      * @returns the same instance of the parser which contains the diagnostics and statements
      */
     public parse(toParse: Token[] | string, options?: ParseOptions) {
-        this.logger = options?.logger ?? new Logger();
+        this.logger = options?.logger ?? createLogger();
         options = this.sanitizeParseOptions(options);
         this.options = options;
 

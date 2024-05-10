@@ -2,14 +2,14 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 import { expect } from './chai-config.spec';
 import * as sinon from 'sinon';
-import { Logger } from './Logger';
 import PluginInterface from './PluginInterface';
+import { createLogger } from './logging';
 
 describe('PluginInterface', () => {
     let pluginInterface: PluginInterface;
 
     beforeEach(() => {
-        pluginInterface = new PluginInterface([], { logger: new Logger() });
+        pluginInterface = new PluginInterface([], { logger: createLogger() });
     });
 
     it('allows adding a plugin', () => {

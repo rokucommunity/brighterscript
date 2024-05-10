@@ -5,7 +5,7 @@ const sinon = createSandbox();
 import { Program } from './Program';
 import { ProgramBuilder } from './ProgramBuilder';
 import { standardizePath as s, util } from './util';
-import { Logger, LogLevel } from './Logger';
+import { LogLevel, createLogger } from './logging';
 import * as diagnosticUtils from './diagnosticUtils';
 import { DiagnosticSeverity } from 'vscode-languageserver';
 import { BrsFile } from './files/BrsFile';
@@ -35,7 +35,7 @@ describe('ProgramBuilder', () => {
             rootDir: rootDir
         });
         builder.program = new Program(builder.options);
-        builder.logger = new Logger();
+        builder.logger = createLogger();
     });
 
     afterEach(() => {
@@ -287,6 +287,26 @@ describe('ProgramBuilder', () => {
 
 
     describe('printDiagnostics', () => {
+
+        it('does not crash when a diagnostic is missing range informtaion', () => {
+            const file = builder.program.setFile('source/main.brs', ``);
+            file.addDiagnostics([{
+                message: 'message 1',
+                code: 'test1',
+                file: file
+            }, {
+                message: 'message 2',
+                code: 'test1',
+                file: file
+            }] as any);
+            const stub = sinon.stub(diagnosticUtils, 'printDiagnostic').callsFake(() => { });
+            //if this doesn't crash, then the test passes
+            builder['printDiagnostics']();
+            expect(stub.getCalls().map(x => x.args[4].message)).to.eql([
+                'message 1',
+                'message 2'
+            ]);
+        });
 
         it('prints no diagnostics when showDiagnosticsInConsole is false', () => {
             builder.options.showDiagnosticsInConsole = false;

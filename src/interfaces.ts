@@ -1,4 +1,4 @@
-import type { Range, Diagnostic, CodeAction, SemanticTokenTypes, SemanticTokenModifiers, Position, CompletionItem, Location } from 'vscode-languageserver';
+import type { Range, Diagnostic, CodeAction, Position, CompletionItem, Location, DocumentSymbol } from 'vscode-languageserver-protocol';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -11,16 +11,18 @@ import type { AstNode, AstNodeKind, Expression, Statement } from './parser/AstNo
 import type { TranspileState } from './parser/TranspileState';
 import type { SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
-import type { Editor } from './astUtils/Editor';
 import type { Identifier, Token } from './lexer/Token';
-import type { BscFile } from './files/BscFile';
-import type { FileFactory } from './files/Factory';
-import type { LazyFileData } from './files/LazyFileData';
-import type { SymbolTable } from './SymbolTable';
-import type { SymbolTypeFlag } from './SymbolTypeFlag';
-import { createToken } from './astUtils/creators';
+import type { SemanticTokenModifiers, SemanticTokenTypes } from 'vscode-languageserver';
+import { createToken } from 'chevrotain';
+import { SymbolTable } from './SymbolTable';
+import { SymbolTypeFlag } from './SymbolTypeFlag';
+import { Editor } from './astUtils/Editor';
+import { BscFile } from './files/BscFile';
+import { FileFactory } from './files/Factory';
+import { LazyFileData } from './files/LazyFileData';
 import { TokenKind } from './lexer/TokenKind';
-import type { BscTypeKind } from './types/BscTypeKind';
+import { BscTypeKind } from './types/BscTypeKind';
+import { WorkspaceSymbol } from 'vscode-languageserver-types';
 
 export interface BsDiagnostic extends Diagnostic {
     file: BscFile;
@@ -287,6 +289,38 @@ export interface CompilerPlugin {
      * @param event
      */
     afterProvideReferences?(event: AfterProvideReferencesEvent): any;
+
+
+    /**
+     * Called before the `provideDocumentSymbols` hook
+     */
+    beforeProvideDocumentSymbols?(event: BeforeProvideDocumentSymbolsEvent): any;
+    /**
+     * Provide all of the `DocumentSymbol`s for the given file
+     * @param event
+     */
+    provideDocumentSymbols?(event: ProvideDocumentSymbolsEvent): any;
+    /**
+     * Called after `provideDocumentSymbols`. Use this if you want to intercept or sanitize the document symbols data provided by bsc or other plugins
+     * @param event
+     */
+    afterProvideDocumentSymbols?(event: AfterProvideDocumentSymbolsEvent): any;
+
+
+    /**
+     * Called before the `provideWorkspaceSymbols` hook
+     */
+    beforeProvideWorkspaceSymbols?(event: BeforeProvideWorkspaceSymbolsEvent): any;
+    /**
+     * Provide all of the workspace symbols for the entire project
+     * @param event
+     */
+    provideWorkspaceSymbols?(event: ProvideWorkspaceSymbolsEvent): any;
+    /**
+     * Called after `provideWorkspaceSymbols`. Use this if you want to intercept or sanitize the workspace symbols data provided by bsc or other plugins
+     * @param event
+     */
+    afterProvideWorkspaceSymbols?(event: AfterProvideWorkspaceSymbolsEvent): any;
 
 
     //scope events
@@ -561,6 +595,32 @@ export interface ProvideReferencesEvent<TFile = BscFile> {
 }
 export type BeforeProvideReferencesEvent<TFile = BscFile> = ProvideReferencesEvent<TFile>;
 export type AfterProvideReferencesEvent<TFile = BscFile> = ProvideReferencesEvent<TFile>;
+
+
+export interface ProvideDocumentSymbolsEvent<TFile = BscFile> {
+    program: Program;
+    /**
+     * The file that the `documentSymbol` request was invoked in
+     */
+    file: TFile;
+    /**
+     * The result list of symbols
+     */
+    documentSymbols: DocumentSymbol[];
+}
+export type BeforeProvideDocumentSymbolsEvent<TFile = BscFile> = ProvideDocumentSymbolsEvent<TFile>;
+export type AfterProvideDocumentSymbolsEvent<TFile = BscFile> = ProvideDocumentSymbolsEvent<TFile>;
+
+
+export interface ProvideWorkspaceSymbolsEvent {
+    program: Program;
+    /**
+     * The result list of symbols
+     */
+    workspaceSymbols: WorkspaceSymbol[];
+}
+export type BeforeProvideWorkspaceSymbolsEvent = ProvideWorkspaceSymbolsEvent;
+export type AfterProvideWorkspaceSymbolsEvent = ProvideWorkspaceSymbolsEvent;
 
 
 export interface OnGetSemanticTokensEvent<T extends BscFile = BscFile> {

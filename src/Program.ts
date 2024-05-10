@@ -1,17 +1,18 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { CodeAction, Position, Range, SignatureInformation, Location } from 'vscode-languageserver';
+import type { CodeAction, Position, Range, SignatureInformation, Location, DocumentSymbol } from 'vscode-languageserver';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { BrsFile, ProvidedSymbolInfo } from './files/BrsFile';
-import type { XmlFile } from './files/XmlFile';
-import type { FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, BeforeFileAddEvent, BeforeFileRemoveEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj } from './interfaces';
+import { BrsFile, ProvidedSymbolInfo } from './files/BrsFile';
+import { XmlFile } from './files/XmlFile';
+import type { FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeFileAddEvent, BeforeFileRemoveEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DependencyGraph } from './DependencyGraph';
-import { Logger, LogLevel } from './Logger';
+import type { Logger } from './logging';
+import { LogLevel, createLogger } from './logging';
 import chalk from 'chalk';
 import { globalCallables, globalFile } from './globalCallables';
 import { parseManifest, getBsConst } from './preprocessor/Manifest';
@@ -79,7 +80,7 @@ export class Program {
         diagnosticsManager?: DiagnosticManager
     ) {
         this.options = util.normalizeConfig(options);
-        this.logger = logger || new Logger(options.logLevel as LogLevel);
+        this.logger = logger ?? createLogger(options);
         this.plugins = plugins || new PluginInterface([], { logger: this.logger });
         this.diagnostics = diagnosticsManager || new DiagnosticManager();
 
@@ -1240,14 +1241,14 @@ export class Program {
      * Goes through each file and builds a list of workspace symbols for the program. Used by LanguageServer's onWorkspaceSymbol functionality
      */
     public getWorkspaceSymbols() {
-        const results = Object.keys(this.files).map(key => {
-            const file = this.files[key];
-            if (isBrsFile(file)) {
-                return file.getWorkspaceSymbols();
-            }
-            return [];
-        });
-        return util.flatMap(results, c => c);
+        const event: ProvideWorkspaceSymbolsEvent = {
+            program: this,
+            workspaceSymbols: []
+        };
+        this.plugins.emit('beforeProvideWorkspaceSymbols', event);
+        this.plugins.emit('provideWorkspaceSymbols', event);
+        this.plugins.emit('afterProvideWorkspaceSymbols', event);
+        return event.workspaceSymbols;
     }
 
     /**
@@ -1294,6 +1295,27 @@ export class Program {
         }
 
         return result ?? [];
+    }
+
+    /**
+     * Get full list of document symbols for a file
+     * @param srcPath path to the file
+     */
+    public getDocumentSymbols(srcPath: string): DocumentSymbol[] | undefined {
+        let file = this.getFile(srcPath);
+        if (file) {
+            const event: ProvideDocumentSymbolsEvent = {
+                program: this,
+                file: file,
+                documentSymbols: []
+            };
+            this.plugins.emit('beforeProvideDocumentSymbols', event);
+            this.plugins.emit('provideDocumentSymbols', event);
+            this.plugins.emit('afterProvideDocumentSymbols', event);
+            return event.documentSymbols;
+        } else {
+            return undefined;
+        }
     }
 
     /**
