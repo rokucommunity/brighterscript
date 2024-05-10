@@ -190,16 +190,16 @@ export class CompletionsProcessor {
             expression = file.getClosestExpression(this.event.position);
         }
 
-        if (!expression) {
-            return [];
-        }
-
         if (isFunctionExpression(expression)) {
             // if completion is the last character of the function, use the completions of the body of the function
             expression = expression.body;
         }
 
-        const tokenBefore = file.getTokenBefore(file.getClosestToken(expression.range.start));
+        if (!expression) {
+            return [];
+        }
+
+        const tokenBefore = file.getTokenBefore(file.getClosestToken(expression.range?.start));
 
         // helper to check get correct symbol tables for look ups
         function getSymbolTableForLookups() {
