@@ -250,14 +250,21 @@ describe('ProgramBuilder', () => {
         it('does not crash when a diagnostic is missing range informtaion', () => {
             const file = builder.program.setFile('source/main.brs', ``);
             file.addDiagnostics([{
-                message: 'the message',
-                code: 'test1'
+                message: 'message 1',
+                code: 'test1',
+                file: file
             }, {
-                message: 'the message',
-                code: 'test1'
+                message: 'message 2',
+                code: 'test1',
+                file: file
             }] as any);
+            const stub = sinon.stub(diagnosticUtils, 'printDiagnostic').callsFake(() => { });
             //if this doesn't crash, then the test passes
             builder['printDiagnostics']();
+            expect(stub.getCalls().map(x => x.args[4].message)).to.eql([
+                'message 1',
+                'message 2'
+            ]);
         });
 
         it('prints no diagnostics when showDiagnosticsInConsole is false', () => {
