@@ -151,10 +151,14 @@ export class BrsFileValidator {
             },
             FunctionParameterExpression: (node) => {
                 const paramName = node.tokens.name?.text;
-                // add param symbol at expression level, so it can be used as default value in other params
-                const symbolTable = node.findAncestor<FunctionExpression>(isFunctionExpression)?.getSymbolTable();
                 const nodeType = node.getType({ flags: SymbolTypeFlag.typetime });
-                symbolTable?.addSymbol(paramName, { definingNode: node }, nodeType, SymbolTypeFlag.runtime);
+                // add param symbol at expression level, so it can be used as default value in other params
+                const funcExpr = node.findAncestor<FunctionExpression>(isFunctionExpression);
+                const funcSymbolTable = funcExpr?.getSymbolTable();
+                funcSymbolTable?.addSymbol(paramName, { definingNode: node }, nodeType, SymbolTypeFlag.runtime);
+
+                //also add param symbol at block level, as it may be redefined, and if so, should show a union
+                funcExpr.body.getSymbolTable()?.addSymbol(paramName, { definingNode: node }, nodeType, SymbolTypeFlag.runtime);
             },
             InterfaceStatement: (node) => {
                 this.validateDeclarationLocations(node, 'interface', () => util.createBoundingRange(node.tokens.interface, node.tokens.name));

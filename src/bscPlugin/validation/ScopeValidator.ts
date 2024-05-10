@@ -1360,24 +1360,40 @@ export class ScopeValidator {
         }
     }
 
-
+    /**
+     * Wraps the AstNode.getType() method, so that we can do extra processing on the result based on the current file
+     * In particular, since BrightScript does not support Unions, and there's no way to cast them to something else
+     * if the result of .getType() is a union, and we're in a .brs (brightScript) file, treat the result as Dynamic
+     *
+     * In most cases, this returns the result of node.getType()
+     *
+     * @param file the current file being processed
+     * @param node the node to get the type of
+     * @param getTypeOpts any options to pass to node.getType()
+     * @returns the processed result type
+     */
     private getNodeTypeWrapper(file: BrsFile, node: AstNode, getTypeOpts: GetTypeOptions) {
         const type = node?.getType(getTypeOpts);
 
         if (file.parseMode === ParseMode.BrightScript) {
+            // this is a brightscript file
             const typeChain = getTypeOpts.typeChain;
             if (typeChain) {
                 const hasUnion = typeChain.reduce((hasUnion, tce) => {
                     return hasUnion || isUnionType(tce.type);
                 }, false);
                 if (hasUnion) {
+                    // there was a union somewhere in the typechain
                     return DynamicType.instance;
                 }
             }
             if (isUnionType(type)) {
+                //this is a union
                 return DynamicType.instance;
             }
         }
+
+        // by default return the result of node.getType()
         return type;
     }
 

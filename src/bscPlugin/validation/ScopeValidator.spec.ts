@@ -1709,6 +1709,19 @@ describe('ScopeValidator', () => {
             ]);
         });
 
+        it('has diagnostic when function default params reference variable from inside function', () => {
+            program.setFile('source/main.bs', `
+                function test(param1 as integer, param2 = paramX + 2)
+                    paramX = 3
+                    print param1; param2
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('paramX').message
+            ]);
+        });
+
         it('has diagnostic when trying to use a method on an union that does not exist in one type', () => {
             program.setFile('source/main.bs', `
                 function typeHoverTest(x as string or integer)
@@ -1722,9 +1735,21 @@ describe('ScopeValidator', () => {
             ]);
         });
 
-        it('does not have diagnostic when accessing unknown member of union in Brightscript mode', () => {
+        it('does not have diagnostic when accessing unknown member of union in Brightscript mode, when variable is a param', () => {
             program.setFile('source/main.brs', `
                 function typeHoverTest(x as string)
+                    x = x.len()
+                    return x
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not have diagnostic when accessing unknown member of union in Brightscript mode, when variable is defined in block', () => {
+            program.setFile('source/main.brs', `
+                function typeHoverTest()
+                    x = "hello"
                     x = x.len()
                     return x
                 end function
