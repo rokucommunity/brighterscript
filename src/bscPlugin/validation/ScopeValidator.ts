@@ -1,5 +1,5 @@
 import { URI } from 'vscode-uri';
-import { Range } from 'vscode-languageserver';
+import type { Range } from 'vscode-languageserver';
 import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isComponentType, isConstStatement, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumStatement, isEnumType, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isObjectType, isPrimitiveType, isReferenceType, isStringType, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
@@ -720,20 +720,37 @@ export class ScopeValidator {
                     }
                 } else {
                     const typeChainScan = util.processTypeChain(typeChain);
+                    //if this is a function call, provide a different diganostic code
+                    if (isCallExpression(typeChainScan.astNode.parent) && typeChainScan.astNode.parent.callee === expression) {
+                        this.addMultiScopeDiagnostic({
+                            file: file as BscFile,
+                            ...DiagnosticMessages.cannotFindFunction(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan)),
+                            range: typeChainScan.range
+                        });
+                    } else {
+                        this.addMultiScopeDiagnostic({
+                            file: file as BscFile,
+                            ...DiagnosticMessages.cannotFindName(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan)),
+                            range: typeChainScan.range
+                        });
+                    }
+                }
+
+            } else {
+                const typeChainScan = util.processTypeChain(typeChain);
+                if (isCallExpression(typeChainScan.astNode.parent) && typeChainScan.astNode.parent.callee === expression) {
+                    this.addMultiScopeDiagnostic({
+                        file: file as BscFile,
+                        ...DiagnosticMessages.cannotFindFunction(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan)),
+                        range: typeChainScan.range
+                    });
+                } else {
                     this.addMultiScopeDiagnostic({
                         file: file as BscFile,
                         ...DiagnosticMessages.cannotFindName(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan)),
                         range: typeChainScan.range
                     });
                 }
-
-            } else {
-                const typeChainScan = util.processTypeChain(typeChain);
-                this.addMultiScopeDiagnostic({
-                    file: file as BscFile,
-                    ...DiagnosticMessages.cannotFindName(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan)),
-                    range: typeChainScan.range
-                });
             }
 
         }

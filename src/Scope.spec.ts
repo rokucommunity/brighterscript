@@ -2118,7 +2118,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.cannotFindName('noMethod', 'float.noMethod', 'float').message
+                    DiagnosticMessages.cannotFindFunction('noMethod', 'float.noMethod', 'float').message
                 ]);
             });
 
@@ -4116,7 +4116,7 @@ describe('Scope', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('test2').message
+                DiagnosticMessages.cannotFindFunction('test2').message
             ]);
 
             program.setFile<BrsFile>('source/file2.bs', `

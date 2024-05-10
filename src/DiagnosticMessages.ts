@@ -145,7 +145,7 @@ export let DiagnosticMessages = {
     }),
     statementMustBeDeclaredAtTopOfFile: (statementKeyword: string) => ({
         message: `'${statementKeyword}' statement must be declared at the top of the file`,
-        code: 1149,
+        code: 1024,
         severity: DiagnosticSeverity.Error
     }),
     methodDoesNotExistOnType: (methodName: string, className: string) => ({
@@ -734,13 +734,16 @@ export let DiagnosticMessages = {
      *
      * @param name for function calls where we can't find the name of the function
      * @param fullName if a namespaced name, this is the full name `alpha.beta.charlie`, otherwise it's the same as `name`
+     * @param typeName if 'name' refers to a member, what is the the type it is a member of?
+     * @param typeDescriptor defaults to 'type' ... could also be 'namespace', etc.
      */
-    cannotFindFunction: (name: string, fullName?: string) => ({
-        message: `Cannot find function '${name}'`,
+    cannotFindFunction: (name: string, fullName?: string, typeName?: string, typeDescriptor = 'type') => ({
+        message: `Cannot find function '${name}'${typeName ? ` for ${typeDescriptor} '${typeName}'` : ''}`,
         code: 1140,
         data: {
             name: name,
-            fullName: fullName ?? name
+            fullName: fullName ?? name,
+            typeName: typeName ? typeName : undefined
         },
         severity: DiagnosticSeverity.Error
     }),

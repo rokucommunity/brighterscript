@@ -185,7 +185,7 @@ export class AssignmentStatement extends Statement {
 
         // Note: compound assignments (eg. +=) are internally dealt with via the RHS being a BinaryExpression
         // so this.value will be a BinaryExpression, and BinaryExpressions can figure out their own types
-        options.typeChain?.push(new TypeChainEntry({ name: this.tokens.name.text, type: variableType, data: options.data, range: this.tokens.name.range, kind: this.kind }));
+        options.typeChain?.push(new TypeChainEntry({ name: this.tokens.name.text, type: variableType, data: options.data, range: this.tokens.name.range, kind: this.kind, astNode: this }));
         return variableType;
     }
 
@@ -1286,7 +1286,8 @@ export class DottedSetStatement extends Statement {
             name: this.tokens.name?.text,
             type: result, data: options.data,
             range: this.tokens.name?.range ?? this.range,
-            kind: this.kind
+            kind: this.kind,
+            astNode: this
         }));
         return result;
     }
@@ -1814,7 +1815,8 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
             type: resultType,
             data: options.data,
             range: this.range,
-            kind: this.kind
+            kind: this.kind,
+            astNode: this
         }));
         return resultType;
     }
@@ -2066,7 +2068,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         }
         let funcName = this.getName(ParseMode.BrighterScript);
         resultType.setName(funcName);
-        options.typeChain?.push(new TypeChainEntry({ name: resultType.name, type: resultType, data: options.data, range: this.range, kind: this.kind }));
+        options.typeChain?.push(new TypeChainEntry({ name: resultType.name, type: resultType, data: options.data, range: this.range, kind: this.kind, astNode: this }));
         return resultType;
     }
 }
@@ -2518,7 +2520,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
             }
             resultType.addMember(statement?.tokens.name?.text, { definingNode: statement }, fieldType, flag);
         }
-        options.typeChain?.push(new TypeChainEntry({ name: resultType.name, type: resultType, data: options.data, range: this.range, kind: this.kind }));
+        options.typeChain?.push(new TypeChainEntry({ name: resultType.name, type: resultType, data: options.data, range: this.range, kind: this.kind, astNode: this }));
         return resultType;
     }
 }

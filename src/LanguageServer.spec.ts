@@ -1197,7 +1197,7 @@ describe('LanguageServer', () => {
                 const file = project.builder.program.setFile(filePath, contents);
                 if (file) {
                     let document = TextDocument.create(util.pathToUri(file.srcPath), 'brightscript', 1, contents);
-                    server['documents']['_documents'][document.uri] = document;
+                    (server['documents']['_syncedDocuments'] as Map<string, TextDocument>).set(document.uri, document);
                     completionDocuments.push(document);
                 }
                 project.builder.program.setFile(s`${rootDir}/source/main.bs`, `

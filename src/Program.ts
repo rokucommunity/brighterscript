@@ -5,8 +5,6 @@ import type { CodeAction, Position, Range, SignatureInformation, Location, Docum
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import { BrsFile, ProvidedSymbolInfo } from './files/BrsFile';
-import { XmlFile } from './files/XmlFile';
 import type { FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeFileAddEvent, BeforeFileRemoveEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
@@ -53,6 +51,8 @@ import type { BscFile } from './files/BscFile';
 import { Stopwatch } from './Stopwatch';
 import { DiagnosticManager } from './DiagnosticManager';
 import { ProgramValidatorDiagnosticsTag } from './bscPlugin/validation/ProgramValidator';
+import type { ProvidedSymbolInfo, BrsFile } from './files/BrsFile';
+import type { XmlFile } from './files/XmlFile';
 
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;

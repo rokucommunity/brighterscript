@@ -31,7 +31,7 @@ export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> 
     ) {
         this.logger = options?.logger;
         this.suppressErrors = (options as any)?.suppressErrors === false ? false : true;
-        for (const plugin of plugins) {
+        for (const plugin of plugins ?? []) {
             this.add(plugin);
         }
         if (!this.logger) {

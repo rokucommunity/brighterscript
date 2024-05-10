@@ -2003,6 +2003,7 @@ export class Util {
         let parentTypeName = '';
         let itemTypeKind = '';
         let parentTypeKind = '';
+        let astNode: AstNode;
         let errorRange: Range;
         let containsDynamic = false;
         let continueResolvingAllItems = true;
@@ -2040,6 +2041,7 @@ export class Util {
                 previousTypeName = typeString ?? '';
                 itemTypeKind = (chainItem.type as any)?.kind;
                 itemName = chainItem.name;
+                astNode = chainItem.astNode;
                 containsDynamic = containsDynamic || (isDynamicType(chainItem.type) && !isAnyReferenceType(chainItem.type));
                 if (!chainItem.isResolved) {
                     errorRange = chainItem.range;
@@ -2055,7 +2057,8 @@ export class Util {
             fullNameOfItem: fullErrorName,
             fullChainName: fullChainName,
             range: errorRange,
-            containsDynamic: containsDynamic
+            containsDynamic: containsDynamic,
+            astNode: astNode
         };
     }
 

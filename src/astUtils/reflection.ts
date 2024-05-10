@@ -438,7 +438,6 @@ export function isLiteralDouble(value: any): value is LiteralExpression & { type
 }
 
 // Diagnostics
-
 export function isBsDiagnostic(value: any): value is BsDiagnostic {
-    return isBscFile(value?.file) && value.range && value.message;
+    return value.message;
 }

@@ -13,16 +13,16 @@ import type { SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
 import type { Identifier, Token } from './lexer/Token';
 import type { SemanticTokenModifiers, SemanticTokenTypes } from 'vscode-languageserver';
-import { createToken } from 'chevrotain';
-import { SymbolTable } from './SymbolTable';
-import { SymbolTypeFlag } from './SymbolTypeFlag';
-import { Editor } from './astUtils/Editor';
-import { BscFile } from './files/BscFile';
-import { FileFactory } from './files/Factory';
-import { LazyFileData } from './files/LazyFileData';
+import type { SymbolTable } from './SymbolTable';
+import type { SymbolTypeFlag } from './SymbolTypeFlag';
+import type { Editor } from './astUtils/Editor';
+import type { BscFile } from './files/BscFile';
+import type { FileFactory } from './files/Factory';
+import type { LazyFileData } from './files/LazyFileData';
 import { TokenKind } from './lexer/TokenKind';
-import { BscTypeKind } from './types/BscTypeKind';
-import { WorkspaceSymbol } from 'vscode-languageserver-types';
+import type { BscTypeKind } from './types/BscTypeKind';
+import type { WorkspaceSymbol } from 'vscode-languageserver-types';
+import { createToken } from './astUtils/creators';
 
 export interface BsDiagnostic extends Diagnostic {
     file: BscFile;
@@ -937,6 +937,7 @@ export class TypeChainEntry {
         range: Range;
         separatorToken?: Token;
         kind?: AstNodeKind;
+        astNode: AstNode;
     }) {
         this.name = options.name;
         // make a copy of this data
@@ -945,6 +946,7 @@ export class TypeChainEntry {
         this.range = options.range;
         this.separatorToken = options.separatorToken ?? createToken(TokenKind.Dot);
         this.kind = options.kind;
+        this.astNode = options.astNode;
     }
     get isResolved() {
         return this.type?.isResolvable();
@@ -956,6 +958,7 @@ export class TypeChainEntry {
     public readonly range: Range;
     public readonly separatorToken: Token;
     public kind: AstNodeKind;
+    public astNode: AstNode;
 }
 
 export interface TypeChainProcessResult {
@@ -991,6 +994,10 @@ export interface TypeChainProcessResult {
      * Does the chain contain a dynamic type?
      */
     containsDynamic: boolean;
+    /**
+     * The AstNode of the item
+     */
+    astNode: AstNode;
 }
 
 export interface TypeCompatibilityData {

@@ -97,23 +97,23 @@ function getSymbolsFromAstNode(node: AstNode): SymbolInfo[] {
 
     node.walk(createVisitor({
         FunctionStatement: (statement) => {
-            if (statement.name?.text) {
-                addSymbol(statement, statement.name.text, SymbolKind.Function, statement.range, statement.name.range);
+            if (statement.tokens.name?.text) {
+                addSymbol(statement, statement.tokens.name.text, SymbolKind.Function, statement.range, statement.tokens.name.range);
             }
         },
         ClassStatement: (statement, parent) => {
-            if (statement.name?.text) {
-                addSymbol(statement, statement.name.text, SymbolKind.Class, statement.range, statement.name.range);
+            if (statement.tokens.name?.text) {
+                addSymbol(statement, statement.tokens.name.text, SymbolKind.Class, statement.range, statement.tokens.name.range);
             }
         },
         FieldStatement: (statement, parent) => {
-            if (statement.name?.text) {
-                addSymbol(statement, statement.name.text, SymbolKind.Field, statement.range, statement.name.range);
+            if (statement.tokens.name?.text) {
+                addSymbol(statement, statement.tokens.name.text, SymbolKind.Field, statement.range, statement.tokens.name.range);
             }
         },
         MethodStatement: (statement, parent) => {
-            if (statement.name?.text) {
-                addSymbol(statement, statement.name.text, SymbolKind.Method, statement.range, statement.name.range);
+            if (statement.tokens.name?.text) {
+                addSymbol(statement, statement.tokens.name.text, SymbolKind.Method, statement.range, statement.tokens.name.range);
             }
         },
         InterfaceStatement: (statement, parent) => {
@@ -138,7 +138,7 @@ function getSymbolsFromAstNode(node: AstNode): SymbolInfo[] {
         },
         NamespaceStatement: (statement) => {
             if (statement.nameExpression) {
-                addSymbol(statement, statement.nameExpression.getNameParts().pop(), SymbolKind.Namespace, statement.range, statement.nameExpression.range);
+                addSymbol(statement, statement.getNameParts().pop().text, SymbolKind.Namespace, statement.range, statement.nameExpression.range);
             }
         },
         EnumStatement: (statement) => {

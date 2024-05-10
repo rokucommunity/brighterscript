@@ -290,7 +290,7 @@ describe('ProgramBuilder', () => {
 
         it('does not crash when a diagnostic is missing range informtaion', () => {
             const file = builder.program.setFile('source/main.brs', ``);
-            file.addDiagnostics([{
+            builder.diagnostics.register([{
                 message: 'message 1',
                 code: 'test1',
                 file: file
