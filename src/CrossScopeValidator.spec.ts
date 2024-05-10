@@ -773,8 +773,8 @@ describe('CrossScopeValidator', () => {
             `);
 
             program.validate();
-            expectDiagnosticsIncludes(program, [
-                DiagnosticMessages.cannotFindName('someFunc', 'alpha.beta.someFunc').message
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('someFunc', 'alpha.beta.someFunc', 'alpha.beta', 'namespace').message
             ]);
         });
 

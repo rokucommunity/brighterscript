@@ -1,4 +1,4 @@
-import { isBlock, isBrsFile, isCallableType, isClassStatement, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isFunctionExpression, isInterfaceType, isMethodStatement, isNamespaceStatement, isNamespaceType, isNativeType, isTypedFunctionType, isXmlFile, isXmlScope } from '../../astUtils/reflection';
+import { isBrsFile, isCallableType, isClassStatement, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isFunctionExpression, isInterfaceType, isMethodStatement, isNamespaceStatement, isNamespaceType, isNativeType, isTypedFunctionType, isXmlFile, isXmlScope } from '../../astUtils/reflection';
 import type { FileReference, ProvideCompletionsEvent } from '../../interfaces';
 import type { BscFile } from '../../files/BscFile';
 import { AllowedTriviaTokens, DeclarableTypes, Keywords, TokenKind } from '../../lexer/TokenKind';
@@ -21,6 +21,7 @@ import type { AstNode } from '../../parser/AstNode';
 import type { ClassStatement, FunctionStatement, NamespaceStatement } from '../../parser/Statement';
 import type { Token } from '../../lexer/Token';
 import { createIdentifier } from '../../astUtils/creators';
+import type { FunctionExpression } from '../../parser/Expression';
 
 export class CompletionsProcessor {
     constructor(
@@ -235,6 +236,7 @@ export class CompletionsProcessor {
         const containingClassStmt = expression.findAncestor<ClassStatement>(isClassStatement);
         const containingNamespace = expression.findAncestor<NamespaceStatement>(isNamespaceStatement);
         const containingNamespaceName = containingNamespace?.getName(ParseMode.BrighterScript);
+        const containingFunctionExpression = expression.findAncestor<FunctionExpression>(isFunctionExpression);
 
         for (const scope of this.event.scopes) {
             if (tokenKind === TokenKind.StringLiteral || tokenKind === TokenKind.TemplateStringQuasi) {
@@ -261,8 +263,9 @@ export class CompletionsProcessor {
                 // get symbols directly from current symbol table and scope
                 if (!gotSymbolsFromThisFile) {
                     currentSymbols = symbolTable?.getOwnSymbols(symbolTableLookupFlag) ?? [];
-                    if (isBlock(expression) && isFunctionExpression(expression.parent)) {
-                        currentSymbols.push(...expression.parent.getSymbolTable().getOwnSymbols(symbolTableLookupFlag));
+
+                    if (containingFunctionExpression) {
+                        currentSymbols.push(...containingFunctionExpression.getSymbolTable().getOwnSymbols(symbolTableLookupFlag));
                     }
                     gotSymbolsFromThisFile = true;
                 }

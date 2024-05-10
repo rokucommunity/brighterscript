@@ -6,8 +6,11 @@ import type { Program } from './Program';
 import util from './util';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { BscSymbol } from './SymbolTable';
-import { isNamespaceType, isReferenceType, isTypedFunctionType } from './astUtils/reflection';
+import { isClassStatement, isInterfaceStatement, isNamespaceType, isReferenceType, isTypeExpression, isTypedFunctionType } from './astUtils/reflection';
 import { getAllRequiredSymbolNames } from './types';
+import type { TypeChainProcessResult } from './interfaces';
+import { BscTypeKind } from './types/BscTypeKind';
+import type { TypeExpression } from './parser/Expression';
 
 
 interface FileSymbolPair {
@@ -162,6 +165,7 @@ export class CrossScopeValidator {
     }
 
     resolutionsMap = new Map<UnresolvedSymbol, Set<{ scope: Scope; sourceFile: BrsFile; providedSymbol: BscSymbol }>>();
+    providedTreeMap = new Map<Scope, { duplicatesMap: Map<string, Set<FileSymbolPair>>; providedTree: ProvidedNode }>();
 
     getRequiredMap(scope: Scope) {
         const map = new Map<SymbolLookupKeys, UnresolvedSymbol>();
@@ -175,6 +179,9 @@ export class CrossScopeValidator {
     }
 
     getProvidedTree(scope: Scope) {
+        if (this.providedTreeMap.has(scope)) {
+            return this.providedTreeMap.get(scope);
+        }
         const providedTree = new ProvidedNode();
         const duplicatesMap = new Map<string, Set<FileSymbolPair>>();
 
@@ -237,7 +244,9 @@ export class CrossScopeValidator {
             }
         }
 
-        return { duplicatesMap: duplicatesMap, providedTree: providedTree };
+        const result = { duplicatesMap: duplicatesMap, providedTree: providedTree };
+        this.providedTreeMap.set(scope, result);
+        return result;
     }
 
     getIssuesForScope(scope: Scope) {
@@ -310,7 +319,7 @@ export class CrossScopeValidator {
     addDiagnosticsForScopes(scopes: Scope[], changedFiles: BrsFile[]) {
         const addDuplicateSymbolDiagnostics = false;
         const missingSymbolInScope = new Map<BrsFile, Map<UnresolvedSymbol, Set<Scope>>>();
-
+        this.providedTreeMap.clear();
         this.clearResolutionsForScopes(scopes);
 
         // Check scope for duplicates and missing symbols
@@ -360,7 +369,7 @@ export class CrossScopeValidator {
 
                 for (const scope of scopeList) {
                     this.program.diagnostics.register({
-                        ...DiagnosticMessages.cannotFindName(typeChainResult.itemName, typeChainResult.fullNameOfItem),
+                        ...DiagnosticMessages.cannotFindName(typeChainResult.itemName, typeChainResult.fullNameOfItem, typeChainResult.itemParentTypeName, this.getParentTypeDescriptor(this.getProvidedTree(scope)?.providedTree, typeChainResult)),
                         file: file,
                         range: typeChainResult.range
                     }, {
@@ -430,6 +439,13 @@ export class CrossScopeValidator {
             }
         }
         return incompatibleResolutions;
+    }
+
+    private getParentTypeDescriptor(provided: ProvidedNode, typeChainResult: TypeChainProcessResult) {
+        if (typeChainResult.itemParentTypeKind === BscTypeKind.NamespaceType || provided?.getNamespace(typeChainResult.itemParentTypeName)) {
+            return 'namespace';
+        }
+        return 'type';
     }
 
 }

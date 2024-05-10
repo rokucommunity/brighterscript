@@ -19,13 +19,16 @@ export let DiagnosticMessages = {
      *
      * @param name for local vars, it's the var name. for namespaced parts, it's the specific part that's unknown (`alpha.beta.charlie` would result in "cannot find name 'charlie')
      * @param fullName if a namespaced name, this is the full name `alpha.beta.charlie`, otherwise it's the same as `name`
+     * @param typeName if 'name' refers to a member, what is the the type it is a member of?
+     * @param typeDescriptor defaults to 'type' ... could also be 'namespace', etc.
      */
-    cannotFindName: (name: string, fullName?: string) => ({
-        message: `Cannot find name '${name}'`,
+    cannotFindName: (name: string, fullName?: string, typeName?: string, typeDescriptor = 'type') => ({
+        message: `Cannot find name '${name}'${typeName ? ` for ${typeDescriptor} '${typeName}'` : ''}`,
         code: 1001,
         data: {
             name: name,
-            fullName: fullName ?? name
+            fullName: fullName ?? name,
+            typeName: typeName ? typeName : undefined
         },
         severity: DiagnosticSeverity.Error
     }),

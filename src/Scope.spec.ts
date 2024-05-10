@@ -370,7 +370,7 @@ describe('Scope', () => {
             program.validate();
             expectDiagnostics(program, [
                 {
-                    ...DiagnosticMessages.cannotFindName('delta', 'constants.alpha.delta'),
+                    ...DiagnosticMessages.cannotFindName('delta', 'constants.alpha.delta', 'constants.alpha', 'namespace'),
                     file: {
                         srcPath: buttonPrimary.srcPath
                     },
@@ -378,7 +378,7 @@ describe('Scope', () => {
                         message: `In component scope 'ButtonPrimary'`
                     }]
                 }, {
-                    ...DiagnosticMessages.cannotFindName('delta', 'constants.alpha.delta'),
+                    ...DiagnosticMessages.cannotFindName('delta', 'constants.alpha.delta', 'constants.alpha', 'namespace'),
                     file: {
                         srcPath: buttonSecondary.srcPath
                     },
@@ -538,7 +538,7 @@ describe('Scope', () => {
             `);
             program.validate();
             expectDiagnostics(program, [{
-                ...DiagnosticMessages.cannotFindName('subname', 'Name1.subname')
+                ...DiagnosticMessages.cannotFindName('subname', 'Name1.subname', 'Name1', 'namespace')
             }]);
         });
 
@@ -1754,7 +1754,7 @@ describe('Scope', () => {
                 program.validate();
 
                 expectDiagnostics(program, [
-                    DiagnosticMessages.cannotFindName('UnknownType').message
+                    DiagnosticMessages.cannotFindName('UnknownType', 'MyNamespace.UnknownType', 'MyNamespace', 'namespace').message
                 ]);
                 expect(program.getDiagnostics()[0]?.data?.fullName).to.eq('MyNamespace.UnknownType');
             });
@@ -1904,7 +1904,7 @@ describe('Scope', () => {
                 program.validate();
 
                 expectDiagnostics(program, [
-                    DiagnosticMessages.cannotFindName('NSDoesNotExistC', 'NSExistsA.NSExistsB.NSDoesNotExistC').message
+                    DiagnosticMessages.cannotFindName('NSDoesNotExistC', 'NSExistsA.NSExistsB.NSDoesNotExistC', 'NSExistsA.NSExistsB', 'namespace').message
                 ]);
             });
 
@@ -2100,7 +2100,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.cannotFindName('someProp').message
+                    DiagnosticMessages.cannotFindName('someProp', 'float.someProp', 'float').message
                 ]);
             });
 
@@ -2118,7 +2118,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.cannotFindName('noMethod').message
+                    DiagnosticMessages.cannotFindName('noMethod', 'float.noMethod', 'float').message
                 ]);
             });
 
@@ -2175,7 +2175,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.cannotFindName('name').message
+                    DiagnosticMessages.cannotFindName('name', 'iface.name', 'iFace').message
                 ]);
             });
 
@@ -2706,7 +2706,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.cannotFindName('legs').message
+                    DiagnosticMessages.cannotFindName('legs', '(Person or Pet).legs', '(Person or Pet)').message
                 ]);
                 const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
                 const sourceScope = program.getScopeByName('source');

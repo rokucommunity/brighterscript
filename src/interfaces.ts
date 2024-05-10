@@ -20,6 +20,7 @@ import type { SymbolTable } from './SymbolTable';
 import type { SymbolTypeFlag } from './SymbolTypeFlag';
 import { createToken } from './astUtils/creators';
 import { TokenKind } from './lexer/TokenKind';
+import type { BscTypeKind } from './types/BscTypeKind';
 
 export interface BsDiagnostic extends Diagnostic {
     file: BscFile;
@@ -904,9 +905,17 @@ export interface TypeChainProcessResult {
      */
     itemName: string;
     /**
+     * The TypeKind of the item of `itemName`
+     */
+    itemTypeKind: BscTypeKind | string;
+    /**
      * The name of the parent of the item of `itemName`
      */
     itemParentTypeName: string;
+    /**
+     * The TypeKind of the parent of the item of `itemName`
+     */
+    itemParentTypeKind: BscTypeKind | string;
     /**
      * The complete chain leading up to the item of `itemName`
      */

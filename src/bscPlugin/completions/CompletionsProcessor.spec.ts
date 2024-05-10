@@ -1059,6 +1059,25 @@ describe('CompletionsProcessor', () => {
             }]);
         });
 
+        it('includes function parameters at the end of the function in namespace', () => {
+            program.setFile('source/main.bs', `
+                namespace alpha
+                    function main(param)
+                        print
+                        myValue = 234
+                    end function
+                end namespace
+            `);
+
+            program.validate();
+            // print |
+            let completions = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(3, 33));
+            expectCompletionsIncludes(completions, [{
+                label: 'param',
+                kind: CompletionItemKind.Variable
+            }]);
+        });
+
         it('treats class name as a function', () => {
             program.setFile('source/main.bs', `
                 class SomeKlass
