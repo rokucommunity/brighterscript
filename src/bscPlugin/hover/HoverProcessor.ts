@@ -1,4 +1,4 @@
-import { isAssignmentStatement, isBrsFile, isCallfuncExpression, isClassStatement, isEnumMemberStatement, isEnumStatement, isEnumType, isInheritableType, isInterfaceStatement, isMemberField, isNamespaceStatement, isNamespaceType, isNewExpression, isTypedFunctionType, isXmlFile } from '../../astUtils/reflection';
+import { isAssignmentStatement, isBrsFile, isCallfuncExpression, isClassStatement, isDottedGetExpression, isEnumMemberStatement, isEnumStatement, isEnumType, isInheritableType, isInterfaceStatement, isMemberField, isNamespaceStatement, isNamespaceType, isNewExpression, isTypedFunctionType, isXmlFile } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
 import type { ExtraSymbolData, Hover, ProvideHoverEvent, TypeChainEntry } from '../../interfaces';
@@ -119,8 +119,8 @@ export class HoverProcessor {
 
     private getMemberHover(memberExpression: FieldStatement | InterfaceFieldStatement, expressionType: BscType) {
         let nameText = `${(memberExpression.parent as ClassStatement | InterfaceStatement)?.getName(ParseMode.BrighterScript)}.${memberExpression.tokens.name.text}`;
-        let exprTypeString = expressionType.toString();
-        const innerText = `${nameText} as ${exprTypeString} `.trim();
+        let exprTypeString = expressionType.isResolvable() ? expressionType.toString() : 'invalid';
+        const innerText = `${nameText} as ${exprTypeString}`.trim();
         let result = fence(innerText);
         return result;
     }
@@ -185,7 +185,13 @@ export class HoverProcessor {
                     if (isTypedFunctionType(exprType)) {
                         exprType.setName(exprNameString);
                     }
-                    hoverContent = fence(`${variableName}${exprType.toString()}`);
+                    let exprTypeString = exprType.toString();
+                    if (!exprType.isResolvable()) {
+                        if (isDottedGetExpression(expression)) {
+                            exprTypeString = 'invalid';
+                        }
+                    }
+                    hoverContent = fence(`${variableName}${exprTypeString}`);
                 }
                 const modifiers = [];
                 // eslint-disable-next-line no-bitwise

@@ -649,6 +649,23 @@ describe('HoverProcessor', () => {
             hover = program.getHover(file.srcPath, util.createPosition(3, 38))[0];
             expect(hover?.contents).to.be.undefined;
         });
+
+        it('should show unresolved members as invalid', () => {
+            const file = program.setFile('source/main.bs', `
+                    interface MyIFace
+                        name as string
+                    end interface
+
+                    sub doSomething(thing as MyIFace)
+                        print thing.member
+                    end sub
+                `);
+            program.validate();
+
+            // print thing.mem|ber
+            let hover = program.getHover(file.srcPath, util.createPosition(6, 40))[0];
+            expect(hover?.contents).eql([fence('MyIFace.member as invalid')]);
+        });
     });
 
     describe('callFunc', () => {
@@ -679,6 +696,7 @@ describe('HoverProcessor', () => {
             let hover = program.getHover(file.srcPath, util.createPosition(3, 35))[0];
             expect(hover?.contents).eql([fence('function roSGNodeWidget@.someFunc(input as string) as float')]);
         });
+
     });
 
     describe('multiple definition locations', () => {
@@ -687,7 +705,6 @@ describe('HoverProcessor', () => {
             const file = program.setFile('source/util.bs', `
                 sub test()
                     myVar = "hello" ' setting type to string
-                    myVar = myVar.trim()
                     print 1; myVar
                     myVar = "hello".len()  ' setting type to integer
                     myVar = sqr(33)  ' setting type to float
@@ -700,15 +717,15 @@ describe('HoverProcessor', () => {
             program.validate();
             expectZeroDiagnostics(program);
             // print 1; my|Var
-            let hover = program.getHover(file.srcPath, util.createPosition(4, 31))[0];
+            let hover = program.getHover(file.srcPath, util.createPosition(3, 31))[0];
             expect(hover?.contents).eql([fence(expectedHoverStr)]);
 
             // my|Var = "hello".len()
-            hover = program.getHover(file.srcPath, util.createPosition(5, 23))[0];
+            hover = program.getHover(file.srcPath, util.createPosition(4, 23))[0];
             expect(hover?.contents).eql([fence(expectedHoverStr)]);
 
             // print 2; my|Var
-            hover = program.getHover(file.srcPath, util.createPosition(7, 31))[0];
+            hover = program.getHover(file.srcPath, util.createPosition(6, 31))[0];
             expect(hover?.contents).eql([fence(expectedHoverStr)]);
         });
 

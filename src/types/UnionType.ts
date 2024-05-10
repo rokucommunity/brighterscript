@@ -41,14 +41,18 @@ export class UnionType extends BscType {
 
     getMemberType(name: string, options: GetTypeOptions) {
         const innerTypesMemberTypes = this.getMemberTypeFromInnerTypes(name, options);
-        if (!innerTypesMemberTypes) {
+        if (!innerTypesMemberTypes || innerTypesMemberTypes.includes(undefined)) {
             // We don't have any members of any inner types that match
             // so instead, create reference type that will
             return new ReferenceType(name, name, options.flags, () => {
                 return {
                     name: `UnionType MemberTable: '${this.__identifier}'`,
                     getSymbolType: (innerName: string, innerOptions: GetTypeOptions) => {
-                        return getUniqueType(findTypeUnion(this.getMemberTypeFromInnerTypes(name, options)), unionTypeFactory);
+                        const referenceTypeInnerMemberTypes = this.getMemberTypeFromInnerTypes(name, options);
+                        if (!innerTypesMemberTypes || innerTypesMemberTypes.includes(undefined)) {
+                            return undefined;
+                        }
+                        return getUniqueType(findTypeUnion(referenceTypeInnerMemberTypes), unionTypeFactory);
                     },
                     setCachedType: (innerName: string, innerCacheEntry: TypeCacheEntry, innerOptions: GetTypeOptions) => {
                         // TODO: is this even cachable? This is a NO-OP for now, and it shouldn't hurt anything
