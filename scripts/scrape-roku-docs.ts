@@ -387,6 +387,11 @@ class Runner {
             // if we found a word that looks like a type, use it for the type, and remove it from the array
             paramType = this.sanitizeMarkdownSymbol(words[paramTypeIndex], { allowSpaces: true });
 
+            if (words[0].replaceAll('\\', '').endsWith('[]')) {
+                paramType = 'roArray';
+            } else if (words[paramTypeIndex].replaceAll('\\', '').endsWith('[]')) {
+                paramType = `roArray of ${paramType}`;
+            }
             // translate to an actual BRS type if needed
             paramType = foundTypesTranslation[paramType.toLowerCase()] || paramType;
 
@@ -765,12 +770,12 @@ class Runner {
     private sanitizeMarkdownSymbol(symbolName: string, opts?: { allowSquareBrackets?: boolean; allowSpaces?: boolean }) {
         let result = symbolName;
         if (opts?.allowSquareBrackets) {
-            result = symbolName?.replaceAll(/[\\]/g, '');
+            result = result?.replaceAll(/[\\]/g, '');
         } else {
-            result = symbolName?.replaceAll(/[\[\]\\]/g, '');
+            result = result?.replaceAll(/[\[\]\\]/g, '');
         }
         if (!opts?.allowSpaces) {
-            result = symbolName?.split(' ')?.[0];
+            result = result?.split(' ')?.[0];
         }
         return result;
     }
