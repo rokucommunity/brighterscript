@@ -2128,6 +2128,30 @@ describe('parser', () => {
             expectZeroDiagnostics(diagnostics);
         });
 
+        it('allows #if not bs_const', () => {
+            let { diagnostics } = parse(`
+                sub foo()
+                #if not DEBUG
+                    print "not debug"
+                #end if
+                end sub
+            `, ParseMode.BrighterScript, { debug: false });
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows #elseif not bs_const', () => {
+            let { diagnostics } = parse(`
+                sub foo()
+                #if DEBUG
+                    print "debug"
+                #else if not STAGING
+                    print "not debug and not staging"
+                #end if
+                end sub
+            `, ParseMode.BrighterScript, { debug: false, staging: false });
+            expectZeroDiagnostics(diagnostics);
+        });
+
         describe('#const', () => {
             it('parses #const', () => {
                 let { diagnostics, ast } = parse(`

@@ -1989,6 +1989,11 @@ export class Parser {
     private conditionalCompileStatement(): ConditionalCompileStatement {
         const hashIfToken = this.advance();
         const startingRange = hashIfToken.range;
+        let notToken: Token | undefined;
+
+        if (this.check(TokenKind.Not)) {
+            notToken = this.advance();
+        }
 
         if (!this.checkAny(TokenKind.True, TokenKind.False, TokenKind.Identifier)) {
             this.diagnostics.push({
@@ -1996,6 +2001,7 @@ export class Parser {
                 range: this.peek()?.range
             });
         }
+
 
         const condition = this.advance();
 
@@ -2056,6 +2062,7 @@ export class Parser {
             hashIf: hashIfToken,
             hashElse: hashElseToken,
             hashEndIf: hashEndIfToken,
+            not: notToken,
             condition: condition,
             thenBranch: thenBranch,
             elseBranch: elseBranch

@@ -3581,6 +3581,7 @@ export class AliasStatement extends Statement {
 export class ConditionalCompileStatement extends Statement {
     constructor(options: {
         hashIf?: Token;
+        not?: Token;
         condition: Token;
         hashElse?: Token;
         hashEndIf?: Token;
@@ -3593,6 +3594,7 @@ export class ConditionalCompileStatement extends Statement {
 
         this.tokens = {
             hashIf: options.hashIf,
+            not: options.not,
             condition: options.condition,
             hashElse: options.hashElse,
             hashEndIf: options.hashEndIf
@@ -3607,6 +3609,7 @@ export class ConditionalCompileStatement extends Statement {
 
     readonly tokens: {
         readonly hashIf?: Token;
+        readonly not?: Token;
         readonly condition: Token;
         readonly hashElse?: Token;
         readonly hashEndIf?: Token;
@@ -3628,6 +3631,10 @@ export class ConditionalCompileStatement extends Statement {
 
         results.push(' ');
         //conditions
+        if (this.tokens.not) {
+            results.push('not');
+            results.push(' ');
+        }
         results.push(state.transpileToken(this.tokens.condition));
         state.lineage.unshift(this);
 
@@ -3687,7 +3694,11 @@ export class ConditionalCompileStatement extends Statement {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkStatements) {
-            const conditionTrue = options.bsConsts?.get(this.tokens.condition.text.toLowerCase());
+            let conditionTrue = options.bsConsts?.get(this.tokens.condition.text.toLowerCase());
+            if (this.tokens.not) {
+                // flips the boolean value
+                conditionTrue = !conditionTrue;
+            }
             const walkFalseBlocks = options.walkMode & InternalWalkMode.visitFalseConditionalCompilationBlocks;
             if (conditionTrue || walkFalseBlocks) {
                 walk(this, 'thenBranch', visitor, options);

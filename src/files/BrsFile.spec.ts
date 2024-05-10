@@ -597,6 +597,23 @@ describe('BrsFile', () => {
                 `);
             });
 
+
+            it('transpiles conditional compilation directives with not', async () => {
+                await testTranspile(`
+                    sub main()
+                        #const thing = true
+                        #if not thing
+                            print "if"
+                        #elseif not false
+                            print "elseif"
+                        #else
+                            #error crash
+                            print "else"
+                        #endif
+                    end sub
+                `);
+            });
+
             it('supports whitespace-separated directives', async () => {
                 const file = program.setFile<BrsFile>('source/main.bs', `
                     sub main()
@@ -711,6 +728,20 @@ describe('BrsFile', () => {
                 program.setFile('source/main.brs', `
                     sub main()
                         #if true1
+                            print "true"
+                        #end if
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.referencedConstDoesNotExist()
+                ]);
+            });
+
+            it('detects syntax error in #if not', () => {
+                program.setFile('source/main.brs', `
+                    sub main()
+                        #if not true1
                             print "true"
                         #end if
                     end sub

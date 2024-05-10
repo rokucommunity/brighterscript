@@ -1257,5 +1257,34 @@ describe('astUtils visitors', () => {
             // did walk false block
             expect(foundMainFunc).to.be.true;
         });
+
+        it('will correct walk `not condition` cc blocks', () => {
+            const { ast } = program.setFile<BrsFile>('source/main.brs', `
+                #const DEBUG = false
+                #if not DEBUG
+                sub notDebug()
+                end sub
+                #end if
+
+                #if not false
+                sub notFalse()
+                end sub
+                #end if
+            `);
+            const bsConsts = new Map<string, boolean>();
+            let functionsFound = new Set<string>();
+            const visitor = createVisitor({
+                FunctionStatement: (func) => {
+                    functionsFound.add(func.getName(ParseMode.BrighterScript));
+                }
+            });
+            ast.walk(visitor, {
+                walkMode: WalkMode.visitStatements,
+                bsConsts: bsConsts
+            });
+            // did walk 'not' block
+            expect(functionsFound.has('notDebug')).to.be.true;
+            expect(functionsFound.has('notFalse')).to.be.true;
+        });
     });
 });
