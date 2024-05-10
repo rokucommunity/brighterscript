@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.67.0](https://github.com/rokucommunity/brighterscript/compare/v0.65.27...v0.67.0) - 2024-05-10
+### Changed
+ - Fix formatting with logger output ([#1171](https://github.com/rokucommunity/brighterscript/pull/1171))
+ - Move function calls to separate diagnostic ([#1169](https://github.com/rokucommunity/brighterscript/pull/1169))
+ - resolve the stagingDir option relative to the bsconfig.json file ([#1148](https://github.com/rokucommunity/brighterscript/pull/1148))
+ - Upgrade to @rokucommunity/logger ([#1137](https://github.com/rokucommunity/brighterscript/pull/1137))
+
+
+
+## 0.66.0
+This release was skipped because we decided to change from the v0.66 alphas to move those breaking changes into v1. 
+
+
+
 ## [0.65.27](https://github.com/rokucommunity/brighterscript/compare/v0.65.26...v0.65.27) - 2024-03-27
 ### Added
  - Plugin hook provide workspace symbol ([#1118](https://github.com/rokucommunity/brighterscript/pull/1118))
