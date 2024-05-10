@@ -128,14 +128,16 @@ export class BrsFile {
     }
 
     public addDiagnostic(diagnostic: Diagnostic & { file?: BscFile }) {
-        if (!diagnostic.file) {
-            diagnostic.file = this;
-        }
-        this.diagnostics.push(diagnostic as any);
+        this.addDiagnostics([diagnostic as BsDiagnostic]);
     }
 
     public addDiagnostics(diagnostics: BsDiagnostic[]) {
-        this.diagnostics.push(...diagnostics);
+        for (const diagnostic of diagnostics) {
+            if (!diagnostic.file) {
+                diagnostic.file = this;
+            }
+            this.diagnostics.push(diagnostic as any);
+        }
     }
 
     public commentFlags = [] as CommentFlag[];

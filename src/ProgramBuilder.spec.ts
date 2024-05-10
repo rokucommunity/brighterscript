@@ -247,6 +247,19 @@ describe('ProgramBuilder', () => {
 
     describe('printDiagnostics', () => {
 
+        it('does not crash when a diagnostic is missing range informtaion', () => {
+            const file = builder.program.setFile('source/main.brs', ``);
+            file.addDiagnostics([{
+                message: 'the message',
+                code: 'test1'
+            }, {
+                message: 'the message',
+                code: 'test1'
+            }] as any);
+            //if this doesn't crash, then the test passes
+            builder['printDiagnostics']();
+        });
+
         it('prints no diagnostics when showDiagnosticsInConsole is false', () => {
             builder.options.showDiagnosticsInConsole = false;
 
