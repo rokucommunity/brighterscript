@@ -1571,7 +1571,7 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('unknown', 'Klass.unknown')
+                DiagnosticMessages.cannotFindName('unknown', 'Klass.unknown', 'Klass')
             ]);
         });
 
@@ -1584,7 +1584,7 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('length', 'string.length')
+                DiagnosticMessages.cannotFindName('length', 'string.length', 'string')
             ]);
         });
 
@@ -1708,6 +1708,55 @@ describe('ScopeValidator', () => {
                 DiagnosticMessages.cannotFindName('paramX').message
             ]);
         });
+
+        it('has diagnostic when function default params reference variable from inside function', () => {
+            program.setFile('source/main.bs', `
+                function test(param1 as integer, param2 = paramX + 2)
+                    paramX = 3
+                    print param1; param2
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('paramX').message
+            ]);
+        });
+
+        it('has diagnostic when trying to use a method on an union that does not exist in one type', () => {
+            program.setFile('source/main.bs', `
+                function typeHoverTest(x as string or integer)
+                    value = x.len()
+                    return value
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('len', null, '(string or integer)').message
+            ]);
+        });
+
+        it('does not have diagnostic when accessing unknown member of union in Brightscript mode, when variable is a param', () => {
+            program.setFile('source/main.brs', `
+                function typeHoverTest(x as string)
+                    x = x.len()
+                    return x
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not have diagnostic when accessing unknown member of union in Brightscript mode, when variable is defined in block', () => {
+            program.setFile('source/main.brs', `
+                function typeHoverTest()
+                    x = "hello"
+                    x = x.len()
+                    return x
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('itemCannotBeUsedAsVariable', () => {
@@ -1799,7 +1848,7 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('name', 'function.name')
+                DiagnosticMessages.cannotFindName('name', 'function.name', 'function')
             ]);
         });
 
@@ -1817,7 +1866,7 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('name', 'function.name')
+                DiagnosticMessages.cannotFindName('name', 'function.name', 'function')
             ]);
         });
 
@@ -2215,7 +2264,7 @@ describe('ScopeValidator', () => {
                 end class
             `);
             program.validate();
-            expectDiagnostics(program, [DiagnosticMessages.cannotFindName('getPi', 'Thing.getPi')]);
+            expectDiagnostics(program, [DiagnosticMessages.cannotFindName('getPi', 'Thing.getPi', 'Thing')]);
         });
 
         it('validates class constructors', () => {
@@ -2748,7 +2797,7 @@ describe('ScopeValidator', () => {
                 end namespace
             `);
             program.validate();
-            expectDiagnosticsIncludes(program, [DiagnosticMessages.cannotFindName('SomeEnum').message]);
+            expectDiagnosticsIncludes(program, [DiagnosticMessages.cannotFindName('SomeEnum', null, 'Alpha.Beta.Charlie', 'namespace').message]);
         });
 
         it('revalidates when a class defined in a different namespace changes', () => {

@@ -5,7 +5,7 @@ import { Cache } from '../../Cache';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
-import type { BsDiagnostic, CallableContainer, ExtraSymbolData, FileReference, OnScopeValidateEvent, TypeChainEntry, TypeCompatibilityData } from '../../interfaces';
+import type { BsDiagnostic, CallableContainer, ExtraSymbolData, FileReference, GetTypeOptions, OnScopeValidateEvent, TypeChainEntry, TypeChainProcessResult, TypeCompatibilityData } from '../../interfaces';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import type { AssignmentStatement, ClassStatement, DottedSetStatement, EnumStatement, NamespaceStatement, ReturnStatement } from '../../parser/Statement';
 import util from '../../util';
@@ -28,6 +28,8 @@ import { globalCallableMap } from '../../globalCallables';
 import type { XmlScope } from '../../XmlScope';
 import type { XmlFile } from '../../files/XmlFile';
 import { SGFieldTypes } from '../../parser/SGTypes';
+import { DynamicType } from '../../types';
+import { BscTypeKind } from '../../types/BscTypeKind';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -144,7 +146,7 @@ export class ScopeValidator {
                         // Note: this also includes For statements
                         this.detectShadowedLocalVar(file, {
                             name: assignStmt.tokens.name.text,
-                            type: assignStmt.getType({ flags: SymbolTypeFlag.runtime }),
+                            type: this.getNodeTypeWrapper(file, assignStmt, { flags: SymbolTypeFlag.runtime }),
                             nameRange: assignStmt.tokens.name.range
                         });
                     },
@@ -154,14 +156,14 @@ export class ScopeValidator {
                     ForEachStatement: (forEachStmt) => {
                         this.detectShadowedLocalVar(file, {
                             name: forEachStmt.tokens.item.text,
-                            type: forEachStmt.getType({ flags: SymbolTypeFlag.runtime }),
+                            type: this.getNodeTypeWrapper(file, forEachStmt, { flags: SymbolTypeFlag.runtime }),
                             nameRange: forEachStmt.tokens.item.range
                         });
                     },
                     FunctionParameterExpression: (funcParam) => {
                         this.detectShadowedLocalVar(file, {
                             name: funcParam.tokens.name.text,
-                            type: funcParam.getType({ flags: SymbolTypeFlag.runtime }),
+                            type: this.getNodeTypeWrapper(file, funcParam, { flags: SymbolTypeFlag.runtime }),
                             nameRange: funcParam.tokens.name.range
                         });
                     }
@@ -397,7 +399,7 @@ export class ScopeValidator {
      */
     private validateFunctionCall(file: BrsFile, expression: CallExpression) {
         const getTypeOptions = { flags: SymbolTypeFlag.runtime, data: {} };
-        let funcType = expression?.callee?.getType(getTypeOptions);
+        let funcType = this.getNodeTypeWrapper(file, expression?.callee, getTypeOptions);
         if (funcType?.isResolvable() && isClassType(funcType)) {
             // We're calling a class - get the constructor
             funcType = funcType.getMemberType('new', getTypeOptions);
@@ -433,7 +435,7 @@ export class ScopeValidator {
             let paramIndex = 0;
             for (let arg of expression.args) {
                 const data = {} as ExtraSymbolData;
-                let argType = arg.getType({ flags: SymbolTypeFlag.runtime, data: data });
+                let argType = this.getNodeTypeWrapper(file, arg, { flags: SymbolTypeFlag.runtime, data: data });
 
                 const paramType = funcType.params[paramIndex]?.type;
                 if (!paramType) {
@@ -472,7 +474,7 @@ export class ScopeValidator {
         const getTypeOptions = { flags: SymbolTypeFlag.runtime };
         let funcType = returnStmt.findAncestor(isFunctionExpression).getType({ flags: SymbolTypeFlag.typetime });
         if (isTypedFunctionType(funcType)) {
-            const actualReturnType = returnStmt.value?.getType(getTypeOptions);
+            const actualReturnType = this.getNodeTypeWrapper(file, returnStmt?.value, getTypeOptions);
             const compatibilityData: TypeCompatibilityData = {};
 
             if (actualReturnType && !funcType.returnType.isTypeCompatible(actualReturnType, compatibilityData)) {
@@ -487,14 +489,14 @@ export class ScopeValidator {
     }
 
     /**
-     * Detect return statements with incompatible types vs. declared return type
+     * Detect assigned type different from expected member type
      */
     private validateDottedSetStatement(file: BrsFile, dottedSetStmt: DottedSetStatement) {
         const typeChainExpectedLHS = [] as TypeChainEntry[];
         const getTypeOpts = { flags: SymbolTypeFlag.runtime };
 
-        const expectedLHSType = dottedSetStmt?.getType({ ...getTypeOpts, data: {}, typeChain: typeChainExpectedLHS });
-        const actualRHSType = dottedSetStmt?.value?.getType(getTypeOpts);
+        const expectedLHSType = this.getNodeTypeWrapper(file, dottedSetStmt, { ...getTypeOpts, data: {}, typeChain: typeChainExpectedLHS });
+        const actualRHSType = this.getNodeTypeWrapper(file, dottedSetStmt?.value, getTypeOpts);
         const compatibilityData: TypeCompatibilityData = {};
         const typeChainScan = util.processTypeChain(typeChainExpectedLHS);
         // check if anything in typeChain is an AA - if so, just allow it
@@ -506,7 +508,7 @@ export class ScopeValidator {
         if (!expectedLHSType?.isResolvable()) {
             this.addMultiScopeDiagnostic({
                 file: file as BscFile,
-                ...DiagnosticMessages.cannotFindName(typeChainScan.itemName, typeChainScan.fullNameOfItem),
+                ...DiagnosticMessages.cannotFindName(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan)),
                 range: typeChainScan.range
             });
             return;
@@ -541,8 +543,8 @@ export class ScopeValidator {
 
         const typeChainExpectedLHS = [];
         const getTypeOpts = { flags: SymbolTypeFlag.runtime };
-        const expectedLHSType = assignStmt.typeExpression.getType({ ...getTypeOpts, data: {}, typeChain: typeChainExpectedLHS });
-        const actualRHSType = assignStmt.value?.getType(getTypeOpts);
+        const expectedLHSType = this.getNodeTypeWrapper(file, assignStmt.typeExpression, { ...getTypeOpts, data: {}, typeChain: typeChainExpectedLHS });
+        const actualRHSType = this.getNodeTypeWrapper(file, assignStmt.value, getTypeOpts);
         const compatibilityData: TypeCompatibilityData = {};
         if (!expectedLHSType || !expectedLHSType.isResolvable()) {
             this.addMultiScopeDiagnostic({
@@ -569,8 +571,8 @@ export class ScopeValidator {
             return;
         }
 
-        let leftType = binaryExpr.left.getType(getTypeOpts);
-        let rightType = binaryExpr.right.getType(getTypeOpts);
+        let leftType = this.getNodeTypeWrapper(file, binaryExpr.left, getTypeOpts);
+        let rightType = this.getNodeTypeWrapper(file, binaryExpr.right, getTypeOpts);
 
         if (!leftType.isResolvable() || !rightType.isResolvable()) {
             // Can not find the type. error handled elsewhere
@@ -622,7 +624,7 @@ export class ScopeValidator {
     private validateUnaryExpression(file: BrsFile, unaryExpr: UnaryExpression) {
         const getTypeOpts = { flags: SymbolTypeFlag.runtime };
 
-        let rightType = unaryExpr.right.getType(getTypeOpts);
+        let rightType = this.getNodeTypeWrapper(file, unaryExpr.right, getTypeOpts);
 
         if (!rightType.isResolvable()) {
             // Can not find the type. error handled elsewhere
@@ -688,7 +690,7 @@ export class ScopeValidator {
         // this will create a diagnostic if an invalid member is accessed
         const typeChain: TypeChainEntry[] = [];
         const typeData = {} as ExtraSymbolData;
-        let exprType = expression.getType({
+        let exprType = this.getNodeTypeWrapper(file, expression, {
             flags: symbolType,
             typeChain: typeChain,
             data: typeData
@@ -697,9 +699,9 @@ export class ScopeValidator {
         const hasValidDeclaration = this.hasValidDeclaration(expression, exprType, typeData?.definingNode);
 
         if (!this.isTypeKnown(exprType) && !hasValidDeclaration) {
-            if (expression.getType({ flags: oppositeSymbolType, isExistenceTest: true })?.isResolvable()) {
+            if (this.getNodeTypeWrapper(file, expression, { flags: oppositeSymbolType, isExistenceTest: true })?.isResolvable()) {
                 const oppoSiteTypeChain = [];
-                const invalidlyUsedResolvedType = expression.getType({ flags: oppositeSymbolType, typeChain: oppoSiteTypeChain, isExistenceTest: true });
+                const invalidlyUsedResolvedType = this.getNodeTypeWrapper(file, expression, { flags: oppositeSymbolType, typeChain: oppoSiteTypeChain, isExistenceTest: true });
                 const typeChainScan = util.processTypeChain(oppoSiteTypeChain);
                 if (isUsedAsType) {
                     this.addMultiScopeDiagnostic({
@@ -720,7 +722,7 @@ export class ScopeValidator {
                     const typeChainScan = util.processTypeChain(typeChain);
                     this.addMultiScopeDiagnostic({
                         file: file as BscFile,
-                        ...DiagnosticMessages.cannotFindName(typeChainScan.itemName, typeChainScan.fullNameOfItem),
+                        ...DiagnosticMessages.cannotFindName(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan)),
                         range: typeChainScan.range
                     });
                 }
@@ -729,7 +731,7 @@ export class ScopeValidator {
                 const typeChainScan = util.processTypeChain(typeChain);
                 this.addMultiScopeDiagnostic({
                     file: file as BscFile,
-                    ...DiagnosticMessages.cannotFindName(typeChainScan.itemName, typeChainScan.fullNameOfItem),
+                    ...DiagnosticMessages.cannotFindName(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan)),
                     range: typeChainScan.range
                 });
             }
@@ -880,7 +882,7 @@ export class ScopeValidator {
      * and make sure we can find a class with that name
      */
     private validateNewExpression(file: BrsFile, newExpression: NewExpression) {
-        const newExprType = newExpression.getType({ flags: SymbolTypeFlag.typetime });
+        const newExprType = this.getNodeTypeWrapper(file, newExpression, { flags: SymbolTypeFlag.typetime });
         if (isClassType(newExprType)) {
             return;
         }
@@ -1356,6 +1358,50 @@ export class ScopeValidator {
                 }
             }
         }
+    }
+
+    /**
+     * Wraps the AstNode.getType() method, so that we can do extra processing on the result based on the current file
+     * In particular, since BrightScript does not support Unions, and there's no way to cast them to something else
+     * if the result of .getType() is a union, and we're in a .brs (brightScript) file, treat the result as Dynamic
+     *
+     * In most cases, this returns the result of node.getType()
+     *
+     * @param file the current file being processed
+     * @param node the node to get the type of
+     * @param getTypeOpts any options to pass to node.getType()
+     * @returns the processed result type
+     */
+    private getNodeTypeWrapper(file: BrsFile, node: AstNode, getTypeOpts: GetTypeOptions) {
+        const type = node?.getType(getTypeOpts);
+
+        if (file.parseMode === ParseMode.BrightScript) {
+            // this is a brightscript file
+            const typeChain = getTypeOpts.typeChain;
+            if (typeChain) {
+                const hasUnion = typeChain.reduce((hasUnion, tce) => {
+                    return hasUnion || isUnionType(tce.type);
+                }, false);
+                if (hasUnion) {
+                    // there was a union somewhere in the typechain
+                    return DynamicType.instance;
+                }
+            }
+            if (isUnionType(type)) {
+                //this is a union
+                return DynamicType.instance;
+            }
+        }
+
+        // by default return the result of node.getType()
+        return type;
+    }
+
+    private getParentTypeDescriptor(typeChainResult: TypeChainProcessResult) {
+        if (typeChainResult.itemParentTypeKind === BscTypeKind.NamespaceType) {
+            return 'namespace';
+        }
+        return 'type';
     }
 
     private addDiagnostic(diagnostic: BsDiagnostic) {
