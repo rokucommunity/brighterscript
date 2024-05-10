@@ -47,7 +47,6 @@ import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { ComponentType } from './types/ComponentType';
 import { FunctionType } from './types/FunctionType';
 import type { AssignmentStatement } from './parser/Statement';
-import { BscTypeKind } from './types/BscTypeKind';
 
 export class Util {
     public clearConsole() {

@@ -6,11 +6,10 @@ import type { Program } from './Program';
 import util from './util';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { BscSymbol } from './SymbolTable';
-import { isClassStatement, isInterfaceStatement, isNamespaceType, isReferenceType, isTypeExpression, isTypedFunctionType } from './astUtils/reflection';
+import { isNamespaceType, isReferenceType, isTypedFunctionType } from './astUtils/reflection';
 import { getAllRequiredSymbolNames } from './types';
 import type { TypeChainProcessResult } from './interfaces';
 import { BscTypeKind } from './types/BscTypeKind';
-import type { TypeExpression } from './parser/Expression';
 
 
 interface FileSymbolPair {
