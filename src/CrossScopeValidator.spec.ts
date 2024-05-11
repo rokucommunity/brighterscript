@@ -936,4 +936,76 @@ describe('CrossScopeValidator', () => {
             expectZeroDiagnostics(program);
         });
     });
+
+    describe('alias statements', () => {
+        it('allows alias namespace and referencing it', () => {
+            program.setFile('components/utils.bs', `
+                namespace get
+                    function hello() as string
+                        return "hello"
+                    end function
+                end namespace
+            `);
+
+            program.setFile('components/widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="pkg:/components/widget.bs"/>
+                    <script uri="pkg:/components/utils.bs"/>
+                </component>
+            `);
+
+            program.setFile('components/widget.bs', `
+                alias get2 = get
+
+                sub foo()
+                    print get2.hello()
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('gracefully handles circular reference', () => {
+            program.setFile('components/utils.bs', `
+                namespace get
+                    function aa()
+                        return {}
+                    end function
+                end namespace
+
+            `);
+
+            program.setFile('components/widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="pkg:/components/widget.bs"/>
+                    <script uri="pkg:/components/utils.bs"/>
+                </component>
+            `);
+
+            program.setFile('components/widget.bs', `
+                alias get2 = get2
+
+                sub foo()
+                    print "hello"
+                end sub
+            `);
+
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('get2')
+            ]);
+            program.setFile('components/widget.bs', `
+                alias get2 = get 'no more circular reference
+
+                sub foo()
+                    print "hello"
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+    });
 });

@@ -1,7 +1,7 @@
 import type { DottedGetExpression, TypeExpression, VariableExpression } from './parser/Expression';
 import { isBinaryExpression, isBody, isClassStatement, isDottedGetExpression, isInterfaceStatement, isNamespaceStatement, isTypeExpression, isVariableExpression } from './astUtils/reflection';
 import { ChildrenSkipper, WalkMode, createVisitor } from './astUtils/visitors';
-import type { GetTypeOptions, TypeChainEntry } from './interfaces';
+import type { ExtraSymbolData, GetTypeOptions, TypeChainEntry } from './interfaces';
 import type { AstNode, Expression } from './parser/AstNode';
 import { util } from './util';
 import type { ClassStatement, NamespaceStatement } from './parser/Statement';
@@ -75,10 +75,11 @@ export class AstValidationSegmenter {
 
         const flag = util.isInTypeExpression(expression) ? SymbolTypeFlag.typetime : SymbolTypeFlag.runtime;
         const typeChain: TypeChainEntry[] = [];
-        const options: GetTypeOptions = { flags: flag, onlyCacheResolvedTypes: true, typeChain: typeChain, data: {} };
+        const extraData = {} as ExtraSymbolData;
+        const options: GetTypeOptions = { flags: flag, onlyCacheResolvedTypes: true, typeChain: typeChain, data: extraData };
 
         const nodeType = expression.getType(options);
-        if (!nodeType?.isResolvable()) {
+        if (!nodeType?.isResolvable() && !extraData.isAlias) {
             let symbolsSet: Set<UnresolvedSymbol>;
             if (!assignedSymbolsNames?.has(typeChain[0].name.toLowerCase())) {
                 if (!this.unresolvedSegmentsSymbols.has(segment)) {

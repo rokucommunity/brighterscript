@@ -275,20 +275,27 @@ export class CrossScopeValidator {
                     providedSymbol: foundSymbol.symbol
                 });
             } else {
-                // did not find symbol!
-                const missing = { ...unresolvedSymbol };
-                let namespaceNode = providedTree;
-                for (const chainEntry of missing.typeChain) {
-                    if (!chainEntry.isResolved) {
-                        namespaceNode = namespaceNode?.getNamespaceByNameParts([chainEntry.name]);
-                        if (namespaceNode) {
-                            chainEntry.isResolved = true;
-                        } else {
-                            break;
+                let foundNamespace = providedTree.getNamespace(symbolKeys.key);
+
+                if (foundNamespace) {
+                    // this symbol turned out to be a namespace. This is allowed for alias statements
+                    // TODO: add check to make sure this usage is from an alias statement
+                } else {
+                    // did not find symbol!
+                    const missing = { ...unresolvedSymbol };
+                    let namespaceNode = providedTree;
+                    for (const chainEntry of missing.typeChain) {
+                        if (!chainEntry.isResolved) {
+                            namespaceNode = namespaceNode?.getNamespaceByNameParts([chainEntry.name]);
+                            if (namespaceNode) {
+                                chainEntry.isResolved = true;
+                            } else {
+                                break;
+                            }
                         }
                     }
+                    missingSymbols.add(unresolvedSymbol);
                 }
-                missingSymbols.add(unresolvedSymbol);
             }
         }
         return { missingSymbols: missingSymbols, duplicatesMap: duplicatesMap };
