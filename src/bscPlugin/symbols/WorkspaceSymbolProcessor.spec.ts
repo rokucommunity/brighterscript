@@ -90,20 +90,20 @@ describe('WorkspaceSymbolProcessor', () => {
         testMissingToken(`
             sub alpha()
             end sub
-        `, ['name']);
+        `, ['tokens', 'name']);
 
         //class name is missing
         testMissingToken(`
             class alpha
             end class
-        `, ['name']);
+        `, ['tokens', 'name']);
 
         //class field name is missing
         testMissingToken(`
             class alpha
                 name as string
             end class
-        `, ['body', '0', 'name'], [
+        `, ['body', '0', 'tokens', 'name'], [
             ['alpha', SymbolKind.Class]
         ]);
 
@@ -113,7 +113,7 @@ describe('WorkspaceSymbolProcessor', () => {
                 sub test()
                 end sub
             end class
-        `, ['body', '0', 'name'], [
+        `, ['body', '0', 'tokens', 'name'], [
             ['alpha', SymbolKind.Class]
         ]);
 
