@@ -944,7 +944,6 @@ export class TypeChainEntry {
         this.type = options.type;
         this._range = options.range;
         this.separatorToken = options.separatorToken ?? createToken(TokenKind.Dot);
-        //this.kind = options.kind;
         this.astNode = options.astNode;
     }
     get isResolved() {
