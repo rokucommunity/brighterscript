@@ -826,7 +826,7 @@ export class ScopeValidator {
                 if (isFirst && containingNamespaceName) {
                     lowerNameSoFar = `${containingNamespaceName.toLowerCase()}.${lowerNameSoFar}`;
                 }
-                if (!tce.kind || ignoreKinds.includes(tce.kind)) {
+                if (!tce.astNode || ignoreKinds.includes(tce.astNode.kind)) {
                     break;
                 } else if (isClassType(tce.type) && lowerNameSoFar.toLowerCase() === tce.type.name.toLowerCase()) {
                     classUsedAsVar = tce.type;

@@ -7,7 +7,7 @@ import type { ParseMode } from './parser/Parser';
 import type { Program } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
 import type { ClassStatement, ConstStatement, EnumStatement, FunctionStatement, NamespaceStatement } from './parser/Statement';
-import type { AstNode, AstNodeKind, Expression, Statement } from './parser/AstNode';
+import type { AstNode, Expression, Statement } from './parser/AstNode';
 import type { TranspileState } from './parser/TranspileState';
 import type { SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
@@ -934,30 +934,31 @@ export class TypeChainEntry {
         name: string;
         type: BscType;
         data: ExtraSymbolData;
-        range: Range;
+        range?: Range;
         separatorToken?: Token;
-        kind?: AstNodeKind;
         astNode: AstNode;
     }) {
         this.name = options.name;
         // make a copy of this data
         this.data = { ...options.data };
         this.type = options.type;
-        this.range = options.range;
+        this._range = options.range;
         this.separatorToken = options.separatorToken ?? createToken(TokenKind.Dot);
-        this.kind = options.kind;
         this.astNode = options.astNode;
     }
     get isResolved() {
         return this.type?.isResolvable();
     }
 
+    get range() {
+        return this._range ?? this.astNode?.range;
+    }
+
     public readonly name: string;
     public readonly type: BscType;
     public readonly data: ExtraSymbolData;
-    public readonly range: Range;
+    private readonly _range: Range;
     public readonly separatorToken: Token;
-    public kind: AstNodeKind;
     public astNode: AstNode;
 }
 
