@@ -23,7 +23,7 @@ import { StringType } from './types/StringType';
 import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
 import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionParameterExpression, IndexedGetExpression, LiteralExpression, NewExpression, TypeExpression, VariableExpression, XmlAttributeGetExpression } from './parser/Expression';
-import { Logger, LogLevel } from './Logger';
+import { LogLevel, createLogger } from './logging';
 import { isToken, type Identifier, type Locatable, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
 import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLiteralString, isLongIntegerType, isNewExpression, isNumberType, isStringType, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUnionType, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
@@ -242,6 +242,9 @@ export class Util {
             }
             if (result.cwd) {
                 result.cwd = path.resolve(projectFileCwd, result.cwd);
+            }
+            if (result.stagingDir) {
+                result.stagingDir = path.resolve(projectFileCwd, result.stagingDir);
             }
             return result;
         }
@@ -1558,7 +1561,7 @@ export class Util {
      * Load and return the list of plugins
      */
     public loadPlugins(cwd: string, pathOrModules: string[], onError?: (pathOrModule: string, err: Error) => void): CompilerPlugin[] {
-        const logger = new Logger();
+        const logger = createLogger();
         return pathOrModules.reduce<CompilerPlugin[]>((acc, pathOrModule) => {
             if (typeof pathOrModule === 'string') {
                 try {
@@ -2000,6 +2003,7 @@ export class Util {
         let parentTypeName = '';
         let itemTypeKind = '';
         let parentTypeKind = '';
+        let astNode: AstNode;
         let errorRange: Range;
         let containsDynamic = false;
         let continueResolvingAllItems = true;
@@ -2037,6 +2041,7 @@ export class Util {
                 previousTypeName = typeString ?? '';
                 itemTypeKind = (chainItem.type as any)?.kind;
                 itemName = chainItem.name;
+                astNode = chainItem.astNode;
                 containsDynamic = containsDynamic || (isDynamicType(chainItem.type) && !isAnyReferenceType(chainItem.type));
                 if (!chainItem.isResolved) {
                     errorRange = chainItem.range;
@@ -2052,7 +2057,8 @@ export class Util {
             fullNameOfItem: fullErrorName,
             fullChainName: fullChainName,
             range: errorRange,
-            containsDynamic: containsDynamic
+            containsDynamic: containsDynamic,
+            astNode: astNode
         };
     }
 

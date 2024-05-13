@@ -1,8 +1,7 @@
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
 import type { CompletionItem, Position, Location } from 'vscode-languageserver';
-import { CancellationTokenSource } from 'vscode-languageserver';
-import { CompletionItemKind, SymbolKind, DocumentSymbol, SymbolInformation } from 'vscode-languageserver';
+import { CancellationTokenSource, CompletionItemKind } from 'vscode-languageserver';
 import chalk from 'chalk';
 import * as path from 'path';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
@@ -19,25 +18,26 @@ import { DynamicType } from '../types/DynamicType';
 import { standardizePath as s, util } from '../util';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
-import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isNamespaceStatement, isVariableExpression, isImportStatement, isFieldStatement, isEnumStatement, isConstStatement, isAnyReferenceType, isNamespaceType, isReferenceType, isCallableType, isBrsFile } from '../astUtils/reflection';
+import { isClassStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isNamespaceStatement, isVariableExpression, isImportStatement, isEnumStatement, isConstStatement, isAnyReferenceType, isNamespaceType, isReferenceType, isCallableType, isBrsFile } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyChangedEvent, DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
-import type { AstNode, Expression, Statement } from '../parser/AstNode';
-import type { AssignedSymbol, UnresolvedSymbol } from '../AstValidationSegmenter';
+import type { AstNode, Expression } from '../parser/AstNode';
+import { ReferencesProvider } from '../bscPlugin/references/ReferencesProvider';
+import { DocumentSymbolProcessor } from '../bscPlugin/symbols/DocumentSymbolProcessor';
+import type { BscFile } from './BscFile';
+import type { BscFileLike } from '../astUtils/CachedLookups';
+import { CachedLookups } from '../astUtils/CachedLookups';
+import type { UnresolvedSymbol, AssignedSymbol } from '../AstValidationSegmenter';
 import { AstValidationSegmenter } from '../AstValidationSegmenter';
 import type { BscSymbol } from '../SymbolTable';
 import { SymbolTable } from '../SymbolTable';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
-import type { BscFileLike } from '../astUtils/CachedLookups';
-import { CachedLookups } from '../astUtils/CachedLookups';
 import { Editor } from '../astUtils/Editor';
-import type { BscFile } from './BscFile';
-import { ReferencesProvider } from '../bscPlugin/references/ReferencesProvider';
-import type { BscType } from '../types/BscType';
+import type { BscType } from '../types';
 import { NamespaceType } from '../types';
+import { WorkspaceSymbolProcessor } from '../bscPlugin/symbols/WorkspaceSymbolProcessor';
 
 export type ProvidedSymbolMap = Map<SymbolTypeFlag, Map<string, BscSymbol>>;
 export type ChangedSymbolMap = Map<SymbolTypeFlag, Set<string>>;
@@ -214,10 +214,6 @@ export class BrsFile implements BscFile {
         return this.parser?.ast;
     }
 
-    private documentSymbols: DocumentSymbol[];
-
-    private workspaceSymbols: SymbolInformation[];
-
     /**
      * Get the token at the specified position
      */
@@ -360,7 +356,7 @@ export class BrsFile implements BscFile {
             }
 
             //tokenize the input file
-            let lexer = this.program.logger.time(LogLevel.debug, ['lexer.lex', chalk.green(this.srcPath)], () => {
+            let lexer = this.program.logger.time('debug', ['lexer.lex', chalk.green(this.srcPath)], () => {
                 return Lexer.scan(fileContents, {
                     includeWhitespace: false
                 });
@@ -374,7 +370,7 @@ export class BrsFile implements BscFile {
             //TODO preprocessor should go away in favor of the AST handling this internally (because it affects transpile)
             //currently the preprocessor throws exceptions on syntax errors...so we need to catch it
             try {
-                this.program.logger.time(LogLevel.debug, ['preprocessor.process', chalk.green(this.srcPath)], () => {
+                this.program.logger.time('debug', ['preprocessor.process', chalk.green(this.srcPath)], () => {
                     preprocessor.process(lexer.tokens, this.program.getManifest());
                 });
             } catch (error: any) {
@@ -387,7 +383,7 @@ export class BrsFile implements BscFile {
             //if the preprocessor generated tokens, use them.
             let tokens = preprocessor.processedTokens.length > 0 ? preprocessor.processedTokens : lexer.tokens;
 
-            this.program.logger.time(LogLevel.debug, ['parser.parse', chalk.green(this.srcPath)], () => {
+            this.program.logger.time('debug', ['parser.parse', chalk.green(this.srcPath)], () => {
                 this._parser = Parser.parse(tokens, {
                     mode: this.parseMode,
                     logger: this.program.logger
@@ -855,118 +851,25 @@ export class BrsFile implements BscFile {
 
     /**
      * Builds a list of document symbols for this file. Used by LanguageServer's onDocumentSymbol functionality
+     * @deprecated use `DocumentSymbolProvider.process()` instead
      */
     public getDocumentSymbols() {
-        if (this.documentSymbols) {
-            return this.documentSymbols;
-        }
-
-        let symbols = [] as DocumentSymbol[];
-
-        for (const statement of this.ast.statements) {
-            const symbol = this.getDocumentSymbol(statement);
-            if (symbol) {
-                symbols.push(symbol);
-            }
-        }
-        this.documentSymbols = symbols;
-        return symbols;
+        return new DocumentSymbolProcessor({
+            documentSymbols: [],
+            file: this,
+            program: this.program
+        }).process();
     }
 
     /**
      * Builds a list of workspace symbols for this file. Used by LanguageServer's onWorkspaceSymbol functionality
      */
     public getWorkspaceSymbols() {
-        if (this.workspaceSymbols) {
-            return this.workspaceSymbols;
-        }
-
-        let symbols = [] as SymbolInformation[];
-
-        for (const statement of this.ast.statements) {
-            for (const symbol of this.generateWorkspaceSymbols(statement)) {
-                symbols.push(symbol);
-            }
-        }
-        this.workspaceSymbols = symbols;
-        return symbols;
+        return new WorkspaceSymbolProcessor({
+            program: this.program,
+            workspaceSymbols: []
+        }).process();
     }
-
-    /**
-     * Builds a single DocumentSymbol object for use by LanguageServer's onDocumentSymbol functionality
-     */
-    private getDocumentSymbol(statement: Statement) {
-        let symbolKind: SymbolKind;
-        const children = [] as DocumentSymbol[];
-
-        if (isFunctionStatement(statement)) {
-            symbolKind = SymbolKind.Function;
-        } else if (isMethodStatement(statement)) {
-            symbolKind = SymbolKind.Method;
-        } else if (isFieldStatement(statement)) {
-            symbolKind = SymbolKind.Field;
-        } else if (isNamespaceStatement(statement)) {
-            symbolKind = SymbolKind.Namespace;
-            for (const childStatement of statement.body.statements) {
-                const symbol = this.getDocumentSymbol(childStatement);
-                if (symbol) {
-                    children.push(symbol);
-                }
-            }
-        } else if (isClassStatement(statement)) {
-            symbolKind = SymbolKind.Class;
-            for (const childStatement of statement.body) {
-                const symbol = this.getDocumentSymbol(childStatement);
-                if (symbol) {
-                    children.push(symbol);
-                }
-            }
-        } else {
-            return;
-        }
-
-        const name = isFieldStatement(statement) ? statement.tokens.name.text : statement.getName(ParseMode.BrighterScript);
-        return DocumentSymbol.create(name, '', symbolKind, statement.range, statement.range, children);
-    }
-
-    /**
-     * Builds a single SymbolInformation object for use by LanguageServer's onWorkspaceSymbol functionality
-     */
-    private generateWorkspaceSymbols(statement: Statement, containerStatement?: ClassStatement | NamespaceStatement) {
-        let symbolKind: SymbolKind;
-        const symbols = [];
-
-        if (isFunctionStatement(statement)) {
-            symbolKind = SymbolKind.Function;
-        } else if (isMethodStatement(statement)) {
-            symbolKind = SymbolKind.Method;
-        } else if (isNamespaceStatement(statement)) {
-            symbolKind = SymbolKind.Namespace;
-
-            for (const childStatement of statement.body.statements) {
-                for (const symbol of this.generateWorkspaceSymbols(childStatement, statement)) {
-                    symbols.push(symbol);
-                }
-            }
-        } else if (isClassStatement(statement)) {
-            symbolKind = SymbolKind.Class;
-
-            for (const childStatement of statement.body) {
-                for (const symbol of this.generateWorkspaceSymbols(childStatement, statement)) {
-                    symbols.push(symbol);
-                }
-            }
-        } else {
-            return symbols;
-        }
-
-        const name = statement.getName(ParseMode.BrighterScript);
-        const uri = util.pathToUri(this.srcPath);
-        const symbol = SymbolInformation.create(name, symbolKind, statement.range, uri, containerStatement?.getName(ParseMode.BrighterScript));
-        symbols.push(symbol);
-        return symbols;
-    }
-
 
     public getClassMemberDefinitions(textToSearchFor: string, file: BrsFile): Location[] {
         let results: Location[] = [];

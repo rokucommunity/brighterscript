@@ -1602,7 +1602,7 @@ describe('BrsFile BrighterScript classes', () => {
         `);
         program.validate();
         expectDiagnosticsIncludes(program, [
-            DiagnosticMessages.cannotFindName('Duck'),
+            DiagnosticMessages.cannotFindFunction('Duck').message,
             DiagnosticMessages.expressionIsNotConstructable('Duck')
         ]);
     });

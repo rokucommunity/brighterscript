@@ -6,7 +6,6 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import { Program } from './Program';
 import PluginInterface from './PluginInterface';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, trim } from './testHelpers.spec';
-import { Logger } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { AssignmentStatement, ForEachStatement, NamespaceStatement } from './parser/Statement';
 import type { CompilerPlugin, OnScopeValidateEvent } from './interfaces';
@@ -1056,7 +1055,7 @@ describe('Scope', () => {
             //validate the scope
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('DoB')
+                DiagnosticMessages.cannotFindFunction('DoB')
             ]);
         });
 
@@ -1072,7 +1071,7 @@ describe('Scope', () => {
             //validate the scope
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('DoC')
+                DiagnosticMessages.cannotFindFunction('DoC')
             ]);
         });
 
@@ -1283,7 +1282,7 @@ describe('Scope', () => {
             program.setFile(s`components/comp.brs`, ``);
             const sourceScope = program.getScopeByName('source');
             const compScope = program.getScopeByName('components/comp.xml');
-            program.plugins = new PluginInterface([], { logger: new Logger() });
+            program.plugins = new PluginInterface();
             const plugin = program.plugins.add({
                 name: 'Emits validation events',
                 beforeScopeValidate: sinon.spy(),
@@ -2119,7 +2118,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.cannotFindName('noMethod', 'float.noMethod', 'float').message
+                    DiagnosticMessages.cannotFindFunction('noMethod', 'float.noMethod', 'float').message
                 ]);
             });
 
@@ -4117,7 +4116,7 @@ describe('Scope', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('test2').message
+                DiagnosticMessages.cannotFindFunction('test2').message
             ]);
 
             program.setFile<BrsFile>('source/file2.bs', `

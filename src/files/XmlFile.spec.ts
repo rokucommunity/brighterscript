@@ -10,7 +10,7 @@ import { XmlFile } from './XmlFile';
 import { standardizePath as s } from '../util';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
 import { ProgramBuilder } from '../ProgramBuilder';
-import { LogLevel } from '../Logger';
+import { LogLevel } from '../logging';
 import { isXmlFile } from '../astUtils/reflection';
 import { tempDir, rootDir, stagingDir } from '../testHelpers.spec';
 import type { BrsFile } from './BrsFile';

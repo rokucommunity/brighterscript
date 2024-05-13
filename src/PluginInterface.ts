@@ -1,7 +1,5 @@
 import type { CompilerPlugin } from './interfaces';
-import type { Logger } from './Logger';
-import { LogLevel } from './Logger';
-
+import { LogLevel, createLogger, type Logger } from './logging';
 /*
  * we use `Required` everywhere here because we expect that the methods on plugin objects will
  * be optional, and we don't want to deal with `undefined`.
@@ -25,16 +23,19 @@ export type PluginEventArgs<T> = {
 
 export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> {
     constructor(
-        plugins: CompilerPlugin[],
-        options: {
-            logger: Logger;
+        plugins?: CompilerPlugin[],
+        options?: {
+            logger?: Logger;
             suppressErrors?: boolean;
         }
     ) {
         this.logger = options?.logger;
         this.suppressErrors = (options as any)?.suppressErrors === false ? false : true;
-        for (const plugin of plugins) {
+        for (const plugin of plugins ?? []) {
             this.add(plugin);
+        }
+        if (!this.logger) {
+            this.logger = createLogger();
         }
     }
 
