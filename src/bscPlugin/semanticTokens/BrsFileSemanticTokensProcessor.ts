@@ -99,7 +99,6 @@ export class BrsFileSemanticTokensProcessor {
         /* eslint-disable @typescript-eslint/dot-notation */
         const nodes = [
             ...this.event.file['_cachedLookups'].aliasStatements,
-            ...this.event.file['_cachedLookups'].aliasStatements.map(x => x.value),
             ...this.event.file['_cachedLookups'].expressions,
             //make a new VariableExpression to wrap the name. This is a hack, we could probably do it better
             ...this.event.file['_cachedLookups'].assignmentStatements,
@@ -115,10 +114,17 @@ export class BrsFileSemanticTokensProcessor {
                 //lift the callee from call expressions to handle namespaced function calls
                 node = node.call.callee;
             } else if (isAliasStatement(node)) {
-                this.addToken(node.tokens.name, SemanticTokenTypes.variable, [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]);
-                continue;
+                //give an alias the same SemanticToken info as its value
+                const extraData = {};
+                const chain = [];
+                // eslint-disable-next-line no-bitwise
+                const symbolType = node.value.getType({ flags: SymbolTypeFlag.typetime | SymbolTypeFlag.runtime, data: extraData, typeChain: chain });
+                if (symbolType?.isResolvable()) {
+                    let info = this.getSemanticTokenTypeFromType(symbolType, extraData);
+                    this.addToken(node.tokens.name, info.type, info.modifiers);
+                }
             }
-
+            const nodeSymbolTable = node.getSymbolTable();
             const containingNamespaceNameLower = node.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript).toLowerCase();
             const tokens = util.getAllDottedGetParts(node);
             const processedNames: string[] = [];
@@ -142,9 +148,10 @@ export class BrsFileSemanticTokensProcessor {
                     this.addToken(token, SemanticTokenTypes.variable, [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]);
                 } else {
                     const extraData = {};
-                    const symbolType = scope.symbolTable.getSymbolType(token.text, { flags: SymbolTypeFlag.typetime, data: extraData });
+                    const symbolType = nodeSymbolTable.getSymbolType(token.text, { flags: SymbolTypeFlag.typetime, data: extraData });
                     if (symbolType?.isResolvable()) {
-                        this.addToken(token, this.getSemanticTokenTypeFromType(symbolType, extraData, !!containingNamespaceNameLower));
+                        const info = this.getSemanticTokenTypeFromType(symbolType, extraData, !!containingNamespaceNameLower);
+                        this.addToken(token, info.type, info.modifiers);
                     }
                 }
             }
@@ -154,25 +161,33 @@ export class BrsFileSemanticTokensProcessor {
 
     // TODO: We can use the actual symbol tables to find methods and member fields.
     private getSemanticTokenTypeFromType(type: BscType, extraData: ExtraSymbolData, areMembers = false) {
+        let result = {
+            type: SemanticTokenTypes.type,
+            modifiers: [] as SemanticTokenModifiers[]
+        };
+
         if (isConstStatement(extraData?.definingNode)) {
-            return SemanticTokenTypes.variable;
+            result.type = SemanticTokenTypes.variable;
+            result.modifiers.push(SemanticTokenModifiers.readonly, SemanticTokenModifiers.static);
         } else if (isClassType(type)) {
-            return SemanticTokenTypes.class;
+            result.type = SemanticTokenTypes.class;
         } else if (isCallableType(type)) {
-            return areMembers ? SemanticTokenTypes.method : SemanticTokenTypes.function;
+            result.type = areMembers ? SemanticTokenTypes.method : SemanticTokenTypes.function;
         } else if (isInterfaceType(type)) {
-            return SemanticTokenTypes.interface;
+            result.type = SemanticTokenTypes.interface;
         } else if (isComponentType(type)) {
-            return SemanticTokenTypes.class;
+            result.type = SemanticTokenTypes.class;
         } else if (isEnumType(type)) {
-            return SemanticTokenTypes.enum;
+            result.type = SemanticTokenTypes.enum;
         } else if (isEnumMemberType(type)) {
-            return SemanticTokenTypes.enumMember;
+            result.type = SemanticTokenTypes.enumMember;
         } else if (isNamespaceType(type)) {
-            return SemanticTokenTypes.namespace;
+            result.type = SemanticTokenTypes.namespace;
         } else if (isNativeType(type)) {
-            return SemanticTokenTypes.type;
+            result.type = SemanticTokenTypes.type;
+        } else {
+            result.type = areMembers ? SemanticTokenTypes.property : SemanticTokenTypes.variable;
         }
-        return areMembers ? SemanticTokenTypes.property : SemanticTokenTypes.variable;
+        return result;
     }
 }

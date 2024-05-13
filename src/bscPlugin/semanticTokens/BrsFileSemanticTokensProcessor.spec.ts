@@ -346,6 +346,38 @@ describe('BrsFileSemanticTokensProcessor', () => {
         }]);
     });
 
+    it.only('matches aliases', () => {
+        program.setFile('source/alpha.bs', `
+            namespace alpha
+                sub test()
+                end sub
+            end namespace
+        `);
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            alias alpha2 = alpha
+            sub main()
+                print alpha2.test()
+            end sub
+        `);
+        expectSemanticTokens(file, [{
+            // alias |alpha2| = alpha
+            range: util.createRange(1, 18, 1, 24),
+            tokenType: SemanticTokenTypes.namespace
+        }, {
+            // alias alpha2 = |alpha|
+            range: util.createRange(1, 27, 1, 32),
+            tokenType: SemanticTokenTypes.namespace
+        }, {
+            // print |alpha2|.test()
+            range: util.createRange(3, 22, 3, 28),
+            tokenType: SemanticTokenTypes.namespace
+        }, {
+            // print alpha2.|test|()
+            range: util.createRange(3, 22, 1, 27),
+            tokenType: SemanticTokenTypes.function
+        }]);
+    });
+
     it('matches consts', () => {
         const file = program.setFile<BrsFile>('source/main.bs', `
             sub init()
