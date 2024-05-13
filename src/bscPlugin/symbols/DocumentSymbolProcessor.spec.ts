@@ -5,8 +5,7 @@ import { rootDir } from '../../testHelpers.spec';
 import type { DocumentSymbol } from 'vscode-languageserver-types';
 import { SymbolKind } from 'vscode-languageserver-types';
 import type { BrsFile } from '../../files/BrsFile';
-import { AstNode, Statement } from '../../parser/AstNode';
-import { Token } from '../../lexer/Token';
+
 let sinon = createSandbox();
 
 describe('DocumentSymbolProcessor', () => {
