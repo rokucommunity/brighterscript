@@ -6,7 +6,7 @@ import type { Program } from './Program';
 import util from './util';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { BscSymbol } from './SymbolTable';
-import { isNamespaceType, isReferenceType, isTypedFunctionType } from './astUtils/reflection';
+import { isCallExpression, isNamespaceType, isReferenceType, isTypedFunctionType } from './astUtils/reflection';
 import { getAllRequiredSymbolNames } from './types';
 import type { TypeChainProcessResult } from './interfaces';
 import { BscTypeKind } from './types/BscTypeKind';
@@ -375,7 +375,8 @@ export class CrossScopeValidator {
 
                 for (const scope of scopeList) {
                     this.program.diagnostics.register({
-                        ...DiagnosticMessages.cannotFindName(typeChainResult.itemName, typeChainResult.fullNameOfItem, typeChainResult.itemParentTypeName, this.getParentTypeDescriptor(this.getProvidedTree(scope)?.providedTree, typeChainResult)),
+
+                        ...this.getCannotFindDiagnostic(scope, typeChainResult),
                         file: file,
                         range: typeChainResult.range
                     }, {
@@ -445,6 +446,14 @@ export class CrossScopeValidator {
             }
         }
         return incompatibleResolutions;
+    }
+
+    private getCannotFindDiagnostic(scope: Scope, typeChainResult: TypeChainProcessResult) {
+        const parentDescriptor = this.getParentTypeDescriptor(this.getProvidedTree(scope)?.providedTree, typeChainResult);
+        if (isCallExpression(typeChainResult.astNode?.parent) && typeChainResult.astNode?.parent.callee === typeChainResult.astNode) {
+            return DiagnosticMessages.cannotFindFunction(typeChainResult.itemName, typeChainResult.fullNameOfItem, typeChainResult.itemParentTypeName, parentDescriptor);
+        }
+        return DiagnosticMessages.cannotFindName(typeChainResult.itemName, typeChainResult.fullNameOfItem, typeChainResult.itemParentTypeName, parentDescriptor);
     }
 
     private getParentTypeDescriptor(provided: ProvidedNode, typeChainResult: TypeChainProcessResult) {

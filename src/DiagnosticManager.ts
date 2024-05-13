@@ -7,11 +7,12 @@ import { Cache } from './Cache';
 import { isBsDiagnostic, isXmlScope } from './astUtils/reflection';
 import type { BscFile } from './files/BscFile';
 import type { DiagnosticRelatedInformation } from 'vscode-languageserver-protocol';
-import { LogLevel, type Logger } from './Logger';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
 import { DiagnosticSeverityAdjuster } from './DiagnosticSeverityAdjuster';
 import type { FinalizedBsConfig } from './BsConfig';
 import chalk from 'chalk';
+import type { Logger } from './logging';
+import { LogLevel, createLogger } from './logging';
 
 /**
  * Manages all diagnostics for a program.
@@ -21,6 +22,10 @@ import chalk from 'chalk';
  * If multiple diagnostics are added related to the same range of code, they will be consolidated as related information
  */
 export class DiagnosticManager {
+
+    constructor(options?: { logger?: Logger }) {
+        this.logger = options?.logger ?? createLogger();
+    }
 
     private diagnosticsCache = new Cache<string, { diagnostic: BsDiagnostic; contexts: Set<DiagnosticContext> }>();
 
@@ -77,13 +82,9 @@ export class DiagnosticManager {
                 return this.filterDiagnostics(diagnostics);
             }) ?? this.filterDiagnostics(diagnostics);
 
-            if (this.logger) {
-                this.logger?.time(LogLevel.debug, ['adjust diagnostics severity'], () => {
-                    this.diagnosticAdjuster?.adjust(this.options ?? {}, filteredDiagnostics);
-                });
-            } else {
-                this.diagnosticAdjuster.adjust(this.options ?? {}, filteredDiagnostics);
-            }
+            this.logger?.time(LogLevel.debug, ['adjust diagnostics severity'], () => {
+                this.diagnosticAdjuster?.adjust(this.options ?? {}, filteredDiagnostics);
+            });
 
             this.logger?.info(`diagnostic counts: total=${chalk.yellow(diagnostics.length.toString())}, after filter=${chalk.yellow(filteredDiagnostics.length.toString())}`);
             return filteredDiagnostics;

@@ -535,7 +535,7 @@ describe('CrossScopeValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('otherFunc').message
+                DiagnosticMessages.cannotFindFunction('otherFunc').message
             ]);
         });
 
@@ -622,7 +622,7 @@ describe('CrossScopeValidator', () => {
             program.validate();
 
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('otherFunc', `components${path.sep}Widget2.xml`).message
+                DiagnosticMessages.cannotFindFunction('otherFunc', `components${path.sep}Widget2.xml`).message
             ]);
         });
 
@@ -774,7 +774,7 @@ describe('CrossScopeValidator', () => {
 
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('someFunc', 'alpha.beta.someFunc', 'alpha.beta', 'namespace').message
+                DiagnosticMessages.cannotFindFunction('someFunc', 'alpha.beta.someFunc', 'alpha.beta', 'namespace').message
             ]);
         });
 

@@ -7,7 +7,6 @@ import { type NamespaceStatement, type ClassStatement, type EnumStatement, type 
 import { ParseMode } from './parser/Parser';
 import { util } from './util';
 import { Cache } from './Cache';
-import { LogLevel } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
 import { isBrsFile, isXmlFile, isEnumMemberStatement, isXmlScope } from './astUtils/reflection';
@@ -19,6 +18,7 @@ import { unionTypeFactory } from './types/UnionType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import type { Statement } from './parser/AstNode';
 import { performance } from 'perf_hooks';
+import { LogLevel } from './logging';
 
 /**
  * Assign some few factories to the SymbolTable to prevent cyclical imports. This file seems like the most intuitive place to do the linking

@@ -16,23 +16,15 @@ import { createVisitor, WalkMode } from './astUtils/visitors';
 import { isBrsFile } from './astUtils/reflection';
 import type { LiteralExpression } from './parser/Expression';
 import { tempDir, rootDir, stagingDir } from './testHelpers.spec';
-import { AssetFile } from './files/AssetFile';
-import * as path from 'path';
 import type { SinonSpy } from 'sinon';
 import { createSandbox } from 'sinon';
-import type { AfterFileAddEvent, AfterFileRemoveEvent, AfterProvideFileEvent, BeforeFileAddEvent, BeforeFileRemoveEvent, BeforeProvideFileEvent, CompilerPlugin, ProvideFileEvent } from './interfaces';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
-import { StringType } from './types/StringType';
-import { TypedFunctionType } from './types/TypedFunctionType';
-import { DynamicType } from './types/DynamicType';
-import { FloatType } from './types/FloatType';
-import { IntegerType } from './types/IntegerType';
-import { InterfaceType } from './types/InterfaceType';
-import { ComponentType } from './types/ComponentType';
-import { ArrayType } from './types/ArrayType';
+import { AssetFile } from './files/AssetFile';
+import type { ProvideFileEvent, CompilerPlugin, BeforeProvideFileEvent, AfterProvideFileEvent, BeforeFileAddEvent, AfterFileAddEvent, BeforeFileRemoveEvent, AfterFileRemoveEvent } from './interfaces';
+import { StringType, TypedFunctionType, DynamicType, FloatType, IntegerType, InterfaceType, ArrayType, BooleanType, DoubleType, UnionType } from './types';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
-import { BooleanType } from './types/BooleanType';
-import { DoubleType, UnionType } from './types';
+import { ComponentType } from './types/ComponentType';
+import * as path from 'path';
 
 const sinon = createSandbox();
 
@@ -524,7 +516,7 @@ describe('Program', () => {
 
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('DoSomething')
+                DiagnosticMessages.cannotFindFunction('DoSomething')
             ]);
         });
 
@@ -983,7 +975,7 @@ describe('Program', () => {
 
             //there should be an error when calling DoParentThing, since it doesn't exist on child or parent
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('DoParentThing')
+                DiagnosticMessages.cannotFindFunction('DoParentThing')
             ]);
 
             //add the script into the parent
@@ -1130,7 +1122,7 @@ describe('Program', () => {
             ];
 
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('C')
+                DiagnosticMessages.cannotFindFunction('C')
             ]);
         });
     });
