@@ -1,5 +1,5 @@
 import type { DottedGetExpression, TypeExpression, VariableExpression } from './parser/Expression';
-import { isBinaryExpression, isBody, isClassStatement, isDottedGetExpression, isInterfaceStatement, isNamespaceStatement, isTypeExpression, isVariableExpression } from './astUtils/reflection';
+import { isAliasStatement, isBinaryExpression, isBody, isClassStatement, isDottedGetExpression, isInterfaceStatement, isNamespaceStatement, isTypeExpression, isVariableExpression } from './astUtils/reflection';
 import { ChildrenSkipper, WalkMode, createVisitor } from './astUtils/visitors';
 import type { ExtraSymbolData, GetTypeOptions, TypeChainEntry } from './interfaces';
 import type { AstNode, Expression } from './parser/AstNode';
@@ -74,12 +74,12 @@ export class AstValidationSegmenter {
         }
 
         const flag = util.isInTypeExpression(expression) ? SymbolTypeFlag.typetime : SymbolTypeFlag.runtime;
-        const typeChain: TypeChainEntry[] = [];
+        let typeChain: TypeChainEntry[] = [];
         const extraData = {} as ExtraSymbolData;
         const options: GetTypeOptions = { flags: flag, onlyCacheResolvedTypes: true, typeChain: typeChain, data: extraData };
 
         const nodeType = expression.getType(options);
-        if (!nodeType?.isResolvable() && !extraData.isAlias) {
+        if (!nodeType?.isResolvable()) {
             let symbolsSet: Set<UnresolvedSymbol>;
             if (!assignedSymbolsNames?.has(typeChain[0].name.toLowerCase())) {
                 if (!this.unresolvedSegmentsSymbols.has(segment)) {
@@ -89,6 +89,14 @@ export class AstValidationSegmenter {
                     symbolsSet = this.unresolvedSegmentsSymbols.get(segment);
                 }
                 this.validatedSegments.set(segment, false);
+
+                if (extraData.isAlias && isAliasStatement(extraData.definingNode)) {
+                    //set the non-aliased version of this symbol as required.
+                    const aliasTypeChain = [];
+                    // eslint-disable-next-line no-bitwise
+                    extraData.definingNode.value.getType({ ...options, flags: SymbolTypeFlag.runtime | SymbolTypeFlag.typetime, typeChain: aliasTypeChain });
+                    typeChain = [...aliasTypeChain, ...typeChain.slice(1)];
+                }
                 symbolsSet.add({
                     typeChain: typeChain,
                     flags: typeChain[0].data.flags,

@@ -188,7 +188,6 @@ export class ScopeValidator {
     }
 
     private doesFileRequireChangedSymbol(file: BrsFile) {
-        let thisFileRequiresChangedSymbol = false;
         for (let requiredSymbol of file.requiredSymbols) {
             // eslint-disable-next-line no-bitwise
             for (const flag of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
@@ -196,13 +195,12 @@ export class ScopeValidator {
                 if (flag & requiredSymbol.flags) {
                     const changeSymbolSetForFlag = this.event.changedSymbols.get(flag);
                     if (util.setContainsUnresolvedSymbol(changeSymbolSetForFlag, requiredSymbol)) {
-                        thisFileRequiresChangedSymbol = true;
-                        break;
+                        return true;
                     }
                 }
             }
         }
-        return thisFileRequiresChangedSymbol;
+        return false;
     }
 
     private doesFileProvideChangedSymbol(file: BrsFile, changedSymbols: Map<SymbolTypeFlag, Set<string>>) {

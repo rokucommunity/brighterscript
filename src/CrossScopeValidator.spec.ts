@@ -1007,5 +1007,50 @@ describe('CrossScopeValidator', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        it('revalidates when source namespace changes', () => {
+            program.setFile('components/utils.bs', `
+                namespace alpha
+                    function passThru(val as integer) as string
+                        return val.toStr()
+                    end function
+                end namespace
+
+            `);
+
+            program.setFile('components/widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="pkg:/components/widget.bs"/>
+                    <script uri="pkg:/components/utils.bs"/>
+                </component>
+            `);
+
+            program.setFile('components/widget.bs', `
+                alias beta = alpha
+
+                sub foo()
+                    print beta.passThru(1)
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            // now alpha.passthru takes a string
+            program.setFile('components/utils.bs', `
+                namespace alpha
+                    function passThru(val as string) as string
+                        return val.toStr()
+                    end function
+                end namespace
+
+            `);
+            program.validate();
+
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('integer', 'string').message
+            ]);
+        });
     });
 });
