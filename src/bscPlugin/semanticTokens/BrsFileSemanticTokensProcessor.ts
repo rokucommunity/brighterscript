@@ -1,7 +1,7 @@
 import type { Range } from 'vscode-languageserver-protocol';
 import { SemanticTokenModifiers } from 'vscode-languageserver-protocol';
 import { SemanticTokenTypes } from 'vscode-languageserver-protocol';
-import { isCallExpression, isCallableType, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isInterfaceType, isNamespaceStatement, isNamespaceType, isNativeType, isNewExpression } from '../../astUtils/reflection';
+import { isAliasStatement, isCallExpression, isCallableType, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isInterfaceType, isNamespaceStatement, isNamespaceType, isNativeType, isNewExpression } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ExtraSymbolData, OnGetSemanticTokensEvent } from '../../interfaces';
 import type { Locatable } from '../../lexer/Token';
@@ -96,22 +96,27 @@ export class BrsFileSemanticTokensProcessor {
             return;
         }
         scope.linkSymbolTable();
+        /* eslint-disable @typescript-eslint/dot-notation */
         const nodes = [
-            // eslint-disable-next-line @typescript-eslint/dot-notation
+            ...this.event.file['_cachedLookups'].aliasStatements,
+            ...this.event.file['_cachedLookups'].aliasStatements.map(x => x.value),
             ...this.event.file['_cachedLookups'].expressions,
             //make a new VariableExpression to wrap the name. This is a hack, we could probably do it better
-            // eslint-disable-next-line @typescript-eslint/dot-notation
             ...this.event.file['_cachedLookups'].assignmentStatements,
-            // eslint-disable-next-line @typescript-eslint/dot-notation
             ...this.event.file['_cachedLookups'].functionExpressions.map(x => x.parameters).flat()
         ];
+        /* eslint-enable @typescript-eslint/dot-notation */
 
         for (let node of nodes) {
-            //lift the callee from call expressions to handle namespaced function calls
             if (isCallExpression(node)) {
+                //lift the callee from call expressions to handle namespaced function calls
                 node = node.callee;
             } else if (isNewExpression(node)) {
+                //lift the callee from call expressions to handle namespaced function calls
                 node = node.call.callee;
+            } else if (isAliasStatement(node)) {
+                this.addToken(node.tokens.name, SemanticTokenTypes.variable, [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]);
+                continue;
             }
 
             const containingNamespaceNameLower = node.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript).toLowerCase();
