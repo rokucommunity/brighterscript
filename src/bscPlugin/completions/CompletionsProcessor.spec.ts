@@ -11,6 +11,9 @@ import * as pick from 'object.pick';
 import { BrsFile } from '../../files/BrsFile';
 import type { FileObj } from '../../interfaces';
 import * as fsExtra from 'fs-extra';
+import { isAssignmentStatement, isFunctionExpression } from '../../astUtils/reflection';
+import type { AssignmentStatement } from '../../parser/Statement';
+import type { FunctionExpression } from '../../parser/Expression';
 
 describe('CompletionsProcessor', () => {
     let program: Program;
@@ -681,6 +684,42 @@ describe('CompletionsProcessor', () => {
             expect(
                 (program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 30))).map(x => x.label).sort()
             ).to.eql(['sayHello', 'sayHello2', 'sayHello3', 'sayHello4']);
+        });
+
+        describe('getBrsFileCompletions', () => {
+            it('does not crash on expression with missing range', () => {
+                const file = program.setFile<BrsFile>('source/main.brs', `
+                    sub main()
+                        message = alpha
+                    end sub
+                `);
+                const assignment = file.ast.findChild<AssignmentStatement>(isAssignmentStatement);
+                // destroy the `range` for this value
+                delete (assignment as any).value.range;
+
+                const processor = new CompletionsProcessor({ scopes: [] } as any);
+                expect(
+                    // message = alpha|
+                    processor['getBrsFileCompletions'](util.createPosition(2, 39), file)
+                ).to.eql([]);
+            });
+
+            it('does not crash when functionExpression.body is undefined (somehow...)', () => {
+                const file = program.setFile<BrsFile>('source/main.brs', `
+                    sub main()
+                        message = alpha
+                    end sub
+                `);
+                const func = file.ast.findChild<FunctionExpression>(isFunctionExpression);
+                // destroy the `body` for this value
+                delete (func as any).body;
+
+                const processor = new CompletionsProcessor({} as any);
+                expect(
+                    // message = alpha|
+                    processor['getBrsFileCompletions'](util.createPosition(2, 39), file)
+                ).to.eql([]);
+            });
         });
 
         describe('getCompletions', () => {

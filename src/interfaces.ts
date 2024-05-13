@@ -1,4 +1,4 @@
-import type { Range, Diagnostic, CodeAction, SemanticTokenTypes, SemanticTokenModifiers, Position, CompletionItem, Location } from 'vscode-languageserver';
+import type { Range, Diagnostic, CodeAction, Position, CompletionItem, Location, DocumentSymbol } from 'vscode-languageserver-protocol';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -7,20 +7,22 @@ import type { ParseMode } from './parser/Parser';
 import type { Program } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
 import type { ClassStatement, ConstStatement, EnumStatement, FunctionStatement, NamespaceStatement } from './parser/Statement';
-import type { AstNode, AstNodeKind, Expression, Statement } from './parser/AstNode';
+import type { AstNode, Expression, Statement } from './parser/AstNode';
 import type { TranspileState } from './parser/TranspileState';
 import type { SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
-import type { Editor } from './astUtils/Editor';
 import type { Identifier, Token } from './lexer/Token';
+import type { SemanticTokenModifiers, SemanticTokenTypes } from 'vscode-languageserver';
+import type { SymbolTable } from './SymbolTable';
+import type { SymbolTypeFlag } from './SymbolTypeFlag';
+import type { Editor } from './astUtils/Editor';
 import type { BscFile } from './files/BscFile';
 import type { FileFactory } from './files/Factory';
 import type { LazyFileData } from './files/LazyFileData';
-import type { SymbolTable } from './SymbolTable';
-import type { SymbolTypeFlag } from './SymbolTypeFlag';
-import { createToken } from './astUtils/creators';
 import { TokenKind } from './lexer/TokenKind';
 import type { BscTypeKind } from './types/BscTypeKind';
+import type { WorkspaceSymbol } from 'vscode-languageserver-types';
+import { createToken } from './astUtils/creators';
 
 export interface BsDiagnostic extends Diagnostic {
     file: BscFile;
@@ -287,6 +289,38 @@ export interface CompilerPlugin {
      * @param event
      */
     afterProvideReferences?(event: AfterProvideReferencesEvent): any;
+
+
+    /**
+     * Called before the `provideDocumentSymbols` hook
+     */
+    beforeProvideDocumentSymbols?(event: BeforeProvideDocumentSymbolsEvent): any;
+    /**
+     * Provide all of the `DocumentSymbol`s for the given file
+     * @param event
+     */
+    provideDocumentSymbols?(event: ProvideDocumentSymbolsEvent): any;
+    /**
+     * Called after `provideDocumentSymbols`. Use this if you want to intercept or sanitize the document symbols data provided by bsc or other plugins
+     * @param event
+     */
+    afterProvideDocumentSymbols?(event: AfterProvideDocumentSymbolsEvent): any;
+
+
+    /**
+     * Called before the `provideWorkspaceSymbols` hook
+     */
+    beforeProvideWorkspaceSymbols?(event: BeforeProvideWorkspaceSymbolsEvent): any;
+    /**
+     * Provide all of the workspace symbols for the entire project
+     * @param event
+     */
+    provideWorkspaceSymbols?(event: ProvideWorkspaceSymbolsEvent): any;
+    /**
+     * Called after `provideWorkspaceSymbols`. Use this if you want to intercept or sanitize the workspace symbols data provided by bsc or other plugins
+     * @param event
+     */
+    afterProvideWorkspaceSymbols?(event: AfterProvideWorkspaceSymbolsEvent): any;
 
 
     //scope events
@@ -561,6 +595,32 @@ export interface ProvideReferencesEvent<TFile = BscFile> {
 }
 export type BeforeProvideReferencesEvent<TFile = BscFile> = ProvideReferencesEvent<TFile>;
 export type AfterProvideReferencesEvent<TFile = BscFile> = ProvideReferencesEvent<TFile>;
+
+
+export interface ProvideDocumentSymbolsEvent<TFile = BscFile> {
+    program: Program;
+    /**
+     * The file that the `documentSymbol` request was invoked in
+     */
+    file: TFile;
+    /**
+     * The result list of symbols
+     */
+    documentSymbols: DocumentSymbol[];
+}
+export type BeforeProvideDocumentSymbolsEvent<TFile = BscFile> = ProvideDocumentSymbolsEvent<TFile>;
+export type AfterProvideDocumentSymbolsEvent<TFile = BscFile> = ProvideDocumentSymbolsEvent<TFile>;
+
+
+export interface ProvideWorkspaceSymbolsEvent {
+    program: Program;
+    /**
+     * The result list of symbols
+     */
+    workspaceSymbols: WorkspaceSymbol[];
+}
+export type BeforeProvideWorkspaceSymbolsEvent = ProvideWorkspaceSymbolsEvent;
+export type AfterProvideWorkspaceSymbolsEvent = ProvideWorkspaceSymbolsEvent;
 
 
 export interface OnGetSemanticTokensEvent<T extends BscFile = BscFile> {
@@ -874,28 +934,32 @@ export class TypeChainEntry {
         name: string;
         type: BscType;
         data: ExtraSymbolData;
-        range: Range;
+        range?: Range;
         separatorToken?: Token;
-        kind?: AstNodeKind;
+        astNode: AstNode;
     }) {
         this.name = options.name;
         // make a copy of this data
         this.data = { ...options.data };
         this.type = options.type;
-        this.range = options.range;
+        this._range = options.range;
         this.separatorToken = options.separatorToken ?? createToken(TokenKind.Dot);
-        this.kind = options.kind;
+        this.astNode = options.astNode;
     }
     get isResolved() {
         return this.type?.isResolvable();
     }
 
+    get range() {
+        return this._range ?? this.astNode?.range;
+    }
+
     public readonly name: string;
     public readonly type: BscType;
     public readonly data: ExtraSymbolData;
-    public readonly range: Range;
+    private readonly _range: Range;
     public readonly separatorToken: Token;
-    public kind: AstNodeKind;
+    public astNode: AstNode;
 }
 
 export interface TypeChainProcessResult {
@@ -931,6 +995,10 @@ export interface TypeChainProcessResult {
      * Does the chain contain a dynamic type?
      */
     containsDynamic: boolean;
+    /**
+     * The AstNode of the item
+     */
+    astNode: AstNode;
 }
 
 export interface TypeCompatibilityData {

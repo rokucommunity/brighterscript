@@ -1731,7 +1731,7 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('len', null, '(string or integer)').message
+                DiagnosticMessages.cannotFindFunction('len', null, '(string or integer)').message
             ]);
         });
 

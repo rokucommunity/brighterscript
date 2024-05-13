@@ -4973,7 +4973,7 @@ describe('BrsFile', () => {
             program.validate();
             expectZeroDiagnostics(program);
 
-            program.setFile('source/main.bs', `function request()\r\n\t\t\t\thandleInterceptedScreenData(m._aaaaaaainterceptedScreenData) 'bs:disable-line 1001\r\nend function`);
+            program.setFile('source/main.bs', `function request()\r\n\t\t\t\thandleInterceptedScreenData(m._aaaaaaainterceptedScreenData) 'bs:disable-line 1140\r\nend function`);
             program.validate();
             expectZeroDiagnostics(program);
         });

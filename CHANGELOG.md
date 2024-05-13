@@ -209,6 +209,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.66.0-alpha.0](https://github.com/rokucommunity/brighterscript/compare/v0.65.1...v0.66.0-alpha.0) - 2023-06-09
 ### Changed
  - all the type tracking stuff!
+
+
+
+## [0.67.0](https://github.com/rokucommunity/brighterscript/compare/v0.65.27...v0.67.0) - 2024-05-10
+### Changed
+ - Fix formatting with logger output ([#1171](https://github.com/rokucommunity/brighterscript/pull/1171))
+ - Move function calls to separate diagnostic ([#1169](https://github.com/rokucommunity/brighterscript/pull/1169))
+ - resolve the stagingDir option relative to the bsconfig.json file ([#1148](https://github.com/rokucommunity/brighterscript/pull/1148))
+ - Upgrade to @rokucommunity/logger ([#1137](https://github.com/rokucommunity/brighterscript/pull/1137))
+
+
+
+## 0.66.0
+This release was skipped because we decided to change from the v0.66 alphas to move those breaking changes into v1.
+
+
+
+## [0.65.27](https://github.com/rokucommunity/brighterscript/compare/v0.65.26...v0.65.27) - 2024-03-27
+### Added
+ - Plugin hook provide workspace symbol ([#1118](https://github.com/rokucommunity/brighterscript/pull/1118))
+ - Plugin hook for documentSymbol ([#1116](https://github.com/rokucommunity/brighterscript/pull/1116))
+### Changed
+ - Upgade LSP packages ([#1117](https://github.com/rokucommunity/brighterscript/pull/1117))
+### Fixed
+ - Improve workspace/document symbol handling ([#1120](https://github.com/rokucommunity/brighterscript/pull/1120))
+ - Increase max param count diagnostic to 63 ([#1112](https://github.com/rokucommunity/brighterscript/pull/1112))
+
+
+
 ## [0.65.26](https://github.com/rokucommunity/brighterscript/compare/v0.65.25...v0.65.26) - 2024-03-13
 ### Fixed
  - Prevent unused variable warnings on transpiled ternary and null coalescence expressions ([#1101](https://github.com/rokucommunity/brighterscript/pull/1101))

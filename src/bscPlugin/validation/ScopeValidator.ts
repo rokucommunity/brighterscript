@@ -720,20 +720,37 @@ export class ScopeValidator {
                     }
                 } else {
                     const typeChainScan = util.processTypeChain(typeChain);
+                    //if this is a function call, provide a different diganostic code
+                    if (isCallExpression(typeChainScan.astNode.parent) && typeChainScan.astNode.parent.callee === expression) {
+                        this.addMultiScopeDiagnostic({
+                            file: file as BscFile,
+                            ...DiagnosticMessages.cannotFindFunction(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan)),
+                            range: typeChainScan.range
+                        });
+                    } else {
+                        this.addMultiScopeDiagnostic({
+                            file: file as BscFile,
+                            ...DiagnosticMessages.cannotFindName(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan)),
+                            range: typeChainScan.range
+                        });
+                    }
+                }
+
+            } else {
+                const typeChainScan = util.processTypeChain(typeChain);
+                if (isCallExpression(typeChainScan.astNode.parent) && typeChainScan.astNode.parent.callee === expression) {
+                    this.addMultiScopeDiagnostic({
+                        file: file as BscFile,
+                        ...DiagnosticMessages.cannotFindFunction(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan)),
+                        range: typeChainScan.range
+                    });
+                } else {
                     this.addMultiScopeDiagnostic({
                         file: file as BscFile,
                         ...DiagnosticMessages.cannotFindName(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan)),
                         range: typeChainScan.range
                     });
                 }
-
-            } else {
-                const typeChainScan = util.processTypeChain(typeChain);
-                this.addMultiScopeDiagnostic({
-                    file: file as BscFile,
-                    ...DiagnosticMessages.cannotFindName(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan)),
-                    range: typeChainScan.range
-                });
             }
 
         }
@@ -809,7 +826,7 @@ export class ScopeValidator {
                 if (isFirst && containingNamespaceName) {
                     lowerNameSoFar = `${containingNamespaceName.toLowerCase()}.${lowerNameSoFar}`;
                 }
-                if (!tce.kind || ignoreKinds.includes(tce.kind)) {
+                if (!tce.astNode || ignoreKinds.includes(tce.astNode.kind)) {
                     break;
                 } else if (isClassType(tce.type) && lowerNameSoFar.toLowerCase() === tce.type.name.toLowerCase()) {
                     classUsedAsVar = tce.type;

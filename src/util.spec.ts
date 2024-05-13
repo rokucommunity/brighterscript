@@ -156,6 +156,26 @@ describe('util', () => {
             ].map(p => util.pathSepNormalize(p, '/')));
         });
 
+        it('resolves path relatively to config file', () => {
+            const mockConfig: BsConfig = {
+                outFile: 'out/app.zip',
+                rootDir: 'rootDir',
+                cwd: 'cwd',
+                stagingDir: 'stagingDir'
+            };
+            fsExtra.outputFileSync(s`${rootDir}/child.json`, JSON.stringify(mockConfig));
+            let config = util.loadConfigFile(s`${rootDir}/child.json`);
+            expect(config).to.deep.equal({
+                '_ancestors': [
+                    s`${rootDir}/child.json`
+                ],
+                'cwd': s`${rootDir}/cwd`,
+                'outFile': s`${rootDir}/out/app.zip`,
+                'rootDir': s`${rootDir}/rootDir`,
+                'stagingDir': s`${rootDir}/stagingDir`
+            });
+        });
+
         it('removes duplicate plugins and undefined values', () => {
             const config: BsConfig = {
                 plugins: [
@@ -933,10 +953,16 @@ describe('util', () => {
     });
     describe('processTypeChain', () => {
         it('should  find the correct details in a list of type resolutions', () => {
+            const nodes = [
+                createVariableExpression('Alpha', util.createRange(1, 1, 2, 2)),
+                createVariableExpression('Beta', util.createRange(2, 2, 3, 3)),
+                createVariableExpression('CharlieProp', util.createRange(3, 3, 4, 4))
+            ];
+
             const chain = [
-                new TypeChainEntry({ name: 'AlphaNamespace', type: new NamespaceType('Alpha'), data: { flags: SymbolTypeFlag.runtime }, range: util.createRange(1, 1, 2, 2) }),
-                new TypeChainEntry({ name: 'BetaProp', type: new ClassType('Beta'), data: { flags: SymbolTypeFlag.runtime }, range: util.createRange(2, 2, 3, 3) }),
-                new TypeChainEntry({ name: 'CharlieProp', type: new ReferenceType('Charlie', 'Alpha.Beta.CharlieProp', SymbolTypeFlag.runtime, () => null), data: { flags: SymbolTypeFlag.runtime }, range: util.createRange(3, 3, 4, 4) })
+                new TypeChainEntry({ name: 'AlphaNamespace', type: new NamespaceType('Alpha'), data: { flags: SymbolTypeFlag.runtime }, astNode: nodes[0] }),
+                new TypeChainEntry({ name: 'BetaProp', type: new ClassType('Beta'), data: { flags: SymbolTypeFlag.runtime }, astNode: nodes[1] }),
+                new TypeChainEntry({ name: 'CharlieProp', type: new ReferenceType('Charlie', 'Alpha.Beta.CharlieProp', SymbolTypeFlag.runtime, () => null), data: { flags: SymbolTypeFlag.runtime }, astNode: nodes[2] })
             ];
 
             const result = util.processTypeChain(chain);
@@ -948,9 +974,13 @@ describe('util', () => {
         });
 
         it('respects the separatorToken', () => {
+            const nodes = [
+                createVariableExpression('Custom', util.createRange(1, 1, 2, 2)),
+                createVariableExpression('someCallFunc', util.createRange(2, 2, 3, 3))
+            ];
             const chain = [
-                new TypeChainEntry({ name: 'roSGNodeCustom', type: new ComponentType('Custom'), data: { flags: SymbolTypeFlag.runtime }, range: util.createRange(1, 1, 2, 2) }),
-                new TypeChainEntry({ name: 'someCallFunc', type: new TypedFunctionType(VoidType.instance), data: { flags: SymbolTypeFlag.runtime }, range: util.createRange(2, 2, 3, 3), separatorToken: createToken(TokenKind.Callfunc) })
+                new TypeChainEntry({ name: 'roSGNodeCustom', type: new ComponentType('Custom'), data: { flags: SymbolTypeFlag.runtime }, astNode: nodes[0] }),
+                new TypeChainEntry({ name: 'someCallFunc', type: new TypedFunctionType(VoidType.instance), data: { flags: SymbolTypeFlag.runtime }, astNode: nodes[1], separatorToken: createToken(TokenKind.Callfunc) })
             ];
 
             const result = util.processTypeChain(chain);

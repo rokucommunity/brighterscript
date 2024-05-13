@@ -3,6 +3,9 @@ import { Program } from '../../Program';
 import { util } from '../../util';
 import { createSandbox } from 'sinon';
 import { expectZeroDiagnostics, rootDir, trim } from '../../testHelpers.spec';
+import { HoverProcessor } from './HoverProcessor';
+import { createIdentifier, createIntegerLiteral } from '../../astUtils/creators';
+import type { BrsFile } from '../../files/BrsFile';
 let sinon = createSandbox();
 
 const fence = (code: string) => util.mdFence(code, 'brightscript');
@@ -37,6 +40,16 @@ describe('HoverProcessor', () => {
     });
 
     describe('BrsFile', () => {
+        it('getConstHover does not crash on expression with missing range', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', ``);
+
+            const processor = new HoverProcessor({} as any);
+            const expression = createIntegerLiteral('1');
+            expect(
+                processor['getConstHover'](createIdentifier('hello'), file, program.getScopeByName('source'), expression)
+            ).to.eql(undefined);
+        });
+
         it('works for param types', () => {
             const file = program.setFile('source/main.brs', `
                 sub DoSomething(name as string)
