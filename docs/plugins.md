@@ -188,6 +188,38 @@ export interface CompilerPlugin {
      */
     afterProvideHover?: PluginHandler<AfterProvideHoverEvent>;
 
+    /**
+     * Called before the `provideDefinition` hook
+     */
+    beforeProvideDefinition?(event: BeforeProvideDefinitionEvent): any;
+    /**
+     * Provide one or more `Location`s where the symbol at the given position was originally defined
+     * @param event
+     */
+    provideDefinition?(event: ProvideDefinitionEvent): any;
+    /**
+     * Called after `provideDefinition`. Use this if you want to intercept or sanitize the definition data provided by bsc or other plugins
+     * @param event
+     */
+    afterProvideDefinition?(event: AfterProvideDefinitionEvent): any;
+
+
+    /**
+     * Called before the `provideReferences` hook
+     */
+    beforeProvideReferences?(event: BeforeProvideReferencesEvent): any;
+    /**
+     * Provide all of the `Location`s where the symbol at the given position is located
+     * @param event
+     */
+    provideReferences?(event: ProvideReferencesEvent): any;
+    /**
+     * Called after `provideReferences`. Use this if you want to intercept or sanitize the references data provided by bsc or other plugins
+     * @param event
+     */
+    afterProvideReferences?(event: AfterProvideReferencesEvent): any;
+
+
     onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
     //scope events
     afterScopeCreate?: (scope: Scope) => void;

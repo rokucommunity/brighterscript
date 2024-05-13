@@ -12,7 +12,7 @@ import { XmlFile } from './XmlFile';
 import { standardizePath as s } from '../util';
 import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
 import { ProgramBuilder } from '../ProgramBuilder';
-import { LogLevel } from '../Logger';
+import { LogLevel } from '../logging';
 import { isXmlFile } from '../astUtils/reflection';
 import { tempDir, rootDir, stagingDir } from '../testHelpers.spec';
 
@@ -898,6 +898,92 @@ describe('XmlFile', () => {
             file.needsTranspiled = true;
             const code = file.transpile().code;
             expect(code.endsWith(`<!--//# sourceMappingURL=./SimpleScene.xml.map -->`)).to.be.true;
+        });
+
+        it('removes script imports if given file is not publishable', () => {
+            program.options.pruneEmptyCodeFiles = true;
+            program.setFile(`components/SimpleScene.bs`, `
+                enum simplescenetypes
+                    hero
+                    intro
+                end enum
+            `);
+
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component
+                    name="SimpleScene" extends="Scene"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:noNamespaceSchemaLocation="https://devtools.web.roku.com/schema/RokuSceneGraph.xsd"
+                >
+                    <script type="text/brightscript" uri="SimpleScene.bs"/>
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://devtools.web.roku.com/schema/RokuSceneGraph.xsd">
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/SimpleScene.xml');
+        });
+
+        it('removes extra imports found via dependencies if given file is not publishable', () => {
+            program.options.pruneEmptyCodeFiles = true;
+            program.setFile(`source/simplescenetypes.bs`, `
+                enum SimpleSceneTypes
+                    world = "world"
+                end enum
+            `);
+            program.setFile(`components/SimpleScene.bs`, `
+                import "pkg:/source/simplescenetypes.bs"
+
+                sub init()
+                    ? "Hello " + SimpleSceneTypes.world
+                end sub
+            `);
+
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component
+                    name="SimpleScene" extends="Scene"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:noNamespaceSchemaLocation="https://devtools.web.roku.com/schema/RokuSceneGraph.xsd"
+                >
+                    <script type="text/brightscript" uri="SimpleScene.bs"/>
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://devtools.web.roku.com/schema/RokuSceneGraph.xsd">
+                    <script type="text/brightscript" uri="SimpleScene.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/SimpleScene.xml');
+        });
+
+        it('removes imports of empty brightscript files', () => {
+            program.options.pruneEmptyCodeFiles = true;
+            program.setFile(`components/EmptyFile.brs`, '');
+            program.setFile(`components/SimpleScene.brs`, `
+                sub init()
+                    ? "Hello World"
+                end sub
+            `);
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component
+                    name="SimpleScene" extends="Scene"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:noNamespaceSchemaLocation="https://devtools.web.roku.com/schema/RokuSceneGraph.xsd"
+                >
+                    <script type="text/brightscript" uri="SimpleScene.brs"/>
+                    <script type="text/brightscript" uri="EmptyFile.brs"/>
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://devtools.web.roku.com/schema/RokuSceneGraph.xsd">
+                    <script type="text/brightscript" uri="SimpleScene.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/SimpleScene.xml');
         });
     });
 

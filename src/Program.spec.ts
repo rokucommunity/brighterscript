@@ -15,13 +15,13 @@ import type { FunctionStatement, PrintStatement } from './parser/Statement';
 import { EmptyStatement } from './parser/Statement';
 import { expectCompletionsExcludes, expectCompletionsIncludes, expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
 import { doesNotThrow } from 'assert';
-import { Logger } from './Logger';
 import { createVisitor, WalkMode } from './astUtils/visitors';
 import { isBrsFile } from './astUtils/reflection';
 import type { LiteralExpression } from './parser/Expression';
 import type { AstEditor } from './astUtils/AstEditor';
 import { tempDir, rootDir, stagingDir } from './testHelpers.spec';
 import type { BsDiagnostic } from './interfaces';
+import { createLogger } from './logging';
 
 let sinon = sinonImport.createSandbox();
 
@@ -188,7 +188,7 @@ describe('Program', () => {
                 beforeFileParse: beforeFileParse,
                 afterFileParse: afterFileParse,
                 afterFileValidate: afterFileValidate
-            }], { logger: new Logger() });
+            }], { logger: createLogger() });
 
             //add a new source file
             program.setFile('source/main.brs', '');
@@ -507,7 +507,7 @@ describe('Program', () => {
 
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('DoSomething')
+                DiagnosticMessages.cannotFindFunction('DoSomething')
             ]);
         });
 
@@ -700,6 +700,92 @@ describe('Program', () => {
                 ...DiagnosticMessages.referencedFileDoesNotExist(),
                 range: Range.create(2, 42, 2, 72)
             }]);
+        });
+
+        it('accepts libpkg .brs script reference', () => {
+            program.setFile('components/component1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="HeroScene" extends="Scene">
+                    <script type="text/brightscript" uri="libpkg:/components/component1.brs" />
+                </component>
+            `);
+            program.setFile('components/component1.brs', '');
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('accepts libpkg .bs script reference', () => {
+            program.setFile('components/component1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="HeroScene" extends="Scene">
+                    <script type="text/brightscript" uri="libpkg:/components/component1.bs" />
+                </component>
+            `);
+            program.setFile('components/component1.bs', '');
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not set function not found diagnostic for function in libpkg referenced script reference', () => {
+            program.setFile('components/component1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="HeroScene" extends="Scene">
+                    <script type="text/brightscript" uri="libpkg:/components/component1.brs" />
+                    <interface>
+                        <function name="isFound"/>
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/component1.brs', `
+                function isFound()
+                end function`
+            );
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not set function not found diagnostic for function in libpkg referenced .bs script reference', () => {
+            program.setFile('components/component1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="HeroScene" extends="Scene">
+                    <script type="text/brightscript" uri="libpkg:/components/component1.bs" />
+                    <interface>
+                        <function name="isFound"/>
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/component1.bs', `
+                function isFound()
+                end function`
+            );
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('sets function not found diagnostic for missing function in libpkg referenced script reference', () => {
+            program.setFile('components/component1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="HeroScene" extends="Scene">
+                    <script type="text/brightscript" uri="libpkg:/components/component1.brs" />
+                    <interface>
+                        <function name="isNotFound"/>
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/component1.brs', `
+                function isFound()
+                end function`
+            );
+
+            program.validate();
+
+            expectDiagnostics(program, [
+                DiagnosticMessages.xmlFunctionNotFound('isNotFound')
+            ]);
         });
 
         it('adds warning instead of error on mismatched upper/lower case script import', () => {
@@ -1490,7 +1576,7 @@ describe('Program', () => {
 
             //there should be an error when calling DoParentThing, since it doesn't exist on child or parent
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('DoParentThing')
+                DiagnosticMessages.cannotFindFunction('DoParentThing')
             ]);
 
             //add the script into the parent
@@ -1648,7 +1734,7 @@ describe('Program', () => {
             ];
 
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('C')
+                DiagnosticMessages.cannotFindFunction('C')
             ]);
         });
     });
@@ -2158,6 +2244,51 @@ describe('Program', () => {
             ).to.eql(
                 s`${sourceRoot}/source/main.bs`
             );
+        });
+
+        it('does not publish files that are empty', async () => {
+            let sourceRoot = s`${tempDir}/sourceRootFolder`;
+            program = new Program({
+                rootDir: rootDir,
+                stagingDir: stagingDir,
+                sourceRoot: sourceRoot,
+                sourceMap: true,
+                pruneEmptyCodeFiles: true
+            });
+            program.setFile('source/types.bs', `
+                enum mainstyle
+                    dark = "dark"
+                    light = "light"
+                end enum
+            `);
+            program.setFile('source/main.bs', `
+                import "pkg:/source/types.bs"
+
+                sub main()
+                    ? "The night is " + mainstyle.dark + " and full of terror"
+                end sub
+            `);
+            await program.transpile([
+                {
+                    src: s`${rootDir}/source/main.bs`,
+                    dest: s`source/main.bs`
+                },
+                {
+                    src: s`${rootDir}/source/types.bs`,
+                    dest: s`source/types.bs`
+                }
+            ], stagingDir);
+
+            expect(trimMap(
+                fsExtra.readFileSync(s`${stagingDir}/source/main.brs`).toString()
+            )).to.eql(trim`
+                'import "pkg:/source/types.bs"
+
+                sub main()
+                    ? "The night is " + "dark" + " and full of terror"
+                end sub
+            `);
+            expect(fsExtra.pathExistsSync(s`${stagingDir}/source/types.brs`)).to.be.false;
         });
     });
 
@@ -2980,9 +3111,9 @@ describe('Program', () => {
                 supports_input_launch=1
                 bs_const=DEBUG=false
             `);
-            program.options = {
+            program.options = util.normalizeConfig({
                 rootDir: tempDir
-            };
+            });
         });
 
         afterEach(() => {

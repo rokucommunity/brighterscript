@@ -1,13 +1,14 @@
 import * as debounce from 'debounce-promise';
 import * as path from 'path';
 import { rokuDeploy } from 'roku-deploy';
-import type { BsConfig } from './BsConfig';
+import type { LogLevel as RokuDeployLogLevel } from 'roku-deploy/dist/Logger';
+import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import type { BscFile, BsDiagnostic, FileObj, FileResolver } from './interfaces';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
 import { Watcher } from './Watcher';
 import { DiagnosticSeverity } from 'vscode-languageserver';
-import { Logger, LogLevel } from './Logger';
+import { LogLevel, createLogger } from './logging';
 import PluginInterface from './PluginInterface';
 import * as diagnosticUtils from './diagnosticUtils';
 import * as fsExtra from 'fs-extra';
@@ -33,11 +34,11 @@ export class ProgramBuilder {
      */
     public allowConsoleClearing = true;
 
-    public options: BsConfig;
+    public options: FinalizedBsConfig = util.normalizeConfig({});
     private isRunning = false;
-    private watcher: Watcher;
-    public program: Program;
-    public logger = new Logger();
+    private watcher: Watcher | undefined;
+    public program: Program | undefined;
+    public logger = createLogger();
     public plugins: PluginInterface = new PluginInterface([], { logger: this.logger });
     private fileResolvers = [] as FileResolver[];
 
@@ -68,7 +69,10 @@ export class ProgramBuilder {
     private staticDiagnostics = [] as BsDiagnostic[];
 
     public addDiagnostic(srcPath: string, diagnostic: Partial<BsDiagnostic>) {
-        let file: BscFile = this.program.getFile(srcPath);
+        if (!this.program) {
+            throw new Error('Cannot call `ProgramBuilder.addDiagnostic` before `ProgramBuilder.run()`');
+        }
+        let file: BscFile | undefined = this.program.getFile(srcPath);
         if (!file) {
             file = {
                 pkgPath: this.program.getPkgPath(srcPath),
@@ -91,7 +95,7 @@ export class ProgramBuilder {
     }
 
     public async run(options: BsConfig) {
-        this.logger.logLevel = options.logLevel as LogLevel;
+        this.logger.logLevel = options.logLevel;
 
         if (this.isRunning) {
             throw new Error('Server is already running');
@@ -122,9 +126,9 @@ export class ProgramBuilder {
             //For now, just use a default options object so we have a functioning program
             this.options = util.normalizeConfig({});
         }
-        this.logger.logLevel = this.options.logLevel as LogLevel;
+        this.logger.logLevel = this.options.logLevel;
 
-        this.program = this.createProgram();
+        this.createProgram();
 
         //parse every file in the entire project
         await this.loadAllFilesAST();
@@ -139,10 +143,11 @@ export class ProgramBuilder {
     }
 
     protected createProgram() {
-        const program = new Program(this.options, this.logger, this.plugins);
+        this.program = new Program(this.options, this.logger, this.plugins);
 
-        this.plugins.emit('afterProgramCreate', program);
-        return program;
+        this.plugins.emit('afterProgramCreate', this.program);
+
+        return this.program;
     }
 
     protected loadPlugins() {
@@ -179,7 +184,7 @@ export class ProgramBuilder {
      * A handle for the watch mode interval that keeps the process alive.
      * We need this so we can clear it if the builder is disposed
      */
-    private watchInterval: NodeJS.Timer;
+    private watchInterval: NodeJS.Timer | undefined;
 
     public enableWatchMode() {
         this.watcher = new Watcher(this.options);
@@ -210,6 +215,9 @@ export class ProgramBuilder {
 
         //on any file watcher event
         this.watcher.on('all', async (event: string, thePath: string) => { //eslint-disable-line @typescript-eslint/no-misused-promises
+            if (!this.program) {
+                throw new Error('Internal invariant exception: somehow file watcher ran before `ProgramBuilder.run()`');
+            }
             thePath = s`${path.resolve(this.rootDir, thePath)}`;
             if (event === 'add' || event === 'change') {
                 const fileObj = {
@@ -237,6 +245,9 @@ export class ProgramBuilder {
      * The rootDir for this program.
      */
     public get rootDir() {
+        if (!this.program) {
+            throw new Error('Cannot access `ProgramBuilder.rootDir` until after `ProgramBuilder.run()`');
+        }
         return this.program.options.rootDir;
     }
 
@@ -296,8 +307,8 @@ export class ProgramBuilder {
             //sort the diagnostics in line and column order
             let sortedDiagnostics = diagnosticsForFile.sort((a, b) => {
                 return (
-                    a.range.start.line - b.range.start.line ||
-                    a.range.start.character - b.range.start.character
+                    (a.range?.start.line ?? -1) - (b.range?.start.line ?? -1) ||
+                    (a.range?.start.character ?? -1) - (b.range?.start.character ?? -1)
                 );
             });
 
@@ -390,7 +401,7 @@ export class ProgramBuilder {
                 await this.logger.time(LogLevel.log, [`Creating package at ${this.options.outFile}`], async () => {
                     await rokuDeploy.zipPackage({
                         ...this.options,
-                        logLevel: this.options.logLevel as LogLevel,
+                        logLevel: this.options.logLevel as unknown as RokuDeployLogLevel,
                         outDir: util.getOutDir(this.options),
                         outFile: path.basename(this.options.outFile)
                     });
@@ -408,10 +419,12 @@ export class ProgramBuilder {
             let options = util.cwdWork(this.options.cwd, () => {
                 return rokuDeploy.getOptions({
                     ...this.options,
-                    logLevel: this.options.logLevel as LogLevel,
+                    logLevel: this.options.logLevel as unknown as RokuDeployLogLevel,
                     outDir: util.getOutDir(this.options),
                     outFile: path.basename(this.options.outFile)
-                });
+
+                    //rokuDeploy's return type says all its fields can be nullable, but it sets values for all of them.
+                }) as any as Required<ReturnType<typeof rokuDeploy.getOptions>>;
             });
 
             //get every file referenced by the files array
@@ -419,8 +432,9 @@ export class ProgramBuilder {
 
             //remove files currently loaded in the program, we will transpile those instead (even if just for source maps)
             let filteredFileMap = [] as FileObj[];
+
             for (let fileEntry of fileMap) {
-                if (this.program.hasFile(fileEntry.src) === false) {
+                if (this.program!.hasFile(fileEntry.src) === false) {
                     filteredFileMap.push(fileEntry);
                 }
             }
@@ -440,7 +454,7 @@ export class ProgramBuilder {
 
             await this.logger.time(LogLevel.log, ['Transpiling'], async () => {
                 //transpile any brighterscript files
-                await this.program.transpile(fileMap, options.stagingDir);
+                await this.program!.transpile(fileMap, options.stagingDir);
             });
 
             this.plugins.emit('afterPublish', this, fileMap);
@@ -453,7 +467,7 @@ export class ProgramBuilder {
             await this.logger.time(LogLevel.log, ['Deploying package to', this.options.host], async () => {
                 await rokuDeploy.publish({
                     ...this.options,
-                    logLevel: this.options.logLevel as LogLevel,
+                    logLevel: this.options.logLevel as unknown as RokuDeployLogLevel,
                     outDir: util.getOutDir(this.options),
                     outFile: path.basename(this.options.outFile)
                 });
@@ -491,12 +505,12 @@ export class ProgramBuilder {
             }
 
             if (manifestFile) {
-                this.program.loadManifest(manifestFile);
+                this.program!.loadManifest(manifestFile, false);
             }
 
             const loadFile = async (fileObj) => {
                 try {
-                    this.program.setFile(fileObj, await this.getFileContents(fileObj.src));
+                    this.program!.setFile(fileObj, await this.getFileContents(fileObj.src));
                 } catch (e) {
                     this.logger.log(e); // log the error, but don't fail this process because the file might be fixable later
                 }

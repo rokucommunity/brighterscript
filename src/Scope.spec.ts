@@ -7,7 +7,6 @@ import { Program } from './Program';
 import { ParseMode } from './parser/Parser';
 import PluginInterface from './PluginInterface';
 import { expectDiagnostics, expectZeroDiagnostics, trim } from './testHelpers.spec';
-import { Logger } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { NamespaceStatement } from './parser/Statement';
 import type { OnScopeValidateEvent } from './interfaces';
@@ -933,7 +932,7 @@ describe('Scope', () => {
             //validate the scope
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('DoB')
+                DiagnosticMessages.cannotFindFunction('DoB')
             ]);
         });
 
@@ -949,7 +948,7 @@ describe('Scope', () => {
             //validate the scope
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('DoC')
+                DiagnosticMessages.cannotFindFunction('DoC')
             ]);
         });
 
@@ -1115,7 +1114,7 @@ describe('Scope', () => {
             program.setFile(s`components/comp.brs`, ``);
             const sourceScope = program.getScopeByName('source');
             const compScope = program.getScopeByName('components/comp.xml');
-            program.plugins = new PluginInterface([], { logger: new Logger() });
+            program.plugins = new PluginInterface();
             const plugin = program.plugins.add({
                 name: 'Emits validation events',
                 beforeScopeValidate: sinon.spy(),

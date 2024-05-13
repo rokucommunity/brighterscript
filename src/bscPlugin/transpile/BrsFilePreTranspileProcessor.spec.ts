@@ -3,7 +3,7 @@ import * as fsExtra from 'fs-extra';
 import { Program } from '../../Program';
 import { standardizePath as s } from '../../util';
 import { tempDir, rootDir } from '../../testHelpers.spec';
-import { Logger, LogLevel } from '../../Logger';
+import { LogLevel, createLogger } from '../../logging';
 import PluginInterface from '../../PluginInterface';
 const sinon = createSandbox();
 
@@ -13,7 +13,9 @@ describe('BrsFile', () => {
 
     beforeEach(() => {
         fsExtra.emptyDirSync(tempDir);
-        const logger = new Logger(LogLevel.warn);
+        const logger = createLogger({
+            logLevel: LogLevel.warn
+        });
         program = new Program({ rootDir: rootDir, sourceMap: true }, logger, new PluginInterface([], {
             logger: logger,
             suppressErrors: false
@@ -40,9 +42,7 @@ describe('BrsFile', () => {
                     print Direction.up
                 end sub
             `);
-
             await program.transpile([], s`${tempDir}/out`);
         });
     });
 });
-

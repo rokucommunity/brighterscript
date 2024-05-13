@@ -1,5 +1,5 @@
 import { URI } from 'vscode-uri';
-import { isBrsFile, isLiteralExpression, isNamespaceStatement, isXmlScope } from '../../astUtils/reflection';
+import { isBrsFile, isCallExpression, isLiteralExpression, isNamespaceStatement, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -100,11 +100,20 @@ export class ScopeValidator {
                 !symbolTable?.hasSymbol(firstPart.name?.text) &&
                 !namespaceContainer
             ) {
-                this.addMultiScopeDiagnostic({
-                    file: file as BscFile,
-                    ...DiagnosticMessages.cannotFindName(firstPart.name?.text),
-                    range: firstPart.name.range
-                });
+                //flag functions differently than all other variables
+                if (isCallExpression(firstPart.parent) && firstPart.parent.callee === firstPart) {
+                    this.addMultiScopeDiagnostic({
+                        file: file as BscFile,
+                        ...DiagnosticMessages.cannotFindFunction(firstPart.name?.text),
+                        range: firstPart.name.range
+                    });
+                } else {
+                    this.addMultiScopeDiagnostic({
+                        file: file as BscFile,
+                        ...DiagnosticMessages.cannotFindName(firstPart.name?.text),
+                        range: firstPart.name.range
+                    });
+                }
                 //skip to the next expression
                 continue;
             }
@@ -152,11 +161,20 @@ export class ScopeValidator {
                             }]
                         });
                     } else {
-                        this.addMultiScopeDiagnostic({
-                            ...DiagnosticMessages.cannotFindName(part.name.text, entityName),
-                            range: part.name.range,
-                            file: file
-                        });
+                        //flag functions differently than all other variables
+                        if (isCallExpression(firstPart.parent) && firstPart.parent.callee === firstPart) {
+                            this.addMultiScopeDiagnostic({
+                                ...DiagnosticMessages.cannotFindFunction(part.name.text, entityName),
+                                range: part.name.range,
+                                file: file
+                            });
+                        } else {
+                            this.addMultiScopeDiagnostic({
+                                ...DiagnosticMessages.cannotFindName(part.name.text, entityName),
+                                range: part.name.range,
+                                file: file
+                            });
+                        }
                     }
                     //no need to add another diagnostic for future unknown items
                     continue outer;

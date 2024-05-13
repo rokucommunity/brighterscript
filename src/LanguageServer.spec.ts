@@ -128,7 +128,7 @@ describe('LanguageServer', () => {
         const file = program.setFile(filePath, contents);
         if (file) {
             const document = TextDocument.create(util.pathToUri(file.srcPath), 'brightscript', 1, contents);
-            server['documents']['_documents'][document.uri] = document;
+            (server['documents']['_syncedDocuments'] as Map<string, TextDocument>).set(document.uri, document);
             return document;
         }
     }
@@ -883,8 +883,8 @@ describe('LanguageServer', () => {
                 expect(namespaceSymbol.name).to.equal('MyFirstNamespace');
                 const classChildrenSymbols = namespaceSymbol.children!;
                 expect(classChildrenSymbols.length).to.equal(2);
-                expect(classChildrenSymbols[0].name).to.equal('MyFirstNamespace.pi');
-                expect(classChildrenSymbols[1].name).to.equal('MyFirstNamespace.buildAwesome');
+                expect(classChildrenSymbols[0].name).to.equal('pi');
+                expect(classChildrenSymbols[1].name).to.equal('buildAwesome');
             }
         });
     });
@@ -969,17 +969,14 @@ describe('LanguageServer', () => {
         });
 
         it('should work for nested class as well', async () => {
-            const nestedNamespace = 'containerNamespace';
-            const nestedClassName = 'nestedClass';
-
             addScriptFile('nested', `
-                namespace ${nestedNamespace}
-                    class ${nestedClassName}
-                        function pi()
+                namespace animals
+                    class dog
+                        function run()
                             return 3.141592653589793
                         end function
 
-                        function buildAwesome()
+                        function speak()
                             return 42
                         end function
                     end class
@@ -990,14 +987,17 @@ describe('LanguageServer', () => {
             // We run the check twice as the first time is with it not cached and second time is with it cached
             for (let i = 0; i < 2; i++) {
                 const symbols = await server['onWorkspaceSymbol']({} as any);
-                expect(symbols.length).to.equal(4);
-                expect(symbols[0].name).to.equal(`pi`);
-                expect(symbols[0].containerName).to.equal(`${nestedNamespace}.${nestedClassName}`);
-                expect(symbols[1].name).to.equal(`buildAwesome`);
-                expect(symbols[1].containerName).to.equal(`${nestedNamespace}.${nestedClassName}`);
-                expect(symbols[2].name).to.equal(`${nestedNamespace}.${nestedClassName}`);
-                expect(symbols[2].containerName).to.equal(nestedNamespace);
-                expect(symbols[3].name).to.equal(nestedNamespace);
+                expect(
+                    symbols.map(x => ({
+                        name: x.name,
+                        containerName: x.containerName
+                    })).sort((a, b) => a.name.localeCompare(b.name))
+                ).to.eql([
+                    { name: 'animals', containerName: undefined },
+                    { name: `dog`, containerName: 'animals' },
+                    { name: `run`, containerName: 'dog' },
+                    { name: 'speak', containerName: 'dog' }
+                ]);
             }
         });
     });

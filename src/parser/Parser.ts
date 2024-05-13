@@ -83,12 +83,14 @@ import {
     TemplateStringExpression,
     TemplateStringQuasiExpression,
     TernaryExpression,
+    TypeCastExpression,
     UnaryExpression,
     VariableExpression,
     XmlAttributeGetExpression
 } from './Expression';
 import type { Diagnostic, Range } from 'vscode-languageserver';
-import { Logger } from '../Logger';
+import type { Logger } from '../logging';
+import { createLogger } from '../logging';
 import { isAAMemberExpression, isAnnotationExpression, isBinaryExpression, isCallExpression, isCallfuncExpression, isMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
@@ -211,15 +213,17 @@ export class Parser {
      * @returns the same instance of the parser which contains the diagnostics and statements
      */
     public parse(toParse: Token[] | string, options?: ParseOptions) {
+        this.logger = options?.logger ?? createLogger();
+        options = this.sanitizeParseOptions(options);
+        this.options = options;
+
         let tokens: Token[];
         if (typeof toParse === 'string') {
-            tokens = Lexer.scan(toParse).tokens;
+            tokens = Lexer.scan(toParse, { trackLocations: options.trackLocations }).tokens;
         } else {
             tokens = toParse;
         }
-        this.logger = options?.logger ?? new Logger();
         this.tokens = tokens;
-        this.options = this.sanitizeParseOptions(options);
         this.allowedLocalIdentifiers = [
             ...AllowedLocalIdentifiers,
             //when in plain brightscript mode, the BrighterScript source literals can be used as regular variables
@@ -276,10 +280,10 @@ export class Parser {
     }
 
     private sanitizeParseOptions(options: ParseOptions) {
-        return {
-            mode: 'brightscript',
-            ...(options || {})
-        } as ParseOptions;
+        options ??= {};
+        options.mode ??= ParseMode.BrightScript;
+        options.trackLocations ??= true;
+        return options;
     }
 
     /**
@@ -488,6 +492,11 @@ export class Parser {
         let body = [] as Statement[];
         while (this.checkAny(TokenKind.Comment, TokenKind.Identifier, TokenKind.At, ...AllowedProperties)) {
             try {
+                //break out of this loop if we encountered the `EndInterface` token not followed by `as`
+                if (this.check(TokenKind.EndInterface) && !this.checkNext(TokenKind.As)) {
+                    break;
+                }
+
                 let decl: Statement;
 
                 //collect leading annotations
@@ -527,10 +536,6 @@ export class Parser {
 
             //ensure statement separator
             this.consumeStatementSeparators();
-            //break out of this loop if we encountered the `EndInterface` token not followed by `as`
-            if (this.check(TokenKind.EndInterface) && !this.checkNext(TokenKind.As)) {
-                break;
-            }
         }
 
         //consume the final `end interface` token
@@ -881,13 +886,6 @@ export class Parser {
             let typeToken: Token;
             if (!this.check(TokenKind.RightParen)) {
                 do {
-                    if (params.length >= CallExpression.MaximumArguments) {
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.tooManyCallableParameters(params.length, CallExpression.MaximumArguments),
-                            range: this.peek().range
-                        });
-                    }
-
                     params.push(this.functionParameter());
                 } while (this.match(TokenKind.Comma));
             }
@@ -1004,7 +1002,7 @@ export class Parser {
         // parse argument default value
         if (this.match(TokenKind.Equal)) {
             // it seems any expression is allowed here -- including ones that operate on other arguments!
-            defaultValue = this.expression();
+            defaultValue = this.expression(false);
         }
 
         let asToken = null;
@@ -1037,6 +1035,14 @@ export class Parser {
                 range: name.range
             });
         }
+        if (this.check(TokenKind.As)) {
+            // v1 syntax allows type declaration on lhs of assignment
+            this.warnIfNotBrighterScriptMode('typed assignment');
+
+            this.advance(); // skip 'as'
+            this.typeToken(); // skip typeToken;
+        }
+
         let operator = this.consume(
             DiagnosticMessages.expectedOperatorAfterIdentifier(AssignmentOperators, name.text),
             ...AssignmentOperators
@@ -1169,10 +1175,33 @@ export class Parser {
         // `let`, (...) keyword. As such, we must check the token *after* an identifier to figure
         // out what to do with it.
         if (
-            this.checkAny(TokenKind.Identifier, ...this.allowedLocalIdentifiers) &&
-            this.checkAnyNext(...AssignmentOperators)
+            this.checkAny(TokenKind.Identifier, ...this.allowedLocalIdentifiers)
         ) {
-            return this.assignment();
+            if (this.checkAnyNext(...AssignmentOperators)) {
+                return this.assignment();
+            } else if (this.checkNext(TokenKind.As)) {
+                // may be a typed assignment - this is v1 syntax
+                const backtrack = this.current;
+                let validTypeExpression = false;
+                try {
+                    // skip the identifier, and check for valid type expression
+                    this.advance();
+                    // skip the 'as'
+                    this.advance();
+                    // check if there is a valid type
+                    const typeToken = this.typeToken(true);
+                    const allowedNameKinds = [TokenKind.Identifier, ...DeclarableTypes, ...this.allowedLocalIdentifiers];
+                    validTypeExpression = allowedNameKinds.includes(typeToken.kind);
+                } catch (e) {
+                    // ignore any errors
+                } finally {
+                    this.current = backtrack;
+                }
+                if (validTypeExpression) {
+                    // there is a valid 'as' and type expression
+                    return this.assignment();
+                }
+            }
         }
 
         //some BrighterScript keywords are allowed as a local identifiers, so we need to check for them AFTER the assignment check
@@ -1336,7 +1365,7 @@ export class Parser {
         //if this comment is on the same line as the previous statement,
         //then this comment should be treated as a single-line comment
         let prev = this.previous();
-        if (prev?.range.end.line === this.peek().range.start.line) {
+        if (prev?.range?.end.line === this.peek().range?.start.line) {
             return new CommentStatement([this.advance()]);
         } else {
             let comments = [this.advance()];
@@ -1387,13 +1416,21 @@ export class Parser {
     /**
      * Get an expression with identifiers separated by periods. Useful for namespaces and class extends
      */
-    private getNamespacedVariableNameExpression() {
-        let firstIdentifier = this.consume(
-            DiagnosticMessages.expectedIdentifierAfterKeyword(this.previous().text),
-            TokenKind.Identifier,
-            ...this.allowedLocalIdentifiers
-        ) as Identifier;
-
+    private getNamespacedVariableNameExpression(ignoreDiagnostics = false) {
+        let firstIdentifier: Identifier;
+        if (ignoreDiagnostics) {
+            if (this.checkAny(...this.allowedLocalIdentifiers)) {
+                firstIdentifier = this.advance() as Identifier;
+            } else {
+                throw new Error();
+            }
+        } else {
+            firstIdentifier = this.consume(
+                DiagnosticMessages.expectedIdentifierAfterKeyword(this.previous().text),
+                TokenKind.Identifier,
+                ...this.allowedLocalIdentifiers
+            ) as Identifier;
+        }
         let expr: DottedGetExpression | VariableExpression;
 
         if (firstIdentifier) {
@@ -2052,7 +2089,8 @@ export class Parser {
                         ? right
                         : new BinaryExpression(left, operator, right),
                     left.openingSquare,
-                    left.closingSquare
+                    left.closingSquare,
+                    left.additionalIndexes
                 );
             } else if (isDottedGetExpression(left)) {
                 return new DottedSetStatement(
@@ -2277,8 +2315,29 @@ export class Parser {
         this.pendingAnnotations = parentAnnotations;
     }
 
-    private expression(): Expression {
-        const expression = this.anonymousFunction();
+    private expression(findTypeCast = true): Expression {
+        let expression = this.anonymousFunction();
+        let asToken: Token;
+        let typeToken: Token;
+        if (findTypeCast) {
+            do {
+                if (this.check(TokenKind.As)) {
+                    this.warnIfNotBrighterScriptMode('type cast');
+                    // Check if this expression is wrapped in any type casts
+                    // allows for multiple casts:
+                    // myVal = foo() as dynamic as string
+
+                    asToken = this.advance();
+                    typeToken = this.typeToken();
+                    if (asToken && typeToken) {
+                        expression = new TypeCastExpression(expression, asToken, typeToken);
+                    }
+                } else {
+                    break;
+                }
+
+            } while (asToken && typeToken);
+        }
         this._references.expressions.add(expression);
         return expression;
     }
@@ -2415,22 +2474,36 @@ export class Parser {
     private indexedGet(expr: Expression) {
         let openingSquare = this.previous();
         let questionDotToken = this.getMatchingTokenAtOffset(-2, TokenKind.QuestionDot);
-        let index: Expression;
-        let closingSquare: Token;
+        let indexes: Expression[] = [];
+
+
+        //consume leading newlines
         while (this.match(TokenKind.Newline)) { }
+
         try {
-            index = this.expression();
+            indexes.push(
+                this.expression()
+            );
+            //consume additional indexes separated by commas
+            while (this.check(TokenKind.Comma)) {
+                //discard the comma
+                this.advance();
+                indexes.push(
+                    this.expression()
+                );
+            }
         } catch (error) {
             this.rethrowNonDiagnosticError(error);
         }
-
+        //consume trailing newlines
         while (this.match(TokenKind.Newline)) { }
-        closingSquare = this.tryConsume(
+
+        const closingSquare = this.tryConsume(
             DiagnosticMessages.expectedRightSquareBraceAfterArrayOrObjectIndex(),
             TokenKind.RightSquareBracket
         );
 
-        return new IndexedGetExpression(expr, index, openingSquare, closingSquare, questionDotToken);
+        return new IndexedGetExpression(expr, indexes.shift(), openingSquare, closingSquare, questionDotToken, indexes);
     }
 
     private newExpression() {
@@ -2579,27 +2652,54 @@ export class Parser {
      * Tries to get the next token as a type
      * Allows for built-in types (double, string, etc.) or namespaced custom types in Brighterscript mode
      * Will return a token of whatever is next to be parsed
+     * Will allow v1 type syntax (typed arrays, union types), but there is no validation on types used this way
      */
-    private typeToken(): Token {
+    private typeToken(ignoreDiagnostics = false): Token {
         let typeToken: Token;
+        let lookForUnions = true;
+        let isAUnion = false;
+        let resultToken;
+        while (lookForUnions) {
+            lookForUnions = false;
 
-        if (this.checkAny(...DeclarableTypes)) {
-            // Token is a built in type
-            typeToken = this.advance();
-        } else if (this.options.mode === ParseMode.BrighterScript) {
-            try {
-                // see if we can get a namespaced identifer
-                const qualifiedType = this.getNamespacedVariableNameExpression();
-                typeToken = createToken(TokenKind.Identifier, qualifiedType.getName(this.options.mode), qualifiedType.range);
-            } catch {
-                //could not get an identifier - just get whatever's next
+            if (this.checkAny(...DeclarableTypes)) {
+                // Token is a built in type
+                typeToken = this.advance();
+            } else if (this.options.mode === ParseMode.BrighterScript) {
+                try {
+                    // see if we can get a namespaced identifer
+                    const qualifiedType = this.getNamespacedVariableNameExpression(ignoreDiagnostics);
+                    typeToken = createToken(TokenKind.Identifier, qualifiedType.getName(this.options.mode), qualifiedType.range);
+                } catch {
+                    //could not get an identifier - just get whatever's next
+                    typeToken = this.advance();
+                }
+            } else {
+                // just get whatever's next
                 typeToken = this.advance();
             }
-        } else {
-            // just get whatever's next
-            typeToken = this.advance();
+            resultToken = resultToken ?? typeToken;
+            if (resultToken && this.options.mode === ParseMode.BrighterScript) {
+                // check for brackets
+                while (this.check(TokenKind.LeftSquareBracket) && this.peekNext().kind === TokenKind.RightSquareBracket) {
+                    const leftBracket = this.advance();
+                    const rightBracket = this.advance();
+                    typeToken = createToken(TokenKind.Identifier, typeToken.text + leftBracket.text + rightBracket.text, util.createBoundingRange(typeToken, leftBracket, rightBracket));
+                    resultToken = createToken(TokenKind.Dynamic, null, typeToken.range);
+                }
+
+                if (this.check(TokenKind.Or)) {
+                    lookForUnions = true;
+                    let orToken = this.advance();
+                    resultToken = createToken(TokenKind.Dynamic, null, util.createBoundingRange(resultToken, typeToken, orToken));
+                    isAUnion = true;
+                }
+            }
         }
-        return typeToken;
+        if (isAUnion) {
+            resultToken = createToken(TokenKind.Dynamic, null, util.createBoundingRange(resultToken, typeToken));
+        }
+        return resultToken;
     }
 
     private primary(): Expression {
@@ -2953,6 +3053,11 @@ export class Parser {
         return this.previous()?.kind === tokenKind;
     }
 
+    /**
+     * Check that the next token kind is the expected kind
+     * @param tokenKind the expected next kind
+     * @returns true if the next tokenKind is the expected value
+     */
     private check(tokenKind: TokenKind): boolean {
         const nextKind = this.peek().kind;
         if (nextKind === TokenKind.Eof) {
@@ -3216,11 +3321,16 @@ export interface ParseOptions {
     /**
      * The parse mode. When in 'BrightScript' mode, no BrighterScript syntax is allowed, and will emit diagnostics.
      */
-    mode: ParseMode;
+    mode?: ParseMode;
     /**
      * A logger that should be used for logging. If omitted, a default logger is used
      */
     logger?: Logger;
+    /**
+     * Should locations be tracked. If false, the `range` property will be omitted
+     * @default true
+     */
+    trackLocations?: boolean;
 }
 
 export class References {

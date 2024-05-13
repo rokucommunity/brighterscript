@@ -40,7 +40,6 @@ import { Deferred } from './deferred';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { ProgramBuilder } from './ProgramBuilder';
 import { standardizePath as s, util } from './util';
-import { Logger } from './Logger';
 import { Throttler } from './Throttler';
 import { KeyedThrottler } from './KeyedThrottler';
 import { DiagnosticCollection } from './DiagnosticCollection';
@@ -48,6 +47,7 @@ import { isBrsFile } from './astUtils/reflection';
 import { encodeSemanticTokens, semanticTokensLegend } from './SemanticTokenUtils';
 import type { BusyStatus } from './BusyStatusTracker';
 import { BusyStatusTracker } from './BusyStatusTracker';
+import { logger } from './logging';
 
 export class LanguageServer {
     private connection = undefined as any as Connection;
@@ -108,12 +108,12 @@ export class LanguageServer {
 
         // Send the current status of the busyStatusTracker anytime it changes
         this.busyStatusTracker.on('change', (status) => {
-            this.sendBusyStatus(status);
+            void this.sendBusyStatus(status);
         });
 
         //listen to all of the output log events and pipe them into the debug channel in the extension
-        this.loggerSubscription = Logger.subscribe((text) => {
-            this.connection.tracer.log(text);
+        this.loggerSubscription = logger.subscribe((message) => {
+            this.connection.tracer.log(message.argsText);
         });
 
         this.connection.onInitialize(this.onInitialize.bind(this));
@@ -187,10 +187,10 @@ export class LanguageServer {
     }
 
     private busyStatusIndex = -1;
-    private sendBusyStatus(status: BusyStatus) {
+    private async sendBusyStatus(status: BusyStatus) {
         this.busyStatusIndex = ++this.busyStatusIndex <= 0 ? 0 : this.busyStatusIndex;
 
-        this.connection.sendNotification(NotificationName.busyStatus, {
+        await this.connection.sendNotification(NotificationName.busyStatus, {
             status: status,
             timestamp: Date.now(),
             index: this.busyStatusIndex,
@@ -411,7 +411,7 @@ export class LanguageServer {
             await this.waitAllProjectFirstRuns(false);
             projectCreatedDeferred.resolve();
         } catch (e: any) {
-            this.sendCriticalFailure(
+            await this.sendCriticalFailure(
                 `Critical failure during BrighterScript language server startup.
                 Please file a github issue and include the contents of the 'BrighterScript Language Server' output channel.
 
@@ -424,8 +424,8 @@ export class LanguageServer {
     /**
      * Send a critical failure notification to the client, which should show a notification of some kind
      */
-    private sendCriticalFailure(message: string) {
-        this.connection.sendNotification('critical-failure', message);
+    private async sendCriticalFailure(message: string) {
+        await this.connection.sendNotification('critical-failure', message);
     }
 
     /**
@@ -444,7 +444,7 @@ export class LanguageServer {
                 //the first run failed...that won't change unless we reload the workspace, so replace with resolved promise
                 //so we don't show this error again
                 project.firstRunPromise = Promise.resolve();
-                this.sendCriticalFailure(`BrighterScript language server failed to start: \n${e.message}`);
+                await this.sendCriticalFailure(`BrighterScript language server failed to start: \n${e.message}`);
             }
         }
     }
@@ -486,7 +486,7 @@ export class LanguageServer {
             if (await util.pathExists(configFilePath)) {
                 return configFilePath;
             } else {
-                this.sendCriticalFailure(`Cannot find config file specified in user / workspace settings at '${configFilePath}'`);
+                await this.sendCriticalFailure(`Cannot find config file specified in user / workspace settings at '${configFilePath}'`);
             }
         }
 
@@ -1119,7 +1119,7 @@ export class LanguageServer {
             // validate all projects
             await this.validateAllThrottled();
         } catch (e: any) {
-            this.sendCriticalFailure(`Critical error parsing/validating ${filePath}: ${e.message}`);
+            await this.sendCriticalFailure(`Critical error parsing/validating ${filePath}: ${e.message}`);
         }
     }
 
@@ -1140,7 +1140,7 @@ export class LanguageServer {
             );
         } catch (e: any) {
             this.connection.console.error(e);
-            this.sendCriticalFailure(`Critical error validating project: ${e.message}${e.stack ?? ''}`);
+            await this.sendCriticalFailure(`Critical error validating project: ${e.message}${e.stack ?? ''}`);
         }
     }
 
@@ -1297,7 +1297,7 @@ export class LanguageServer {
                 const uri = URI.file(filePath).toString();
                 const diagnostics = patch[filePath].map(d => util.toDiagnostic(d, uri));
 
-                this.connection.sendDiagnostics({
+                await this.connection.sendDiagnostics({
                     uri: uri,
                     diagnostics: diagnostics
                 });

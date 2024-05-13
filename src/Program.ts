@@ -1,19 +1,20 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location } from 'vscode-languageserver';
+import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location, DocumentSymbol } from 'vscode-languageserver';
 import { CompletionItemKind } from 'vscode-languageserver';
-import type { BsConfig } from './BsConfig';
+import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover } from './interfaces';
+import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
 import { DependencyGraph } from './DependencyGraph';
-import { Logger, LogLevel } from './Logger';
+import type { Logger } from './logging';
+import { LogLevel, createLogger } from './logging';
 import chalk from 'chalk';
 import { globalFile } from './globalCallables';
 import { parseManifest, getBsConst } from './preprocessor/Manifest';
@@ -60,12 +61,12 @@ export class Program {
         /**
          * The root directory for this program
          */
-        public options: BsConfig,
+        options: BsConfig,
         logger?: Logger,
         plugins?: PluginInterface
     ) {
         this.options = util.normalizeConfig(options);
-        this.logger = logger || new Logger(options.logLevel as LogLevel);
+        this.logger = logger ?? createLogger(options);
         this.plugins = plugins || new PluginInterface([], { logger: this.logger });
 
         //inject the bsc plugin as the first plugin in the stack.
@@ -77,6 +78,7 @@ export class Program {
         this.createGlobalScope();
     }
 
+    public options: FinalizedBsConfig;
     public logger: Logger;
 
     private createGlobalScope() {
@@ -109,7 +111,7 @@ export class Program {
      * A scope that contains all built-in global functions.
      * All scopes should directly or indirectly inherit from this scope
      */
-    public globalScope: Scope;
+    public globalScope: Scope = undefined as any;
 
     /**
      * Plugins which can provide extra diagnostics or transform AST
@@ -320,7 +322,7 @@ export class Program {
     /**
      * roku filesystem is case INsensitive, so find the scope by key case insensitive
      */
-    public getScopeByName(scopeName: string) {
+    public getScopeByName(scopeName: string): Scope | undefined {
         if (!scopeName) {
             return undefined;
         }
@@ -328,7 +330,7 @@ export class Program {
         //so it's safe to run the standardizePkgPath method
         scopeName = s`${scopeName}`;
         let key = Object.keys(this.scopes).find(x => x.toLowerCase() === scopeName.toLowerCase());
-        return this.scopes[key];
+        return this.scopes[key!];
     }
 
     /**
@@ -495,8 +497,8 @@ export class Program {
      * @param rootDir must be a pre-normalized path
      */
     private getPaths(fileParam: string | FileObj | { srcPath?: string; pkgPath?: string }, rootDir: string) {
-        let srcPath: string;
-        let pkgPath: string;
+        let srcPath: string | undefined;
+        let pkgPath: string | undefined;
 
         assert.ok(fileParam, 'fileParam is required');
 
@@ -631,7 +633,7 @@ export class Program {
                 this.plugins.emit('beforeScopeDispose', scope);
                 scope.dispose();
                 //notify dependencies of this scope that it has been removed
-                this.dependencyGraph.remove(scope.dependencyGraphKey);
+                this.dependencyGraph.remove(scope.dependencyGraphKey!);
                 delete this.scopes[file.pkgPath];
                 this.plugins.emit('afterScopeDispose', scope);
             }
@@ -777,15 +779,15 @@ export class Program {
      * @param file the file
      */
     public getScopesForFile(file: XmlFile | BrsFile | string) {
-        if (typeof file === 'string') {
-            file = this.getFile(file);
-        }
+
+        const resolvedFile = typeof file === 'string' ? this.getFile(file) : file;
+
         let result = [] as Scope[];
-        if (file) {
+        if (resolvedFile) {
             for (let key in this.scopes) {
                 let scope = this.scopes[key];
 
-                if (scope.hasFile(file)) {
+                if (scope.hasFile(resolvedFile)) {
                     result.push(scope);
                 }
             }
@@ -904,36 +906,37 @@ export class Program {
      * Goes through each file and builds a list of workspace symbols for the program. Used by LanguageServer's onWorkspaceSymbol functionality
      */
     public getWorkspaceSymbols() {
-        const results = Object.keys(this.files).map(key => {
-            const file = this.files[key];
-            if (isBrsFile(file)) {
-                return file.getWorkspaceSymbols();
-            }
-            return [];
-        });
-        return util.flatMap(results, c => c);
+        const event: ProvideWorkspaceSymbolsEvent = {
+            program: this,
+            workspaceSymbols: []
+        };
+        this.plugins.emit('beforeProvideWorkspaceSymbols', event);
+        this.plugins.emit('provideWorkspaceSymbols', event);
+        this.plugins.emit('afterProvideWorkspaceSymbols', event);
+        return event.workspaceSymbols;
     }
 
     /**
      * Given a position in a file, if the position is sitting on some type of identifier,
      * go to the definition of that identifier (where this thing was first defined)
      */
-    public getDefinition(srcPath: string, position: Position) {
+    public getDefinition(srcPath: string, position: Position): Location[] {
         let file = this.getFile(srcPath);
         if (!file) {
             return [];
         }
 
-        if (isBrsFile(file)) {
-            return file.getDefinition(position);
-        } else {
-            let results = [] as Location[];
-            const scopes = this.getScopesForFile(file);
-            for (const scope of scopes) {
-                results = results.concat(...scope.getDefinition(file, position));
-            }
-            return results;
-        }
+        const event: ProvideDefinitionEvent = {
+            program: this,
+            file: file,
+            position: position,
+            definitions: []
+        };
+
+        this.plugins.emit('beforeProvideDefinition', event);
+        this.plugins.emit('provideDefinition', event);
+        this.plugins.emit('afterProvideDefinition', event);
+        return event.definitions;
     }
 
     /**
@@ -957,6 +960,27 @@ export class Program {
         }
 
         return result ?? [];
+    }
+
+    /**
+     * Get full list of document symbols for a file
+     * @param srcPath path to the file
+     */
+    public getDocumentSymbols(srcPath: string): DocumentSymbol[] | undefined {
+        let file = this.getFile(srcPath);
+        if (file) {
+            const event: ProvideDocumentSymbolsEvent = {
+                program: this,
+                file: file,
+                documentSymbols: []
+            };
+            this.plugins.emit('beforeProvideDocumentSymbols', event);
+            this.plugins.emit('provideDocumentSymbols', event);
+            this.plugins.emit('afterProvideDocumentSymbols', event);
+            return event.documentSymbols;
+        } else {
+            return undefined;
+        }
     }
 
     /**
@@ -1015,14 +1039,25 @@ export class Program {
         return signatureHelpUtil.getSignatureHelpItems(callExpressionInfo);
     }
 
-    public getReferences(srcPath: string, position: Position) {
+    public getReferences(srcPath: string, position: Position): Location[] {
         //find the file
         let file = this.getFile(srcPath);
         if (!file) {
             return null;
         }
 
-        return file.getReferences(position);
+        const event: ProvideReferencesEvent = {
+            program: this,
+            file: file,
+            position: position,
+            references: []
+        };
+
+        this.plugins.emit('beforeProvideReferences', event);
+        this.plugins.emit('provideReferences', event);
+        this.plugins.emit('afterProvideReferences', event);
+
+        return event.references;
     }
 
     /**
@@ -1213,28 +1248,30 @@ export class Program {
             //mark this file as processed so we don't process it more than once
             processedFiles.add(outputPath?.toLowerCase());
 
-            //skip transpiling typedef files
-            if (isBrsFile(file) && file.isTypedef) {
-                return;
-            }
+            if (!this.options.pruneEmptyCodeFiles || !file.canBePruned) {
+                //skip transpiling typedef files
+                if (isBrsFile(file) && file.isTypedef) {
+                    return;
+                }
 
-            const fileTranspileResult = this._getTranspiledFileContents(file, outputPath);
+                const fileTranspileResult = this._getTranspiledFileContents(file, outputPath);
 
-            //make sure the full dir path exists
-            await fsExtra.ensureDir(path.dirname(outputPath));
+                //make sure the full dir path exists
+                await fsExtra.ensureDir(path.dirname(outputPath));
 
-            if (await fsExtra.pathExists(outputPath)) {
-                throw new Error(`Error while transpiling "${file.srcPath}". A file already exists at "${outputPath}" and will not be overwritten.`);
-            }
-            const writeMapPromise = fileTranspileResult.map ? fsExtra.writeFile(`${outputPath}.map`, fileTranspileResult.map.toString()) : null;
-            await Promise.all([
-                fsExtra.writeFile(outputPath, fileTranspileResult.code),
-                writeMapPromise
-            ]);
+                if (await fsExtra.pathExists(outputPath)) {
+                    throw new Error(`Error while transpiling "${file.srcPath}". A file already exists at "${outputPath}" and will not be overwritten.`);
+                }
+                const writeMapPromise = fileTranspileResult.map ? fsExtra.writeFile(`${outputPath}.map`, fileTranspileResult.map.toString()) : null;
+                await Promise.all([
+                    fsExtra.writeFile(outputPath, fileTranspileResult.code),
+                    writeMapPromise
+                ]);
 
-            if (fileTranspileResult.typedef) {
-                const typedefPath = outputPath.replace(/\.brs$/i, '.d.bs');
-                await fsExtra.writeFile(typedefPath, fileTranspileResult.typedef);
+                if (fileTranspileResult.typedef) {
+                    const typedefPath = outputPath.replace(/\.brs$/i, '.d.bs');
+                    await fsExtra.writeFile(typedefPath, fileTranspileResult.typedef);
+                }
             }
         };
 
@@ -1382,8 +1419,13 @@ export class Program {
     /**
      * Try to find and load the manifest into memory
      * @param manifestFileObj A pointer to a potential manifest file object found during loading
+     * @param replaceIfAlreadyLoaded should we overwrite the internal `_manifest` if it already exists
      */
-    public loadManifest(manifestFileObj?: FileObj) {
+    public loadManifest(manifestFileObj?: FileObj, replaceIfAlreadyLoaded = true) {
+        //if we already have a manifest instance, and should not replace...then don't replace
+        if (!replaceIfAlreadyLoaded && this._manifest) {
+            return;
+        }
         let manifestPath = manifestFileObj
             ? manifestFileObj.src
             : path.join(this.options.rootDir, 'manifest');

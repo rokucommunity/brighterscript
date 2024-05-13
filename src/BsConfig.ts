@@ -1,4 +1,4 @@
-import type { LogLevel } from './Logger';
+import type { LogLevel } from './logging';
 
 export interface BsConfig {
     /**
@@ -173,7 +173,7 @@ export interface BsConfig {
      * The log level.
      * @default LogLevel.log
      */
-    logLevel?: LogLevel | 'error' | 'warn' | 'log' | 'info' | 'debug' | 'trace';
+    logLevel?: LogLevel | 'error' | 'warn' | 'log' | 'info' | 'debug' | 'trace' | 'off';
     /**
      * Override the path to source files in source maps. Use this if you have a preprocess step and want
      * to ensure the source maps point to the original location.
@@ -186,7 +186,15 @@ export interface BsConfig {
      * @default true
      */
     sourceMap?: boolean;
-
+    /**
+     * Excludes empty files from being included in the output. Some Brighterscript files
+     * are left empty or with only comments after transpilation to Brightscript.
+     * The default behavior is to write these to disk after transpilation.
+     * Setting this flag to `true` will prevent empty files being written and will
+     * remove associated script tags from XML
+     * @default false
+     */
+    pruneEmptyCodeFiles?: boolean;
     /**
      * Allow brighterscript features (classes, interfaces, etc...) to be included in BrightScript (`.brs`) files, and force those files to be transpiled.
      * @default false
@@ -201,3 +209,22 @@ export interface BsConfig {
      */
     bslibDestinationDir?: string;
 }
+
+type OptionalBsConfigFields =
+    | '_ancestors'
+    | 'sourceRoot'
+    | 'project'
+    | 'manifest'
+    | 'noProject'
+    | 'extends'
+    | 'host'
+    | 'password'
+    | 'require'
+    | 'stagingFolderPath'
+    | 'diagnosticLevel'
+    | 'rootDir'
+    | 'stagingDir';
+
+export type FinalizedBsConfig =
+    Omit<Required<BsConfig>, OptionalBsConfigFields>
+    & Pick<BsConfig, OptionalBsConfigFields>;

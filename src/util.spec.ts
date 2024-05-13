@@ -123,6 +123,26 @@ describe('util', () => {
             ].map(p => util.pathSepNormalize(p, '/')));
         });
 
+        it('resolves path relatively to config file', () => {
+            const mockConfig: BsConfig = {
+                outFile: 'out/app.zip',
+                rootDir: 'rootDir',
+                cwd: 'cwd',
+                stagingDir: 'stagingDir'
+            };
+            fsExtra.outputFileSync(s`${rootDir}/child.json`, JSON.stringify(mockConfig));
+            let config = util.loadConfigFile(s`${rootDir}/child.json`);
+            expect(config).to.deep.equal({
+                '_ancestors': [
+                    s`${rootDir}/child.json`
+                ],
+                'cwd': s`${rootDir}/cwd`,
+                'outFile': s`${rootDir}/out/app.zip`,
+                'rootDir': s`${rootDir}/rootDir`,
+                'stagingDir': s`${rootDir}/stagingDir`
+            });
+        });
+
         it('removes duplicate plugins and undefined values', () => {
             const config: BsConfig = {
                 plugins: [
@@ -303,6 +323,12 @@ describe('util', () => {
             expect(util.normalizeConfig(<any>{ emitDefinitions: 'true' }).emitDefinitions).to.be.false;
         });
 
+        it('sets pruneEmptyCodeFiles to false by default, or true if explicitly true', () => {
+            expect(util.normalizeConfig({}).pruneEmptyCodeFiles).to.be.false;
+            expect(util.normalizeConfig({ pruneEmptyCodeFiles: true }).pruneEmptyCodeFiles).to.be.true;
+            expect(util.normalizeConfig({ pruneEmptyCodeFiles: false }).pruneEmptyCodeFiles).to.be.false;
+        });
+
         it('loads project from disc', () => {
             fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.json`, `{ "outFile": "customOutDir/pkg.zip" }`);
             let config = util.normalizeAndResolveConfig({
@@ -377,7 +403,7 @@ describe('util', () => {
         });
 
         it('sets default value for bslibDestinationDir', () => {
-            expect(util.normalizeConfig(<any>{ }).bslibDestinationDir).to.equal('source');
+            expect(util.normalizeConfig(<any>{}).bslibDestinationDir).to.equal('source');
         });
 
         it('strips leading and/or trailing slashes from bslibDestinationDir', () => {
@@ -421,6 +447,16 @@ describe('util', () => {
             expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg:/')).to.equal(null);
             expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg:')).to.equal(null);
             expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg')).to.equal(s`components/pkg`);
+        });
+
+        it('supports pkg:/ and libpkg:/', () => {
+            expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg:/source/lib.brs')).to.equal(s`source/lib.brs`);
+            expect(util.getPkgPathFromTarget('components/component1.xml', 'libpkg:/source/lib.brs')).to.equal(s`source/lib.brs`);
+        });
+
+        it('works case insensitive', () => {
+            expect(util.getPkgPathFromTarget('components/component1.xml', 'PKG:/source/lib.brs')).to.equal(s`source/lib.brs`);
+            expect(util.getPkgPathFromTarget('components/component1.xml', 'LIBPKG:/source/lib.brs')).to.equal(s`source/lib.brs`);
         });
     });
 

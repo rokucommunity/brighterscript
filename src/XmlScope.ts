@@ -4,10 +4,9 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import type { XmlFile } from './files/XmlFile';
 import type { BscFile, CallableContainerMap, FileReference } from './interfaces';
 import type { Program } from './Program';
-import util from './util';
-import { isXmlFile } from './astUtils/reflection';
 import { SGFieldTypes } from './parser/SGTypes';
 import type { SGTag } from './parser/SGTypes';
+import { DefinitionProvider } from './bscPlugin/definition/DefinitionProvider';
 
 export class XmlScope extends Scope {
     constructor(
@@ -27,7 +26,7 @@ export class XmlScope extends Scope {
      */
     public getParentScope() {
         return this.cache.getOrAdd('parentScope', () => {
-            let scope: Scope;
+            let scope: Scope | undefined;
             let parentComponentName = this.xmlFile.parentComponentName?.text;
             if (parentComponentName) {
                 scope = this.program.getComponentScope(parentComponentName);
@@ -35,7 +34,7 @@ export class XmlScope extends Scope {
             if (scope) {
                 return scope;
             } else {
-                return this.program.globalScope;
+                return this.program.globalScope ?? null;
             }
         });
     }
@@ -64,7 +63,7 @@ export class XmlScope extends Scope {
             } else if (!callableContainerMap.has(name.toLowerCase())) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.xmlFunctionNotFound(name),
-                    range: fun.getAttribute('name').value.range,
+                    range: fun.getAttribute('name')?.value.range,
                     file: this.xmlFile
                 });
             }
@@ -82,7 +81,7 @@ export class XmlScope extends Scope {
             } else if (!SGFieldTypes.includes(type.toLowerCase())) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.xmlInvalidFieldType(type),
-                    range: field.getAttribute('type').value.range,
+                    range: field.getAttribute('type')?.value.range,
                     file: this.xmlFile
                 });
             }
@@ -90,7 +89,7 @@ export class XmlScope extends Scope {
                 if (!callableContainerMap.has(onChange.toLowerCase())) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.xmlFunctionNotFound(onChange),
-                        range: field.getAttribute('onchange').value.range,
+                        range: field.getAttribute('onchange')?.value.range,
                         file: this.xmlFile
                     });
                 }
@@ -168,21 +167,14 @@ export class XmlScope extends Scope {
 
     /**
      * Get the definition (where was this thing first defined) of the symbol under the position
+     * @deprecated use `DefinitionProvider.process()`
      */
     public getDefinition(file: BscFile, position: Position): Location[] {
-        let results = [] as Location[];
-        //if the position is within the file's parent component name
-        if (
-            isXmlFile(file) &&
-            file.parentComponent &&
-            file.parentComponentName &&
-            util.rangeContains(file.parentComponentName.range, position)
-        ) {
-            results.push({
-                range: util.createRange(0, 0, 0, 0),
-                uri: util.pathToUri(file.parentComponent.srcPath)
-            });
-        }
-        return results;
+        return new DefinitionProvider({
+            program: this.program,
+            file: file,
+            position: position,
+            definitions: []
+        }).process();
     }
 }

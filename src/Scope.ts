@@ -14,12 +14,12 @@ import { util } from './util';
 import { globalCallableMap } from './globalCallables';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
-import { LogLevel } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
 import { isBrsFile, isMethodStatement, isClassStatement, isConstStatement, isCustomType, isEnumStatement, isFunctionStatement, isFunctionType, isXmlFile, isNamespaceStatement, isEnumMemberStatement } from './astUtils/reflection';
 import { SymbolTable } from './SymbolTable';
 import type { Statement } from './parser/AstNode';
+import { LogLevel } from './logging';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -369,8 +369,8 @@ export class Scope {
      * XmlScope overrides this to return the parent xml scope if available.
      * For globalScope this will return null.
      */
-    public getParentScope() {
-        let scope: Scope;
+    public getParentScope(): Scope | null {
+        let scope: Scope | undefined;
         //use the global scope if we didn't find a sope and this is not the global scope
         if (this.program.globalScope !== this) {
             scope = this.program.globalScope;
@@ -878,7 +878,9 @@ export class Scope {
                 // check if this custom type is in our class map
                 const returnTypeName = func.returnType.name;
                 const currentNamespaceName = func.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
-                if (!this.hasClass(returnTypeName, currentNamespaceName) && !this.hasInterface(returnTypeName) && !this.hasEnum(returnTypeName)) {
+                // check for built in types
+                const isBuiltInType = util.isBuiltInType(returnTypeName);
+                if (!isBuiltInType && !this.hasClass(returnTypeName, currentNamespaceName) && !this.hasInterface(returnTypeName) && !this.hasEnum(returnTypeName)) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.invalidFunctionReturnType(returnTypeName),
                         range: func.returnTypeToken.range,
@@ -891,7 +893,10 @@ export class Scope {
                 if (isCustomType(param.type) && param.typeToken) {
                     const paramTypeName = param.type.name;
                     const currentNamespaceName = func.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
-                    if (!this.hasClass(paramTypeName, currentNamespaceName) && !this.hasInterface(paramTypeName) && !this.hasEnum(paramTypeName)) {
+                    // check for built in types
+                    const isBuiltInType = util.isBuiltInType(paramTypeName);
+
+                    if (!isBuiltInType && !this.hasClass(paramTypeName, currentNamespaceName) && !this.hasInterface(paramTypeName) && !this.hasEnum(paramTypeName)) {
                         this.diagnostics.push({
                             ...DiagnosticMessages.functionParameterTypeIsInvalid(param.name.text, paramTypeName),
                             range: param.typeToken.range,
@@ -1206,6 +1211,7 @@ export class Scope {
 
     /**
      * Get the definition (where was this thing first defined) of the symbol under the position
+     * @deprecated use `DefinitionProvider.process()`
      */
     public getDefinition(file: BscFile, position: Position): Location[] {
         // Overridden in XMLScope. Brs files use implementation in BrsFile

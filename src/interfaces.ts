@@ -1,4 +1,4 @@
-import type { Range, Diagnostic, CodeAction, SemanticTokenTypes, SemanticTokenModifiers, Position, CompletionItem } from 'vscode-languageserver';
+import type { Range, Diagnostic, CodeAction, Position, CompletionItem, Location, DocumentSymbol, WorkspaceSymbol } from 'vscode-languageserver-protocol';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -14,6 +14,7 @@ import type { SourceMapGenerator, SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
 import type { AstEditor } from './astUtils/AstEditor';
 import type { Token } from './lexer/Token';
+import type { SemanticTokenModifiers, SemanticTokenTypes } from 'vscode-languageserver';
 
 export interface BsDiagnostic extends Diagnostic {
     file: BscFile;
@@ -229,6 +230,70 @@ export interface CompilerPlugin {
      */
     afterProvideHover?: PluginHandler<AfterProvideHoverEvent>;
 
+    /**
+     * Called before the `provideDefinition` hook
+     */
+    beforeProvideDefinition?(event: BeforeProvideDefinitionEvent): any;
+    /**
+     * Provide one or more `Location`s where the symbol at the given position was originally defined
+     * @param event
+     */
+    provideDefinition?(event: ProvideDefinitionEvent): any;
+    /**
+     * Called after `provideDefinition`. Use this if you want to intercept or sanitize the definition data provided by bsc or other plugins
+     * @param event
+     */
+    afterProvideDefinition?(event: AfterProvideDefinitionEvent): any;
+
+
+    /**
+     * Called before the `provideReferences` hook
+     */
+    beforeProvideReferences?(event: BeforeProvideReferencesEvent): any;
+    /**
+     * Provide all of the `Location`s where the symbol at the given position is located
+     * @param event
+     */
+    provideReferences?(event: ProvideReferencesEvent): any;
+    /**
+     * Called after `provideReferences`. Use this if you want to intercept or sanitize the references data provided by bsc or other plugins
+     * @param event
+     */
+    afterProvideReferences?(event: AfterProvideReferencesEvent): any;
+
+
+    /**
+     * Called before the `provideDocumentSymbols` hook
+     */
+    beforeProvideDocumentSymbols?(event: BeforeProvideDocumentSymbolsEvent): any;
+    /**
+     * Provide all of the `DocumentSymbol`s for the given file
+     * @param event
+     */
+    provideDocumentSymbols?(event: ProvideDocumentSymbolsEvent): any;
+    /**
+     * Called after `provideDocumentSymbols`. Use this if you want to intercept or sanitize the document symbols data provided by bsc or other plugins
+     * @param event
+     */
+    afterProvideDocumentSymbols?(event: AfterProvideDocumentSymbolsEvent): any;
+
+
+    /**
+     * Called before the `provideWorkspaceSymbols` hook
+     */
+    beforeProvideWorkspaceSymbols?(event: BeforeProvideWorkspaceSymbolsEvent): any;
+    /**
+     * Provide all of the workspace symbols for the entire project
+     * @param event
+     */
+    provideWorkspaceSymbols?(event: ProvideWorkspaceSymbolsEvent): any;
+    /**
+     * Called after `provideWorkspaceSymbols`. Use this if you want to intercept or sanitize the workspace symbols data provided by bsc or other plugins
+     * @param event
+     */
+    afterProvideWorkspaceSymbols?(event: AfterProvideWorkspaceSymbolsEvent): any;
+
+
     onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
     //scope events
     afterScopeCreate?: (scope: Scope) => void;
@@ -302,6 +367,69 @@ export interface Hover {
 }
 export type BeforeProvideHoverEvent = ProvideHoverEvent;
 export type AfterProvideHoverEvent = ProvideHoverEvent;
+
+export interface ProvideDefinitionEvent<TFile = BscFile> {
+    program: Program;
+    /**
+     * The file that the getDefinition request was invoked in
+     */
+    file: TFile;
+    /**
+     * The position in the text document where the getDefinition request was invoked
+     */
+    position: Position;
+    /**
+     * The list of locations for where the item at the file and position was defined
+     */
+    definitions: Location[];
+}
+export type BeforeProvideDefinitionEvent<TFile = BscFile> = ProvideDefinitionEvent<TFile>;
+export type AfterProvideDefinitionEvent<TFile = BscFile> = ProvideDefinitionEvent<TFile>;
+
+export interface ProvideReferencesEvent<TFile = BscFile> {
+    program: Program;
+    /**
+     * The file that the getDefinition request was invoked in
+     */
+    file: TFile;
+    /**
+     * The position in the text document where the getDefinition request was invoked
+     */
+    position: Position;
+    /**
+     * The list of locations for where the item at the file and position was defined
+     */
+    references: Location[];
+}
+export type BeforeProvideReferencesEvent<TFile = BscFile> = ProvideReferencesEvent<TFile>;
+export type AfterProvideReferencesEvent<TFile = BscFile> = ProvideReferencesEvent<TFile>;
+
+
+export interface ProvideDocumentSymbolsEvent<TFile = BscFile> {
+    program: Program;
+    /**
+     * The file that the `documentSymbol` request was invoked in
+     */
+    file: TFile;
+    /**
+     * The result list of symbols
+     */
+    documentSymbols: DocumentSymbol[];
+}
+export type BeforeProvideDocumentSymbolsEvent<TFile = BscFile> = ProvideDocumentSymbolsEvent<TFile>;
+export type AfterProvideDocumentSymbolsEvent<TFile = BscFile> = ProvideDocumentSymbolsEvent<TFile>;
+
+
+export interface ProvideWorkspaceSymbolsEvent {
+    program: Program;
+    /**
+     * The result list of symbols
+     */
+    workspaceSymbols: WorkspaceSymbol[];
+}
+export type BeforeProvideWorkspaceSymbolsEvent = ProvideWorkspaceSymbolsEvent;
+export type AfterProvideWorkspaceSymbolsEvent = ProvideWorkspaceSymbolsEvent;
+
 
 export interface OnGetSemanticTokensEvent<T extends BscFile = BscFile> {
     /**
@@ -392,10 +520,17 @@ export interface SemanticToken {
 }
 
 export interface TypedefProvider {
-    getTypedef(state: TranspileState): Array<SourceNode | string>;
+    getTypedef(state: TranspileState): TranspileResult;
 }
 
-export type TranspileResult = Array<(string | SourceNode)>;
+export type TranspileResult = Array<(string | SourceNode | TranspileResult)>;
+
+/**
+ * This is the type that the SourceNode class is declared as taking in its constructor.
+ * The actual type that SourceNode accepts is the more permissive TranspileResult, but
+ * we need to use this declared type for some type casts.
+ */
+export type FlattenedTranspileResult = Array<string | SourceNode>;
 
 export type FileResolver = (srcPath: string) => string | undefined | Thenable<string | undefined> | void;
 
