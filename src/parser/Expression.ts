@@ -407,7 +407,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         if (funcName) {
             resultType.setName(funcName);
         }
-        options.typeChain?.push(new TypeChainEntry({ name: funcName, type: resultType, data: options.data, range: this.range, kind: this.kind, astNode: this }));
+        options.typeChain?.push(new TypeChainEntry({ name: funcName, type: resultType, data: options.data, astNode: this }));
         return resultType;
     }
 }
@@ -445,7 +445,7 @@ export class FunctionParameterExpression extends Expression {
         const paramType = this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime, typeChain: undefined }) ??
             this.defaultValue?.getType({ ...options, flags: SymbolTypeFlag.runtime, typeChain: undefined }) ??
             DynamicType.instance;
-        options.typeChain?.push(new TypeChainEntry({ name: this.tokens.name.text, type: paramType, data: options.data, range: this.range, kind: this.kind, astNode: this }));
+        options.typeChain?.push(new TypeChainEntry({ name: this.tokens.name.text, type: paramType, data: options.data, astNode: this }));
         return paramType;
     }
 
@@ -578,7 +578,6 @@ export class DottedGetExpression extends Expression {
             type: result,
             data: options.data,
             range: this.tokens.name?.range ?? this.range,
-            kind: this.kind,
             astNode: this
         }));
         if (result ||
@@ -1205,7 +1204,7 @@ export class VariableExpression extends Expression {
             }
 
         }
-        options.typeChain?.push(new TypeChainEntry({ name: nameKey, type: resultType, data: options.data, range: this.range, kind: this.kind, astNode: this }));
+        options.typeChain?.push(new TypeChainEntry({ name: nameKey, type: resultType, data: options.data, astNode: this }));
         return resultType;
     }
 
@@ -1389,7 +1388,7 @@ export class NewExpression extends Expression {
             // modify last typechain entry to show it is a new ...()
             const lastEntry = options.typeChain[options.typeChain.length - 1];
             if (lastEntry) {
-                lastEntry.kind = this.kind;
+                lastEntry.astNode = this;
             }
         }
         return result;
@@ -1491,9 +1490,9 @@ export class CallfuncExpression extends Expression {
                 options.typeChain?.push(new TypeChainEntry({
                     name: this.tokens.methodName.text,
                     type: funcType,
-                    data: options.data, range: this.tokens.methodName.range,
+                    data: options.data,
+                    range: this.tokens.methodName.range,
                     separatorToken: createToken(TokenKind.Callfunc),
-                    kind: this.kind,
                     astNode: this
                 }));
                 if (options.ignoreCall) {
@@ -2236,7 +2235,7 @@ export class TypecastExpression extends Expression {
             // modify last typechain entry to show it is a typecast
             const lastEntry = options.typeChain[options.typeChain.length - 1];
             if (lastEntry) {
-                lastEntry.kind = this.kind;
+                lastEntry.astNode = this;
             }
         }
         return result;
