@@ -564,6 +564,11 @@ export class IfStatement extends Statement {
     getLeadingTrivia(): Token[] {
         return this.tokens.if?.leadingTrivia ?? [];
     }
+
+    getEndTrivia(): Token[] {
+        return this.tokens.endIf?.leadingTrivia ?? [];
+    }
+
 }
 
 export class IncrementStatement extends Statement {
@@ -1060,6 +1065,10 @@ export class ForStatement extends Statement {
     getLeadingTrivia(): Token[] {
         return this.tokens.for?.leadingTrivia ?? [];
     }
+
+    public getEndTrivia(): Token[] {
+        return this.tokens.endFor?.leadingTrivia ?? [];
+    }
 }
 
 export class ForEachStatement extends Statement {
@@ -1150,6 +1159,10 @@ export class ForEachStatement extends Statement {
     getLeadingTrivia(): Token[] {
         return this.tokens.forEach?.leadingTrivia ?? [];
     }
+
+    public getEndTrivia(): Token[] {
+        return this.tokens.endFor?.leadingTrivia ?? [];
+    }
 }
 
 export class WhileStatement extends Statement {
@@ -1218,6 +1231,10 @@ export class WhileStatement extends Statement {
 
     getLeadingTrivia(): Token[] {
         return this.tokens.while?.leadingTrivia ?? [];
+    }
+
+    public getEndTrivia(): Token[] {
+        return this.tokens.endWhile?.leadingTrivia ?? [];
     }
 }
 
@@ -1492,6 +1509,10 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         return util.concatAnnotationLeadingTrivia(this, this.tokens.namespace?.leadingTrivia);
     }
 
+    public getEndTrivia(): Token[] {
+        return this.tokens.endNamespace?.leadingTrivia ?? [];
+    }
+
     public getNameParts() {
         let parts = util.getAllDottedGetParts(this.nameExpression);
 
@@ -1678,7 +1699,11 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
 
     public getLeadingTrivia(): Token[] {
         return util.concatAnnotationLeadingTrivia(this,
-            this.tokens.interface.leadingTrivia);
+            this.tokens.interface?.leadingTrivia);
+    }
+
+    public getEndTrivia(): Token[] {
+        return this.tokens.endInterface?.leadingTrivia ?? [];
     }
 
 
@@ -2145,6 +2170,10 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
     public getLeadingTrivia(): Token[] {
         return util.concatAnnotationLeadingTrivia(this, this.tokens.class?.leadingTrivia);
+    }
+
+    public getEndTrivia(): Token[] {
+        return this.tokens.endClass?.leadingTrivia ?? [];
     }
 
     public readonly memberMap = {} as Record<string, MemberStatement>;
@@ -2909,6 +2938,10 @@ export class TryCatchStatement extends Statement {
     public getLeadingTrivia(): Token[] {
         return this.tokens.try?.leadingTrivia ?? [];
     }
+
+    public getEndTrivia(): Token[] {
+        return this.tokens.endTry?.leadingTrivia ?? [];
+    }
 }
 
 export class CatchStatement extends Statement {
@@ -3064,6 +3097,10 @@ export class EnumStatement extends Statement implements TypedefProvider {
 
     public getLeadingTrivia(): Token[] {
         return util.concatAnnotationLeadingTrivia(this, this.tokens.enum?.leadingTrivia);
+    }
+
+    public getEndTrivia(): Token[] {
+        return this.tokens.endEnum?.leadingTrivia ?? [];
     }
 
     /**
@@ -3693,7 +3730,8 @@ export class ConditionalCompileStatement extends Statement {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkStatements) {
-            let conditionTrue = options.bsConsts?.get(this.tokens.condition.text.toLowerCase());
+            const bsConsts = options.bsConsts ?? this.getBsConsts();
+            let conditionTrue = bsConsts?.get(this.tokens.condition.text.toLowerCase());
             if (this.tokens.not) {
                 // flips the boolean value
                 conditionTrue = !conditionTrue;

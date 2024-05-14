@@ -1200,6 +1200,60 @@ describe('astUtils visitors', () => {
             ]);
         });
 
+        it('can get end trivia of any kind of block type node', () => {
+            const file: BrsFile = program.setFile('source/main.bs', `
+                sub test()
+                    x = {
+                        val: [123],
+                        count: 4
+                        ' end comment in literal AA 1
+                    }
+                    for each y in x.val
+                        print y
+                        ' end comment in for 2
+                    end for
+
+                    if x.count > 2
+                        print "hi"
+                        ' end comment in if 3
+                    end if
+
+                    while x.count > 3
+                        x.count--
+                        ' end comment in while 4
+                    end while
+
+                    try
+                        print "in try"
+                    catch e
+                        ' end comment in try 5
+                    end try
+
+                    array = [
+                        1,
+                        2,
+                        ' end comment in array 6
+                    ]
+
+                    ' end comment in function 7
+                end sub
+            `);
+            const comments = [];
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            file.ast.walk(createVisitor({
+                AstNode: (node) => {
+                    const endNodeComments = node.getEndTrivia().filter(t => t.kind === TokenKind.Comment);
+                    comments.push(...endNodeComments);
+                }
+            }), {
+                walkMode: WalkMode.visitAllRecursive
+            });
+
+            expect(comments.length).to.eql(7);
+        });
+
         it('can set bsConst in walk', () => {
             const { ast } = program.setFile<BrsFile>('source/main.brs', `
                 #if DEBUG
@@ -1265,7 +1319,6 @@ describe('astUtils visitors', () => {
                 sub notDebug()
                 end sub
                 #end if
-
                 #if not false
                 sub notFalse()
                 end sub
