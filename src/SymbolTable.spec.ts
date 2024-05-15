@@ -8,6 +8,7 @@ import { SymbolTypeFlag } from './SymbolTypeFlag';
 import { expectTypeToBe } from './testHelpers.spec';
 import { NamespaceType } from './types/NamespaceType';
 import { TypedFunctionType } from './types/TypedFunctionType';
+import { DynamicType } from './types';
 
 
 describe('SymbolTable', () => {
@@ -99,6 +100,14 @@ describe('SymbolTable', () => {
         ).to.eql([
             'boolean'
         ]);
+    });
+
+    it('can check if something is an instance', () => {
+        const table = new SymbolTable('Table');
+
+        table.addSymbol('test', { isInstance: true }, DynamicType.instance, SymbolTypeFlag.runtime);
+
+        expect(table.isSymbolTypeInstance('test')).to.true;
     });
 
 

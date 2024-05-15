@@ -9,7 +9,7 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
-import { isCallExpression, isEnumMemberStatement, isExpression, isExpressionStatement, isFieldStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypedefProvider, isUnaryExpression, isVoidType } from '../astUtils/reflection';
+import { isCallExpression, isConditionalCompileStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFieldStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypedefProvider, isUnaryExpression, isVoidType } from '../astUtils/reflection';
 import { TypeChainEntry, type GetTypeOptions, type TranspileResult, type TypedefProvider } from '../interfaces';
 import { createInvalidLiteral, createMethodStatement, createToken } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
@@ -1832,7 +1832,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         for (const statement of this.fields) {
             const memberType = statement?.getType({ ...options, typeChain: undefined }); // no typechain info needed
             const flag = statement.isOptional ? SymbolTypeFlag.runtime | SymbolTypeFlag.optional : SymbolTypeFlag.runtime;
-            resultType.addMember(statement?.tokens.name?.text, { definingNode: statement }, memberType, flag);
+            resultType.addMember(statement?.tokens.name?.text, { definingNode: statement, isInstance: true }, memberType, flag);
         }
         options.typeChain?.push(new TypeChainEntry({
             name: this.getName(ParseMode.BrighterScript),
@@ -2544,7 +2544,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
             if (statement.tokens.accessModifier?.kind === TokenKind.Protected) {
                 flag |= SymbolTypeFlag.protected;
             }
-            resultType.addMember(statement?.tokens.name?.text, { definingNode: statement }, fieldType, flag);
+            resultType.addMember(statement?.tokens.name?.text, { definingNode: statement, isInstance: true }, fieldType, flag);
         }
         options.typeChain?.push(new TypeChainEntry({ name: resultType.name, type: resultType, data: options.data, astNode: this }));
         return resultType;
@@ -3509,6 +3509,46 @@ export class TypecastStatement extends Statement {
     }
 }
 
+export class ConditionalCompileErrorStatement extends Statement {
+    constructor(options: {
+        hashError?: Token;
+        message: Token;
+    }) {
+        super();
+        this.tokens = {
+            hashError: options.hashError,
+            message: options.message
+        };
+        this.range = util.createBoundingRange(util.createBoundingRangeFromTokens(this.tokens));
+    }
+
+    public readonly tokens: {
+        readonly hashError?: Token;
+        readonly message: Token;
+    };
+
+
+    public readonly kind = AstNodeKind.ConditionalCompileErrorStatement;
+
+    public readonly range: Range | undefined;
+
+    transpile(state: BrsTranspileState) {
+        return [
+            state.transpileToken(this.tokens.hashError, '#error'),
+            ' ',
+            state.transpileToken(this.tokens.message)
+
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        // nothing to walk
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.hashError.leadingTrivia ?? [];
+    }
+}
 
 export class AliasStatement extends Statement {
     constructor(options: {
@@ -3573,3 +3613,189 @@ export class AliasStatement extends Statement {
         return this.value.getType(options);
     }
 }
+
+export class ConditionalCompileStatement extends Statement {
+    constructor(options: {
+        hashIf?: Token;
+        not?: Token;
+        condition: Token;
+        hashElse?: Token;
+        hashEndIf?: Token;
+        thenBranch: Block;
+        elseBranch?: ConditionalCompileStatement | Block;
+    }) {
+        super();
+        this.thenBranch = options.thenBranch;
+        this.elseBranch = options.elseBranch;
+
+        this.tokens = {
+            hashIf: options.hashIf,
+            not: options.not,
+            condition: options.condition,
+            hashElse: options.hashElse,
+            hashEndIf: options.hashEndIf
+        };
+
+        this.range = util.createBoundingRange(
+            util.createBoundingRangeFromTokens(this.tokens),
+            this.thenBranch,
+            this.elseBranch
+        );
+    }
+
+    readonly tokens: {
+        readonly hashIf?: Token;
+        readonly not?: Token;
+        readonly condition: Token;
+        readonly hashElse?: Token;
+        readonly hashEndIf?: Token;
+    };
+    public readonly thenBranch: Block;
+    public readonly elseBranch?: ConditionalCompileStatement | Block;
+
+    public readonly kind = AstNodeKind.ConditionalCompileStatement;
+
+    public readonly range: Range | undefined;
+
+    transpile(state: BrsTranspileState) {
+        let results = [] as TranspileResult;
+        //if   (already indented by block)
+        if (!state.conditionalCompileStatement) {
+            // only transpile the #if in the case when we're not in a conditionalCompileStatement already
+            results.push(state.transpileToken(this.tokens.hashIf ?? createToken(TokenKind.HashIf)));
+        }
+
+        results.push(' ');
+        //conditions
+        if (this.tokens.not) {
+            results.push('not');
+            results.push(' ');
+        }
+        results.push(state.transpileToken(this.tokens.condition));
+        state.lineage.unshift(this);
+
+        //if statement body
+        let thenNodes = this.thenBranch.transpile(state);
+        state.lineage.shift();
+        if (thenNodes.length > 0) {
+            results.push(thenNodes);
+        }
+        //else branch
+        if (this.elseBranch) {
+            const elseIsCC = isConditionalCompileStatement(this.elseBranch);
+            const endBlockToken = elseIsCC ? (this.elseBranch as ConditionalCompileStatement).tokens.hashIf ?? createToken(TokenKind.HashElseIf) : this.tokens.hashElse;
+            //else
+
+            results.push(...state.transpileEndBlockToken(this.thenBranch, endBlockToken, createToken(TokenKind.HashElse).text));
+
+            if (elseIsCC) {
+                //chained else if
+                state.lineage.unshift(this.elseBranch);
+
+                // transpile following #if with knowledge of current
+                const existingCCStmt = state.conditionalCompileStatement;
+                state.conditionalCompileStatement = this;
+                let body = this.elseBranch.transpile(state);
+                state.conditionalCompileStatement = existingCCStmt;
+
+                state.lineage.shift();
+
+                if (body.length > 0) {
+                    //zero or more spaces between the `else` and the `if`
+                    results.push(...body);
+
+                    // stop here because chained if will transpile the rest
+                    return results;
+                } else {
+                    results.push('\n');
+                }
+
+            } else {
+                //else body
+                state.lineage.unshift(this.tokens.hashElse!);
+                let body = this.elseBranch.transpile(state);
+                state.lineage.shift();
+
+                if (body.length > 0) {
+                    results.push(...body);
+                }
+            }
+        }
+
+        //end if
+        results.push(...state.transpileEndBlockToken(this.elseBranch ?? this.thenBranch, this.tokens.hashEndIf, '#end if'));
+
+        return results;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkStatements) {
+            const bsConsts = options.bsConsts ?? this.getBsConsts();
+            let conditionTrue = bsConsts?.get(this.tokens.condition.text.toLowerCase());
+            if (this.tokens.not) {
+                // flips the boolean value
+                conditionTrue = !conditionTrue;
+            }
+            const walkFalseBlocks = options.walkMode & InternalWalkMode.visitFalseConditionalCompilationBlocks;
+            if (conditionTrue || walkFalseBlocks) {
+                walk(this, 'thenBranch', visitor, options);
+            }
+            if (this.elseBranch && (!conditionTrue || walkFalseBlocks)) {
+                walk(this, 'elseBranch', visitor, options);
+            }
+        }
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.hashIf?.leadingTrivia ?? [];
+    }
+}
+
+
+export class ConditionalCompileConstStatement extends Statement {
+    constructor(options: {
+        hashConst?: Token;
+        assignment: AssignmentStatement;
+    }) {
+        super();
+        this.tokens = {
+            hashConst: options.hashConst
+        };
+        this.assignment = options.assignment;
+        this.range = util.createBoundingRange(util.createBoundingRangeFromTokens(this.tokens), this.assignment);
+    }
+
+    public readonly tokens: {
+        readonly hashConst?: Token;
+    };
+
+    public readonly assignment: AssignmentStatement;
+
+    public readonly kind = AstNodeKind.ConditionalCompileConstStatement;
+
+    public readonly range: Range | undefined;
+
+    transpile(state: BrsTranspileState) {
+        return [
+            state.transpileToken(this.tokens.hashConst, '#const'),
+            ' ',
+            state.transpileToken(this.assignment.tokens.name),
+            ' ',
+            state.transpileToken(this.assignment.tokens.equals, '='),
+            ' ',
+            ...this.assignment.value.transpile(state)
+        ];
+
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        // nothing to walk
+    }
+
+
+    getLeadingTrivia(): Token[] {
+        return this.tokens.hashConst.leadingTrivia ?? [];
+    }
+}
+
+
