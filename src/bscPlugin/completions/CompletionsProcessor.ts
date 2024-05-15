@@ -1,5 +1,5 @@
-import { isBrsFile, isCallableType, isClassStatement, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isFunctionExpression, isInterfaceType, isMethodStatement, isNamespaceStatement, isNamespaceType, isNativeType, isTypedFunctionType, isXmlFile, isXmlScope } from '../../astUtils/reflection';
-import type { FileReference, ProvideCompletionsEvent } from '../../interfaces';
+import { isAliasStatement, isBrsFile, isCallableType, isClassStatement, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isFunctionExpression, isInterfaceType, isMethodStatement, isNamespaceStatement, isNamespaceType, isNativeType, isTypedFunctionType, isXmlFile, isXmlScope } from '../../astUtils/reflection';
+import type { ExtraSymbolData, FileReference, ProvideCompletionsEvent } from '../../interfaces';
 import type { BscFile } from '../../files/BscFile';
 import { AllowedTriviaTokens, DeclarableTypes, Keywords, TokenKind } from '../../lexer/TokenKind';
 import type { XmlScope } from '../../XmlScope';
@@ -18,7 +18,7 @@ import { BooleanType } from '../../types/BooleanType';
 import { InvalidType } from '../../types/InvalidType';
 import type { BscType } from '../../types/BscType';
 import type { AstNode } from '../../parser/AstNode';
-import type { ClassStatement, FunctionStatement, NamespaceStatement } from '../../parser/Statement';
+import type { ClassStatement, FunctionStatement, NamespaceStatement, AliasStatement } from '../../parser/Statement';
 import type { Token } from '../../lexer/Token';
 import { createIdentifier } from '../../astUtils/creators';
 import type { FunctionExpression } from '../../parser/Expression';
@@ -168,24 +168,29 @@ export class CompletionsProcessor {
             return this.getLabelCompletion(functionScope);
         }
 
-
-        if (file.getPreviousToken(currentToken)?.kind === TokenKind.Dot || file.isTokenNextToTokenKind(currentToken, TokenKind.Dot)) {
-            const dotToken = currentToken.kind === TokenKind.Dot ? currentToken : file.getTokenBefore(currentToken, TokenKind.Dot);
+        if (this.isTokenAdjacentTo(file, currentToken, TokenKind.Dot)) {
+            const dotToken = this.getAdjacentToken(file, currentToken, TokenKind.Dot);
             beforeDotToken = file.getTokenBefore(dotToken);
             expression = file.getClosestExpression(beforeDotToken?.range.end);
             shouldLookForMembers = true;
-        } else if (file.getPreviousToken(currentToken)?.kind === TokenKind.Callfunc || file.isTokenNextToTokenKind(currentToken, TokenKind.Callfunc)) {
-            const dotToken = currentToken.kind === TokenKind.Callfunc ? currentToken : file.getTokenBefore(currentToken, TokenKind.Callfunc);
+        } else if (this.isTokenAdjacentTo(file, currentToken, TokenKind.Callfunc)) {
+            const dotToken = this.getAdjacentToken(file, currentToken, TokenKind.Callfunc);
             beforeDotToken = file.getTokenBefore(dotToken);
             expression = file.getClosestExpression(beforeDotToken?.range.end);
             shouldLookForCallFuncMembers = true;
-        } else if (file.getPreviousToken(currentToken)?.kind === TokenKind.As || file.isTokenNextToTokenKind(currentToken, TokenKind.As)) {
-
+        } else if (this.isTokenAdjacentTo(file, currentToken, TokenKind.As)) {
             if (file.parseMode === ParseMode.BrightScript) {
                 return NativeTypeCompletions;
             }
             expression = file.getClosestExpression(this.event.position);
             symbolTableLookupFlag = SymbolTypeFlag.typetime;
+        } else if (this.isTokenAdjacentTo(file, currentToken, TokenKind.Equal)) {
+            expression = file.getClosestExpression(this.event.position);
+            if (expression.findAncestor<AliasStatement>(isAliasStatement)) {
+                // allow runtime and typetime lookups in alias statements
+                // eslint-disable-next-line no-bitwise
+                symbolTableLookupFlag = SymbolTypeFlag.runtime | SymbolTypeFlag.typetime;
+            }
         } else {
             expression = file.getClosestExpression(this.event.position);
         }
@@ -326,10 +331,12 @@ export class CompletionsProcessor {
     private getScopeSymbolCompletions(file: BrsFile, scope: Scope, symbolTableLookupFlag: SymbolTypeFlag) {
         // get all scope available symbols
 
-        let scopeSymbols = file.parseMode === ParseMode.BrighterScript
+        const scopeSymbols = file.parseMode === ParseMode.BrighterScript
             ? [...scope.symbolTable.getOwnSymbols(symbolTableLookupFlag), ...scope.allNamespaceTypeTable.getOwnSymbols(symbolTableLookupFlag)]
             : scope.symbolTable.getOwnSymbols(symbolTableLookupFlag);
 
+        const fileSymbols = file.ast.getSymbolTable().getOwnSymbols(symbolTableLookupFlag);
+        scopeSymbols.push(...fileSymbols);
 
         const scopeAvailableSymbols = scopeSymbols.filter(sym => {
             if (file.parseMode === ParseMode.BrighterScript) {
@@ -372,12 +379,21 @@ export class CompletionsProcessor {
 
 
     private getCompletionKindFromSymbol(symbol: BscSymbol, areMembers = false) {
-        const type = symbol?.type;
+        let type = symbol?.type;
         const extraData = symbol?.data;
         const finalTypeNameLower = type?.toString().split('.').pop().toLowerCase();
         const symbolNameLower = symbol?.name.toLowerCase();
         let nameMatchesType = symbolNameLower === finalTypeNameLower;
-        if (isConstStatement(extraData?.definingNode)) {
+        let definingNode = extraData?.definingNode;
+        let isAlias = false;
+        if (isAliasStatement(extraData?.definingNode)) {
+            isAlias = true;
+            const aliasExtraData: ExtraSymbolData = {};
+            type = extraData.definingNode.value.getType({ flags: symbol.flags, data: aliasExtraData });
+            definingNode = aliasExtraData?.definingNode;
+        }
+
+        if (isConstStatement(definingNode)) {
             return CompletionItemKind.Constant;
         } else if (isClassType(type) && nameMatchesType) {
             return CompletionItemKind.Class;
@@ -387,7 +403,7 @@ export class CompletionsProcessor {
                     nameMatchesType = true;
                 }
             }
-            if (nameMatchesType) {
+            if (nameMatchesType || isAlias) {
                 return areMembers ? CompletionItemKind.Method : CompletionItemKind.Function;
             }
         } else if (isInterfaceType(type) && nameMatchesType) {
@@ -607,6 +623,14 @@ export class CompletionsProcessor {
             return true;
         }
         return false;
+    }
+
+    private isTokenAdjacentTo(file: BrsFile, currentToken: Token, targetKind: TokenKind) {
+        return file.getPreviousToken(currentToken)?.kind === targetKind || file.isTokenNextToTokenKind(currentToken, targetKind);
+    }
+
+    private getAdjacentToken(file: BrsFile, currentToken: Token, targetKind: TokenKind) {
+        return currentToken.kind === targetKind ? currentToken : file.getTokenBefore(currentToken, targetKind);
     }
 }
 
