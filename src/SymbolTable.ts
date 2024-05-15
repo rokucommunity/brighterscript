@@ -5,7 +5,7 @@ import type { ReferenceType } from './types/ReferenceType';
 import type { UnionType } from './types/UnionType';
 import { getUniqueType } from './types/helpers';
 import { isAnyReferenceType, isNamespaceType, isReferenceType } from './astUtils/reflection';
-import type { SymbolTypeFlag } from './SymbolTypeFlag';
+import { SymbolTypeFlag } from './SymbolTypeFlag';
 
 /**
  * Stores the types associated with variables and functions in the Brighterscript code
@@ -231,8 +231,15 @@ export class SymbolTable implements SymbolTypeGetter {
             options.data.memberOfAncestor = data?.memberOfAncestor;
             options.data.doNotMerge = data?.doNotMerge;
             options.data.isAlias = data?.isAlias;
+            options.data.isInstance = data?.isInstance;
         }
         return resolvedType;
+    }
+
+    isSymbolTypeInstance(name: string) {
+        const data: ExtraSymbolData = {};
+        this.getSymbolType(name, { flags: SymbolTypeFlag.runtime, data: data });
+        return data?.isInstance;
     }
 
     /**

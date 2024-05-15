@@ -1,6 +1,6 @@
 import { URI } from 'vscode-uri';
 import type { Range } from 'vscode-languageserver';
-import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isComponentType, isConstStatement, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumStatement, isEnumType, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isObjectType, isPrimitiveType, isReferenceType, isStringType, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
+import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBooleanType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isComponentType, isConstStatement, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumStatement, isEnumType, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isStringType, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
@@ -450,7 +450,8 @@ export class ScopeValidator {
                 }
 
                 const compatibilityData: TypeCompatibilityData = {};
-                if (!paramType?.isTypeCompatible(argType, compatibilityData)) {
+                const isAllowedArgConversion = this.checkAllowedArgConversions(paramType, argType);
+                if (!isAllowedArgConversion && !paramType?.isTypeCompatible(argType, compatibilityData)) {
                     this.addMultiScopeDiagnostic({
                         ...DiagnosticMessages.argumentTypeMismatch(argType.toString(), paramType.toString(), compatibilityData),
                         range: arg.range,
@@ -462,6 +463,13 @@ export class ScopeValidator {
             }
 
         }
+    }
+
+    private checkAllowedArgConversions(paramType: BscType, argType: BscType): boolean {
+        if (isNumberType(argType) && isBooleanType(paramType)) {
+            return true;
+        }
+        return false;
     }
 
 

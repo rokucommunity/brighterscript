@@ -42,7 +42,7 @@ export class DiagnosticManager {
      * Diagnostics can optionally be associated with a context
      */
     public register(diagnostic: BsDiagnostic, context?: DiagnosticContext);
-    public register(diagnostics: Array<BsDiagnostic>);
+    public register(diagnostics: Array<BsDiagnostic>, context?: DiagnosticContext);
     public register(diagnostics: Array<DiagnosticContextPair>);
     public register(diagnosticArg: BsDiagnostic | Array<BsDiagnostic | DiagnosticContextPair>, context?: DiagnosticContext) {
         const diagnostics = Array.isArray(diagnosticArg) ? diagnosticArg : [{ diagnostic: diagnosticArg, context: context }];

@@ -25,6 +25,11 @@ export abstract class AstNode {
     public abstract transpile(state: BrsTranspileState): TranspileResult;
 
     /**
+     * Optional property, set at the top level with a map of conditional compile consts and their values
+     */
+    public bsConsts?: Map<string, boolean>;
+
+    /**
      * When being considered by the walk visitor, this describes what type of element the current class is.
      */
     public visitMode = InternalWalkMode.visitStatements;
@@ -150,7 +155,8 @@ export abstract class AstNode {
     public link() {
         //the act of walking causes the nodes to be linked
         this.walk(() => { }, {
-            walkMode: WalkMode.visitAllRecursive
+            // eslint-disable-next-line no-bitwise
+            walkMode: WalkMode.visitAllRecursive | InternalWalkMode.visitFalseConditionalCompilationBlocks
         });
     }
 
@@ -168,8 +174,25 @@ export abstract class AstNode {
         }
     }
 
+
+    /**
+     * Gets all the trivia (comments, whitespace) that is directly before the start of this node
+     * Note: this includes all trivia that might start on the line of the previous node
+     */
     public getLeadingTrivia(): Token[] {
         return [];
+    }
+
+    /**
+     * Gets any trivia that is directly before the end of the node
+     * For example, this would return all trivia before a `end function` token of a FunctionExpression
+     */
+    public getEndTrivia(): Token[] {
+        return [];
+    }
+
+    public getBsConsts() {
+        return this.bsConsts ?? this.parent?.getBsConsts();
     }
 }
 
@@ -264,5 +287,8 @@ export enum AstNodeKind {
     TypecastExpression = 'TypecastExpression',
     TypedArrayExpression = 'TypedArrayExpression',
     TypecastStatement = 'TypecastStatement',
-    AliasStatement = 'AliasStatement'
+    AliasStatement = 'AliasStatement',
+    ConditionalCompileStatement = 'ConditionalCompileStatement',
+    ConditionalCompileConstStatement = 'ConditionalCompileConstStatement',
+    ConditionalCompileErrorStatement = 'ConditionalCompileErrorStatement'
 }

@@ -918,6 +918,10 @@ export interface ExtraSymbolData {
      * is this symbol an alias?
      */
     isAlias?: boolean;
+    /**
+     * is this symbol an instance of the type
+     */
+    isInstance?: boolean;
 }
 
 export interface GetTypeOptions {
