@@ -111,7 +111,7 @@ export class LanguageServer {
             void this.sendBusyStatus(status);
         });
 
-        //disable color for lsp logging
+        //disable logger colors when running in LSP mode
         logger.enableColor = false;
 
         //listen to all of the output log events and pipe them into the debug channel in the extension
