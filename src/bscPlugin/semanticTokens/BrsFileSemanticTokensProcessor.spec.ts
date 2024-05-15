@@ -115,6 +115,20 @@ describe('BrsFileSemanticTokensProcessor', () => {
         ]);
     });
 
+    it('matches class name in assignment statement', () => {
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            sub test()
+                ctor = Person
+            end sub
+            class Person
+            end class
+        `);
+        expectSemanticTokensIncludes(file, [
+            // ctor = |Person|
+            [SemanticTokenTypes.class, 2, 23, 2, 29]
+        ]);
+    });
+
     it('matches namespace-relative parts', () => {
         const file = program.setFile<BrsFile>('source/main.bs', `
             namespace alpha

@@ -9,7 +9,6 @@ import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import type { BscType } from '../../types/BscType';
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
 import type { AstNode } from '../../parser/AstNode';
-import { DynamicType } from '../../types';
 
 export class BrsFileSemanticTokensProcessor {
     public constructor(
@@ -102,6 +101,12 @@ export class BrsFileSemanticTokensProcessor {
             return { type: SemanticTokenTypes.class };
             //function statements and expressions
         } else if (isCallableType(type)) {
+            //if the typetime type is a class, then color this like a class
+            const typetimeType = node.getType({ flags: SymbolTypeFlag.typetime });
+            if (isClassType(typetimeType)) {
+                return { type: SemanticTokenTypes.class };
+            }
+
             //if this is a function statement or expression, treat it as a function
             if (isFunctionExpression(node) || isFunctionStatement(node)) {
                 return { type: SemanticTokenTypes.function };
