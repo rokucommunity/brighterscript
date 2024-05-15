@@ -112,7 +112,7 @@ export class HoverProcessor {
                 declarationText = firstToken?.text ?? TokenKind.Enum;
             }
         }
-        const innerText = `${declarationText} ${exprTypeString} `.trim();
+        const innerText = `${declarationText} ${exprTypeString}`.trim();
         let result = fence(innerText);
         return result;
     }

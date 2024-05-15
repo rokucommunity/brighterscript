@@ -346,6 +346,21 @@ export type BlockTerminator =
     | TokenKind.Catch
     | TokenKind.EndTry;
 
+/** Set of keywords that end non-conditional compilation blocks. */
+export const BlockTerminators = [
+    TokenKind.Else,
+    TokenKind.EndFor,
+    TokenKind.Next,
+    TokenKind.EndIf,
+    TokenKind.EndWhile,
+    TokenKind.EndSub,
+    TokenKind.EndFunction,
+    TokenKind.EndNamespace,
+    TokenKind.EndInterface,
+    TokenKind.Catch,
+    TokenKind.EndTry
+];
+
 /** The set of operators valid for use in assignment statements. */
 export const AssignmentOperators = [
     TokenKind.Equal,

@@ -8,12 +8,12 @@ import type { BrsFile } from '../files/BrsFile';
 import type { FunctionStatement } from '../parser/Statement';
 import { PrintStatement, Block, ReturnStatement, ExpressionStatement } from '../parser/Statement';
 import { TokenKind } from '../lexer/TokenKind';
-import { ChildrenSkipper, createVisitor, WalkMode, walkStatements } from './visitors';
+import { ChildrenSkipper, createVisitor, InternalWalkMode, WalkMode, walkStatements } from './visitors';
 import { isFunctionExpression, isPrintStatement } from './reflection';
 import { createCall, createToken, createVariableExpression } from './creators';
 import { createStackedVisitor } from './stackedVisitor';
 import { Editor } from './Editor';
-import { Parser } from '../parser/Parser';
+import { ParseMode, Parser } from '../parser/Parser';
 import type { Statement, Expression, AstNode } from '../parser/AstNode';
 import { expectZeroDiagnostics } from '../testHelpers.spec';
 import type { FunctionExpression } from '../parser/Expression';
@@ -1198,6 +1198,146 @@ describe('astUtils visitors', () => {
                 'IncrementStatement',
                 'VariableExpression'
             ]);
+        });
+
+        it('can get end trivia of any kind of block type node', () => {
+            const file: BrsFile = program.setFile('source/main.bs', `
+                sub test()
+                    x = {
+                        val: [123],
+                        count: 4
+                        ' end comment in literal AA 1
+                    }
+                    for each y in x.val
+                        print y
+                        ' end comment in for 2
+                    end for
+
+                    if x.count > 2
+                        print "hi"
+                        ' end comment in if 3
+                    end if
+
+                    while x.count > 3
+                        x.count--
+                        ' end comment in while 4
+                    end while
+
+                    try
+                        print "in try"
+                    catch e
+                        ' end comment in try 5
+                    end try
+
+                    array = [
+                        1,
+                        2,
+                        ' end comment in array 6
+                    ]
+
+                    ' end comment in function 7
+                end sub
+            `);
+            const comments = [];
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            file.ast.walk(createVisitor({
+                AstNode: (node) => {
+                    const endNodeComments = node.getEndTrivia().filter(t => t.kind === TokenKind.Comment);
+                    comments.push(...endNodeComments);
+                }
+            }), {
+                walkMode: WalkMode.visitAllRecursive
+            });
+
+            expect(comments.length).to.eql(7);
+        });
+
+        it('can set bsConst in walk', () => {
+            const { ast } = program.setFile<BrsFile>('source/main.brs', `
+                #if DEBUG
+                sub main()
+                end sub
+                #end if
+            `);
+            const bsConsts = new Map<string, boolean>();
+            let foundMainFunc = false;
+            const visitor = createVisitor({
+                FunctionStatement: (func) => {
+                    foundMainFunc ||= func.getName(ParseMode.BrighterScript) === 'main';
+                }
+            });
+            ast.walk(visitor, {
+                walkMode: WalkMode.visitStatements,
+                bsConsts: bsConsts
+            });
+            // did not walk false block
+            expect(foundMainFunc).to.be.false;
+            bsConsts.set('debug', true);
+            ast.walk(visitor, {
+                walkMode: WalkMode.visitStatements,
+                bsConsts: bsConsts
+            });
+            // debug is true, so it did walk block
+            expect(foundMainFunc).to.be.true;
+        });
+
+        it('can walk false cc blocks', () => {
+            const { ast } = program.setFile<BrsFile>('source/main.brs', `
+                #if false
+                sub main()
+                end sub
+                #end if
+            `);
+            const bsConsts = new Map<string, boolean>();
+            let foundMainFunc = false;
+            const visitor = createVisitor({
+                FunctionStatement: (func) => {
+                    foundMainFunc ||= func.getName(ParseMode.BrighterScript) === 'main';
+                }
+            });
+            ast.walk(visitor, {
+                walkMode: WalkMode.visitStatements,
+                bsConsts: bsConsts
+            });
+            // did not walk false block
+            expect(foundMainFunc).to.be.false;
+            ast.walk(visitor, {
+                // eslint-disable-next-line no-bitwise
+                walkMode: WalkMode.visitStatements | InternalWalkMode.visitFalseConditionalCompilationBlocks,
+                bsConsts: bsConsts
+            });
+            // did walk false block
+            expect(foundMainFunc).to.be.true;
+        });
+
+        it('will correct walk `not condition` cc blocks', () => {
+            const { ast } = program.setFile<BrsFile>('source/main.brs', `
+                #const DEBUG = false
+                #if not DEBUG
+                sub notDebug()
+                end sub
+                #end if
+                #if not false
+                sub notFalse()
+                end sub
+                #end if
+            `);
+            const bsConsts = new Map<string, boolean>();
+            let functionsFound = new Set<string>();
+            const visitor = createVisitor({
+                FunctionStatement: (func) => {
+                    functionsFound.add(func.getName(ParseMode.BrighterScript));
+                }
+            });
+            ast.walk(visitor, {
+                walkMode: WalkMode.visitStatements,
+                bsConsts: bsConsts
+            });
+            // did walk 'not' block
+            expect(functionsFound.has('notDebug')).to.be.true;
+            expect(functionsFound.has('notFalse')).to.be.true;
         });
     });
 });

@@ -1515,6 +1515,30 @@ describe('ScopeValidator', () => {
             expectZeroDiagnostics(program);
         });
 
+        describe('allowed arg type conversions', () => {
+            it('allows numbers passed to a function that accepts booleans', () => {
+                program.setFile('source/util.bs', `
+                    sub takesBool(input as boolean)
+                    end sub
+
+                    sub tryNums()
+                        pi = 3.14
+                        takesBool(1)
+                        takesBool(-1)
+                        takesBool(123.456)
+                        takesBool(23!)
+                        takesBool(&hABCD)
+                        takesBool(1.22#)
+                        takesBool(pi)
+                        takesBool(0)
+                        takesBool(true)
+                        takesBool(false)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+        });
 
     });
 

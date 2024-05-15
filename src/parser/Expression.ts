@@ -259,6 +259,10 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         return this.tokens.functionType?.leadingTrivia ?? [];
     }
 
+    public getEndTrivia(): Token[] {
+        return this.tokens.endFunctionType?.leadingTrivia ?? [];
+    }
+
     /**
      * The range of the function, starting at the 'f' in function or 's' in sub (or the open paren if the keyword is missing),
      * and ending with the last n' in 'end function' or 'b' in 'end sub'
@@ -934,7 +938,11 @@ export class ArrayLiteralExpression extends Expression {
         return new ArrayType(...innerTypes);
     }
     getLeadingTrivia(): Token[] {
-        return this.tokens.open.leadingTrivia ?? [];
+        return this.tokens.open?.leadingTrivia ?? [];
+    }
+
+    getEndTrivia(): Token[] {
+        return this.tokens.close?.leadingTrivia ?? [];
     }
 }
 
@@ -1083,7 +1091,11 @@ export class AALiteralExpression extends Expression {
     }
 
     public getLeadingTrivia(): Token[] {
-        return this.tokens.open.leadingTrivia ?? [];
+        return this.tokens.open?.leadingTrivia ?? [];
+    }
+
+    public getEndTrivia(): Token[] {
+        return this.tokens.close?.leadingTrivia ?? [];
     }
 
 }
