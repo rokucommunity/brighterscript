@@ -374,14 +374,15 @@ export class CompletionsProcessor {
     private getCompletionKindFromSymbol(symbol: BscSymbol, areMembers = false) {
         const type = symbol?.type;
         const extraData = symbol?.data;
-        const finalTypeNameLower = type?.toString().split('.').pop().toLowerCase();
-        const symbolNameLower = symbol?.name.toLowerCase();
-        let nameMatchesType = symbolNameLower === finalTypeNameLower;
+        const isInstance = extraData?.isInstance;
         if (isConstStatement(extraData?.definingNode)) {
             return CompletionItemKind.Constant;
-        } else if (isClassType(type) && nameMatchesType) {
+        } else if (isClassType(type) && !isInstance) {
             return CompletionItemKind.Class;
         } else if (isCallableType(type)) {
+            const finalTypeNameLower = type?.toString().split('.').pop().toLowerCase();
+            const symbolNameLower = symbol?.name.toLowerCase();
+            let nameMatchesType = symbolNameLower === finalTypeNameLower;
             if (isTypedFunctionType(type) && !nameMatchesType) {
                 if (symbolNameLower === type.name.replace(/\./gi, '_').toLowerCase()) {
                     nameMatchesType = true;
@@ -390,15 +391,15 @@ export class CompletionsProcessor {
             if (nameMatchesType) {
                 return areMembers ? CompletionItemKind.Method : CompletionItemKind.Function;
             }
-        } else if (isInterfaceType(type) && nameMatchesType) {
+        } else if (isInterfaceType(type) && !isInstance) {
             return CompletionItemKind.Interface;
-        } else if (isEnumType(type) && nameMatchesType) {
+        } else if (isEnumType(type) && !isInstance) {
             return CompletionItemKind.Enum;
         } else if (isEnumMemberType(type)) {
             return CompletionItemKind.EnumMember;
         } else if (isNamespaceType(type)) {
             return CompletionItemKind.Module;
-        } else if (isComponentType(type) && (nameMatchesType || symbolNameLower === 'rosgnode')) {
+        } else if (isComponentType(type) && (!isInstance)) {
             return CompletionItemKind.Interface;
         }
         if (areMembers) {

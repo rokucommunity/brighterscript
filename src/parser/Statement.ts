@@ -1832,7 +1832,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         for (const statement of this.fields) {
             const memberType = statement?.getType({ ...options, typeChain: undefined }); // no typechain info needed
             const flag = statement.isOptional ? SymbolTypeFlag.runtime | SymbolTypeFlag.optional : SymbolTypeFlag.runtime;
-            resultType.addMember(statement?.tokens.name?.text, { definingNode: statement }, memberType, flag);
+            resultType.addMember(statement?.tokens.name?.text, { definingNode: statement, isInstance: true }, memberType, flag);
         }
         options.typeChain?.push(new TypeChainEntry({
             name: this.getName(ParseMode.BrighterScript),
@@ -2544,7 +2544,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
             if (statement.tokens.accessModifier?.kind === TokenKind.Protected) {
                 flag |= SymbolTypeFlag.protected;
             }
-            resultType.addMember(statement?.tokens.name?.text, { definingNode: statement }, fieldType, flag);
+            resultType.addMember(statement?.tokens.name?.text, { definingNode: statement, isInstance: true }, fieldType, flag);
         }
         options.typeChain?.push(new TypeChainEntry({ name: resultType.name, type: resultType, data: options.data, astNode: this }));
         return resultType;
