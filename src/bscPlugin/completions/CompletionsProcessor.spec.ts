@@ -2259,4 +2259,75 @@ describe('CompletionsProcessor', () => {
             }]);
         });
     });
+
+    describe('alias', () => {
+        it('includes aliases', () => {
+            program.setFile('source/main.bs', `
+                alias APerson = Person
+                alias APi = Pi
+
+                namespace alpha
+                    sub test()
+                        print
+                    end sub
+
+                    sub pi()
+                        print "Magnum"
+                    end sub
+
+                    enum Person
+                        tall
+                        short
+                    end enum
+                end namespace
+
+                function Person()
+                    return "John Doe"
+                end function
+
+                const PI = 3.14
+            `);
+            program.validate();
+            //     print |
+            let completions = program.getCompletions('source/main.bs', util.createPosition(6, 31));
+            expectCompletionsIncludes(completions, [{
+                label: 'APi',
+                kind: CompletionItemKind.Constant
+            }, {
+                label: 'APerson',
+                kind: CompletionItemKind.Function
+            }]);
+        });
+
+
+        it('includes runtime and typetime symbols on RHS', () => {
+            program.setFile('source/main.bs', `
+                alias myAlias = a
+
+                function getPersonName()
+                    return "John Doe"
+                end function
+
+                const PI = 3.14
+
+                interface SomeInterface
+                    name as string
+                end interface
+            `);
+            program.validate();
+            //   alias myAlias = a|
+            let completions = program.getCompletions('source/main.bs', util.createPosition(1, 33));
+            expectCompletionsIncludes(completions, [{
+                label: 'getPersonName',
+                kind: CompletionItemKind.Function
+            }, {
+                label: 'PI',
+                kind: CompletionItemKind.Constant
+            }, {
+                label: 'SomeInterface',
+                kind: CompletionItemKind.Interface
+            }]);
+        });
+
+    });
 });

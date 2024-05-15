@@ -1,4 +1,4 @@
-import type { Range, Diagnostic, CodeAction, Position, CompletionItem, Location, DocumentSymbol } from 'vscode-languageserver-protocol';
+import type { Range, Diagnostic, CodeAction, Position, CompletionItem, Location, DocumentSymbol, WorkspaceSymbol } from 'vscode-languageserver-protocol';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -21,7 +21,6 @@ import type { FileFactory } from './files/Factory';
 import type { LazyFileData } from './files/LazyFileData';
 import { TokenKind } from './lexer/TokenKind';
 import type { BscTypeKind } from './types/BscTypeKind';
-import type { WorkspaceSymbol } from 'vscode-languageserver-types';
 import { createToken } from './astUtils/creators';
 
 export interface BsDiagnostic extends Diagnostic {
@@ -321,7 +320,6 @@ export interface CompilerPlugin {
      * @param event
      */
     afterProvideWorkspaceSymbols?(event: AfterProvideWorkspaceSymbolsEvent): any;
-
 
     //scope events
     onScopeValidate?(event: OnScopeValidateEvent): any;

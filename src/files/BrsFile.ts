@@ -1,7 +1,8 @@
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
 import type { CompletionItem, Position, Location } from 'vscode-languageserver';
-import { CancellationTokenSource, CompletionItemKind } from 'vscode-languageserver';
+import { CancellationTokenSource } from 'vscode-languageserver';
+import { CompletionItemKind } from 'vscode-languageserver';
 import chalk from 'chalk';
 import * as path from 'path';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
@@ -17,7 +18,6 @@ import type { Program } from '../Program';
 import { DynamicType } from '../types/DynamicType';
 import { standardizePath as s, util } from '../util';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
-import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
 import { isClassStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isNamespaceStatement, isVariableExpression, isImportStatement, isEnumStatement, isConstStatement, isAnyReferenceType, isNamespaceType, isReferenceType, isCallableType, isBrsFile } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
@@ -26,19 +26,21 @@ import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import type { AstNode, Expression } from '../parser/AstNode';
 import { ReferencesProvider } from '../bscPlugin/references/ReferencesProvider';
 import { DocumentSymbolProcessor } from '../bscPlugin/symbols/DocumentSymbolProcessor';
-import type { BscFile } from './BscFile';
-import type { BscFileLike } from '../astUtils/CachedLookups';
-import { CachedLookups } from '../astUtils/CachedLookups';
+import { WorkspaceSymbolProcessor } from '../bscPlugin/symbols/WorkspaceSymbolProcessor';
 import type { UnresolvedSymbol, AssignedSymbol } from '../AstValidationSegmenter';
 import { AstValidationSegmenter } from '../AstValidationSegmenter';
+import { LogLevel } from '../Logger';
 import type { BscSymbol } from '../SymbolTable';
 import { SymbolTable } from '../SymbolTable';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
+import type { BscFileLike } from '../astUtils/CachedLookups';
+import { CachedLookups } from '../astUtils/CachedLookups';
 import { Editor } from '../astUtils/Editor';
+import { getBsConst } from '../preprocessor/Manifest';
 import type { BscType } from '../types';
 import { NamespaceType } from '../types';
-import { getBsConst } from '../preprocessor/Manifest';
-import { WorkspaceSymbolProcessor } from '../bscPlugin/symbols/WorkspaceSymbolProcessor';
+import type { BscFile } from './BscFile';
+import { DefinitionProvider } from '../bscPlugin/definition/DefinitionProvider';
 
 export type ProvidedSymbolMap = Map<SymbolTypeFlag, Map<string, BscSymbol>>;
 export type ChangedSymbolMap = Map<SymbolTypeFlag, Set<string>>;
@@ -850,6 +852,20 @@ export class BrsFile implements BscFile {
         return new WorkspaceSymbolProcessor({
             program: this.program,
             workspaceSymbols: []
+        }).process();
+    }
+
+    /**
+     * Given a position in a file, if the position is sitting on some type of identifier,
+     * go to the definition of that identifier (where this thing was first defined)
+     * @deprecated use `DefinitionProvider.process()` instead
+     */
+    public getDefinition(position: Position): Location[] {
+        return new DefinitionProvider({
+            program: this.program,
+            file: this,
+            position: position,
+            definitions: []
         }).process();
     }
 
