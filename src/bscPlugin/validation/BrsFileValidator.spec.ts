@@ -600,11 +600,11 @@ describe('BrsFileValidator', () => {
         });
     });
 
+
     describe('alias statement', () => {
         it('allows being at start of file', () => {
             program.setFile('source/main.bs', `
                 alias x = lcase
-
                 sub noop()
                 end sub
             `);
@@ -616,7 +616,6 @@ describe('BrsFileValidator', () => {
             program.setFile('source/main.bs', `
                 alias x = lcase
                 alias y = Str
-
                 sub noop()
                    print x(y(1))
                 end sub
@@ -629,7 +628,6 @@ describe('BrsFileValidator', () => {
             program.setFile('source/main.bs', `
                 namespace alpha
                     alias x = lcase
-
                     sub noop()
                         alias y = str
                         print "hello"
@@ -648,15 +646,12 @@ describe('BrsFileValidator', () => {
                 interface Thing1
                     value as string
                 end interface
-
                 namespace alpha.beta
                     function piAsStr()
                         return "3.14"
                     end function
-
                     const eulerAsStr = "2.78"
                 end namespace
-
                 function lowercase(text as string) as string
                     return lcase(text)
                 end function
@@ -667,12 +662,10 @@ describe('BrsFileValidator', () => {
                 alias p = alpha.beta.piAsStr
                 alias e = alpha.beta.eulerAsStr
                 alias l = lowercase
-
                 namespace ns1.ns2
                     function lowercase(x as integer) as integer
                         return x
                     end function
-
                     sub func1(usedAsType as t)
                         x = usedAsType.value
                         print
@@ -708,7 +701,6 @@ describe('BrsFileValidator', () => {
         it('has diagnostic when rhs not found', () => {
             program.setFile('source/main.bs', `
                 alias x = notThere
-
                 sub noop()
                 end sub
             `);
@@ -720,16 +712,74 @@ describe('BrsFileValidator', () => {
 
     });
 
+    describe('conditional compile', () => {
+        it('allows top level definitions inside #if block', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                #const debug = true
+                #if debug
+                function f()
+                    return 3.14
+                end function
+                #end if
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not allow top level definitions inside #if block inside a function', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                #const debug = true
+                function f()
+                    #if debug
+                    namespace alpha
+                    end namespace
+                    #end if
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel('namespace')
+            ]);
+        });
+
+        it('shows diagnostic for #error', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                #const debug = true
+                function f()
+                    #if debug
+                    #error This is a conditional compile error
+                    #end if
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.hashError('This is a conditional compile error')
+            ]);
+        });
+
+        it('does not show diagnostic for #error when inside false CC block', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                #const debug = false
+                function f()
+                    #if debug
+                    #error This is a conditional compile error
+                    #end if
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+    });
     describe('instances of types', () => {
         it('sets assigned variables as instances', () => {
             const file = program.setFile<BrsFile>('source/main.bs', `
-                sub makeKlass()
-                    x = new Klass()
-                end sub
+            sub makeKlass()
+                x = new Klass()
+            end sub
 
-                class Klass
-                end class
-            `);
+            class Klass
+            end class
+        `);
             program.validate();
             expectZeroDiagnostics(program);
             const func = file.ast.statements[0].findChild<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive });
@@ -743,13 +793,13 @@ describe('BrsFileValidator', () => {
 
         it('sets params as instances', () => {
             const file = program.setFile<BrsFile>('source/main.bs', `
-                sub makeKlass(x as Klass, n = x.name)
-                end sub
+            sub makeKlass(x as Klass, n = x.name)
+            end sub
 
-                class Klass
-                    name as string
-                end class
-            `);
+            class Klass
+                name as string
+            end class
+        `);
             program.validate();
             expectZeroDiagnostics(program);
             const func = file.ast.statements[0].findChild<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive });
@@ -767,23 +817,23 @@ describe('BrsFileValidator', () => {
 
         it('allows super as instance', () => {
             const file = program.setFile<BrsFile>('source/main.bs', `
-                class SuperKlass
-                    name as string
-                    sub new(name as string)
-                        m.name = name
-                    end sub
-                end class
+            class SuperKlass
+                name as string
+                sub new(name as string)
+                    m.name = name
+                end sub
+            end class
 
-                class Klass extends SuperKlass
-                    sub new()
-                        super("hello")
-                    end sub
+            class Klass extends SuperKlass
+                sub new()
+                    super("hello")
+                end sub
 
-                    function getName()
-                        return super.name
-                    end function
-                end class
-            `);
+                function getName()
+                    return super.name
+                end function
+            end class
+        `);
             program.validate();
             expectZeroDiagnostics(program);
             const klass = file.ast.statements[1] as ClassStatement;
@@ -800,4 +850,5 @@ describe('BrsFileValidator', () => {
             expect(data.isInstance).to.be.true;
         });
     });
+
 });
