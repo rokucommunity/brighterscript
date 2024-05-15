@@ -37,6 +37,9 @@ export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> 
         if (!this.logger) {
             this.logger = createLogger();
         }
+        if (!this.logger) {
+            this.logger = createLogger();
+        }
     }
 
     private plugins: CompilerPlugin[] = [];
