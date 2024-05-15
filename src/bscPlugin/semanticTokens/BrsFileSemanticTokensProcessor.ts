@@ -75,7 +75,7 @@ export class BrsFileSemanticTokensProcessor {
         const extraData = {};
         const chain = [];
         // eslint-disable-next-line no-bitwise
-        const symbolType = node.getType({ flags: SymbolTypeFlag.typetime | SymbolTypeFlag.runtime, data: extraData, typeChain: chain });
+        const symbolType = node.getType({ flags: SymbolTypeFlag.runtime, data: extraData, typeChain: chain });
         if (symbolType?.isResolvable()) {
             let info = this.getSemanticTokenInfo(node, symbolType, extraData);
             if (info) {
