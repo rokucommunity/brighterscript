@@ -502,8 +502,8 @@ export let DiagnosticMessages = {
         code: 1093,
         severity: DiagnosticSeverity.Error
     }),
-    expectedHashElseIfToCloseHashIf: (startingLine: number) => ({
-        message: `Expected '#else if' to close '#if' conditional compilation statement starting on line ${startingLine}`,
+    expectedHashEndIfToCloseHashIf: (startingLine: number) => ({
+        message: `Expected '#end if' to close '#if' conditional compilation statement starting on line ${startingLine}`,
         code: 1094,
         severity: DiagnosticSeverity.Error
     }),
@@ -793,6 +793,21 @@ export let DiagnosticMessages = {
     itemCannotBeUsedAsType: (typeText: string) => ({
         message: `'${typeText}' cannot be used as a type`,
         code: 1149,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedNewlineInConditionalCompile: () => ({
+        message: `Expected newline in conditional compilation statement`,
+        code: 1151,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedTerminatorOnConditionalCompileBlock: () => ({
+        message: `Expected '#end if', '#else if', or '#else' to terminate conditional compilation block`,
+        code: 1152,
+        severity: DiagnosticSeverity.Error
+    }),
+    unsafeUnmatchedTerminatorInConditionalCompileBlock: (terminator: string) => ({
+        message: `Unsafe unmatched terminator '${terminator}' in conditional compilation block`,
+        code: 1153,
         severity: DiagnosticSeverity.Error
     })
 };

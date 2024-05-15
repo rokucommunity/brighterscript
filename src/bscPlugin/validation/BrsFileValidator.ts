@@ -1,4 +1,4 @@
-import { isAALiteralExpression, isAliasStatement, isArrayType, isBlock, isBody, isClassStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isTypecastStatement, isUnaryExpression, isVariableExpression, isWhileStatement } from '../../astUtils/reflection';
+import { isAALiteralExpression, isAliasStatement, isArrayType, isBlock, isBody, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isTypecastStatement, isUnaryExpression, isVariableExpression, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -14,12 +14,14 @@ import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import { DynamicType } from '../../types/DynamicType';
 import util from '../../util';
 import type { Range } from 'vscode-languageserver';
+import type { Token } from '../../lexer/Token';
 
 export class BrsFileValidator {
     constructor(
         public event: OnFileValidateEvent<BrsFile>
     ) {
     }
+
 
     public process() {
         const unlinkGlobalSymbolTable = this.event.file.parser.symbolTable.pushParentProvider(() => this.event.program.globalScope.symbolTable);
@@ -31,6 +33,9 @@ export class BrsFileValidator {
         // eslint-disable-next-line @typescript-eslint/dot-notation
         this.event.file['_cachedLookups'].invalidate();
 
+        // make a copy of the bsConsts, because they might be added to
+        const bsConstsBackup = new Map<string, boolean>(this.event.file.ast.getBsConsts());
+
         this.walk();
         this.flagTopLevelStatements();
         //only validate the file if it was actually parsed (skip files containing typedefs)
@@ -38,6 +43,8 @@ export class BrsFileValidator {
             this.validateTopOfFileStatements();
             this.validateTypecastStatements();
         }
+
+        this.event.file.ast.bsConsts = bsConstsBackup;
         unlinkGlobalSymbolTable();
     }
 
@@ -45,6 +52,8 @@ export class BrsFileValidator {
      * Walk the full AST
      */
     private walk() {
+
+
         const visitor = createVisitor({
             MethodStatement: (node) => {
                 //add the `super` symbol to class methods
@@ -186,6 +195,28 @@ export class BrsFileValidator {
             TypecastStatement: (node) => {
                 node.parent.getSymbolTable().addSymbol('m', { definingNode: node, doNotMerge: true }, node.getType({ flags: SymbolTypeFlag.typetime }), SymbolTypeFlag.runtime);
             },
+            ConditionalCompileConstStatement: (node) => {
+                const assign = node.assignment;
+                const constNameLower = assign.tokens.name?.text.toLowerCase();
+                const astBsConsts = this.event.file.ast.bsConsts;
+                if (isLiteralExpression(assign.value)) {
+                    astBsConsts.set(constNameLower, assign.value.tokens.value.text.toLowerCase() === 'true');
+                } else if (isVariableExpression(assign.value)) {
+                    if (this.validateConditionalCompileConst(assign.value.tokens.name)) {
+                        astBsConsts.set(constNameLower, astBsConsts.get(assign.value.tokens.name.text.toLowerCase()));
+                    }
+                }
+            },
+            ConditionalCompileStatement: (node) => {
+                this.validateConditionalCompileConst(node.tokens.condition);
+            },
+            ConditionalCompileErrorStatement: (node) => {
+                this.event.program.diagnostics.register({
+                    file: this.event.file,
+                    ...DiagnosticMessages.hashError(node.tokens.message.text),
+                    range: node.range
+                });
+            },
             AliasStatement: (node) => {
                 // eslint-disable-next-line no-bitwise
                 const targetType = node.value.getType({ flags: SymbolTypeFlag.typetime | SymbolTypeFlag.runtime });
@@ -211,9 +242,20 @@ export class BrsFileValidator {
      */
     private validateDeclarationLocations(statement: Statement, keyword: string, rangeFactory?: () => (Range | undefined)) {
         //if nested inside a namespace, or defined at the root of the AST (i.e. in a body that has no parent)
-        if (isNamespaceStatement(statement.parent?.parent) || (isBody(statement.parent) && !statement.parent?.parent)) {
+        const isOkDeclarationLocation = (parentNode) => {
+            return isNamespaceStatement(parentNode?.parent) || (isBody(parentNode) && !parentNode?.parent);
+        };
+        if (isOkDeclarationLocation(statement.parent)) {
             return;
         }
+
+        // is this in a top levelconditional compile?
+        if (isConditionalCompileStatement(statement.parent?.parent)) {
+            if (isOkDeclarationLocation(statement.parent.parent.parent)) {
+                return;
+            }
+        }
+
         //the statement was defined in the wrong place. Flag it.
         this.event.program.diagnostics.register({
             file: this.event.file,
@@ -315,6 +357,20 @@ export class BrsFileValidator {
         }
     }
 
+
+    private validateConditionalCompileConst(ccConst: Token) {
+        const isBool = ccConst.kind === TokenKind.True || ccConst.kind === TokenKind.False;
+        if (!isBool && !this.event.file.ast.bsConsts.has(ccConst.text.toLowerCase())) {
+            this.event.program.diagnostics.register({
+                file: this.event.file,
+                ...DiagnosticMessages.referencedConstDoesNotExist(),
+                range: ccConst.range
+            });
+            return false;
+        }
+        return true;
+    }
+
     /**
      * Find statements defined at the top level (or inside a namespace body) that are not allowed to be there
      */
@@ -335,6 +391,9 @@ export class BrsFileValidator {
                     !isImportStatement(statement) &&
                     !isConstStatement(statement) &&
                     !isTypecastStatement(statement) &&
+                    !isConditionalCompileConstStatement(statement) &&
+                    !isConditionalCompileErrorStatement(statement) &&
+                    !isConditionalCompileStatement(statement) &&
                     !isAliasStatement(statement)
                 ) {
                     this.event.program.diagnostics.register({

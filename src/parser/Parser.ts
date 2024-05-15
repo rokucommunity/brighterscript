@@ -11,7 +11,9 @@ import {
     BrighterScriptSourceLiterals,
     DisallowedFunctionIdentifiersText,
     DisallowedLocalIdentifiersText,
-    TokenKind
+    TokenKind,
+    BlockTerminators,
+    ReservedWords
 } from '../lexer/TokenKind';
 import type {
     PrintSeparatorSpace,
@@ -26,6 +28,7 @@ import {
     ContinueStatement,
     ClassStatement,
     ConstStatement,
+    ConditionalCompileStatement,
     DimStatement,
     DottedSetStatement,
     EndStatement,
@@ -56,7 +59,9 @@ import {
     ThrowStatement,
     TryCatchStatement,
     WhileStatement,
-    TypecastStatement
+    TypecastStatement,
+    ConditionalCompileConstStatement,
+    ConditionalCompileErrorStatement
 } from './Statement';
 import type { DiagnosticInfo } from '../DiagnosticMessages';
 import { DiagnosticMessages } from '../DiagnosticMessages';
@@ -94,8 +99,8 @@ import {
 import type { Diagnostic, Range } from 'vscode-languageserver';
 import type { Logger } from '../logging';
 import { createLogger } from '../logging';
-import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isTypecastExpression } from '../astUtils/reflection';
-import { createStringLiteral } from '../astUtils/creators';
+import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isConditionalCompileStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isLiteralBoolean, isTypecastExpression, isVariableExpression } from '../astUtils/reflection';
+import { createStringLiteral, createToken } from '../astUtils/creators';
 import type { Expression, Statement } from './AstNode';
 import type { DeepWriteable } from '../interfaces';
 
@@ -203,6 +208,7 @@ export class Parser {
         this.pendingAnnotations = [];
 
         this.ast = this.body();
+        this.ast.bsConsts = options.bsConsts;
         //now that we've built the AST, link every node to its parent
         this.ast.link();
         return this;
@@ -284,6 +290,16 @@ export class Parser {
 
     private declaration(): Statement | AnnotationExpression | undefined {
         try {
+            if (this.checkAny(TokenKind.HashConst)) {
+                return this.conditionalCompileConstStatement();
+            }
+            if (this.checkAny(TokenKind.HashIf)) {
+                return this.conditionalCompileStatement();
+            }
+            if (this.checkAny(TokenKind.HashError)) {
+                return this.conditionalCompileErrorStatement();
+            }
+
             if (this.checkAny(TokenKind.Sub, TokenKind.Function)) {
                 return this.functionDeclaration(false);
             }
@@ -964,7 +980,7 @@ export class Parser {
         });
     }
 
-    private assignment(): AssignmentStatement {
+    private assignment(allowedAssignmentOperators = AssignmentOperators): AssignmentStatement {
         let name = this.advance() as Identifier;
         //add diagnostic if name is a reserved word that cannot be used as an identifier
         if (DisallowedLocalIdentifiersText.has(name.text.toLowerCase())) {
@@ -984,8 +1000,8 @@ export class Parser {
         }
 
         let operator = this.consume(
-            DiagnosticMessages.expectedOperatorAfterIdentifier(AssignmentOperators, name.text),
-            ...AssignmentOperators
+            DiagnosticMessages.expectedOperatorAfterIdentifier(allowedAssignmentOperators, name.text),
+            ...allowedAssignmentOperators
         );
         let value = this.expression();
 
@@ -1971,6 +1987,263 @@ export class Parser {
         return branch;
     }
 
+    private conditionalCompileStatement(): ConditionalCompileStatement {
+        const hashIfToken = this.advance();
+        const startingRange = hashIfToken.range;
+        let notToken: Token | undefined;
+
+        if (this.check(TokenKind.Not)) {
+            notToken = this.advance();
+        }
+
+        if (!this.checkAny(TokenKind.True, TokenKind.False, TokenKind.Identifier)) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.invalidHashIfValue(),
+                range: this.peek()?.range
+            });
+        }
+
+
+        const condition = this.advance();
+
+        let thenBranch: Block;
+        let elseBranch: ConditionalCompileStatement | Block | undefined;
+
+        let hashEndIfToken: Token | undefined;
+        let hashElseToken: Token | undefined;
+
+        //keep track of the current error count
+        //if this is `#if false` remove all diagnostics.
+        let diagnosticsLengthBeforeBlock = this.diagnostics.length;
+
+        thenBranch = this.blockConditionalCompileBranch(hashIfToken);
+        const conditionTextLower = condition.text.toLowerCase();
+        if (!this.options.bsConsts?.get(conditionTextLower) || conditionTextLower === 'false') {
+            //throw out any new diagnostics created as a result of a false block
+            this.diagnostics.splice(diagnosticsLengthBeforeBlock, this.diagnostics.length - diagnosticsLengthBeforeBlock);
+        }
+
+        this.ensureNewLine();
+        this.advance();
+
+        //else branch
+        if (this.check(TokenKind.HashElseIf)) {
+            // recurse-read `#else if`
+            elseBranch = this.conditionalCompileStatement();
+            this.ensureNewLine();
+
+        } else if (this.check(TokenKind.HashElse)) {
+            hashElseToken = this.advance();
+            let diagnosticsLengthBeforeBlock = this.diagnostics.length;
+            elseBranch = this.blockConditionalCompileBranch(hashIfToken);
+
+            if (condition.text.toLowerCase() === 'true') {
+                //throw out any new diagnostics created as a result of a false block
+                this.diagnostics.splice(diagnosticsLengthBeforeBlock, this.diagnostics.length - diagnosticsLengthBeforeBlock);
+            }
+            this.ensureNewLine();
+            this.advance();
+        }
+
+        if (!isConditionalCompileStatement(elseBranch)) {
+
+            if (this.check(TokenKind.HashEndIf)) {
+                hashEndIfToken = this.advance();
+
+            } else {
+                //missing #endif
+                this.diagnostics.push({
+                    ...DiagnosticMessages.expectedHashEndIfToCloseHashIf(startingRange.start.line),
+                    range: hashIfToken.range
+                });
+            }
+        }
+
+        return new ConditionalCompileStatement({
+            hashIf: hashIfToken,
+            hashElse: hashElseToken,
+            hashEndIf: hashEndIfToken,
+            not: notToken,
+            condition: condition,
+            thenBranch: thenBranch,
+            elseBranch: elseBranch
+        });
+    }
+
+    //consume a conditional compile branch block of an `#if` statement
+    private blockConditionalCompileBranch(hashIfToken: Token) {
+        //keep track of the current error count, because if the then branch fails,
+        //we will trash them in favor of a single error on if
+        let diagnosticsLengthBeforeBlock = this.diagnostics.length;
+
+        //parsing until trailing "#end if", "#else", "#else if"
+        let branch = this.conditionalCompileBlock();
+
+        if (!branch) {
+            //throw out any new diagnostics created as a result of a `then` block parse failure.
+            //the block() function will discard the current line, so any discarded diagnostics will
+            //resurface if they are legitimate, and not a result of a malformed if statement
+            this.diagnostics.splice(diagnosticsLengthBeforeBlock, this.diagnostics.length - diagnosticsLengthBeforeBlock);
+
+            //this whole if statement is bogus...add error to the if token and hard-fail
+            this.diagnostics.push({
+                ...DiagnosticMessages.expectedTerminatorOnConditionalCompileBlock(),
+                range: hashIfToken.range
+            });
+            throw this.lastDiagnosticAsError();
+        }
+        return branch;
+    }
+
+    /**
+     * Parses a block, looking for a specific terminating TokenKind to denote completion.
+     * Always looks for `#end if` or `#else`
+     */
+    private conditionalCompileBlock(): Block | undefined {
+        const parentAnnotations = this.enterAnnotationBlock();
+
+        this.consumeStatementSeparators(true);
+        let startingToken = this.peek();
+        const unsafeTerminators = BlockTerminators;
+        const conditionalEndTokens = [TokenKind.HashElse, TokenKind.HashElseIf, TokenKind.HashEndIf];
+        const terminators = [...conditionalEndTokens, ...unsafeTerminators];
+        this.globalTerminators.push(conditionalEndTokens);
+        const statements: Statement[] = [];
+        while (!this.isAtEnd() && !this.checkAny(...terminators)) {
+            //grab the location of the current token
+            let loopCurrent = this.current;
+            let dec = this.declaration();
+            if (dec) {
+                if (!isAnnotationExpression(dec)) {
+                    this.consumePendingAnnotations(dec);
+                    statements.push(dec);
+                }
+
+                const peekKind = this.peek().kind;
+                if (conditionalEndTokens.includes(peekKind)) {
+                    // current conditional compile branch was closed by other statement, rewind to preceding newline
+                    this.current--;
+                }
+                //ensure statement separator
+                this.consumeStatementSeparators();
+
+            } else {
+                //something went wrong. reset to the top of the loop
+                this.current = loopCurrent;
+
+                //scrap the entire line (hopefully whatever failed has added a diagnostic)
+                this.consumeUntil(TokenKind.Newline, TokenKind.Colon, TokenKind.Eof);
+
+                //trash the next token. this prevents an infinite loop. not exactly sure why we need this,
+                //but there's already an error in the file being parsed, so just leave this line here
+                this.advance();
+
+                //consume potential separators
+                this.consumeStatementSeparators(true);
+            }
+        }
+        this.globalTerminators.pop();
+
+
+        if (this.isAtEnd()) {
+            return undefined;
+            // TODO: Figure out how to handle unterminated blocks well
+        } else {
+            //did we  hit an unsafe terminator?
+            //if so, we need to restore the statement separator
+            let prev = this.previous();
+            let prevKind = prev.kind;
+            let peek = this.peek();
+            let peekKind = this.peek().kind;
+            if (
+                (peekKind === TokenKind.HashEndIf || peekKind === TokenKind.HashElse || peekKind === TokenKind.HashElseIf) &&
+                (prevKind === TokenKind.Newline)
+            ) {
+                this.current--;
+            } else if (unsafeTerminators.includes(peekKind) &&
+                (prevKind === TokenKind.Newline || prevKind === TokenKind.Colon)
+            ) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.unsafeUnmatchedTerminatorInConditionalCompileBlock(peek.text),
+                    range: peek.range
+                });
+                throw this.lastDiagnosticAsError();
+            } else {
+                return undefined;
+            }
+        }
+        this.exitAnnotationBlock(parentAnnotations);
+        return new Block({ statements: statements, startingRange: startingToken.range });
+    }
+
+    private conditionalCompileConstStatement() {
+        const hashConstToken = this.advance();
+
+        const constName = this.peek();
+        //disallow using keywords for const names
+        if (ReservedWords.has(constName?.text.toLowerCase())) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.constNameCannotBeReservedWord(),
+                range: constName?.range
+            });
+
+            this.lastDiagnosticAsError();
+            return;
+        }
+        const assignment = this.assignment([TokenKind.Equal]);
+        if (assignment) {
+            // check for something other than #const <name> = <otherName|true|false>
+            if (assignment.tokens.as || assignment.typeExpression) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.unexpectedToken(assignment.tokens.as?.text || assignment.typeExpression?.getName(ParseMode.BrighterScript)),
+                    range: assignment.tokens.as?.range ?? assignment.typeExpression?.range
+                });
+                this.lastDiagnosticAsError();
+            }
+
+            if (isVariableExpression(assignment.value) || isLiteralBoolean(assignment.value)) {
+                //value is an identifier or a boolean
+                //check for valid identifiers will happen in program validation
+            } else {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.invalidHashConstValue(),
+                    range: assignment.value.range
+                });
+                this.lastDiagnosticAsError();
+            }
+        } else {
+            return undefined;
+        }
+
+        if (!this.check(TokenKind.Newline)) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.expectedNewlineInConditionalCompile(),
+                range: this.peek().range
+            });
+            throw this.lastDiagnosticAsError();
+        }
+
+        return new ConditionalCompileConstStatement({ hashConst: hashConstToken, assignment: assignment });
+    }
+
+    private conditionalCompileErrorStatement() {
+        const hashErrorToken = this.advance();
+        const tokensUntilEndOfLine = this.consumeUntil(TokenKind.Newline);
+        const message = createToken(TokenKind.HashErrorMessage, tokensUntilEndOfLine.map(t => t.text).join(' '));
+        return new ConditionalCompileErrorStatement({ hashError: hashErrorToken, message: message });
+    }
+
+    private ensureNewLine() {
+        //ensure newline before next keyword
+        if (!this.check(TokenKind.Newline)) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.expectedNewlineInConditionalCompile(),
+                range: this.peek().range
+            });
+            throw this.lastDiagnosticAsError();
+        }
+    }
+
     private ensureNewLineOrColon(silent = false) {
         const prev = this.previous().kind;
         if (prev !== TokenKind.Newline && prev !== TokenKind.Colon) {
@@ -2241,7 +2514,8 @@ export class Parser {
         let startingToken = this.peek();
 
         const statements: Statement[] = [];
-        while (!this.isAtEnd() && !this.checkAny(TokenKind.EndSub, TokenKind.EndFunction, ...terminators)) {
+        const flatGlobalTerminators = this.globalTerminators.flat().flat();
+        while (!this.isAtEnd() && !this.checkAny(TokenKind.EndSub, TokenKind.EndFunction, ...terminators, ...flatGlobalTerminators)) {
             //grab the location of the current token
             let loopCurrent = this.current;
             let dec = this.declaration();
@@ -3187,6 +3461,10 @@ export interface ParseOptions {
      * @default true
      */
     trackLocations?: boolean;
+    /**
+     *
+     */
+    bsConsts?: Map<string, boolean>;
 }
 
 

@@ -17,7 +17,7 @@ import type { Program } from '../Program';
 import { DynamicType } from '../types/DynamicType';
 import { standardizePath as s, util } from '../util';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
-import { Preprocessor } from '../preprocessor/Preprocessor';
+import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
 import { isClassStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isNamespaceStatement, isVariableExpression, isImportStatement, isEnumStatement, isConstStatement, isAnyReferenceType, isNamespaceType, isReferenceType, isCallableType, isBrsFile } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
@@ -37,6 +37,7 @@ import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { Editor } from '../astUtils/Editor';
 import type { BscType } from '../types';
 import { NamespaceType } from '../types';
+import { getBsConst } from '../preprocessor/Manifest';
 import { WorkspaceSymbolProcessor } from '../bscPlugin/symbols/WorkspaceSymbolProcessor';
 
 export type ProvidedSymbolMap = Map<SymbolTypeFlag, Map<string, BscSymbol>>;
@@ -364,36 +365,17 @@ export class BrsFile implements BscFile {
 
             this.getCommentFlags(lexer.tokens);
 
-            let preprocessor = new Preprocessor();
-
-            //remove all code inside false-resolved conditional compilation statements.
-            //TODO preprocessor should go away in favor of the AST handling this internally (because it affects transpile)
-            //currently the preprocessor throws exceptions on syntax errors...so we need to catch it
-            try {
-                this.program.logger.time('debug', ['preprocessor.process', chalk.green(this.srcPath)], () => {
-                    preprocessor.process(lexer.tokens, this.program.getManifest());
-                });
-            } catch (error: any) {
-                //if the thrown error is DIFFERENT than any errors from the preprocessor, add that error to the list as well
-                if (diagnostics.find((x) => x === error) === undefined) {
-                    diagnostics.push(error);
-                }
-            }
-
-            //if the preprocessor generated tokens, use them.
-            let tokens = preprocessor.processedTokens.length > 0 ? preprocessor.processedTokens : lexer.tokens;
-
-            this.program.logger.time('debug', ['parser.parse', chalk.green(this.srcPath)], () => {
-                this._parser = Parser.parse(tokens, {
+            this.program.logger.time(LogLevel.debug, ['parser.parse', chalk.green(this.srcPath)], () => {
+                this._parser = Parser.parse(lexer.tokens, {
                     mode: this.parseMode,
-                    logger: this.program.logger
+                    logger: this.program.logger,
+                    bsConsts: getBsConst(this.program.getManifest())
                 });
             });
 
             //absorb all lexing/preprocessing/parsing diagnostics
             diagnostics.push(
                 ...lexer.diagnostics as BsDiagnostic[],
-                ...preprocessor.diagnostics as BsDiagnostic[],
                 ...this._parser.diagnostics as BsDiagnostic[]
             );
 
