@@ -475,7 +475,7 @@ describe.only('BrsFileSemanticTokensProcessor', () => {
         ]);
     });
 
-    it.only('works for `new` statement', () => {
+    it('works for `new` statement', () => {
         const file = program.setFile<BrsFile>('source/main.bs', `
             class Person
                 sub speak()
@@ -498,7 +498,7 @@ describe.only('BrsFileSemanticTokensProcessor', () => {
             // |dude|.speak()
             [SemanticTokenTypes.variable, 7, 16, 7, 20],
             // dude.|speak|()
-            [SemanticTokenTypes.method, 7, 21, 6, 26]
+            [SemanticTokenTypes.method, 7, 21, 7, 26]
         ]);
     });
 });

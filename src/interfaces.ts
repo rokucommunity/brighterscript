@@ -918,7 +918,11 @@ export interface ExtraSymbolData {
      */
     isAlias?: boolean;
     /**
-     * is this symbol an instance of the type
+     * Is this symbol an instance of the type.
+     *
+     * `true` means `true`, and `false` or `undefined` means `false`,
+     *
+     * so check for `=== true` or `!== true`
      */
     isInstance?: boolean;
 }
