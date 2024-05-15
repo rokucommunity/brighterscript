@@ -111,6 +111,9 @@ export class LanguageServer {
             void this.sendBusyStatus(status);
         });
 
+        //disable color for lsp logging
+        logger.enableColor = false;
+
         //listen to all of the output log events and pipe them into the debug channel in the extension
         this.loggerSubscription = logger.subscribe((message) => {
             this.connection.tracer.log(message.argsText);
