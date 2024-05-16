@@ -1524,7 +1524,11 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
 
     transpile(state: BrsTranspileState) {
         //namespaces don't actually have any real content, so just transpile their bodies
-        return this.body.transpile(state);
+        return [
+            state.transpileLeadingComments(this.tokens.namespace),
+            this.body.transpile(state),
+            state.transpileLeadingComments(this.tokens.endNamespace)
+        ];
     }
 
     getTypedef(state: BrsTranspileState) {
@@ -1615,8 +1619,7 @@ export class ImportStatement extends Statement implements TypedefProvider {
         //The xml files are responsible for adding the additional script imports, but
         //add the import statement as a comment just for debugging purposes
         return [
-            `'`,
-            state.transpileToken(this.tokens.import, 'import'),
+            state.transpileToken(this.tokens.import, 'import', true),
             ' ',
             state.transpileToken(this.tokens.path)
         ];
@@ -1749,7 +1752,9 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
 
     public transpile(state: BrsTranspileState): TranspileResult {
         //interfaces should completely disappear at runtime
-        return [];
+        return [
+            state.transpileLeadingComments(this.tokens.interface)
+        ];
     }
 
     getTypedef(state: BrsTranspileState) {
@@ -3172,7 +3177,9 @@ export class EnumStatement extends Statement implements TypedefProvider {
 
     transpile(state: BrsTranspileState) {
         //enum declarations do not exist at runtime, so don't transpile anything...
-        return [];
+        return [
+            state.transpileLeadingComments(this.tokens.enum)
+        ];
     }
 
     getTypedef(state: BrsTranspileState) {
@@ -3375,7 +3382,7 @@ export class ConstStatement extends Statement implements TypedefProvider {
 
     public transpile(state: BrsTranspileState): TranspileResult {
         //const declarations don't exist at runtime, so just transpile empty
-        return [];
+        return [state.transpileLeadingComments(this.tokens.const)];
     }
 
     getTypedef(state: BrsTranspileState): TranspileResult {
@@ -3483,8 +3490,7 @@ export class TypecastStatement extends Statement {
     transpile(state: BrsTranspileState) {
         //the typecast statement is a comment just for debugging purposes
         return [
-            `'`,
-            state.transpileToken(this.tokens.typecast, 'typecast'),
+            state.transpileToken(this.tokens.typecast, 'typecast', true),
             ' ',
             this.typecastExpression.obj.transpile(state),
             ' ',
@@ -3588,8 +3594,7 @@ export class AliasStatement extends Statement {
     transpile(state: BrsTranspileState) {
         //the alias statement is a comment just for debugging purposes
         return [
-            `'`,
-            state.transpileToken(this.tokens.alias, 'alias'),
+            state.transpileToken(this.tokens.alias, 'alias', true),
             ' ',
             state.transpileToken(this.tokens.name),
             ' ',
