@@ -6,6 +6,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.30](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.29...v1.0.0-alpha.30) - 2024-05-16
+### Added
+ - alias completions ([#1188](https://github.com/rokucommunity/brighterscript/pull/1188))
+ - the isInstance flag on symbol extra data for when a symbol represents an instance of a type ([#1187](https://github.com/rokucommunity/brighterscript/pull/1187))
+ - Conditional Compilation Statements to the AST ([#1149](https://github.com/rokucommunity/brighterscript/pull/1149))
+ - extra DiagnosticManager.register() overload ([#1185](https://github.com/rokucommunity/brighterscript/pull/1185))
+ - AstNode.getEndTrivia ([#1184](https://github.com/rokucommunity/brighterscript/pull/1184))
+ - `roSGNode` `Update()` overload ([#1173](https://github.com/rokucommunity/brighterscript/pull/1173))
+ - `roSgNodeContentNode` fields ([#1159](https://github.com/rokucommunity/brighterscript/pull/1159))
+ - AstNode visitor function for createVisitor ([#1138](https://github.com/rokucommunity/brighterscript/pull/1138))
+ - `Alias` Statement ([#1151](https://github.com/rokucommunity/brighterscript/pull/1151))
+ - `typecast m as <Type>` statement ([#1140](https://github.com/rokucommunity/brighterscript/pull/1140))
+###  Fixed
+ - allows numbers to be passed to a function that takes a bool ([#1179](https://github.com/rokucommunity/brighterscript/pull/1179))
+ - several lsp crashes for v1 ([#1175](https://github.com/rokucommunity/brighterscript/pull/1175))
+ - crash when diagnostic is missing range ([#1174](https://github.com/rokucommunity/brighterscript/pull/1174))
+ - union type issues with unknown members ([#1170](https://github.com/rokucommunity/brighterscript/pull/1170))
+ - formatting with logger output ([#1171](https://github.com/rokucommunity/brighterscript/pull/1171))
+ - hovers on LHS of assignments do symbol type lookups ([#1165](https://github.com/rokucommunity/brighterscript/pull/1165))
+ - includes in self closing components ([#1150](https://github.com/rokucommunity/brighterscript/pull/1150))
+### Changed
+ - move function calls to separate diagnostic ([#1169](https://github.com/rokucommunity/brighterscript/pull/1169))
+ - all overloaded methods in interfaces from Scraped Roku docs ([#1163](https://github.com/rokucommunity/brighterscript/pull/1163))
+ - Fixes issue with defualt params referencing previous ones ([#1161](https://github.com/rokucommunity/brighterscript/pull/1161))
+ - fix: resolve the stagingDir option relative to the bsconfig.json file ([#1148](https://github.com/rokucommunity/brighterscript/pull/1148))
+ - `CreateObject` function call implies correct return type ([#1154](https://github.com/rokucommunity/brighterscript/pull/1154))
+ - diagnostics refactor: DiagnosticManager ([#1136](https://github.com/rokucommunity/brighterscript/pull/1136))
+ - revert range and column caching ([#1147](https://github.com/rokucommunity/brighterscript/pull/1147))
+ - Fixes CompletionItemKinds for typed variables ([#1145](https://github.com/rokucommunity/brighterscript/pull/1145))
+ - typecast symbols are not merged to other namespaces ([#1144](https://github.com/rokucommunity/brighterscript/pull/1144))
+ - removes diagnostic on accessing unknown member of roAssociativeArray ([#1143](https://github.com/rokucommunity/brighterscript/pull/1143))
+ - upgrade to @rokucommunity/logger ([#1137](https://github.com/rokucommunity/brighterscript/pull/1137))
+
+
+
 ## [1.0.0-alpha.29](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.28...v1.0.0-alpha.29) - 2024-03-28
 ### Fixed
  - transpile crash when token has no text ([#1109](https://github.com/rokucommunity/brighterscript/pull/1109))
