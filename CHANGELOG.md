@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.67.1](https://github.com/rokucommunity/brighterscript/compare/v0.67.0...v0.67.1) - 2024-05-16
+### Fixed
+ - remove ascii color chars in language server logs ([#1189](https://github.com/rokucommunity/brighterscript/pull/1189))
+ - crash when diagnostic is missing range ([#1174](https://github.com/rokucommunity/brighterscript/pull/1174))
+
+
+
 ## [0.67.0](https://github.com/rokucommunity/brighterscript/compare/v0.65.27...v0.67.0) - 2024-05-10
 ### Changed
  - Fix formatting with logger output ([#1171](https://github.com/rokucommunity/brighterscript/pull/1171))
