@@ -1,15 +1,14 @@
-import type { Range } from 'vscode-languageserver-protocol';
 import { SemanticTokenModifiers } from 'vscode-languageserver-protocol';
 import { SemanticTokenTypes } from 'vscode-languageserver-protocol';
-import { isCallExpression, isCallableType, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isInterfaceType, isNamespaceStatement, isNamespaceType, isNativeType, isNewExpression } from '../../astUtils/reflection';
+import { isCallableType, isClassType, isComponentType, isConstStatement, isDottedGetExpression, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionStatement, isInterfaceType, isNamespaceType, isVariableExpression } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
-import type { ExtraSymbolData, OnGetSemanticTokensEvent } from '../../interfaces';
-import type { Locatable } from '../../lexer/Token';
-import { ParseMode } from '../../parser/Parser';
-import type { NamespaceStatement } from '../../parser/Statement';
+import type { ExtraSymbolData, OnGetSemanticTokensEvent, SemanticToken, TypeChainEntry } from '../../interfaces';
+import type { Locatable, Token } from '../../lexer/Token';
 import util from '../../util';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import type { BscType } from '../../types/BscType';
+import { WalkMode, createVisitor } from '../../astUtils/visitors';
+import type { AstNode } from '../../parser/AstNode';
 
 export class BrsFileSemanticTokensProcessor {
     public constructor(
@@ -19,155 +18,128 @@ export class BrsFileSemanticTokensProcessor {
     }
 
     public process() {
-        this.handleClasses();
-        this.handleConstDeclarations();
-        this.iterateNodes();
-    }
+        const scope = this.event.scopes[0];
+        this.result.clear();
+        scope.linkSymbolTable();
 
-    private handleConstDeclarations() {
-        // eslint-disable-next-line @typescript-eslint/dot-notation
-        for (const stmt of this.event.file['_cachedLookups'].constStatements) {
-            this.addToken(stmt.tokens.name, SemanticTokenTypes.variable, [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]);
-        }
-    }
-
-    private handleClasses() {
-
-        const classes = [] as Array<{ className: string; namespaceName: string; range: Range }>;
-
-        //classes used in function param types
-        // eslint-disable-next-line @typescript-eslint/dot-notation
-        for (const func of this.event.file['_cachedLookups'].functionExpressions) {
-            for (const param of func.parameters) {
-                if (isClassType(param.getType({ flags: SymbolTypeFlag.typetime }))) {
-                    const namespace = param.findAncestor<NamespaceStatement>(isNamespaceStatement);
-                    classes.push({
-                        className: util.getAllDottedGetParts(param.typeExpression.expression).map(x => x.text).join('.'),
-                        namespaceName: namespace?.getName(ParseMode.BrighterScript),
-                        range: param.typeExpression.range
-                    });
-                }
+        this.event.file.ast.walk(createVisitor({
+            VariableExpression: (node) => {
+                this.tryAddToken(node, node.tokens.name);
+            },
+            AssignmentStatement: (node) => {
+                this.addToken(node.tokens.name, SemanticTokenTypes.variable);
+            },
+            DottedGetExpression: (node) => {
+                this.tryAddToken(node, node.tokens.name);
+            },
+            ConstStatement: (node) => {
+                this.tryAddToken(node, node.tokens.name);
+            },
+            AliasStatement: (node) => {
+                this.tryAddToken(node, node.tokens.name);
+            },
+            ClassStatement: (node) => {
+                this.tryAddToken(node, node.tokens.name);
+            },
+            InterfaceStatement: (node) => {
+                this.tryAddToken(node, node.tokens.name);
+            },
+            EnumStatement: (node) => {
+                this.tryAddToken(node, node.tokens.name);
+            },
+            FunctionStatement: (node) => {
+                this.tryAddToken(node, node.tokens.name);
+            },
+            FunctionParameterExpression: (node) => {
+                this.addToken(node.tokens.name, SemanticTokenTypes.parameter);
             }
-        }
+        }), {
+            walkMode: WalkMode.visitAllRecursive
+        });
 
-        for (const cls of classes) {
-            if (
-                cls.className.length > 0 &&
-                //only highlight classes that are in scope
-                this.event.scopes.some(x => x.hasClass(cls.className, cls.namespaceName))
-            ) {
-                const tokens = util.splitGetRange('.', cls.className, cls.range);
-                this.addTokens(tokens.reverse(), SemanticTokenTypes.class, SemanticTokenTypes.namespace);
-            }
-        }
+        scope.unlinkSymbolTable();
+
+        //add all tokens to the event
+        this.event.semanticTokens.push(
+            ...this.result.values()
+        );
     }
+
+    private result = new Map<string, SemanticToken>();
+
 
     /**
-     * Add tokens for each locatable item in the list.
-     * Each locatable is paired with a token type. If there are more locatables than token types, all remaining locatables are given the final token type
+     * Add the given token and node IF we have a resolvable type
      */
-    private addTokens(locatables: Locatable[], ...semanticTokenTypes: SemanticTokenTypes[]) {
-        for (let i = 0; i < locatables.length; i++) {
-            const locatable = locatables[i];
-            //skip items that don't have a location
-            if (locatable?.range) {
-                this.addToken(
-                    locatables[i],
-                    //use the type at the index, or the last type if missing
-                    semanticTokenTypes[i] ?? semanticTokenTypes[semanticTokenTypes.length - 1]
-                );
+    private tryAddToken(node: AstNode, token: Token) {
+        const extraData = {} as ExtraSymbolData;
+        const chain = [] as TypeChainEntry[];
+        // eslint-disable-next-line no-bitwise
+        const symbolType = node.getType({ flags: SymbolTypeFlag.runtime, data: extraData, typeChain: chain });
+        if (symbolType?.isResolvable()) {
+            let info = this.getSemanticTokenInfo(node, symbolType, extraData);
+            if (info) {
+                this.addToken(token, info.type, info.modifiers);
             }
         }
     }
 
     private addToken(locatable: Locatable, type: SemanticTokenTypes, modifiers: SemanticTokenModifiers[] = []) {
-        this.event.semanticTokens.push({
+        //only keep a single token per range. Last-in wins
+        this.result.set(util.rangeToString(locatable.range), {
             range: locatable.range,
             tokenType: type,
             tokenModifiers: modifiers
         });
     }
 
-    private iterateNodes() {
-        const scope = this.event.scopes[0];
-
-        //if this file has no scopes, there's nothing else we can do about this
-        if (!scope) {
-            return;
-        }
-        scope.linkSymbolTable();
-        const nodes = [
-            // eslint-disable-next-line @typescript-eslint/dot-notation
-            ...this.event.file['_cachedLookups'].expressions,
-            //make a new VariableExpression to wrap the name. This is a hack, we could probably do it better
-            // eslint-disable-next-line @typescript-eslint/dot-notation
-            ...this.event.file['_cachedLookups'].assignmentStatements,
-            // eslint-disable-next-line @typescript-eslint/dot-notation
-            ...this.event.file['_cachedLookups'].functionExpressions.map(x => x.parameters).flat()
-        ];
-
-        for (let node of nodes) {
-            //lift the callee from call expressions to handle namespaced function calls
-            if (isCallExpression(node)) {
-                node = node.callee;
-            } else if (isNewExpression(node)) {
-                node = node.call.callee;
-            }
-
-            const containingNamespaceNameLower = node.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript).toLowerCase();
-            const tokens = util.getAllDottedGetParts(node);
-            const processedNames: string[] = [];
-            for (const token of tokens ?? []) {
-                processedNames.push(token.text?.toLowerCase());
-                const entityName = processedNames.join('.');
-
-                if (scope.getEnumMemberFileLink(entityName, containingNamespaceNameLower)) {
-                    this.addToken(token, SemanticTokenTypes.enumMember);
-                } else if (scope.getEnum(entityName, containingNamespaceNameLower)) {
-                    this.addToken(token, SemanticTokenTypes.enum);
-                } else if (scope.getClass(entityName, containingNamespaceNameLower)) {
-                    this.addToken(token, SemanticTokenTypes.class);
-                } else if (scope.getInterface(entityName, containingNamespaceNameLower)) {
-                    this.addToken(token, SemanticTokenTypes.interface);
-                } else if (scope.getCallableByName(entityName)) {
-                    this.addToken(token, SemanticTokenTypes.function);
-                } else if (scope.getNamespace(entityName, containingNamespaceNameLower)) {
-                    this.addToken(token, SemanticTokenTypes.namespace);
-                } else if (scope.getConstFileLink(entityName, containingNamespaceNameLower)) {
-                    this.addToken(token, SemanticTokenTypes.variable, [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]);
-                } else {
-                    const extraData = {};
-                    const symbolType = scope.symbolTable.getSymbolType(token.text, { flags: SymbolTypeFlag.typetime, data: extraData });
-                    if (symbolType?.isResolvable()) {
-                        this.addToken(token, this.getSemanticTokenTypeFromType(symbolType, extraData, !!containingNamespaceNameLower));
-                    }
-                }
-            }
-        }
-        scope.unlinkSymbolTable();
-    }
-
-    // TODO: We can use the actual symbol tables to find methods and member fields.
-    private getSemanticTokenTypeFromType(type: BscType, extraData: ExtraSymbolData, areMembers = false) {
+    private getSemanticTokenInfo(node: AstNode, type: BscType, extraData: ExtraSymbolData): { type: SemanticTokenTypes; modifiers?: SemanticTokenModifiers[] } {
         if (isConstStatement(extraData?.definingNode)) {
-            return SemanticTokenTypes.variable;
-        } else if (isClassType(type)) {
-            return SemanticTokenTypes.class;
+            return { type: SemanticTokenTypes.variable, modifiers: [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static] };
+            // non-instances of classes should be colored like classes
+        } else if (isClassType(type) && extraData.isInstance !== true) {
+            return { type: SemanticTokenTypes.class };
+            //function statements and expressions
         } else if (isCallableType(type)) {
-            return areMembers ? SemanticTokenTypes.method : SemanticTokenTypes.function;
+            //if the typetime type is a class, then color this like a class
+            const typetimeType = node.getType({ flags: SymbolTypeFlag.typetime });
+            if (isClassType(typetimeType)) {
+                return { type: SemanticTokenTypes.class };
+            }
+
+            //if this is a function statement or expression, treat it as a function
+            if (isFunctionExpression(node) || isFunctionStatement(node)) {
+                return { type: SemanticTokenTypes.function };
+            }
+            if (
+                //if this is a standalone function
+                isVariableExpression(node) ||
+                //if this is a dottedGet, and the LHS is a namespace, treat it as a function.
+                (isDottedGetExpression(node) && isNamespaceType(node.obj.getType({ flags: SymbolTypeFlag.typetime })))
+            ) {
+                return { type: SemanticTokenTypes.function };
+
+                //all others should be treated as methods
+            } else {
+                return { type: SemanticTokenTypes.method };
+            }
         } else if (isInterfaceType(type)) {
-            return SemanticTokenTypes.interface;
+            return { type: SemanticTokenTypes.interface };
         } else if (isComponentType(type)) {
-            return SemanticTokenTypes.class;
+            return { type: SemanticTokenTypes.class };
         } else if (isEnumType(type)) {
-            return SemanticTokenTypes.enum;
+            return { type: SemanticTokenTypes.enum };
         } else if (isEnumMemberType(type)) {
-            return SemanticTokenTypes.enumMember;
+            return { type: SemanticTokenTypes.enumMember };
         } else if (isNamespaceType(type)) {
-            return SemanticTokenTypes.namespace;
-        } else if (isNativeType(type)) {
-            return SemanticTokenTypes.type;
+            return { type: SemanticTokenTypes.namespace };
+            //this is separate from the checks above because we want to resolve alias lookups before turning this variable into a const
+        } else if (isConstStatement(node)) {
+            return { type: SemanticTokenTypes.variable, modifiers: [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static] };
+        } else if (isVariableExpression(node)) {
+            return { type: SemanticTokenTypes.variable };
+        } else {
+            //we don't know what it is...return undefined to prevent creating a semantic token
         }
-        return areMembers ? SemanticTokenTypes.property : SemanticTokenTypes.variable;
     }
 }

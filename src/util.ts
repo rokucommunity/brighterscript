@@ -2196,7 +2196,7 @@ export class Util {
 
     public isClassUsedAsFunction(potentialClassType: BscType, expression: Expression, options: GetTypeOptions) {
         // eslint-disable-next-line no-bitwise
-        if (options.flags & SymbolTypeFlag.runtime &&
+        if ((options?.flags ?? 0) & SymbolTypeFlag.runtime &&
             isClassType(potentialClassType) &&
             !options.isExistenceTest &&
             potentialClassType.name.toLowerCase() === this.getAllDottedGetPartsAsString(expression).toLowerCase() &&

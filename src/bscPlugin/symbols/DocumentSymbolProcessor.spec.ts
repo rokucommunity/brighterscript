@@ -5,7 +5,6 @@ import { rootDir } from '../../testHelpers.spec';
 import type { DocumentSymbol } from 'vscode-languageserver-types';
 import { SymbolKind } from 'vscode-languageserver-types';
 import type { BrsFile } from '../../files/BrsFile';
-
 let sinon = createSandbox();
 
 describe('DocumentSymbolProcessor', () => {
@@ -44,7 +43,6 @@ describe('DocumentSymbolProcessor', () => {
             let node = file.ast.statements[0];
             //delete the token at the given path
             for (let i = 0; i < nameTokenPath.length - 1; i++) {
-
                 node = node[nameTokenPath[i]];
             }
 

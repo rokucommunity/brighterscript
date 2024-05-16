@@ -1216,7 +1216,7 @@ export class VariableExpression extends Expression {
             }
 
         }
-        options.typeChain?.push(new TypeChainEntry({ name: nameKey, type: resultType, data: options.data, astNode: this }));
+        options?.typeChain?.push(new TypeChainEntry({ name: nameKey, type: resultType, data: options.data, astNode: this }));
         return resultType;
     }
 
