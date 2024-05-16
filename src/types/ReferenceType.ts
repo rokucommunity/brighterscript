@@ -113,7 +113,7 @@ export class ReferenceType extends BscType {
                             if (resolvedType) {
                                 return resolvedType.getMemberType(memberName, options);
                             }
-                            const refLookUp = `${memberName.toLowerCase()}-${options.flags}`;
+                            const refLookUp = `${memberName.toLowerCase()}-${options?.flags}`;
                             let memberTypeReference = this.memberTypeReferences.get(refLookUp);
                             if (memberTypeReference) {
                                 return memberTypeReference;
