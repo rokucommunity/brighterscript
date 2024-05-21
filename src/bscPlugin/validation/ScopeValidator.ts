@@ -524,8 +524,10 @@ export class ScopeValidator {
 
         let accessibilityIsOk = this.checkMemberAccessibility(file, dottedSetStmt, typeChainExpectedLHS);
 
-        //special case for roSgNodeFont - these can accept string
-        if (isComponentType(expectedLHSType) && expectedLHSType.name.toLowerCase() === 'font') {
+        //Most Component fields can be set with strings
+        //TODO: be more precise about which fields can actually accept strings
+        //TODO: if RHS is a string literal, we can do more validation to make sure it's the correct type
+        if (isComponentType(dottedSetStmt.obj?.getType({ flags: SymbolTypeFlag.runtime }))) {
             if (isStringType(actualRHSType)) {
                 return;
             }

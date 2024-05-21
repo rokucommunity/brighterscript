@@ -2350,18 +2350,54 @@ describe('ScopeValidator', () => {
         });
 
 
-        it('allows assigning string to font fields', () => {
-            program.setFile('source/util.bs', `
-                sub setLabelFont(label as roSGNodeLabel)
-                    label.font = "font:LargeSystemFont"
-                    label.font.size = 50
-                end sub
-            `);
-            program.validate();
-            //should have no errors
-            expectZeroDiagnostics(program);
-        });
+        describe('Component fields', () => {
+            it('allows assigning string to font fields', () => {
+                program.setFile('source/util.bs', `
+                    sub setLabelFont(label as roSGNodeLabel)
+                        label.font = "font:LargeSystemFont"
+                        label.font.size = 50
+                    end sub
+                `);
+                program.validate();
+                //should have no errors
+                expectZeroDiagnostics(program);
+            });
 
+            it('allows assigning strings to node fields', () => {
+                program.setFile('source/util.bs', `
+                    sub setPosterPosition(node as roSGNodePoster)
+                        node.translation = "[100, 200]"
+                        node.bitmapMargins = "this is not an aa" ' TODO: this *should* be a diagnostic
+                    end sub
+                `);
+                program.validate();
+                //should have no errors
+                expectZeroDiagnostics(program);
+            });
+
+            it('disallows assigning non-correct type to node fields', () => {
+                program.setFile('source/util.bs', `
+                    sub setId(node as roSgNode)
+                        node.id = 123
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.assignmentTypeMismatch('integer', 'string').message
+                ]);
+            });
+
+            it('allows assigning arrays to appropriate node fields', () => {
+                program.setFile('source/util.bs', `
+                    sub setPosition(node as roSGNodePoster)
+                        node.translation = [100, 200]
+                        node.bitmapMargins = {left: 0, right: 100, top: 0, bottom: 200}
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+        });
     });
 
     describe('operatorTypeMismatch', () => {
