@@ -2569,6 +2569,33 @@ describe('ScopeValidator', () => {
             expectZeroDiagnostics(program);
         });
 
+        it('validates augmented assignments', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff(x as integer)
+                    x += "hello"
+                    print x
+                end sub
+            `);
+            program.validate();
+            //should have errors
+            expectDiagnostics(program, [
+                DiagnosticMessages.operatorTypeMismatch('+=', 'integer', 'string').message
+            ]);
+        });
+
+        it('validates increment statements', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff(x as string)
+                    x++
+                    print x
+                end sub
+            `);
+            program.validate();
+            //should have errors
+            expectDiagnostics(program, [
+                DiagnosticMessages.operatorTypeMismatch('++', 'string').message
+            ]);
+        });
     });
 
     describe('memberAccessibilityMismatch', () => {

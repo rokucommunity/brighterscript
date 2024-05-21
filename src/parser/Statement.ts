@@ -194,6 +194,68 @@ export class AssignmentStatement extends Statement {
     }
 }
 
+export class AugmentedAssignmentStatement extends Statement {
+    constructor(options: {
+        item: Expression;
+        operator: Token;
+        value: Expression;
+    }) {
+        super();
+        this.value = options.value;
+        this.tokens = {
+            operator: options.operator
+        };
+        this.item = options.item;
+        this.value = options.value;
+        this.range = util.createBoundingRange(this.item, util.createBoundingRangeFromTokens(this.tokens), this.value);
+    }
+
+    public readonly tokens: {
+        readonly operator?: Token;
+    };
+
+    public readonly item: Expression;
+
+    public readonly value: Expression;
+
+    public readonly kind = AstNodeKind.AugmentedAssignmentStatement;
+
+    public readonly range: Range | undefined;
+
+    transpile(state: BrsTranspileState) {
+        //if the value is a compound assignment, just transpile the expression itself
+        return [
+            this.item.transpile(state),
+            ' ',
+            state.transpileToken(this.tokens.operator),
+            ' ',
+            this.value.transpile(state)
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'item', visitor, options);
+            walk(this, 'value', visitor, options);
+        }
+    }
+
+    getType(options: GetTypeOptions) {
+        const variableType = util.binaryOperatorResultType(this.item.getType(options), this.tokens.operator, this.value.getType(options));
+
+        //const variableType = this.typeExpression?.getType({ ...options, typeChain: undefined }) ?? this.value.getType({ ...options, typeChain: undefined });
+
+        // Note: compound assignments (eg. +=) are internally dealt with via the RHS being a BinaryExpression
+        // so this.value will be a BinaryExpression, and BinaryExpressions can figure out their own types
+        // options.typeChain?.push(new TypeChainEntry({ name: this.tokens.name.text, type: variableType, data: options.data, range: this.tokens.name.range, astNode: this }));
+        return variableType;
+    }
+
+    getLeadingTrivia(): Token[] {
+        return this.item.getLeadingTrivia();
+    }
+}
+
 export class Block extends Statement {
     constructor(options: {
         statements: Statement[];

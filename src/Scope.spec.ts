@@ -195,7 +195,7 @@ describe('Scope', () => {
             end namespace
             sub main()
                 namea = 2
-                NAMEA += 1
+                NAMEA = 1
             end sub
         `);
         program.validate();
