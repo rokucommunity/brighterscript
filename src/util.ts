@@ -1729,7 +1729,7 @@ export class Util {
     public sortByRange<T extends Locatable>(locatables: T[]) {
         //sort the tokens by range
         return locatables.sort((a, b) => {
-            //handle undefined tokens
+            //handle undefined tokens to prevent crashes
             if (!a?.range) {
                 return 1;
             }
