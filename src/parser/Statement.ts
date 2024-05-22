@@ -1,7 +1,7 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
-import { CompoundAssignmentOperators, TokenKind } from '../lexer/TokenKind';
-import type { BinaryExpression, DottedGetExpression, FunctionExpression, FunctionParameterExpression, LiteralExpression, TypeExpression, TypecastExpression } from './Expression';
+import { TokenKind } from '../lexer/TokenKind';
+import type { DottedGetExpression, FunctionExpression, FunctionParameterExpression, LiteralExpression, TypeExpression, TypecastExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
 import type { Range } from 'vscode-languageserver';
@@ -159,18 +159,13 @@ export class AssignmentStatement extends Statement {
     public readonly range: Range | undefined;
 
     transpile(state: BrsTranspileState) {
-        //if the value is a compound assignment, just transpile the expression itself
-        if (CompoundAssignmentOperators.includes((this.value as BinaryExpression)?.tokens?.operator?.kind)) {
-            return this.value.transpile(state);
-        } else {
-            return [
-                state.transpileToken(this.tokens.name),
-                ' ',
-                state.transpileToken(this.tokens.equals ?? createToken(TokenKind.Equal)),
-                ' ',
-                ...this.value.transpile(state)
-            ];
-        }
+        return [
+            state.transpileToken(this.tokens.name),
+            ' ',
+            state.transpileToken(this.tokens.equals ?? createToken(TokenKind.Equal)),
+            ' ',
+            ...this.value.transpile(state)
+        ];
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -223,7 +218,6 @@ export class AugmentedAssignmentStatement extends Statement {
     public readonly range: Range | undefined;
 
     transpile(state: BrsTranspileState) {
-        //if the value is a compound assignment, just transpile the expression itself
         return [
             this.item.transpile(state),
             ' ',
@@ -1306,11 +1300,13 @@ export class DottedSetStatement extends Statement {
         name: Identifier;
         value: Expression;
         dot?: Token;
+        equals?: Token;
     }) {
         super();
         this.tokens = {
             name: options.name,
-            dot: options.dot
+            dot: options.dot,
+            equals: options.equals
         };
         this.obj = options.obj;
         this.value = options.value;
@@ -1323,6 +1319,7 @@ export class DottedSetStatement extends Statement {
     }
     public readonly tokens: {
         readonly name: Identifier;
+        readonly equals?: Token;
         readonly dot?: Token;
     };
 
@@ -1335,20 +1332,19 @@ export class DottedSetStatement extends Statement {
 
     transpile(state: BrsTranspileState) {
         //if the value is a compound assignment, don't add the obj, dot, name, or operator...the expression will handle that
-        if (CompoundAssignmentOperators.includes((this.value as BinaryExpression)?.tokens?.operator?.kind)) {
-            return this.value.transpile(state);
-        } else {
-            return [
-                //object
-                ...this.obj.transpile(state),
-                this.tokens.dot ? state.tokenToSourceNode(this.tokens.dot) : '.',
-                //name
-                state.transpileToken(this.tokens.name),
-                ' = ',
-                //right-hand-side of assignment
-                ...this.value.transpile(state)
-            ];
-        }
+        return [
+            //object
+            ...this.obj.transpile(state),
+            this.tokens.dot ? state.tokenToSourceNode(this.tokens.dot) : '.',
+            //name
+            state.transpileToken(this.tokens.name),
+            ' ',
+            state.transpileToken(this.tokens.equals, '='),
+            ' ',
+            //right-hand-side of assignment
+            ...this.value.transpile(state)
+        ];
+
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -1382,11 +1378,13 @@ export class IndexedSetStatement extends Statement {
         value: Expression;
         openingSquare?: Token;
         closingSquare?: Token;
+        equals?: Token;
     }) {
         super();
         this.tokens = {
             openingSquare: options.openingSquare,
-            closingSquare: options.closingSquare
+            closingSquare: options.closingSquare,
+            equals: options.equals
         };
         this.obj = options.obj;
         this.indexes = options.indexes;
@@ -1403,6 +1401,7 @@ export class IndexedSetStatement extends Statement {
     public readonly tokens: {
         readonly openingSquare?: Token;
         readonly closingSquare?: Token;
+        readonly equals?: Token;
     };
     public readonly obj: Expression;
     public readonly indexes: Expression[];
@@ -1413,34 +1412,32 @@ export class IndexedSetStatement extends Statement {
     public readonly range: Range | undefined;
 
     transpile(state: BrsTranspileState) {
-        //if the value is a component assignment, don't add the obj, index or operator...the expression will handle that
-        if (CompoundAssignmentOperators.includes((this.value as BinaryExpression)?.tokens?.operator?.kind)) {
-            return this.value.transpile(state);
-        } else {
-            const result = [];
-            result.push(
-                //obj
-                ...this.obj.transpile(state),
-                //   [
-                state.transpileToken(this.tokens.openingSquare)
-            );
-            for (let i = 0; i < this.indexes.length; i++) {
-                //add comma between indexes
-                if (i > 0) {
-                    result.push(', ');
-                }
-                let index = this.indexes[i];
-                result.push(
-                    ...(index?.transpile(state) ?? [])
-                );
+        const result = [];
+        result.push(
+            //obj
+            ...this.obj.transpile(state),
+            //   [
+            state.transpileToken(this.tokens.openingSquare, '[')
+        );
+        for (let i = 0; i < this.indexes.length; i++) {
+            //add comma between indexes
+            if (i > 0) {
+                result.push(', ');
             }
+            let index = this.indexes[i];
             result.push(
-                state.transpileToken(this.tokens.closingSquare),
-                ' = ',
-                ...this.value.transpile(state)
+                ...(index?.transpile(state) ?? [])
             );
-            return result;
         }
+        result.push(
+            state.transpileToken(this.tokens.closingSquare, ']'),
+            ' ',
+            state.transpileToken(this.tokens.equals, '='),
+            ' ',
+            ...this.value.transpile(state)
+        );
+        return result;
+
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {

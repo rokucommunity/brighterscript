@@ -1011,41 +1011,20 @@ export class Parser {
 
         let result = new AssignmentStatement({ equals: operator, name: name, value: value, as: asToken, typeExpression: typeExpression });
 
-        /*AssignmentStatement | AugmentedAssignmentStatement;
-        if (operator.kind === TokenKind.Equal) {
-            result =
-        } else {
-            const nameExpression = new VariableExpression({ name: name });
-            result = new AugmentedAssignmentStatement({
-                item: nameExpression,
-                operator: operator,
-                value: value
-            });
-        }
-*/
         return result;
     }
 
     private augmentedAssignment(): AugmentedAssignmentStatement {
-        let name = this.advance() as Identifier;
-
-        //add diagnostic if name is a reserved word that cannot be used as an identifier
-        if (DisallowedLocalIdentifiersText.has(name.text.toLowerCase())) {
-            this.diagnostics.push({
-                ...DiagnosticMessages.cannotUseReservedWordAsIdentifier(name.text),
-                range: name.range
-            });
-        }
+        let item = this.expression();
 
         let operator = this.consume(
-            DiagnosticMessages.expectedOperatorAfterIdentifier(CompoundAssignmentOperators, name.text),
+            DiagnosticMessages.expectedToken(...CompoundAssignmentOperators),
             ...CompoundAssignmentOperators
         );
         let value = this.expression();
 
-        const nameExpression = new VariableExpression({ name: name });
         let result = new AugmentedAssignmentStatement({
-            item: nameExpression,
+            item: item,
             operator: operator,
             value: value
         });
@@ -2375,7 +2354,7 @@ export class Parser {
         return new ExpressionStatement({ expression: expr });
     }
 
-    private setStatement(): DottedSetStatement | IndexedSetStatement | ExpressionStatement | IncrementStatement | AssignmentStatement {
+    private setStatement(): DottedSetStatement | IndexedSetStatement | ExpressionStatement | IncrementStatement | AssignmentStatement | AugmentedAssignmentStatement {
         /**
          * Attempts to find an expression-statement or an increment statement.
          * While calls are valid expressions _and_ statements, increment (e.g. `foo++`)
@@ -2383,7 +2362,7 @@ export class Parser {
          * priority as standalone function calls though, so we can parse them in the same way.
          */
         let expr = this.call();
-        if (this.checkAny(...AssignmentOperators) && !(isCallExpression(expr))) {
+        if (this.check(TokenKind.Equal) && !(isCallExpression(expr))) {
             let left = expr;
             let operator = this.advance();
             let right = this.expression();
@@ -2393,22 +2372,29 @@ export class Parser {
                 return new IndexedSetStatement({
                     obj: left.obj,
                     indexes: left.indexes,
-                    value: operator.kind === TokenKind.Equal
-                        ? right
-                        : new BinaryExpression({ left: left, operator: operator, right: right }),
+                    value: right,
                     openingSquare: left.tokens.openingSquare,
-                    closingSquare: left.tokens.closingSquare
+                    closingSquare: left.tokens.closingSquare,
+                    equals: operator
                 });
             } else if (isDottedGetExpression(left)) {
                 return new DottedSetStatement({
                     obj: left.obj,
                     name: left.tokens.name,
-                    value: operator.kind === TokenKind.Equal
-                        ? right
-                        : new BinaryExpression({ left: left, operator: operator, right: right }),
-                    dot: left.tokens.dot
+                    value: right,
+                    dot: left.tokens.dot,
+                    equals: operator
                 });
             }
+        } else if (this.checkAny(...CompoundAssignmentOperators) && !(isCallExpression(expr))) {
+            let left = expr;
+            let operator = this.advance();
+            let right = this.expression();
+            return new AugmentedAssignmentStatement({
+                item: left,
+                operator: operator,
+                value: right
+            });
         }
         return this.expressionStatement(expr);
     }
