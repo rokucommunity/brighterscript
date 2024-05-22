@@ -694,15 +694,12 @@ export class ScopeValidator {
         if (isUnionType(rightType)) {
             // TODO: it is possible to validate based on innerTypes, but more complicated
             // Because you need to verify each combination of types
-
         } else if (isDynamicType(rightType) || isObjectType(rightType)) {
-            // operand is basically "any" type... ignore;
-
+            // operand is basically "any" type... ignore
         } else if (isNumberType(rightType)) {
             // operand is a number.. this is ok
-
         } else {
-            // rhs is not a primitive, so no increment operator is not allowed
+            // rhs is not a number, so no increment operator is not allowed
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.operatorTypeMismatch(incStmt.tokens.operator.text, rightType.toString()),
                 range: incStmt.range,
