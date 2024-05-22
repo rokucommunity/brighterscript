@@ -1,5 +1,5 @@
 import type { AALiteralExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionExpression, VariableExpression } from '../parser/Expression';
-import type { AliasStatement, AssignmentStatement, ClassStatement, ConstStatement, EnumStatement, FunctionStatement, ImportStatement, InterfaceStatement, LibraryStatement, NamespaceStatement, TypecastStatement } from '../parser/Statement';
+import type { AliasStatement, AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, ConstStatement, EnumStatement, FunctionStatement, ImportStatement, InterfaceStatement, LibraryStatement, NamespaceStatement, TypecastStatement } from '../parser/Statement';
 import { Cache } from '../Cache';
 import { WalkMode, createVisitor } from './visitors';
 import type { Expression } from '../parser/AstNode';
@@ -96,6 +96,10 @@ export class CachedLookups {
         return this.getFromCache<Array<AssignmentStatement>>('assignmentStatements');
     }
 
+    get augmentedAssignmentStatements(): AugmentedAssignmentStatement[] {
+        return this.getFromCache<Array<AugmentedAssignmentStatement>>('augmentedAssignmentStatements');
+    }
+
     get enumStatements(): EnumStatement[] {
         return this.getFromCache<Array<EnumStatement>>('enumStatements');
     }
@@ -172,6 +176,8 @@ export class CachedLookups {
         const aliasStatements: AliasStatement[] = [];
         const functionStatements: FunctionStatement[] = [];
         const functionExpressions: FunctionExpression[] = [];
+
+        const augmentedAssignmentStatements: AugmentedAssignmentStatement[] = [];
 
         const propertyHints: Record<string, string> = {};
         const addPropertyHints = (item: Token | AALiteralExpression) => {
@@ -333,6 +339,9 @@ export class CachedLookups {
             },
             VariableExpression: e => {
                 visitVariableNameExpression(e);
+            },
+            AugmentedAssignmentStatement: e => {
+                augmentedAssignmentStatements.push(e);
             }
         }), {
             walkMode: WalkMode.visitAllRecursive
@@ -353,5 +362,6 @@ export class CachedLookups {
         this.cache.set('functionStatements', functionStatements);
         this.cache.set('functionExpressions', functionExpressions);
         this.cache.set('propertyHints', propertyHints);
+        this.cache.set('augmentedAssignmentStatements', augmentedAssignmentStatements);
     }
 }

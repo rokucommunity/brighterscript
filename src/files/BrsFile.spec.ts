@@ -3157,6 +3157,113 @@ describe('BrsFile', () => {
             });
 
         });
+
+        it('allows comments after alias/typecast/import statements', async () => {
+            program.setFile('source/types.bs', `
+                class Person
+                end class
+
+                interface MyComponent
+                    name as string
+                end interface
+            `);
+            await testTranspile(`
+                typecast m as MyComponent ' typecast comment
+                import "types.bs" ' import comment
+                alias Person2 = Person ' alias comment
+
+                sub test()
+                    dude = new Person2()
+                    print m.name
+                end sub
+            `, `
+                'typecast m as dynamic ' typecast comment
+                'import "types.bs" ' import comment
+                'alias Person2 = Person ' alias comment
+
+                sub test()
+                    dude = Person()
+                    print m.name
+                end sub
+            `);
+        });
+
+        it('allows comments on same line as alias before namespace', async () => {
+            program.setFile('source/types.bs', `
+                class Person
+                end class
+            `);
+            await testTranspile(`
+                import "types.bs" ' import comment
+                alias Person2 = Person ' alias comment
+
+                namespace alpha
+                    sub foo()
+                    end sub
+                end namespace
+            `, `
+                'import "types.bs" ' import comment
+                'alias Person2 = Person ' alias comment
+
+                sub alpha_foo()
+                end sub
+            `);
+        });
+
+        it('adds comments before eventually empty nodes', async () => {
+            await testTranspile(`
+                ' comment before enum
+                enum Direction
+                    north
+                    south
+                end enum
+
+                ' comment before const
+                const myconst = 1234
+
+                ' comment before interface
+                interface ABC
+                    id as integer
+                    function func() as string
+                end interface
+
+                ' comment before empty namespace
+                namespace alpha
+                end namespace
+            `, `
+                ' comment before enum
+
+                ' comment before const
+
+                ' comment before interface
+
+                ' comment before empty namespace
+            `);
+        });
+
+        describe('augmented assignments', () => {
+            it('transpiles directly', async () => {
+                await testTranspile(`
+                    sub testAugmentedAssigns()
+                        num = 7
+                        num++
+                        num += 2
+                        num -= 2
+                        num >>= 8
+                    end sub
+                `);
+            });
+
+            it('transpiles directly when LHS is a dotted get or indexed get', async () => {
+                await testTranspile(`
+                    sub testAugmentedAssigns(x)
+                        x[0]++
+                        x[0] += 2
+                        x.prop += "hello"
+                    end sub
+                `);
+            });
+        });
     });
 
     describe('callfunc operator', () => {

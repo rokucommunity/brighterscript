@@ -1,13 +1,13 @@
 import { URI } from 'vscode-uri';
 import type { Range } from 'vscode-languageserver';
-import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBooleanType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isComponentType, isConstStatement, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumStatement, isEnumType, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isStringType, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
+import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isComponentType, isConstStatement, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumStatement, isEnumType, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isStringType, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BsDiagnostic, CallableContainer, ExtraSymbolData, FileReference, GetTypeOptions, OnScopeValidateEvent, TypeChainEntry, TypeChainProcessResult, TypeCompatibilityData } from '../../interfaces';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
-import type { AssignmentStatement, ClassStatement, DottedSetStatement, EnumStatement, NamespaceStatement, ReturnStatement } from '../../parser/Statement';
+import type { AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, DottedSetStatement, EnumStatement, IncrementStatement, NamespaceStatement, ReturnStatement } from '../../parser/Statement';
 import util from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
@@ -149,6 +149,12 @@ export class ScopeValidator {
                             type: this.getNodeTypeWrapper(file, assignStmt, { flags: SymbolTypeFlag.runtime }),
                             nameRange: assignStmt.tokens.name.range
                         });
+                    },
+                    AugmentedAssignmentStatement: (binaryExpr) => {
+                        this.validateBinaryExpression(file, binaryExpr);
+                    },
+                    IncrementStatement: (stmt) => {
+                        this.validateIncrementStatement(file, stmt);
                     },
                     NewExpression: (newExpr) => {
                         this.validateNewExpression(file, newExpr);
@@ -522,8 +528,10 @@ export class ScopeValidator {
 
         let accessibilityIsOk = this.checkMemberAccessibility(file, dottedSetStmt, typeChainExpectedLHS);
 
-        //special case for roSgNodeFont - these can accept string
-        if (isComponentType(expectedLHSType) && expectedLHSType.name.toLowerCase() === 'font') {
+        //Most Component fields can be set with strings
+        //TODO: be more precise about which fields can actually accept strings
+        //TODO: if RHS is a string literal, we can do more validation to make sure it's the correct type
+        if (isComponentType(dottedSetStmt.obj?.getType({ flags: SymbolTypeFlag.runtime }))) {
             if (isStringType(actualRHSType)) {
                 return;
             }
@@ -570,15 +578,19 @@ export class ScopeValidator {
     /**
      * Detect invalid use of a binary operator
      */
-    private validateBinaryExpression(file: BrsFile, binaryExpr: BinaryExpression) {
+    private validateBinaryExpression(file: BrsFile, binaryExpr: BinaryExpression | AugmentedAssignmentStatement) {
         const getTypeOpts = { flags: SymbolTypeFlag.runtime };
 
         if (util.isInTypeExpression(binaryExpr)) {
             return;
         }
 
-        let leftType = this.getNodeTypeWrapper(file, binaryExpr.left, getTypeOpts);
-        let rightType = this.getNodeTypeWrapper(file, binaryExpr.right, getTypeOpts);
+        let leftType = isBinaryExpression(binaryExpr)
+            ? this.getNodeTypeWrapper(file, binaryExpr.left, getTypeOpts)
+            : this.getNodeTypeWrapper(file, binaryExpr.item, getTypeOpts);
+        let rightType = isBinaryExpression(binaryExpr)
+            ? this.getNodeTypeWrapper(file, binaryExpr.right, getTypeOpts)
+            : this.getNodeTypeWrapper(file, binaryExpr.value, getTypeOpts);
 
         if (!leftType.isResolvable() || !rightType.isResolvable()) {
             // Can not find the type. error handled elsewhere
@@ -663,6 +675,33 @@ export class ScopeValidator {
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.operatorTypeMismatch(unaryExpr.tokens.operator.text, rightType.toString()),
                 range: unaryExpr.range,
+                file: file
+            });
+        }
+    }
+
+    private validateIncrementStatement(file: BrsFile, incStmt: IncrementStatement) {
+        const getTypeOpts = { flags: SymbolTypeFlag.runtime };
+
+        let rightType = this.getNodeTypeWrapper(file, incStmt.value, getTypeOpts);
+
+        if (!rightType.isResolvable()) {
+            // Can not find the type. error handled elsewhere
+            return;
+        }
+
+        if (isUnionType(rightType)) {
+            // TODO: it is possible to validate based on innerTypes, but more complicated
+            // because you need to verify each combination of types
+        } else if (isDynamicType(rightType) || isObjectType(rightType)) {
+            // operand is basically "any" type... ignore
+        } else if (isNumberType(rightType)) {
+            // operand is a number.. this is ok
+        } else {
+            // rhs is not a number, so no increment operator is not allowed
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.operatorTypeMismatch(incStmt.tokens.operator.text, rightType.toString()),
+                range: incStmt.range,
                 file: file
             });
         }

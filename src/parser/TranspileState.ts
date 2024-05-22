@@ -132,25 +132,29 @@ export class TranspileState {
 
     /**
      * Create a SourceNode from a token, accounting for missing range and multi-line text
+     * Adds all leading trivia for the token
      */
-    public transpileToken(token: TranspileToken, defaultValue?: string): TranspileResult {
-        if (!token?.text && defaultValue !== undefined) {
-            return [new SourceNode(null, null, null, defaultValue)];
-        }
+    public transpileToken(token: TranspileToken, defaultValue?: string, commentOut = false): TranspileResult {
         const leadingCommentsSourceNodes = this.transpileLeadingComments(token);
+        const commentIfCommentedOut = commentOut ? `'` : '';
+
+        if (!token?.text && defaultValue !== undefined) {
+            return [new SourceNode(null, null, null, [...leadingCommentsSourceNodes, commentIfCommentedOut, defaultValue])];
+        }
 
         if (!token.range) {
-            return [new SourceNode(null, null, null, [...leadingCommentsSourceNodes, token.text])];
+            return [new SourceNode(null, null, null, [...leadingCommentsSourceNodes, commentIfCommentedOut, token.text])];
         }
         //split multi-line text
         if (token.range?.end.line > token.range?.start.line) {
             const lines = token.text.split(/\r?\n/g);
             const code = [
-                this.sourceNode(token, [...leadingCommentsSourceNodes, lines[0]])
+                this.sourceNode(token, [...leadingCommentsSourceNodes, commentIfCommentedOut, lines[0]])
             ] as Array<string | SourceNode>;
             for (let i = 1; i < lines.length; i++) {
                 code.push(
                     this.newline,
+                    commentIfCommentedOut,
                     new SourceNode(
                         //convert 0-based range line to 1-based SourceNode line
                         token.range.start.line + i + 1,
@@ -163,7 +167,7 @@ export class TranspileState {
             }
             return [new SourceNode(null, null, null, code)];
         } else {
-            return [...leadingCommentsSourceNodes, this.tokenToSourceNode(token)];
+            return [...leadingCommentsSourceNodes, commentIfCommentedOut, this.tokenToSourceNode(token)];
         }
     }
 
