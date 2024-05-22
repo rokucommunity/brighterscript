@@ -3240,6 +3240,30 @@ describe('BrsFile', () => {
                 ' comment before empty namespace
             `);
         });
+
+        describe('augmented assignments', () => {
+            it('transpiles directly', async () => {
+                await testTranspile(`
+                    sub testAugmentedAssigns()
+                        num = 7
+                        num++
+                        num += 2
+                        num -= 2
+                        num >>= 8
+                    end sub
+                `);
+            });
+
+            it('transpiles directly when LHS is a dotted get or indexed get', async () => {
+                await testTranspile(`
+                    sub testAugmentedAssigns(x)
+                        x[0]++
+                        x[0] += 2
+                        x.prop += "hello"
+                    end sub
+                `);
+            });
+        });
     });
 
     describe('callfunc operator', () => {

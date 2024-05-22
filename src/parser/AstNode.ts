@@ -290,5 +290,6 @@ export enum AstNodeKind {
     AliasStatement = 'AliasStatement',
     ConditionalCompileStatement = 'ConditionalCompileStatement',
     ConditionalCompileConstStatement = 'ConditionalCompileConstStatement',
-    ConditionalCompileErrorStatement = 'ConditionalCompileErrorStatement'
+    ConditionalCompileErrorStatement = 'ConditionalCompileErrorStatement',
+    AugmentedAssignmentStatement = 'AugmentedAssignmentStatement'
 }
