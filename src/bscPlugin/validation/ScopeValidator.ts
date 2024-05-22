@@ -693,7 +693,7 @@ export class ScopeValidator {
 
         if (isUnionType(rightType)) {
             // TODO: it is possible to validate based on innerTypes, but more complicated
-            // Because you need to verify each combination of types
+            // because you need to verify each combination of types
         } else if (isDynamicType(rightType) || isObjectType(rightType)) {
             // operand is basically "any" type... ignore
         } else if (isNumberType(rightType)) {
