@@ -155,7 +155,8 @@ export class ScopeValidator {
                     },
                     IncrementStatement: (stmt) => {
                         this.validateIncrementStatement(file, stmt);
-                    }, NewExpression: (newExpr) => {
+                    },
+                    NewExpression: (newExpr) => {
                         this.validateNewExpression(file, newExpr);
                     },
                     ForEachStatement: (forEachStmt) => {
