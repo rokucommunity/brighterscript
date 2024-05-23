@@ -26,7 +26,7 @@ import { ClassType, EnumType, FloatType, InterfaceType } from '../types';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import * as fileUrl from 'file-url';
 import { isAALiteralExpression } from '../astUtils/reflection';
-import { VariableExpression, type AALiteralExpression } from '../parser/Expression';
+import type { AALiteralExpression } from '../parser/Expression';
 
 let sinon = sinonImport.createSandbox();
 
