@@ -16,7 +16,7 @@ import util, { standardizePath as s } from '../util';
 import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
 import { ParseMode, Parser } from '../parser/Parser';
 import { ImportStatement } from '../parser/Statement';
-import { createToken } from '../astUtils/creators';
+import { createToken, createVariableExpression } from '../astUtils/creators';
 import * as fsExtra from 'fs-extra';
 import { URI } from 'vscode-uri';
 import undent from 'undent';
@@ -26,7 +26,7 @@ import { ClassType, EnumType, FloatType, InterfaceType } from '../types';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import * as fileUrl from 'file-url';
 import { isAALiteralExpression } from '../astUtils/reflection';
-import type { AALiteralExpression } from '../parser/Expression';
+import { VariableExpression, type AALiteralExpression } from '../parser/Expression';
 
 let sinon = sinonImport.createSandbox();
 
@@ -47,7 +47,6 @@ describe('BrsFile', () => {
         }
 
     }
-
 
     beforeEach(() => {
         fsExtra.emptyDirSync(tempDir);
@@ -5122,4 +5121,16 @@ describe('BrsFile', () => {
         }]);
     });
 
+    describe('calleeIsKnownNamespaceFunction', () => {
+        it('does not crash when namespace is missing', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main()
+                    someNamespace.someFunc()
+                end sub
+            `);
+            expect(
+                file.calleeIsKnownNamespaceFunction(createVariableExpression('alpha'), 'beta')
+            ).to.be.false;
+        });
+    });
 });
