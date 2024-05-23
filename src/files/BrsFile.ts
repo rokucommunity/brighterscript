@@ -772,6 +772,9 @@ export class BrsFile implements BscFile {
                 let scopes = this.program.getScopesForFile(this);
                 for (let scope of scopes) {
                     let namespace = scope.namespaceLookup.get(namespaceName.toLowerCase());
+                    if (!namespace) {
+                        continue;
+                    }
                     if (namespace.functionStatements.has(lowerCalleeName)) {
                         return true;
                     }

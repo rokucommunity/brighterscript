@@ -291,4 +291,3 @@ class ManualChange<T> implements Change {
         this._undo?.(this);
     }
 }
-
