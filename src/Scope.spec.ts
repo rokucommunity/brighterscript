@@ -2601,7 +2601,7 @@ describe('Scope', () => {
             expect(mainFnScope).to.exist;
             const chimpType = mainFnScope.symbolTable.getSymbol('chimp', SymbolTypeFlag.runtime)[0].type;
             expectTypeToBe(chimpType, ClassType);
-            expectTypeToBe((chimpType as ClassType).superClass, ClassType);
+            expectTypeToBe((chimpType as ClassType).parentType, ClassType);
             expectTypeToBe(mainFnScope.symbolTable.getSymbol('chimpHasLegs', SymbolTypeFlag.runtime)[0].type, BooleanType);
             expectTypeToBe(mainFnScope.symbolTable.getSymbol('chimpSpeed', SymbolTypeFlag.runtime)[0].type, IntegerType);
             expectTypeToBe(mainFnScope.symbolTable.getSymbol('fidoSpeed', SymbolTypeFlag.runtime)[0].type, IntegerType);

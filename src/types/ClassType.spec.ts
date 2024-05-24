@@ -14,8 +14,8 @@ describe('ClassType', () => {
         const superKlass = new ClassType('SuperKlass');
         const subKlass = new ClassType('SubKlass', superKlass);
 
-        expect(subKlass.superClass).to.exist;
-        expect(subKlass.superClass.toString()).to.equal('SuperKlass');
+        expect(subKlass.parentType).to.exist;
+        expect(subKlass.parentType.toString()).to.equal('SuperKlass');
     });
 
     it('should be assignable to a super klass, or higher ancestor', () => {

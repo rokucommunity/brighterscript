@@ -1012,7 +1012,7 @@ export class BrsFile implements BscFile {
     }
 
     private constructNamespaceSymbolTable() {
-        const nsTable = new SymbolTable(`File NamespaceTypes ${this.destPath}`, () => this.program.globalScope.symbolTable);
+        const nsTable = new SymbolTable(`File NamespaceTypes ${this.destPath}`, () => this.program?.globalScope.symbolTable);
         this.populateNameSpaceSymbolTable(nsTable);
         return nsTable;
     }

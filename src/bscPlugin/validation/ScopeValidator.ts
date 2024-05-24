@@ -517,7 +517,7 @@ export class ScopeValidator {
             // treat members as dynamic - they could have been set without the type system's knowledge
             return;
         }
-        if (!expectedLHSType?.isResolvable()) {
+        if (!expectedLHSType || !expectedLHSType?.isResolvable()) {
             this.addMultiScopeDiagnostic({
                 file: file as BscFile,
                 ...DiagnosticMessages.cannotFindName(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan)),
@@ -561,11 +561,7 @@ export class ScopeValidator {
         const actualRHSType = this.getNodeTypeWrapper(file, assignStmt.value, getTypeOpts);
         const compatibilityData: TypeCompatibilityData = {};
         if (!expectedLHSType || !expectedLHSType.isResolvable()) {
-            /* this.addMultiScopeDiagnostic({
-                 ...DiagnosticMessages.cannotFindName(assignStmt.typeExpression.getName(ParseMode.BrighterScript)),
-                 range: assignStmt.typeExpression.range,
-                 file: file
-             });*/
+            // LHS is not resolvable... handled elsewhere
         } else if (!expectedLHSType?.isTypeCompatible(actualRHSType, compatibilityData)) {
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.assignmentTypeMismatch(actualRHSType.toString(), expectedLHSType.toString(), compatibilityData),
