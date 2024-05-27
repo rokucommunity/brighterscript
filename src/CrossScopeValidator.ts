@@ -6,14 +6,18 @@ import type { Program } from './Program';
 import util from './util';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { BscSymbol } from './SymbolTable';
-import { isCallExpression, isNamespaceType, isReferenceType, isTypedFunctionType } from './astUtils/reflection';
-import { getAllRequiredSymbolNames } from './types';
-import type { TypeChainProcessResult } from './interfaces';
+import { isCallExpression, isEnumType, isInheritableType, isNamespaceType, isReferenceType, isTypedFunctionType, isUnionType } from './astUtils/reflection';
+import type { ReferenceType } from './types/ReferenceType';
+import { getAllRequiredSymbolNames } from './types/ReferenceType';
+import type { TypeChainEntry, TypeChainProcessResult } from './interfaces';
 import { BscTypeKind } from './types/BscTypeKind';
+import { getAllTypesFromUnionType } from './types/helpers';
+import type { BscType } from './types/BscType';
+import type { BscFile } from './files/BscFile';
 
 
 interface FileSymbolPair {
-    file: BrsFile;
+    file: BscFile;
     symbol: BscSymbol;
 }
 
@@ -59,30 +63,68 @@ export class ProvidedNode {
         }
         if (this.symbols.has(first)) {
             let result = this.symbols.get(first);
+            let currentType = result.symbol.type;
+
             for (const namePart of rest) {
-                let memberTable = result.symbol.type.getMemberTable();
-                if (isTypedFunctionType(result.symbol.type)) {
-                    const returnType = result.symbol.type.returnType;
+                if (isTypedFunctionType(currentType)) {
+                    const returnType = currentType.returnType;
                     if (returnType.isResolvable()) {
-                        memberTable = returnType.getMemberTable();
+                        currentType = returnType;
                     } else if (isReferenceType(returnType)) {
                         const fullName = returnType.fullName;
                         if (fullName.includes('.')) {
-                            memberTable = root.getSymbol(fullName)?.symbol?.type?.getMemberTable();
+                            currentType = root.getSymbol(fullName)?.symbol?.type;
                         } else {
-                            memberTable = this.getSymbol(fullName)?.symbol.type.getMemberTable() ??
-                                root.getSymbol(fullName)?.symbol?.type?.getMemberTable();
+                            currentType = this.getSymbol(fullName)?.symbol?.type ??
+                                root.getSymbol(fullName)?.symbol?.type;
                         }
                     }
                 }
-                const memberSymbol = memberTable?.getSymbol(namePart, SymbolTypeFlag.runtime);
-                if (!memberSymbol) {
+                let typesToTry = [currentType];
+                if (isEnumType(currentType)) {
+                    typesToTry.push(currentType.defaultMemberType);
+                }
+                if (isInheritableType(currentType)) {
+                    let inheritableType = currentType as any;
+                    while (inheritableType?.parentType) {
+                        let parentType = inheritableType.parentType;
+                        if (isReferenceType(inheritableType.parentType)) {
+                            const fullName = inheritableType.parentType.fullName;
+                            if (fullName.includes('.')) {
+                                parentType = root.getSymbol(fullName)?.symbol?.type;
+                            } else {
+                                parentType = this.getSymbol(fullName)?.symbol?.type ??
+                                    root.getSymbol(fullName)?.symbol?.type;
+                            }
+                        }
+                        typesToTry.push(parentType);
+                        inheritableType = parentType;
+                    }
+
+                }
+                const extraData = {};
+
+                for (const curType of typesToTry) {
+                    currentType = curType?.getMemberType(namePart, { flags: SymbolTypeFlag.runtime, data: extraData });
+                    if (isReferenceType(currentType)) {
+                        const memberLookup = currentType.fullName;
+                        currentType = this.getSymbol(memberLookup.toLowerCase())?.symbol?.type ?? root.getSymbol(memberLookup.toLowerCase())?.symbol?.type;
+                    }
+                    if (currentType) {
+                        break;
+                    }
+                }
+
+                if (!currentType) {
                     return;
                 }
                 // get specific member
-                result = { ...result, symbol: memberSymbol[0] };
+                result = {
+                    ...result, symbol: { name: namePart, type: currentType, data: extraData, flags: SymbolTypeFlag.runtime }
+                };
             }
             return result;
+
         } else if (rest && this.namespaces.has(first)) {
             const node = this.namespaces.get(first);
             const parts = node.getSymbolByNameParts(rest, root);
@@ -141,37 +183,70 @@ export class CrossScopeValidator {
 
     constructor(public program: Program) { }
 
-    private symbolMapKeys(symbol: UnresolvedSymbol): SymbolLookupKeys {
-        const unnamespacedNameLower = symbol.typeChain.map(tce => tce.name).join('.').toLowerCase();
-        const lowerFirst = symbol.typeChain[0]?.name?.toLowerCase() ?? '';
-        let namespacedName = '';
-        let lowerNamespacePrefix = '';
-        let namespacedPotentialTypeKey = '';
-        if (symbol.containingNamespaces?.length > 0 && symbol.typeChain[0]?.name.toLowerCase() !== symbol.containingNamespaces[0].toLowerCase()) {
-            lowerNamespacePrefix = `${(symbol.containingNamespaces ?? []).join('.')}`.toLowerCase();
-        }
-        if (lowerNamespacePrefix) {
-            namespacedName = `${lowerNamespacePrefix}.${unnamespacedNameLower}`;
-            namespacedPotentialTypeKey = `${lowerNamespacePrefix}.${lowerFirst}`;
+    private symbolMapKeys(symbol: UnresolvedSymbol): SymbolLookupKeys[] {
+        let keysArray = new Array<SymbolLookupKeys>();
+        let unnamespacedNameLowers: string[] = [];
+
+        function joinTypeChainForKey(typeChain: TypeChainEntry[], firstType?: BscType) {
+            firstType ||= typeChain[0].type;
+            const unnamespacedNameLower = typeChain.map((tce, i) => {
+                if (i === 0) {
+                    if (isReferenceType(firstType)) {
+                        return firstType.fullName;
+                    } else if (isInheritableType(firstType)) {
+                        return tce.type.toString();
+                    }
+                    return tce.name;
+                }
+                return tce.name;
+            }).join('.').toLowerCase();
+            return unnamespacedNameLower;
         }
 
-        return {
-            potentialTypeKey: lowerFirst, // first entry in type chain (useful for enum types, typecasts, etc.)
-            key: unnamespacedNameLower, //full name used in code (useful for namespaced symbols)
-            namespacedKey: namespacedName, // full name including namespaces (useful for relative symbols in a namespace)
-            namespacedPotentialTypeKey: namespacedPotentialTypeKey //first entry in chain, prefixed with current namespace
-        };
+        if (isUnionType(symbol.typeChain[0].type) && symbol.typeChain[0].data.isInstance) {
+            const allUnifiedTypes = getAllTypesFromUnionType(symbol.typeChain[0].type);
+            for (const unifiedType of allUnifiedTypes) {
+                unnamespacedNameLowers.push(joinTypeChainForKey(symbol.typeChain, unifiedType));
+            }
+
+        } else {
+            unnamespacedNameLowers.push(joinTypeChainForKey(symbol.typeChain));
+        }
+
+        for (const unnamespacedNameLower of unnamespacedNameLowers) {
+            const lowerFirst = symbol.typeChain[0]?.name?.toLowerCase() ?? '';
+            let namespacedName = '';
+            let lowerNamespacePrefix = '';
+            let namespacedPotentialTypeKey = '';
+            if (symbol.containingNamespaces?.length > 0 && symbol.typeChain[0]?.name.toLowerCase() !== symbol.containingNamespaces[0].toLowerCase()) {
+                lowerNamespacePrefix = `${(symbol.containingNamespaces ?? []).join('.')}`.toLowerCase();
+            }
+            if (lowerNamespacePrefix) {
+                namespacedName = `${lowerNamespacePrefix}.${unnamespacedNameLower}`;
+                namespacedPotentialTypeKey = `${lowerNamespacePrefix}.${lowerFirst}`;
+            }
+
+            keysArray.push({
+                potentialTypeKey: lowerFirst, // first entry in type chain (useful for enum types, typecasts, etc.)
+                key: unnamespacedNameLower, //full name used in code (useful for namespaced symbols)
+                namespacedKey: namespacedName, // full name including namespaces (useful for relative symbols in a namespace)
+                namespacedPotentialTypeKey: namespacedPotentialTypeKey //first entry in chain, prefixed with current namespace
+            });
+        }
+        return keysArray;
     }
 
-    resolutionsMap = new Map<UnresolvedSymbol, Set<{ scope: Scope; sourceFile: BrsFile; providedSymbol: BscSymbol }>>();
+    resolutionsMap = new Map<UnresolvedSymbol, Set<{ scope: Scope; sourceFile: BscFile; providedSymbol: BscSymbol }>>();
     providedTreeMap = new Map<Scope, { duplicatesMap: Map<string, Set<FileSymbolPair>>; providedTree: ProvidedNode }>();
 
     getRequiredMap(scope: Scope) {
         const map = new Map<SymbolLookupKeys, UnresolvedSymbol>();
         scope.enumerateBrsFiles((file) => {
             for (const symbol of file.requiredSymbols) {
-                const symbolKeys = this.symbolMapKeys(symbol);
-                map.set(symbolKeys, symbol);
+                const symbolKeysArray = this.symbolMapKeys(symbol);
+                for (const symbolKeys of symbolKeysArray) {
+                    map.set(symbolKeys, symbol);
+                }
             }
         });
         return map;
@@ -184,10 +259,10 @@ export class CrossScopeValidator {
         const providedTree = new ProvidedNode();
         const duplicatesMap = new Map<string, Set<FileSymbolPair>>();
 
-        const referenceTypesMap = new Map<{ symbolName: string; file: BrsFile; symbol: BscSymbol }, Set<string>>();
+        const referenceTypesMap = new Map<{ symbolName: string; file: BscFile; symbol: BscSymbol }, Set<string>>();
 
 
-        function addSymbolWithDuplicates(symbolName: string, file: BrsFile, symbol: BscSymbol) {
+        function addSymbolWithDuplicates(symbolName: string, file: BscFile, symbol: BscSymbol) {
             const isDupe = providedTree.addSymbol(symbolName, { file: file, symbol: symbol });
             if (isDupe) {
                 let dupes = duplicatesMap.get(symbolName);
@@ -221,6 +296,16 @@ export class CrossScopeValidator {
                 }
             }
         });
+
+        // Add custom components
+        for (let componentName of this.program.getSortedComponentNames()) {
+            const typeName = 'rosgnode' + componentName;
+            const componentSymbol = this.program.globalScope.symbolTable.getSymbol(typeName, SymbolTypeFlag.typetime)?.[0];
+            const component = this.program.getComponent(componentName);
+            if (componentSymbol && component) {
+                addSymbolWithDuplicates(typeName, component?.file, componentSymbol);
+            }
+        }
 
         // check provided reference types to see if they exist yet!
         while (referenceTypesMap.size > 0) {
@@ -264,16 +349,18 @@ export class CrossScopeValidator {
             let foundSymbol = providedTree.getSymbolByKey(symbolKeys);
 
             if (foundSymbol) {
-                let resolvedListForSymbol = this.resolutionsMap.get(unresolvedSymbol);
-                if (!resolvedListForSymbol) {
-                    resolvedListForSymbol = new Set<{ scope: Scope; sourceFile: BrsFile; providedSymbol: BscSymbol }>();
-                    this.resolutionsMap.set(unresolvedSymbol, resolvedListForSymbol);
+                if (!unresolvedSymbol.typeChain[0].data?.isInstance) {
+                    let resolvedListForSymbol = this.resolutionsMap.get(unresolvedSymbol);
+                    if (!resolvedListForSymbol) {
+                        resolvedListForSymbol = new Set<{ scope: Scope; sourceFile: BrsFile; providedSymbol: BscSymbol }>();
+                        this.resolutionsMap.set(unresolvedSymbol, resolvedListForSymbol);
+                    }
+                    resolvedListForSymbol.add({
+                        scope: scope,
+                        sourceFile: foundSymbol.file,
+                        providedSymbol: foundSymbol.symbol
+                    });
                 }
-                resolvedListForSymbol.add({
-                    scope: scope,
-                    sourceFile: foundSymbol.file,
-                    providedSymbol: foundSymbol.symbol
-                });
             } else {
                 let foundNamespace = providedTree.getNamespace(symbolKeys.key);
 
@@ -284,13 +371,28 @@ export class CrossScopeValidator {
                     // did not find symbol!
                     const missing = { ...unresolvedSymbol };
                     let namespaceNode = providedTree;
+                    let currentKnownType;
                     for (const chainEntry of missing.typeChain) {
                         if (!chainEntry.isResolved) {
-                            namespaceNode = namespaceNode?.getNamespaceByNameParts([chainEntry.name]);
+                            const lookupName = (chainEntry.type as ReferenceType)?.fullName ?? chainEntry.name;
+                            if (!currentKnownType) {
+                                namespaceNode = namespaceNode?.getNamespaceByNameParts([chainEntry.name]);
+
+                            }
                             if (namespaceNode) {
                                 chainEntry.isResolved = true;
                             } else {
-                                break;
+                                if (currentKnownType) {
+                                    currentKnownType = currentKnownType.getMemberType(chainEntry.name, { flags: SymbolTypeFlag.runtime });
+                                } else {
+                                    currentKnownType = providedTree.getSymbol(lookupName.toLowerCase())?.symbol?.type;
+                                }
+
+                                if (currentKnownType?.isResolvable()) {
+                                    chainEntry.isResolved = true;
+                                } else {
+                                    break;
+                                }
                             }
                         }
                     }

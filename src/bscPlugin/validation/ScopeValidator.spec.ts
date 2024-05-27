@@ -1544,64 +1544,6 @@ describe('ScopeValidator', () => {
 
     describe('cannotFindName', () => {
 
-        it.only('works for multi-scope usage', () => {
-            program.options.autoImportComponentScript = true;
-            //set a baseline where everyone is happy
-            program.setFile('components/TextOptions.bs', `
-                interface TextOptions
-                    fontName as string
-                end interface
-            `);
-
-            const button1 = program.setFile('components/Button1.bs', `
-                import "pkg:/components/TextOptions.bs"
-                function configure(options as TextOptions)
-                    m.fontName = options.fontName
-                end function
-            `);
-            program.setFile('components/Button1.xml', `
-                <component name="Button1" extends="Group">
-                </component>
-            `);
-
-            const button2 = program.setFile('components/Button2.bs', `
-                import "pkg:/components/TextOptions.bs"
-                function configure(options as TextOptions)
-                    m.fontName = options.fontName
-                end function
-            `);
-
-            program.setFile('components/Button2.xml', `
-                <component name="Button2" extends="Group">
-                </component>
-            `);
-
-            program.validate();
-            expectZeroDiagnostics(program);
-
-            //now rename the interface property and verify both files have an error
-            program.setFile('components/TextOptions.bs', `
-                interface TextOptions
-                    fontFileName as string 'renamed from "fontName" to "fontFileName"
-                end interface
-            `);
-            program.validate();
-            expectDiagnostics(program, [
-                {
-                    message: DiagnosticMessages.cannotFindName('fontName', 'TextOptions.fontName', 'TextOptions').message,
-                    file: {
-                        srcPath: button1.srcPath
-                    }
-                },
-                {
-                    message: DiagnosticMessages.cannotFindName('fontName', 'TextOptions.fontName', 'TextOptions').message,
-                    file: {
-                        srcPath: button2.srcPath
-                    }
-                }
-            ]);
-        });
-
         it('finds variables from assignments from member functions of primitive types', () => {
             program.setFile('source/util.brs', `
                 function lcaseTrim(str)

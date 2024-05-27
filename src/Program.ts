@@ -308,6 +308,22 @@ export class Program {
     }
 
     /**
+     * Get the sorted names of custom components
+     */
+    public getSortedComponentNames() {
+        const componentNames = Object.keys(this.components);
+        componentNames.sort((a, b) => {
+            if (a < b) {
+                return -1;
+            } else if (b < a) {
+                return 1;
+            }
+            return 0;
+        });
+        return componentNames;
+    }
+
+    /**
      * Keeps a set of all the components that need to have their types updated during the current validation cycle
      */
     private componentSymbolsToUpdate = new Set<{ componentKey: string; componentName: string }>();

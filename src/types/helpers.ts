@@ -1,6 +1,7 @@
 import type { TypeCompatibilityData } from '../interfaces';
 import { isAnyReferenceType, isDynamicType, isEnumMemberType, isEnumType, isInheritableType, isInterfaceType, isUnionType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
+import type { UnionType } from './UnionType';
 
 export function findTypeIntersection(typesArr1: BscType[], typesArr2: BscType[]) {
     if (!typesArr1 || !typesArr2) {
@@ -179,4 +180,17 @@ export function isNativeInterfaceCompatibleNumber(thisType: BscType, otherType: 
             lowerOtherName === 'rolonginteger';
     }
     return false;
+}
+
+export function getAllTypesFromUnionType(union: UnionType): BscType[] {
+    const results = [];
+
+    for (const type of union.types) {
+        if (isUnionType(type)) {
+            results.push(...getAllTypesFromUnionType(type));
+        } else {
+            results.push(type);
+        }
+    }
+    return results;
 }

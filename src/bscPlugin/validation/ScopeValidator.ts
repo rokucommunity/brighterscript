@@ -117,7 +117,6 @@ export class ScopeValidator {
 
                 }
 
-
                 const validationVisitor = createVisitor({
                     VariableExpression: (varExpr) => {
                         this.validateVariableAndDottedGetExpressions(file, varExpr);

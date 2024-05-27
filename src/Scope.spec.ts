@@ -3748,7 +3748,7 @@ describe('Scope', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            expect(file1.requiredSymbols.length).to.eq(1);
+            expect(file1.requiredSymbols.length).to.eq(2);
             expect(file1.requiredSymbols[0].containingNamespaces).to.have.members(['Alpha']);
             expect(file1.requiredSymbols[0].endChainFlags).to.eq(SymbolTypeFlag.typetime);
             expect(file1.requiredSymbols[0].typeChain.length).to.eq(4);
