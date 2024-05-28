@@ -79,9 +79,11 @@ export class CallExpressionInfo {
 
             } else {
                 let parts = util.getAllDottedGetParts(callExpression.callee);
-                parts.splice(parts?.length - 1, 1);
-                this.dotPart = parts.map(x => x.text).join('.');
-                this.namespace = this.getNamespace();
+                if (parts) {
+                    parts.splice(parts?.length - 1, 1);
+                    this.dotPart = parts.map(x => x.text).join('.');
+                    this.namespace = this.getNamespace();
+                }
             }
         }
 
