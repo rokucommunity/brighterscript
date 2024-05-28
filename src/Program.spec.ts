@@ -2383,6 +2383,19 @@ describe('Program', () => {
             expect(signatureHelp[0]?.signature).to.not.exist;
         });
 
+        it('does not crash when parts is undefined', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    print m.b["c"].hello?(12345)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            // 123|45
+            let signatureHelp = getSignatureHelp(2, 45);
+            expect(signatureHelp).is.empty;
+        });
+
         describe('gets signature info for regular function call', () => {
             it('does not get help when on method name', () => {
                 program.setFile('source/main.bs', `
