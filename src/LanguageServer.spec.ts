@@ -67,7 +67,8 @@ describe('LanguageServer', () => {
             },
             getConfiguration: () => {
                 return {};
-            }
+            },
+            onDidChangeWorkspaceFolders: () => { }
         },
         tracer: {
             log: () => { }
@@ -151,6 +152,46 @@ describe('LanguageServer', () => {
             await sendDiagnosticsDeferred.promise;
 
             expect(stub.getCall(0).args?.[0]?.diagnostics).to.be.lengthOf(1);
+        });
+    });
+
+    describe('project-reload', () => {
+        it('should sync all open document changes to all projects', async () => {
+
+            //force an open text document
+            const srcPath = s`${rootDir}/source/main.brs`;
+            const document = TextDocument.create(util.pathToUri(srcPath), 'brightscript', 1, `sub main()\nend sub`);
+            (server['documents']['_syncedDocuments'] as Map<string, TextDocument>).set(document.uri, document);
+
+            const deferred = new Deferred();
+            const stub = sinon.stub(server['projectManager'], 'handleFileChanges').callsFake(() => {
+                deferred.resolve();
+                return Promise.resolve();
+            });
+
+            server['projectManager']['emit']('project-reload', {
+                project: server['projectManager'].projects[0]
+            });
+
+            await deferred.promise;
+            expect(
+                stub.getCalls()[0].args[0].map(x => ({
+                    srcPath: x.srcPath,
+                    fileContents: x.fileContents
+                }))
+            ).to.eql([{
+                srcPath: srcPath,
+                fileContents: document.getText()
+            }]);
+        });
+
+        it('handles when there were no open documents', () => {
+            server['projectManager']['emit']('project-reload', {
+                project: {
+                    projectNumber: 1
+                }
+            } as any);
+            //we can't really test this, but it helps with code coverage...
         });
     });
 
@@ -270,6 +311,43 @@ describe('LanguageServer', () => {
                 s`${tempDir}/project1`,
                 s`${tempDir}/sub/dir/project2`
             ]);
+        });
+    });
+
+    describe('onInitialize', () => {
+        it('sets capabilities', async () => {
+            server['hasConfigurationCapability'] = false;
+            server['clientHasWorkspaceFolderCapability'] = false;
+
+            await server.onInitialize({
+                capabilities: {
+                    workspace: {
+                        configuration: true,
+                        workspaceFolders: true
+                    }
+                }
+            } as any);
+            expect(server['hasConfigurationCapability']).to.be.true;
+            expect(server['clientHasWorkspaceFolderCapability']).to.be.true;
+        });
+    });
+
+    describe('onInitialized', () => {
+        it('registers workspaceFolders change listener', async () => {
+
+            server['connection'] = connection as any;
+
+            const deferred = new Deferred();
+            sinon.stub(server['connection']['workspace'], 'onDidChangeWorkspaceFolders').callsFake((() => {
+                deferred.resolve();
+            }) as any);
+
+            server['hasConfigurationCapability'] = false;
+            server['clientHasWorkspaceFolderCapability'] = true;
+
+            await server.onInitialized();
+            //if the promise resolves, we know the function was called
+            await deferred.promise;
         });
     });
 
@@ -411,6 +489,50 @@ describe('LanguageServer', () => {
                 stub2.getCalls()
             ).to.be.empty;
         });
+
+        it('rebuilds the path filterer when certain files are changed', async () => {
+
+            sinon.stub(server['projectManager'], 'handleFileChanges').callsFake(() => Promise.resolve());
+
+            async function test(filePath: string, expected = true) {
+                const stub = sinon.stub(server as any, 'rebuildPathFilterer');
+
+                await server['onDidChangeWatchedFiles']({
+                    changes: [{
+                        type: FileChangeType.Changed,
+                        uri: util.pathToUri(filePath)
+                    }]
+                } as DidChangeWatchedFilesParams);
+
+                expect(
+                    stub.getCalls().length
+                ).to.eql(expected ? 1 : 0);
+
+                stub.restore();
+            }
+
+            await test(s`${rootDir}/bsconfig.json`);
+            await test(s`${rootDir}/sub/dir/bsconfig.json`);
+
+            await test(s`${rootDir}/.vscode/settings.json`);
+
+            await test(s`${rootDir}/.gitignore`);
+            await test(s`${rootDir}/sub/dir/.two/.gitignore`);
+
+            await test(s`${rootDir}/source/main.brs`, false);
+        });
+    });
+
+    describe('onDocumentClose', () => {
+        it('calls handleFileClose', async () => {
+            const stub = sinon.stub(server['projectManager'], 'handleFileClose').callsFake((() => { }) as any);
+            await server['onDocumentClose']({
+                document: {
+                    uri: util.pathToUri(s`${rootDir}/source/main.brs`)
+                } as any
+            });
+            expect(stub.args[0][0].srcPath).to.eql(s`${rootDir}/source/main.brs`);
+        });
     });
 
     describe('onSignatureHelp', () => {
@@ -517,6 +639,23 @@ describe('LanguageServer', () => {
             expect(result.signatures.length).to.equal(0);
             expect(result.activeSignature).to.equal(null);
             expect(result.activeParameter).to.equal(null);
+        });
+    });
+
+    describe('onCompletion', () => {
+        it('does not crash when uri is invalid', async () => {
+            sinon.stub(server['projectManager'], 'getCompletions').callsFake(() => Promise.resolve({ items: [], isIncomplete: false }));
+            expect(
+                await (server['onCompletion'] as any)({
+                    textDocument: {
+                        uri: 'invalid'
+                    },
+                    position: util.createPosition(0, 0)
+                } as any)
+            ).to.eql({
+                items: [],
+                isIncomplete: false
+            });
         });
     });
 

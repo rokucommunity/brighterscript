@@ -552,7 +552,13 @@ export type DisposableLike = Disposable | (() => any);
 export type MaybePromise<T> = T | Promise<T>;
 
 export interface FileChange {
+    /**
+     * Absolute path to the source file
+     */
     srcPath: string;
+    /**
+     * What type of change was this.
+     */
     type: FileChangeType;
     /**
      * If provided, this is the new contents of the file. If not provided, the file will be read from disk

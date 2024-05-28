@@ -133,7 +133,7 @@ export class LanguageServer {
             //resend all open document changes
             const documents = [...this.documents.all()];
             if (documents.length > 0) {
-                this.logger.log(`Project ${event.project.projectNumber} reloaded. Resending all open document changes.`, documents.map(x => x.uri));
+                this.logger.log(`Project ${event.project?.projectNumber} reloaded. Resending all open document changes.`, documents.map(x => x.uri));
                 for (const document of this.documents.all()) {
                     void this.onTextDocumentDidChangeContent({
                         document: document
@@ -376,7 +376,9 @@ export class LanguageServer {
                 '**/.gitignore',
                 '**/.vscode/settings.json',
                 '**/*bsconfig*.json'
-            ])
+            ], {
+                dot: true
+            })
         ) {
             await this.rebuildPathFilterer();
         }
