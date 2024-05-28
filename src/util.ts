@@ -251,6 +251,9 @@ export class Util {
             if (result.cwd) {
                 result.cwd = path.resolve(projectFileCwd, result.cwd);
             }
+            if (result.stagingDir) {
+                result.stagingDir = path.resolve(projectFileCwd, result.stagingDir);
+            }
             return result;
         }
     }

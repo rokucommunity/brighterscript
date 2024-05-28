@@ -507,7 +507,7 @@ describe('Program', () => {
 
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('DoSomething')
+                DiagnosticMessages.cannotFindFunction('DoSomething')
             ]);
         });
 
@@ -1590,7 +1590,7 @@ describe('Program', () => {
 
             //there should be an error when calling DoParentThing, since it doesn't exist on child or parent
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('DoParentThing')
+                DiagnosticMessages.cannotFindFunction('DoParentThing')
             ]);
 
             //add the script into the parent
@@ -1748,7 +1748,7 @@ describe('Program', () => {
             ];
 
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('C')
+                DiagnosticMessages.cannotFindFunction('C')
             ]);
         });
     });

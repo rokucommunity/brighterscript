@@ -1,11 +1,13 @@
-import { default as logger, createLogger } from '@rokucommunity/logger';
+import { default as defaultLogger } from '@rokucommunity/logger';
 import { Logger } from '@rokucommunity/logger';
+const logger = defaultLogger.createLogger();
 
 //force log levels to be same width
 logger.consistentLogLevelWidth = true;
-//by default, disable printing the logLevel in the console.
 logger.printLogLevel = false;
+logger.timestampFormat = 'hh:mm:ss:SSS aa';
 logger.logLevel = 'log';
+logger.prefix = '';
 
 /**
  * Set the logger properties to be used when running in language server mode. It's a function so we can share the logic between LanguageServer and
@@ -18,5 +20,7 @@ export function setLspLoggerProps() {
     logger.printLogLevel = true;
 }
 
-export { logger, Logger, createLogger };
+
+export const createLogger = logger.createLogger.bind(logger);
+export { logger, Logger };
 export { LogLevel } from './Logger';

@@ -330,8 +330,8 @@ export class ProgramBuilder {
             //sort the diagnostics in line and column order
             let sortedDiagnostics = diagnosticsForFile.sort((a, b) => {
                 return (
-                    a.range.start.line - b.range.start.line ||
-                    a.range.start.character - b.range.start.character
+                    (a.range?.start.line ?? -1) - (b.range?.start.line ?? -1) ||
+                    (a.range?.start.character ?? -1) - (b.range?.start.character ?? -1)
                 );
             });
 

@@ -152,6 +152,9 @@ export class LanguageServer {
         // Create a connection for the server. The connection uses Node's IPC as a transport.
         this.connection = this.establishConnection();
 
+        //disable logger colors when running in LSP mode
+        logger.enableColor = false;
+
         //listen to all of the output log events and pipe them into the debug channel in the extension
         this.loggerSubscription = logger.subscribe((message) => {
             this.connection.tracer.log(message.argsText);
