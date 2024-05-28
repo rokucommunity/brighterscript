@@ -104,23 +104,6 @@ export class AstValidationSegmenter {
                     containingNamespaces: this.currentNamespaceStatement?.getNameParts()?.map(t => t.text),
                     file: this.file
                 });
-            } else if (typeChain.length > 1) {
-                // unresolved use of a member of an assigned symbol
-
-                if (!this.unresolvedSegmentsSymbols.has(segment)) {
-                    symbolsSet = new Set<UnresolvedSymbol>();
-                    this.unresolvedSegmentsSymbols.set(segment, symbolsSet);
-                } else {
-                    symbolsSet = this.unresolvedSegmentsSymbols.get(segment);
-                }
-                this.validatedSegments.set(segment, false);
-                symbolsSet.add({
-                    typeChain: typeChain,
-                    flags: typeChain[0].data.flags,
-                    endChainFlags: flag,
-                    containingNamespaces: this.currentNamespaceStatement?.getNameParts()?.map(t => t.text),
-                    file: this.file
-                });
             }
             return true;
         }

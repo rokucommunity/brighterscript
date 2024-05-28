@@ -424,7 +424,48 @@ export class CrossScopeValidator {
         }
     }
 
-    addDiagnosticsForScopes(scopes: Scope[], changedFiles: BrsFile[]) {
+    getFilesRequiringChangedSymbol(scopes: Scope[], changedSymbols: Map<SymbolTypeFlag, Set<string>>) {
+        const filesThatNeedRevalidation = new Set<BscFile>();
+        const filesThatDoNotNeedRevalidation = new Set<BscFile>();
+
+        const runTimeChanges = changedSymbols.get(SymbolTypeFlag.runtime);
+        const typeTimeChanges = changedSymbols.get(SymbolTypeFlag.typetime);
+
+        function checkChangedSetForSymbol(symbol: UnresolvedSymbol) {
+            const fullChainName = util.processTypeChain(symbol.typeChain).fullChainName?.toLowerCase();
+            for (let changedSet of [runTimeChanges, typeTimeChanges]) {
+
+                if (changedSet?.has(fullChainName)) {
+                    return true;
+                } else if (symbol.containingNamespaces?.length > 0) {
+                    const namespacedName = (symbol.containingNamespaces.join('.') + '.' + fullChainName).toLowerCase();
+                    if (changedSet?.has(namespacedName)) {
+
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        for (const scope of scopes) {
+            scope.enumerateBrsFiles((file) => {
+                if (filesThatNeedRevalidation.has(file) || filesThatDoNotNeedRevalidation.has(file)) {
+                    return;
+                }
+                for (const symbol of file.requiredSymbols) {
+                    if (checkChangedSetForSymbol(symbol)) {
+                        filesThatNeedRevalidation.add(file);
+                        return;
+                    }
+                }
+                filesThatDoNotNeedRevalidation.add(file);
+            });
+        }
+        return filesThatNeedRevalidation;
+    }
+
+    addDiagnosticsForScopes(scopes: Scope[]) { //, changedFiles: BrsFile[]) {
         const addDuplicateSymbolDiagnostics = false;
         const missingSymbolInScope = new Map<BrsFile, Map<UnresolvedSymbol, Set<Scope>>>();
         this.providedTreeMap.clear();

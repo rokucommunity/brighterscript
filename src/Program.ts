@@ -878,9 +878,6 @@ export class Program {
                 this.componentSymbolsToUpdate.clear();
             });
 
-            metrics.crossScopeValidationTime = validationStopwatch.getDurationTextFor(() => {
-                this.addCrossScopeDiagnostics(brsFilesValidated);
-            }).durationText;
 
             const changedSymbolsMapArr = brsFilesValidated?.map(f => {
                 if (isBrsFile(f)) {
@@ -894,11 +891,23 @@ export class Program {
                 const changedSymbolsSetArr = changedSymbolsMapArr.map(symMap => symMap.get(flag));
                 changedSymbols.set(flag, new Set(...changedSymbolsSetArr));
             }
+
+            const filesToBeValidatedInScopeContext = new Set<BscFile>(afterValidateFiles);
+
+            metrics.crossScopeValidationTime = validationStopwatch.getDurationTextFor(() => {
+                const scopesToCheck = this.getScopesForCrossScopeValidation();
+                this.crossScopeValidation.addDiagnosticsForScopes(scopesToCheck);
+                const filesToRevalidate = this.crossScopeValidation.getFilesRequiringChangedSymbol(scopesToCheck, changedSymbols);
+                for (const file of filesToRevalidate) {
+                    filesToBeValidatedInScopeContext.add(file);
+                }
+            }).durationText;
+
+
             let linkTime = 0;
             let validationTime = 0;
             let scopesValidated = 0;
             this.logger.time(LogLevel.info, ['Validate all scopes'], () => {
-                const filesToBeValidatedInScopeContext = new Set<BscFile>(afterValidateFiles);
                 //sort the scope names so we get consistent results
                 const scopeNames = this.getSortedScopeNames();
                 for (let scopeName of scopeNames) {
@@ -943,7 +952,7 @@ export class Program {
         this.logger.info(`Validation Metrics: ${logs.join(', ')}`);
     }
 
-    private addCrossScopeDiagnostics(changedFiles: BrsFile[]) {
+    private getScopesForCrossScopeValidation() {
         const scopesForCrossScopeValidation = [];
         for (let scopeName of this.getSortedScopeNames()) {
             let scope = this.scopes[scopeName];
@@ -951,7 +960,7 @@ export class Program {
                 scopesForCrossScopeValidation.push(scope);
             }
         }
-        this.crossScopeValidation.addDiagnosticsForScopes(scopesForCrossScopeValidation, changedFiles);
+        return scopesForCrossScopeValidation;
     }
 
     /**

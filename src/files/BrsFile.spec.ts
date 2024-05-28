@@ -4093,9 +4093,9 @@ describe('BrsFile', () => {
             `);
             validateFile(mainFile);
 
-            expect(mainFile.requiredSymbols.length).to.eq(3);
+            expect(mainFile.requiredSymbols.length).to.eq(2);
             expect(mainFile.requiredSymbols.map(x => x.typeChain[0].name)).to.have.same.members([
-                'TwoType', 'OneType', 'arg']);
+                'TwoType', 'OneType']);
         });
 
         it('allows built-in types for interface members', () => {
@@ -4134,12 +4134,12 @@ describe('BrsFile', () => {
             `);
             validateFile(mainFile);
 
-            expect(mainFile.requiredSymbols.length).to.eq(3);
+            expect(mainFile.requiredSymbols.length).to.eq(2);
             expect(mainFile.requiredSymbols.map(x => x.typeChain[0].name)).to.have.same.members([
-                'TwoType', 'OneType', 'arg']);
+                'TwoType', 'OneType']);
         });
 
-        it('should include assigned symbols', () => {
+        it('should not include assigned symbols', () => {
             const mainFile: BrsFile = program.setFile('source/main.bs', `
                 sub someFunc(arg as SomeOtherType)
                     x = arg.member
@@ -4148,9 +4148,9 @@ describe('BrsFile', () => {
             `);
             validateFile(mainFile);
 
-            expect(mainFile.requiredSymbols.length).to.eq(2);
+            expect(mainFile.requiredSymbols.length).to.eq(1);
             // x and arg are assigned.. they are not included in the required symbols
-            expect(mainFile.requiredSymbols[0].typeChain[0].name).to.equal('SomeOtherType', 'arg');
+            expect(mainFile.requiredSymbols[0].typeChain[0].name).to.equal('SomeOtherType');
         });
 
         it('should include functions called that are not in the file', () => {
@@ -4184,14 +4184,14 @@ describe('BrsFile', () => {
             `);
             validateFile(mainFile);
 
-            expect(mainFile.requiredSymbols.length).to.eq(4);
+            expect(mainFile.requiredSymbols.length).to.eq(3);
             const requiredTypeChains = mainFile.requiredSymbols.map(x => x.typeChain.map(tc => tc.name).join('.'));
             expect(requiredTypeChains).to.have.same.members([
-                'OtherKlass', 'NS1.Thing', 'AnotherClass', 'other.getThing'
+                'OtherKlass', 'NS1.Thing', 'AnotherClass'
             ]);
             const requiredSymbolsFlags = mainFile.requiredSymbols.map(x => x.flags);
             expect(requiredSymbolsFlags).to.have.same.members([
-                SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.runtime, SymbolTypeFlag.runtime
+                SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.runtime
             ]);
         });
 
@@ -4237,14 +4237,14 @@ describe('BrsFile', () => {
             `);
             validateFile(mainFile);
 
-            expect(mainFile.requiredSymbols.length).to.eq(6);
+            expect(mainFile.requiredSymbols.length).to.eq(5);
             const requiredTypeChains = mainFile.requiredSymbols.map(x => x.typeChain.map(tc => tc.name).join('.'));
             expect(requiredTypeChains).to.have.same.members([
-                'DataKind', 'SubData', 'BaseData', 'DataProcessor', 'ProcessedData', 'dataProcess.work'
+                'DataKind', 'SubData', 'BaseData', 'DataProcessor', 'ProcessedData'
             ]);
             const requiredSymbolsFlags = mainFile.requiredSymbols.map(x => x.flags);
             expect(requiredSymbolsFlags).to.have.same.members([
-                SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.runtime
+                SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime
             ]);
         });
 
@@ -4268,10 +4268,10 @@ describe('BrsFile', () => {
             `);
             validateFile(mainFile);
 
-            expect(mainFile.requiredSymbols.length).to.eq(3);
+            expect(mainFile.requiredSymbols.length).to.eq(2);
             const requiredTypeChains = mainFile.requiredSymbols.map(x => x.typeChain.map(tc => tc.name).join('.'));
             expect(requiredTypeChains).to.have.same.members([
-                'CONST_VALUE', 'OtherType', 'x.something'
+                'CONST_VALUE', 'OtherType'
             ]);
             expect(mainFile.requiredSymbols[0].containingNamespaces).to.have.same.members(['Alpha', 'Beta']);
             expect(mainFile.requiredSymbols[1].containingNamespaces).to.have.same.members(['Delta', 'Gamma', 'Eta']);

@@ -257,7 +257,7 @@ describe('CrossScopeValidator', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            expect(file1.requiredSymbols.length).to.eq(2);
+            expect(file1.requiredSymbols.length).to.eq(1);
             expect(file1.requiredSymbols[0].flags).to.eq(SymbolTypeFlag.typetime);
             expect(file1.requiredSymbols[0].typeChain[0].name).to.eq('MyInterface');
             const sourceScopeIssues = program.crossScopeValidation.getIssuesForScope(program.getScopeByName('source'));
@@ -936,63 +936,7 @@ describe('CrossScopeValidator', () => {
             expectZeroDiagnostics(program);
         });
 
-        it('works for multi-scope usage, when variable is passed as function param', () => {
-            program.options.autoImportComponentScript = true;
-            //set a baseline where everyone is happy
-            program.setFile('components/TextOptions.bs', `
-                interface TextOptions
-                    fontName as string
-                end interface
-            `);
 
-            const button1 = program.setFile('components/Button1.bs', `
-                import "pkg:/components/TextOptions.bs"
-                function configure(options as TextOptions)
-                    m.fontName = options.fontName
-                end function
-            `);
-            program.setFile('components/Button1.xml', `
-                <component name="Button1" extends="Group">
-                </component>
-            `);
-
-            const button2 = program.setFile('components/Button2.bs', `
-                import "pkg:/components/TextOptions.bs"
-                function configure(options as TextOptions)
-                    m.fontName = options.fontName
-                end function
-            `);
-
-            program.setFile('components/Button2.xml', `
-                <component name="Button2" extends="Group">
-                </component>
-            `);
-
-            program.validate();
-            expectZeroDiagnostics(program);
-
-            //now rename the interface property and verify both files have an error
-            program.setFile('components/TextOptions.bs', `
-                interface TextOptions
-                    fontFileName as string 'renamed from "fontName" to "fontFileName"
-                end interface
-            `);
-            program.validate();
-            expectDiagnostics(program, [
-                {
-                    message: DiagnosticMessages.cannotFindName('fontName', 'TextOptions.fontName', 'TextOptions').message,
-                    file: {
-                        srcPath: button1.srcPath
-                    }
-                },
-                {
-                    message: DiagnosticMessages.cannotFindName('fontName', 'TextOptions.fontName', 'TextOptions').message,
-                    file: {
-                        srcPath: button2.srcPath
-                    }
-                }
-            ]);
-        });
     });
 
     describe('alias statements', () => {
@@ -1108,6 +1052,135 @@ describe('CrossScopeValidator', () => {
 
             expectDiagnostics(program, [
                 DiagnosticMessages.argumentTypeMismatch('integer', 'string').message
+            ]);
+        });
+    });
+
+
+    describe('revalidation', () => {
+        it('works for multi-scope usage, when variable is passed as function param', () => {
+            program.options.autoImportComponentScript = true;
+            //set a baseline where everyone is happy
+            program.setFile('components/TextOptions.bs', `
+                interface TextOptions
+                    fontName as string
+                end interface
+            `);
+
+            const button1 = program.setFile('components/Button1.bs', `
+                import "pkg:/components/TextOptions.bs"
+                function configure(options as TextOptions)
+                    m.fontName = options.fontName
+                end function
+            `);
+            program.setFile('components/Button1.xml', `
+                <component name="Button1" extends="Group">
+                </component>
+            `);
+
+            const button2 = program.setFile('components/Button2.bs', `
+                import "pkg:/components/TextOptions.bs"
+                function configure(options as TextOptions)
+                    m.fontName = options.fontName
+                end function
+            `);
+
+            program.setFile('components/Button2.xml', `
+                <component name="Button2" extends="Group">
+                </component>
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            //now rename the interface property and verify both files have an error
+            program.setFile('components/TextOptions.bs', `
+                interface TextOptions
+                    fontFileName as string 'renamed from "fontName" to "fontFileName"
+                end interface
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                {
+                    message: DiagnosticMessages.cannotFindName('fontName', 'TextOptions.fontName', 'TextOptions').message,
+                    file: {
+                        srcPath: button1.srcPath
+                    }
+                },
+                {
+                    message: DiagnosticMessages.cannotFindName('fontName', 'TextOptions.fontName', 'TextOptions').message,
+                    file: {
+                        srcPath: button2.srcPath
+                    }
+                }
+            ]);
+        });
+
+        it('works for multi-scope usage, with namespaced functions', () => {
+            program.options.autoImportComponentScript = true;
+            //set a baseline where everyone is happy
+            program.setFile('components/namespace.bs', `
+                namespace alpha
+                    namespace beta
+                        function getValue() as string
+                            return "value"
+                        end function
+                    end namespace
+                end namespace
+            `);
+
+            const button1 = program.setFile('components/Button1.bs', `
+                import "pkg:/components/namespace.bs"
+                function configure()
+                    m.label.text = alpha.beta.getValue()
+                end function
+            `);
+            program.setFile('components/Button1.xml', `
+                <component name="Button1" extends="Group">
+                </component>
+            `);
+
+            const button2 = program.setFile('components/Button2.bs', `
+                import "pkg:/components/namespace.bs"
+                namespace alpha.beta
+                    function configure()
+                        m.label.text = getValue()
+                    end function
+                end namespace
+            `);
+
+            program.setFile('components/Button2.xml', `
+                <component name="Button2" extends="Group">
+                </component>
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            //now rename the interface property and verify both files have an error
+            program.setFile('components/namespace.bs', `
+                namespace alpha
+                    namespace beta
+                        function getValue(text as string) as string
+                            return text
+                        end function
+                    end namespace
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                {
+                    message: DiagnosticMessages.mismatchArgumentCount(1, 0).message,
+                    file: {
+                        srcPath: button1.srcPath
+                    }
+                },
+                {
+                    message: DiagnosticMessages.mismatchArgumentCount(1, 0).message,
+                    file: {
+                        srcPath: button2.srcPath
+                    }
+                }
             ]);
         });
     });
