@@ -2114,24 +2114,10 @@ export class Util {
         if (!symbolLowerNameSet || symbolLowerNameSet.size === 0) {
             return false;
         }
-        const fullChainName = util.processTypeChain(symbol.typeChain).fullChainName?.toLowerCase();
-        const possibleNamesLower = [] as string[];
-        let lastSymbol = '';
-        for (const chainPart of fullChainName.split('.')) {
-            lastSymbol += (lastSymbol ? `.${chainPart}` : chainPart);
-            possibleNamesLower.push(lastSymbol);
-        }
-        const possibleNamespace = symbol.containingNamespaces?.join('.').toLowerCase() ?? '';
 
-        for (const possibleNameLower of possibleNamesLower) {
+        for (const possibleNameLower of symbol.lookups) {
             if (symbolLowerNameSet.has(possibleNameLower)) {
                 return true;
-            }
-            if (possibleNamespace) {
-                const fullName = possibleNamespace + '.' + possibleNameLower;
-                if (symbolLowerNameSet.has(fullName)) {
-                    return true;
-                }
             }
         }
         return false;

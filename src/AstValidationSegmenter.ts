@@ -19,6 +19,7 @@ export interface UnresolvedSymbol {
     endChainFlags: SymbolTypeFlag;
     containingNamespaces: string[];
     file: BrsFile;
+    lookups: string[];
 }
 
 export interface AssignedSymbol {
@@ -97,12 +98,25 @@ export class AstValidationSegmenter {
                     extraData.definingNode.value.getType({ ...options, flags: SymbolTypeFlag.runtime | SymbolTypeFlag.typetime, typeChain: aliasTypeChain });
                     typeChain = [...aliasTypeChain, ...typeChain.slice(1)];
                 }
+                const possibleNamespace = this.currentNamespaceStatement?.getNameParts()?.map(t => t.text)?.join('.').toLowerCase() ?? '';
+                const fullChainName = util.processTypeChain(typeChain).fullChainName?.toLowerCase();
+                const possibleNamesLower = [] as string[];
+                let lastSymbol = '';
+                for (const chainPart of fullChainName.split('.')) {
+                    lastSymbol += (lastSymbol ? `.${chainPart}` : chainPart);
+                    possibleNamesLower.push(lastSymbol);
+                    if (possibleNamespace) {
+                        possibleNamesLower.push(possibleNamespace + '.' + lastSymbol);
+                    }
+                }
+
                 symbolsSet.add({
                     typeChain: typeChain,
                     flags: typeChain[0].data.flags,
                     endChainFlags: flag,
                     containingNamespaces: this.currentNamespaceStatement?.getNameParts()?.map(t => t.text),
-                    file: this.file
+                    file: this.file,
+                    lookups: possibleNamesLower
                 });
             }
             return true;
