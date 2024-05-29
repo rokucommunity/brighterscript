@@ -74,13 +74,13 @@ export class ScopeValidator {
             this.validateXmlInterface(event.scope);
         }
 
-        this.event.program.logger.info(this.event.scope.name, 'metrics:');
+        this.event.program.logger.debug(this.event.scope.name, 'metrics:');
         let total = 0;
         for (const [filePath, num] of this.metrics) {
-            this.event.program.logger.info(' - ', filePath, num);
+            this.event.program.logger.debug(' - ', filePath, num);
             total += num;
         }
-        this.event.program.logger.info(this.event.scope.name, 'total segments validated', total);
+        this.event.program.logger.debug(this.event.scope.name, 'total segments validated', total);
     }
 
     public reset() {
