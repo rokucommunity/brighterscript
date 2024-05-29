@@ -493,12 +493,12 @@ export class ArrayDefaultTypeReferenceType extends BscType {
 /**
  * Gives an array of all the symbol names that need to be resolved to make the given reference type be resolved
  */
-export function getAllRequiredSymbolNames(refType: BscType): string[] {
+export function getAllRequiredSymbolNames(refType: BscType, namespaceLower?: string): Array<{ name: string; namespacedName?: string }> {
     if (refType.isResolvable()) {
         return [];
     }
     if (isReferenceType(refType)) {
-        return [refType.fullName];
+        return [{ name: refType.fullName, namespacedName: namespaceLower ? `${namespaceLower}.${refType.fullName}` : null }];
     }
     if (isTypePropertyReferenceType(refType)) {
         const outer = refType.outerType;
@@ -522,10 +522,10 @@ export function getAllRequiredSymbolNames(refType: BscType): string[] {
         const right = refType.rightType;
         const result = [];
         if (isAnyReferenceType(left)) {
-            result.push(...getAllRequiredSymbolNames(left));
+            result.push(...getAllRequiredSymbolNames(left, namespaceLower));
         }
         if (isAnyReferenceType(right)) {
-            result.push(...getAllRequiredSymbolNames(right));
+            result.push(...getAllRequiredSymbolNames(right, namespaceLower));
 
         }
         return result;

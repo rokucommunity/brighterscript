@@ -6,7 +6,7 @@ import type { Program } from './Program';
 import util from './util';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { BscSymbol } from './SymbolTable';
-import { isCallExpression, isEnumType, isInheritableType, isNamespaceType, isReferenceType, isTypedFunctionType, isUnionType } from './astUtils/reflection';
+import { isCallExpression, isEnumType, isInheritableType, isNamespaceStatement, isNamespaceType, isReferenceType, isTypedFunctionType, isUnionType } from './astUtils/reflection';
 import type { ReferenceType } from './types/ReferenceType';
 import { getAllRequiredSymbolNames } from './types/ReferenceType';
 import type { TypeChainEntry, TypeChainProcessResult } from './interfaces';
@@ -14,6 +14,8 @@ import { BscTypeKind } from './types/BscTypeKind';
 import { getAllTypesFromUnionType } from './types/helpers';
 import type { BscType } from './types/BscType';
 import type { BscFile } from './files/BscFile';
+import type { NamespaceStatement } from './parser/Statement';
+import { ParseMode } from './parser/Parser';
 
 
 interface FileSymbolPair {
@@ -46,6 +48,9 @@ export class ProvidedNode {
     }
 
     getSymbol(symbolName: string): FileSymbolPair {
+        if (!symbolName) {
+            return;
+        }
         let lowerSymbolNameParts = symbolName.toLowerCase().split('.');
         return this.getSymbolByNameParts(lowerSymbolNameParts, this);
     }
@@ -259,7 +264,7 @@ export class CrossScopeValidator {
         const providedTree = new ProvidedNode();
         const duplicatesMap = new Map<string, Set<FileSymbolPair>>();
 
-        const referenceTypesMap = new Map<{ symbolName: string; file: BscFile; symbol: BscSymbol }, Set<string>>();
+        const referenceTypesMap = new Map<{ symbolName: string; file: BscFile; symbol: BscSymbol }, Array<{ name: string; namespacedName?: string }>>();
 
 
         function addSymbolWithDuplicates(symbolName: string, file: BscFile, symbol: BscSymbol) {
@@ -290,9 +295,10 @@ export class CrossScopeValidator {
             for (const [_, nameMap] of file.providedSymbols.referenceSymbolMap.entries()) {
                 for (const [symbolName, symbol] of nameMap.entries()) {
                     const symbolType = symbol.type;
-                    const allNames = getAllRequiredSymbolNames(symbolType);
+                    const namespaceLower = symbol.data?.definingNode?.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript).toLowerCase();
+                    const allNames = getAllRequiredSymbolNames(symbolType, namespaceLower);
 
-                    referenceTypesMap.set({ symbolName: symbolName, file: file, symbol: symbol }, new Set(allNames));
+                    referenceTypesMap.set({ symbolName: symbolName, file: file, symbol: symbol }, allNames);
                 }
             }
         });
@@ -311,12 +317,14 @@ export class CrossScopeValidator {
         while (referenceTypesMap.size > 0) {
             let addedSymbol = false;
             for (const [refTypeDetails, neededNames] of referenceTypesMap.entries()) {
+                let foundNames = 0;
                 for (const neededName of neededNames) {
-                    if (providedTree.getSymbol(neededName)) {
-                        neededNames.delete(neededName);
+
+                    if (providedTree.getSymbol(neededName.name) ?? providedTree.getSymbol(neededName.namespacedName)) {
+                        foundNames++;
                     }
                 }
-                if (neededNames.size === 0) {
+                if (neededNames.length === foundNames) {
                     //found all that were needed
                     addSymbolWithDuplicates(refTypeDetails.symbolName, refTypeDetails.file, refTypeDetails.symbol);
                     referenceTypesMap.delete(refTypeDetails);

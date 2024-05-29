@@ -1235,6 +1235,47 @@ describe('CrossScopeValidator', () => {
             expectZeroDiagnostics(program);
         });
 
+        it('works for multi-scope usage, with namespaced consts name changes', () => {
+            program.options.autoImportComponentScript = true;
+            program.logger.logLevel = 'info';
+            //set a baseline where everyone is happy
+            program.setFile('source/test.bs', `
+                namespace alpha.beta
+                   const PI = 3.14
+                end namespace
+            `);
+
+            for (let i = 0; i < 100; i++) {
+
+                program.setFile(`components/Button${i}.bs`, `
+                    import "pkg:/source/test.bs"
+                    namespace alpha.beta
+                        sub configure()
+                            print PI
+                        end sub
+                    end namespace
+                `);
+
+                program.setFile(`components/Button${i}.xml`, `
+                    <component name="Button${i}" extends="Group">
+                    </component>
+                `);
+            }
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            //now rename the interface property and verify both files have an error
+            program.setFile('source/test.bs', `
+                namespace alpha.beta
+                    const PIE = 3.14159
+                end namespace
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.cannotFindName('PI').message
+            ]);
+        });
+
         it('works for multi-scope usage, when changing imported namespace members', () => {
             program.options.autoImportComponentScript = true;
             //set a baseline where everyone is happy

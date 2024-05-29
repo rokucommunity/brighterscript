@@ -824,6 +824,7 @@ export class Program {
             this.plugins.emit('onProgramValidate', programValidateEvent);
 
             const metrics = {
+                filesChanged: 0,
                 filesValidated: 0,
                 fileValidationTime: '',
                 crossScopeValidationTime: '',
@@ -868,7 +869,7 @@ export class Program {
                 }
             }).durationText;
 
-            metrics.filesValidated = afterValidateFiles.length;
+            metrics.filesChanged = afterValidateFiles.length;
 
             // Build component types for any component that changes
             this.logger.time(LogLevel.info, ['Build component types'], () => {
@@ -903,6 +904,7 @@ export class Program {
                 }
             }).durationText;
 
+            metrics.filesValidated = filesToBeValidatedInScopeContext.size;
 
             let linkTime = 0;
             let validationTime = 0;

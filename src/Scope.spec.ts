@@ -4286,7 +4286,8 @@ describe('Scope', () => {
 
         // eslint-disable-next-line func-names, prefer-arrow-callback
         it.skip('namespace linking performance', function () {
-            this.timeout(5000);
+            this.timeout(10000);
+            program.logger.logLevel = 'info';
             // this test takes a few seconds (~4) it is skipped just to make regular test running faster
             program.options.autoImportComponentScript = true;
             const constFileContents = `
@@ -4315,14 +4316,10 @@ describe('Scope', () => {
             `;
 
             const const2FileContents = `
-               import "pkg:/source/consts3.bs"
-
+                import "pkg:/source/consts3.bs"
+                import "pkg:/source/consts2a.bs"
                 namespace a.b.c
                     const ROOT2 = 1.41
-                end namespace
-
-                namespace d.e.f
-                    const GOLDEN = 1.62
                 end namespace
 
                 namespace a.b.c.d
@@ -4331,6 +4328,12 @@ describe('Scope', () => {
 
                 namespace d.e.f.g
                     const D = "D"
+                end namespace
+            `;
+
+            const const2AFileContents = `
+                namespace d.e.f
+                    const GOLDEN = 1.62
                 end namespace
             `;
 
@@ -4355,6 +4358,7 @@ describe('Scope', () => {
 
             program.setFile('source/consts.bs', constFileContents);
             program.setFile('source/consts2.bs', const2FileContents);
+            program.setFile('source/consts2a.bs', const2AFileContents);
             program.setFile('source/consts3.bs', const3FileContents);
 
             const widgetBsFileContents = `
@@ -4363,6 +4367,7 @@ describe('Scope', () => {
                     sub init()
                         print a.b.c.PI + d.e.f.EULER
                         print a.b.c.d.D + n.o.p.C
+                        print d.e.f.GOLDEN
                         print d.e.f.GOLDEN_EULER
                         print alpha_0.beta_0.charlie_0.delta_0.getNum().toStr() +  alpha_0.beta_0.charlie_0.delta_0.TEST
                     end sub
@@ -4384,7 +4389,13 @@ describe('Scope', () => {
             program.validate();
             program.setFile('source/consts3.bs', const3FileContents);
             program.validate();
+            program.setFile('source/consts2a.bs', `
+                namespace d.e.f
+                    const NOT_GOLDEN = 1.62
+                end namespace
+            `);
+            program.validate();
+
         });
     });
-
 });
