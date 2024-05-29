@@ -52,13 +52,16 @@ export class ScopeValidator {
      */
     private event: OnScopeValidateEvent;
 
+    private metrics = new Map<string, number>();
+
+
     public processEvent(event: OnScopeValidateEvent) {
         this.event = event;
         if (this.event.program.globalScope === this.event.scope) {
             return;
         }
         this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, tag: ScopeValidatorDiagnosticTag });
-
+        this.metrics.clear();
         this.walkFiles();
         this.detectDuplicateEnums();
         this.flagDuplicateFunctionDeclarations();
@@ -70,6 +73,14 @@ export class ScopeValidator {
             //validate component interface
             this.validateXmlInterface(event.scope);
         }
+
+        this.event.program.logger.info(this.event.scope.name, 'metrics:');
+        let total = 0;
+        for (const [filePath, num] of this.metrics) {
+            this.event.program.logger.info(' - ', filePath, num);
+            total += num;
+        }
+        this.event.program.logger.info(this.event.scope.name, 'total segments validated', total);
     }
 
     public reset() {
@@ -177,17 +188,20 @@ export class ScopeValidator {
                     ? file.validationSegmenter.segmentsForValidation // validate everything in the file
                     : file.getValidationSegments(this.event.changedSymbols); // validate only what's needed in the file
 
+                let segmentsValidated = 0;
                 for (const segment of segmentsToWalkForValidation) {
-                    if (!file.validationSegmenter.checkIfSegmentNeedRevalidation(segment)) {
+                    if (!file.validationSegmenter.checkIfSegmentNeedsRevalidation(segment, this.event.changedSymbols)) {
                         continue;
                     }
                     this.currentSegmentBeingValidated = segment;
                     this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, file: file, segment: segment });
+                    segmentsValidated++;
                     segment.walk(validationVisitor, {
                         walkMode: InsideSegmentWalkMode
                     });
                     file.markSegmentAsValidated(segment);
                 }
+                this.metrics.set(file.pkgPath, segmentsValidated);
             }
         });
     }

@@ -428,36 +428,14 @@ export class CrossScopeValidator {
         const filesThatNeedRevalidation = new Set<BscFile>();
         const filesThatDoNotNeedRevalidation = new Set<BscFile>();
 
-        const runTimeChanges = changedSymbols.get(SymbolTypeFlag.runtime);
-        const typeTimeChanges = changedSymbols.get(SymbolTypeFlag.typetime);
-
-        function checkChangedSetForSymbol(symbol: UnresolvedSymbol) {
-            const fullChainName = util.processTypeChain(symbol.typeChain).fullChainName?.toLowerCase();
-            for (let changedSet of [runTimeChanges, typeTimeChanges]) {
-
-                if (changedSet?.has(fullChainName)) {
-                    return true;
-                } else if (symbol.containingNamespaces?.length > 0) {
-                    const namespacedName = (symbol.containingNamespaces.join('.') + '.' + fullChainName).toLowerCase();
-                    if (changedSet?.has(namespacedName)) {
-
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
-
         for (const scope of scopes) {
             scope.enumerateBrsFiles((file) => {
                 if (filesThatNeedRevalidation.has(file) || filesThatDoNotNeedRevalidation.has(file)) {
                     return;
                 }
-                for (const symbol of file.requiredSymbols) {
-                    if (checkChangedSetForSymbol(symbol)) {
-                        filesThatNeedRevalidation.add(file);
-                        return;
-                    }
+                if (util.hasAnyRequiredSymbolChanged(file.requiredSymbols, changedSymbols)) {
+                    filesThatNeedRevalidation.add(file);
+                    return;
                 }
                 filesThatDoNotNeedRevalidation.add(file);
             });

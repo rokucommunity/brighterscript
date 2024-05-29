@@ -1183,5 +1183,201 @@ describe('CrossScopeValidator', () => {
                 }
             ]);
         });
+
+        it('works for multi-scope usage, with namespaced consts', () => {
+            program.options.autoImportComponentScript = true;
+            //set a baseline where everyone is happy
+            program.setFile('source/test.bs', `
+                namespace alpha.beta
+                   const PI = 3.14
+                end namespace
+            `);
+
+            program.setFile('components/Button1.bs', `
+                import "pkg:/source/test.bs"
+                function configure()
+                    m.label.text = alpha.beta.PI.toStr()
+                end function
+            `);
+            program.setFile('components/Button1.xml', `
+                <component name="Button1" extends="Group">
+                </component>
+            `);
+
+            program.setFile('components/Button2.bs', `
+                import "pkg:/source/test.bs"
+                namespace alpha.beta
+                    sub configure()
+                        m.label.text = alpha.beta.PI.toStr()
+                    end sub
+
+                    sub noop()
+                        print "hello"
+                    end sub
+                end namespace
+            `);
+
+            program.setFile('components/Button2.xml', `
+                <component name="Button2" extends="Group">
+                </component>
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            //now rename the interface property and verify both files have an error
+            program.setFile('source/test.bs', `
+                namespace alpha.beta
+                    const PI = 3.14159
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('works for multi-scope usage, when changing imported namespace members', () => {
+            program.options.autoImportComponentScript = true;
+            //set a baseline where everyone is happy
+            program.setFile('source/test.bs', `
+                namespace alpha.beta
+                   function getValue()
+                        return 1
+                    end function
+
+                    namespace charlie
+                        const hello = "hello"
+                    end namespace
+                end namespace
+            `);
+
+            const button1 = program.setFile('components/Button1.bs', `
+                import "pkg:/source/test.bs"
+                function configure()
+                    m.label.text = alpha.beta.getValue.toStr()
+                end function
+
+                sub noop()
+                    print alpha.beta.charlie.hello
+                end sub
+            `);
+            program.setFile('components/Button1.xml', `
+                <component name="Button1" extends="Group">
+                </component>
+            `);
+
+            const button2 = program.setFile('components/Button2.bs', `
+                import "pkg:/source/test.bs"
+                namespace alpha.beta
+                    sub configure()
+                        m.label.text = getValue.toStr()
+                    end sub
+
+                    sub noop()
+                        print "hello"
+                    end sub
+
+                    sub noop2()
+                        print alpha.beta.charlie.hello
+                    end sub
+                end namespace
+            `);
+
+            program.setFile('components/Button2.xml', `
+                <component name="Button2" extends="Group">
+                </component>
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            //now rename the interface property and verify both files have an error
+            program.setFile('source/test.bs', `
+                namespace alpha.beta
+                    function getOtherValue()
+                        return 1
+                    end function
+
+                    namespace charlie
+                        const hello = "hello"
+                    end namespace
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                {
+                    message: DiagnosticMessages.cannotFindName('getValue', 'alpha.beta.getValue', 'alpha.beta', 'namespace').message,
+                    file: {
+                        srcPath: button1.srcPath
+                    }
+                },
+                {
+                    message: DiagnosticMessages.cannotFindName('getValue').message,
+                    file: {
+                        srcPath: button2.srcPath
+                    }
+                }
+            ]);
+        });
+
+        it('works when changing file multiple times', () => {
+            program.options.autoImportComponentScript = true;
+            //set a baseline where everyone is happy
+            program.setFile('source/test.bs', `
+                namespace alpha.beta
+                    function someFunc()
+                        return "test"
+                    end function
+                end namespace
+            `);
+
+            const widgetFile = program.setFile('components/Widget.bs', `
+                import "pkg:/source/test.bs"
+                sub init()
+                    alpha.beta.someFunc()
+                end sub
+            `);
+            program.setFile('components/Widget.xml', `
+                <component name="Widget" extends="Group">
+                </component>
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            let testCount = 4;
+            while (testCount > 0) {
+                testCount--;
+
+                //now rename the interface property and verify both files have an error
+                program.setFile('source/test.bs', `
+                    namespace alpha.beta
+                        function notSomeFunc()
+                            return "test"
+                        end function
+                    end namespace
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    {
+                        message: DiagnosticMessages.cannotFindFunction('someFunc', 'alpha.beta.someFunc', 'alpha.beta', 'namespace').message,
+                        file: {
+                            srcPath: widgetFile.srcPath
+                        }
+                    }
+                ]);
+
+                //reset file:
+                program.setFile('source/test.bs', `
+                    namespace alpha.beta
+                        function someFunc()
+                            return "test"
+                        end function
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            }
+
+        });
     });
 });

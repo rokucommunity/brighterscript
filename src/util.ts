@@ -2098,25 +2098,38 @@ export class Util {
         return false;
     }
 
-    public setContainsUnresolvedSymbol(symbolLowerNameSet: Set<string>, symbol: UnresolvedSymbol) {
-        const possibleOriginalSymbolNamesLower = [];
-        let nameSoFar = '';
-        for (const tce of symbol.typeChain) {
-            if (nameSoFar.length > 0) {
-                nameSoFar += '.';
-            }
-            nameSoFar += tce.name.toLowerCase();
-            possibleOriginalSymbolNamesLower.push(nameSoFar);
-        }
-        const possibleNamespace = symbol.containingNamespaces?.join('.') ?? '';
+    public hasAnyRequiredSymbolChanged(requiredSymbols: UnresolvedSymbol[], changedSymbols: Map<SymbolTypeFlag, Set<string>>) {
+        const runTimeChanges = changedSymbols.get(SymbolTypeFlag.runtime);
+        const typeTimeChanges = changedSymbols.get(SymbolTypeFlag.typetime);
 
-        for (const possibleNameLower of possibleOriginalSymbolNamesLower) {
+        for (const symbol of requiredSymbols) {
+            if (this.setContainsUnresolvedSymbol(runTimeChanges, symbol) || this.setContainsUnresolvedSymbol(typeTimeChanges, symbol)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public setContainsUnresolvedSymbol(symbolLowerNameSet: Set<string>, symbol: UnresolvedSymbol) {
+        if (!symbolLowerNameSet || symbolLowerNameSet.size === 0) {
+            return false;
+        }
+        const fullChainName = util.processTypeChain(symbol.typeChain).fullChainName?.toLowerCase();
+        const possibleNamesLower = [] as string[];
+        let lastSymbol = '';
+        for (const chainPart of fullChainName.split('.')) {
+            lastSymbol += (lastSymbol ? `.${chainPart}` : chainPart);
+            possibleNamesLower.push(lastSymbol);
+        }
+        const possibleNamespace = symbol.containingNamespaces?.join('.').toLowerCase() ?? '';
+
+        for (const possibleNameLower of possibleNamesLower) {
             if (symbolLowerNameSet.has(possibleNameLower)) {
                 return true;
             }
             if (possibleNamespace) {
                 const fullName = possibleNamespace + '.' + possibleNameLower;
-                if (symbolLowerNameSet.has(fullName.toLowerCase())) {
+                if (symbolLowerNameSet.has(fullName)) {
                     return true;
                 }
             }

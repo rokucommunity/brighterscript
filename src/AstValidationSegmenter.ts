@@ -252,13 +252,16 @@ export class AstValidationSegmenter {
     }
 
 
-    checkIfSegmentNeedRevalidation(segment: AstNode) {
+    checkIfSegmentNeedsRevalidation(segment: AstNode, changedSymbols: Map<SymbolTypeFlag, Set<string>>) {
         if (!this.validatedSegments.get(segment)) {
             return true;
         }
         const unresolved = this.unresolvedSegmentsSymbols.get(segment);
         if (unresolved?.size > 0) {
-            return true;
+            if (util.hasAnyRequiredSymbolChanged([...unresolved], changedSymbols)) {
+                return true;
+            }
+
         } /*
          const assignedTokens = this.assignedTokensInSegment.get(segment);
          if (assignedTokens?.size > 0) {
