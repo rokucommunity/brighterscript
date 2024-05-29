@@ -1377,7 +1377,6 @@ describe('CrossScopeValidator', () => {
                 program.validate();
                 expectZeroDiagnostics(program);
             }
-
         });
     });
 });

@@ -1083,12 +1083,6 @@ export class BrsFile implements BscFile {
         }
     }
 
-    public getValidationSegments(changedSymbols: Map<SymbolTypeFlag, Set<string>>) {
-        const segments = this.validationSegmenter.getSegments(changedSymbols);
-        return segments;
-    }
-
-
     public get requiredSymbols() {
         return this.cache.getOrAdd(`requiredSymbols`, () => {
             const allNeededSymbolSets = this.validationSegmenter.unresolvedSegmentsSymbols.values();

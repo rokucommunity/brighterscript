@@ -210,40 +210,28 @@ export class AstValidationSegmenter {
 
     }
 
-
-    getSegments(changedSymbols: Map<SymbolTypeFlag, Set<string>>): AstNode[] {
+    getAllUnvalidatedSegments() {
         const segmentsToWalkForValidation: AstNode[] = [];
-        const allChangedSymbolNames = [...changedSymbols.get(SymbolTypeFlag.runtime), ...changedSymbols.get(SymbolTypeFlag.typetime)];
         for (const segment of this.segmentsForValidation) {
+            if (this.validatedSegments.get(segment)) {
+                continue;
+            }
+            segmentsToWalkForValidation.push(segment);
+        }
+        return segmentsToWalkForValidation;
+    }
+
+    getSegmentsWithChangedSymbols(changedSymbols: Map<SymbolTypeFlag, Set<string>>): AstNode[] {
+        const segmentsToWalkForValidation: AstNode[] = [];
+        for (const segment of this.segmentsForValidation) {
+            if (this.validatedSegments.get(segment)) {
+                continue;
+            }
             const symbolsRequired = this.unresolvedSegmentsSymbols.get(segment);
-
-            const isSingleValidationSegment = this.singleValidationSegments.has(segment);
-            const singleValidationSegmentAlreadyValidated = isSingleValidationSegment ? this.validatedSegments.get(segment) : false;
-            let segmentNeedsRevalidation = !singleValidationSegmentAlreadyValidated;
-
             if (symbolsRequired) {
-                for (const requiredSymbol of symbolsRequired.values()) {
-                    for (const flagType of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
-                        // eslint-disable-next-line no-bitwise
-                        const runTimeOrTypeTimeSymbolFlag = requiredSymbol.flags & flagType;
-                        const changeSymbolSetForFlag = changedSymbols.get(runTimeOrTypeTimeSymbolFlag);
-                        if (!changeSymbolSetForFlag) {
-                            // This symbol has no flag - it is of unknown usage
-                            // This can happen when testing if a function exists
-                        } else if (util.setContainsUnresolvedSymbol(changeSymbolSetForFlag, requiredSymbol)) {
-                            segmentsToWalkForValidation.push(segment);
-                            break;
-                        }
-                    }
-                }
-            } else if (segmentNeedsRevalidation) {
-                segmentsToWalkForValidation.push(segment);
-            } else {
-                for (let assignedToken of this.assignedTokensInSegment?.get(segment)?.values() ?? []) {
-                    if (allChangedSymbolNames.includes(assignedToken.token.text.toLowerCase())) {
-                        segmentsToWalkForValidation.push(segment);
-                        break;
-                    }
+                if (util.hasAnyRequiredSymbolChanged([...symbolsRequired], changedSymbols)) {
+                    segmentsToWalkForValidation.push(segment);
+                    continue;
                 }
             }
         }
@@ -270,17 +258,6 @@ export class AstValidationSegmenter {
         if (!this.validatedSegments.get(segment)) {
             return true;
         }
-        const unresolved = this.unresolvedSegmentsSymbols.get(segment);
-        if (unresolved?.size > 0) {
-            if (util.hasAnyRequiredSymbolChanged([...unresolved], changedSymbols)) {
-                return true;
-            }
-
-        } /*
-         const assignedTokens = this.assignedTokensInSegment.get(segment);
-         if (assignedTokens?.size > 0) {
-             return true;
-         }*/
         return false;
     }
 

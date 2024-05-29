@@ -114,18 +114,16 @@ export class ScopeValidator {
             if (isBrsFile(file)) {
                 const thisFileHasChanges = this.event.changedFiles.includes(file);
 
-                const thisFileRequiresChangedSymbol = this.doesFileRequireChangedSymbol(file);
+                const thisFileRequiresChangedSymbol = util.hasAnyRequiredSymbolChanged(file.requiredSymbols, this.event.changedSymbols);
 
                 const hasUnvalidatedSegments = file.validationSegmenter.hasUnvalidatedSegments();
 
                 if (hasChangeInfo && !thisFileRequiresChangedSymbol && !thisFileHasChanges && !hasUnvalidatedSegments) {
                     // this file does not require a symbol that has changed, and this file has not changed
-
                     if (!this.doesFileAssignChangedSymbol(file)) {
                         // this file does not have a variable assignment that needs to be checked
                         return;
                     }
-
                 }
 
                 const validationVisitor = createVisitor({
@@ -184,9 +182,11 @@ export class ScopeValidator {
                         });
                     }
                 });
-                const segmentsToWalkForValidation = (thisFileHasChanges || !hasChangeInfo)
-                    ? file.validationSegmenter.segmentsForValidation // validate everything in the file
-                    : file.getValidationSegments(this.event.changedSymbols); // validate only what's needed in the file
+                // validate only what's needed in the file
+
+                const segmentsToWalkForValidation = thisFileHasChanges
+                    ? file.validationSegmenter.getAllUnvalidatedSegments()
+                    : file.validationSegmenter.getSegmentsWithChangedSymbols(this.event.changedSymbols);
 
                 let segmentsValidated = 0;
                 for (const segment of segmentsToWalkForValidation) {
@@ -204,22 +204,6 @@ export class ScopeValidator {
                 this.metrics.set(file.pkgPath, segmentsValidated);
             }
         });
-    }
-
-    private doesFileRequireChangedSymbol(file: BrsFile) {
-        for (let requiredSymbol of file.requiredSymbols) {
-            // eslint-disable-next-line no-bitwise
-            for (const flag of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
-                // eslint-disable-next-line no-bitwise
-                if (flag & requiredSymbol.flags) {
-                    const changeSymbolSetForFlag = this.event.changedSymbols.get(flag);
-                    if (util.setContainsUnresolvedSymbol(changeSymbolSetForFlag, requiredSymbol)) {
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
     }
 
     private doesFileProvideChangedSymbol(file: BrsFile, changedSymbols: Map<SymbolTypeFlag, Set<string>>) {

@@ -907,14 +907,21 @@ export class Program {
             let linkTime = 0;
             let validationTime = 0;
             let scopesValidated = 0;
+            let changedFiles = new Set<BscFile>(afterValidateFiles);
             this.logger.time(LogLevel.info, ['Validate all scopes'], () => {
                 //sort the scope names so we get consistent results
                 const scopeNames = this.getSortedScopeNames();
+                for (const file of filesToBeValidatedInScopeContext) {
+                    if (isBrsFile(file)) {
+                        file.validationSegmenter.unValidateAllSegments();
+                    }
+                }
                 for (let scopeName of scopeNames) {
                     let scope = this.scopes[scopeName];
                     const scopeValidated = scope.validate({
                         filesToBeValidatedInScopeContext: filesToBeValidatedInScopeContext,
                         changedSymbols: changedSymbols,
+                        changedFiles: changedFiles,
                         initialValidation: this.isFirstValidation
                     });
                     if (scopeValidated) {

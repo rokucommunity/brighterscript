@@ -766,6 +766,11 @@ export class Scope {
     };
 
     public validate(validationOptions: ScopeValidationOptions = { force: false }) {
+        this.validationMetrics = {
+            linkTime: 0,
+            validationTime: 0
+        };
+
         //if this scope is already validated, no need to revalidate
         if (this.isValidated === true && !validationOptions.force) {
             this.logDebug('validate(): already validated');
@@ -789,8 +794,6 @@ export class Scope {
                 this.logDebug('validate(): validating parent first');
                 parentScope.validate(validationOptions);
             }
-            //clear the scope's errors list (we will populate them from this method)
-
 
             //Since statements from files are shared across multiple scopes, we need to link those statements to the current scope
 
@@ -800,7 +803,7 @@ export class Scope {
             const scopeValidateEvent = {
                 program: this.program,
                 scope: this,
-                changedFiles: new Array<BscFile>(...(validationOptions?.filesToBeValidatedInScopeContext?.values() ?? [])),
+                changedFiles: new Array<BscFile>(...(validationOptions?.changedFiles?.values() ?? [])),
                 changedSymbols: validationOptions?.changedSymbols
             };
             t0 = performance.now();

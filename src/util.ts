@@ -2099,6 +2099,9 @@ export class Util {
     }
 
     public hasAnyRequiredSymbolChanged(requiredSymbols: UnresolvedSymbol[], changedSymbols: Map<SymbolTypeFlag, Set<string>>) {
+        if (!requiredSymbols || !changedSymbols) {
+            return false;
+        }
         const runTimeChanges = changedSymbols.get(SymbolTypeFlag.runtime);
         const typeTimeChanges = changedSymbols.get(SymbolTypeFlag.typetime);
 

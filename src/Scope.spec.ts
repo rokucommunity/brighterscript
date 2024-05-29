@@ -3961,7 +3961,7 @@ describe('Scope', () => {
                 program.validate();
                 expectZeroDiagnostics(program);
                 expect(file1.requiredSymbols.length).to.eq(0);
-                const validationSegments = file1.getValidationSegments(file1.providedSymbols.changes);
+                const validationSegments = file1.validationSegmenter.getSegmentsWithChangedSymbols(file1.providedSymbols.changes);
                 expect(validationSegments).to.not.undefined;
             });
 
@@ -4006,7 +4006,7 @@ describe('Scope', () => {
                 program.validate();
                 expectZeroDiagnostics(program);
                 expect(file1.requiredSymbols.length).to.eq(2);
-                const validationSegments = file1.getValidationSegments(file1.providedSymbols.changes);
+                const validationSegments = file1.validationSegmenter.getSegmentsWithChangedSymbols(file1.providedSymbols.changes);
                 expect(validationSegments).to.not.undefined;
             });
         });
