@@ -1175,7 +1175,7 @@ class Runner {
                         }
                     ],
                     interfaces: [],
-                    name: 'TrickPlayBar',
+                    name: 'ProgressBar',
                     url: 'https://developer.roku.com/en-ca/docs/references/scenegraph/media-playback-nodes/video.md#ui-fields'
                 }
             },

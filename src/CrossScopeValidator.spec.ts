@@ -936,6 +936,57 @@ describe('CrossScopeValidator', () => {
             expectZeroDiagnostics(program);
         });
 
+        it('finds custom components', () => {
+            program.setFile('components/utils.bs', `
+                function printWidgetName(widg as roSGNodeWidget)
+                    print widg.name
+                end function
+
+                function getWidget(name as string) as roSGNodeWidget
+                    widge = createObject("roSgNode", "Widget")
+                    widge.name = name
+                    return widge
+                end function
+            `);
+            program.setFile('components/widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="pkg:/components/widget.bs"/>
+                    <interface>
+                        <field id="name" type="string" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/widget.bs', `
+                import "pkg:/components/utils.bs"
+
+                sub init()
+                    stuff(m.top as roSGNodeWidget)
+                end sub
+
+                sub stuff(w as roSgNodeWidget)
+                    printWidgetName(w)
+                end sub
+            `);
+
+            program.setFile('components/other.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Other" extends="Group">
+                    <script uri="pkg:/components/other.bs"/>
+                    <interface>
+                        <field id="name" type="string" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/other.bs', `
+                import "pkg:/components/utils.bs"
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
 
     });
 
@@ -1250,8 +1301,8 @@ describe('CrossScopeValidator', () => {
                 program.setFile(`components/Button${i}.bs`, `
                     import "pkg:/source/test.bs"
                     namespace alpha.beta
-                        sub configure()
-                            print PI
+                        sub configure(x = alpha.beta.PI)
+                            print x
                         end sub
                     end namespace
                 `);
@@ -1272,7 +1323,7 @@ describe('CrossScopeValidator', () => {
             `);
             program.validate();
             expectDiagnosticsIncludes(program, [
-                DiagnosticMessages.cannotFindName('PI').message
+                DiagnosticMessages.cannotFindName('PI', 'alpha.beta.PI', 'alpha.beta', 'namespace').message
             ]);
         });
 

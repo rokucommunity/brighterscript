@@ -897,6 +897,7 @@ export class Program {
 
             metrics.crossScopeValidationTime = validationStopwatch.getDurationTextFor(() => {
                 const scopesToCheck = this.getScopesForCrossScopeValidation();
+                this.crossScopeValidation.buildComponentsMap();
                 this.crossScopeValidation.addDiagnosticsForScopes(scopesToCheck);
                 const filesToRevalidate = this.crossScopeValidation.getFilesRequiringChangedSymbol(scopesToCheck, changedSymbols);
                 for (const file of filesToRevalidate) {

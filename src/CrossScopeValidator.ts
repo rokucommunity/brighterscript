@@ -37,7 +37,7 @@ export class ProvidedNode {
     namespaces = new Map<string, ProvidedNode>();
     symbols = new Map<string, FileSymbolPair>();
 
-    constructor(public key: string = '') { }
+    constructor(public key: string = '', private componentsMap?: Map<string, FileSymbolPair>) { }
 
 
     getSymbolByKey(symbolKeys: SymbolLookupKeys): FileSymbolPair {
@@ -51,7 +51,11 @@ export class ProvidedNode {
         if (!symbolName) {
             return;
         }
-        let lowerSymbolNameParts = symbolName.toLowerCase().split('.');
+        const lowerSymbolName = symbolName.toLowerCase();
+        if (this.componentsMap?.has(lowerSymbolName)) {
+            return this.componentsMap.get(lowerSymbolName);
+        }
+        let lowerSymbolNameParts = lowerSymbolName.split('.');
         return this.getSymbolByNameParts(lowerSymbolNameParts, this);
     }
 
@@ -244,6 +248,9 @@ export class CrossScopeValidator {
     resolutionsMap = new Map<UnresolvedSymbol, Set<{ scope: Scope; sourceFile: BscFile; providedSymbol: BscSymbol }>>();
     providedTreeMap = new Map<Scope, { duplicatesMap: Map<string, Set<FileSymbolPair>>; providedTree: ProvidedNode }>();
 
+
+    private componentsMap = new Map<string, FileSymbolPair>();
+
     getRequiredMap(scope: Scope) {
         const map = new Map<SymbolLookupKeys, UnresolvedSymbol>();
         scope.enumerateBrsFiles((file) => {
@@ -261,7 +268,7 @@ export class CrossScopeValidator {
         if (this.providedTreeMap.has(scope)) {
             return this.providedTreeMap.get(scope);
         }
-        const providedTree = new ProvidedNode();
+        const providedTree = new ProvidedNode('', this.componentsMap);
         const duplicatesMap = new Map<string, Set<FileSymbolPair>>();
 
         const referenceTypesMap = new Map<{ symbolName: string; file: BscFile; symbol: BscSymbol }, Array<{ name: string; namespacedName?: string }>>();
@@ -303,23 +310,13 @@ export class CrossScopeValidator {
             }
         });
 
-        // Add custom components
-        for (let componentName of this.program.getSortedComponentNames()) {
-            const typeName = 'rosgnode' + componentName;
-            const componentSymbol = this.program.globalScope.symbolTable.getSymbol(typeName, SymbolTypeFlag.typetime)?.[0];
-            const component = this.program.getComponent(componentName);
-            if (componentSymbol && component) {
-                addSymbolWithDuplicates(typeName, component?.file, componentSymbol);
-            }
-        }
-
         // check provided reference types to see if they exist yet!
         while (referenceTypesMap.size > 0) {
             let addedSymbol = false;
             for (const [refTypeDetails, neededNames] of referenceTypesMap.entries()) {
                 let foundNames = 0;
                 for (const neededName of neededNames) {
-
+                    // check if name exists or namespaced version exists
                     if (providedTree.getSymbol(neededName.name) ?? providedTree.getSymbol(neededName.namespacedName)) {
                         foundNames++;
                     }
@@ -382,6 +379,8 @@ export class CrossScopeValidator {
                     let currentKnownType;
                     for (const chainEntry of missing.typeChain) {
                         if (!chainEntry.isResolved) {
+                            // for each unresolved part of a chain, see if we can resolve it with stuff from the provided tree
+                            // and if so, mark it as resolved
                             const lookupName = (chainEntry.type as ReferenceType)?.fullName ?? chainEntry.name;
                             if (!currentKnownType) {
                                 namespaceNode = namespaceNode?.getNamespaceByNameParts([chainEntry.name]);
@@ -449,6 +448,19 @@ export class CrossScopeValidator {
             });
         }
         return filesThatNeedRevalidation;
+    }
+
+    buildComponentsMap() {
+        this.componentsMap.clear();
+        // Add custom components
+        for (let componentName of this.program.getSortedComponentNames()) {
+            const typeName = 'rosgnode' + componentName;
+            const component = this.program.getComponent(componentName);
+            const componentSymbol = this.program.globalScope.symbolTable.getSymbol(typeName, SymbolTypeFlag.typetime)?.[0];
+            if (componentSymbol && component) {
+                this.componentsMap.set(typeName, { file: component.file, symbol: componentSymbol });
+            }
+        }
     }
 
     addDiagnosticsForScopes(scopes: Scope[]) { //, changedFiles: BrsFile[]) {

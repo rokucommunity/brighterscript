@@ -2110,6 +2110,7 @@ export class Util {
                 return true;
             }
         }
+
         return false;
     }
 
