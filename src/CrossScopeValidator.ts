@@ -1,12 +1,12 @@
 import type { UnresolvedSymbol } from './AstValidationSegmenter';
 import type { Scope } from './Scope';
-import type { BrsFile } from './files/BrsFile';
+import type { BrsFile, ProvidedSymbol } from './files/BrsFile';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { Program } from './Program';
 import util from './util';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { BscSymbol } from './SymbolTable';
-import { isCallExpression, isEnumType, isInheritableType, isNamespaceStatement, isNamespaceType, isReferenceType, isTypedFunctionType, isUnionType } from './astUtils/reflection';
+import { isCallExpression, isConstStatement, isEnumStatement, isEnumType, isFunctionStatement, isInheritableType, isInterfaceStatement, isNamespaceStatement, isNamespaceType, isReferenceType, isTypedFunctionType, isUnionType } from './astUtils/reflection';
 import type { ReferenceType } from './types/ReferenceType';
 import { getAllRequiredSymbolNames } from './types/ReferenceType';
 import type { TypeChainEntry, TypeChainProcessResult } from './interfaces';
@@ -16,6 +16,8 @@ import type { BscType } from './types/BscType';
 import type { BscFile } from './files/BscFile';
 import type { NamespaceStatement } from './parser/Statement';
 import { ParseMode } from './parser/Parser';
+import { URI } from 'vscode-uri';
+import { globalFile } from './globalCallables';
 
 
 interface FileSymbolPair {
@@ -176,11 +178,17 @@ export class ProvidedNode {
             }
             return namespaceNode.addSymbolByNameParts(rest, symbolPair);
         } else {
+            if (this.namespaces.get(first)) {
+                // trying to add a symbol that already exists as a namespace - this is a duplicate
+                return true;
+            }
+
             // just add it to the symbols
-            if (!this.symbols.get(first)) {
+            const existingSymbolPair = this.symbols.get(first);
+            if (!existingSymbolPair) {
                 this.symbols.set(first, symbolPair);
             } else {
-                isDuplicate = true;
+                isDuplicate = existingSymbolPair.symbol.data?.definingNode !== symbolPair.symbol.data?.definingNode;
             }
         }
         return isDuplicate;
@@ -271,41 +279,74 @@ export class CrossScopeValidator {
         const providedTree = new ProvidedNode('', this.componentsMap);
         const duplicatesMap = new Map<string, Set<FileSymbolPair>>();
 
-        const referenceTypesMap = new Map<{ symbolName: string; file: BscFile; symbol: BscSymbol }, Array<{ name: string; namespacedName?: string }>>();
+        const referenceTypesMap = new Map<{ symbolName: string; file: BscFile; symbolObj: ProvidedSymbol }, Array<{ name: string; namespacedName?: string }>>();
 
 
-        function addSymbolWithDuplicates(symbolName: string, file: BscFile, symbol: BscSymbol) {
-            const isDupe = providedTree.addSymbol(symbolName, { file: file, symbol: symbol });
-            if (isDupe) {
-                let dupes = duplicatesMap.get(symbolName);
-                if (!dupes) {
-                    dupes = new Set<{ file: BrsFile; symbol: BscSymbol }>();
-                    duplicatesMap.set(symbolName, dupes);
-                    dupes.add(providedTree.getSymbol(symbolName));
+        const addSymbolWithDuplicates = (symbolName: string, file: BscFile, symbolObj: ProvidedSymbol) => {
+            // eslint-disable-next-line no-bitwise
+            const globalSymbol = this.program.globalScope.symbolTable.getSymbol(symbolName, SymbolTypeFlag.typetime | SymbolTypeFlag.runtime);
+            const symbolIsNamespace = providedTree.getNamespace(symbolName);
+            const isDupe = providedTree.addSymbol(symbolName, { file: file, symbol: symbolObj.symbol });
+            if (symbolIsNamespace || globalSymbol || isDupe || symbolObj.duplicates.length > 0) {
+                let dupesSet = duplicatesMap.get(symbolName);
+                if (!dupesSet) {
+                    dupesSet = new Set<{ file: BrsFile; symbol: BscSymbol }>();
+                    duplicatesMap.set(symbolName, dupesSet);
+                    const existing = providedTree.getSymbol(symbolName);
+                    if (existing) {
+                        dupesSet.add(existing);
+                    }
                 }
-                dupes.add({ file: file, symbol: symbol });
+                if (!dupesSet.has({ file: file, symbol: symbolObj.symbol })) {
+                    dupesSet.add({ file: file, symbol: symbolObj.symbol });
+                }
+                if (symbolIsNamespace) {
+                    const namespaceContainer = scope.getNamespace(symbolName);
+                    const nsNode = namespaceContainer?.namespaceStatements?.[0];
+                    if (nsNode) {
+                        const nsFile = namespaceContainer.file;
+                        const nsType = nsNode.getType({ flags: SymbolTypeFlag.typetime });
+                        let nsSymbol: BscSymbol = {
+                            name: nsNode.getName(ParseMode.BrighterScript),
+                            type: nsType,
+                            data: { definingNode: nsNode },
+                            flags: SymbolTypeFlag.typetime
+                        };
+                        if (nsSymbol && !dupesSet.has({ file: nsFile, symbol: nsSymbol })) {
+                            dupesSet.add({ file: nsFile, symbol: nsSymbol });
+                        }
+                    }
+                }
+                for (const providedDupeSymbol of symbolObj.duplicates) {
+                    if (!dupesSet.has({ file: file, symbol: providedDupeSymbol })) {
+                        dupesSet.add({ file: file, symbol: providedDupeSymbol });
+                    }
+                }
+                if (globalSymbol) {
+                    dupesSet.add({ file: globalFile, symbol: globalSymbol[0] });
+                }
             }
-        }
+        };
 
         scope.enumerateBrsFiles((file) => {
             for (const [_, nameMap] of file.providedSymbols.symbolMap.entries()) {
 
-                for (const [symbolName, symbol] of nameMap.entries()) {
-                    if (isNamespaceType(symbol.type)) {
+                for (const [symbolName, symbolObj] of nameMap.entries()) {
+                    if (isNamespaceType(symbolObj.symbol.type)) {
                         continue;
                     }
-                    addSymbolWithDuplicates(symbolName, file, symbol);
+                    addSymbolWithDuplicates(symbolName, file, symbolObj);
                 }
             }
 
             // find all "provided symbols" that are reference types
             for (const [_, nameMap] of file.providedSymbols.referenceSymbolMap.entries()) {
-                for (const [symbolName, symbol] of nameMap.entries()) {
-                    const symbolType = symbol.type;
-                    const namespaceLower = symbol.data?.definingNode?.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript).toLowerCase();
+                for (const [symbolName, symbolObj] of nameMap.entries()) {
+                    const symbolType = symbolObj.symbol.type;
+                    const namespaceLower = symbolObj.symbol.data?.definingNode?.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript).toLowerCase();
                     const allNames = getAllRequiredSymbolNames(symbolType, namespaceLower);
 
-                    referenceTypesMap.set({ symbolName: symbolName, file: file, symbol: symbol }, allNames);
+                    referenceTypesMap.set({ symbolName: symbolName, file: file, symbolObj: symbolObj }, allNames);
                 }
             }
         });
@@ -323,7 +364,7 @@ export class CrossScopeValidator {
                 }
                 if (neededNames.length === foundNames) {
                     //found all that were needed
-                    addSymbolWithDuplicates(refTypeDetails.symbolName, refTypeDetails.file, refTypeDetails.symbol);
+                    addSymbolWithDuplicates(refTypeDetails.symbolName, refTypeDetails.file, refTypeDetails.symbolObj);
                     referenceTypesMap.delete(refTypeDetails);
                     addedSymbol = true;
                 }
@@ -464,7 +505,7 @@ export class CrossScopeValidator {
     }
 
     addDiagnosticsForScopes(scopes: Scope[]) { //, changedFiles: BrsFile[]) {
-        const addDuplicateSymbolDiagnostics = false;
+        const addDuplicateSymbolDiagnostics = true;
         const missingSymbolInScope = new Map<BrsFile, Map<UnresolvedSymbol, Set<Scope>>>();
         this.providedTreeMap.clear();
         this.clearResolutionsForScopes(scopes);
@@ -479,16 +520,79 @@ export class CrossScopeValidator {
             const { missingSymbols, duplicatesMap } = this.getIssuesForScope(scope);
             if (addDuplicateSymbolDiagnostics) {
                 for (const [_flag, dupeSet] of duplicatesMap.entries()) {
-                    for (const dupe of dupeSet.values()) {
-                        if (dupe.symbol.data?.definingNode?.range) {
-                            this.program.diagnostics.register({
-                                ...DiagnosticMessages.duplicateSymbolInScope(dupe.symbol.name, scope.name),
-                                file: dupe.file,
-                                range: dupe.symbol.data?.definingNode.range
-                            }, {
-                                scope: scope,
-                                tags: [CrossScopeValidatorDiagnosticTag]
-                            });
+                    if (dupeSet.size > 1) {
+
+                        const dupesArray = [...dupeSet.values()];
+
+                        for (let i = 0; i < dupesArray.length; i++) {
+                            const dupe = dupesArray[i];
+
+                            const dupeNode = dupe?.symbol?.data?.definingNode;
+                            if (!dupeNode) {
+                                continue;
+                            }
+                            let thisName = dupe.symbol?.name;
+                            const wrappingNameSpace = dupeNode?.findAncestor<NamespaceStatement>(isNamespaceStatement);
+
+                            if (wrappingNameSpace) {
+                                thisName = `${wrappingNameSpace.getName(ParseMode.BrighterScript)}.` + thisName;
+                            }
+
+                            const thisNodeKindName = util.getAstNodeFriendlyName(dupeNode) ?? 'Item';
+
+                            for (let j = 0; j < dupesArray.length; j++) {
+                                if (i === j) {
+                                    continue;
+                                }
+                                const otherDupe = dupesArray[j];
+                                if (!otherDupe || dupe.symbol === otherDupe.symbol) {
+                                    continue;
+                                }
+
+                                const otherDupeNode = otherDupe.symbol.data?.definingNode;
+                                const otherIsGlobal = otherDupe.file.srcPath === 'global';
+
+                                if (isFunctionStatement(dupeNode) && isFunctionStatement(otherDupeNode)) {
+                                    // duplicate functions are handled in ScopeValidator
+                                    continue;
+                                }
+                                if (otherIsGlobal &&
+                                    (isInterfaceStatement(dupeNode) ||
+                                        isEnumStatement(dupeNode) ||
+                                        isConstStatement(dupeNode))) {
+                                    // these are allowed to shadow global functions
+                                    continue;
+                                }
+                                let thatName = otherDupe.symbol?.name;
+
+                                if (otherDupeNode) {
+                                    const otherWrappingNameSpace = otherDupeNode?.findAncestor<NamespaceStatement>(isNamespaceStatement);
+                                    if (otherWrappingNameSpace) {
+                                        thatName = `${otherWrappingNameSpace.getName(ParseMode.BrighterScript)}.` + thatName;
+                                    }
+                                }
+
+                                const thatNodeKindName = otherIsGlobal ? 'Global Function' : util.getAstNodeFriendlyName(otherDupeNode) ?? 'Item';
+                                let thisNameRange = (dupeNode as any)?.tokens?.name?.range ?? dupeNode.range;
+                                let thatNameRange = (otherDupeNode as any)?.tokens?.name?.range ?? otherDupeNode?.range;
+
+                                const relatedInformation = thatNameRange ? [{
+                                    message: `${thatNodeKindName} declared here`,
+                                    location: util.createLocation(
+                                        URI.file(otherDupe.file?.srcPath).toString(),
+                                        thatNameRange
+                                    )
+                                }] : undefined;
+                                this.program.diagnostics.register({
+                                    ...DiagnosticMessages.nameCollision(thisNodeKindName, thatNodeKindName, thatName),
+                                    file: dupe.file,
+                                    range: thisNameRange,
+                                    relatedInformation: relatedInformation
+                                }, {
+                                    scope: scope,
+                                    tags: [CrossScopeValidatorDiagnosticTag]
+                                });
+                            }
                         }
                     }
                 }

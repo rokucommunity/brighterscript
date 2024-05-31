@@ -607,7 +607,7 @@ export let DiagnosticMessages = {
         code: 1115,
         severity: DiagnosticSeverity.Error
     }),
-    functionCannotHaveSameNameAsClass: (className: string) => ({
+    __unused6: (className: string) => ({
         message: `Function has same name as class '${className}'`,
         code: 1116,
         severity: DiagnosticSeverity.Error
@@ -793,12 +793,6 @@ export let DiagnosticMessages = {
     itemCannotBeUsedAsType: (typeText: string) => ({
         message: `'${typeText}' cannot be used as a type`,
         code: 1149,
-        severity: DiagnosticSeverity.Error
-    }),
-
-    duplicateSymbolInScope: (symbol: string, scopeName: string) => ({
-        message: `'${symbol}' is defined multiple times in scope '${scopeName}'`,
-        code: 1150,
         severity: DiagnosticSeverity.Error
     }),
     expectedNewlineInConditionalCompile: () => ({

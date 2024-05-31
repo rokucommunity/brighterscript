@@ -42,7 +42,11 @@ import { NamespaceType } from '../types';
 import type { BscFile } from './BscFile';
 import { DefinitionProvider } from '../bscPlugin/definition/DefinitionProvider';
 
-export type ProvidedSymbolMap = Map<SymbolTypeFlag, Map<string, BscSymbol>>;
+export interface ProvidedSymbol {
+    symbol: BscSymbol;
+    duplicates: BscSymbol[];
+}
+export type ProvidedSymbolMap = Map<SymbolTypeFlag, Map<string, ProvidedSymbol>>;
 export type ChangedSymbolMap = Map<SymbolTypeFlag, Set<string>>;
 
 export interface ProvidedSymbolInfo {
@@ -1133,12 +1137,12 @@ export class BrsFile implements BscFile {
     }
 
     private getProvidedSymbols() {
-        const symbolMap = new Map<SymbolTypeFlag, Map<string, BscSymbol>>();
-        const runTimeSymbolMap = new Map<string, BscSymbol>();
-        const typeTimeSymbolMap = new Map<string, BscSymbol>();
-        const referenceSymbolMap = new Map<SymbolTypeFlag, Map<string, BscSymbol>>();
-        const referenceRunTimeSymbolMap = new Map<string, BscSymbol>();
-        const referenceTypeTimeSymbolMap = new Map<string, BscSymbol>();
+        const symbolMap = new Map<SymbolTypeFlag, Map<string, ProvidedSymbol>>();
+        const runTimeSymbolMap = new Map<string, ProvidedSymbol>();
+        const typeTimeSymbolMap = new Map<string, ProvidedSymbol>();
+        const referenceSymbolMap = new Map<SymbolTypeFlag, Map<string, ProvidedSymbol>>();
+        const referenceRunTimeSymbolMap = new Map<string, ProvidedSymbol>();
+        const referenceTypeTimeSymbolMap = new Map<string, ProvidedSymbol>();
 
         const tablesToGetSymbolsFrom: Array<{ table: SymbolTable; namePrefixLower?: string }> = [{
             table: this.parser.symbolTable
@@ -1151,6 +1155,23 @@ export class BrsFile implements BscFile {
             });
         }
 
+        function getAnyDuplicates(symbolNameLower: string, providedSymbolMap: Map<string, ProvidedSymbol>, referenceProvidedSymbolMap: Map<string, ProvidedSymbol>) {
+            if (symbolNameLower === 'm') {
+                return [];
+            }
+            let duplicates = [] as Array<BscSymbol>;
+            let existingSymbol = providedSymbolMap.get(symbolNameLower);
+            if (existingSymbol) {
+                duplicates.push(existingSymbol.symbol, ...existingSymbol.duplicates);
+            }
+            existingSymbol = referenceProvidedSymbolMap.get(symbolNameLower);
+            if (existingSymbol) {
+                duplicates.push(existingSymbol.symbol, ...existingSymbol.duplicates);
+            }
+
+            return duplicates;
+        }
+
         for (const symbolTable of tablesToGetSymbolsFrom) {
             const runTimeSymbols = symbolTable.table.getOwnSymbols(SymbolTypeFlag.runtime);
             const typeTimeSymbols = symbolTable.table.getOwnSymbols(SymbolTypeFlag.typetime);
@@ -1159,10 +1180,15 @@ export class BrsFile implements BscFile {
                 const symbolNameLower = symbolTable.namePrefixLower
                     ? `${symbolTable.namePrefixLower}.${symbol.name.toLowerCase()}`
                     : symbol.name.toLowerCase();
-                if (!isAnyReferenceType(symbol.type) && symbol.name.toLowerCase() !== 'm') {
-                    runTimeSymbolMap.set(symbolNameLower, symbol);
+                if (symbolNameLower === 'm') {
+                    continue;
+                }
+                const duplicates = getAnyDuplicates(symbolNameLower, runTimeSymbolMap, referenceRunTimeSymbolMap);
+
+                if (!isAnyReferenceType(symbol.type)) {
+                    runTimeSymbolMap.set(symbolNameLower, { symbol: symbol, duplicates: duplicates });
                 } else {
-                    referenceRunTimeSymbolMap.set(symbolNameLower, symbol);
+                    referenceRunTimeSymbolMap.set(symbolNameLower, { symbol: symbol, duplicates: duplicates });
                 }
             }
 
@@ -1170,10 +1196,14 @@ export class BrsFile implements BscFile {
                 const symbolNameLower = symbolTable.namePrefixLower
                     ? `${symbolTable.namePrefixLower}.${symbol.name.toLowerCase()}`
                     : symbol.name.toLowerCase();
+                if (symbolNameLower === 'm') {
+                    continue;
+                }
+                const duplicates = getAnyDuplicates(symbolNameLower, typeTimeSymbolMap, referenceTypeTimeSymbolMap);
                 if (!isAnyReferenceType(symbol.type)) {
-                    typeTimeSymbolMap.set(symbolNameLower, symbol);
+                    typeTimeSymbolMap.set(symbolNameLower, { symbol: symbol, duplicates: duplicates });
                 } else {
-                    referenceTypeTimeSymbolMap.set(symbolNameLower, symbol);
+                    referenceTypeTimeSymbolMap.set(symbolNameLower, { symbol: symbol, duplicates: duplicates });
                 }
             }
         }
@@ -1203,9 +1233,9 @@ export class BrsFile implements BscFile {
                 continue;
 
             }
-            for (const [symbolKey, symbol] of newSymbolMapForFlag) {
-                const symbolType = symbol.type;
-                const previousType = oldSymbolMapForFlag?.get(symbolKey)?.type;
+            for (const [symbolKey, symbolObj] of newSymbolMapForFlag) {
+                const symbolType = symbolObj.symbol.type;
+                const previousType = oldSymbolMapForFlag?.get(symbolKey)?.symbol?.type;
                 previousSymbolsCheckedForFlag.add(symbolKey);
                 if (!previousType) {
                     changesForFlag.add(symbolKey);

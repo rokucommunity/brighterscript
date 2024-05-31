@@ -1107,7 +1107,6 @@ describe('CrossScopeValidator', () => {
         });
     });
 
-
     describe('revalidation', () => {
         it('works for multi-scope usage, when variable is passed as function param', () => {
             program.options.autoImportComponentScript = true;
@@ -1469,6 +1468,167 @@ describe('CrossScopeValidator', () => {
                 program.validate();
                 expectZeroDiagnostics(program);
             }
+        });
+    });
+
+    describe('duplicate symbols / name collisions', () => {
+        it('finds duplicates', () => {
+            program.options.autoImportComponentScript = true;
+
+            program.setFile('source/utils.bs', `
+                interface Test
+                    name as string
+                end interface
+            `);
+
+            program.setFile('components/Button1.bs', `
+                import "pkg:/source/utils.bs"
+                const Test = "test"
+            `);
+            program.setFile('components/Button1.xml', `
+                <component name="Button1" extends="Group">
+                </component>
+            `);
+
+            program.setFile('components/Button2.bs', `
+                import "pkg:/source/utils.bs"
+                function test()
+                end function
+            `);
+
+            program.setFile('components/Button2.xml', `
+                <component name="Button2" extends="Group">
+                </component>
+            `);
+
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.nameCollision('Const', 'Interface', 'Test'),
+                DiagnosticMessages.nameCollision('Interface', 'Const', 'Test'),
+                DiagnosticMessages.nameCollision('Function', 'Interface', 'Test'),
+                DiagnosticMessages.nameCollision('Interface', 'Function', 'test')
+            ]);
+        });
+
+        it('finds duplicates inside a namespace', () => {
+            program.options.autoImportComponentScript = true;
+
+            program.setFile('source/utils.bs', `
+                namespace alpha.beta
+                    interface Test
+                        name as string
+                    end interface
+                end namespace
+            `);
+
+            program.setFile('components/Button1.bs', `
+                import "pkg:/source/utils.bs"
+                namespace alpha.beta
+                    const Test = "test"
+                end namespace
+            `);
+            program.setFile('components/Button1.xml', `
+                <component name="Button1" extends="Group">
+                </component>
+            `);
+
+            program.setFile('components/Button2.bs', `
+                import "pkg:/source/utils.bs"
+                namespace alpha.beta
+                    function test()
+                    end function
+                end namespace
+            `);
+
+            program.setFile('components/Button2.xml', `
+                <component name="Button2" extends="Group">
+                </component>
+            `);
+
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.nameCollision('Const', 'Interface', 'alpha.beta.Test'),
+                DiagnosticMessages.nameCollision('Interface', 'Const', 'alpha.beta.Test'),
+                DiagnosticMessages.nameCollision('Function', 'Interface', 'alpha.beta.Test'),
+                DiagnosticMessages.nameCollision('Interface', 'Function', 'alpha.beta.test')
+            ]);
+        });
+
+        it('does not have diagnostic if items are namespaced', () => {
+            program.options.autoImportComponentScript = true;
+
+            program.setFile('source/utils.bs', `
+                interface Test
+                    name as string
+                end interface
+            `);
+
+            program.setFile('components/Button1.bs', `
+                import "pkg:/source/utils.bs"
+                namespace alpha.beta
+                    const Test = "test"
+                end namespace
+            `);
+            program.setFile('components/Button1.xml', `
+                <component name="Button1" extends="Group">
+                </component>
+            `);
+
+            program.setFile('components/Button2.bs', `
+                import "pkg:/source/utils.bs"
+                namespace alpha.beta
+                    function test()
+                    end function
+                end namespace
+            `);
+
+            program.setFile('components/Button2.xml', `
+                <component name="Button2" extends="Group">
+                </component>
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('finds duplicates in same file', () => {
+            program.options.autoImportComponentScript = true;
+
+            program.setFile('source/utils.bs', `
+                interface Test
+                    name as string
+                end interface
+
+                const Test = 89
+            `);
+
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.nameCollision('Const', 'Interface', 'Test'),
+                DiagnosticMessages.nameCollision('Interface', 'Const', 'Test')
+            ]);
+        });
+
+        it('finds namespaced duplicates in same file', () => {
+            program.options.autoImportComponentScript = true;
+
+            program.setFile('source/utils.bs', `
+                namespace alpha
+                    namespace beta
+                        interface Test
+                            name as string
+                        end interface
+
+                        const Test = 89
+                    end namespace
+                end namespace
+            `);
+
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.nameCollision('Const', 'Interface', 'alpha.beta.Test'),
+                DiagnosticMessages.nameCollision('Interface', 'Const', 'alpha.beta.Test')
+            ]);
         });
     });
 });

@@ -140,7 +140,8 @@ describe('Scope', () => {
         `);
         program.validate();
         expectDiagnostics(program, [
-            DiagnosticMessages.nameCollision('Const', 'Function', 'options').message
+            DiagnosticMessages.nameCollision('Const', 'Function', 'alpha.options').message,
+            DiagnosticMessages.nameCollision('Function', 'Const', 'alpha.options').message
         ]);
     });
 
@@ -1017,10 +1018,12 @@ describe('Scope', () => {
                     end function
                 `);
                 program.validate();
-                expectDiagnostics(program, [{
-                    message: DiagnosticMessages.scopeFunctionShadowedByBuiltInFunction().message,
-                    range: Range.create(4, 29, 4, 32)
-                }]);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.nameCollision('Function', 'Global Function', 'Str').message,
+                    {
+                        message: DiagnosticMessages.scopeFunctionShadowedByBuiltInFunction().message,
+                        range: Range.create(4, 29, 4, 32)
+                    }]);
             });
         });
 
@@ -1444,7 +1447,7 @@ describe('Scope', () => {
                 program.validate();
                 let diagnostics = program.getDiagnostics();
                 expectDiagnosticsIncludes(diagnostics, [
-                    DiagnosticMessages.nameCollision('Const', 'Function', 'MY_CONST').message
+                    DiagnosticMessages.nameCollision('Const', 'Function', 'SomeEnum.MY_CONST').message
                 ]);
             });
         });
@@ -3756,7 +3759,7 @@ describe('Scope', () => {
             expect(file2.requiredSymbols.length).to.eq(0);
             expect(file2.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime).size).to.eq(1);
             const file2TypeProvides = file2.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime);
-            expectTypeToBe(file2TypeProvides.get('alpha.beta.charlie.someenum').type, EnumType);
+            expectTypeToBe(file2TypeProvides.get('alpha.beta.charlie.someenum').symbol.type, EnumType);
         });
 
         it('classes that extend classes in other files show change properly', () => {
@@ -4085,8 +4088,8 @@ describe('Scope', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.nameCollision('Enum', 'Const', 'SomeName').message,
-                DiagnosticMessages.nameCollision('Const', 'Enum', 'SomeName').message
+                DiagnosticMessages.nameCollision('Const', 'Enum', 'SomeName').message,
+                DiagnosticMessages.nameCollision('Enum', 'Const', 'SomeName').message
             ]);
         });
 
@@ -4192,7 +4195,7 @@ describe('Scope', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.nameCollision('Class', 'Global Function', 'log')
+                DiagnosticMessages.nameCollision('Class', 'Global Function', 'Log')
             ]);
         });
 
@@ -4208,8 +4211,8 @@ describe('Scope', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.functionCannotHaveSameNameAsClass('someName'),
-                DiagnosticMessages.nameCollision('Class', 'Function', 'SomeName')
+                DiagnosticMessages.nameCollision('Class', 'Function', 'someName'),
+                DiagnosticMessages.nameCollision('Function', 'Class', 'SomeName')
             ]);
         });
 

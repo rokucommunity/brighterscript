@@ -1,6 +1,6 @@
 import { URI } from 'vscode-uri';
 import type { Range } from 'vscode-languageserver';
-import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isComponentType, isConstStatement, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumStatement, isEnumType, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isStringType, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
+import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isComponentType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isStringType, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
@@ -101,29 +101,22 @@ export class ScopeValidator {
             if (thisFileHasChanges) {
                 this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, file: file, tag: ScopeValidatorDiagnosticTag });
             }
-
             this.detectVariableNamespaceCollisions(file);
 
             if (thisFileHasChanges || this.doesFileProvideChangedSymbol(file, this.event.changedSymbols)) {
                 this.diagnosticDetectFunctionCollisions(file);
-                this.detectNameCollisions(file);
             }
+
         });
 
         this.event.scope.enumerateOwnFiles((file) => {
             if (isBrsFile(file)) {
                 const thisFileHasChanges = this.event.changedFiles.includes(file);
 
-                const thisFileRequiresChangedSymbol = util.hasAnyRequiredSymbolChanged(file.requiredSymbols, this.event.changedSymbols);
-
                 const hasUnvalidatedSegments = file.validationSegmenter.hasUnvalidatedSegments();
 
-                if (hasChangeInfo && !thisFileRequiresChangedSymbol && !thisFileHasChanges && !hasUnvalidatedSegments) {
-                    // this file does not require a symbol that has changed, and this file has not changed
-                    if (!this.doesFileAssignChangedSymbol(file)) {
-                        // this file does not have a variable assignment that needs to be checked
-                        return;
-                    }
+                if (hasChangeInfo && !hasUnvalidatedSegments) {
+                    return;
                 }
 
                 const validationVisitor = createVisitor({
@@ -221,18 +214,6 @@ export class ScopeValidator {
             }
         }
         return false;
-    }
-
-    private doesFileAssignChangedSymbol(file: BrsFile) {
-        let thisFileAssignsChangedSymbol = false;
-        const runTimeChangedSymbolSet = this.event.changedSymbols.get(SymbolTypeFlag.runtime);
-        for (let assignedSymbol of file.assignedSymbols) {
-            if (runTimeChangedSymbolSet.has(assignedSymbol.token.text.toLowerCase())) {
-                thisFileAssignsChangedSymbol = true;
-                break;
-            }
-        }
-        return thisFileAssignsChangedSymbol;
     }
 
     private currentSegmentBeingValidated: AstNode;
@@ -1095,115 +1076,8 @@ export class ScopeValidator {
 
                     });
                 }
-
-                //find any functions that have the same name as a class
-                const klassLink = this.event.scope.getClassFileLink(lowerFuncName);
-                if (klassLink) {
-                    this.addMultiScopeDiagnostic({
-                        ...DiagnosticMessages.functionCannotHaveSameNameAsClass(funcName),
-                        range: func.nameRange,
-                        file: file,
-                        relatedInformation: [{
-                            location: util.createLocation(
-                                URI.file(klassLink.file.srcPath).toString(),
-                                klassLink.item.tokens.name.range
-                            ),
-                            message: 'Original class declared here'
-                        }]
-                    });
-                }
             }
         }
-    }
-
-    private detectNameCollisions(file: BrsFile) {
-        // eslint-disable-next-line @typescript-eslint/dot-notation
-        for (let nsStmt of file['_cachedLookups'].namespaceStatements) {
-            this.validateNameCollision(file, nsStmt, nsStmt.getNameParts()?.[0]);
-
-        }
-        // eslint-disable-next-line @typescript-eslint/dot-notation
-        for (let classStmt of file['_cachedLookups'].classStatements) {
-            this.validateNameCollision(file, classStmt, classStmt.tokens.name);
-
-        }
-        // eslint-disable-next-line @typescript-eslint/dot-notation
-        for (let ifaceStmt of file['_cachedLookups'].interfaceStatements) {
-            this.validateNameCollision(file, ifaceStmt, ifaceStmt.tokens.name);
-
-        }
-        // eslint-disable-next-line @typescript-eslint/dot-notation
-        for (let constStmt of file['_cachedLookups'].constStatements) {
-            this.validateNameCollision(file, constStmt, constStmt.tokens.name);
-        }
-
-        // eslint-disable-next-line @typescript-eslint/dot-notation
-        for (let enumStmt of file['_cachedLookups'].enumStatements) {
-            this.validateNameCollision(file, enumStmt, enumStmt.tokens.name);
-
-        }
-    }
-
-
-    validateNameCollision(file: BrsFile, node: AstNode, nameIdentifier: Token) {
-        const name = nameIdentifier?.text;
-        if (!name || !node) {
-            return;
-        }
-        const nameRange = nameIdentifier.range;
-
-        const containingNamespace = node.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
-        const containingNamespaceLower = containingNamespace?.toLowerCase();
-        const links = this.event.scope.getAllFileLinks(name, containingNamespace, !isNamespaceStatement(node));
-        for (let link of links) {
-            if (!link || link.item === node) {
-                // refers to same node
-                continue;
-            }
-            if (isNamespaceStatement(link.item) && isNamespaceStatement(node)) {
-                // namespace can be declared multiple times
-                continue;
-            }
-            if (isFunctionStatement(link.item) || link.file?.destPath === 'global') {
-                const linkItemNamespaceLower = link.item?.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript)?.toLowerCase();
-                if (!(containingNamespaceLower && linkItemNamespaceLower) || linkItemNamespaceLower !== containingNamespaceLower) {
-
-                    // the thing found is a function OR from global (which is also a function)
-                    if (isNamespaceStatement(node) ||
-                        isEnumStatement(node) ||
-                        isConstStatement(node) ||
-                        isInterfaceStatement(node)) {
-                        // these are not callable functions in transpiled code - ignore them
-                        continue;
-                    }
-                }
-            }
-
-            const thisNodeKindName = util.getAstNodeFriendlyName(node);
-            const thatNodeKindName = link.file.srcPath === 'global' ? 'Global Function' : util.getAstNodeFriendlyName(link.item) ?? '';
-
-            let thatNameRange = (link.item as any)?.tokens?.name?.range ?? link.item?.range;
-
-            if (isNamespaceStatement(link.item)) {
-                thatNameRange = (link.item as NamespaceStatement).getNameParts()?.[0]?.range;
-            }
-
-            const relatedInformation = thatNameRange ? [{
-                message: `${thatNodeKindName} declared here`,
-                location: util.createLocation(
-                    URI.file(link.file?.srcPath).toString(),
-                    thatNameRange
-                )
-            }] : undefined;
-
-            this.addMultiScopeDiagnostic({
-                file: file,
-                ...DiagnosticMessages.nameCollision(thisNodeKindName, thatNodeKindName, name),
-                range: nameRange,
-                relatedInformation: relatedInformation
-            });
-        }
-
     }
 
     public detectShadowedLocalVar(file: BrsFile, varDeclaration: { name: string; type: BscType; nameRange: Range }) {
