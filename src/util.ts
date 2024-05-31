@@ -26,7 +26,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { LogLevel, createLogger } from './logging';
 import { isToken, type Identifier, type Locatable, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLiteralString, isLongIntegerType, isNewExpression, isNumberType, isStringType, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUnionType, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLiteralString, isLongIntegerType, isNamespaceType, isNewExpression, isNumberType, isStringType, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUnionType, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import * as requireRelative from 'require-relative';
@@ -2026,6 +2026,7 @@ export class Util {
                 parentTypeName = previousTypeName;
                 parentTypeKind = itemTypeKind;
                 fullErrorName = previousTypeName ? `${previousTypeName}${dotSep}${chainItem.name}` : chainItem.name;
+                itemTypeKind = (chainItem.type as any)?.kind;
 
                 let typeString = chainItem.type?.toString();
                 let typeToFindStringFor = chainItem.type;
@@ -2040,6 +2041,15 @@ export class Util {
                             typeString = 'function';
                             break;
                         }
+                        parentTypeName = previousTypeName;
+                    } else if (isNamespaceType(typeToFindStringFor) && parentTypeName) {
+                        const chainItemTypeName = typeToFindStringFor.toString();
+                        typeString = parentTypeName + '.' + chainItemTypeName;
+                        if (chainItemTypeName.toLowerCase().startsWith(parentTypeName.toLowerCase())) {
+                            // the following namespace already knows...
+                            typeString = chainItemTypeName;
+                        }
+                        break;
                     } else {
                         typeString = typeToFindStringFor?.toString();
                         break;
@@ -2047,7 +2057,6 @@ export class Util {
                 }
 
                 previousTypeName = typeString ?? '';
-                itemTypeKind = (chainItem.type as any)?.kind;
                 itemName = chainItem.name;
                 astNode = chainItem.astNode;
                 containsDynamic = containsDynamic || (isDynamicType(chainItem.type) && !isAnyReferenceType(chainItem.type));
@@ -2089,27 +2098,30 @@ export class Util {
         return false;
     }
 
-    public setContainsUnresolvedSymbol(symbolLowerNameSet: Set<string>, symbol: UnresolvedSymbol) {
-        const possibleOriginalSymbolNamesLower = [];
-        let nameSoFar = '';
-        for (const tce of symbol.typeChain) {
-            if (nameSoFar.length > 0) {
-                nameSoFar += '.';
-            }
-            nameSoFar += tce.name.toLowerCase();
-            possibleOriginalSymbolNamesLower.push(nameSoFar);
+    public hasAnyRequiredSymbolChanged(requiredSymbols: UnresolvedSymbol[], changedSymbols: Map<SymbolTypeFlag, Set<string>>) {
+        if (!requiredSymbols || !changedSymbols) {
+            return false;
         }
-        const possibleNamespace = symbol.containingNamespaces?.join('.') ?? '';
+        const runTimeChanges = changedSymbols.get(SymbolTypeFlag.runtime);
+        const typeTimeChanges = changedSymbols.get(SymbolTypeFlag.typetime);
 
-        for (const possibleNameLower of possibleOriginalSymbolNamesLower) {
-            if (symbolLowerNameSet.has(possibleNameLower)) {
+        for (const symbol of requiredSymbols) {
+            if (this.setContainsUnresolvedSymbol(runTimeChanges, symbol) || this.setContainsUnresolvedSymbol(typeTimeChanges, symbol)) {
                 return true;
             }
-            if (possibleNamespace) {
-                const fullName = possibleNamespace + '.' + possibleNameLower;
-                if (symbolLowerNameSet.has(fullName.toLowerCase())) {
-                    return true;
-                }
+        }
+
+        return false;
+    }
+
+    public setContainsUnresolvedSymbol(symbolLowerNameSet: Set<string>, symbol: UnresolvedSymbol) {
+        if (!symbolLowerNameSet || symbolLowerNameSet.size === 0) {
+            return false;
+        }
+
+        for (const possibleNameLower of symbol.lookups) {
+            if (symbolLowerNameSet.has(possibleNameLower)) {
+                return true;
             }
         }
         return false;

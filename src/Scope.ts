@@ -76,6 +76,7 @@ export class Scope {
         return this.cache.getOrAdd('namespaceLookup', () => this.buildNamespaceLookup());
     }
 
+
     /**
      * Get a NamespaceContainer by its name, looking for a fully qualified version first, then global version next if not found
      */
@@ -765,30 +766,24 @@ export class Scope {
     };
 
     public validate(validationOptions: ScopeValidationOptions = { force: false }) {
+        this.validationMetrics = {
+            linkTime: 0,
+            validationTime: 0
+        };
+
         //if this scope is already validated, no need to revalidate
         if (this.isValidated === true && !validationOptions.force) {
             this.logDebug('validate(): already validated');
             return false;
         }
 
-        const hasChangedSymbols = validationOptions.changedSymbols?.get(SymbolTypeFlag.runtime).size > 0 || validationOptions.changedSymbols?.get(SymbolTypeFlag.typetime).size > 0;
-        let immediateFileChanged = false;
-        if (!validationOptions.initialValidation && validationOptions.changedSymbols && !hasChangedSymbols && validationOptions.changedFiles) {
-            for (let file of this.getImmediateFiles()) {
-                if (validationOptions.changedFiles.includes(file)) {
-                    immediateFileChanged = true;
-                    break;
-                }
-            }
-
-            if (!immediateFileChanged) {
-                // There was no need to validate this scope.
-                (this as any).isValidated = true;
-                return false;
-            }
+        if (!validationOptions.initialValidation && validationOptions.filesToBeValidatedInScopeContext?.size === 0) {
+            // There was no need to validate this scope.
+            (this as any).isValidated = true;
+            return false;
         }
 
-        this.useFileCachesForFileLinkLookups = !validationOptions.initialValidation;
+        this.useFileCachesForFileLinkLookups = true;//!validationOptions.initialValidation;
 
         this.program.logger.time(LogLevel.debug, [this._debugLogComponentName, 'validate()'], () => {
 
@@ -799,8 +794,6 @@ export class Scope {
                 this.logDebug('validate(): validating parent first');
                 parentScope.validate(validationOptions);
             }
-            //clear the scope's errors list (we will populate them from this method)
-
 
             //Since statements from files are shared across multiple scopes, we need to link those statements to the current scope
 
@@ -810,7 +803,7 @@ export class Scope {
             const scopeValidateEvent = {
                 program: this.program,
                 scope: this,
-                changedFiles: validationOptions?.changedFiles,
+                changedFiles: new Array<BscFile>(...(validationOptions?.changedFiles?.values() ?? [])),
                 changedSymbols: validationOptions?.changedSymbols
             };
             t0 = performance.now();
@@ -822,6 +815,9 @@ export class Scope {
             this.unlinkSymbolTable();
             (this as any).isValidated = true;
         });
+        for (let file of this.getAllFiles()) {
+            validationOptions.filesToBeValidatedInScopeContext?.delete(file);
+        }
         return true;
     }
 
@@ -890,16 +886,13 @@ export class Scope {
 
             }
         }
-        const directFiles = this.getImmediateFiles();
-        for (const file of directFiles) {
-            if (isBrsFile(file)) {
-                const namespaceTypes = file.getNamespaceSymbolTable();
+        this.enumerateBrsFiles((file) => {
+            const namespaceTypes = file.getNamespaceSymbolTable();
 
-                this.linkSymbolTableDisposables.push(
-                    ...this._allNamespaceTypeTable.mergeNamespaceSymbolTables(namespaceTypes)
-                );
-            }
-        }
+            this.linkSymbolTableDisposables.push(
+                ...this._allNamespaceTypeTable.mergeNamespaceSymbolTables(namespaceTypes)
+            );
+        });
         for (const [_, nsContainer] of this.namespaceLookup) {
             for (let nsStmt of nsContainer.namespaceStatements) {
                 this.linkSymbolTableDisposables.push(

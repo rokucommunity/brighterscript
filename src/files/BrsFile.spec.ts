@@ -4333,7 +4333,7 @@ describe('BrsFile', () => {
             expect(mainFile.requiredSymbols.length).to.eq(0);
         });
 
-        it('should not include symbols in imported file', () => {
+        it('should include symbols in imported file', () => {
             const otherFile: BrsFile = program.setFile('source/other.bs', `
                 namespace alpha
                     const PI = 3.14
@@ -4348,10 +4348,10 @@ describe('BrsFile', () => {
                 end namespace
             `);
             validateFile(otherFile, mainFile);
-            expect(mainFile.requiredSymbols.length).to.eq(0);
+            expect(mainFile.requiredSymbols.length).to.eq(1);
         });
 
-        it('should not include symbols in imported file of imported file', () => {
+        it('should  include symbols in imported file of imported file', () => {
             const deepFile: BrsFile = program.setFile('source/deep.bs', `
                 namespace alpha
                     const SOME_VALUE = 2
@@ -4372,10 +4372,10 @@ describe('BrsFile', () => {
                 end namespace
             `);
             validateFile(otherFile, mainFile, deepFile);
-            expect(mainFile.requiredSymbols.length).to.eq(0);
+            expect(mainFile.requiredSymbols.length).to.eq(2);
         });
 
-        it('should not have problems with circular references of imports', () => {
+        it('should ignore imports even with circular references', () => {
             const deepFile: BrsFile = program.setFile('source/deep.bs', `
                 import "pkg:/source/main.bs"
                 namespace alpha
@@ -4400,7 +4400,7 @@ describe('BrsFile', () => {
                 end namespace
             `);
             validateFile(otherFile, mainFile, deepFile);
-            expect(mainFile.requiredSymbols.length).to.eq(0);
+            expect(mainFile.requiredSymbols.length).to.eq(2);
         });
     });
 
@@ -4419,9 +4419,9 @@ describe('BrsFile', () => {
             validateFile(mainFile);
             const runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
             expect(runtimeSymbols.size).to.eq(2);
-            const someFuncType = runtimeSymbols.get('somefunc').type;
+            const someFuncType = runtimeSymbols.get('somefunc').symbol.type;
             expectTypeToBe(someFuncType, TypedFunctionType);
-            const someFunc2Type = runtimeSymbols.get('somefunc2').type;
+            const someFunc2Type = runtimeSymbols.get('somefunc2').symbol.type;
             expectTypeToBe(someFunc2Type, TypedFunctionType);
         });
 
@@ -4435,7 +4435,7 @@ describe('BrsFile', () => {
 
             const runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
             expect(runtimeSymbols.size).to.eq(1);
-            const someFuncType = runtimeSymbols.get('somefunc').type;
+            const someFuncType = runtimeSymbols.get('somefunc').symbol.type;
             expectTypeToBe(someFuncType, TypedFunctionType);
             const requiredSymbols = mainFile.requiredSymbols.map(x => x.typeChain[0].name);
             expect(requiredSymbols).to.have.same.members(['OtherFileType', 'OtherFileType']);
@@ -4465,14 +4465,14 @@ describe('BrsFile', () => {
 
             const runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
             expect(runtimeSymbols.size).to.eq(3);
-            expectTypeToBe(runtimeSymbols.get('klass').type, ClassType);
-            expectTypeToBe(runtimeSymbols.get('klass2').type, ClassType);
-            expectTypeToBe(runtimeSymbols.get('klass3').type, ClassType);
+            expectTypeToBe(runtimeSymbols.get('klass').symbol.type, ClassType);
+            expectTypeToBe(runtimeSymbols.get('klass2').symbol.type, ClassType);
+            expectTypeToBe(runtimeSymbols.get('klass3').symbol.type, ClassType);
             const typetimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime);
             expect(typetimeSymbols.size).to.eq(3);
-            expectTypeToBe(runtimeSymbols.get('klass').type, ClassType);
-            expectTypeToBe(runtimeSymbols.get('klass2').type, ClassType);
-            expectTypeToBe(runtimeSymbols.get('klass3').type, ClassType);
+            expectTypeToBe(runtimeSymbols.get('klass').symbol.type, ClassType);
+            expectTypeToBe(runtimeSymbols.get('klass2').symbol.type, ClassType);
+            expectTypeToBe(runtimeSymbols.get('klass3').symbol.type, ClassType);
         });
 
         it('includes other types defined in the file', () => {
@@ -4493,12 +4493,12 @@ describe('BrsFile', () => {
             validateFile(mainFile);
             const runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
             expect(runtimeSymbols.size).to.eq(2);
-            expectTypeToBe(runtimeSymbols.get('myenum').type, EnumType);
-            expectTypeToBe(runtimeSymbols.get('mynamespace.myconst').type, FloatType);
+            expectTypeToBe(runtimeSymbols.get('myenum').symbol.type, EnumType);
+            expectTypeToBe(runtimeSymbols.get('mynamespace.myconst').symbol.type, FloatType);
             const typetimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime);
             expect(typetimeSymbols.size).to.eq(2);
-            expectTypeToBe(typetimeSymbols.get('myinterface').type, InterfaceType);
-            expectTypeToBe(runtimeSymbols.get('myenum').type, EnumType);
+            expectTypeToBe(typetimeSymbols.get('myinterface').symbol.type, InterfaceType);
+            expectTypeToBe(runtimeSymbols.get('myenum').symbol.type, EnumType);
         });
 
         describe('changes', () => {

@@ -35,7 +35,8 @@ export enum DiagnosticOrigin {
     Program = 'Program',
     Scope = 'Scope',
     File = 'File',
-    ASTSegment = 'AstSegment'
+    ASTSegment = 'AstSegment',
+    CrossScope = 'CrossScope'
 }
 
 export interface DiagnosticContext {
@@ -658,8 +659,9 @@ export interface TranspileEntry {
 
 
 export interface ScopeValidationOptions {
-    changedFiles?: BscFile[];
+    filesToBeValidatedInScopeContext?: Set<BscFile>;
     changedSymbols?: Map<SymbolTypeFlag, Set<string>>;
+    changedFiles?: Set<BscFile>;
     force?: boolean;
     initialValidation?: boolean;
 }
@@ -951,9 +953,7 @@ export class TypeChainEntry {
         this._range = options.range;
         this.separatorToken = options.separatorToken ?? createToken(TokenKind.Dot);
         this.astNode = options.astNode;
-    }
-    get isResolved() {
-        return this.type?.isResolvable();
+        this.isResolved = this.type?.isResolvable();
     }
 
     get range() {
@@ -965,6 +965,7 @@ export class TypeChainEntry {
     public readonly data: ExtraSymbolData;
     private readonly _range: Range;
     public readonly separatorToken: Token;
+    public isResolved: boolean;
     public astNode: AstNode;
 }
 

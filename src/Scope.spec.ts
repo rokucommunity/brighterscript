@@ -25,7 +25,6 @@ import { ArrayType } from './types/ArrayType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { InterfaceType } from './types/InterfaceType';
 import { ComponentType } from './types/ComponentType';
-import * as path from 'path';
 import { WalkMode, createVisitor } from './astUtils/visitors';
 import type { FunctionExpression } from './parser/Expression';
 import { ObjectType } from './types';
@@ -141,7 +140,8 @@ describe('Scope', () => {
         `);
         program.validate();
         expectDiagnostics(program, [
-            DiagnosticMessages.nameCollision('Const', 'Function', 'options').message
+            DiagnosticMessages.nameCollision('Const', 'Function', 'alpha.options').message,
+            DiagnosticMessages.nameCollision('Function', 'Const', 'alpha.options').message
         ]);
     });
 
@@ -370,7 +370,7 @@ describe('Scope', () => {
             program.validate();
             expectDiagnostics(program, [
                 {
-                    message: DiagnosticMessages.cannotFindName('delta', 'constants.alpha.delta', 'constants.alpha', 'namespace').message,
+                    ...DiagnosticMessages.cannotFindName('delta', 'constants.alpha.delta', 'constants.alpha', 'namespace'),
                     file: {
                         srcPath: buttonPrimary.srcPath
                     },
@@ -378,7 +378,7 @@ describe('Scope', () => {
                         message: `In component scope 'ButtonPrimary'`
                     }]
                 }, {
-                    message: DiagnosticMessages.cannotFindName('delta', 'constants.alpha.delta', 'constants.alpha', 'namespace').message,
+                    ...DiagnosticMessages.cannotFindName('delta', 'constants.alpha.delta', 'constants.alpha', 'namespace'),
                     file: {
                         srcPath: buttonSecondary.srcPath
                     },
@@ -1018,10 +1018,12 @@ describe('Scope', () => {
                     end function
                 `);
                 program.validate();
-                expectDiagnostics(program, [{
-                    message: DiagnosticMessages.scopeFunctionShadowedByBuiltInFunction().message,
-                    range: Range.create(4, 29, 4, 32)
-                }]);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.nameCollision('Function', 'Global Function', 'Str').message,
+                    {
+                        message: DiagnosticMessages.scopeFunctionShadowedByBuiltInFunction().message,
+                        range: Range.create(4, 29, 4, 32)
+                    }]);
             });
         });
 
@@ -1445,7 +1447,7 @@ describe('Scope', () => {
                 program.validate();
                 let diagnostics = program.getDiagnostics();
                 expectDiagnosticsIncludes(diagnostics, [
-                    DiagnosticMessages.nameCollision('Const', 'Function', 'MY_CONST').message
+                    DiagnosticMessages.nameCollision('Const', 'Function', 'SomeEnum.MY_CONST').message
                 ]);
             });
         });
@@ -2602,7 +2604,7 @@ describe('Scope', () => {
             expect(mainFnScope).to.exist;
             const chimpType = mainFnScope.symbolTable.getSymbol('chimp', SymbolTypeFlag.runtime)[0].type;
             expectTypeToBe(chimpType, ClassType);
-            expectTypeToBe((chimpType as ClassType).superClass, ClassType);
+            expectTypeToBe((chimpType as ClassType).parentType, ClassType);
             expectTypeToBe(mainFnScope.symbolTable.getSymbol('chimpHasLegs', SymbolTypeFlag.runtime)[0].type, BooleanType);
             expectTypeToBe(mainFnScope.symbolTable.getSymbol('chimpSpeed', SymbolTypeFlag.runtime)[0].type, IntegerType);
             expectTypeToBe(mainFnScope.symbolTable.getSymbol('fidoSpeed', SymbolTypeFlag.runtime)[0].type, IntegerType);
@@ -3698,203 +3700,6 @@ describe('Scope', () => {
 
     describe('provides & requires', () => {
 
-        it('finds a required symbol in another file', () => {
-            let file1 = program.setFile<BrsFile>('source/file1.bs', `
-                sub callOutsideFunc()
-                    outsideFunc()
-                end sub
-            `);
-            let file2 = program.setFile<BrsFile>('source/file2.bs', `
-                sub outsideFunc()
-                    print "hello"
-                end sub
-            `);
-            program.validate();
-            expectZeroDiagnostics(program);
-            expect(file1.requiredSymbols.length).to.eq(1);
-            expect(file2.requiredSymbols.length).to.eq(0);
-            let file1Info = program.lastValidationInfo.get(file1.srcPath.toLowerCase());
-            expect(file1Info.symbolsNotDefinedInEveryScope.length).to.eq(0);
-            expect(file1Info.symbolsNotConsistentAcrossScopes.length).to.eq(0);
-        });
-
-        it('finds a required symbol in another file for each scope', () => {
-            let file1 = program.setFile<BrsFile>('source/file1.bs', `
-                sub callOutsideFunc()
-                    outsideFunc()
-                end sub
-            `);
-            let file2 = program.setFile<BrsFile>('source/file2.bs', `
-                sub outsideFunc()
-                    print "hello from source"
-                end sub
-            `);
-
-            program.setFile<BrsFile>('components/Widget.xml', trim`
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="Widget" extends="Group">
-                    <script uri="Widget.bs"/>
-                    <script uri="pkg:/source/file1.bs"/>
-                </component>
-            `);
-            let widgetBs = program.setFile<BrsFile>('components/Widget.bs', `
-                sub init()
-                    callOutsideFunc()
-                end sub
-
-                sub outsideFunc()
-                    print "hello from widget"
-                end sub
-            `);
-            program.validate();
-            expectZeroDiagnostics(program);
-            expect(file1.requiredSymbols.length).to.eq(1);
-            expect(file2.requiredSymbols.length).to.eq(0);
-            expect(widgetBs.requiredSymbols.length).to.eq(1);
-            let file1Info = program.lastValidationInfo.get(file1.srcPath.toLowerCase());
-            expect(file1Info.symbolsNotDefinedInEveryScope.length).to.eq(0);
-            expect(file1Info.symbolsNotConsistentAcrossScopes.length).to.eq(0);
-        });
-
-        it('finds a required symbol in a namespace in another file', () => {
-            let file1 = program.setFile<BrsFile>('source/file1.bs', `
-                namespace alpha
-                    sub callOutsideFunc()
-                        outsideFunc()
-                    end sub
-                end namespace
-            `);
-            let file2 = program.setFile<BrsFile>('source/file2.bs', `
-                namespace alpha
-                    sub outsideFunc()
-                        print "hello from source"
-                    end sub
-                end namespace
-            `);
-
-            program.validate();
-            expectZeroDiagnostics(program);
-            expect(file1.requiredSymbols.length).to.eq(1);
-            expect(file2.requiredSymbols.length).to.eq(0);
-            let file1Info = program.lastValidationInfo.get(file1.srcPath.toLowerCase());
-            expect(file1Info.symbolsNotDefinedInEveryScope.length).to.eq(0);
-            expect(file1Info.symbolsNotConsistentAcrossScopes.length).to.eq(0);
-        });
-
-
-        it('finds a if a required symbol is defined different in different scopes', () => {
-            let file1 = program.setFile<BrsFile>('source/file1.bs', `
-                sub callOutsideFunc()
-                    print outsideFunc()
-                end sub
-            `);
-            let file2 = program.setFile<BrsFile>('source/file2.bs', `
-                function outsideFunc() as string
-                    return "hello from source"
-                end function
-            `);
-
-            program.setFile<BrsFile>('components/Widget.xml', trim`
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="Widget" extends="Group">
-                    <script uri="Widget.bs"/>
-                    <script uri="pkg:/source/file1.bs"/>
-                </component>
-            `);
-            let widgetBs = program.setFile<BrsFile>('components/Widget.bs', `
-                sub init()
-                    print callOutsideFunc()
-                end sub
-
-                function outsideFunc() as integer
-                    return 123
-                end function
-            `);
-            program.validate();
-            //expectZeroDiagnostics(program);
-            expect(file1.requiredSymbols.length).to.eq(1);
-            expect(file2.requiredSymbols.length).to.eq(0);
-            expect(widgetBs.requiredSymbols.length).to.eq(1);
-            let file1Info = program.lastValidationInfo.get(file1.srcPath.toLowerCase());
-            expect(file1Info.symbolsNotDefinedInEveryScope.length).to.eq(0);
-            expect(file1Info.symbolsNotConsistentAcrossScopes.length).to.eq(1);
-            expect(file1Info.symbolsNotConsistentAcrossScopes[0].symbol.typeChain[0].name).to.eq('outsideFunc');
-        });
-
-        it('finds types defined in different file', () => {
-            let file1 = program.setFile<BrsFile>('source/file1.bs', `
-                function takesIface(z as MyInterface) as string
-                    return z.name
-                end function
-            `);
-            program.setFile<BrsFile>('source/file2.bs', `
-                interface MyInterface
-                    name as string
-                end interface
-            `);
-            program.validate();
-            expectZeroDiagnostics(program);
-            expect(file1.requiredSymbols.length).to.eq(1);
-            expect(file1.requiredSymbols[0].flags).to.eq(SymbolTypeFlag.typetime);
-            expect(file1.requiredSymbols[0].typeChain[0].name).to.eq('MyInterface');
-            let file1Info = program.lastValidationInfo.get(file1.srcPath.toLowerCase());
-            expect(file1Info.symbolsNotDefinedInEveryScope.length).to.eq(0);
-        });
-
-        it('finds members of typecasts of types defined in different file', () => {
-            let file1 = program.setFile<BrsFile>('source/file1.bs', `
-                function takesIface(z) as string
-                    return (z as MyInterface).name
-                end function
-            `);
-            program.setFile<BrsFile>('source/file2.bs', `
-                interface MyInterface
-                    name as string
-                end interface
-            `);
-            program.validate();
-            expectZeroDiagnostics(program);
-            expect(file1.requiredSymbols.length).to.eq(1);
-            expect(file1.requiredSymbols[0].flags).to.eq(SymbolTypeFlag.typetime);
-            expect(file1.requiredSymbols[0].typeChain[0].name).to.eq('MyInterface');
-            let file1Info = program.lastValidationInfo.get(file1.srcPath.toLowerCase());
-            expect(file1Info.symbolsNotDefinedInEveryScope.length).to.eq(0);
-        });
-
-        it('finds symbols inconsistent across scopes', () => {
-            program.setFile<BrsFile>('source/file1.bs', `
-                function callsOther() as string
-                    return otherFunc()
-                end function
-            `);
-            program.setFile<BrsFile>('source/file2.bs', `
-                function otherFunc() as string
-                    return "hello"
-                end function
-            `);
-
-            program.setFile<BrsFile>('components/Widget.xml', trim`
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="Widget" extends="Group">
-                    <script uri="Widget.bs"/>
-                    <script uri="pkg:/source/file1.bs"/>
-                </component>
-            `);
-            program.setFile<BrsFile>('components/Widget.bs', `
-                sub init()
-                    callsOther()
-                end sub
-
-                function otherFunc() as integer
-                    return 42
-                end function
-            `);
-            program.validate();
-            expectDiagnosticsIncludes(program, [
-                DiagnosticMessages.incompatibleSymbolDefinition('otherFunc', `source, components${path.sep}Widget.xml`).message
-            ]);
-        });
-
         it('a class can reference itself', () => {
             program.setFile<BrsFile>('source/klass.bs', `
                 class Klass
@@ -3954,7 +3759,7 @@ describe('Scope', () => {
             expect(file2.requiredSymbols.length).to.eq(0);
             expect(file2.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime).size).to.eq(1);
             const file2TypeProvides = file2.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime);
-            expectTypeToBe(file2TypeProvides.get('alpha.beta.charlie.someenum').type, EnumType);
+            expectTypeToBe(file2TypeProvides.get('alpha.beta.charlie.someenum').symbol.type, EnumType);
         });
 
         it('classes that extend classes in other files show change properly', () => {
@@ -4159,11 +3964,11 @@ describe('Scope', () => {
                 program.validate();
                 expectZeroDiagnostics(program);
                 expect(file1.requiredSymbols.length).to.eq(0);
-                const validationSegments = file1.getValidationSegments(file1.providedSymbols.changes);
+                const validationSegments = file1.validationSegmenter.getSegmentsWithChangedSymbols(file1.providedSymbols.changes);
                 expect(validationSegments).to.not.undefined;
             });
 
-            it('does not require symbols found in namespace of import', () => {
+            it('does require symbols found in namespace of import', () => {
                 let file1 = program.setFile<BrsFile>('source/file1.bs', `
                     import "pkg:/source/file2.bs"
 
@@ -4203,8 +4008,8 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                expect(file1.requiredSymbols.length).to.eq(0);
-                const validationSegments = file1.getValidationSegments(file1.providedSymbols.changes);
+                expect(file1.requiredSymbols.length).to.eq(2);
+                const validationSegments = file1.validationSegmenter.getSegmentsWithChangedSymbols(file1.providedSymbols.changes);
                 expect(validationSegments).to.not.undefined;
             });
         });
@@ -4283,8 +4088,8 @@ describe('Scope', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.nameCollision('Enum', 'Const', 'SomeName').message,
-                DiagnosticMessages.nameCollision('Const', 'Enum', 'SomeName').message
+                DiagnosticMessages.nameCollision('Const', 'Enum', 'SomeName').message,
+                DiagnosticMessages.nameCollision('Enum', 'Const', 'SomeName').message
             ]);
         });
 
@@ -4390,7 +4195,7 @@ describe('Scope', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.nameCollision('Class', 'Global Function', 'log')
+                DiagnosticMessages.nameCollision('Class', 'Global Function', 'Log')
             ]);
         });
 
@@ -4406,8 +4211,8 @@ describe('Scope', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.functionCannotHaveSameNameAsClass('someName'),
-                DiagnosticMessages.nameCollision('Class', 'Function', 'SomeName')
+                DiagnosticMessages.nameCollision('Class', 'Function', 'someName'),
+                DiagnosticMessages.nameCollision('Function', 'Class', 'SomeName')
             ]);
         });
 
@@ -4484,7 +4289,9 @@ describe('Scope', () => {
 
         // eslint-disable-next-line func-names, prefer-arrow-callback
         it.skip('namespace linking performance', function () {
-            this.timeout(30000); // this test takes a long time!
+            this.timeout(10000);
+            program.logger.logLevel = 'info';
+            // this test takes a few seconds (~4) it is skipped just to make regular test running faster
             program.options.autoImportComponentScript = true;
             const constFileContents = `
                 import "pkg:/source/consts2.bs"
@@ -4512,14 +4319,10 @@ describe('Scope', () => {
             `;
 
             const const2FileContents = `
-               import "pkg:/source/consts3.bs"
-
+                import "pkg:/source/consts3.bs"
+                import "pkg:/source/consts2a.bs"
                 namespace a.b.c
                     const ROOT2 = 1.41
-                end namespace
-
-                namespace d.e.f
-                    const GOLDEN = 1.62
                 end namespace
 
                 namespace a.b.c.d
@@ -4528,6 +4331,12 @@ describe('Scope', () => {
 
                 namespace d.e.f.g
                     const D = "D"
+                end namespace
+            `;
+
+            const const2AFileContents = `
+                namespace d.e.f
+                    const GOLDEN = 1.62
                 end namespace
             `;
 
@@ -4552,6 +4361,7 @@ describe('Scope', () => {
 
             program.setFile('source/consts.bs', constFileContents);
             program.setFile('source/consts2.bs', const2FileContents);
+            program.setFile('source/consts2a.bs', const2AFileContents);
             program.setFile('source/consts3.bs', const3FileContents);
 
             const widgetBsFileContents = `
@@ -4560,6 +4370,7 @@ describe('Scope', () => {
                     sub init()
                         print a.b.c.PI + d.e.f.EULER
                         print a.b.c.d.D + n.o.p.C
+                        print d.e.f.GOLDEN
                         print d.e.f.GOLDEN_EULER
                         print alpha_0.beta_0.charlie_0.delta_0.getNum().toStr() +  alpha_0.beta_0.charlie_0.delta_0.TEST
                     end sub
@@ -4581,7 +4392,13 @@ describe('Scope', () => {
             program.validate();
             program.setFile('source/consts3.bs', const3FileContents);
             program.validate();
+            program.setFile('source/consts2a.bs', `
+                namespace d.e.f
+                    const NOT_GOLDEN = 1.62
+                end namespace
+            `);
+            program.validate();
+
         });
     });
-
 });

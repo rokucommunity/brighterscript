@@ -1560,10 +1560,7 @@ describe('BrsFile BrighterScript classes', () => {
             `);
             program.validate();
             expectDiagnostics(program, [{
-                ...DiagnosticMessages.cannotFindName('GroundedBird', 'Vertibrates.GroundedBird', 'Vertibrates', 'namespace'),
-                relatedInformation: [{
-                    message: `In scope 'source'`
-                }]
+                ...DiagnosticMessages.cannotFindName('GroundedBird', 'Vertibrates.GroundedBird', 'Vertibrates', 'namespace')
             }]);
         });
 
@@ -1673,7 +1670,7 @@ describe('BrsFile BrighterScript classes', () => {
         `);
         program.validate();
         expectDiagnosticsIncludes(program, [
-            DiagnosticMessages.nameCollision('Class', 'Class', 'Animal').message
+            DiagnosticMessages.nameCollision('Class', 'Class', 'NameA.NameB.Animal').message
         ]);
     });
 
@@ -1705,8 +1702,9 @@ describe('BrsFile BrighterScript classes', () => {
             end sub
         `);
         program.validate();
-        expectDiagnosticsIncludes(program, [
-            DiagnosticMessages.functionCannotHaveSameNameAsClass('Animal').message
+        expectDiagnostics(program, [
+            DiagnosticMessages.nameCollision('Class', 'Function', 'Animal').message,
+            DiagnosticMessages.nameCollision('Function', 'Class', 'Animal').message
         ]);
     });
 
@@ -1719,7 +1717,8 @@ describe('BrsFile BrighterScript classes', () => {
         `);
         program.validate();
         expectDiagnosticsIncludes(program, [
-            DiagnosticMessages.functionCannotHaveSameNameAsClass('animal').message
+            DiagnosticMessages.nameCollision('Class', 'Function', 'animal').message,
+            DiagnosticMessages.nameCollision('Function', 'Class', 'ANIMAL').message
         ]);
     });
 

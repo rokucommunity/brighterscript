@@ -1,12 +1,14 @@
 import type { DottedGetExpression, TypeExpression, VariableExpression } from './parser/Expression';
-import { isBody, isClassStatement, isInterfaceStatement, isNamespaceStatement, isVariableExpression } from './astUtils/reflection';
+import { isAliasStatement, isBinaryExpression, isBody, isClassStatement, isDottedGetExpression, isInterfaceStatement, isNamespaceStatement, isTypeExpression, isVariableExpression } from './astUtils/reflection';
 import { ChildrenSkipper, WalkMode, createVisitor } from './astUtils/visitors';
-import type { GetTypeOptions, TypeChainEntry } from './interfaces';
-import type { AstNode } from './parser/AstNode';
+import type { ExtraSymbolData, GetTypeOptions, TypeChainEntry } from './interfaces';
+import type { AstNode, Expression } from './parser/AstNode';
 import { util } from './util';
-import type { NamespaceStatement } from './parser/Statement';
+import type { ClassStatement, NamespaceStatement } from './parser/Statement';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { Token } from './lexer/Token';
+import type { BrsFile } from './files/BrsFile';
+import { TokenKind } from './lexer/TokenKind';
 
 // eslint-disable-next-line no-bitwise
 export const InsideSegmentWalkMode = WalkMode.visitStatements | WalkMode.visitExpressions | WalkMode.recurseChildFunctions;
@@ -16,6 +18,8 @@ export interface UnresolvedSymbol {
     flags: SymbolTypeFlag;
     endChainFlags: SymbolTypeFlag;
     containingNamespaces: string[];
+    file: BrsFile;
+    lookups: string[];
 }
 
 export interface AssignedSymbol {
@@ -31,6 +35,8 @@ export class AstValidationSegmenter {
     public unresolvedSegmentsSymbols = new Map<AstNode, Set<UnresolvedSymbol>>();
     public assignedTokensInSegment = new Map<AstNode, Set<AssignedSymbol>>();
     public ast: AstNode;
+
+    constructor(public file: BrsFile) { }
 
     reset() {
         this.validatedSegments.clear();
@@ -53,12 +59,25 @@ export class AstValidationSegmenter {
         if (!expression) {
             return false;
         }
-        if (isVariableExpression(expression) && expression.tokens.name.text.toLowerCase() === 'm') {
-            return false;
+        let startOfDottedGet = expression as Expression;
+        while (isDottedGetExpression(startOfDottedGet)) {
+            startOfDottedGet = startOfDottedGet.obj;
         }
+        if (isVariableExpression(startOfDottedGet)) {
+            const firstTokenTextLower = startOfDottedGet.tokens.name.text.toLowerCase();
+            if (firstTokenTextLower === 'm' || (this.currentClassStatement && firstTokenTextLower === 'super')) {
+                return false;
+            }
+        }
+        if (isTypeExpression(expression) && isBinaryExpression(expression.expression)) {
+            return this.checkExpressionForUnresolved(segment, expression.expression.left as VariableExpression, assignedSymbolsNames) ||
+                this.checkExpressionForUnresolved(segment, expression.expression.right as VariableExpression, assignedSymbolsNames);
+        }
+
         const flag = util.isInTypeExpression(expression) ? SymbolTypeFlag.typetime : SymbolTypeFlag.runtime;
-        const typeChain: TypeChainEntry[] = [];
-        const options: GetTypeOptions = { flags: flag, onlyCacheResolvedTypes: true, typeChain: typeChain, data: {} };
+        let typeChain: TypeChainEntry[] = [];
+        const extraData = {} as ExtraSymbolData;
+        const options: GetTypeOptions = { flags: flag, onlyCacheResolvedTypes: true, typeChain: typeChain, data: extraData };
 
         const nodeType = expression.getType(options);
         if (!nodeType?.isResolvable()) {
@@ -71,7 +90,34 @@ export class AstValidationSegmenter {
                     symbolsSet = this.unresolvedSegmentsSymbols.get(segment);
                 }
                 this.validatedSegments.set(segment, false);
-                symbolsSet.add({ typeChain: typeChain, flags: typeChain[0].data.flags, endChainFlags: flag, containingNamespaces: this.currentNamespaceStatement?.getNameParts()?.map(t => t.text) });
+
+                if (extraData.isAlias && isAliasStatement(extraData.definingNode)) {
+                    //set the non-aliased version of this symbol as required.
+                    const aliasTypeChain = [];
+                    // eslint-disable-next-line no-bitwise
+                    extraData.definingNode.value.getType({ ...options, flags: SymbolTypeFlag.runtime | SymbolTypeFlag.typetime, typeChain: aliasTypeChain });
+                    typeChain = [...aliasTypeChain, ...typeChain.slice(1)];
+                }
+                const possibleNamespace = this.currentNamespaceStatement?.getNameParts()?.map(t => t.text)?.join('.').toLowerCase() ?? '';
+                const fullChainName = util.processTypeChain(typeChain).fullChainName?.toLowerCase();
+                const possibleNamesLower = [] as string[];
+                let lastSymbol = '';
+                for (const chainPart of fullChainName.split('.')) {
+                    lastSymbol += (lastSymbol ? `.${chainPart}` : chainPart);
+                    possibleNamesLower.push(lastSymbol);
+                    if (possibleNamespace) {
+                        possibleNamesLower.push(possibleNamespace + '.' + lastSymbol);
+                    }
+                }
+
+                symbolsSet.add({
+                    typeChain: typeChain,
+                    flags: typeChain[0].data.flags,
+                    endChainFlags: flag,
+                    containingNamespaces: this.currentNamespaceStatement?.getNameParts()?.map(t => t.text),
+                    file: this.file,
+                    lookups: possibleNamesLower
+                });
             }
             return true;
         }
@@ -79,11 +125,14 @@ export class AstValidationSegmenter {
     }
 
     private currentNamespaceStatement: NamespaceStatement;
+    private currentClassStatement: ClassStatement;
 
     checkSegmentWalk(segment: AstNode) {
         if (isNamespaceStatement(segment) || isBody(segment)) {
             return;
         }
+        this.currentNamespaceStatement = segment.findAncestor(isNamespaceStatement);
+
         if (isClassStatement(segment)) {
             if (segment.parentClassName) {
                 this.segmentsForValidation.push(segment.parentClassName);
@@ -113,12 +162,15 @@ export class AstValidationSegmenter {
         const skipper = new ChildrenSkipper();
         const assignedSymbols = new Set<AssignedSymbol>();
         const assignedSymbolsNames = new Set<string>();
-        this.currentNamespaceStatement = segment.findAncestor(isNamespaceStatement);
+        this.currentClassStatement = segment.findAncestor(isClassStatement);
 
         segment.walk(createVisitor({
             AssignmentStatement: (stmt) => {
-                assignedSymbols.add({ token: stmt.tokens.name, node: stmt });
-                assignedSymbolsNames.add(stmt.tokens.name.text.toLowerCase());
+                if (stmt.tokens.equals.kind === TokenKind.Equal) {
+                    // this is a straight assignment, not a compound assignment
+                    assignedSymbols.add({ token: stmt.tokens.name, node: stmt });
+                    assignedSymbolsNames.add(stmt.tokens.name.text.toLowerCase());
+                }
             },
             FunctionParameterExpression: (expr) => {
                 assignedSymbols.add({ token: expr.tokens.name, node: expr });
@@ -153,42 +205,33 @@ export class AstValidationSegmenter {
         if (!foundUnresolvedInSegment) {
             this.singleValidationSegments.add(segment);
         }
+        this.currentClassStatement = undefined;
+        this.currentClassStatement = undefined;
+
     }
 
-
-    getSegments(changedSymbols: Map<SymbolTypeFlag, Set<string>>): AstNode[] {
+    getAllUnvalidatedSegments() {
         const segmentsToWalkForValidation: AstNode[] = [];
-        const allChangedSymbolNames = [...changedSymbols.get(SymbolTypeFlag.runtime), ...changedSymbols.get(SymbolTypeFlag.typetime)];
         for (const segment of this.segmentsForValidation) {
+            if (this.validatedSegments.get(segment)) {
+                continue;
+            }
+            segmentsToWalkForValidation.push(segment);
+        }
+        return segmentsToWalkForValidation;
+    }
+
+    getSegmentsWithChangedSymbols(changedSymbols: Map<SymbolTypeFlag, Set<string>>): AstNode[] {
+        const segmentsToWalkForValidation: AstNode[] = [];
+        for (const segment of this.segmentsForValidation) {
+            if (this.validatedSegments.get(segment)) {
+                continue;
+            }
             const symbolsRequired = this.unresolvedSegmentsSymbols.get(segment);
-
-            const isSingleValidationSegment = this.singleValidationSegments.has(segment);
-            const singleValidationSegmentAlreadyValidated = isSingleValidationSegment ? this.validatedSegments.get(segment) : false;
-            let segmentNeedsRevalidation = !singleValidationSegmentAlreadyValidated;
-
             if (symbolsRequired) {
-                for (const requiredSymbol of symbolsRequired.values()) {
-                    for (const flagType of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
-                        // eslint-disable-next-line no-bitwise
-                        const runTimeOrTypeTimeSymbolFlag = requiredSymbol.flags & flagType;
-                        const changeSymbolSetForFlag = changedSymbols.get(runTimeOrTypeTimeSymbolFlag);
-                        if (!changeSymbolSetForFlag) {
-                            // This symbol has no flag - it is of unknown usage
-                            // This can happen when testing if a function exists
-                        } else if (util.setContainsUnresolvedSymbol(changeSymbolSetForFlag, requiredSymbol)) {
-                            segmentsToWalkForValidation.push(segment);
-                            break;
-                        }
-                    }
-                }
-            } else if (segmentNeedsRevalidation) {
-                segmentsToWalkForValidation.push(segment);
-            } else {
-                for (let assignedToken of this.assignedTokensInSegment?.get(segment)?.values() ?? []) {
-                    if (allChangedSymbolNames.includes(assignedToken.token.text.toLowerCase())) {
-                        segmentsToWalkForValidation.push(segment);
-                        break;
-                    }
+                if (util.hasAnyRequiredSymbolChanged([...symbolsRequired], changedSymbols)) {
+                    segmentsToWalkForValidation.push(segment);
+                    continue;
                 }
             }
         }
@@ -211,18 +254,10 @@ export class AstValidationSegmenter {
     }
 
 
-    checkIfSegmentNeedRevalidation(segment: AstNode) {
+    checkIfSegmentNeedsRevalidation(segment: AstNode, changedSymbols: Map<SymbolTypeFlag, Set<string>>) {
         if (!this.validatedSegments.get(segment)) {
             return true;
         }
-        const unresolved = this.unresolvedSegmentsSymbols.get(segment);
-        if (unresolved?.size > 0) {
-            return true;
-        } /*
-         const assignedTokens = this.assignedTokensInSegment.get(segment);
-         if (assignedTokens?.size > 0) {
-             return true;
-         }*/
         return false;
     }
 

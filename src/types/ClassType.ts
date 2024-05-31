@@ -10,7 +10,7 @@ import { isUnionTypeCompatible } from './helpers';
 
 export class ClassType extends InheritableType {
 
-    constructor(public name: string, public readonly superClass?: ClassType | ReferenceType) {
+    constructor(public name: string, superClass?: ClassType | ReferenceType) {
         super(name, superClass);
     }
 
@@ -39,6 +39,7 @@ export class ClassType extends InheritableType {
     private builtInMemberTable: SymbolTable;
 
     getBuiltInMemberTable(): SymbolTable {
+
         if (!this.parentType) {
             if (this.builtInMemberTable) {
                 return this.builtInMemberTable;

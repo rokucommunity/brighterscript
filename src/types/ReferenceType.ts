@@ -1,11 +1,13 @@
 import type { GetTypeOptions, TypeChainEntry, TypeCompatibilityData } from '../interfaces';
 import type { GetSymbolTypeOptions, SymbolTypeGetterProvider } from '../SymbolTable';
 import type { SymbolTypeFlag } from '../SymbolTypeFlag';
-import { isAnyReferenceType, isArrayType, isComponentType, isDynamicType, isReferenceType } from '../astUtils/reflection';
+import { isAnyReferenceType, isArrayDefaultTypeReferenceType, isArrayType, isBinaryOperatorReferenceType, isComponentType, isDynamicType, isReferenceType, isTypePropertyReferenceType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
 import { BscTypeKind } from './BscTypeKind';
 import type { Token } from '../lexer/Token';
+
+export type AnyReferenceType = ReferenceType | TypePropertyReferenceType | BinaryOperatorReferenceType | ArrayDefaultTypeReferenceType;
 
 export function referenceTypeFactory(memberKey: string, fullName, flags: SymbolTypeFlag, tableProvider: SymbolTypeGetterProvider) {
     return new ReferenceType(memberKey, fullName, flags, tableProvider);
@@ -330,6 +332,10 @@ export class TypePropertyReferenceType extends BscType {
                     return { name: 'TypePropertyReferenceType' };
                 }
 
+                if (propName === 'outerType') {
+                    return outerType;
+                }
+
                 if (isAnyReferenceType(this.outerType) && !this.outerType.isResolvable()) {
                     if (propName === 'getMemberType') {
                         //If we're calling `getMemberType()`, we need it to proxy to using the actual symbol table
@@ -399,6 +405,14 @@ export class BinaryOperatorReferenceType extends BscType {
                     return { name: 'BinaryOperatorReferenceType' };
                 }
 
+                if (propName === 'leftType') {
+                    return leftType;
+                }
+
+                if (propName === 'rightType') {
+                    return rightType;
+                }
+
                 let resultType: BscType = this.cachedType ?? DynamicType.instance;
                 if (!this.cachedType) {
                     if ((isAnyReferenceType(this.leftType) && !this.leftType.isResolvable()) ||
@@ -443,6 +457,10 @@ export class ArrayDefaultTypeReferenceType extends BscType {
                     return { name: 'ArrayDefaultTypeReferenceType' };
                 }
 
+                if (propName === 'objType') {
+                    return objType;
+                }
+
                 let resultType: BscType = this.cachedType ?? DynamicType.instance;
                 if (!this.cachedType) {
                     if ((isAnyReferenceType(this.objType) && !this.objType.isResolvable())
@@ -470,4 +488,47 @@ export class ArrayDefaultTypeReferenceType extends BscType {
             }
         });
     }
+}
+
+/**
+ * Gives an array of all the symbol names that need to be resolved to make the given reference type be resolved
+ */
+export function getAllRequiredSymbolNames(refType: BscType, namespaceLower?: string): Array<{ name: string; namespacedName?: string }> {
+    if (refType.isResolvable()) {
+        return [];
+    }
+    if (isReferenceType(refType)) {
+        return [{ name: refType.fullName, namespacedName: namespaceLower ? `${namespaceLower}.${refType.fullName}` : null }];
+    }
+    if (isTypePropertyReferenceType(refType)) {
+        const outer = refType.outerType;
+        if (isAnyReferenceType(outer)) {
+            return getAllRequiredSymbolNames(outer);
+        } else {
+            return [];
+        }
+
+    }
+    if (isArrayDefaultTypeReferenceType(refType)) {
+        const objType = refType.objType;
+        if (isAnyReferenceType(objType)) {
+            return getAllRequiredSymbolNames(objType);
+        } else {
+            return [];
+        }
+    }
+    if (isBinaryOperatorReferenceType(refType)) {
+        const left = refType.leftType;
+        const right = refType.rightType;
+        const result = [];
+        if (isAnyReferenceType(left)) {
+            result.push(...getAllRequiredSymbolNames(left, namespaceLower));
+        }
+        if (isAnyReferenceType(right)) {
+            result.push(...getAllRequiredSymbolNames(right, namespaceLower));
+
+        }
+        return result;
+    }
+    return [];
 }

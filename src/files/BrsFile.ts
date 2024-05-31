@@ -19,7 +19,7 @@ import { DynamicType } from '../types/DynamicType';
 import { standardizePath as s, util } from '../util';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { serializeError } from 'serialize-error';
-import { isClassStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isNamespaceStatement, isVariableExpression, isImportStatement, isEnumStatement, isConstStatement, isAnyReferenceType, isNamespaceType, isReferenceType, isCallableType, isBrsFile } from '../astUtils/reflection';
+import { isClassStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isNamespaceStatement, isVariableExpression, isImportStatement, isEnumStatement, isConstStatement, isAnyReferenceType, isNamespaceType, isReferenceType, isCallableType } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyChangedEvent, DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
@@ -42,7 +42,11 @@ import { NamespaceType } from '../types';
 import type { BscFile } from './BscFile';
 import { DefinitionProvider } from '../bscPlugin/definition/DefinitionProvider';
 
-export type ProvidedSymbolMap = Map<SymbolTypeFlag, Map<string, BscSymbol>>;
+export interface ProvidedSymbol {
+    symbol: BscSymbol;
+    duplicates: BscSymbol[];
+}
+export type ProvidedSymbolMap = Map<SymbolTypeFlag, Map<string, ProvidedSymbol>>;
 export type ChangedSymbolMap = Map<SymbolTypeFlag, Set<string>>;
 
 export interface ProvidedSymbolInfo {
@@ -312,11 +316,6 @@ export class BrsFile implements BscFile {
 
     public onDependenciesChanged(event: DependencyChangedEvent) {
         this.resolveTypedef();
-        this.unlinkNamespaceSymbolTables();
-        this.cache?.delete('namespaceSymbolTable');
-        this.cache?.delete('requiredSymbols');
-
-        this.validationSegmenter.unValidateAllSegments();
     }
 
     /**
@@ -1007,41 +1006,19 @@ export class BrsFile implements BscFile {
         }
     }
 
-    public validationSegmenter = new AstValidationSegmenter();
+    public validationSegmenter = new AstValidationSegmenter(this);
 
     public getNamespaceSymbolTable(allowCache = true) {
-        const makeImportTreeNamespaceTable = () => {
-            const nsTable = new SymbolTable(`File Complete NamespaceTypes ${this.destPath}`, () => this.program.globalScope.symbolTable);
-            this.updateWithDependenciesNamespaceTables(nsTable, new Set());
-            return nsTable;
-        };
         if (!allowCache) {
-            return makeImportTreeNamespaceTable();
+            return this.constructNamespaceSymbolTable();
         }
-        return this.cache?.getOrAdd(`namespaceSymbolTable`, makeImportTreeNamespaceTable);
+        return this.cache?.getOrAdd(`namespaceSymbolTable`, () => this.constructNamespaceSymbolTable());
     }
 
-    private updateWithDependenciesNamespaceTables(symbolTableToUpdate: SymbolTable, filesToSkip: Set<string>) {
-        symbolTableToUpdate.mergeNamespaceSymbolTables(this.getOwnNamespaceSymbolTable());
-        filesToSkip.add(this.destPath.toLowerCase());
-        for (const filePath of this.dependencies) {
-            if (filesToSkip.has(filePath.toLowerCase())) {
-                continue;
-            }
-            const importedFile = this.program.getFile<BrsFile>(filePath);
-            if (!isBrsFile(importedFile) || importedFile === this) {
-                continue;
-            }
-            importedFile.updateWithDependenciesNamespaceTables(symbolTableToUpdate, filesToSkip);
-        }
-    }
-
-    public getOwnNamespaceSymbolTable() {
-        return this.cache?.getOrAdd(`ownNamespaceSymbolTable`, () => {
-            const nsTable = new SymbolTable(`File NamespaceTypes ${this.destPath}`, () => this.program.globalScope.symbolTable);
-            this.populateNameSpaceSymbolTable(nsTable);
-            return nsTable;
-        });
+    private constructNamespaceSymbolTable() {
+        const nsTable = new SymbolTable(`File NamespaceTypes ${this.destPath}`, () => this.program?.globalScope.symbolTable);
+        this.populateNameSpaceSymbolTable(nsTable);
+        return nsTable;
     }
 
     public processSymbolInformation() {
@@ -1110,12 +1087,6 @@ export class BrsFile implements BscFile {
         }
     }
 
-    public getValidationSegments(changedSymbols: Map<SymbolTypeFlag, Set<string>>) {
-        const segments = this.validationSegmenter.getSegments(changedSymbols);
-        return segments;
-    }
-
-
     public get requiredSymbols() {
         return this.cache.getOrAdd(`requiredSymbols`, () => {
             const allNeededSymbolSets = this.validationSegmenter.unresolvedSegmentsSymbols.values();
@@ -1127,20 +1098,19 @@ export class BrsFile implements BscFile {
             for (const setOfSymbols of allNeededSymbolSets) {
                 for (const symbol of setOfSymbols) {
                     const fullSymbolKey = symbol.typeChain.map(tce => tce.name).join('.').toLowerCase();
-                    //for (const flag of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
-                    // eslint-disable-next-line no-bitwise
                     const flag = symbol.endChainFlags;
-                    //  if (symbol.endChainFlags & flag) {
                     if (this.providedSymbols.symbolMap.get(flag)?.has(fullSymbolKey)) {
                         // this catches namespaced things
+                        continue;
+                    }
+                    if (this.ast.getSymbolTable().hasSymbol(fullSymbolKey, flag)) {
+                        //catches aliases
                         continue;
                     }
                     if (!addedSymbols.get(flag)?.has(fullSymbolKey)) {
                         requiredSymbols.push(symbol);
                         addedSymbols.get(flag)?.add(fullSymbolKey);
                     }
-                    // }
-                    //}
                 }
             }
             return requiredSymbols;
@@ -1167,9 +1137,12 @@ export class BrsFile implements BscFile {
     }
 
     private getProvidedSymbols() {
-        const symbolMap = new Map<SymbolTypeFlag, Map<string, BscSymbol>>();
-        const runTimeSymbolMap = new Map<string, BscSymbol>();
-        const typeTimeSymbolMap = new Map<string, BscSymbol>();
+        const symbolMap = new Map<SymbolTypeFlag, Map<string, ProvidedSymbol>>();
+        const runTimeSymbolMap = new Map<string, ProvidedSymbol>();
+        const typeTimeSymbolMap = new Map<string, ProvidedSymbol>();
+        const referenceSymbolMap = new Map<SymbolTypeFlag, Map<string, ProvidedSymbol>>();
+        const referenceRunTimeSymbolMap = new Map<string, ProvidedSymbol>();
+        const referenceTypeTimeSymbolMap = new Map<string, ProvidedSymbol>();
 
         const tablesToGetSymbolsFrom: Array<{ table: SymbolTable; namePrefixLower?: string }> = [{
             table: this.parser.symbolTable
@@ -1182,31 +1155,64 @@ export class BrsFile implements BscFile {
             });
         }
 
+        function getAnyDuplicates(symbolNameLower: string, providedSymbolMap: Map<string, ProvidedSymbol>, referenceProvidedSymbolMap: Map<string, ProvidedSymbol>) {
+            if (symbolNameLower === 'm') {
+                return [];
+            }
+            let duplicates = [] as Array<BscSymbol>;
+            let existingSymbol = providedSymbolMap.get(symbolNameLower);
+            if (existingSymbol) {
+                duplicates.push(existingSymbol.symbol, ...existingSymbol.duplicates);
+            }
+            existingSymbol = referenceProvidedSymbolMap.get(symbolNameLower);
+            if (existingSymbol) {
+                duplicates.push(existingSymbol.symbol, ...existingSymbol.duplicates);
+            }
+
+            return duplicates;
+        }
+
         for (const symbolTable of tablesToGetSymbolsFrom) {
             const runTimeSymbols = symbolTable.table.getOwnSymbols(SymbolTypeFlag.runtime);
             const typeTimeSymbols = symbolTable.table.getOwnSymbols(SymbolTypeFlag.typetime);
 
             for (const symbol of runTimeSymbols) {
-                if (!isAnyReferenceType(symbol.type) && symbol.name.toLowerCase() !== 'm') {
-                    const symbolNameLower = symbolTable.namePrefixLower
-                        ? `${symbolTable.namePrefixLower}.${symbol.name.toLowerCase()}`
-                        : symbol.name.toLowerCase();
-                    runTimeSymbolMap.set(symbolNameLower, symbol);
+                const symbolNameLower = symbolTable.namePrefixLower
+                    ? `${symbolTable.namePrefixLower}.${symbol.name.toLowerCase()}`
+                    : symbol.name.toLowerCase();
+                if (symbolNameLower === 'm') {
+                    continue;
+                }
+                const duplicates = getAnyDuplicates(symbolNameLower, runTimeSymbolMap, referenceRunTimeSymbolMap);
+
+                if (!isAnyReferenceType(symbol.type)) {
+                    runTimeSymbolMap.set(symbolNameLower, { symbol: symbol, duplicates: duplicates });
+                } else {
+                    referenceRunTimeSymbolMap.set(symbolNameLower, { symbol: symbol, duplicates: duplicates });
                 }
             }
 
             for (const symbol of typeTimeSymbols) {
+                const symbolNameLower = symbolTable.namePrefixLower
+                    ? `${symbolTable.namePrefixLower}.${symbol.name.toLowerCase()}`
+                    : symbol.name.toLowerCase();
+                if (symbolNameLower === 'm') {
+                    continue;
+                }
+                const duplicates = getAnyDuplicates(symbolNameLower, typeTimeSymbolMap, referenceTypeTimeSymbolMap);
                 if (!isAnyReferenceType(symbol.type)) {
-                    const symbolNameLower = symbolTable.namePrefixLower
-                        ? `${symbolTable.namePrefixLower}.${symbol.name.toLowerCase()}`
-                        : symbol.name.toLowerCase();
-                    typeTimeSymbolMap.set(symbolNameLower, symbol);
+                    typeTimeSymbolMap.set(symbolNameLower, { symbol: symbol, duplicates: duplicates });
+                } else {
+                    referenceTypeTimeSymbolMap.set(symbolNameLower, { symbol: symbol, duplicates: duplicates });
                 }
             }
         }
 
         symbolMap.set(SymbolTypeFlag.runtime, runTimeSymbolMap);
         symbolMap.set(SymbolTypeFlag.typetime, typeTimeSymbolMap);
+
+        referenceSymbolMap.set(SymbolTypeFlag.runtime, referenceRunTimeSymbolMap);
+        referenceSymbolMap.set(SymbolTypeFlag.typetime, referenceTypeTimeSymbolMap);
 
         const changes = new Map<SymbolTypeFlag, Set<string>>();
         changes.set(SymbolTypeFlag.runtime, new Set<string>());
@@ -1227,9 +1233,9 @@ export class BrsFile implements BscFile {
                 continue;
 
             }
-            for (const [symbolKey, symbol] of newSymbolMapForFlag) {
-                const symbolType = symbol.type;
-                const previousType = oldSymbolMapForFlag?.get(symbolKey)?.type;
+            for (const [symbolKey, symbolObj] of newSymbolMapForFlag) {
+                const symbolType = symbolObj.symbol.type;
+                const previousType = oldSymbolMapForFlag?.get(symbolKey)?.symbol?.type;
                 previousSymbolsCheckedForFlag.add(symbolKey);
                 if (!previousType) {
                     changesForFlag.add(symbolKey);
@@ -1248,7 +1254,8 @@ export class BrsFile implements BscFile {
         }
         return {
             symbolMap: symbolMap,
-            changes: changes
+            changes: changes,
+            referenceSymbolMap: referenceSymbolMap
         };
     }
 

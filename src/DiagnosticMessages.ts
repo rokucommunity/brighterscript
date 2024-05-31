@@ -607,7 +607,7 @@ export let DiagnosticMessages = {
         code: 1115,
         severity: DiagnosticSeverity.Error
     }),
-    functionCannotHaveSameNameAsClass: (className: string) => ({
+    __unused6: (className: string) => ({
         message: `Function has same name as class '${className}'`,
         code: 1116,
         severity: DiagnosticSeverity.Error
@@ -771,7 +771,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error
     }),
     incompatibleSymbolDefinition: (symbol: string, scopeName: string) => ({
-        message: `'${symbol}' is incompatible across scope group (${scopeName})`, // TODO: Add scopes where it was defined
+        message: `'${symbol}' is incompatible across these scopes: ${scopeName}`,
         code: 1145,
         severity: DiagnosticSeverity.Error
     }),
