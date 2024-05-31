@@ -119,7 +119,7 @@ export class UnionType extends BscType {
         for (const symbol of firstType.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime)) {
             const foundType = this.getMemberTypeFromInnerTypes(symbol.name, { flags: SymbolTypeFlag.runtime });
             const allResolvableTypes = foundType.reduce((acc, curType) => {
-                return acc && curType.isResolvable();
+                return acc && curType?.isResolvable();
             }, true);
 
             if (!allResolvableTypes) {
