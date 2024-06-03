@@ -1189,6 +1189,24 @@ class Runner {
             },
             events: {},
             interfaces: {
+                ifsetmessageport: {
+                    methods: [{
+                        description: 'DEPRECATED: use `.SetMessagePort()` instead. \n\nSets the roMessagePort to be used to receive events',
+                        isDeprecated: true,
+                        deprecatedDescription: 'Use .SetMessagePort instead. Some legacy objects still implement the older `SetPort` function, but apps should not be using it.',
+                        name: 'SetPort',
+                        params: [
+                            {
+                                'default': null,
+                                'description': 'The port to be used to receive events.',
+                                'isRequired': true,
+                                'name': 'port',
+                                'type': 'Object'
+                            }
+                        ],
+                        returnType: 'Void'
+                    }]
+                } as Partial<RokuInterface>,
                 ifsgnodechildren: {
                     methods: [{
                         name: 'update',
@@ -1860,4 +1878,3 @@ interface ElementFilter {
 
 //run the builder
 new Runner().run().catch((e) => console.error(e));
-
