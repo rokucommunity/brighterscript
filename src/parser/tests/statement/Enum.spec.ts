@@ -808,5 +808,53 @@ describe('EnumStatement', () => {
                 end sub
             `);
         });
+
+        it('works when enum is in a namespace', async () => {
+            program.setFile('components/Colors.bs', `
+                namespace Colors
+                    enum Primary
+                        red = "#FF0000"
+                    end enum
+                end namespace
+            `);
+
+            program.setFile('components/Button.xml', `
+                <component name="Button" extends="Group">
+                    <script type="text/brightscript" uri="pkg:/components/Button.bs" />
+                </component>
+            `);
+            const file = program.setFile('components/Button.bs', `
+                import "Colors.bs"
+
+                namespace alpha
+                    sub testIt()
+                        print Colors.Primary.red
+                        aa = {
+                            value: Colors.Primary.red
+                        }
+                    end sub
+                end namespace
+
+                namespace Colors
+                    sub testIt()
+                        print Primary.red
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            await testTranspile(file, `
+                'import "Colors.bs"
+                sub alpha_testIt()
+                    print "#FF0000"
+                    aa = {
+                        value: "#FF0000"
+                    }
+                end sub
+                sub Colors_testIt()
+                    print "#FF0000"
+                end sub
+            `);
+        });
     });
 });
