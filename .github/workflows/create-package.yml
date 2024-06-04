@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@master
       - uses: actions/setup-node@master
         with:
-          node-version: "14.19.0"
+          node-version: "16.20.2"
       # Get a bot token so the bot's name shows up on all our actions
       - name: Get Token From roku-ci-token Application
         uses: tibdex/github-app-token@v1
