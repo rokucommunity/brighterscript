@@ -6,6 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.31](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.30...v1.0.0-alpha.31) - 2024-06-04
+### Added
+ - Adds AugmentedAssignmentStatement ([#1196](https://github.com/rokucommunity/brighterscript/pull/1196))
+ - Visualize deprecated items in editor ([#1213](https://github.com/rokucommunity/brighterscript/pull/1213))
+### Changed
+ - Temporarily disable test-related-projects until they support v1 ([#1202](https://github.com/rokucommunity/brighterscript/pull/1202))
+ - Validate single scope ([#1123](https://github.com/rokucommunity/brighterscript/pull/1123))
+ - Removes 'duplicate enum' diagnostic and makes 'duplicate function' diagnostics better ([#1212](https://github.com/rokucommunity/brighterscript/pull/1212))
+### Fixed
+ - Fixes some issues with comments and transpilation ([#1192](https://github.com/rokucommunity/brighterscript/pull/1192))
+ - Component field can be set with strings ([#1195](https://github.com/rokucommunity/brighterscript/pull/1195))
+ - Fix semantic token crash ([#1197](https://github.com/rokucommunity/brighterscript/pull/1197))
+ - Fix namespace crash ([#1201](https://github.com/rokucommunity/brighterscript/pull/1201))
+ - Document the deprecated ifMessagePort.setPort() method. ([#1210](https://github.com/rokucommunity/brighterscript/pull/1210))
+ - Refines ScopeValidator Diagnostics to use more specific Diagnostic tags ([#1211](https://github.com/rokucommunity/brighterscript/pull/1211))
+ - Fixes issue with enums in namespaces ([#1216](https://github.com/rokucommunity/brighterscript/pull/1216))
+
+
+
 ## [1.0.0-alpha.30](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.29...v1.0.0-alpha.30) - 2024-05-16
 ### Added
  - alias completions ([#1188](https://github.com/rokucommunity/brighterscript/pull/1188))
