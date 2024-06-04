@@ -20,7 +20,7 @@ import { BslibManager } from './serialize/BslibManager';
 import { FileSerializer } from './serialize/FileSerializer';
 import { BrsFilePreTranspileProcessor } from './transpile/BrsFileTranspileProcessor';
 import { XmlFilePreTranspileProcessor } from './transpile/XmlFilePreTranspileProcessor';
-import { BrsFileAfterValidator } from './validation/BrsFileAfterValidatior';
+import { BrsFileAfterValidator } from './validation/BrsFileAfterValidator';
 
 export class BscPlugin implements CompilerPlugin {
     public name = 'BscPlugin';
