@@ -1182,7 +1182,7 @@ class Runner {
             components: {
                 rourltransfer: {
                     methods: [{
-                        description: 'DEPRECATED: use `.SetMessagePort()` instead. \n\nSets the roMessagePort to be used to receive events',
+                        description: 'Sets the roMessagePort to be used to receive events',
                         isDeprecated: true,
                         deprecatedDescription: 'Use .SetMessagePort instead. Some legacy objects still implement the older `SetPort` function, but apps should not be using it.',
                         name: 'SetPort',

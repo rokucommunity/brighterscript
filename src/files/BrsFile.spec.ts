@@ -5142,6 +5142,12 @@ describe('BrsFile', () => {
             end function
         `);
         program.validate();
-        expectZeroDiagnostics(program);
+        expectDiagnostics(program, [
+            {
+                ...DiagnosticMessages.itemIsDeprecated(),
+                // url.|setPort|(80)
+                range: util.createRange(3, 20, 3, 27)
+            }
+        ]);
     });
 });
