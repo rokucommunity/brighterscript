@@ -489,7 +489,7 @@ describe('BrsFileSemanticTokensProcessor', () => {
         ]);
     });
 
-    it.only('marks setPort as deprecated', () => {
+    it('marks setPort as deprecated', () => {
         const file = program.setFile<BrsFile>('source/main.bs', `
             sub main()
                 url = createObject("roUrlTransfer") as roUrlTransfer
