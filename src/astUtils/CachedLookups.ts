@@ -219,7 +219,6 @@ export class CachedLookups {
                         //when we hit a variable expression, we're definitely at the leftmost expression so stop
                     } else if (isVariableExpression(node) || isLiteralExpression(node)) {
                         break;
-                        //if
 
                     } else if (isDottedGetExpression(node) || isIndexedGetExpression(node)) {
                         node = node.obj;
