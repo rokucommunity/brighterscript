@@ -1,6 +1,6 @@
 {
   "name": "brighterscript",
-  "version": "0.67.1-local",
+  "version": "0.67.2-local",
   "description": "A superset of Roku's BrightScript language.",
   "scripts": {
     "preversion": "npm run build && npm run lint && npm run test",
