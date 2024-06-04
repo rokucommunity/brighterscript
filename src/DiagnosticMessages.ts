@@ -37,8 +37,8 @@ export let DiagnosticMessages = {
         code: 1002,
         severity: DiagnosticSeverity.Error
     }),
-    duplicateFunctionImplementation: (functionName: string, scopeName: string) => ({
-        message: `Duplicate function implementation for '${functionName}' when this file is included in scope '${scopeName}'.`,
+    duplicateFunctionImplementation: (functionName: string) => ({
+        message: `Duplicate function implementation for '${functionName}'.`,
         code: 1003,
         severity: DiagnosticSeverity.Error
     }),
@@ -662,7 +662,7 @@ export let DiagnosticMessages = {
         code: 1126,
         severity: DiagnosticSeverity.Error
     }),
-    duplicateEnumDeclaration: (scopeName: string, enumName: string) => ({
+    __unused7: (scopeName: string, enumName: string) => ({
         message: `Scope '${scopeName}' already contains an enum with name '${enumName}'`,
         code: 1127,
         severity: DiagnosticSeverity.Error

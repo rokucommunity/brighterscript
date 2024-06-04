@@ -1,13 +1,12 @@
 import { URI } from 'vscode-uri';
 import type { Range } from 'vscode-languageserver';
 import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isComponentType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isStringType, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
-import { Cache } from '../../Cache';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BsDiagnostic, CallableContainer, ExtraSymbolData, FileReference, GetTypeOptions, OnScopeValidateEvent, TypeChainEntry, TypeChainProcessResult, TypeCompatibilityData } from '../../interfaces';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
-import type { AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, DottedSetStatement, EnumStatement, IncrementStatement, NamespaceStatement, ReturnStatement } from '../../parser/Statement';
+import type { AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, DottedSetStatement, IncrementStatement, NamespaceStatement, ReturnStatement } from '../../parser/Statement';
 import util from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
@@ -63,7 +62,6 @@ export class ScopeValidator {
         this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, tag: ScopeValidatorDiagnosticTag });
         this.metrics.clear();
         this.walkFiles();
-        this.detectDuplicateEnums();
         this.flagDuplicateFunctionDeclarations();
         this.validateScriptImportPaths();
         this.validateClasses();
@@ -243,57 +241,6 @@ export class ScopeValidator {
             assignmentAncestor = expression?.findAncestor(isAssignmentStatement);
         }
         return assignmentAncestor?.tokens.name === expression?.tokens.name && isUnionType(exprType);
-    }
-
-    /**
-     * Flag duplicate enums
-     */
-    private detectDuplicateEnums() {
-        const enumLocationsByName = new Cache<string, Array<{ file: BrsFile; statement: EnumStatement }>>();
-        this.event.scope.enumerateBrsFiles((file) => {
-            // eslint-disable-next-line @typescript-eslint/dot-notation
-            for (const enumStatement of file['_cachedLookups'].enumStatements) {
-                const fullName = enumStatement.fullName;
-                const nameLower = fullName?.toLowerCase();
-                if (nameLower?.length > 0) {
-                    enumLocationsByName.getOrAdd(nameLower, () => []).push({
-                        file: file,
-                        statement: enumStatement
-                    });
-                }
-            }
-        });
-
-        //now that we've collected all enum declarations, flag duplicates
-        for (const enumLocations of enumLocationsByName.values()) {
-            //sort by srcPath to keep the primary enum location consistent
-            enumLocations.sort((a, b) => {
-                const pathA = a.file?.srcPath;
-                const pathB = b.file?.srcPath;
-                if (pathA < pathB) {
-                    return -1;
-                } else if (pathA > pathB) {
-                    return 1;
-                }
-                return 0;
-            });
-            const primaryEnum = enumLocations.shift();
-            const fullName = primaryEnum.statement.fullName;
-            for (const duplicateEnumInfo of enumLocations) {
-                this.addDiagnostic({
-                    ...DiagnosticMessages.duplicateEnumDeclaration(this.event.scope.name, fullName),
-                    file: duplicateEnumInfo.file,
-                    range: duplicateEnumInfo.statement.tokens.name.range,
-                    relatedInformation: [{
-                        message: 'Enum declared here',
-                        location: util.createLocation(
-                            URI.file(primaryEnum.file.srcPath).toString(),
-                            primaryEnum.statement.tokens.name.range
-                        )
-                    }]
-                });
-            }
-        }
     }
 
     /**
@@ -996,11 +943,25 @@ export class ScopeValidator {
 
                 for (let callableContainer of ownCallables) {
                     let callable = callableContainer.callable;
+                    const related = [];
+                    for (const ownCallable of ownCallables) {
+                        const thatNameRange = ownCallable.callable.nameRange;
+                        if (ownCallable.callable.nameRange !== callable.nameRange) {
+                            related.push({
+                                message: `Function declared here`,
+                                location: util.createLocation(
+                                    URI.file(ownCallable.callable.file?.srcPath).toString(),
+                                    thatNameRange
+                                )
+                            });
+                        }
+                    }
 
                     this.addMultiScopeDiagnostic({
-                        ...DiagnosticMessages.duplicateFunctionImplementation(callable.name, callableContainer.scope.name),
+                        ...DiagnosticMessages.duplicateFunctionImplementation(callable.name),
                         range: callable.nameRange,
-                        file: callable.file
+                        file: callable.file,
+                        relatedInformation: related
                     });
                 }
             }

@@ -224,13 +224,36 @@ describe('EnumStatement', () => {
             `);
             program.validate();
             expectDiagnosticsIncludes(program, [{
-                ...DiagnosticMessages.duplicateEnumDeclaration('source', 'Direction'),
+                ...DiagnosticMessages.nameCollision('Enum', 'Enum', 'Direction'),
+                relatedInformation: [{
+                    location: util.createLocation(
+                        URI.file(s`${rootDir}/source/main.bs`).toString(),
+                        util.createRange(5, 21, 5, 30)
+                    ),
+                    message: 'Enum declared here'
+                },
+                {
+                    location: util.createLocation(
+                        URI.file(s`${rootDir}/source/main.bs`).toString(),
+                        util.createRange(1, 21, 1, 30)
+                    ),
+                    message: `In scope 'source'`
+                }]
+            }, {
+                ...DiagnosticMessages.nameCollision('Enum', 'Enum', 'Direction'),
                 relatedInformation: [{
                     location: util.createLocation(
                         URI.file(s`${rootDir}/source/main.bs`).toString(),
                         util.createRange(1, 21, 1, 30)
                     ),
                     message: 'Enum declared here'
+                },
+                {
+                    location: util.createLocation(
+                        URI.file(s`${rootDir}/source/main.bs`).toString(),
+                        util.createRange(5, 21, 5, 30)
+                    ),
+                    message: `In scope 'source'`
                 }]
             }]);
         });
@@ -248,13 +271,20 @@ describe('EnumStatement', () => {
             `);
             program.validate();
             expectDiagnosticsIncludes(program, [{
-                ...DiagnosticMessages.duplicateEnumDeclaration('source', 'Direction'),
+                ...DiagnosticMessages.nameCollision('Enum', 'Enum', 'Direction'),
                 relatedInformation: [{
                     location: util.createLocation(
                         URI.file(s`${rootDir}/source/lib.bs`).toString(),
                         util.createRange(1, 21, 1, 30)
                     ),
                     message: 'Enum declared here'
+                },
+                {
+                    location: util.createLocation(
+                        URI.file(s`${rootDir}/source/main.bs`).toString(),
+                        util.createRange(1, 21, 1, 30)
+                    ),
+                    message: `In scope 'source'`
                 }]
             }]);
         });

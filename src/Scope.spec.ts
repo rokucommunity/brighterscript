@@ -1042,8 +1042,8 @@ describe('Scope', () => {
             program.validate();
             //we should have the "DoA declared more than once" error twice (one for each function named "DoA")
             expectDiagnostics(program, [
-                DiagnosticMessages.duplicateFunctionImplementation('DoA', 'source'),
-                DiagnosticMessages.duplicateFunctionImplementation('DoA', 'source')
+                DiagnosticMessages.duplicateFunctionImplementation('DoA'),
+                DiagnosticMessages.duplicateFunctionImplementation('DoA')
             ]);
         });
 
