@@ -202,10 +202,10 @@ export class DiagnosticManager {
     public clearByFilter(filter: DiagnosticContextFilter) {
 
         const needToMatch = {
-            tag: !!(filter.tag),
-            scope: !!(filter.scope),
-            file: !!(filter.file),
-            segment: !!(filter.segment)
+            tag: !!filter.tag,
+            scope: !!filter.scope,
+            file: !!filter.file,
+            segment: !!filter.segment
         };
 
         for (const [key, cachedData] of this.diagnosticsCache.entries()) {
