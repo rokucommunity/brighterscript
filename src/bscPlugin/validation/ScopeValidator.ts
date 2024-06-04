@@ -60,9 +60,10 @@ export class ScopeValidator {
         if (this.event.program.globalScope === this.event.scope) {
             return;
         }
-        this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, tag: ScopeValidatorDiagnosticTag });
+        this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, segment: null, tag: ScopeValidatorDiagnosticTag });
         this.metrics.clear();
         this.walkFiles();
+        this.currentSegmentBeingValidated = null;
         this.detectDuplicateEnums();
         this.flagDuplicateFunctionDeclarations();
         this.validateScriptImportPaths();
@@ -99,7 +100,7 @@ export class ScopeValidator {
             const thisFileHasChanges = this.event.changedFiles.includes(file);
 
             if (thisFileHasChanges) {
-                this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, file: file, tag: ScopeValidatorDiagnosticTag });
+                this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, segment: null, file: file, tag: ScopeValidatorDiagnosticTag });
             }
             this.detectVariableNamespaceCollisions(file);
 

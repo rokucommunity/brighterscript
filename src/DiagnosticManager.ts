@@ -197,14 +197,15 @@ export class DiagnosticManager {
 
     /**
      * Clears all diagnostics that match all aspects of the filter provided
+     * Matches equality of tag, scope, file, segment filters. Leave filter option undefined to not filter on option
      */
     public clearByFilter(filter: DiagnosticContextFilter) {
 
         const needToMatch = {
-            tag: !!filter.tag,
-            scope: !!filter.scope,
-            file: !!filter.file,
-            segment: !!filter.segment
+            tag: !(filter.tag === undefined),
+            scope: !(filter.scope === undefined),
+            file: !(filter.file === undefined),
+            segment: !(filter.segment === undefined)
         };
 
         for (const [key, cachedData] of this.diagnosticsCache.entries()) {
