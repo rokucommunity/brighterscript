@@ -489,6 +489,20 @@ describe('BrsFileSemanticTokensProcessor', () => {
         ]);
     });
 
+    it('marks setPort as deprecated', () => {
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            sub main()
+                url = createObject("roUrlTransfer") as roUrlTransfer
+                url.setPort(80)
+            end sub
+        `);
+        program.validate();
+        expectSemanticTokensIncludes(file, [
+            // url.|setPort|(80)
+            [SemanticTokenTypes.method, 3, 20, 3, 27, [SemanticTokenModifiers.deprecated]]
+        ]);
+    });
+
     it('works for `new` statement', () => {
         const file = program.setFile<BrsFile>('source/main.bs', `
             class Person

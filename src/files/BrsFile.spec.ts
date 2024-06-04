@@ -5133,4 +5133,15 @@ describe('BrsFile', () => {
             ).to.be.false;
         });
     });
+
+    it('handles deprecated .setPort() on rourltransfer', () => {
+        program.setFile('source/main.bs', `
+            function main()
+                url = createObject("roUrlTransfer") as roUrlTransfer
+                url.setPort(80)
+            end function
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
 });
