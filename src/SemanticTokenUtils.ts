@@ -94,3 +94,10 @@ export function getModifierBitFlags(modifiers: SemanticTokenModifiers[]) {
     }
     return result;
 }
+
+/**
+ * @deprecated
+ */
+function test(){}
+
+test();
