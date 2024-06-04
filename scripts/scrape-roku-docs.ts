@@ -1180,16 +1180,7 @@ class Runner {
                 }
             },
             components: {
-                roregion: {
-                    interfaces: [{
-                        name: 'ifDraw2D',
-                        url: 'https://developer.roku.com/docs/references/brightscript/interfaces/ifdraw2d.md'
-                    }]
-                }
-            },
-            events: {},
-            interfaces: {
-                ifsetmessageport: {
+                rourltransfer: {
                     methods: [{
                         description: 'DEPRECATED: use `.SetMessagePort()` instead. \n\nSets the roMessagePort to be used to receive events',
                         isDeprecated: true,
@@ -1204,9 +1195,19 @@ class Runner {
                                 'type': 'Object'
                             }
                         ],
-                        returnType: 'Void'
+                        returnType: 'Void',
+                        returnDescription: undefined
                     }]
-                } as Partial<RokuInterface>,
+                },
+                roregion: {
+                    interfaces: [{
+                        name: 'ifDraw2D',
+                        url: 'https://developer.roku.com/docs/references/brightscript/interfaces/ifdraw2d.md'
+                    }]
+                }
+            } as Record<string, Partial<BrightScriptComponent>>,
+            events: {},
+            interfaces: {
                 ifsgnodechildren: {
                     methods: [{
                         name: 'update',
@@ -1778,6 +1779,10 @@ interface BrightScriptComponent extends PossiblyDeprecated {
     description: string;
     constructors: Array<Signature>;
     interfaces: Reference[];
+    /**
+     * Most components only get their methods from interfaces, but occasionally we need to attach one
+     */
+    methods: Func[];
     events: Reference[];
 }
 

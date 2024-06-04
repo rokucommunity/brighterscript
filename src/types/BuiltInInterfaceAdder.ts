@@ -48,6 +48,12 @@ export class BuiltInInterfaceAdder {
         }
         const interfacesToLoop = builtInComponent.interfaces ?? [builtInComponent];
 
+        //add any direct methods from this component to the member table
+        for (const method of builtInComponent.methods ?? []) {
+            const methodFuncType = this.buildMethodFromDocData(method, overrides, thisType);
+            builtInMemberTable.addSymbol(method.name, { description: method.description, completionPriority: 1 }, methodFuncType, SymbolTypeFlag.runtime);
+        }
+
         for (const iface of interfacesToLoop) {
             const lowerIfaceName = iface.name.toLowerCase();
             const ifaceData = (interfaces[lowerIfaceName] ?? events[lowerIfaceName]) as BRSInterfaceData;
@@ -147,7 +153,8 @@ export class BuiltInInterfaceAdder {
         }
     }
 
-    static getMatchingRokuComponent(theType: BscType) {
+    //the return type is a union of the three data types. Just pick the first item from each collection, as every item in the collection should have the same shape
+    static getMatchingRokuComponent(theType: BscType): typeof components['roappinfo'] & typeof interfaces['ifappinfo'] & typeof events['rourlevent'] {
         const componentName = this.getMatchingRokuComponentName(theType);
         if (!componentName) {
             // No component matches the given type
