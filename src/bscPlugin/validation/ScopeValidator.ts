@@ -1,13 +1,12 @@
 import { URI } from 'vscode-uri';
-import type { Range } from 'vscode-languageserver';
+import { DiagnosticTag, type Range } from 'vscode-languageserver';
 import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isComponentType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isStringType, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
-import { Cache } from '../../Cache';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BsDiagnostic, CallableContainer, ExtraSymbolData, FileReference, GetTypeOptions, OnScopeValidateEvent, TypeChainEntry, TypeChainProcessResult, TypeCompatibilityData } from '../../interfaces';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
-import type { AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, DottedSetStatement, EnumStatement, IncrementStatement, NamespaceStatement, ReturnStatement } from '../../parser/Statement';
+import type { AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, DottedSetStatement, IncrementStatement, NamespaceStatement, ReturnStatement } from '../../parser/Statement';
 import util from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
@@ -38,7 +37,7 @@ import { BscTypeKind } from '../../types/BscTypeKind';
 const platformNodeNames = nodes ? new Set((Object.values(nodes) as { name: string }[]).map(x => x?.name.toLowerCase())) : new Set();
 const platformComponentNames = components ? new Set((Object.values(components) as { name: string }[]).map(x => x?.name.toLowerCase())) : new Set();
 
-const enum DiagnosticTag {
+const enum ScopeValidatorDiagnosticTag {
     Imports = 'ScopeValidatorImports',
     NamespaceCollisions = 'ScopeValidatorNamespaceCollisions',
     DuplicateFunctionDeclaration = 'ScopeValidatorDuplicateFunctionDeclaration',
@@ -73,7 +72,6 @@ export class ScopeValidator {
         this.metrics.clear();
         this.walkFiles();
         this.currentSegmentBeingValidated = null;
-        this.detectDuplicateEnums();
         this.flagDuplicateFunctionDeclarations();
         this.validateScriptImportPaths();
         this.validateClasses();
@@ -113,7 +111,6 @@ export class ScopeValidator {
             if (thisFileHasChanges || this.doesFileProvideChangedSymbol(file, this.event.changedSymbols)) {
                 this.diagnosticDetectFunctionCollisions(file);
             }
-
         });
 
         this.event.scope.enumerateOwnFiles((file) => {
@@ -194,12 +191,13 @@ export class ScopeValidator {
                         continue;
                     }
                     this.currentSegmentBeingValidated = segment;
-                    this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, file: file, segment: segment, tag: DiagnosticTag.Segment });
+                    this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, file: file, segment: segment, tag: ScopeValidatorDiagnosticTag.Segment });
                     segmentsValidated++;
                     segment.walk(validationVisitor, {
                         walkMode: InsideSegmentWalkMode
                     });
                     file.markSegmentAsValidated(segment);
+                    this.currentSegmentBeingValidated = null;
                 }
                 this.metrics.set(file.pkgPath, segmentsValidated);
             }
@@ -250,57 +248,6 @@ export class ScopeValidator {
             assignmentAncestor = expression?.findAncestor(isAssignmentStatement);
         }
         return assignmentAncestor?.tokens.name === expression?.tokens.name && isUnionType(exprType);
-    }
-
-    /**
-     * Flag duplicate enums
-     */
-    private detectDuplicateEnums() {
-        const enumLocationsByName = new Cache<string, Array<{ file: BrsFile; statement: EnumStatement }>>();
-        this.event.scope.enumerateBrsFiles((file) => {
-            // eslint-disable-next-line @typescript-eslint/dot-notation
-            for (const enumStatement of file['_cachedLookups'].enumStatements) {
-                const fullName = enumStatement.fullName;
-                const nameLower = fullName?.toLowerCase();
-                if (nameLower?.length > 0) {
-                    enumLocationsByName.getOrAdd(nameLower, () => []).push({
-                        file: file,
-                        statement: enumStatement
-                    });
-                }
-            }
-        });
-
-        //now that we've collected all enum declarations, flag duplicates
-        for (const enumLocations of enumLocationsByName.values()) {
-            //sort by srcPath to keep the primary enum location consistent
-            enumLocations.sort((a, b) => {
-                const pathA = a.file?.srcPath;
-                const pathB = b.file?.srcPath;
-                if (pathA < pathB) {
-                    return -1;
-                } else if (pathA > pathB) {
-                    return 1;
-                }
-                return 0;
-            });
-            const primaryEnum = enumLocations.shift();
-            const fullName = primaryEnum.statement.fullName;
-            for (const duplicateEnumInfo of enumLocations) {
-                this.addDiagnostic({
-                    ...DiagnosticMessages.duplicateEnumDeclaration(this.event.scope.name, fullName),
-                    file: duplicateEnumInfo.file,
-                    range: duplicateEnumInfo.statement.tokens.name.range,
-                    relatedInformation: [{
-                        message: 'Enum declared here',
-                        location: util.createLocation(
-                            URI.file(primaryEnum.file.srcPath).toString(),
-                            primaryEnum.statement.tokens.name.range
-                        )
-                    }]
-                });
-            }
-        }
     }
 
     /**
@@ -724,6 +671,16 @@ export class ScopeValidator {
 
         const hasValidDeclaration = this.hasValidDeclaration(expression, exprType, typeData?.definingNode);
 
+        //include a hint diagnostic if this type is marked as deprecated
+        if (typeData.flags & SymbolTypeFlag.deprecated) { // eslint-disable-line no-bitwise
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.itemIsDeprecated(),
+                range: expression.tokens.name.range,
+                file: file,
+                tags: [DiagnosticTag.Deprecated]
+            });
+        }
+
         if (!this.isTypeKnown(exprType) && !hasValidDeclaration) {
             if (this.getNodeTypeWrapper(file, expression, { flags: oppositeSymbolType, isExistenceTest: true })?.isResolvable()) {
                 const oppoSiteTypeChain = [];
@@ -951,7 +908,7 @@ export class ScopeValidator {
      * Create diagnostics for any duplicate function declarations
      */
     private flagDuplicateFunctionDeclarations() {
-        this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, tag: DiagnosticTag.DuplicateFunctionDeclaration });
+        this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, tag: ScopeValidatorDiagnosticTag.DuplicateFunctionDeclaration });
 
         //for each list of callables with the same name
         for (let [lowerName, callableContainers] of this.event.scope.getCallableContainerMap()) {
@@ -994,7 +951,7 @@ export class ScopeValidator {
                             ),
                             range: container.callable.nameRange,
                             file: container.callable.file
-                        }, DiagnosticTag.DuplicateFunctionDeclaration);
+                        }, ScopeValidatorDiagnosticTag.DuplicateFunctionDeclaration);
                     }
                 }
             }
@@ -1004,12 +961,26 @@ export class ScopeValidator {
 
                 for (let callableContainer of ownCallables) {
                     let callable = callableContainer.callable;
+                    const related = [];
+                    for (const ownCallable of ownCallables) {
+                        const thatNameRange = ownCallable.callable.nameRange;
+                        if (ownCallable.callable.nameRange !== callable.nameRange) {
+                            related.push({
+                                message: `Function declared here`,
+                                location: util.createLocation(
+                                    URI.file(ownCallable.callable.file?.srcPath).toString(),
+                                    thatNameRange
+                                )
+                            });
+                        }
+                    }
 
                     this.addMultiScopeDiagnostic({
-                        ...DiagnosticMessages.duplicateFunctionImplementation(callable.name, callableContainer.scope.name),
+                        ...DiagnosticMessages.duplicateFunctionImplementation(callable.name),
                         range: callable.nameRange,
-                        file: callable.file
-                    }, DiagnosticTag.DuplicateFunctionDeclaration);
+                        file: callable.file,
+                        relatedInformation: related
+                    }, ScopeValidatorDiagnosticTag.DuplicateFunctionDeclaration);
                 }
             }
         }
@@ -1019,7 +990,7 @@ export class ScopeValidator {
      * Verify that all of the scripts imported by each file in this scope actually exist, and have the correct case
      */
     private validateScriptImportPaths() {
-        this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, tag: DiagnosticTag.Imports });
+        this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, tag: ScopeValidatorDiagnosticTag.Imports });
 
         let scriptImports = this.event.scope.getOwnScriptImports();
         //verify every script import
@@ -1042,14 +1013,14 @@ export class ScopeValidator {
                     ...dInfo,
                     range: scriptImport.filePathRange,
                     file: scriptImport.sourceFile
-                }, DiagnosticTag.Imports);
+                }, ScopeValidatorDiagnosticTag.Imports);
                 //if the character casing of the script import path does not match that of the actual path
             } else if (scriptImport.destPath !== referencedFile.destPath) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.scriptImportCaseMismatch(referencedFile.destPath),
                     range: scriptImport.filePathRange,
                     file: scriptImport.sourceFile
-                }, DiagnosticTag.Imports);
+                }, ScopeValidatorDiagnosticTag.Imports);
             }
         }
     }
@@ -1058,14 +1029,14 @@ export class ScopeValidator {
      * Validate all classes defined in this scope
      */
     private validateClasses() {
-        this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, tag: DiagnosticTag.Classes });
+        this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, tag: ScopeValidatorDiagnosticTag.Classes });
 
         let validator = new BsClassValidator(this.event.scope);
         validator.validate();
         for (const diagnostic of validator.diagnostics) {
             this.addMultiScopeDiagnostic({
                 ...diagnostic
-            }, DiagnosticTag.Classes);
+            }, ScopeValidatorDiagnosticTag.Classes);
         }
     }
 
@@ -1074,7 +1045,7 @@ export class ScopeValidator {
      * Find various function collisions
      */
     private diagnosticDetectFunctionCollisions(file: BrsFile) {
-        this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, file: file, tag: DiagnosticTag.FunctionCollisions });
+        this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, file: file, tag: ScopeValidatorDiagnosticTag.FunctionCollisions });
         for (let func of file.callables) {
             const funcName = func.getName(ParseMode.BrighterScript);
             const lowerFuncName = funcName?.toLowerCase();
@@ -1165,7 +1136,7 @@ export class ScopeValidator {
     }
 
     private detectVariableNamespaceCollisions(file: BrsFile) {
-        this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, file: file, tag: DiagnosticTag.NamespaceCollisions });
+        this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, file: file, tag: ScopeValidatorDiagnosticTag.NamespaceCollisions });
 
         //find all function parameters
         // eslint-disable-next-line @typescript-eslint/dot-notation
@@ -1186,7 +1157,7 @@ export class ScopeValidator {
                                 namespace.nameRange
                             )
                         }]
-                    }, DiagnosticTag.NamespaceCollisions);
+                    }, ScopeValidatorDiagnosticTag.NamespaceCollisions);
                 }
             }
         }
@@ -1208,7 +1179,7 @@ export class ScopeValidator {
                             namespace.nameRange
                         )
                     }]
-                }, DiagnosticTag.NamespaceCollisions);
+                }, ScopeValidatorDiagnosticTag.NamespaceCollisions);
             }
         }
     }
@@ -1217,7 +1188,7 @@ export class ScopeValidator {
         if (!scope.xmlFile.parser.ast?.componentElement?.interfaceElement) {
             return;
         }
-        this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, file: scope.xmlFile, tag: DiagnosticTag.XMLInterface });
+        this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, file: scope.xmlFile, tag: ScopeValidatorDiagnosticTag.XMLInterface });
 
         const iface = scope.xmlFile.parser.ast.componentElement.interfaceElement;
         const callableContainerMap = scope.getCallableContainerMap();
@@ -1229,13 +1200,13 @@ export class ScopeValidator {
                     ...DiagnosticMessages.xmlTagMissingAttribute(func.tokens.startTagName.text, 'name'),
                     range: func.tokens.startTagName.range,
                     file: scope.xmlFile
-                }, DiagnosticTag.XMLInterface);
+                }, ScopeValidatorDiagnosticTag.XMLInterface);
             } else if (!callableContainerMap.has(name.toLowerCase())) {
                 this.addDiagnostic({
                     ...DiagnosticMessages.xmlFunctionNotFound(name),
                     range: func.getAttribute('name')?.tokens.value.range,
                     file: scope.xmlFile
-                }, DiagnosticTag.XMLInterface);
+                }, ScopeValidatorDiagnosticTag.XMLInterface);
             }
         }
         //validate fields
@@ -1246,7 +1217,7 @@ export class ScopeValidator {
                     ...DiagnosticMessages.xmlTagMissingAttribute(field.tokens.startTagName.text, 'id'),
                     range: field.tokens.startTagName.range,
                     file: scope.xmlFile
-                }, DiagnosticTag.XMLInterface);
+                }, ScopeValidatorDiagnosticTag.XMLInterface);
             }
             if (!type) {
                 if (!field.alias) {
@@ -1254,14 +1225,14 @@ export class ScopeValidator {
                         ...DiagnosticMessages.xmlTagMissingAttribute(field.tokens.startTagName.text, 'type'),
                         range: field.tokens.startTagName.range,
                         file: scope.xmlFile
-                    }, DiagnosticTag.XMLInterface);
+                    }, ScopeValidatorDiagnosticTag.XMLInterface);
                 }
             } else if (!SGFieldTypes.includes(type.toLowerCase())) {
                 this.addDiagnostic({
                     ...DiagnosticMessages.xmlInvalidFieldType(type),
                     range: field.getAttribute('type')?.tokens.value.range,
                     file: scope.xmlFile
-                }, DiagnosticTag.XMLInterface);
+                }, ScopeValidatorDiagnosticTag.XMLInterface);
             }
             if (onChange) {
                 if (!callableContainerMap.has(onChange.toLowerCase())) {
@@ -1269,7 +1240,7 @@ export class ScopeValidator {
                         ...DiagnosticMessages.xmlFunctionNotFound(onChange),
                         range: field.getAttribute('onchange')?.tokens.value.range,
                         file: scope.xmlFile
-                    }, DiagnosticTag.XMLInterface);
+                    }, ScopeValidatorDiagnosticTag.XMLInterface);
                 }
             }
         }
@@ -1279,7 +1250,7 @@ export class ScopeValidator {
      * Detect when a child has imported a script that an ancestor also imported
      */
     private diagnosticDetectDuplicateAncestorScriptImports(scope: XmlScope) {
-        this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, file: scope.xmlFile, tag: DiagnosticTag.XMLImports });
+        this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, file: scope.xmlFile, tag: ScopeValidatorDiagnosticTag.XMLImports });
         if (scope.xmlFile.parentComponent) {
             //build a lookup of pkg paths -> FileReference so we can more easily look up collisions
             let parentScriptImports = scope.xmlFile.getAncestorScriptTagImports();
@@ -1301,7 +1272,7 @@ export class ScopeValidator {
                         file: scope.xmlFile,
                         range: scriptImport.filePathRange,
                         ...DiagnosticMessages.unnecessaryScriptImportInChildFromParent(ancestorComponentName)
-                    }, DiagnosticTag.XMLImports);
+                    }, ScopeValidatorDiagnosticTag.XMLImports);
                 }
             }
         }
@@ -1352,7 +1323,7 @@ export class ScopeValidator {
     }
 
     private addDiagnostic(diagnostic: BsDiagnostic, diagnosticTag?: string) {
-        diagnosticTag = diagnosticTag ?? (this.currentSegmentBeingValidated ? DiagnosticTag.Segment : DiagnosticTag.Default);
+        diagnosticTag = diagnosticTag ?? (this.currentSegmentBeingValidated ? ScopeValidatorDiagnosticTag.Segment : ScopeValidatorDiagnosticTag.Default);
         this.event.program.diagnostics.register(diagnostic, {
             tags: [diagnosticTag],
             segment: this.currentSegmentBeingValidated
@@ -1363,7 +1334,7 @@ export class ScopeValidator {
      * Add a diagnostic (to the first scope) that will have `relatedInformation` for each affected scope
      */
     private addMultiScopeDiagnostic(diagnostic: BsDiagnostic, diagnosticTag?: string) {
-        diagnosticTag = diagnosticTag ?? (this.currentSegmentBeingValidated ? DiagnosticTag.Segment : DiagnosticTag.Default);
+        diagnosticTag = diagnosticTag ?? (this.currentSegmentBeingValidated ? ScopeValidatorDiagnosticTag.Segment : ScopeValidatorDiagnosticTag.Default);
         this.event.program.diagnostics.register(diagnostic, {
             tags: [diagnosticTag],
             segment: this.currentSegmentBeingValidated,

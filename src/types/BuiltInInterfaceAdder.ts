@@ -48,6 +48,19 @@ export class BuiltInInterfaceAdder {
         }
         const interfacesToLoop = builtInComponent.interfaces ?? [builtInComponent];
 
+        //add any direct methods from this component to the member table
+        if (this.isBrightScriptComponent(thisType)) {
+            for (const method of builtInComponent.methods ?? []) {
+                const methodFuncType = this.buildMethodFromDocData(method, overrides, thisType);
+                let flags = SymbolTypeFlag.runtime;
+                //set the deprecated flag if applicable
+                if ((method as any).isDeprecated) {
+                    flags |= SymbolTypeFlag.deprecated; // eslint-disable-line no-bitwise
+                }
+                builtInMemberTable.addSymbol(method.name, { description: method.description, completionPriority: 1 }, methodFuncType, flags);
+            }
+        }
+
         for (const iface of interfacesToLoop) {
             const lowerIfaceName = iface.name.toLowerCase();
             const ifaceData = (interfaces[lowerIfaceName] ?? events[lowerIfaceName]) as BRSInterfaceData;
@@ -147,7 +160,18 @@ export class BuiltInInterfaceAdder {
         }
     }
 
-    static getMatchingRokuComponent(theType: BscType) {
+    static isBrightScriptComponent(theType: BscType) {
+        const componentName = this.getMatchingRokuComponentName(theType);
+        if (!componentName) {
+            // No component matches the given type
+            return;
+        }
+        const lowerComponentName = componentName.toLowerCase();
+        return !!components[lowerComponentName];
+    }
+
+    //the return type is a union of the three data types. Just pick the first item from each collection, as every item in the collection should have the same shape
+    static getMatchingRokuComponent(theType: BscType): typeof components['roappinfo'] & typeof interfaces['ifappinfo'] & typeof events['rourlevent'] {
         const componentName = this.getMatchingRokuComponentName(theType);
         if (!componentName) {
             // No component matches the given type
@@ -177,7 +201,12 @@ export class BuiltInInterfaceAdder {
         }
         for (const method of builtInNode.methods ?? []) {
             const methodFuncType = this.buildMethodFromDocData(method, null, thisType);
-            memberTable.addSymbol(method.name, { description: method.description, completionPriority: 1 }, methodFuncType, SymbolTypeFlag.runtime);
+            let flags = SymbolTypeFlag.runtime;
+            //set the deprecated flag if applicable
+            if (method.isDeprecated) {
+                flags |= SymbolTypeFlag.deprecated; // eslint-disable-line no-bitwise
+            }
+            memberTable.addSymbol(method.name, { description: method.description, completionPriority: 1 }, methodFuncType, flags);
         }
     }
 

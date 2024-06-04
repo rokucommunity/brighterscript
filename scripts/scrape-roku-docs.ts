@@ -1180,13 +1180,32 @@ class Runner {
                 }
             },
             components: {
+                rourltransfer: {
+                    methods: [{
+                        description: 'Sets the roMessagePort to be used to receive events',
+                        isDeprecated: true,
+                        deprecatedDescription: 'Use .SetMessagePort instead. Some legacy objects still implement the older `SetPort` function, but apps should not be using it.',
+                        name: 'SetPort',
+                        params: [
+                            {
+                                'default': null,
+                                'description': 'The port to be used to receive events.',
+                                'isRequired': true,
+                                'name': 'port',
+                                'type': 'Object'
+                            }
+                        ],
+                        returnType: 'Void',
+                        returnDescription: undefined
+                    }]
+                },
                 roregion: {
                     interfaces: [{
                         name: 'ifDraw2D',
                         url: 'https://developer.roku.com/docs/references/brightscript/interfaces/ifdraw2d.md'
                     }]
                 }
-            },
+            } as Record<string, Partial<BrightScriptComponent>>,
             events: {},
             interfaces: {
                 ifsgnodechildren: {
@@ -1760,6 +1779,10 @@ interface BrightScriptComponent extends PossiblyDeprecated {
     description: string;
     constructors: Array<Signature>;
     interfaces: Reference[];
+    /**
+     * Most components only get their methods from interfaces, but occasionally we need to attach one
+     */
+    methods: Func[];
     events: Reference[];
 }
 
@@ -1860,4 +1883,3 @@ interface ElementFilter {
 
 //run the builder
 new Runner().run().catch((e) => console.error(e));
-

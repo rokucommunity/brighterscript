@@ -37,8 +37,8 @@ export let DiagnosticMessages = {
         code: 1002,
         severity: DiagnosticSeverity.Error
     }),
-    duplicateFunctionImplementation: (functionName: string, scopeName: string) => ({
-        message: `Duplicate function implementation for '${functionName}' when this file is included in scope '${scopeName}'.`,
+    duplicateFunctionImplementation: (functionName: string) => ({
+        message: `Duplicate function implementation for '${functionName}'.`,
         code: 1003,
         severity: DiagnosticSeverity.Error
     }),
@@ -133,10 +133,10 @@ export let DiagnosticMessages = {
         code: 1021,
         severity: DiagnosticSeverity.Error
     }),
-    __unused4: (nonNamespacedClassName: string) => ({
-        message: `Namespaced class cannot have the same name as a non-namespaced class '${nonNamespacedClassName}'`,
+    itemIsDeprecated: () => ({
+        message: `Item is deprecated`,
         code: 1022,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Hint
     }),
     cannotUseOverrideKeywordOnConstructorFunction: () => ({
         message: 'Override keyword is not allowed on class constructor method',
@@ -662,7 +662,7 @@ export let DiagnosticMessages = {
         code: 1126,
         severity: DiagnosticSeverity.Error
     }),
-    duplicateEnumDeclaration: (scopeName: string, enumName: string) => ({
+    __unused7: (scopeName: string, enumName: string) => ({
         message: `Scope '${scopeName}' already contains an enum with name '${enumName}'`,
         code: 1127,
         severity: DiagnosticSeverity.Error

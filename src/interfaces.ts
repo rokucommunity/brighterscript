@@ -31,14 +31,6 @@ export interface BsDiagnostic extends Diagnostic {
     data?: any;
 }
 
-export enum DiagnosticOrigin {
-    Program = 'Program',
-    Scope = 'Scope',
-    File = 'File',
-    ASTSegment = 'AstSegment',
-    CrossScope = 'CrossScope'
-}
-
 export interface DiagnosticContext {
     scopeSpecific?: boolean;
     scope?: Scope;

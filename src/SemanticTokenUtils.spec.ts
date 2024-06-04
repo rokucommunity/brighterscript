@@ -72,6 +72,14 @@ describe('SemanticTokenUtils', () => {
                 SemanticTokenModifiers.documentation //idx=8
             ])).to.eql(0b100001001);
         });
+
+        it('properly handles deprecated and another', () => {
+            expect(getModifierBitFlags([
+                SemanticTokenModifiers.declaration, //idx=0
+                SemanticTokenModifiers.static, //idx=3
+                SemanticTokenModifiers.documentation //idx=8
+            ])).to.eql(0b100001001);
+        });
     });
 });
 
