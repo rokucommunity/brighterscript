@@ -79,6 +79,11 @@ export class BrsFileSemanticTokensProcessor {
         if (symbolType?.isResolvable()) {
             let info = this.getSemanticTokenInfo(node, symbolType, extraData);
             if (info) {
+                //mark as deprecated if applicable
+                if ((extraData.flags & SymbolTypeFlag.deprecated)) { // eslint-disable-line no-bitwise
+                    info.modifiers ??= [];
+                    info.modifiers.push(SemanticTokenModifiers.deprecated);
+                }
                 this.addToken(token, info.type, info.modifiers);
             }
         }

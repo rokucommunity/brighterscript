@@ -133,10 +133,10 @@ export let DiagnosticMessages = {
         code: 1021,
         severity: DiagnosticSeverity.Error
     }),
-    __unused4: (nonNamespacedClassName: string) => ({
-        message: `Namespaced class cannot have the same name as a non-namespaced class '${nonNamespacedClassName}'`,
+    itemIsDeprecated: () => ({
+        message: `Item is deprecated`,
         code: 1022,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Hint
     }),
     cannotUseOverrideKeywordOnConstructorFunction: () => ({
         message: 'Override keyword is not allowed on class constructor method',
