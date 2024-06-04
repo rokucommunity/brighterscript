@@ -806,7 +806,6 @@ export class Program {
         }
     }
 
-    //public lastValidationInfo = new Map<string, ProgramValidationInfo>();
     public crossScopeValidation = new CrossScopeValidator(this);
 
     private isFirstValidation = true;

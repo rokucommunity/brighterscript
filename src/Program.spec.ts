@@ -435,8 +435,8 @@ describe('Program', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.duplicateFunctionImplementation('DoSomething', 'source'),
-                DiagnosticMessages.duplicateFunctionImplementation('DoSomething', 'source')
+                DiagnosticMessages.duplicateFunctionImplementation('DoSomething'),
+                DiagnosticMessages.duplicateFunctionImplementation('DoSomething')
             ]);
         });
 
@@ -451,8 +451,8 @@ describe('Program', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.duplicateFunctionImplementation('DoSomething', 'source'),
-                DiagnosticMessages.duplicateFunctionImplementation('DoSomething', 'source')
+                DiagnosticMessages.duplicateFunctionImplementation('DoSomething'),
+                DiagnosticMessages.duplicateFunctionImplementation('DoSomething')
             ]);
         });
 
