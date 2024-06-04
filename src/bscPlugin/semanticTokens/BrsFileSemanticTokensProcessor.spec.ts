@@ -500,7 +500,7 @@ describe('BrsFileSemanticTokensProcessor', () => {
         expectSemanticTokensIncludes(file, [
             // url.|setPort|(80)
             [SemanticTokenTypes.method, 3, 20, 3, 27, [SemanticTokenModifiers.deprecated]]
-        ]);
+        ], false);
     });
 
     it('works for `new` statement', () => {
