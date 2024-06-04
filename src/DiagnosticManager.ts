@@ -197,6 +197,7 @@ export class DiagnosticManager {
 
     /**
      * Clears all diagnostics that match all aspects of the filter provided
+     * Matches equality of tag, scope, file, segment filters. Leave filter option undefined to not filter on option
      */
     public clearByFilter(filter: DiagnosticContextFilter) {
 

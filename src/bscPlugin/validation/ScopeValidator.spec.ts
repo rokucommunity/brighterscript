@@ -3059,5 +3059,48 @@ describe('ScopeValidator', () => {
             program.validate();
         });
 
+        it('diagnostics stay when file changes', () => {
+            program.options.autoImportComponentScript = true;
+            program.setFile('components/playerInterfaces.bs', `
+                interface MediaObject
+                    optional url as string
+                end interface
+            `);
+            program.setFile('components/player.xml', `
+                <component name="Player" extends="Group">
+                </component>
+            `);
+            program.setFile('components/player.bs', `
+                import "playerInterfaces.bs"
+                import "playerUtils.bs"
+                sub test()
+                    media = {} as MediaObject
+                    print media.missingBool1
+                end sub
+            `);
+            const playerUtilsCode = `
+                import "playerInterfaces.bs"
+                function test1(media as MediaObject) as boolean
+                    print media.missingBool2
+                end function
+            `;
+
+            program.setFile('components/playerUtils.bs', playerUtilsCode);
+            program.validate();
+            //we have both diagnostics
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('missingBool1', undefined, 'MediaObject').message,
+                DiagnosticMessages.cannotFindName('missingBool2', undefined, 'MediaObject').message
+            ]);
+
+            //add the last file again with no changes thus "opening" it.
+            program.setFile('components/playerUtils.bs', playerUtilsCode);
+            program.validate();
+            //we STILL have both diagnostics
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('missingBool1', undefined, 'MediaObject').message,
+                DiagnosticMessages.cannotFindName('missingBool2', undefined, 'MediaObject').message
+            ]);
+        });
     });
 });
