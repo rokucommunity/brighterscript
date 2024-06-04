@@ -1685,7 +1685,7 @@ export class Util {
                 location: util.createLocation('   ', util.createRange(0, 0, 0, 0))
             });
         }
-        return {
+        let result = {
             severity: diagnostic.severity,
             range: diagnostic.range,
             message: diagnostic.message,
@@ -1707,7 +1707,11 @@ export class Util {
             }).filter((x): x is DiagnosticRelatedInformation => Boolean(x)),
             code: diagnostic.code,
             source: 'brs'
-        };
+        } as Diagnostic;
+        if (diagnostic?.tags?.length > 0) {
+            result.tags = diagnostic.tags;
+        }
+        return result;
     }
 
     /**

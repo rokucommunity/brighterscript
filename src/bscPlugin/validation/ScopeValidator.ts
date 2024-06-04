@@ -1,5 +1,5 @@
 import { URI } from 'vscode-uri';
-import type { Range } from 'vscode-languageserver';
+import { DiagnosticTag, type Range } from 'vscode-languageserver';
 import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isComponentType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isStringType, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
@@ -106,7 +106,6 @@ export class ScopeValidator {
             if (thisFileHasChanges || this.doesFileProvideChangedSymbol(file, this.event.changedSymbols)) {
                 this.diagnosticDetectFunctionCollisions(file);
             }
-
         });
 
         this.event.scope.enumerateOwnFiles((file) => {
@@ -716,6 +715,16 @@ export class ScopeValidator {
         });
 
         const hasValidDeclaration = this.hasValidDeclaration(expression, exprType, typeData?.definingNode);
+
+        //include a hint diagnostic if this type is marked as deprecated
+        if (typeData.flags & SymbolTypeFlag.deprecated) { // eslint-disable-line no-bitwise
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.itemIsDeprecated(),
+                range: expression.tokens.name.range,
+                file: file,
+                tags: [DiagnosticTag.Deprecated]
+            });
+        }
 
         if (!this.isTypeKnown(exprType) && !hasValidDeclaration) {
             if (this.getNodeTypeWrapper(file, expression, { flags: oppositeSymbolType, isExistenceTest: true })?.isResolvable()) {

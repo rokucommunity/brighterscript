@@ -3861,5 +3861,3 @@ export class ConditionalCompileConstStatement extends Statement {
         return this.tokens.hashConst.leadingTrivia ?? [];
     }
 }
-
-
