@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.32](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.31...v1.0.0-alpha.32) - 2024-06-05
+### Fixed
+ - Elevate `thenby` to a prod dependency ([#1217](https://github.com/rokucommunity/brighterscript/pull/1217))
+
+
+
 ## [1.0.0-alpha.31](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.30...v1.0.0-alpha.31) - 2024-06-04
 ### Added
  - Adds AugmentedAssignmentStatement ([#1196](https://github.com/rokucommunity/brighterscript/pull/1196))
