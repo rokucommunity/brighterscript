@@ -1350,7 +1350,11 @@ export class Util {
         } else if (typeDescriptorLower === 'assocarray' ||
             typeDescriptorLower === 'associative array' ||
             typeDescriptorLower === 'associativearray' ||
-            typeDescriptorLower === 'roassociativearray') {
+            typeDescriptorLower === 'roassociativearray' ||
+            typeDescriptorLower.startsWith('associative array of') ||
+            typeDescriptorLower.startsWith('associativearray of') ||
+            typeDescriptorLower.startsWith('roassociativearray of')
+        ) {
             return new AssociativeArrayType();
         } else if (typeDescriptorLower === 'node') {
             return ComponentType.instance;

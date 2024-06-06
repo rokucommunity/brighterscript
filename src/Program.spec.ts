@@ -2874,6 +2874,37 @@ describe('Program', () => {
             expectZeroDiagnostics(program);
         });
 
+
+        it('includes non-standard fields tables', () => {
+            const table = program.globalScope.symbolTable;
+            const opts = { flags: SymbolTypeFlag.runtime };
+            const multiLabel = table.getSymbolType('roSGNodeMultiStyleLabel', { flags: SymbolTypeFlag.typetime });
+            expectTypeToBe(multiLabel, ComponentType);
+            expectTypeToBe(multiLabel.getMemberType('drawingStyles', opts), AssociativeArrayType);
+        });
+
+        it('includes overrides from scrapper', () => {
+            const table = program.globalScope.symbolTable;
+            const opts = { flags: SymbolTypeFlag.runtime };
+            const regionType = table.getSymbolType('roRegion', { flags: SymbolTypeFlag.typetime });
+            expectTypeToBe(regionType, InterfaceType);
+
+            const ifDraw2DType = regionType.getMemberType('ifDraw2D', opts) as InterfaceType;
+            expectTypeToBe(ifDraw2DType, InterfaceType);
+            expect(ifDraw2DType.name).to.eq('ifDraw2D');
+            expectTypeToBe(ifDraw2DType.getMemberType('getWidth', opts), TypedFunctionType);
+            expectTypeToBe(regionType.getMemberType('getWidth', opts), TypedFunctionType);
+
+            const streamSocketType = table.getSymbolType('roStreamSocket', { flags: SymbolTypeFlag.typetime });
+            expectTypeToBe(streamSocketType, InterfaceType);
+
+            const socketAsyncType = streamSocketType.getMemberType('ifSocketAsync', opts) as InterfaceType;
+            expectTypeToBe(socketAsyncType, InterfaceType);
+            expect(socketAsyncType.name).to.eq('ifSocketAsync');
+            expectTypeToBe(socketAsyncType.getMemberType('setMessagePort', opts), TypedFunctionType);
+            expectTypeToBe(streamSocketType.getMemberType('setMessagePort', opts), TypedFunctionType);
+        });
+
     });
 
     describe('manifest', () => {

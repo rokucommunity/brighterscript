@@ -553,19 +553,30 @@ class Runner {
 
     private getNodeFields(manager: TokenManager) {
         const result = [] as SceneGraphNodeField[];
-        const tables = manager.getAllTablesByHeaders(['field', 'type', 'default', 'access permission', 'description']);
+        const tables = [
+            ...manager.getAllTablesByHeaders(['field', 'type', 'default', 'access permission', 'description']),
+            ...manager.getAllTablesByHeaders(['field', 'type', 'description'], null, null, (headingToken) => {
+                return (headingToken as marked.Tokens.Heading)?.text?.toLowerCase() === 'fields';
+            })
+        ];
         for (const table of tables) {
             const rows = manager.tableToObjects(table);
+            const descriptionIndex = table.header.findIndex(header => header.text.toLowerCase() === 'description');
             for (let i = 0; i < rows.length; i++) {
                 const row = rows[i];
-                let description = table.rows[i][4].text;
+                let description = table.rows[i][descriptionIndex].text;
                 //the turndown plugin doesn't convert inner html tables, so turn that into markdown too
                 description = turndownService.turndown(description);
+
+                if (!row.field) {
+                    continue;
+                }
+
                 result.push({
                     name: this.sanitizeMarkdownSymbol(row.field),
                     type: this.sanitizeMarkdownSymbol(row.type, { allowSquareBrackets: true, allowSpaces: true }),
-                    default: this.sanitizeMarkdownSymbol(row.default, { allowSquareBrackets: true, allowSpaces: true }),
-                    accessPermission: this.sanitizeMarkdownSymbol(row['access permission'], { allowSpaces: true }),
+                    default: (row.default !== undefined) ? this.sanitizeMarkdownSymbol(row.default, { allowSquareBrackets: true, allowSpaces: true }) : null,
+                    accessPermission: row['access permission'] ? this.sanitizeMarkdownSymbol(row['access permission'], { allowSpaces: true }) : 'READ_WRITE',
                     //grab all the markdown from the 4th column (description)
                     description: description
                 });
@@ -1227,6 +1238,30 @@ class Runner {
                         }],
                         returnType: 'Void'
                     }]
+                },
+                ifsocketasync: {
+                    methods: [{
+
+                        description: 'Returns the message port (if any) currently associated with the object',
+                        name: 'GetMessagePort',
+                        params: [],
+                        returnDescription: 'The message port.',
+                        returnType: 'Object'
+
+                    }, {
+                        description: 'Sets the roMessagePort to be used to receive events.',
+                        name: 'SetMessagePort',
+                        params: [
+                            {
+                                default: null,
+                                description: 'The port to be used to receive events.',
+                                isRequired: true,
+                                name: 'port',
+                                type: 'Object'
+                            }
+                        ],
+                        returnType: 'Void'
+                    }]
                 }
             }
         });
@@ -1552,7 +1587,7 @@ class TokenManager {
     /**
      * Scan the tokens and find the first the top-level table based on the header names
      */
-    public getTableByHeaders(searchHeaders: string[], startAt?: Token, endTokenMatcher?: EndTokenMatcher): TableEnhanced {
+    public getTableByHeaders(searchHeaders: string[], startAt?: Token, endTokenMatcher?: TokenMatcher): TableEnhanced {
         let startIndex = this.tokens.indexOf(startAt);
         startIndex = startIndex > -1 ? startIndex : 0;
 
@@ -1576,13 +1611,22 @@ class TokenManager {
     /**
      * Scan the tokens and find the all top-level tables based on the header names
      */
-    public getAllTablesByHeaders(searchHeaders: string[], startAt?: Token, endTokenMatcher?: EndTokenMatcher): TableEnhanced[] {
+    public getAllTablesByHeaders(searchHeaders: string[], startAt?: Token, endTokenMatcher?: TokenMatcher, headingMatcher?: TokenMatcher): TableEnhanced[] {
         let startIndex = this.tokens.indexOf(startAt);
         startIndex = startIndex > -1 ? startIndex : 0;
         const tables = [];
+        let lastHeading: Token;
         for (let i = startIndex + 1; i < this.tokens.length; i++) {
             const token = this.tokens[i];
+            if (token.type === 'heading') {
+                lastHeading = token;
+            }
             if (token?.type === 'table') {
+                if (headingMatcher) {
+                    if (!headingMatcher(lastHeading)) {
+                        continue;
+                    }
+                }
                 const headers = token?.header?.map(x => x.text.toLowerCase());
                 if (
                     headers.every(x => searchHeaders.includes(x)) &&
@@ -1683,7 +1727,7 @@ class TokenManager {
     /**
      * Get all text found between the start token and the matched end token
      */
-    public getTokensBetween(startToken: Token, endTokenMatcher: EndTokenMatcher) {
+    public getTokensBetween(startToken: Token, endTokenMatcher: TokenMatcher) {
         let startIndex = this.tokens.indexOf(startToken);
         startIndex = startIndex > -1 ? startIndex : 0;
 
@@ -1704,14 +1748,14 @@ class TokenManager {
     /**
      * Get join all markdown between the specified items
      */
-    public getMarkdown(startToken: Token, endTokenMatcher: EndTokenMatcher) {
+    public getMarkdown(startToken: Token, endTokenMatcher: TokenMatcher) {
         return this.getTokensBetween(startToken, endTokenMatcher).map(x => x.raw).join('')?.trim() || undefined;
     }
 
     /**
      * Find any `available since` text between the specified items
      */
-    public getAvailableSince(startToken: Token, endTokenMatcher: EndTokenMatcher) {
+    public getAvailableSince(startToken: Token, endTokenMatcher: TokenMatcher) {
         const markdown = this.getMarkdown(startToken, endTokenMatcher);
         const match = /available\s+since\s?(?:roku\s*os\s*)?([\d\.]+)/i.exec(markdown);
         if (match) {
@@ -1758,7 +1802,8 @@ class TokenManager {
     }
 }
 
-type EndTokenMatcher = (t: Token) => boolean | undefined;
+type TokenMatcher = (t: Token) => boolean | undefined;
+
 
 interface TableEnhanced extends marked.Tokens.Table {
     tokens: {
