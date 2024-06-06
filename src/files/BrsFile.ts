@@ -876,12 +876,12 @@ export class BrsFile implements BscFile {
         //get class fields and members
         const statementHandler = (statement: MethodStatement) => {
             if (statement.getName(file.parseMode).toLowerCase() === textToSearchFor) {
-                results.push(util.createLocation(util.pathToUri(file.srcPath), statement.range));
+                results.push(util.createLocationFromRange(util.pathToUri(file.srcPath), statement.range));
             }
         };
         const fieldStatementHandler = (statement: FieldStatement) => {
             if (statement.tokens.name.text.toLowerCase() === textToSearchFor) {
-                results.push(util.createLocation(util.pathToUri(file.srcPath), statement.range));
+                results.push(util.createLocationFromRange(util.pathToUri(file.srcPath), statement.range));
             }
         };
         file.parser.ast.walk(createVisitor({

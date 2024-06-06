@@ -578,7 +578,7 @@ export class CrossScopeValidator {
 
                                 const relatedInformation = thatNameRange ? [{
                                     message: `${thatNodeKindName} declared here`,
-                                    location: util.createLocation(
+                                    location: util.createLocationFromRange(
                                         URI.file(otherDupe.file?.srcPath).toString(),
                                         thatNameRange
                                     )

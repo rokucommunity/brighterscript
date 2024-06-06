@@ -787,7 +787,7 @@ export class ScopeValidator {
                     range: lastTypeInfo?.range,
                     relatedInformation: [{
                         message: 'Enum declared here',
-                        location: util.createLocation(
+                        location: util.createLocationFromRange(
                             URI.file(enumFileLink?.file.srcPath).toString(),
                             enumFileLink?.item?.tokens.name.range
                         )
@@ -967,7 +967,7 @@ export class ScopeValidator {
                         if (ownCallable.callable.nameRange !== callable.nameRange) {
                             related.push({
                                 message: `Function declared here`,
-                                location: util.createLocation(
+                                location: util.createLocationFromRange(
                                     URI.file(ownCallable.callable.file?.srcPath).toString(),
                                     thatNameRange
                                 )
@@ -1095,7 +1095,7 @@ export class ScopeValidator {
                     file: file,
                     relatedInformation: [{
                         message: 'Function declared here',
-                        location: util.createLocation(
+                        location: util.createLocationFromRange(
                             URI.file(callable[0].callable.file.srcPath).toString(),
                             callable[0].callable.nameRange
                         )
@@ -1108,7 +1108,7 @@ export class ScopeValidator {
                     file: file,
                     relatedInformation: [{
                         message: 'Function declared here',
-                        location: util.createLocation(
+                        location: util.createLocationFromRange(
                             URI.file(callable[0].callable.file.srcPath).toString(),
                             callable[0].callable.nameRange
                         )
@@ -1125,7 +1125,7 @@ export class ScopeValidator {
                     file: file,
                     relatedInformation: [{
                         message: 'Class declared here',
-                        location: util.createLocation(
+                        location: util.createLocationFromRange(
                             URI.file(classStmtLink.file.srcPath).toString(),
                             classStmtLink?.item.tokens.name.range
                         )
@@ -1152,7 +1152,7 @@ export class ScopeValidator {
                         range: param.tokens.name.range,
                         relatedInformation: [{
                             message: 'Namespace declared here',
-                            location: util.createLocation(
+                            location: util.createLocationFromRange(
                                 URI.file(namespace.file.srcPath).toString(),
                                 namespace.nameRange
                             )
@@ -1174,7 +1174,7 @@ export class ScopeValidator {
                     range: assignment.tokens.name.range,
                     relatedInformation: [{
                         message: 'Namespace declared here',
-                        location: util.createLocation(
+                        location: util.createLocationFromRange(
                             URI.file(namespace.file.srcPath).toString(),
                             namespace.nameRange
                         )

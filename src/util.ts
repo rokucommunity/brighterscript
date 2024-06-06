@@ -1062,10 +1062,29 @@ export class Util {
     /**
      * Helper for creating `Location` objects. Prefer using this function because vscode-languageserver's `Location.create()` is significantly slower at scale
      */
-    public createLocation(uri: string, range: Range): Location {
+    public createLocationFromRange(uri: string, range: Range): Location {
         return {
             uri: uri,
             range: range
+        };
+    }
+
+    /**
+     * Helper for creating `Location` objects by passing each range value in directly. Prefer using this function because vscode-languageserver's `Location.create()` is significantly slower at scale
+     */
+    public createLocation(startLine: number, startCharacter: number, endLine: number, endCharacter: number, uri: string): Location {
+        return {
+            uri: uri,
+            range: {
+                start: {
+                    line: startLine,
+                    character: startCharacter
+                },
+                end: {
+                    line: endLine,
+                    character: endCharacter
+                }
+            }
         };
     }
 
@@ -1686,7 +1705,7 @@ export class Util {
             relatedInformation = relatedInformation.slice(0, MAX_RELATED_INFOS_COUNT);
             relatedInformation.push({
                 message: `...and ${relatedInfoLength - MAX_RELATED_INFOS_COUNT} more`,
-                location: util.createLocation('   ', util.createRange(0, 0, 0, 0))
+                location: util.createLocationFromRange('   ', util.createRange(0, 0, 0, 0))
             });
         }
         let result = {
@@ -1700,7 +1719,7 @@ export class Util {
                 if (!clone.location) {
                     // use the fallback location if available
                     if (relatedInformationFallbackLocation) {
-                        clone.location = util.createLocation(relatedInformationFallbackLocation, diagnostic.range);
+                        clone.location = util.createLocationFromRange(relatedInformationFallbackLocation, diagnostic.range);
                     } else {
                         //remove this related information so it doesn't bring crash the language server
                         return undefined;

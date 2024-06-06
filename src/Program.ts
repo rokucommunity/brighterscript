@@ -1001,7 +1001,7 @@ export class Program {
                         file: xmlFile,
                         relatedInformation: xmlFiles.filter(x => x !== xmlFile).map(x => {
                             return {
-                                location: util.createLocation(
+                                location: util.createLocationFromRange(
                                     URI.file(xmlFile.srcPath ?? xmlFile.srcPath).toString(),
                                     x.componentName.range
                                 ),

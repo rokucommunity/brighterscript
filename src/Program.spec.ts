@@ -264,7 +264,7 @@ describe('Program', () => {
                 ...DiagnosticMessages.duplicateComponentName('Component1'),
                 range: Range.create(1, 17, 1, 27),
                 relatedInformation: [{
-                    location: util.createLocation(
+                    location: util.createLocationFromRange(
                         URI.file(s`${rootDir}/components/component1.xml`).toString(),
                         Range.create(1, 17, 1, 27)
                     ),
@@ -274,7 +274,7 @@ describe('Program', () => {
                 ...DiagnosticMessages.duplicateComponentName('Component1'),
                 range: Range.create(1, 17, 1, 27),
                 relatedInformation: [{
-                    location: util.createLocation(
+                    location: util.createLocationFromRange(
                         URI.file(s`${rootDir}/components/component2.xml`).toString(),
                         Range.create(1, 17, 1, 27)
                     ),

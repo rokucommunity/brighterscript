@@ -108,7 +108,7 @@ export class DiagnosticManager {
                 if (isXmlScope(scope) && scope.xmlFile?.srcPath) {
                     relatedInformation.push({
                         message: `In component scope '${scope?.xmlFile?.componentName?.text}'`,
-                        location: util.createLocation(
+                        location: util.createLocationFromRange(
                             URI.file(scope.xmlFile.srcPath).toString(),
                             scope?.xmlFile?.ast?.componentElement?.getAttribute('name')?.tokens?.value?.range ?? util.createRange(0, 0, 0, 10)
                         )
@@ -116,7 +116,7 @@ export class DiagnosticManager {
                 } else {
                     relatedInformation.push({
                         message: `In scope '${scope.name}'`,
-                        location: util.createLocation(
+                        location: util.createLocationFromRange(
                             URI.file(diagnostic.file.srcPath).toString(),
                             diagnostic.range
                         )

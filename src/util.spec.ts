@@ -921,7 +921,7 @@ describe('util', () => {
                 }, 'u/r/i').relatedInformation
             ).to.eql([{
                 message: 'Alpha',
-                location: util.createLocation(
+                location: util.createLocationFromRange(
                     'u/r/i', util.createRange(1, 2, 3, 4)
                 )
             }]);
@@ -935,7 +935,7 @@ describe('util', () => {
                     range: util.createRange(1, 2, 3, 4),
                     relatedInformation: [{
                         message: 'Alpha',
-                        location: util.createLocation(
+                        location: util.createLocationFromRange(
                             'uri', util.createRange(2, 3, 4, 5)
                         )
                     }, {
@@ -945,7 +945,7 @@ describe('util', () => {
                 }, undefined as any).relatedInformation
             ).to.eql([{
                 message: 'Alpha',
-                location: util.createLocation(
+                location: util.createLocationFromRange(
                     'uri', util.createRange(2, 3, 4, 5)
                 )
             }]);
