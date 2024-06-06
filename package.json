@@ -98,6 +98,8 @@
     "coveralls-next": "^4.2.0",
     "deepmerge": "^4.2.2",
     "eslint": "^8.16.0",
+    "eslint-import-resolver-typescript": "^3.6.1",
+    "eslint-plugin-import": "^2.29.1",
     "eslint-plugin-jsdoc": "^39.3.6",
     "eslint-plugin-no-only-tests": "2.6.0",
     "he": "^1.2.0",
