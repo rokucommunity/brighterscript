@@ -815,8 +815,11 @@ export const defaultMaximumTruncationLength = 160;
 
 export function typeCompatibilityMessage(actualTypeString: string, expectedTypeString: string, data: TypeCompatibilityData) {
     let message = '';
+    actualTypeString = data?.actualType?.toString() ?? actualTypeString;
+    expectedTypeString = data?.expectedType?.toString() ?? expectedTypeString;
+
     if (data?.missingFields?.length > 0) {
-        message = `\n    Type '${actualTypeString}' is missing the following members: ` + util.truncate({
+        message = `\n    Type '${actualTypeString}' is missing the following members of type '${expectedTypeString}': ` + util.truncate({
             leadingText: ``,
             trailingText: '',
             itemSeparator: ', ',

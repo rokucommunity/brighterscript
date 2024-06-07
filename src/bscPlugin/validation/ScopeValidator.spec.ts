@@ -2397,6 +2397,93 @@ describe('ScopeValidator', () => {
                 program.validate();
                 expectZeroDiagnostics(program);
             });
+
+
+            it('allows assigning to rect2d fields', () => {
+                program.setFile('components/widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <interface>
+                            <field id="rectangle" type="rect2d" />
+                        </interface>
+                    </component>
+                `);
+
+                program.setFile('source/util.bs', `
+                    sub test()
+                        node = createObject("roSGNode", "Widget")
+                        myRectangle =  {x: 0, y: 0, width: 100, height: 100}
+                        node.rectangle = myRectangle
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows assigning to rect2dArray fields', () => {
+                program.setFile('components/widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <interface>
+                            <field id="rectangles" type="rect2dArray" />
+                        </interface>
+                    </component>
+                `);
+
+                program.setFile('source/util.bs', `
+                    sub test()
+                        node = createObject("roSGNode", "Widget")
+                        myRectangles =  [
+                            {x: 0, y: 0, width: 100, height: 100},
+                            {x: 100, y: 100, width: 200, height: 200},
+                        ]
+                        node.rectangles = myRectangles
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows assigning to roSGNodeTargetSet.targetRects fields', () => {
+                program.setFile('source/util.bs', `
+                    sub test()
+                        targetSet = createObject("roSGNode", "TargetSet")
+                        targets = [
+                            {x: 0, y: 0, width: 100, height: 100},
+                            {x: 100, y: 100, width: 200, height: 200},
+                        ]
+                        targetSet.targetRects = targets
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('has diagnostic if invalid data is assigned to roSGNodeTargetSet.targetRects fields', () => {
+                program.setFile('source/util.bs', `
+                    sub test()
+                        targetSet = createObject("roSGNode", "TargetSet")
+                        targets = ["hello", "world"]
+                        targetSet.targetRects = targets
+                    end sub
+                `);
+
+                // make up the assignability data for the diagnostic:
+                const rectType = new AssociativeArrayType();
+                rectType.addMember('height', null, FloatType.instance, SymbolTypeFlag.runtime);
+                rectType.addMember('width', null, FloatType.instance, SymbolTypeFlag.runtime);
+                rectType.addMember('x', null, FloatType.instance, SymbolTypeFlag.runtime);
+                rectType.addMember('y', null, FloatType.instance, SymbolTypeFlag.runtime);
+                const typeCompatData = {} as TypeCompatibilityData;
+                rectType.isTypeCompatible(StringType.instance, typeCompatData);
+                typeCompatData.actualType = StringType.instance;
+                typeCompatData.expectedType = rectType;
+
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.assignmentTypeMismatch('Array<string>', 'Array<roAssociativeArray>', typeCompatData).message
+                ]);
+            });
         });
     });
 

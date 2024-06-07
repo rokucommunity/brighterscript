@@ -1311,6 +1311,9 @@ export class Util {
                 // remove "'" in "float's", etc.
                 arrayOfTypeName = arrayOfTypeName.substring(0, arrayOfTypeName.length - 1);
             }
+            if (arrayOfTypeName === 'rectangle') {
+                arrayOfTypeName = 'rect2d';
+            }
             let arrayType = this.getNodeFieldType(arrayOfTypeName, lookupTable);
             return new ArrayType(arrayType);
         } else if (typeDescriptorLower.startsWith('option ')) {
