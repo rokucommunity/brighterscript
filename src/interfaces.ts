@@ -1004,6 +1004,9 @@ export interface TypeCompatibilityData {
     missingFields?: { name: string; expectedType: BscType }[];
     fieldMismatches?: { name: string; expectedType: BscType; actualType: BscType }[];
     depth?: number;
+    // override for diagnostic message - useful for Arrays with different default types
+    actualType?: BscType;
+    expectedType?: BscType;
 }
 
 export interface NamespaceContainer {

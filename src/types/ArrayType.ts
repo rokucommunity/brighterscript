@@ -39,7 +39,12 @@ export class ArrayType extends BscType {
         } else if (isUnionTypeCompatible(this, targetType)) {
             return true;
         } else if (isArrayType(targetType)) {
-            return this.defaultType.isTypeCompatible(targetType.defaultType, data);
+            const compatible = this.defaultType.isTypeCompatible(targetType.defaultType, data);
+            if (data) {
+                data.actualType = targetType.defaultType;
+                data.expectedType = this.defaultType;
+            }
+            return compatible;
         } else if (this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlag.runtime, data)) {
             return true;
         }
