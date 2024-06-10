@@ -264,7 +264,7 @@ export class Block extends Statement {
 
     get range(): Range {
         if (this.statements.length > 0) {
-            return util.createBoundingRange(...(this.statements));
+            return util.createBoundingRange(...this.statements);
         }
         let lastBitBefore: Position;
         let firstBitAfter: Position;
