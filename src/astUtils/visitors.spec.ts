@@ -1,6 +1,6 @@
 /* eslint-disable no-multi-spaces */
 import type { CancellationToken } from 'vscode-languageserver';
-import { CancellationTokenSource, Range } from 'vscode-languageserver';
+import { CancellationTokenSource } from 'vscode-languageserver';
 import { expect } from '../chai-config.spec';
 import * as sinon from 'sinon';
 import { Program } from '../Program';
@@ -252,7 +252,7 @@ describe('astUtils visitors', () => {
                 print: createToken(TokenKind.Print),
                 expressions: []
             });
-            const blockStatement = new Block({ statements: [], startingRange: Range.create(0, 0, 0, 0) });
+            const blockStatement = new Block({ statements: [] });
             visitor(printStatement, undefined);
             visitor(blockStatement, undefined);
             expect(printHandler.callCount).to.equal(1);
@@ -276,8 +276,7 @@ describe('astUtils visitors', () => {
                 statements: [
                     printStatement1,
                     new ReturnStatement({ return: createToken(TokenKind.Return) })
-                ],
-                startingRange: Range.create(0, 0, 0, 0)
+                ]
             });
             const visitor = createVisitor({
                 PrintStatement: () => printStatement2
@@ -300,8 +299,7 @@ describe('astUtils visitors', () => {
             });
 
             const block = new Block({
-                statements: [printStatement1],
-                startingRange: Range.create(0, 0, 0, 0)
+                statements: [printStatement1]
             });
 
             block.walk(createVisitor({
