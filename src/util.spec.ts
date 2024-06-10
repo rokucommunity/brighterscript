@@ -6,7 +6,7 @@ import type { BsConfig } from './BsConfig';
 import * as fsExtra from 'fs-extra';
 import { createSandbox } from 'sinon';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import { tempDir, rootDir, expectTypeToBe } from './testHelpers.spec';
+import { tempDir, rootDir, expectTypeToBe, expectRangeToBe } from './testHelpers.spec';
 import { Program } from './Program';
 import type { BsDiagnostic } from './interfaces';
 import { TypeChainEntry } from './interfaces';
@@ -648,6 +648,29 @@ describe('util', () => {
             expect(plugins[0].name).to.eql('AwesomePlugin');
             //does not warn about factory pattern
             expect(stub.callCount).to.equal(0);
+        });
+    });
+
+    describe('range creation', () => {
+        it('createRangeFromPositions', () => {
+            const pos11 = { line: 1, character: 1 };
+            const pos99 = { line: 9, character: 9 };
+
+            expectRangeToBe(util.createRangeFromPositions(pos11, pos99), util.createRange(1, 1, 9, 9));
+            expectRangeToBe(util.createRangeFromPositions(null, pos99), util.createRange(9, 9, 9, 9));
+            expectRangeToBe(util.createRangeFromPositions(pos11, null), util.createRange(1, 1, 1, 1));
+        });
+
+
+        it('createBoundingRange', () => {
+            const range1 = util.createRange(1, 1, 2, 2);
+            const range2 = util.createRange(2, 2, 3, 3);
+            const range3 = util.createRange(100, 100, 100, 100);
+
+            expectRangeToBe(util.createBoundingRange(range1), util.createRange(1, 1, 2, 2));
+            expectRangeToBe(util.createBoundingRange(range1, range2), util.createRange(1, 1, 3, 3));
+            expectRangeToBe(util.createBoundingRange(range2, range1), util.createRange(1, 1, 3, 3));
+            expectRangeToBe(util.createBoundingRange(range2, range3, range1), util.createRange(1, 1, 100, 100));
         });
     });
 
