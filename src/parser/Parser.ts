@@ -1825,7 +1825,6 @@ export class Parser {
         }
 
         const ifToken = this.advance();
-        const startingRange = ifToken.range;
 
         const condition = this.expression();
         let thenBranch: Block;
@@ -1947,7 +1946,7 @@ export class Parser {
                 } else {
                     //missing endif
                     this.diagnostics.push({
-                        ...DiagnosticMessages.expectedEndIfToCloseIfStatement(startingRange.start),
+                        ...DiagnosticMessages.expectedEndIfToCloseIfStatement(ifToken.range.start),
                         range: ifToken.range
                     });
                 }
@@ -1994,7 +1993,6 @@ export class Parser {
 
     private conditionalCompileStatement(): ConditionalCompileStatement {
         const hashIfToken = this.advance();
-        const startingRange = hashIfToken.range;
         let notToken: Token | undefined;
 
         if (this.check(TokenKind.Not)) {
@@ -2058,7 +2056,7 @@ export class Parser {
             } else {
                 //missing #endif
                 this.diagnostics.push({
-                    ...DiagnosticMessages.expectedHashEndIfToCloseHashIf(startingRange.start.line),
+                    ...DiagnosticMessages.expectedHashEndIfToCloseHashIf(hashIfToken.range.start.line),
                     range: hashIfToken.range
                 });
             }
@@ -2108,7 +2106,6 @@ export class Parser {
         const parentAnnotations = this.enterAnnotationBlock();
 
         this.consumeStatementSeparators(true);
-        let startingToken = this.peek();
         const unsafeTerminators = BlockTerminators;
         const conditionalEndTokens = [TokenKind.HashElse, TokenKind.HashElseIf, TokenKind.HashEndIf];
         const terminators = [...conditionalEndTokens, ...unsafeTerminators];
@@ -2285,7 +2282,6 @@ export class Parser {
             return undefined;
         }
         statements.push(statement);
-        const startingRange = statement.range;
 
         //look for colon statement separator
         let foundColon = false;
@@ -2523,8 +2519,6 @@ export class Parser {
         const parentAnnotations = this.enterAnnotationBlock();
 
         this.consumeStatementSeparators(true);
-        let startingToken = this.peek();
-
         const statements: Statement[] = [];
         const flatGlobalTerminators = this.globalTerminators.flat().flat();
         while (!this.isAtEnd() && !this.checkAny(TokenKind.EndSub, TokenKind.EndFunction, ...terminators, ...flatGlobalTerminators)) {

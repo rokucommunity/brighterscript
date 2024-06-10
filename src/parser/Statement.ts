@@ -259,7 +259,6 @@ export class Block extends Statement {
     }
 
     public readonly statements: Statement[];
-    public readonly startingRange?: Range;
 
     public readonly kind = AstNodeKind.Block;
 
