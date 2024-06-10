@@ -1110,7 +1110,7 @@ describe('util', () => {
                 end function
             `);
             const func = (statements[0] as FunctionStatement).func;
-            const docs = util.getTokenDocumentation(func);
+            const docs = util.getNodeDocumentation(func);
             expect(docs).to.eql('This is a comment.\nit has two lines');
         });
 
@@ -1126,7 +1126,7 @@ describe('util', () => {
                 end function
             `);
             const func = (statements[0] as FunctionStatement).func;
-            const docs = util.getTokenDocumentation(func);
+            const docs = util.getNodeDocumentation(func);
             expect(docs).to.eql('Add 1 to a number\n\n\n_@public_\n\n_@param_ {integer} the number to add to\n\n_@return_ {integer} the result');
         });
 

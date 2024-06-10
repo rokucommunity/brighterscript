@@ -1660,13 +1660,20 @@ describe('parser', () => {
                 ' hello comment 1
                 ' hello comment 2
                 @annotation
+                ' hello comment 3
+                @otherAnnotation
                 sub sayHello(name as string = "world")
                 end sub
             `, ParseMode.BrighterScript);
             const funcStatements = statements.filter(isFunctionStatement);
             const helloTrivia = funcStatements[0].getLeadingTrivia();
-            expect(helloTrivia.length).to.be.greaterThan(0);
-            expect(helloTrivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(2);
+            expect(helloTrivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(0);
+            const helloAnnotationTrivia = funcStatements[0].annotations[0].getLeadingTrivia();
+            expect(helloAnnotationTrivia.length).to.be.greaterThan(0);
+            expect(helloAnnotationTrivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(2);
+            const otherAnnotationTrivia = funcStatements[0].annotations[1].getLeadingTrivia();
+            expect(otherAnnotationTrivia.length).to.be.greaterThan(0);
+            expect(otherAnnotationTrivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(1);
         });
 
 

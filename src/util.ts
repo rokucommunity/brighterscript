@@ -26,7 +26,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { LogLevel, createLogger } from './logging';
 import { isToken, type Identifier, type Locatable, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLiteralString, isLongIntegerType, isNamespaceType, isNewExpression, isNumberType, isStringType, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUnionType, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLiteralString, isLongIntegerType, isNamespaceType, isNewExpression, isNumberType, isStatement, isStringType, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUnionType, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import * as requireRelative from 'require-relative';
@@ -631,10 +631,16 @@ export class Util {
     }
 
     /**
-     * Combine all the documentation found before a token (i.e. comment tokens)
+     * Combine all the documentation for a node - uses the AstNode's leadingTrivia property
      */
-    public getTokenDocumentation(token?: Token | AstNode) {
-        const leadingTrivia = isToken(token) ? token.leadingTrivia : token?.getLeadingTrivia() ?? [];
+    public getNodeDocumentation(node: AstNode) {
+        if (!node) {
+            return '';
+        }
+        const nodeTrivia = node?.getLeadingTrivia() ?? [];
+        const leadingTrivia = isStatement(node)
+            ? [...(node.annotations?.map(anno => anno.getLeadingTrivia()).flat() ?? []), ...nodeTrivia]
+            : nodeTrivia;
         const tokens = leadingTrivia?.filter(t => t.kind === TokenKind.Newline || t.kind === TokenKind.Comment);
         const comments = [] as Token[];
 
@@ -689,16 +695,7 @@ export class Util {
                     return line;
                 }).join('\n');
         }
-    }
-
-    /**
-     * Combine all the documentation for a node - uses the AstNode's leadingTrivia property
-     */
-    public getNodeDocumentation(node: AstNode) {
-        if (!node) {
-            return;
-        }
-        return this.getTokenDocumentation(node);
+        return '';
     }
 
     /**
@@ -1646,8 +1643,8 @@ export class Util {
     }
 
 
-    public concatAnnotationLeadingTrivia(stmt: Statement, otherTrivia: Token[] = []): Token[] {
-        return [...(stmt.annotations?.map(anno => anno.getLeadingTrivia()).flat() ?? []), ...otherTrivia];
+    public concatAnnotationLeadingTrivia(stmt: Statement): Token[] {
+        return [...(stmt.annotations?.map(anno => anno.getLeadingTrivia()).flat() ?? []), ...stmt.getLeadingTrivia()];
     }
 
     /**
