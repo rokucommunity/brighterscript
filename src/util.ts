@@ -1088,7 +1088,12 @@ export class Util {
     /**
      * Create a `Range` from two `Position`s
      */
-    public createRangeFromPositions(startPosition: Position, endPosition: Position): Range {
+    public createRangeFromPositions(startPosition: Position, endPosition: Position): Range | undefined {
+        startPosition = startPosition ?? endPosition;
+        endPosition = endPosition ?? startPosition;
+        if (!startPosition && !endPosition) {
+            return undefined;
+        }
         return this.createRange(startPosition.line, startPosition.character, endPosition.line, endPosition.character);
     }
 

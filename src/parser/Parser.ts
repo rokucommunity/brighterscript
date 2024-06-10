@@ -915,11 +915,7 @@ export class Parser {
             }
 
             if (!body) {
-                body = new Block({
-                    statements: [],
-                    startingRange: util.createBoundingRange(
-                        functionType, name, leftParen, ...params, rightParen, asToken, typeExpression, endFunctionType)
-                });
+                body = new Block({ statements: [] });
             }
 
             let func = new FunctionExpression({
@@ -2182,7 +2178,7 @@ export class Parser {
             }
         }
         this.exitAnnotationBlock(parentAnnotations);
-        return new Block({ statements: statements, startingRange: startingToken.range });
+        return new Block({ statements: statements });
     }
 
     private conditionalCompileConstStatement() {
@@ -2315,7 +2311,7 @@ export class Parser {
                 });
             }
         }
-        return new Block({ statements: statements, startingRange: startingRange });
+        return new Block({ statements: statements });
     }
 
     private expressionStatement(expr: Expression): ExpressionStatement | IncrementStatement {
@@ -2577,7 +2573,7 @@ export class Parser {
         }
 
         this.exitAnnotationBlock(parentAnnotations);
-        return new Block({ statements: statements, startingRange: startingToken.range });
+        return new Block({ statements: statements });
     }
 
     /**

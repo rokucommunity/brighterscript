@@ -4,12 +4,12 @@ import { TokenKind } from '../lexer/TokenKind';
 import type { DottedGetExpression, FunctionExpression, FunctionParameterExpression, LiteralExpression, TypeExpression, TypecastExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
-import type { Range } from 'vscode-languageserver';
+import type { Position, Range } from 'vscode-languageserver';
 import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
-import { isCallExpression, isConditionalCompileStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFieldStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypedefProvider, isUnaryExpression, isVoidType } from '../astUtils/reflection';
+import { isCallExpression, isCatchStatement, isConditionalCompileStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTryCatchStatement, isTypedefProvider, isUnaryExpression, isVoidType, isWhileStatement } from '../astUtils/reflection';
 import { TypeChainEntry, type GetTypeOptions, type TranspileResult, type TypedefProvider } from '../interfaces';
 import { createInvalidLiteral, createMethodStatement, createToken } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
@@ -253,15 +253,9 @@ export class AugmentedAssignmentStatement extends Statement {
 export class Block extends Statement {
     constructor(options: {
         statements: Statement[];
-        startingRange?: Range;
     }) {
         super();
         this.statements = options.statements;
-        this.startingRange = options.startingRange;
-        this.range = util.createBoundingRange(
-            this.startingRange,
-            ...(this.statements ?? [])
-        );
     }
 
     public readonly statements: Statement[];
@@ -269,7 +263,96 @@ export class Block extends Statement {
 
     public readonly kind = AstNodeKind.Block;
 
-    public readonly range: Range | undefined;
+    get range(): Range {
+        if (this.statements.length > 0) {
+            return util.createBoundingRange(...(this.statements));
+        }
+        let lastBitBefore: Position;
+        let firstBitAfter: Position;
+
+        if (isFunctionExpression(this.parent)) {
+            lastBitBefore = util.createBoundingRange(
+                this.parent.tokens.functionType,
+                this.parent.tokens.leftParen,
+                ...this.parent.parameters,
+                this.parent.tokens.rightParen,
+                this.parent.tokens.as,
+                this.parent.returnTypeExpression
+            )?.end;
+            firstBitAfter = this.parent.tokens.endFunctionType?.range?.start;
+        } else if (isIfStatement(this.parent)) {
+            if (this.parent.thenBranch === this) {
+                lastBitBefore = util.createBoundingRange(
+                    this.parent.tokens.then,
+                    this.parent.condition
+                )?.end;
+                firstBitAfter = util.createBoundingRange(
+                    this.parent.tokens.else,
+                    this.parent.elseBranch,
+                    this.parent.tokens.endIf
+                )?.start;
+            } else if (this.parent.elseBranch === this) {
+                lastBitBefore = this.parent.tokens.else?.range.end;
+                firstBitAfter = this.parent.tokens.endIf?.range.start;
+            }
+        } else if (isConditionalCompileStatement(this.parent)) {
+            if (this.parent.thenBranch === this) {
+                lastBitBefore = util.createBoundingRange(
+                    this.parent.tokens.condition,
+                    this.parent.tokens.not,
+                    this.parent.tokens.hashIf
+                )?.end;
+                firstBitAfter = util.createBoundingRange(
+                    this.parent.tokens.hashElse,
+                    this.parent.elseBranch,
+                    this.parent.tokens.hashEndIf
+                )?.start;
+            } else if (this.parent.elseBranch === this) {
+                lastBitBefore = this.parent.tokens.hashElse?.range.end;
+                firstBitAfter = this.parent.tokens.hashEndIf?.range.start;
+            }
+        } else if (isForStatement(this.parent)) {
+            lastBitBefore = util.createBoundingRange(
+                this.parent.increment,
+                this.parent.tokens.step,
+                this.parent.finalValue,
+                this.parent.tokens.to,
+                this.parent.counterDeclaration,
+                this.parent.tokens.for
+            )?.end;
+            firstBitAfter = this.parent.tokens.endFor?.range.start;
+        } else if (isForEachStatement(this.parent)) {
+            lastBitBefore = util.createBoundingRange(
+                this.parent.target,
+                this.parent.tokens.in,
+                this.parent.tokens.item,
+                this.parent.tokens.forEach
+            )?.end;
+            firstBitAfter = this.parent.tokens.endFor?.range.start;
+        } else if (isWhileStatement(this.parent)) {
+            lastBitBefore = util.createBoundingRange(
+                this.parent.condition,
+                this.parent.tokens.while
+            )?.end;
+            firstBitAfter = this.parent.tokens.endWhile?.range.start;
+        } else if (isTryCatchStatement(this.parent)) {
+            lastBitBefore = util.createBoundingRange(
+                this.parent.tokens.try
+            )?.end;
+            firstBitAfter = util.createBoundingRange(
+                this.parent.tokens.endTry,
+                this.parent.catchStatement
+            )?.start;
+        } else if (isCatchStatement(this.parent) && isTryCatchStatement(this.parent?.parent)) {
+            lastBitBefore = util.createBoundingRange(
+                this.parent.tokens.catch,
+                this.parent.tokens.exceptionVariable
+            )?.end;
+            firstBitAfter = this.parent.parent.tokens.endTry?.range?.start;
+        }
+        return util.createRangeFromPositions(lastBitBefore, firstBitAfter);
+
+    }
 
     transpile(state: BrsTranspileState) {
         state.blockDepth++;
