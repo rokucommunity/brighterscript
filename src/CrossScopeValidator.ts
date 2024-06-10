@@ -573,8 +573,8 @@ export class CrossScopeValidator {
                                 }
 
                                 const thatNodeKindName = otherIsGlobal ? 'Global Function' : util.getAstNodeFriendlyName(otherDupeNode) ?? 'Item';
-                                let thisNameRange = (dupeNode as any)?.tokens?.name?.range ?? dupeNode.range;
-                                let thatNameRange = (otherDupeNode as any)?.tokens?.name?.range ?? otherDupeNode?.range;
+                                let thisNameRange = (dupeNode as any)?.tokens?.name?.range ?? dupeNode.location?.range;
+                                let thatNameRange = (otherDupeNode as any)?.tokens?.name?.range ?? otherDupeNode?.location?.range;
 
                                 const relatedInformation = thatNameRange ? [{
                                     message: `${thatNodeKindName} declared here`,

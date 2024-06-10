@@ -113,7 +113,7 @@ describe('parser variable declarations', () => {
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);
-        expect(statements[0].range).to.deep.include(
+        expect(statements[0].location.range).to.deep.include(
             Range.create(0, 0, 0, 13)
         );
     });

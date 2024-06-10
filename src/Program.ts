@@ -997,13 +997,13 @@ export class Program {
                     const { componentName } = xmlFile;
                     this.diagnostics.register({
                         ...DiagnosticMessages.duplicateComponentName(componentName.text),
-                        range: xmlFile.componentName.range,
+                        range: xmlFile.componentName.location?.range,
                         file: xmlFile,
                         relatedInformation: xmlFiles.filter(x => x !== xmlFile).map(x => {
                             return {
                                 location: util.createLocationFromRange(
                                     URI.file(xmlFile.srcPath ?? xmlFile.srcPath).toString(),
-                                    x.componentName.range
+                                    x.componentName.location?.range
                                 ),
                                 message: 'Also defined here'
                             };

@@ -851,16 +851,16 @@ describe('util', () => {
 
     it('sortByRange', () => {
         const front = {
-            range: util.createRange(1, 1, 1, 2)
+            location: util.createLocation(1, 1, 1, 2)
         };
         const middle = {
-            range: util.createRange(1, 3, 1, 4)
+            location: util.createLocation(1, 3, 1, 4)
         };
         const back = {
-            range: util.createRange(1, 5, 1, 6)
+            location: util.createLocation(1, 5, 1, 6)
         };
         expect(
-            util.sortByRange([middle, front, back])
+            util.sortByRange([middle?.location, front?.location, back?.location])
         ).to.eql([
             front, middle, back
         ]);
@@ -954,9 +954,9 @@ describe('util', () => {
     describe('processTypeChain', () => {
         it('should  find the correct details in a list of type resolutions', () => {
             const nodes = [
-                createVariableExpression('Alpha', util.createRange(1, 1, 2, 2)),
-                createVariableExpression('Beta', util.createRange(2, 2, 3, 3)),
-                createVariableExpression('CharlieProp', util.createRange(3, 3, 4, 4))
+                createVariableExpression('Alpha', util.createLocation(1, 1, 2, 2)),
+                createVariableExpression('Beta', util.createLocation(2, 2, 3, 3)),
+                createVariableExpression('CharlieProp', util.createLocation(3, 3, 4, 4))
             ];
 
             const chain = [
@@ -975,8 +975,8 @@ describe('util', () => {
 
         it('respects the separatorToken', () => {
             const nodes = [
-                createVariableExpression('Custom', util.createRange(1, 1, 2, 2)),
-                createVariableExpression('someCallFunc', util.createRange(2, 2, 3, 3))
+                createVariableExpression('Custom', util.createLocation(1, 1, 2, 2)),
+                createVariableExpression('someCallFunc', util.createLocation(2, 2, 3, 3))
             ];
             const chain = [
                 new TypeChainEntry({ name: 'roSGNodeCustom', type: new ComponentType('Custom'), data: { flags: SymbolTypeFlag.runtime }, astNode: nodes[0] }),

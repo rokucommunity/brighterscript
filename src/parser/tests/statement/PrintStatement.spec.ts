@@ -6,6 +6,7 @@ import { Range } from 'vscode-languageserver';
 import { Program } from '../../../Program';
 import { rootDir } from '../../../testHelpers.spec';
 import { getTestTranspile } from '../../../testHelpers.spec';
+import util from '../../../util';
 
 describe('parser print statements', () => {
 
@@ -79,7 +80,7 @@ describe('parser print statements', () => {
                 kind: TokenKind.Print,
                 text: 'print',
                 isReserved: true,
-                range: Range.create(0, 0, 0, 5),
+                location: util.createLocation(0, 0, 0, 5),
                 leadingWhitespace: '',
                 leadingTrivia: []
             },
@@ -87,7 +88,7 @@ describe('parser print statements', () => {
                 kind: TokenKind.StringLiteral,
                 text: `"foo"`,
                 isReserved: false,
-                range: Range.create(0, 6, 0, 11),
+                location: util.createLocation(0, 6, 0, 11),
                 leadingWhitespace: '',
                 leadingTrivia: []
             },
@@ -95,7 +96,7 @@ describe('parser print statements', () => {
                 kind: TokenKind.Eof,
                 text: '\0',
                 isReserved: false,
-                range: Range.create(0, 11, 0, 12),
+                location: util.createLocation(0, 11, 0, 12),
                 leadingWhitespace: '',
                 leadingTrivia: []
             }
@@ -103,7 +104,7 @@ describe('parser print statements', () => {
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);
-        expect(statements[0].range).to.deep.include(Range.create(0, 0, 0, 11));
+        expect(statements[0].location?.range).to.deep.include(Range.create(0, 0, 0, 11));
     });
 
     describe('transpile', () => {

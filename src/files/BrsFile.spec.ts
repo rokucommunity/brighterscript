@@ -1961,7 +1961,7 @@ describe('BrsFile', () => {
             function doTest(source: string, expected = source) {
                 const file = program.setFile<BrsFile>('source/main.bs', '');
                 //override the parser with our locationless parser
-                file['_parser'] = Parser.parse(source, { mode: ParseMode.BrighterScript, trackLocations: false });
+                file['_parser'] = Parser.parse(source, { mode: ParseMode.BrighterScript, trackLocations: false, srcPath: s`${rootDir}/source/main.brs` });
                 program.getScopesForFile(file).forEach(x => x['cache'].clear());
                 program.validate();
                 expectZeroDiagnostics(program);
@@ -2562,13 +2562,13 @@ describe('BrsFile', () => {
             await SourceMapConsumer.with(result.map.toString(), null, (consumer) => {
                 let tokenResult = tokens.map(token => ({
                     kind: token.kind,
-                    start: token.range.start
+                    start: token.location?.range.start
                 }));
                 let sourcemapResult = tokens.map(token => {
                     let originalPosition = consumer.originalPositionFor({
                         //convert token 0-based line to source-map 1-based line for the lookup
-                        line: token.range.start.line + 1,
-                        column: token.range.start.character
+                        line: token.location?.range.start.line + 1,
+                        column: token.location?.range.start.character
                     });
                     return {
                         kind: token.kind,

@@ -68,7 +68,7 @@ export class BrsFileValidator {
                     this.event.program.diagnostics.register({
                         file: this.event.file,
                         ...DiagnosticMessages.callfuncHasToManyArgs(node.args.length),
-                        range: node.tokens.methodName.range
+                        range: node.tokens.methodName.location?.range
                     });
                 }
             },
@@ -214,7 +214,7 @@ export class BrsFileValidator {
                 this.event.program.diagnostics.register({
                     file: this.event.file,
                     ...DiagnosticMessages.hashError(node.tokens.message.text),
-                    range: node.range
+                    range: node.location?.range
                 });
             },
             AliasStatement: (node) => {
@@ -260,7 +260,7 @@ export class BrsFileValidator {
         this.event.program.diagnostics.register({
             file: this.event.file,
             ...DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel(keyword),
-            range: rangeFactory?.() ?? statement.range
+            range: rangeFactory?.() ?? statement.location?.range
         });
     }
 
@@ -271,7 +271,7 @@ export class BrsFileValidator {
                 this.event.program.diagnostics.register({
                     file: this.event.file,
                     ...DiagnosticMessages.tooManyCallableParameters(func.parameters.length, CallExpression.MaximumArguments),
-                    range: func.parameters[i]?.tokens.name?.range ?? func.parameters[i]?.range ?? func.range
+                    range: func.parameters[i]?.tokens.name?.location?.range ?? func.parameters[i]?.location?.range ?? func.location?.range
                 });
             }
         }
@@ -292,7 +292,7 @@ export class BrsFileValidator {
                 this.event.program.diagnostics.register({
                     file: this.event.file,
                     ...DiagnosticMessages.duplicateIdentifier(member.name),
-                    range: member.range
+                    range: member.location?.range
                 });
             } else {
                 memberNames.add(memberNameLower);
@@ -313,7 +313,7 @@ export class BrsFileValidator {
             memberValueKind = (member.value as LiteralExpression)?.tokens?.value?.kind;
             memberValue = member.value;
         }
-        const range = (memberValue ?? member)?.range;
+        const range = (memberValue ?? member)?.location?.range;
         if (
             //is integer enum, has value, that value type is not integer
             (enumValueKind === TokenKind.IntegerLiteral && memberValueKind && memberValueKind !== enumValueKind) ||
@@ -364,7 +364,7 @@ export class BrsFileValidator {
             this.event.program.diagnostics.register({
                 file: this.event.file,
                 ...DiagnosticMessages.referencedConstDoesNotExist(),
-                range: ccConst.range
+                range: ccConst.location?.range
             });
             return false;
         }
@@ -399,7 +399,7 @@ export class BrsFileValidator {
                     this.event.program.diagnostics.register({
                         file: this.event.file,
                         ...DiagnosticMessages.unexpectedStatementOutsideFunction(),
-                        range: statement.range
+                        range: statement.location?.range
                     });
                 }
             }
@@ -438,19 +438,19 @@ export class BrsFileValidator {
                 if (isLibraryStatement(result)) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('library'),
-                        range: result.range,
+                        range: result.location?.range,
                         file: this.event.file
                     });
                 } else if (isImportStatement(result)) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('import'),
-                        range: result.range,
+                        range: result.location?.range,
                         file: this.event.file
                     });
                 } else if (isAliasStatement(result)) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('alias'),
-                        range: result.range,
+                        range: result.location?.range,
                         file: this.event.file
                     });
                 }
@@ -466,7 +466,7 @@ export class BrsFileValidator {
             const typecastStmt = topOfFileTypecastStatements[i];
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.typecastStatementMustBeDeclaredAtStart(),
-                range: typecastStmt.range,
+                range: typecastStmt.location?.range,
                 file: this.event.file
             });
         }
@@ -482,7 +482,7 @@ export class BrsFileValidator {
             if (isBadTypecastObj) {
                 this.event.program.diagnostics.register({
                     ...DiagnosticMessages.invalidTypecastStatementApplication(util.getAllDottedGetPartsAsString(result.typecastExpression.obj)),
-                    range: result.typecastExpression.obj.range,
+                    range: result.typecastExpression.obj.location?.range,
                     file: this.event.file
                 });
             }
@@ -499,7 +499,7 @@ export class BrsFileValidator {
             if (!isFirst || !isAllowedBlock) {
                 this.event.program.diagnostics.register({
                     ...DiagnosticMessages.typecastStatementMustBeDeclaredAtStart(),
-                    range: result.range,
+                    range: result.location?.range,
                     file: this.event.file
                 });
             }
@@ -514,7 +514,7 @@ export class BrsFileValidator {
             if (actualLoopType && expectedLoopType?.toLowerCase() !== actualLoopType.text?.toLowerCase()) {
                 this.event.program.diagnostics.register({
                     file: this.event.file,
-                    range: statement.tokens.loopType.range,
+                    range: statement.tokens.loopType.location?.range,
                     ...DiagnosticMessages.expectedToken(expectedLoopType)
                 });
             }
@@ -537,7 +537,7 @@ export class BrsFileValidator {
         if (!parent) {
             this.event.program.diagnostics.register({
                 file: this.event.file,
-                range: statement.range,
+                range: statement.location?.range,
                 ...DiagnosticMessages.illegalContinueStatement()
             });
         }
@@ -562,11 +562,11 @@ export class BrsFileValidator {
                 //try to highlight the entire left-hand-side expression if possible
                 let range: Range;
                 if (isDottedSetStatement(parent)) {
-                    range = util.createBoundingRange(parent.obj, parent.tokens.dot, parent.tokens.name);
+                    range = util.createBoundingRange(parent.obj?.location, parent.tokens.dot, parent.tokens.name);
                 } else if (isIndexedSetStatement(parent)) {
-                    range = util.createBoundingRange(parent.obj, parent.tokens.openingSquare, ...parent.indexes, parent.tokens.closingSquare);
+                    range = util.createBoundingRange(parent.obj?.location, parent.tokens.openingSquare, ...parent.indexes, parent.tokens.closingSquare);
                 } else {
-                    range = node.range;
+                    range = node.location?.range;
                 }
 
                 this.event.program.diagnostics.register({

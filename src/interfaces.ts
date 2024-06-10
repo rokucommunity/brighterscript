@@ -949,7 +949,7 @@ export class TypeChainEntry {
     }
 
     get range() {
-        return this._range ?? this.astNode?.range;
+        return this._range ?? this.astNode?.location?.range;
     }
 
     public readonly name: string;

@@ -73,5 +73,5 @@ function validatePass(text: string, dimStatementIndex: number, identifierText: s
     expect(dimStatement.dimensions).to.exist;
     expect(dimStatement.dimensions!.length).to.equal(dimensionsCount);
     expect(dimStatement.tokens.closingSquare).to.exist;
-    expect(dimStatement.range).to.exist;
+    expect(dimStatement.location).to.exist;
 }

@@ -9,7 +9,7 @@ import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement 
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { isAliasStatement, isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isDottedGetExpression, isExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypecastExpression, isTypecastStatement, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
-import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics } from '../testHelpers.spec';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, rootDir } from '../testHelpers.spec';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { Expression, Statement } from './AstNode';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
@@ -17,6 +17,7 @@ import { IntegerType } from '../types/IntegerType';
 import { FloatType } from '../types/FloatType';
 import { StringType } from '../types/StringType';
 import { ArrayType, UnionType } from '../types';
+import { standardizePath as s } from '../util';
 
 describe('parser', () => {
     it('emits empty object when empty token list is provided', () => {
@@ -2293,6 +2294,7 @@ export function parse(text: string, mode?: ParseMode, bsConsts: Record<string, b
         bsConstMap.set(constName.toLowerCase(), bsConsts[constName]);
     }
     return Parser.parse(tokens, {
+        srcPath: s`${rootDir}/source/main.brs`,
         mode: mode!,
         bsConsts: bsConstMap
     });
@@ -2317,6 +2319,5 @@ function expectCommentWithText(stat: Statement, text: string) {
 }
 
 export function failStatementType(stat: Statement, type: string) {
-    assert.fail(`Statement ${stat.constructor.name} line ${stat.range.start.line} is not a ${type}`);
+    assert.fail(`Statement ${stat.constructor.name} line ${stat.location?.range.start.line} is not a ${type}`);
 }
-

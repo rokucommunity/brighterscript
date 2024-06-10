@@ -110,7 +110,7 @@ export class DiagnosticManager {
                         message: `In component scope '${scope?.xmlFile?.componentName?.text}'`,
                         location: util.createLocationFromRange(
                             URI.file(scope.xmlFile.srcPath).toString(),
-                            scope?.xmlFile?.ast?.componentElement?.getAttribute('name')?.tokens?.value?.range ?? util.createRange(0, 0, 0, 10)
+                            scope?.xmlFile?.ast?.componentElement?.getAttribute('name')?.tokens?.value?.location?.range ?? util.createRange(0, 0, 0, 10)
                         )
                     });
                 } else {

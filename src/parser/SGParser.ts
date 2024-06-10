@@ -21,7 +21,10 @@ export default class SGParser {
      */
     public diagnostics = [] as Diagnostic[];
 
-    private destPath: string;
+    /**
+     * The options used to parse the file
+     */
+    public options: SGParseOptions;
 
     private _references: SGReferences;
 
@@ -68,16 +71,25 @@ export default class SGParser {
             if (uriAttr?.tokens.value) {
                 const uri = uriAttr.tokens.value.text;
                 this._references.scriptTagImports.push({
-                    filePathRange: uriAttr.tokens.value.range,
+                    filePathRange: uriAttr.tokens.value.location?.range,
                     text: uri,
-                    destPath: util.getPkgPathFromTarget(this.destPath, uri)
+                    destPath: util.getPkgPathFromTarget(this.options.destPath, uri)
                 });
             }
         }
     }
 
-    public parse(destPath: string, fileContents: string) {
-        this.destPath = destPath;
+    private sanitizeParseOptions(options: SGParseOptions) {
+        options ??= {
+            destPath: undefined
+        };
+        options.trackLocations ??= true;
+        return options;
+    }
+
+
+    public parse(fileContents: string, options?: SGParseOptions) {
+        this.options = this.sanitizeParseOptions(options);
         this.diagnostics = [];
 
         const { cst, tokenVector, lexErrors, parseErrors } = parser.parse(fileContents);
@@ -128,7 +140,7 @@ export default class SGParser {
                 //error: not a component
                 this.diagnostics.push({
                     ...DiagnosticMessages.xmlUnexpectedTag(root.tokens.startTagName.text),
-                    range: root.tokens.startTagName.range
+                    range: root.tokens.startTagName.location?.range
                 });
             }
             this.ast = new SGAst({ prologElement: prolog, rootElement: root });
@@ -195,7 +207,7 @@ export default class SGParser {
             case 'field':
                 if (this.hasElements(content)) {
                     this.diagnostics.push({
-                        range: startTagName.range,
+                        range: startTagName.location?.range,
                         ...DiagnosticMessages.xmlUnexpectedChildren(startTagName.text)
                     });
                 }
@@ -203,7 +215,7 @@ export default class SGParser {
             case 'function':
                 if (this.hasElements(content)) {
                     this.diagnostics.push({
-                        range: startTagName.range,
+                        range: startTagName.location?.range,
                         ...DiagnosticMessages.xmlUnexpectedChildren(startTagName.text)
                     });
                 }
@@ -211,7 +223,7 @@ export default class SGParser {
             case 'script':
                 if (this.hasElements(content)) {
                     this.diagnostics.push({
-                        range: startTagName.range,
+                        range: startTagName.location?.range,
                         ...DiagnosticMessages.xmlUnexpectedChildren(startTagName.text)
                     });
                 }
@@ -296,7 +308,8 @@ export default class SGParser {
         if (token) {
             return {
                 text: token.image,
-                range: this.rangeFromToken(token)
+                //TODO should this be coerced into a uri?
+                location: util.createLocationFromRange(this.options.srcPath, this.rangeFromToken(token))
             };
         } else {
             return undefined;
@@ -397,4 +410,18 @@ export interface CstNodeLocation {
     endOffset?: number;
     endLine?: number;
     endColumn?: number;
+}
+
+export interface SGParseOptions {
+    /**
+     * Path to the file where this source code originated
+     */
+    srcPath?: string;
+
+    destPath: string;
+    /**
+     * Should locations be tracked. If false, the `range` property will be omitted
+     * @default true
+     */
+    trackLocations?: boolean;
 }

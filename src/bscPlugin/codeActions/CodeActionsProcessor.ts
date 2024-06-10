@@ -45,7 +45,7 @@ export class CodeActionsProcessor {
         // eslint-disable-next-line @typescript-eslint/dot-notation
         const importStatements = this.event.file['_cachedLookups'].importStatements;
         //find the position of the first import statement, or the top of the file if there is none
-        const insertPosition = importStatements[importStatements.length - 1]?.tokens.import?.range?.start ?? util.createPosition(0, 0);
+        const insertPosition = importStatements[importStatements.length - 1]?.tokens.import?.location?.range?.start ?? util.createPosition(0, 0);
 
         //find all files that reference this function
         for (const file of files) {
@@ -103,7 +103,7 @@ export class CodeActionsProcessor {
         const srcPath = this.event.file.srcPath;
         const { componentElement } = (this.event.file as XmlFile).parser.ast;
         //inject new attribute after the final attribute, or after the `<component` if there are no attributes
-        const pos = (componentElement.attributes[componentElement.attributes.length - 1] ?? componentElement.tokens.startTagName).range.end;
+        const pos = (componentElement.attributes[componentElement.attributes.length - 1] ?? componentElement.tokens.startTagName)?.location?.range.end;
         this.event.codeActions.push(
             codeActionUtil.createCodeAction({
                 title: `Extend "Group"`,

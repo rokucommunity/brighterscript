@@ -4,8 +4,8 @@ import type { ParseError } from 'jsonc-parser';
 import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 import * as path from 'path';
 import { rokuDeploy, DefaultFiles, standardizePath as rokuDeployStandardizePath } from 'roku-deploy';
-import type { DiagnosticRelatedInformation } from 'vscode-languageserver';
-import type { Diagnostic, Position, Location } from 'vscode-languageserver';
+import type { DiagnosticRelatedInformation, Diagnostic, Position } from 'vscode-languageserver';
+import { Location } from 'vscode-languageserver';
 import { Range } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
@@ -950,9 +950,27 @@ export class Util {
     }
 
     /**
+     * Get a range back from an object that contains (or is) a range
+     */
+    public extractRange(rangeIsh: RangeLike): Range | undefined {
+        if (!rangeIsh) {
+            return undefined;
+        } else if ('location' in rangeIsh) {
+            return rangeIsh.location?.range;
+        } else if ('range' in rangeIsh) {
+            return rangeIsh.range;
+        } else if (Range.is(rangeIsh)) {
+            return rangeIsh;
+        } else {
+            return undefined;
+        }
+    }
+
+
+    /**
      * Get a location object back by extracting location information from other objects that contain location
      */
-    public getRange(startObj: { range: Range }, endObj: { range: Range }): Range {
+    public getRange(startObj: | { range: Range }, endObj: { range: Range }): Range {
         if (!startObj?.range || !endObj?.range) {
             return undefined;
         }
@@ -973,12 +991,14 @@ export class Util {
     /**
      * If the two items have lines that touch
      */
-    public linesTouch(first: { range?: Range | undefined }, second: { range?: Range | undefined }) {
-        if (first && second && (first.range !== undefined) && (second.range !== undefined) && (
-            first.range.start.line === second.range.start.line ||
-            first.range.start.line === second.range.end.line ||
-            first.range.end.line === second.range.start.line ||
-            first.range.end.line === second.range.end.line
+    public linesTouch(first: RangeLike, second: RangeLike) {
+        const firstRange = this.extractRange(first);
+        const secondRange = this.extractRange(second);
+        if (firstRange && secondRange && (
+            firstRange.start.line === secondRange.start.line ||
+            firstRange.start.line === secondRange.end.line ||
+            firstRange.end.line === secondRange.start.line ||
+            firstRange.end.line === secondRange.end.line
         )) {
             return true;
         } else {
@@ -1072,7 +1092,7 @@ export class Util {
     /**
      * Helper for creating `Location` objects by passing each range value in directly. Prefer using this function because vscode-languageserver's `Location.create()` is significantly slower at scale
      */
-    public createLocation(startLine: number, startCharacter: number, endLine: number, endCharacter: number, uri: string): Location {
+    public createLocation(startLine: number, startCharacter: number, endLine: number, endCharacter: number, uri?: string): Location {
         return {
             uri: uri,
             range: {
@@ -1115,33 +1135,58 @@ export class Util {
      *  Gets the bounding range of a bunch of ranges or objects that have ranges
      *  TODO: this does a full iteration of the args. If the args were guaranteed to be in range order, we could optimize this
      */
-    public createBoundingRange(...locatables: Array<{ range?: Range } | Range | undefined>): Range | undefined {
+    public createBoundingLocation(...locatables: Array<{ location?: Location } | Location | { range?: Range } | Range | undefined>): Location | undefined {
+        let uri: string | undefined;
         let startPosition: Position | undefined;
         let endPosition: Position | undefined;
 
         for (let locatable of locatables) {
-            //the range might be a getter, so access it exactly once
-            const locatableRange = Range.is(locatable) ? locatable : locatable?.range;
-            if (!locatableRange) {
+            let range: Range;
+            if ('location' in locatable) {
+                range = locatable.location?.range;
+                if (!uri) {
+                    uri = locatable.location?.uri;
+                }
+            } else if (Location.is(locatable)) {
+                range = locatable.range;
+                if (!uri) {
+                    uri = locatable.uri;
+                }
+            } else if ('range' in locatable) {
+                range = locatable.range;
+            } else {
+                range = locatable as Range;
+            }
+
+            //skip undefined locations or locations without a range
+            if (!range) {
                 continue;
             }
 
             if (!startPosition) {
-                startPosition = locatableRange.start;
-            } else if (this.comparePosition(locatableRange.start, startPosition) < 0) {
-                startPosition = locatableRange.start;
+                startPosition = range.start;
+            } else if (this.comparePosition(range.start, startPosition) < 0) {
+                startPosition = range.start;
             }
             if (!endPosition) {
-                endPosition = locatableRange.end;
-            } else if (this.comparePosition(locatableRange.end, endPosition) > 0) {
-                endPosition = locatableRange.end;
+                endPosition = range.end;
+            } else if (this.comparePosition(range.end, endPosition) > 0) {
+                endPosition = range.end;
             }
         }
         if (startPosition && endPosition) {
-            return this.createRangeFromPositions(startPosition, endPosition);
+            return util.createLocation(startPosition.line, startPosition.character, endPosition.line, endPosition.character, uri);
         } else {
             return undefined;
         }
+    }
+
+    /**
+     *  Gets the bounding range of a bunch of ranges or objects that have ranges
+     *  TODO: this does a full iteration of the args. If the args were guaranteed to be in range order, we could optimize this
+     */
+    public createBoundingRange(...locatables: Array<RangeLike>): Range | undefined {
+        return this.createBoundingLocation(...locatables)?.range;
     }
 
     /**
@@ -1149,11 +1194,13 @@ export class Util {
      * @param tokens Object with tokens in it
      * @returns Range containing all the tokens
      */
-    public createBoundingRangeFromTokens(tokens: Record<string, { range?: Range }>): Range | undefined {
+    public createBoundingLocationFromTokens(tokens: Record<string, { location?: Location }>): Location | undefined {
+        let uri: string;
         let startPosition: Position | undefined;
         let endPosition: Position | undefined;
         for (let key in tokens) {
-            let locatableRange = tokens?.[key]?.range;
+            let token = tokens?.[key];
+            let locatableRange = token?.location?.range;
             if (!locatableRange) {
                 continue;
             }
@@ -1168,9 +1215,12 @@ export class Util {
             } else if (this.comparePosition(locatableRange.end, endPosition) > 0) {
                 endPosition = locatableRange.end;
             }
+            if (!uri) {
+                uri = token.location.uri;
+            }
         }
         if (startPosition && endPosition) {
-            return this.createRangeFromPositions(startPosition, endPosition);
+            return this.createLocation(startPosition.line, startPosition.character, endPosition.line, endPosition.character, uri);
         } else {
             return undefined;
         }
@@ -1753,7 +1803,7 @@ export class Util {
     /**
      * Sort an array of objects that have a Range
      */
-    public sortByRange<T extends Locatable>(locatables: T[]) {
+    public sortByRange<T extends { range: Range | undefined }>(locatables: T[]) {
         //sort the tokens by range
         return locatables.sort((a, b) => {
             //handle undefined tokens to prevent crashes
@@ -1863,7 +1913,7 @@ export class Util {
                 case AstNodeKind.FunctionParameterExpression:
                     return [(nextPart as FunctionParameterExpression).tokens.name];
                 case AstNodeKind.GroupingExpression:
-                    parts.push(createIdentifier('()', nextPart.range));
+                    parts.push(createIdentifier('()', nextPart.location));
                     break loop;
                 default:
                     //we found a non-DottedGet expression, so return because this whole operation is invalid.
@@ -2224,10 +2274,10 @@ export class Util {
         return leadingTrivia.filter(t => t.kind === TokenKind.Comment);
     }
 
-    public isLeadingCommentOnSameLine(line: { range?: Range }, input: Token | AstNode) {
+    public isLeadingCommentOnSameLine(line: RangeLike, input: Token | AstNode) {
         const leadingCommentRange = this.getLeadingComments(input)?.[0];
         if (leadingCommentRange) {
-            return this.linesTouch(line, leadingCommentRange);
+            return this.linesTouch(line, leadingCommentRange?.location);
         }
         return false;
     }
@@ -2281,6 +2331,11 @@ export function standardizePath(stringParts, ...expressions: any[]) {
         )
     );
 }
+
+/**
+ * An item that can be coerced into a range
+ */
+export type RangeLike = { location?: Location } | Location | { range?: Range } | Range | undefined;
 
 export let util = new Util();
 export default util;

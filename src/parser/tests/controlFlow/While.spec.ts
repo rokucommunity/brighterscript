@@ -6,6 +6,7 @@ import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
 import type { FunctionStatement } from '../../Statement';
 import { isFunctionStatement } from '../../../astUtils/reflection';
+import util from '../../../util';
 
 describe('parser while statements', () => {
 
@@ -79,21 +80,21 @@ describe('parser while statements', () => {
                 kind: TokenKind.While,
                 text: 'while',
                 isReserved: true,
-                range: Range.create(0, 0, 0, 5),
+                location: util.createLocation(0, 0, 0, 5),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.True,
                 text: 'true',
                 isReserved: true,
-                range: Range.create(0, 6, 0, 10),
+                location: util.createLocation(0, 6, 0, 10),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 isReserved: false,
-                range: Range.create(0, 10, 0, 11),
+                location: util.createLocation(0, 10, 0, 11),
                 leadingTrivia: []
             },
             // loop body isn't significant for location tracking, so helper functions are safe
@@ -106,7 +107,7 @@ describe('parser while statements', () => {
                 kind: TokenKind.EndWhile,
                 text: 'end while',
                 isReserved: false,
-                range: Range.create(2, 0, 2, 9),
+                location: util.createLocation(2, 0, 2, 9),
                 leadingTrivia: []
             },
             EOF
@@ -114,7 +115,7 @@ describe('parser while statements', () => {
 
         expect(diagnostics[0]?.message).not.to.exist;
         expect(statements).to.be.lengthOf(1);
-        expect(statements[0].range).deep.include(
+        expect(statements[0].location.range).deep.include(
             Range.create(0, 0, 2, 9)
         );
     });

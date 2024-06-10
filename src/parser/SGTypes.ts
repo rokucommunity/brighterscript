@@ -1,5 +1,5 @@
 import { SourceNode } from 'source-map';
-import type { Range } from 'vscode-languageserver';
+import type { Location } from 'vscode-languageserver';
 import { createSGAttribute, createSGInterface, createSGInterfaceField, createSGInterfaceFunction, createSGToken } from '../astUtils/creators';
 import type { FileReference, TranspileResult } from '../interfaces';
 import util from '../util';
@@ -7,7 +7,7 @@ import type { TranspileState } from './TranspileState';
 
 export interface SGToken {
     text: string;
-    range?: Range;
+    location?: Location;
 }
 
 export class SGAttribute {
@@ -59,9 +59,9 @@ export class SGAttribute {
         }
     }
 
-    public get range() {
-        if (!this._range) {
-            this._range = util.createBoundingRange(
+    public get location(): Location {
+        if (!this._location) {
+            this._location = util.createBoundingLocation(
                 this.tokens.key,
                 this.tokens.equals,
                 this.tokens.openingQuote,
@@ -69,9 +69,9 @@ export class SGAttribute {
                 this.tokens.closingQuote
             );
         }
-        return this._range;
+        return this._location;
     }
-    private _range = null as Range;
+    private _location = null as Location;
 
     public transpile(state: TranspileState) {
         const result: TranspileResult = [
@@ -154,9 +154,9 @@ export class SGElement {
      */
     public readonly elements = [] as SGElement[];
 
-    public get range() {
-        if (!this._range) {
-            this._range = util.createBoundingRange(
+    public get location() {
+        if (!this._location) {
+            this._location = util.createBoundingLocation(
                 this.tokens.startTagOpen,
                 this.tokens.startTagName,
                 this.attributes?.[this.attributes?.length - 1],
@@ -167,9 +167,9 @@ export class SGElement {
                 this.tokens.endTagClose
             );
         }
-        return this._range;
+        return this._location;
     }
-    private _range = null as Range;
+    private _location = null as Location;
 
     /**
      * Is this a self-closing tag?
@@ -308,7 +308,7 @@ export class SGElement {
         } else {
             // it is possible that the original tag isSelfClosing, but new elements have been added to it
             // in that case, create a new startTagClose token for transpilation.
-            const startTagClose = this.isSelfClosing ? createSGToken('>', this.tokens.startTagClose.range) : this.tokens.startTagClose;
+            const startTagClose = this.isSelfClosing ? createSGToken('>', this.tokens.startTagClose.location) : this.tokens.startTagClose;
             const chunks: TranspileResult = [
                 state.transpileToken(startTagClose, '>'),
                 state.newline

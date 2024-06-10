@@ -126,7 +126,7 @@ describe('parser postfix unary expressions', () => {
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);
-        expect(statements[0].range).deep.include(
+        expect(statements[0].location?.range).deep.include(
             Range.create(0, 0, 0, 12)
         );
     });

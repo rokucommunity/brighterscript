@@ -58,7 +58,7 @@ export class DefinitionProvider {
                 this.event.definitions.push(
                     util.createLocationFromRange(
                         URI.file(constant.file.srcPath).toString(),
-                        constant.item.tokens.name.range
+                        constant.item.tokens.name?.location?.range
                     )
                 );
                 return;
@@ -70,7 +70,7 @@ export class DefinitionProvider {
                     this.event.definitions.push(
                         util.createLocationFromRange(
                             URI.file(enumLink.file.srcPath).toString(),
-                            enumLink.item.tokens.name.range
+                            enumLink.item.tokens.name.location?.range
                         )
                     );
                     return;
@@ -80,7 +80,7 @@ export class DefinitionProvider {
                     this.event.definitions.push(
                         util.createLocationFromRange(
                             URI.file(enumMemberLink.file.srcPath).toString(),
-                            enumMemberLink.item.tokens.name.range
+                            enumMemberLink.item.tokens.name.location?.range
                         )
                     );
                     return;
@@ -91,7 +91,7 @@ export class DefinitionProvider {
                     this.event.definitions.push(
                         util.createLocationFromRange(
                             URI.file(interfaceFileLink.file.srcPath).toString(),
-                            interfaceFileLink.item.tokens.name.range
+                            interfaceFileLink.item.tokens.name.location?.range
                         )
                     );
                     return;
@@ -102,7 +102,7 @@ export class DefinitionProvider {
                     this.event.definitions.push(
                         util.createLocationFromRange(
                             URI.file(classFileLink.file.srcPath).toString(),
-                            classFileLink.item.tokens.name.range
+                            classFileLink.item.tokens.name.location?.range
                         )
                     );
                     return;
@@ -112,7 +112,7 @@ export class DefinitionProvider {
 
         let textToSearchFor = token.text.toLowerCase();
 
-        const previousToken = file.getTokenAt({ line: token.range.start.line, character: token.range.start.character });
+        const previousToken = file.getTokenAt({ line: token.location?.range.start.line, character: token.location?.range.start.character });
 
         if (previousToken?.kind === TokenKind.Callfunc) {
             for (const scope of this.event.program.getScopes()) {
@@ -121,12 +121,12 @@ export class DefinitionProvider {
                     const apiFunc = scope.xmlFile.ast?.componentElement?.interfaceElement?.functions?.find(x => x.name.toLowerCase() === textToSearchFor); // eslint-disable-line @typescript-eslint/no-loop-func
                     if (apiFunc) {
                         this.event.definitions.push(
-                            util.createLocationFromRange(util.pathToUri(scope.xmlFile.srcPath), apiFunc.getAttribute('name').tokens.value.range)
+                            util.createLocationFromRange(util.pathToUri(scope.xmlFile.srcPath), apiFunc.getAttribute('name').tokens.value.location?.range)
                         );
                         const callable = scope.getAllCallables().find((c) => c.callable.name.toLowerCase() === textToSearchFor); // eslint-disable-line @typescript-eslint/no-loop-func
                         if (callable) {
                             this.event.definitions.push(
-                                util.createLocationFromRange(util.pathToUri((callable.callable.file as BrsFile).srcPath), callable.callable.functionStatement.tokens.name.range)
+                                util.createLocationFromRange(util.pathToUri((callable.callable.file as BrsFile).srcPath), callable.callable.functionStatement.tokens.name.location?.range)
                             );
                         }
                     }
@@ -138,12 +138,12 @@ export class DefinitionProvider {
         // eslint-disable-next-line @typescript-eslint/dot-notation
         let classToken = file['getTokenBefore'](token, TokenKind.Class);
         if (classToken) {
-            let cs = file.parser.ast.findChild<ClassStatement>((klass) => isClassStatement(klass) && klass.tokens.class.range === classToken.range);
+            let cs = file.parser.ast.findChild<ClassStatement>((klass) => isClassStatement(klass) && klass.tokens.class.location?.range === classToken.location?.range);
             if (cs?.parentClassName) {
                 const nameParts = cs.parentClassName.getNameParts();
                 let extendedClass = file.getClassFileLink(nameParts[nameParts.length - 1], nameParts.slice(0, -1).join('.'));
                 if (extendedClass) {
-                    this.event.definitions.push(util.createLocationFromRange(util.pathToUri(extendedClass.file.srcPath), extendedClass.item.range));
+                    this.event.definitions.push(util.createLocationFromRange(util.pathToUri(extendedClass.file.srcPath), extendedClass.item.location?.range));
                 }
             }
             return;
@@ -203,7 +203,7 @@ export class DefinitionProvider {
                     FunctionStatement: (statement: FunctionStatement) => {
                         if (statement.getName(file.parseMode).toLowerCase() === textToSearchFor) {
                             const uri = util.pathToUri(file.srcPath);
-                            this.event.definitions.push(util.createLocationFromRange(uri, statement.range));
+                            this.event.definitions.push(util.createLocationFromRange(uri, statement.location?.range));
                         }
                     }
                 }), {
@@ -230,7 +230,7 @@ export class DefinitionProvider {
                 const namespaceItemStatementHandler = (statement: ClassStatement | FunctionStatement) => {
                     if (!location && statement.tokens.name.text.toLowerCase() === endName) {
                         const uri = util.pathToUri(file.srcPath);
-                        location = util.createLocationFromRange(uri, statement.range);
+                        location = util.createLocationFromRange(uri, statement.location?.range);
                     }
                 };
 
@@ -259,7 +259,7 @@ export class DefinitionProvider {
             isXmlFile(file) &&
             file.parentComponent &&
             file.parentComponentName &&
-            util.rangeContains(file.parentComponentName.range, this.event.position)
+            util.rangeContains(file.parentComponentName.location?.range, this.event.position)
         ) {
             this.event.definitions.push({
                 range: util.createRange(0, 0, 0, 0),

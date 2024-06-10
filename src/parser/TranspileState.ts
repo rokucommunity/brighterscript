@@ -1,8 +1,9 @@
 import { SourceNode } from 'source-map';
-import type { Range } from 'vscode-languageserver';
+import type { Location, Range } from 'vscode-languageserver';
 import type { BsConfig } from '../BsConfig';
 import { TokenKind } from '../lexer/TokenKind';
 import type { Token } from '../lexer/Token';
+import type { RangeLike } from '../util';
 import util from '../util';
 import type { TranspileResult } from '../interfaces';
 
@@ -67,12 +68,13 @@ export class TranspileState {
     /**
      * Shorthand for creating a new source node
      */
-    public sourceNode(locatable: { range?: Range }, code: string | SourceNode | TranspileResult): SourceNode {
+    public sourceNode(locatable: RangeLike, code: string | SourceNode | TranspileResult): SourceNode {
+        let range = util.extractRange(locatable);
         return util.sourceNodeFromTranspileResult(
             //convert 0-based range line to 1-based SourceNode line
-            locatable.range ? locatable.range.start.line + 1 : null,
+            range ? range.start.line + 1 : null,
             //range and SourceNode character are both 0-based, so no conversion necessary
-            locatable.range ? locatable.range.start.character : null,
+            range ? range.start.character : null,
             this.srcPath,
             code
         );
@@ -171,12 +173,12 @@ export class TranspileState {
         }
     }
 
-    public transpileEndBlockToken(previousLocatable: { range?: Range }, endToken: Token, defaultValue: string, alwaysAddNewlineBeforeEndToken = true) {
+    public transpileEndBlockToken(previousLocatable: { location?: Location }, endToken: Token, defaultValue: string, alwaysAddNewlineBeforeEndToken = true) {
         const result = [];
 
         if (util.hasLeadingComments(endToken)) {
             // add comments before `end token` - they should be indented
-            if (util.isLeadingCommentOnSameLine(previousLocatable, endToken)) {
+            if (util.isLeadingCommentOnSameLine(previousLocatable?.location, endToken)) {
                 this.blockDepth++;
                 result.push(' ');
             } else {

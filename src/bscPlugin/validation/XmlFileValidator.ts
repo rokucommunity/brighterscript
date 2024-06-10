@@ -25,7 +25,7 @@ export class XmlFileValidator {
             //not a SG component
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.xmlComponentMissingComponentDeclaration(),
-                range: rootElement.range,
+                range: rootElement.location?.range,
                 file: this.event.file
             });
             return;
@@ -35,14 +35,14 @@ export class XmlFileValidator {
         if (!componentElement.name) {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.xmlComponentMissingNameAttribute(),
-                range: componentElement.tokens.startTagName.range,
+                range: componentElement.tokens.startTagName.location?.range,
                 file: this.event.file
             });
         }
         if (!componentElement.extends) {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.xmlComponentMissingExtendsAttribute(),
-                range: componentElement.tokens.startTagName.range,
+                range: componentElement.tokens.startTagName.location?.range,
                 file: this.event.file
             });
         }

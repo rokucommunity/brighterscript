@@ -5,6 +5,7 @@ import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import type { FunctionStatement } from '../../Statement';
 import { Range } from 'vscode-languageserver';
+import util from '../../../util';
 
 describe('parser return statements', () => {
     it('parses void returns', () => {
@@ -51,7 +52,7 @@ describe('parser return statements', () => {
             token(TokenKind.Newline, '\\n'),
             token(TokenKind.Return, 'return'),
             identifier('RebootSystem'),
-            { kind: TokenKind.LeftParen, text: '(', range: null as any, leadingTrivia: [] },
+            { kind: TokenKind.LeftParen, text: '(', location: null as any, leadingTrivia: [] },
             token(TokenKind.RightParen, ')'),
             token(TokenKind.Newline, '\\n'),
             token(TokenKind.EndFunction, 'end function'),
@@ -81,14 +82,14 @@ describe('parser return statements', () => {
                 kind: TokenKind.Return,
                 text: 'return',
                 isReserved: true,
-                range: Range.create(1, 2, 1, 8),
+                location: util.createLocation(1, 2, 1, 8),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '5',
                 isReserved: false,
-                range: Range.create(1, 9, 1, 10),
+                location: util.createLocation(1, 9, 1, 10),
                 leadingTrivia: []
             },
             token(TokenKind.Newline, '\\n'),
@@ -97,7 +98,7 @@ describe('parser return statements', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect((statements[0] as FunctionStatement).func.body.statements[0]?.range).to.exist.and.to.deep.include(
+        expect((statements[0] as FunctionStatement).func.body.statements[0]?.location?.range).to.exist.and.to.deep.include(
             Range.create(1, 2, 1, 10)
         );
     });

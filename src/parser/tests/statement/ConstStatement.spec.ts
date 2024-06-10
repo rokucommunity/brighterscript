@@ -1,5 +1,5 @@
 import { expectCompletionsIncludes, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile } from '../../../testHelpers.spec';
-import { util } from '../../../util';
+import { util, standardizePath as s } from '../../../util';
 import { Program } from '../../../Program';
 import { createSandbox } from 'sinon';
 import { ParseMode, Parser } from '../../Parser';
@@ -41,7 +41,7 @@ describe('ConstStatement', () => {
     });
 
     it('supports basic structure', () => {
-        parser.parse('const API_KEY = "abc"', { mode: ParseMode.BrighterScript });
+        parser.parse('const API_KEY = "abc"', { mode: ParseMode.BrighterScript, srcPath: s`${rootDir}/source/main.bs` });
         expectZeroDiagnostics(parser);
         const statement = parser.ast.statements[0] as ConstStatement;
         expect(statement.tokens.const?.kind).to.eql(TokenKind.Const);
@@ -53,7 +53,7 @@ describe('ConstStatement', () => {
         expect(value).to.be.instanceof(LiteralExpression);
         expect(value.tokens.value?.text).to.eql('"abc"');
         //ensure range is correct
-        expect(statement.range).to.eql(util.createRange(0, 0, 0, 21));
+        expect(statement.location?.range).to.eql(util.createRange(0, 0, 0, 21));
     });
 
     it('produces typedef', async () => {

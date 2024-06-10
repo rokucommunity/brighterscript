@@ -79,8 +79,7 @@ describe('SGParser', () => {
 
     it('does not crash when missing tag name', () => {
         const parser = new SGParser();
-        parser.parse(
-            'pkg:/components/ParentScene.xml', trim`
+        parser.parse(trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="ParentScene">
             <!-- a standalone less-than symbol used to cause issues -->
@@ -93,8 +92,7 @@ describe('SGParser', () => {
 
     it('Adds error when an unexpected tag is found in xml', () => {
         const parser = new SGParser();
-        parser.parse(
-            'pkg:/components/ParentScene.xml', trim`
+        parser.parse(trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="ParentScene">
                 <interface>
@@ -116,8 +114,7 @@ describe('SGParser', () => {
 
     it('Adds error when a leaf tag is found to have children', () => {
         const parser = new SGParser();
-        parser.parse(
-            'pkg:/components/ParentScene.xml', trim`
+        parser.parse(trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="ParentScene">
                 <interface>
@@ -143,7 +140,7 @@ describe('SGParser', () => {
 
     it('Adds error when whitespace appears before the prolog', () => {
         const parser = new SGParser();
-        parser.parse('path/to/component/ChildScene.xml', /* not trimmed */`
+        parser.parse(/* not trimmed */`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="ParentScene">
                 <script type="text/brightscript" uri="ChildScene.brs" />
