@@ -273,7 +273,7 @@ export class Block extends Statement {
             lastBitBefore = util.createBoundingRange(
                 this.parent.tokens.functionType,
                 this.parent.tokens.leftParen,
-                ...this.parent.parameters,
+                ...(this.parent.parameters ?? [])
                 this.parent.tokens.rightParen,
                 this.parent.tokens.as,
                 this.parent.returnTypeExpression
