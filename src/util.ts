@@ -639,7 +639,7 @@ export class Util {
         }
         const nodeTrivia = node?.getLeadingTrivia() ?? [];
         const leadingTrivia = isStatement(node)
-            ? [...(node.annotations?.map(anno => anno.getLeadingTrivia()).flat() ?? []), ...nodeTrivia]
+            ? [...(node.annotations?.map(anno => anno.getLeadingTrivia() ?? []).flat() ?? []), ...nodeTrivia]
             : nodeTrivia;
         const tokens = leadingTrivia?.filter(t => t.kind === TokenKind.Newline || t.kind === TokenKind.Comment);
         const comments = [] as Token[];
@@ -1644,7 +1644,7 @@ export class Util {
 
 
     public concatAnnotationLeadingTrivia(stmt: Statement): Token[] {
-        return [...(stmt.annotations?.map(anno => anno.getLeadingTrivia()).flat() ?? []), ...stmt.getLeadingTrivia()];
+        return [...(stmt.annotations?.map(anno => anno.getLeadingTrivia() ?? []).flat() ?? []), ...stmt.getLeadingTrivia()];
     }
 
     /**
