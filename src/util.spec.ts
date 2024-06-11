@@ -6,7 +6,7 @@ import type { BsConfig } from './BsConfig';
 import * as fsExtra from 'fs-extra';
 import { createSandbox } from 'sinon';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import { tempDir, rootDir, expectTypeToBe, expectRangeToBe } from './testHelpers.spec';
+import { tempDir, rootDir, expectTypeToBe } from './testHelpers.spec';
 import { Program } from './Program';
 import type { BsDiagnostic } from './interfaces';
 import { TypeChainEntry } from './interfaces';
@@ -656,9 +656,9 @@ describe('util', () => {
             const pos11 = { line: 1, character: 1 };
             const pos99 = { line: 9, character: 9 };
 
-            expectRangeToBe(util.createRangeFromPositions(pos11, pos99), util.createRange(1, 1, 9, 9));
-            expectRangeToBe(util.createRangeFromPositions(null, pos99), util.createRange(9, 9, 9, 9));
-            expectRangeToBe(util.createRangeFromPositions(pos11, null), util.createRange(1, 1, 1, 1));
+            expect(util.createRangeFromPositions(pos11, pos99)).to.eql(util.createRange(1, 1, 9, 9));
+            expect(util.createRangeFromPositions(null, pos99)).to.eql(util.createRange(9, 9, 9, 9));
+            expect(util.createRangeFromPositions(pos11, null)).to.eql(util.createRange(1, 1, 1, 1));
         });
 
 
@@ -667,10 +667,10 @@ describe('util', () => {
             const range2 = util.createRange(2, 2, 3, 3);
             const range3 = util.createRange(100, 100, 100, 100);
 
-            expectRangeToBe(util.createBoundingRange(range1), util.createRange(1, 1, 2, 2));
-            expectRangeToBe(util.createBoundingRange(range1, range2), util.createRange(1, 1, 3, 3));
-            expectRangeToBe(util.createBoundingRange(range2, range1), util.createRange(1, 1, 3, 3));
-            expectRangeToBe(util.createBoundingRange(range2, range3, range1), util.createRange(1, 1, 100, 100));
+            expect(util.createBoundingRange(range1)).to.eql(util.createRange(1, 1, 2, 2));
+            expect(util.createBoundingRange(range1, range2)).to.eql(util.createRange(1, 1, 3, 3));
+            expect(util.createBoundingRange(range2, range1)).to.eql(util.createRange(1, 1, 3, 3));
+            expect(util.createBoundingRange(range2, range3, range1)).to.eql(util.createRange(1, 1, 100, 100));
         });
     });
 
