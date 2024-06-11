@@ -345,6 +345,8 @@ export class LanguageServer {
 
     @AddStackToErrorMessage
     private async onTextDocumentDidChangeContent(event: TextDocumentChangeEvent<TextDocument>) {
+        this.logger.log('onTextDocumentDidChangeContent', event.document.uri);
+
         await this.projectManager.handleFileChanges([{
             srcPath: URI.parse(event.document.uri).fsPath,
             type: FileChangeType.Changed,
@@ -399,11 +401,10 @@ export class LanguageServer {
      */
     @AddStackToErrorMessage
     public async onCompletion(params: CompletionParams, token: CancellationToken, workDoneProgress: WorkDoneProgressReporter, resultProgress: ResultProgressReporter<CompletionItem[]>): Promise<CompletionList> {
-        this.logger.debug('onCompletion');
+        this.logger.log('onCompletion', params, token);
         const srcPath = util.uriToPath(params.textDocument.uri);
         const completions = await this.projectManager.getCompletions({ srcPath: srcPath, position: params.position });
-        this.logger.debug('onCompletion end');
-        return completions;
+        return completions
     }
 
     @AddStackToErrorMessage

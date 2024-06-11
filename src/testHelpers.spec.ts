@@ -367,6 +367,21 @@ export function expectThrows(callback: () => any, expectedMessage: string | unde
     }
 }
 
+ export async function expectThrowsAsync(callback: () => any, expectedMessage = undefined, failedTestMessage = 'Expected to throw but did not') {
+    let wasExceptionThrown = false;
+    try {
+        await Promise.resolve(callback());
+    } catch (e) {
+        wasExceptionThrown = true;
+        if (expectedMessage) {
+            expect((e as Error)?.message).to.eql(expectedMessage);
+        }
+    }
+    if (wasExceptionThrown === false) {
+        throw new Error(failedTestMessage);
+    }
+}
+
 export function objectToMap<T>(obj: Record<string, T>) {
     const result = new Map<string, T>();
     for (let key in obj) {
