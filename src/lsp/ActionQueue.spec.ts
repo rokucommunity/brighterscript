@@ -5,7 +5,7 @@ import { Deferred } from "../deferred";
 import { expectThrowsAsync } from "../testHelpers.spec";
 import { CancellationToken } from "vscode-languageserver-protocol";
 
-describe.only('ActionQueue', () => {
+describe('ActionQueue', () => {
     let queue: ActionQueue;
 
     beforeEach(() => {

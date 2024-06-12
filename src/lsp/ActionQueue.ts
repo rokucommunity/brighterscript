@@ -1,6 +1,8 @@
 import { CancellationToken, CancellationTokenSource } from "vscode-languageserver-protocol";
 import { Deferred } from "../deferred";
 import * as safeJsonStringify from 'safe-json-stringify';
+import { EventEmitter } from 'eventemitter3';
+import util from "../util";
 
 export class ActionQueue {
 
@@ -57,6 +59,7 @@ export class ActionQueue {
             return;
         }
         if (this.queue.length === 0) {
+            this.emit('idle');
             return;
         }
         this.isRunning = true;
@@ -65,6 +68,7 @@ export class ActionQueue {
         const queueItem = this.queue.shift();
         const cancellationTokenSource = new CancellationTokenSource();
 
+        //process the action next tick to allow the event loop to catch up
         let actionPromise = Promise.resolve().then(() => {
             return queueItem.action(queueItem.data, cancellationTokenSource.token);
         }).then((result) => {
@@ -90,6 +94,9 @@ export class ActionQueue {
 
         clearTimeout(timeoutId);
 
+        //small delay to allow the event loop to catch up
+        await util.sleep(1);
+
         this.isRunning = false;
 
         //at this point, we've properly handled the action, so try and handle the next one
@@ -103,6 +110,51 @@ export class ActionQueue {
                 return typeof value === 'bigint' ? value.toString() : value;
             }
         );
+    }
+
+    public get isIdle() {
+        return this.queue.length === 0 && !this.isRunning;
+    }
+
+    /**
+     * Get a promise that resolves when the queue is empty
+     * @returns
+     */
+    public onIdle() {
+        if (!this.isIdle) {
+            return this.once('idle');
+        }
+        return Promise.resolve();
+    }
+
+    public once(eventname: 'idle'): Promise<void>;
+    public once(eventName: string): Promise<void> {
+        return new Promise<any>((resolve) => {
+            const disconnect = this.on(eventName as Parameters<typeof this['on']>[0], (...args) => {
+                disconnect();
+                resolve(args);
+            });
+        });
+    }
+
+    public on(eventName: 'idle', handler: () => any);
+    public on(eventName: string, handler: (payload: any) => any) {
+        this.emitter.on(eventName, handler as any);
+        return () => {
+            this.emitter.removeListener(eventName, handler as any);
+        };
+    }
+
+    private async emit(eventName: 'idle');
+    private async emit(eventName: string, data?: any) {
+        //emit these events on next tick, otherwise they will be processed immediately which could cause issues
+        await util.sleep(0);
+        this.emitter.emit(eventName, data);
+    }
+    private emitter = new EventEmitter();
+
+    public dispose() {
+        this.emitter.removeAllListeners();
     }
 }
 
