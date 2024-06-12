@@ -6,7 +6,7 @@ import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, rangeMatch, token } from '../Parser.spec';
 import { isBlock, isFunctionStatement, isIfStatement } from '../../../astUtils/reflection';
 import type { Block, FunctionStatement, IfStatement } from '../../Statement';
-import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics } from '../../../testHelpers.spec';
+import { expectDiagnosticsIncludes, expectZeroDiagnostics } from '../../../testHelpers.spec';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 
 describe('parser if statements', () => {
