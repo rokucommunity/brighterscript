@@ -634,8 +634,8 @@ export class IfStatement extends Statement {
             ...(this.tokens.endIf?.leadingTrivia ?? [])
         ];
 
-        const hasNewlineOrColon = allLeadingTrivia.find(t => t.kind === TokenKind.Newline);
-        return !hasNewlineOrColon;
+        const hasNewline = allLeadingTrivia.find(t => t.kind === TokenKind.Newline);
+        return !hasNewline;
     }
 
     transpile(state: BrsTranspileState) {
