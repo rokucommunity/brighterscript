@@ -10,7 +10,7 @@ import { WorkerThreadProject } from './worker/WorkerThreadProject';
 import { getWakeWorkerThreadPromise } from './worker/WorkerThreadProject.spec';
 import type { LspDiagnostic } from './LspProject';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { CompletionItemKind, FileChangeType } from 'vscode-languageserver-protocol';
+import { FileChangeType } from 'vscode-languageserver-protocol';
 import { PathFilterer } from './PathFilterer';
 import { Deferred } from '../deferred';
 import type { DocumentActionWithStatus } from './DocumentManager';
@@ -70,7 +70,7 @@ describe('ProjectManager', () => {
     }
 
     describe('on', () => {
-        it.only('emits events', async () => {
+        it('emits events', async () => {
             const stub = sinon.stub();
             const off = manager.on('diagnostics', stub);
             await manager['emit']('diagnostics', { project: undefined, diagnostics: [] });
@@ -291,7 +291,7 @@ describe('ProjectManager', () => {
             await manager.onIdle();
 
             //now for the test. type a char, request completions, type a char, request completions (just like how vscode does it)
-            setFile(s`${rootDir}/source/main.bs`, `
+            void setFile(s`${rootDir}/source/main.bs`, `
                 sub test()
                     thing = alpha.Direction
                 end sub
@@ -301,7 +301,7 @@ describe('ProjectManager', () => {
             //     position: util.createPosition(2, 43)
             // });
             //request completions
-            setFile(s`${rootDir}/source/main.bs`, `
+            void setFile(s`${rootDir}/source/main.bs`, `
                 sub test()
                     thing = alpha.Direction.
                 end sub

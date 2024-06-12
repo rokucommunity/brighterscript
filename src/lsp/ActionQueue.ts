@@ -1,8 +1,9 @@
-import { CancellationToken, CancellationTokenSource } from "vscode-languageserver-protocol";
-import { Deferred } from "../deferred";
+import type { CancellationToken } from 'vscode-languageserver-protocol';
+import { CancellationTokenSource } from 'vscode-languageserver-protocol';
+import { Deferred } from '../deferred';
 import * as safeJsonStringify from 'safe-json-stringify';
 import { EventEmitter } from 'eventemitter3';
-import util from "../util";
+import util from '../util';
 
 export class ActionQueue {
 
@@ -33,9 +34,7 @@ export class ActionQueue {
 
     /**
      * Run an action. This will run after all previous actions have completed
-     * @param data data to be passed to the action. We collect this so we can log this data if this action takes too long (helpful for debugging)
      * @param action action to be run
-     * @returns
      */
     public run<T = any>(action: Action<T>, data?: T) {
         const deferred = new Deferred();
@@ -44,7 +43,7 @@ export class ActionQueue {
             data: data,
             deferred: deferred
         });
-        this.process();
+        void this.process();
         return deferred.promise;
     }
 
@@ -52,7 +51,6 @@ export class ActionQueue {
 
     /**
      * Process the next pending action. Safe to call even if another action is running, we will only run one action at a time
-     * @returns
      */
     private async process() {
         if (this.isRunning) {
@@ -73,7 +71,7 @@ export class ActionQueue {
             return queueItem.action(queueItem.data, cancellationTokenSource.token);
         }).then((result) => {
             queueItem.deferred.resolve(result);
-        })
+        });
 
         //register a timeout that will reject if the action takes too long
         let timeoutId: NodeJS.Timeout;
@@ -118,7 +116,6 @@ export class ActionQueue {
 
     /**
      * Get a promise that resolves when the queue is empty
-     * @returns
      */
     public onIdle() {
         if (!this.isIdle) {
@@ -158,7 +155,7 @@ export class ActionQueue {
     }
 }
 
-export type Action<T = any> = (data: T, cancellationToken?: CancellationToken) => (Promise<any> | any)
+export type Action<T = any> = (data: T, cancellationToken?: CancellationToken) => any;
 
 export interface ActionQueueOptions {
     /**

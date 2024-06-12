@@ -1,9 +1,9 @@
-import { expect } from "chai";
-import { ActionQueue } from "./ActionQueue";
-import util from "../util";
-import { Deferred } from "../deferred";
-import { expectThrowsAsync } from "../testHelpers.spec";
-import { CancellationToken } from "vscode-languageserver-protocol";
+import { expect } from 'chai';
+import { ActionQueue } from './ActionQueue';
+import util from '../util';
+import { Deferred } from '../deferred';
+import { expectThrowsAsync } from '../testHelpers.spec';
+import type { CancellationToken } from 'vscode-languageserver-protocol';
 
 describe('ActionQueue', () => {
     let queue: ActionQueue;
@@ -14,7 +14,7 @@ describe('ActionQueue', () => {
 
     it('runs successful actions in sequence', async () => {
         let results = [];
-        queue.run(() => {
+        void queue.run(() => {
             results.push(1);
         });
         await queue.run(() => {
@@ -25,10 +25,10 @@ describe('ActionQueue', () => {
 
     it('runs actions after a failed action', async () => {
         let results = [];
-        queue.run(() => {
+        void queue.run(() => {
             results.push(1);
         });
-        queue.run(() => {
+        void queue.run(() => {
             throw new Error('Crash');
         });
         await queue.run(() => {
@@ -44,7 +44,7 @@ describe('ActionQueue', () => {
         await expectThrowsAsync(async () => {
             await queue.run(async () => {
                 await util.sleep(10);
-            }, BigInt(1))
+            }, BigInt(1));
         }, 'Action took longer than 1ms to complete. Data: "1"');
     });
 

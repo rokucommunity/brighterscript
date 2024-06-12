@@ -11,7 +11,7 @@ export class DocumentManager {
     constructor(
         private options: {
             delay: number;
-            flushHandler: (event: FlushEvent) => Promise<void>;
+            flushHandler?: (event: FlushEvent) => Promise<void>;
         }) {
     }
 
@@ -23,7 +23,7 @@ export class DocumentManager {
             clearTimeout(this.timeoutHandle);
         }
         this.timeoutHandle = setTimeout(() => {
-            this.flush();
+            void this.flush();
         }, this.options.delay);
     }
 

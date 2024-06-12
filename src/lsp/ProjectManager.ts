@@ -182,7 +182,6 @@ export class ProjectManager {
     }
     /**
      * Get a promise that resolves when the project manager is idle (no pending work)
-     * @returns
      */
     public async onIdle() {
         await this.onInitialized();

@@ -404,7 +404,7 @@ export class LanguageServer {
         this.logger.log('onCompletion', params, token);
         const srcPath = util.uriToPath(params.textDocument.uri);
         const completions = await this.projectManager.getCompletions({ srcPath: srcPath, position: params.position });
-        return completions
+        return completions;
     }
 
     @AddStackToErrorMessage
