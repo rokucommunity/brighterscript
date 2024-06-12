@@ -383,16 +383,6 @@ export function expectTypeToBe(someType: BscType, expectedTypeClass: any) {
     expect(someType?.constructor?.name).to.eq(expectedTypeClass.name);
 }
 
-/**
- * Test that a range is waht was expected
- */
-export function expectRangeToBe(actual: Range, expected: Range) {
-    expect(actual.start.line, 'start line').to.eq(expected.start.line);
-    expect(actual.start.character, 'start character').to.eq(expected.start.character);
-    expect(actual.end.line, 'end line').to.eq(expected.end.line);
-    expect(actual.end.character, 'end character').to.eq(expected.end.character);
-}
-
 export function stripConsoleColors(inputString) {
     // Regular expression to match ANSI escape codes for colors
     // eslint-disable-next-line no-control-regex

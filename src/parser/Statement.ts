@@ -386,6 +386,10 @@ export class Block extends Statement {
         return results;
     }
 
+    public getLeadingTrivia(): Token[] {
+        return this.statements[0]?.getLeadingTrivia() ?? [];
+    }
+
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkStatements) {
             walkArray(this.statements, visitor, options, this);
@@ -587,13 +591,11 @@ export class IfStatement extends Statement {
         condition: Expression;
         thenBranch: Block;
         elseBranch?: IfStatement | Block;
-        isInline?: boolean;
     }) {
         super();
         this.condition = options.condition;
         this.thenBranch = options.thenBranch;
         this.elseBranch = options.elseBranch;
-        this.isInline = options.isInline;
 
         this.tokens = {
             if: options.if,
@@ -619,11 +621,22 @@ export class IfStatement extends Statement {
     public readonly condition: Expression;
     public readonly thenBranch: Block;
     public readonly elseBranch?: IfStatement | Block;
-    public readonly isInline?: boolean;
 
     public readonly kind = AstNodeKind.IfStatement;
 
     public readonly range: Range | undefined;
+
+    get isInline() {
+        const allLeadingTrivia = [
+            ...this.thenBranch.getLeadingTrivia(),
+            ...this.thenBranch.statements.map(s => s.getLeadingTrivia()).flat(),
+            ...(this.tokens.else?.leadingTrivia ?? []),
+            ...(this.tokens.endIf?.leadingTrivia ?? [])
+        ];
+
+        const hasNewline = allLeadingTrivia.find(t => t.kind === TokenKind.Newline);
+        return !hasNewline;
+    }
 
     transpile(state: BrsTranspileState) {
         let results = [] as TranspileResult;

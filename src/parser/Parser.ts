@@ -1810,12 +1810,14 @@ export class Parser {
         });
     }
 
-    private ifStatement(): IfStatement {
+    private nestedInlineConditionalCount = 0;
+
+    private ifStatement(incrementNestedCount = true): IfStatement {
         // colon before `if` is usually not allowed, unless it's after `then`
         if (this.current > 0) {
             const prev = this.previous();
             if (prev.kind === TokenKind.Colon) {
-                if (this.current > 1 && this.tokens[this.current - 2].kind !== TokenKind.Then) {
+                if (this.current > 1 && this.tokens[this.current - 2].kind !== TokenKind.Then && this.nestedInlineConditionalCount === 0) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.unexpectedColonBeforeIfStatement(),
                         range: prev.range
@@ -1844,6 +1846,9 @@ export class Parser {
 
         if (isInlineIfThen) {
             /*** PARSE INLINE IF STATEMENT ***/
+            if (!incrementNestedCount) {
+                this.nestedInlineConditionalCount++;
+            }
 
             thenBranch = this.inlineConditionalBranch(TokenKind.Else, TokenKind.EndIf);
 
@@ -1863,7 +1868,7 @@ export class Parser {
 
                 if (this.check(TokenKind.If)) {
                     // recurse-read `else if`
-                    elseBranch = this.ifStatement();
+                    elseBranch = this.ifStatement(false);
 
                     //no multi-line if chained with an inline if
                     if (!elseBranch.isInline) {
@@ -1901,7 +1906,7 @@ export class Parser {
             if (!elseBranch || !isIfStatement(elseBranch)) {
                 //enforce newline at the end of the inline if statement
                 const peek = this.peek();
-                if (peek.kind !== TokenKind.Newline && peek.kind !== TokenKind.Comment && !this.isAtEnd()) {
+                if (peek.kind !== TokenKind.Newline && peek.kind !== TokenKind.Comment && peek.kind !== TokenKind.Else && !this.isAtEnd()) {
                     //ignore last error if it was about a colon
                     if (this.previous().kind === TokenKind.Colon) {
                         this.diagnostics.pop();
@@ -1914,7 +1919,7 @@ export class Parser {
                     });
                 }
             }
-
+            this.nestedInlineConditionalCount--;
         } else {
             /*** PARSE MULTI-LINE IF STATEMENT ***/
 
@@ -1960,8 +1965,7 @@ export class Parser {
             else: elseToken,
             condition: condition,
             thenBranch: thenBranch,
-            elseBranch: elseBranch,
-            isInline: isInlineIfThen
+            elseBranch: elseBranch
         });
     }
 
