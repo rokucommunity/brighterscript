@@ -9,7 +9,10 @@ import util from '../util';
 export class DocumentManager {
 
     constructor(
-        private options: { delay: number }) {
+        private options: {
+            delay: number;
+            flushHandler: (event: FlushEvent) => Promise<void>;
+        }) {
     }
 
     private queue = new Map<string, DocumentAction>();
@@ -63,30 +66,45 @@ export class DocumentManager {
         this.throttle();
     }
 
+    private isFlushRunning = false;
+
+    private async flush() {
+        //if we're already running a flush, don't run another
+        if (this.isFlushRunning) {
+            return;
+        }
+
+        this.isFlushRunning = true;
+        while (this.queue.size > 0) {
+            try {
+                const event: FlushEvent = {
+                    actions: [...this.queue.values()]
+                };
+                await this.options.flushHandler?.(event);
+                this.queue.clear();
+            } catch (e) {
+                console.error(e);
+            }
+        }
+        this.emitSync('flush');
+        this.isFlushRunning = false;
+    }
+
     /**
-     * Are there any pending documents that need to be flushed
+     * Is the manager settled (i.e. no pending files, all files have been fully flushed)
      */
-    public get hasPendingChanges() {
-        return this.queue.size > 0;
-    }
-
-    private flush() {
-        const event: FlushEvent = {
-            actions: [...this.queue.values()]
-        };
-        this.queue.clear();
-
-        this.emitSync('flush', event);
+    public get isIdle() {
+        return this.queue.size === 0 && this.isFlushRunning === false;
     }
 
     /**
-     * Returns a promise that resolves when there are no pending files. Will immediately resolve if there are no files,
+     * Returns a promise that resolves when there are no pending files and no active flushes are running. Will immediately resolve if there are no files,
      * and will wait until files are flushed if there are files.
      */
-    public async onSettle() {
-        if (this.queue.size > 0) {
+    public async onIdle() {
+        if (!this.isIdle) {
             await this.once('flush');
-            return this.onSettle();
+            return this.onIdle();
         }
     }
 
@@ -108,7 +126,7 @@ export class DocumentManager {
         };
     }
 
-    private emitSync(eventName: 'flush', data: FlushEvent);
+    private emitSync(eventName: 'flush');
     private emitSync(eventName: string, data?) {
         this.emitter.emit(eventName, data);
     }

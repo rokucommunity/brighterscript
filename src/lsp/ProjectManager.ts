@@ -18,6 +18,7 @@ import type { Logger } from '../logging';
 import { LogLevel, createLogger } from '../logging';
 import { Trace } from '../common/Decorators';
 import { Cache } from '../Cache';
+import { ActionQueue } from './ActionQueue';
 
 /**
  * Manages all brighterscript projects for the language server
@@ -30,8 +31,11 @@ export class ProjectManager {
     }) {
         this.logger = options?.logger ?? createLogger();
         this.pathFilterer = options?.pathFilterer ?? new PathFilterer({ logger: options?.logger });
-        this.documentManager.on('flush', (event) => {
-            void this.flushDocumentChanges(event).catch(e => console.error(e));
+        this.documentManager = new DocumentManager({
+            delay: ProjectManager.documentManagerDelay,
+            flushHandler: (event) => {
+                return this.flushDocumentChanges(event).catch(e => console.error(e));
+            }
         });
 
         this.on('validate-begin', (event) => {
@@ -57,9 +61,7 @@ export class ProjectManager {
      */
     private standaloneProjects: StandaloneProject[] = [];
 
-    private documentManager = new DocumentManager({
-        delay: ProjectManager.documentManagerDelay
-    });
+    private documentManager: DocumentManager;
     public static documentManagerDelay = 150;
 
     public busyStatusTracker = new BusyStatusTracker();
@@ -69,8 +71,11 @@ export class ProjectManager {
      * @param event the document changes that have occurred since the last time we applied
      */
     @TrackBusyStatus
-    @OnReady
     private async flushDocumentChanges(event: FlushEvent) {
+        this.logger.log('flushDocumentChanges', event.actions.map(x => x.srcPath));
+        //ensure that we're fully initialized before proceeding
+        await this.onInitialized();
+
         const actions = [...event.actions] as DocumentActionWithStatus[];
 
         let idSequence = 0;
@@ -114,6 +119,7 @@ export class ProjectManager {
                 await this.createStandaloneProject(action.srcPath);
             }
         }
+        this.logger.log('flushDocumentChanges complete', event.actions.map(x => x.srcPath));
     }
 
     /**
@@ -164,18 +170,35 @@ export class ProjectManager {
     /**
      * Get a promise that resolves when this manager is finished initializing
      */
-    public onReady() {
+    public onInitialized() {
         return Promise.allSettled([
             //wait for the first sync to finish
             this.firstSync.promise,
             //make sure we're not in the middle of a sync
             this.syncPromise,
-            //make sure all pending file changes have been flushed
-            this.documentManager.onSettle(),
             //make sure all projects are activated
             ...this.projects.map(x => x.whenActivated())
         ]);
     }
+    /**
+     * Get a promise that resolves when the project manager is idle (no pending work)
+     * @returns
+     */
+    public async onIdle() {
+        await this.onInitialized();
+
+        //There are race conditions where the fileChangesQueue will become idle, but that causes the documentManager
+        //to start a new flush. So we must keep waiting until everything is idle
+        while (!this.documentManager.isIdle || !this.fileChangesQueue.isIdle) {
+            await Promise.allSettled([
+                //make sure all pending file changes have been flushed
+                this.documentManager.onIdle(),
+                //wait for the file changes queue to be idle
+                this.fileChangesQueue.onIdle()
+            ]);
+        }
+    }
+
     /**
      * Given a list of all desired projects, create any missing projects and destroy and projects that are no longer available
      * Treat workspaces that don't have a bsconfig.json as a project.
@@ -246,21 +269,20 @@ export class ProjectManager {
         return this.syncPromise;
     }
 
-    /**
-     * Promise that resolves when all file changes have been processed (so we can queue file changes in sequence)
-     */
-    private handleFileChangesPromise: Promise<any> = Promise.resolve();
+    private fileChangesQueue = new ActionQueue({
+        maxActionDuration: 45_000
+    });
 
-    public async handleFileChanges(changes: FileChange[]) {
-        //wait for the previous file change handling to finish, then handle these changes
-        this.handleFileChangesPromise = this.handleFileChangesPromise.catch((e) => {
-            console.error(e);
-            //ignore errors, they will be handled by the previous caller
-        }).then(() => {
-            //wait for the initial sync to finish
+    public handleFileChanges(changes: FileChange[]) {
+        this.logger.log('handleFileChanges', changes.map(x => x.srcPath));
+        //this function should NOT be marked as async, because typescript wraps the body in an async call sometimes. These need to be registered synchronously
+        return this.fileChangesQueue.run(async (changes) => {
+            this.logger.log('handleFileChanges -> run', changes.map(x => x.srcPath));
+            //wait for any pending syncs to finish
+            await this.onInitialized();
+
             return this._handleFileChanges(changes);
-        });
-        return this.handleFileChangesPromise;
+        }, changes);
     }
 
     /**
@@ -268,8 +290,7 @@ export class ProjectManager {
      * This is safe to call any time. Changes will be queued and flushed at the correct times
      */
     public async _handleFileChanges(changes: FileChange[]) {
-        //wait for any pending syncs to finish
-        await this.onReady();
+
 
         //filter any changes that are not allowed by the path filterer
         changes = this.pathFilterer.filter(changes, x => x.srcPath);
@@ -347,8 +368,10 @@ export class ProjectManager {
      * @returns an array of semantic tokens
      */
     @TrackBusyStatus
-    @OnReady
     public async getSemanticTokens(options: { srcPath: string }) {
+        //wait for all pending syncs to finish
+        await this.onIdle();
+
         let result = await util.promiseRaceMatch(
             this.projects.map(x => x.getSemanticTokens(options)),
             //keep the first non-falsey result
@@ -362,8 +385,10 @@ export class ProjectManager {
      * @returns the transpiled contents of the file as a string
      */
     @TrackBusyStatus
-    @OnReady
     public async transpileFile(options: { srcPath: string }) {
+        //wait for all pending syncs to finish
+        await this.onIdle();
+
         let result = await util.promiseRaceMatch(
             this.projects.map(x => x.transpileFile(options)),
             //keep the first non-falsey result
@@ -376,8 +401,10 @@ export class ProjectManager {
      *  Get the completions for the given position in the file
      */
     @TrackBusyStatus
-    @OnReady
     public async getCompletions(options: { srcPath: string; position: Position }): Promise<CompletionList> {
+        await this.onIdle();
+
+        this.logger.log('ProjectManager getCompletions', options);
         //Ask every project for results, keep whichever one responds first that has a valid response
         let result = await util.promiseRaceMatch(
             this.projects.map(x => x.getCompletions(options)),
@@ -393,8 +420,10 @@ export class ProjectManager {
      * @returns the hover information or undefined if no hover information was found
      */
     @TrackBusyStatus
-    @OnReady
     public async getHover(options: { srcPath: string; position: Position }): Promise<Hover> {
+        //wait for all pending syncs to finish
+        await this.onIdle();
+
         //Ask every project for hover info, keep whichever one responds first that has a valid response
         let hover = await util.promiseRaceMatch(
             this.projects.map(x => x.getHover(options)),
@@ -409,8 +438,10 @@ export class ProjectManager {
      * @returns a list of locations where the symbol under the position is defined in the project
      */
     @TrackBusyStatus
-    @OnReady
     public async getDefinition(options: { srcPath: string; position: Position }): Promise<Location[]> {
+        //wait for all pending syncs to finish
+        await this.onIdle();
+
         //TODO should we merge definitions across ALL projects? or just return definitions from the first project we found
 
         //Ask every project for definition info, keep whichever one responds first that has a valid response
@@ -423,8 +454,10 @@ export class ProjectManager {
     }
 
     @TrackBusyStatus
-    @OnReady
     public async getSignatureHelp(options: { srcPath: string; position: Position }): Promise<SignatureHelp> {
+        //wait for all pending syncs to finish
+        await this.onIdle();
+
         //Ask every project for definition info, keep whichever one responds first that has a valid response
         let signatures = await util.promiseRaceMatch(
             this.projects.map(x => x.getSignatureHelp(options)),
@@ -447,8 +480,10 @@ export class ProjectManager {
     }
 
     @TrackBusyStatus
-    @OnReady
     public async getDocumentSymbol(options: { srcPath: string }): Promise<DocumentSymbol[]> {
+        //wait for all pending syncs to finish
+        await this.onIdle();
+
         //Ask every project for definition info, keep whichever one responds first that has a valid response
         let result = await util.promiseRaceMatch(
             this.projects.map(x => x.getDocumentSymbol(options)),
@@ -459,8 +494,10 @@ export class ProjectManager {
     }
 
     @TrackBusyStatus
-    @OnReady
     public async getWorkspaceSymbol(): Promise<WorkspaceSymbol[]> {
+        //wait for all pending syncs to finish
+        await this.onIdle();
+
         //Ask every project for definition info, keep whichever one responds first that has a valid response
         let responses = await Promise.allSettled(
             this.projects.map(x => x.getWorkspaceSymbol())
@@ -488,8 +525,10 @@ export class ProjectManager {
     }
 
     @TrackBusyStatus
-    @OnReady
     public async getReferences(options: { srcPath: string; position: Position }): Promise<Location[]> {
+        //wait for all pending syncs to finish
+        await this.onIdle();
+
         //Ask every project for definition info, keep whichever one responds first that has a valid response
         let result = await util.promiseRaceMatch(
             this.projects.map(x => x.getReferences(options)),
@@ -500,8 +539,10 @@ export class ProjectManager {
     }
 
     @TrackBusyStatus
-    @OnReady
     public async getCodeActions(options: { srcPath: string; range: Range }) {
+        //wait for all pending syncs to finish
+        await this.onIdle();
+
         //Ask every project for definition info, keep whichever one responds first that has a valid response
         let result = await util.promiseRaceMatch(
             this.projects.map(x => x.getCodeActions(options)),
@@ -745,18 +786,5 @@ function TrackBusyStatus(target: any, propertyKey: string, descriptor: PropertyD
         return this.busyStatusTracker.run(() => {
             return originalMethod.apply(this, args);
         }, originalMethod.name);
-    };
-}
-
-/**
- * Wraps the method in a an awaited call to `onReady` to ensure the project manager is ready before the method is called
- */
-function OnReady(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
-    let originalMethod = descriptor.value;
-
-    //wrapping the original method
-    descriptor.value = async function value(this: ProjectManager, ...args: any[]) {
-        await this.onReady();
-        return originalMethod.apply(this, args);
     };
 }
