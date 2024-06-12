@@ -1,7 +1,7 @@
 import type { BscFile, BsDiagnostic } from './interfaces';
 import * as assert from 'assert';
 import chalk from 'chalk';
-import type { CodeDescription, CompletionItem, Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, integer, Range } from 'vscode-languageserver';
+import type { CodeDescription, CompletionItem, CompletionList, Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, integer, Range } from 'vscode-languageserver';
 import { createSandbox } from 'sinon';
 import { expect } from './chai-config.spec';
 import type { CodeActionShorthand } from './CodeActionUtil';
@@ -319,7 +319,9 @@ function pick<T extends Record<string, any>>(example: T, subject: Record<string,
 /**
  * Test a set of completions includes the provided items
  */
-export function expectCompletionsIncludes(completions: CompletionItem[], expectedItems: Array<string | Partial<CompletionItem>>) {
+export function expectCompletionsIncludes(collection: CompletionItem[] | CompletionList, expectedItems: Array<string | Partial<CompletionItem>>) {
+    const completions = Array.isArray(collection) ? collection : collection.items;
+
     for (const expectedItem of expectedItems) {
         if (typeof expectedItem === 'string') {
             expect(completions.map(x => x.label)).includes(expectedItem);
@@ -367,7 +369,7 @@ export function expectThrows(callback: () => any, expectedMessage: string | unde
     }
 }
 
- export async function expectThrowsAsync(callback: () => any, expectedMessage = undefined, failedTestMessage = 'Expected to throw but did not') {
+export async function expectThrowsAsync(callback: () => any, expectedMessage = undefined, failedTestMessage = 'Expected to throw but did not') {
     let wasExceptionThrown = false;
     try {
         await Promise.resolve(callback());

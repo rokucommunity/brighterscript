@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import { ProjectManager } from './ProjectManager';
-import { tempDir, rootDir, expectZeroDiagnostics, expectDiagnostics } from '../testHelpers.spec';
+import { tempDir, rootDir, expectZeroDiagnostics, expectDiagnostics, expectCompletionsIncludes } from '../testHelpers.spec';
 import * as fsExtra from 'fs-extra';
 import util, { standardizePath as s } from '../util';
 import type { SinonStub } from 'sinon';
@@ -10,7 +10,7 @@ import { WorkerThreadProject } from './worker/WorkerThreadProject';
 import { getWakeWorkerThreadPromise } from './worker/WorkerThreadProject.spec';
 import type { LspDiagnostic } from './LspProject';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { FileChangeType } from 'vscode-languageserver-protocol';
+import { CompletionItemKind, FileChangeType } from 'vscode-languageserver-protocol';
 import { PathFilterer } from './PathFilterer';
 import { Deferred } from '../deferred';
 import type { DocumentActionWithStatus } from './DocumentManager';
@@ -59,8 +59,18 @@ describe('ProjectManager', () => {
         }
     }
 
+    async function setFile(srcPath: string, contents: string) {
+        //set the namespace first
+        await manager.handleFileChanges([{
+            srcPath: srcPath,
+            type: FileChangeType.Changed,
+            fileContents: contents,
+            allowStandaloneProject: false
+        }]);
+    }
+
     describe('on', () => {
-        it('emits events', async () => {
+        it.only('emits events', async () => {
             const stub = sinon.stub();
             const off = manager.on('diagnostics', stub);
             await manager['emit']('diagnostics', { project: undefined, diagnostics: [] });
@@ -254,6 +264,62 @@ describe('ProjectManager', () => {
                 s`${rootDir}/subdir1`,
                 s`${rootDir}/subdir2`
             ]);
+        });
+    });
+
+    describe('getCompletions', () => {
+        it('works for quick file changes', async () => {
+            //set up the project
+            await manager.syncProjects([{
+                workspaceFolder: rootDir
+            }]);
+
+            //add the namespace first
+            await setFile(s`${rootDir}/source/alpha.bs`, `
+                namespace alpha
+                    enum Direction
+                        up
+                    end enum
+                end namespace
+            `);
+            //add the baseline file
+            await setFile(s`${rootDir}/source/main.bs`, `
+                sub test()
+                    thing = alpha.Directio
+                end sub
+            `);
+            await manager.onIdle();
+
+            //now for the test. type a char, request completions, type a char, request completions (just like how vscode does it)
+            setFile(s`${rootDir}/source/main.bs`, `
+                sub test()
+                    thing = alpha.Direction
+                end sub
+            `);
+            // const completionsPromise1 = manager.getCompletions({
+            //     srcPath: s`${rootDir}/source/main.bs`,
+            //     position: util.createPosition(2, 43)
+            // });
+            //request completions
+            setFile(s`${rootDir}/source/main.bs`, `
+                sub test()
+                    thing = alpha.Direction.
+                end sub
+            `);
+            const completionsPromise2 = manager.getCompletions({
+                srcPath: s`${rootDir}/source/main.bs`,
+                position: util.createPosition(2, 44)
+            });
+
+            // //the first set of completions should only have the `alpha.Direction` enum
+            // expectCompletionsIncludes(await completionsPromise1, [{
+            //     label: 'Direction'
+            // }]);
+
+            //the next set of completions should only have the alpha.Direction.up enum member
+            expectCompletionsIncludes(await completionsPromise2, [{
+                label: 'up'
+            }]);
         });
     });
 
