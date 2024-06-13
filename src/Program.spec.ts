@@ -44,7 +44,7 @@ describe('Program', () => {
         program.dispose();
     });
 
-    it('Does not crazy for file not referenced by any other scope', async () => {
+    it('Does not crash for file not referenced by any other scope', async () => {
         program.setFile('tests/testFile.spec.bs', `
             function main(args as object) as object
                 return roca(args).describe("test suite", sub()
@@ -552,6 +552,20 @@ describe('Program', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        it('properly handles errors in async mode', async () => {
+            const file = program.setFile<BrsFile>('source/main.brs', ``);
+            file.validate = () => {
+                throw new Error('Crash for test');
+            };
+            let error: Error;
+            try {
+                await program.validate({ async: true });
+            } catch (e) {
+                error = e as any;
+            }
+            expect(error?.message).to.eql('Crash for test');
+        });
     });
 
     describe('hasFile', () => {
@@ -900,6 +914,43 @@ describe('Program', () => {
             program.validate();
             let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(4, 28)).map(x => x.label);
             expect(completions).to.include('thing');
+        });
+
+        it('finds enum member after dot', () => {
+            program.setFile('source/main.bs', `
+                sub test()
+                    thing = alpha.Direction.
+                end sub
+                namespace alpha
+                    enum Direction
+                        up
+                    end enum
+                end namespace
+            `);
+            program.validate();
+            const completions = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 44));
+            expect(completions.map(x => ({ kind: x.kind, label: x.label }))).to.eql([{
+                label: 'up',
+                kind: CompletionItemKind.EnumMember
+            }]);
+        });
+
+        it('finds enum member after dot in if statement', () => {
+            program.setFile('source/main.bs', `
+                sub test()
+                    if alpha.beta. then
+                    end if
+                end sub
+                namespace alpha.beta
+                    const isEnabled = true
+                end namespace
+            `);
+            program.validate();
+            const completions = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 34));
+            expect(completions.map(x => ({ kind: x.kind, label: x.label }))).to.eql([{
+                label: 'isEnabled',
+                kind: CompletionItemKind.Constant
+            }]);
         });
 
         it('includes `for` variable', () => {
@@ -1958,9 +2009,9 @@ describe('Program', () => {
             src: s`${rootDir}/source/main.bs`,
             dest: 'source/main.bs'
         }, {
-            src: s`${rootDir}/source/main.bs`,
-            dest: 'source/main.bs'
-        }], program.options.stagingDir!);
+            src: s`${rootDir}/source/common.bs`,
+            dest: 'source/common.bs'
+        }], program.options.stagingDir);
 
         //entries should now be in alphabetic order
         expect(

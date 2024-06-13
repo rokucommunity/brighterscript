@@ -1,7 +1,7 @@
 import type { BscFile, BsDiagnostic } from './interfaces';
 import * as assert from 'assert';
 import chalk from 'chalk';
-import type { CodeDescription, CompletionItem, Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, integer, Range } from 'vscode-languageserver';
+import type { CodeDescription, CompletionItem, CompletionList, Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, integer, Range } from 'vscode-languageserver';
 import { createSandbox } from 'sinon';
 import { expect } from './chai-config.spec';
 import type { CodeActionShorthand } from './CodeActionUtil';
@@ -19,8 +19,17 @@ export const rootDir = s`${tempDir}/rootDir`;
 export const stagingDir = s`${tempDir}/stagingDir`;
 
 export const trim = undent;
+const sinon = createSandbox();
+
+beforeEach(() => {
+    sinon.restore();
+});
+afterEach(() => {
+    sinon.restore();
+});
 
 type DiagnosticCollection = { getDiagnostics(): Array<Diagnostic> } | { diagnostics: Diagnostic[] } | Diagnostic[];
+type DiagnosticCollectionAsync = DiagnosticCollection | { getDiagnostics(): Promise<Array<Diagnostic>> };
 
 function getDiagnostics(arg: DiagnosticCollection): BsDiagnostic[] {
     if (Array.isArray(arg)) {
@@ -101,6 +110,17 @@ function cloneDiagnostic(actualDiagnosticInput: BsDiagnostic, expectedDiagnostic
     return actualDiagnostic;
 }
 
+/**
+ * Ensure the DiagnosticCollection exactly contains the data from expected list.
+ * @param arg - any object that contains diagnostics (such as `Program`, `Scope`, or even an array of diagnostics)
+ * @param expected an array of expected diagnostics. if it's a string, assume that's a diagnostic error message
+ */
+export async function expectDiagnosticsAsync(arg: DiagnosticCollectionAsync, expected: Array<PartialDiagnostic | string | number>) {
+    expectDiagnostics(
+        await Promise.resolve(getDiagnostics(arg as any)),
+        expected
+    );
+}
 
 /**
  * Ensure the DiagnosticCollection exactly contains the data from expected list.
@@ -299,7 +319,9 @@ function pick<T extends Record<string, any>>(example: T, subject: Record<string,
 /**
  * Test a set of completions includes the provided items
  */
-export function expectCompletionsIncludes(completions: CompletionItem[], expectedItems: Array<string | Partial<CompletionItem>>) {
+export function expectCompletionsIncludes(collection: CompletionItem[] | CompletionList, expectedItems: Array<string | Partial<CompletionItem>>) {
+    const completions = Array.isArray(collection) ? collection : collection.items;
+
     for (const expectedItem of expectedItems) {
         if (typeof expectedItem === 'string') {
             expect(completions.map(x => x.label)).includes(expectedItem);
@@ -347,6 +369,21 @@ export function expectThrows(callback: () => any, expectedMessage: string | unde
     }
 }
 
+export async function expectThrowsAsync(callback: () => any, expectedMessage = undefined, failedTestMessage = 'Expected to throw but did not') {
+    let wasExceptionThrown = false;
+    try {
+        await Promise.resolve(callback());
+    } catch (e) {
+        wasExceptionThrown = true;
+        if (expectedMessage) {
+            expect((e as Error)?.message).to.eql(expectedMessage);
+        }
+    }
+    if (wasExceptionThrown === false) {
+        throw new Error(failedTestMessage);
+    }
+}
+
 export function objectToMap<T>(obj: Record<string, T>) {
     const result = new Map<string, T>();
     for (let key in obj) {
@@ -370,4 +407,20 @@ export function stripConsoleColors(inputString) {
 
     // Remove all occurrences of ANSI escape codes
     return inputString.replace(colorPattern, '');
+}
+
+type FunctionReturnType<T> = T extends (...args: any[]) => infer R ? R : any;
+
+/**
+ * Mock something, and get a promise when it has been called once
+ */
+export async function onCalledOnce<T, K extends keyof T>(thing: T, method: K): Promise<FunctionReturnType<T[K]>> {
+    return new Promise((resolve, reject) => {
+        const stub = sinon.stub(thing, method).callsFake(async function _(this: any, ...args: any[]) {
+            const result = await stub.wrappedMethod.apply(this, args);
+            sinon.restore();
+            resolve(result);
+            return result;
+        });
+    });
 }
