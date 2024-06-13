@@ -6,7 +6,9 @@ import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { isBlock, isFunctionStatement, isIfStatement } from '../../../astUtils/reflection';
 import type { Block, FunctionStatement, IfStatement } from '../../Statement';
-import util from '../../../util';
+import { expectDiagnosticsIncludes, expectZeroDiagnostics } from '../../../testHelpers.spec';
+import { DiagnosticMessages } from '../../../DiagnosticMessages';
+import { util } from '../../../util';
 
 describe('parser if statements', () => {
     it('allows empty if blocks', () => {
@@ -234,8 +236,147 @@ describe('parser if statements', () => {
                 if true then return else print 1
             `);
 
-            expect(diagnostics).to.be.lengthOf(0);
+            expectZeroDiagnostics(diagnostics);
             expect(statements).to.be.length.greaterThan(0);
+        });
+
+        it('colon used between inline else statements', () => {
+            const { statements, diagnostics } = Parser.parse(`
+                if x print 1 else print 2 : print 3
+            `);
+
+            expectZeroDiagnostics(diagnostics);
+            expect(statements).to.be.lengthOf(1);
+            const ifStatement = statements[0] as IfStatement;
+            expect(ifStatement.thenBranch.statements).to.be.lengthOf(1);
+            expect((ifStatement.elseBranch as Block).statements).to.be.lengthOf(2);
+        });
+
+        it('colon used between inline else if statements', () => {
+            const { statements, diagnostics } = Parser.parse(`
+                if x print 1 else if y print 2 : print 3
+            `);
+
+            expectZeroDiagnostics(diagnostics);
+            expect(statements).to.be.lengthOf(1);
+            const ifStatement = statements[0] as IfStatement;
+            expect(ifStatement.thenBranch.statements).to.be.lengthOf(1);
+            expect((ifStatement.elseBranch as IfStatement).thenBranch.statements).to.be.lengthOf(2);
+        });
+
+        it('colon used between all kinds of statements', () => {
+            const { statements, diagnostics } = Parser.parse(`
+                if x print 1 : print 1 else if y print 2 : print 2 : print 2 else print 3 : print 3: print 3: print 3
+            `);
+
+            expectZeroDiagnostics(diagnostics);
+            expect(statements).to.be.lengthOf(1);
+            const ifStatement = statements[0] as IfStatement;
+            expect(ifStatement.thenBranch.statements).to.be.lengthOf(2);
+            const elseIf = ifStatement.elseBranch as IfStatement;
+            expect(elseIf.thenBranch.statements).to.be.lengthOf(3);
+            expect((elseIf.elseBranch as Block).statements).to.be.lengthOf(4);
+        });
+
+        it('has diagnostic with extra else', () => {
+            const { diagnostics } = Parser.parse(`
+                if x=1 print 1 else print 2 else print 3
+            `);
+
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.expectedNewlineOrColon().message
+            ]);
+        });
+
+        it('nested inline if statements', () => {
+            const { statements, diagnostics } = Parser.parse(`
+                if x=1 print 1 else if x=2 print 2 : if y=1 print "y is 1" else print "y is not 1" else print 3: print 3: print 3
+            `);
+
+            expectZeroDiagnostics(diagnostics);
+            expect(statements).to.be.lengthOf(1);
+            const ifStatement = statements[0] as IfStatement;
+            expect(ifStatement.thenBranch.statements).to.be.lengthOf(1);
+            const elseIf = ifStatement.elseBranch as IfStatement;
+            expect(elseIf.thenBranch.statements).to.be.lengthOf(2);
+            expect(isIfStatement(elseIf.thenBranch.statements[1])).to.be.true;
+            const nestedInlineIf = elseIf.thenBranch.statements[1] as IfStatement;
+            expect(nestedInlineIf.thenBranch.statements).to.be.lengthOf(1);
+            expect((nestedInlineIf.elseBranch as Block).statements).to.be.lengthOf(1);
+            expect((elseIf.elseBranch as Block).statements).to.be.lengthOf(3);
+        });
+
+        describe('expected inline if', () => {
+
+            it('non-inline statement used in inline if', () => {
+                const { statements, diagnostics } = Parser.parse(`
+                    if true print 1 else
+                        print 1
+                    end if
+                `);
+                expectDiagnosticsIncludes(diagnostics, [
+                    DiagnosticMessages.expectedInlineIfStatement().message
+                ]);
+                expect(statements.length).to.be.greaterThan(0);
+            });
+
+            it('non inline statement used in inline else if', () => {
+                const { statements, diagnostics } = Parser.parse(`
+                    if x print 1 else if y
+                        print 2
+                    end if
+                `);
+                expectDiagnosticsIncludes(diagnostics, [
+                    DiagnosticMessages.expectedInlineIfStatement().message
+                ]);
+                expect(statements.length).to.be.greaterThan(0);
+            });
+
+            it('colon used after inline else', () => {
+                const { statements, diagnostics } = Parser.parse(`
+                    if x print 1 else : print 2 : print 3: end if
+                `);
+                expectDiagnosticsIncludes(diagnostics, [
+                    DiagnosticMessages.expectedInlineIfStatement().message
+                ]);
+                expect(statements.length).to.be.greaterThan(0);
+            });
+
+            it('new line used in inline else', () => {
+                const { statements, diagnostics } = Parser.parse(`
+                    if x print 1 else
+                        print 2
+                        print 3
+                    end if
+                `);
+                expectDiagnosticsIncludes(diagnostics, [
+                    DiagnosticMessages.expectedInlineIfStatement().message
+                ]);
+                expect(statements.length).to.be.greaterThan(0);
+            });
+
+
+            it('colon used after inline else if', () => {
+                const { diagnostics } = Parser.parse(`
+                    if x print 1 else if y : print 2
+                `);
+                expectDiagnosticsIncludes(diagnostics, [
+                    DiagnosticMessages.expectedEndIfElseIfOrElseToTerminateThenBlock().message
+                ]);
+            });
+
+            it('new line used in inline else if', () => {
+                const { statements, diagnostics } = Parser.parse(`
+                    if x print 1 else if y
+                        print 2
+                    end if
+                `);
+                expectDiagnosticsIncludes(diagnostics, [
+                    DiagnosticMessages.expectedInlineIfStatement().message
+                ]);
+                expect(statements.length).to.be.greaterThan(0);
+            });
+
         });
     });
 

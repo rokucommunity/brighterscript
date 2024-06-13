@@ -918,11 +918,7 @@ export class Parser {
             }
 
             if (!body) {
-                body = new Block({
-                    statements: [],
-                    startingRange: util.createBoundingRange(
-                        functionType, name, leftParen, ...params, rightParen, asToken, typeExpression, endFunctionType)
-                });
+                body = new Block({ statements: [] });
             }
 
             let func = new FunctionExpression({
@@ -1817,12 +1813,14 @@ export class Parser {
         });
     }
 
-    private ifStatement(): IfStatement {
+    private nestedInlineConditionalCount = 0;
+
+    private ifStatement(incrementNestedCount = true): IfStatement {
         // colon before `if` is usually not allowed, unless it's after `then`
         if (this.current > 0) {
             const prev = this.previous();
             if (prev.kind === TokenKind.Colon) {
-                if (this.current > 1 && this.tokens[this.current - 2].kind !== TokenKind.Then) {
+                if (this.current > 1 && this.tokens[this.current - 2].kind !== TokenKind.Then && this.nestedInlineConditionalCount === 0) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.unexpectedColonBeforeIfStatement(),
                         range: prev.location?.range
@@ -1832,7 +1830,6 @@ export class Parser {
         }
 
         const ifToken = this.advance();
-        const startingRange = ifToken.location?.range;
 
         const condition = this.expression();
         let thenBranch: Block;
@@ -1852,6 +1849,9 @@ export class Parser {
 
         if (isInlineIfThen) {
             /*** PARSE INLINE IF STATEMENT ***/
+            if (!incrementNestedCount) {
+                this.nestedInlineConditionalCount++;
+            }
 
             thenBranch = this.inlineConditionalBranch(TokenKind.Else, TokenKind.EndIf);
 
@@ -1871,7 +1871,7 @@ export class Parser {
 
                 if (this.check(TokenKind.If)) {
                     // recurse-read `else if`
-                    elseBranch = this.ifStatement();
+                    elseBranch = this.ifStatement(false);
 
                     //no multi-line if chained with an inline if
                     if (!elseBranch.isInline) {
@@ -1909,7 +1909,7 @@ export class Parser {
             if (!elseBranch || !isIfStatement(elseBranch)) {
                 //enforce newline at the end of the inline if statement
                 const peek = this.peek();
-                if (peek.kind !== TokenKind.Newline && peek.kind !== TokenKind.Comment && !this.isAtEnd()) {
+                if (peek.kind !== TokenKind.Newline && peek.kind !== TokenKind.Comment && peek.kind !== TokenKind.Else && !this.isAtEnd()) {
                     //ignore last error if it was about a colon
                     if (this.previous().kind === TokenKind.Colon) {
                         this.diagnostics.pop();
@@ -1922,7 +1922,7 @@ export class Parser {
                     });
                 }
             }
-
+            this.nestedInlineConditionalCount--;
         } else {
             /*** PARSE MULTI-LINE IF STATEMENT ***/
 
@@ -1954,7 +1954,7 @@ export class Parser {
                 } else {
                     //missing endif
                     this.diagnostics.push({
-                        ...DiagnosticMessages.expectedEndIfToCloseIfStatement(startingRange.start),
+                        ...DiagnosticMessages.expectedEndIfToCloseIfStatement(ifToken.location?.range.start),
                         range: ifToken.location?.range
                     });
                 }
@@ -1968,8 +1968,7 @@ export class Parser {
             else: elseToken,
             condition: condition,
             thenBranch: thenBranch,
-            elseBranch: elseBranch,
-            isInline: isInlineIfThen
+            elseBranch: elseBranch
         });
     }
 
@@ -2001,7 +2000,6 @@ export class Parser {
 
     private conditionalCompileStatement(): ConditionalCompileStatement {
         const hashIfToken = this.advance();
-        const startingRange = hashIfToken.location?.range;
         let notToken: Token | undefined;
 
         if (this.check(TokenKind.Not)) {
@@ -2065,7 +2063,7 @@ export class Parser {
             } else {
                 //missing #endif
                 this.diagnostics.push({
-                    ...DiagnosticMessages.expectedHashEndIfToCloseHashIf(startingRange.start.line),
+                    ...DiagnosticMessages.expectedHashEndIfToCloseHashIf(hashIfToken.location?.range.start.line),
                     range: hashIfToken.location?.range
                 });
             }
@@ -2115,7 +2113,6 @@ export class Parser {
         const parentAnnotations = this.enterAnnotationBlock();
 
         this.consumeStatementSeparators(true);
-        let startingToken = this.peek();
         const unsafeTerminators = BlockTerminators;
         const conditionalEndTokens = [TokenKind.HashElse, TokenKind.HashElseIf, TokenKind.HashEndIf];
         const terminators = [...conditionalEndTokens, ...unsafeTerminators];
@@ -2185,7 +2182,7 @@ export class Parser {
             }
         }
         this.exitAnnotationBlock(parentAnnotations);
-        return new Block({ statements: statements, startingRange: startingToken.location?.range });
+        return new Block({ statements: statements });
     }
 
     private conditionalCompileConstStatement() {
@@ -2292,7 +2289,6 @@ export class Parser {
             return undefined;
         }
         statements.push(statement);
-        const startingRange = statement.location?.range;
 
         //look for colon statement separator
         let foundColon = false;
@@ -2318,7 +2314,7 @@ export class Parser {
                 });
             }
         }
-        return new Block({ statements: statements, startingRange: startingRange });
+        return new Block({ statements: statements });
     }
 
     private expressionStatement(expr: Expression): ExpressionStatement | IncrementStatement {
@@ -2530,8 +2526,6 @@ export class Parser {
         const parentAnnotations = this.enterAnnotationBlock();
 
         this.consumeStatementSeparators(true);
-        let startingToken = this.peek();
-
         const statements: Statement[] = [];
         const flatGlobalTerminators = this.globalTerminators.flat().flat();
         while (!this.isAtEnd() && !this.checkAny(TokenKind.EndSub, TokenKind.EndFunction, ...terminators, ...flatGlobalTerminators)) {
@@ -2580,7 +2574,7 @@ export class Parser {
         }
 
         this.exitAnnotationBlock(parentAnnotations);
-        return new Block({ statements: statements, startingRange: startingToken.location?.range });
+        return new Block({ statements: statements });
     }
 
     /**

@@ -651,6 +651,29 @@ describe('util', () => {
         });
     });
 
+    describe('range creation', () => {
+        it('createRangeFromPositions', () => {
+            const pos11 = { line: 1, character: 1 };
+            const pos99 = { line: 9, character: 9 };
+
+            expect(util.createRangeFromPositions(pos11, pos99)).to.eql(util.createRange(1, 1, 9, 9));
+            expect(util.createRangeFromPositions(null, pos99)).to.eql(util.createRange(9, 9, 9, 9));
+            expect(util.createRangeFromPositions(pos11, null)).to.eql(util.createRange(1, 1, 1, 1));
+        });
+
+
+        it('createBoundingRange', () => {
+            const range1 = util.createRange(1, 1, 2, 2);
+            const range2 = util.createRange(2, 2, 3, 3);
+            const range3 = util.createRange(100, 100, 100, 100);
+
+            expect(util.createBoundingRange(range1)).to.eql(util.createRange(1, 1, 2, 2));
+            expect(util.createBoundingRange(range1, range2)).to.eql(util.createRange(1, 1, 3, 3));
+            expect(util.createBoundingRange(range2, range1)).to.eql(util.createRange(1, 1, 3, 3));
+            expect(util.createBoundingRange(range2, range3, range1)).to.eql(util.createRange(1, 1, 100, 100));
+        });
+    });
+
     describe('rangesIntersect', () => {
         it('does not crash on undefined range', () => {
             expect(

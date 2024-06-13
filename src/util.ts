@@ -1127,7 +1127,12 @@ export class Util {
     /**
      * Create a `Range` from two `Position`s
      */
-    public createRangeFromPositions(startPosition: Position, endPosition: Position): Range {
+    public createRangeFromPositions(startPosition: Position, endPosition: Position): Range | undefined {
+        startPosition = startPosition ?? endPosition;
+        endPosition = endPosition ?? startPosition;
+        if (!startPosition && !endPosition) {
+            return undefined;
+        }
         return this.createRange(startPosition.line, startPosition.character, endPosition.line, endPosition.character);
     }
 
@@ -1381,6 +1386,9 @@ export class Util {
             if (arrayOfTypeName.endsWith('\'')) {
                 // remove "'" in "float's", etc.
                 arrayOfTypeName = arrayOfTypeName.substring(0, arrayOfTypeName.length - 1);
+            }
+            if (arrayOfTypeName === 'rectangle') {
+                arrayOfTypeName = 'rect2d';
             }
             let arrayType = this.getNodeFieldType(arrayOfTypeName, lookupTable);
             return new ArrayType(arrayType);
