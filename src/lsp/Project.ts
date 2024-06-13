@@ -208,7 +208,10 @@ export class Project implements LspProject {
      * This will cancel any pending validation cycles and queue a future validation cycle instead.
      */
     public async applyFileChanges(documentActions: DocumentAction[]): Promise<DocumentActionWithStatus[]> {
+        this.logger.debug('project.applyFileChanges', documentActions.map(x => x.srcPath));
+
         await this.onIdle();
+
         let didChangeFiles = false;
         const result = [...documentActions] as DocumentActionWithStatus[];
         // eslint-disable-next-line @typescript-eslint/prefer-for-of
@@ -251,6 +254,9 @@ export class Project implements LspProject {
             //trigger a validation (but don't wait for it. That way we can cancel it sooner if we get new incoming data or requests)
             void this.validate();
         }
+
+        this.logger.debug('project.applyFileChanges done', documentActions.map(x => x.srcPath));
+
         return result;
     }
 
@@ -383,6 +389,7 @@ export class Project implements LspProject {
 
     public async getCodeActions(options: { srcPath: string; range: Range }) {
         await this.onIdle();
+
         if (this.builder.program.hasFile(options.srcPath)) {
             const codeActions = this.builder.program.getCodeActions(options.srcPath, options.range);
             //clone each diagnostic since certain diagnostics can have circular reference properties that kill the language server if serialized
@@ -397,6 +404,9 @@ export class Project implements LspProject {
 
     public async getCompletions(options: { srcPath: string; position: Position }): Promise<CompletionList> {
         await this.onIdle();
+
+        this.logger.debug('project.getCompletions', options.srcPath, options.position);
+
         if (this.builder.program.hasFile(options.srcPath)) {
             const completions = this.builder.program.getCompletions(options.srcPath, options.position);
             const result = CompletionList.create(completions);

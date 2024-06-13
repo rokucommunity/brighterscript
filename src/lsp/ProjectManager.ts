@@ -6,7 +6,7 @@ import type { LspDiagnostic, LspProject, ProjectConfig } from './LspProject';
 import { Project } from './Project';
 import { WorkerThreadProject } from './worker/WorkerThreadProject';
 import { FileChangeType } from 'vscode-languageserver-protocol';
-import type { Hover, Position, Range, Location, SignatureHelp, DocumentSymbol, SymbolInformation, WorkspaceSymbol, CompletionList } from 'vscode-languageserver-protocol';
+import type { Hover, Position, Range, Location, SignatureHelp, DocumentSymbol, SymbolInformation, WorkspaceSymbol, CompletionList, CancellationToken } from 'vscode-languageserver-protocol';
 import { Deferred } from '../deferred';
 import type { DocumentActionWithStatus, FlushEvent } from './DocumentManager';
 import { DocumentManager } from './DocumentManager';
@@ -73,6 +73,7 @@ export class ProjectManager {
     @TrackBusyStatus
     private async flushDocumentChanges(event: FlushEvent) {
         this.logger.log('flushDocumentChanges', event.actions.map(x => x.srcPath));
+
         //ensure that we're fully initialized before proceeding
         await this.onInitialized();
 
@@ -102,7 +103,9 @@ export class ProjectManager {
             const projectActions = actions.filter(action => {
                 return action.type === 'delete' || filterer.isMatch(action.srcPath);
             });
-            return project.applyFileChanges(projectActions);
+            if (projectActions.length > 0) {
+                return project.applyFileChanges(projectActions);
+            }
         }));
 
         //create standalone projects for any files not handled by any project
@@ -189,6 +192,8 @@ export class ProjectManager {
         //There are race conditions where the fileChangesQueue will become idle, but that causes the documentManager
         //to start a new flush. So we must keep waiting until everything is idle
         while (!this.documentManager.isIdle || !this.fileChangesQueue.isIdle) {
+            this.logger.debug('onIdle', { documentManagerIdle: this.documentManager.isIdle, fileChangesQueueIdle: this.fileChangesQueue.isIdle });
+
             await Promise.allSettled([
                 //make sure all pending file changes have been flushed
                 this.documentManager.onIdle(),
@@ -196,6 +201,8 @@ export class ProjectManager {
                 this.fileChangesQueue.onIdle()
             ]);
         }
+
+        this.logger.info('onIdle debug', { documentManagerIdle: this.documentManager.isIdle, fileChangesQueueIdle: this.fileChangesQueue.isIdle });
     }
 
     /**
@@ -398,8 +405,14 @@ export class ProjectManager {
      *  Get the completions for the given position in the file
      */
     @TrackBusyStatus
-    public async getCompletions(options: { srcPath: string; position: Position }): Promise<CompletionList> {
+    public async getCompletions(options: { srcPath: string; position: Position; cancellationToken?: CancellationToken }): Promise<CompletionList> {
         await this.onIdle();
+
+        //if the request has been cancelled since originall requested due to idle time being slow, skip the rest of the wor
+        if (options?.cancellationToken?.isCancellationRequested) {
+            this.logger.log('ProjectManager getCompletions cancelled', options);
+            return;
+        }
 
         this.logger.log('ProjectManager getCompletions', options);
         //Ask every project for results, keep whichever one responds first that has a valid response

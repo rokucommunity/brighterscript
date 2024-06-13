@@ -80,8 +80,8 @@ export class DocumentManager {
                 const event: FlushEvent = {
                     actions: [...this.queue.values()]
                 };
-                await this.options.flushHandler?.(event);
                 this.queue.clear();
+                await this.options.flushHandler?.(event);
             } catch (e) {
                 console.error(e);
             }
