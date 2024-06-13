@@ -581,7 +581,7 @@ export class DottedGetExpression extends Expression {
             name: this.tokens.name?.text,
             type: result,
             data: options.data,
-            range: this.tokens.name?.location?.range ?? this.location?.range,
+            location: this.tokens.name?.location ?? this.location,
             astNode: this
         }));
         if (result ||
@@ -1503,7 +1503,7 @@ export class CallfuncExpression extends Expression {
                     name: this.tokens.methodName.text,
                     type: funcType,
                     data: options.data,
-                    range: this.tokens.methodName.location?.range,
+                    location: this.tokens.methodName.location,
                     separatorToken: createToken(TokenKind.Callfunc),
                     astNode: this
                 }));

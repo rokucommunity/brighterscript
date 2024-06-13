@@ -5,6 +5,7 @@ import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { isFunctionStatement } from '../../../astUtils/reflection';
 import type { FunctionStatement } from '../../Statement';
+import { expectZeroDiagnostics } from '../../../testHelpers.spec';
 
 describe('parser', () => {
 
@@ -372,7 +373,7 @@ describe('parser', () => {
                 EOF
             ]);
 
-            expect(diagnostics).to.be.lengthOf(0);
+            expectZeroDiagnostics(diagnostics);
             expect(statements).to.length.greaterThan(0);
         });
 

@@ -1,15 +1,15 @@
 import { SourceNode } from 'source-map';
-import type { Location, Range } from 'vscode-languageserver';
+import type { Location } from 'vscode-languageserver';
 import type { BsConfig } from '../BsConfig';
 import { TokenKind } from '../lexer/TokenKind';
 import type { Token } from '../lexer/Token';
 import type { RangeLike } from '../util';
-import util from '../util';
+import { util } from '../util';
 import type { TranspileResult } from '../interfaces';
 
 
 interface TranspileToken {
-    range?: Range;
+    location?: Location;
     text: string;
     kind?: TokenKind;
     leadingWhitespace?: string;
@@ -88,9 +88,9 @@ export class TranspileState {
     public tokenToSourceNode(token: TranspileToken) {
         return new SourceNode(
             //convert 0-based range line to 1-based SourceNode line
-            token.range ? token.range.start.line + 1 : null,
+            token.location?.range ? token.location.range.start.line + 1 : null,
             //range and SourceNode character are both 0-based, so no conversion necessary
-            token.range ? token.range.start.character : null,
+            token.location?.range ? token.location.range.start.character : null,
             this.srcPath,
             token.text
         );
@@ -144,11 +144,11 @@ export class TranspileState {
             return [new SourceNode(null, null, null, [...leadingCommentsSourceNodes, commentIfCommentedOut, defaultValue])];
         }
 
-        if (!token.range) {
+        if (!token?.location?.range) {
             return [new SourceNode(null, null, null, [...leadingCommentsSourceNodes, commentIfCommentedOut, token.text])];
         }
         //split multi-line text
-        if (token.range?.end.line > token.range?.start.line) {
+        if (token.location.range.end.line > token.location.range.start.line) {
             const lines = token.text.split(/\r?\n/g);
             const code = [
                 this.sourceNode(token, [...leadingCommentsSourceNodes, commentIfCommentedOut, lines[0]])
@@ -159,7 +159,7 @@ export class TranspileState {
                     commentIfCommentedOut,
                     new SourceNode(
                         //convert 0-based range line to 1-based SourceNode line
-                        token.range.start.line + i + 1,
+                        token.location.range.start.line + i + 1,
                         //SourceNode column is 0-based, and this starts at the beginning of the line
                         0,
                         this.srcPath,

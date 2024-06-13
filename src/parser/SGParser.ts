@@ -350,7 +350,7 @@ export default class SGParser {
      * @param startOffset the offset to start the new token. If negative, subtracts from token.length
      * @param length the length of the text to keep. If negative, subtracts from token.length
      */
-    public createPartialToken(token: IToken, startOffset: number, length?: number) {
+    public createPartialToken(token: IToken, startOffset: number, length?: number): SGToken {
         if (startOffset < 0) {
             startOffset = token.image.length + startOffset;
         }
@@ -363,13 +363,13 @@ export default class SGParser {
         return {
             text: token.image.substring(startOffset, startOffset + length),
             //xmltools startLine is 1-based, we need 0-based which is why we subtract 1 below
-            range: util.createRange(
+            location: util.createLocation(
                 token.startLine - 1,
                 token.startColumn - 1 + startOffset,
                 token.endLine - 1,
-                token.startColumn - 1 + (startOffset + length)
+                token.startColumn - 1 + (startOffset + length),
+                this.options.srcPath
             )
-
         };
     }
 

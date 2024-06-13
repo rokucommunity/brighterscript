@@ -9,6 +9,7 @@ import type { AALiteralExpression, AAMemberExpression } from '../../Expression';
 import { isAALiteralExpression, isAssignmentStatement, isDottedGetExpression, isLiteralExpression } from '../../../astUtils/reflection';
 import { expectDiagnostics, expectDiagnosticsIncludes } from '../../../testHelpers.spec';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
+import { util } from '../../../util';
 
 describe('parser associative array literals', () => {
     describe('empty associative arrays', () => {
@@ -259,84 +260,97 @@ describe('parser associative array literals', () => {
          * 5|
          * 6| }
          */
-        let { statements, diagnostics } = Parser.parse(<any>[
+        let { statements, diagnostics } = Parser.parse([
             {
                 kind: TokenKind.Identifier,
                 text: 'a',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 0, 0, 1)
+                location: util.createLocation(0, 0, 0, 1)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 2, 0, 3)
+                location: util.createLocation(0, 2, 0, 3)
             },
             {
                 kind: TokenKind.LeftCurlyBrace,
                 text: '{',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 4, 0, 5)
+                location: util.createLocation(0, 4, 0, 5)
             },
             {
                 kind: TokenKind.RightCurlyBrace,
                 text: '}',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 8, 0, 9)
+                location: util.createLocation(0, 8, 0, 9)
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 9, 0, 10)
+                location: util.createLocation(0, 9, 0, 10)
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(1, 0, 1, 1)
+                location: util.createLocation(1, 0, 1, 1)
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'b',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(2, 0, 2, 1)
+                location: util.createLocation(2, 0, 2, 1)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(2, 2, 2, 3)
+                location: util.createLocation(2, 2, 2, 3)
             },
             {
                 kind: TokenKind.LeftCurlyBrace,
                 text: '{',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(2, 4, 2, 5)
+                location: util.createLocation(2, 4, 2, 5)
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(3, 0, 3, 1)
+                location: util.createLocation(3, 0, 3, 1)
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(4, 0, 4, 1)
+                location: util.createLocation(4, 0, 4, 1)
             },
             {
                 kind: TokenKind.RightCurlyBrace,
                 text: '}',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(5, 0, 5, 1)
+                location: util.createLocation(5, 0, 5, 1)
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(5, 1, 5, 2)
+                location: util.createLocation(5, 1, 5, 2)
             }
         ]) as any;
 

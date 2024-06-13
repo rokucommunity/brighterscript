@@ -1142,7 +1142,9 @@ export class Util {
 
         for (let locatable of locatables) {
             let range: Range;
-            if ('location' in locatable) {
+            if (!locatable) {
+                continue;
+            } else if ('location' in locatable) {
                 range = locatable.location?.range;
                 if (!uri) {
                     uri = locatable.location?.uri;
@@ -2089,7 +2091,7 @@ export class Util {
         let itemTypeKind = '';
         let parentTypeKind = '';
         let astNode: AstNode;
-        let errorRange: Range;
+        let errorLocation: Location;
         let containsDynamic = false;
         let continueResolvingAllItems = true;
         for (let i = 0; i < typeChain.length; i++) {
@@ -2138,7 +2140,7 @@ export class Util {
                 astNode = chainItem.astNode;
                 containsDynamic = containsDynamic || (isDynamicType(chainItem.type) && !isAnyReferenceType(chainItem.type));
                 if (!chainItem.isResolved) {
-                    errorRange = chainItem.range;
+                    errorLocation = chainItem.location;
                     continueResolvingAllItems = false;
                 }
             }
@@ -2150,7 +2152,7 @@ export class Util {
             itemParentTypeKind: parentTypeKind,
             fullNameOfItem: fullErrorName,
             fullChainName: fullChainName,
-            range: errorRange,
+            location: errorLocation,
             containsDynamic: containsDynamic,
             astNode: astNode
         };
@@ -2333,7 +2335,7 @@ export function standardizePath(stringParts, ...expressions: any[]) {
 }
 
 /**
- * An item that can be coerced into a range
+ * An item that can be coerced into a `Range`
  */
 export type RangeLike = { location?: Location } | Location | { range?: Range } | Range | undefined;
 

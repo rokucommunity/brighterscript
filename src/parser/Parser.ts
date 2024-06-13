@@ -2208,7 +2208,7 @@ export class Parser {
             if (assignment.tokens.as || assignment.typeExpression) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.unexpectedToken(assignment.tokens.as?.text || assignment.typeExpression?.getName(ParseMode.BrighterScript)),
-                    range: assignment.tokens.as?.location?.range ?? assignment.typeExpression?.location.range
+                    range: assignment.tokens.as?.location?.range ?? assignment.typeExpression?.location?.range
                 });
                 this.lastDiagnosticAsError();
             }
@@ -2580,7 +2580,7 @@ export class Parser {
         }
 
         this.exitAnnotationBlock(parentAnnotations);
-        return new Block({ statements: statements, startingRange: startingToken.location.range });
+        return new Block({ statements: statements, startingRange: startingToken.location?.range });
     }
 
     /**

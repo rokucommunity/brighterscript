@@ -4,6 +4,7 @@ import { Parser } from '../../Parser';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
+import { util } from '../../../util';
 
 describe('parser boolean expressions', () => {
 
@@ -42,42 +43,48 @@ describe('parser boolean expressions', () => {
          *  +----------------------
          * 0| a = true and false
          */
-        let { statements, diagnostics } = Parser.parse(<any>[
+        let { statements, diagnostics } = Parser.parse([
             {
                 kind: TokenKind.Identifier,
                 text: 'a',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 0, 0, 1)
+                location: util.createLocation(0, 0, 0, 1)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 2, 0, 3)
+                location: util.createLocation(0, 2, 0, 3)
             },
             {
                 kind: TokenKind.True,
                 text: 'true',
+                leadingTrivia: [],
                 isReserved: true,
-                range: Range.create(0, 4, 0, 8)
+                location: util.createLocation(0, 4, 0, 8)
             },
             {
                 kind: TokenKind.And,
                 text: 'and',
+                leadingTrivia: [],
                 isReserved: true,
-                range: Range.create(0, 9, 0, 12)
+                location: util.createLocation(0, 9, 0, 12)
             },
             {
                 kind: TokenKind.False,
                 text: 'false',
+                leadingTrivia: [],
                 isReserved: true,
-                range: Range.create(0, 13, 0, 18)
+                location: util.createLocation(0, 13, 0, 18)
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 18, 0, 19)
+                location: util.createLocation(0, 18, 0, 19)
             }
         ]) as any;
 

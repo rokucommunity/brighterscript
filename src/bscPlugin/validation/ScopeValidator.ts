@@ -7,7 +7,7 @@ import type { BrsFile } from '../../files/BrsFile';
 import type { BsDiagnostic, CallableContainer, ExtraSymbolData, FileReference, GetTypeOptions, OnScopeValidateEvent, TypeChainEntry, TypeChainProcessResult, TypeCompatibilityData } from '../../interfaces';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import type { AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, DottedSetStatement, IncrementStatement, NamespaceStatement, ReturnStatement } from '../../parser/Statement';
-import util from '../../util';
+import { util } from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
 import type { Token } from '../../lexer/Token';
@@ -453,7 +453,7 @@ export class ScopeValidator {
             this.addMultiScopeDiagnostic({
                 file: file as BscFile,
                 ...DiagnosticMessages.cannotFindName(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan)),
-                range: typeChainScan?.range
+                range: typeChainScan?.location?.range
             });
             return;
         }
@@ -708,13 +708,13 @@ export class ScopeValidator {
                         this.addMultiScopeDiagnostic({
                             file: file as BscFile,
                             ...DiagnosticMessages.cannotFindFunction(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan)),
-                            range: typeChainScan?.range
+                            range: typeChainScan?.location?.range
                         });
                     } else {
                         this.addMultiScopeDiagnostic({
                             file: file as BscFile,
                             ...DiagnosticMessages.cannotFindName(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan)),
-                            range: typeChainScan?.range
+                            range: typeChainScan?.location?.range
                         });
                     }
                 }
@@ -725,13 +725,13 @@ export class ScopeValidator {
                     this.addMultiScopeDiagnostic({
                         file: file as BscFile,
                         ...DiagnosticMessages.cannotFindFunction(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan)),
-                        range: typeChainScan?.range
+                        range: typeChainScan?.location?.range
                     });
                 } else {
                     this.addMultiScopeDiagnostic({
                         file: file as BscFile,
                         ...DiagnosticMessages.cannotFindName(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan)),
-                        range: typeChainScan?.range
+                        range: typeChainScan?.location?.range
                     });
                 }
 
@@ -784,7 +784,7 @@ export class ScopeValidator {
                 this.addMultiScopeDiagnostic({
                     file: file,
                     ...DiagnosticMessages.unknownEnumValue(lastTypeInfo?.name, typeChainScanForParent.fullChainName),
-                    range: lastTypeInfo?.range,
+                    range: lastTypeInfo?.location?.range,
                     relatedInformation: [{
                         message: 'Enum declared here',
                         location: util.createLocationFromRange(

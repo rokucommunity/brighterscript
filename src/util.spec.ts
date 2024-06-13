@@ -1,6 +1,6 @@
 import { expect } from './chai-config.spec';
 import * as path from 'path';
-import util, { standardizePath as s } from './util';
+import { util, standardizePath as s } from './util';
 import { Position, Range } from 'vscode-languageserver';
 import type { BsConfig } from './BsConfig';
 import * as fsExtra from 'fs-extra';
@@ -851,16 +851,16 @@ describe('util', () => {
 
     it('sortByRange', () => {
         const front = {
-            location: util.createLocation(1, 1, 1, 2)
+            range: util.createRange(1, 1, 1, 2)
         };
         const middle = {
-            location: util.createLocation(1, 3, 1, 4)
+            range: util.createRange(1, 3, 1, 4)
         };
         const back = {
-            location: util.createLocation(1, 5, 1, 6)
+            range: util.createRange(1, 5, 1, 6)
         };
         expect(
-            util.sortByRange([middle?.location, front?.location, back?.location])
+            util.sortByRange([middle, front, back])
         ).to.eql([
             front, middle, back
         ]);
@@ -970,7 +970,7 @@ describe('util', () => {
             expect(result.fullChainName).to.eql('AlphaNamespace.BetaProp.CharlieProp');
             expect(result.itemParentTypeName).to.eql('Beta');
             expect(result.fullNameOfItem).to.eql('Beta.CharlieProp');
-            expect(result.range).to.eql(util.createRange(3, 3, 4, 4));
+            expect(result.location.range).to.eql(util.createRange(3, 3, 4, 4));
         });
 
         it('respects the separatorToken', () => {

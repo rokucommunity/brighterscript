@@ -180,7 +180,7 @@ export class AssignmentStatement extends Statement {
 
         // Note: compound assignments (eg. +=) are internally dealt with via the RHS being a BinaryExpression
         // so this.value will be a BinaryExpression, and BinaryExpressions can figure out their own types
-        options.typeChain?.push(new TypeChainEntry({ name: this.tokens.name.text, type: variableType, data: options.data, range: this.tokens.name?.location?.range, astNode: this }));
+        options.typeChain?.push(new TypeChainEntry({ name: this.tokens.name.text, type: variableType, data: options.data, location: this.tokens.name?.location, astNode: this }));
         return variableType;
     }
 
@@ -1360,7 +1360,7 @@ export class DottedSetStatement extends Statement {
         options.typeChain?.push(new TypeChainEntry({
             name: this.tokens.name?.text,
             type: result, data: options.data,
-            range: this.tokens.name?.location?.range,
+            location: this.tokens.name?.location,
             astNode: this
         }));
         return result;

@@ -4,6 +4,7 @@ import { Parser } from '../../Parser';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
+import { util } from '../../../util';
 
 describe('parser', () => {
 
@@ -396,54 +397,62 @@ describe('parser', () => {
          * 1|
          * 2| end sub
          */
-        let { statements, diagnostics } = Parser.parse(<any>[
+        let { statements, diagnostics } = Parser.parse([
             {
                 kind: TokenKind.Identifier,
                 text: '_',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 0, 0, 1)
+                location: util.createLocation(0, 0, 0, 1)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 2, 0, 3)
+                location: util.createLocation(0, 2, 0, 3)
             },
             {
                 kind: TokenKind.Sub,
                 text: 'sub',
+                leadingTrivia: [],
                 isReserved: true,
-                range: Range.create(0, 4, 0, 7)
+                location: util.createLocation(0, 4, 0, 7)
             },
             {
                 kind: TokenKind.LeftParen,
                 text: '(',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 11, 0, 12)
+                location: util.createLocation(0, 11, 0, 12)
             },
             {
                 kind: TokenKind.RightParen,
                 text: ')',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 12, 0, 13)
+                location: util.createLocation(0, 12, 0, 13)
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 13, 0, 14)
+                location: util.createLocation(0, 13, 0, 14)
             },
             {
                 kind: TokenKind.EndSub,
                 text: 'end sub',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(2, 0, 2, 7)
+                location: util.createLocation(2, 0, 2, 7)
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(2, 7, 2, 8)
+                location: util.createLocation(2, 7, 2, 8)
             }
         ]) as any;
 

@@ -9,6 +9,7 @@ import type { ExpressionStatement, FunctionStatement } from '../../Statement';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { expectDiagnostics, expectDiagnosticsIncludes } from '../../../testHelpers.spec';
 import { isAssignmentStatement, isCallExpression, isDottedGetExpression, isDottedSetStatement, isExpressionStatement, isIndexedGetExpression, isReturnStatement } from '../../../astUtils/reflection';
+import { util } from '../../../util';
 
 describe('parser call expressions', () => {
     it('parses named function calls', () => {
@@ -148,48 +149,55 @@ describe('parser call expressions', () => {
          *  +----------------------
          * 0| foo("bar", "baz")
          */
-        const { statements, diagnostics } = Parser.parse(<any>[
+        const { statements, diagnostics } = Parser.parse([
             {
                 kind: TokenKind.Identifier,
                 text: 'foo',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 0, 0, 3)
+                location: util.createLocation(0, 0, 0, 3)
             },
             {
                 kind: TokenKind.LeftParen,
                 text: '(',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 3, 0, 4)
+                location: util.createLocation(0, 3, 0, 4)
             },
             {
                 kind: TokenKind.StringLiteral,
                 text: `"bar"`,
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 4, 0, 9)
+                location: util.createLocation(0, 4, 0, 9)
             },
             {
                 kind: TokenKind.Comma,
                 text: ',',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 9, 0, 10)
+                location: util.createLocation(0, 9, 0, 10)
             },
             {
                 kind: TokenKind.StringLiteral,
                 text: `"baz"`,
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 11, 0, 16)
+                location: util.createLocation(0, 11, 0, 16)
             },
             {
                 kind: TokenKind.RightParen,
                 text: ')',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 16, 0, 17)
+                location: util.createLocation(0, 16, 0, 17)
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 17, 0, 18)
+                location: util.createLocation(0, 17, 0, 18)
             }
         ]);
 
