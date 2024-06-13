@@ -744,14 +744,37 @@ export class Util {
         return subject;
     }
 
+    /**
+     * Does the string appear to be a uri (i.e. does it start with `file:`)
+     */
+    private isUriLike(filePath: string) {
+        return filePath?.indexOf('file:') === 0;// eslint-disable-line @typescript-eslint/prefer-string-starts-ends-with
+    }
+
+    /**
+     * Given a file path, convert it to a URI string
+     */
+    public pathToUri(filePath: string) {
+        if (!filePath) {
+            return filePath;
+        } else if (this.isUriLike(filePath)) {
+            return filePath;
+        } else {
+            return URI.file(filePath).toString();
+        }
+    }
 
     /**
      * Given a URI, convert that to a regular fs path
      */
     public uriToPath(uri: string) {
+        //if this doesn't look like a URI, then assume it's already a path
+        if (this.isUriLike(uri) === false) {
+            return uri;
+        }
         let parsedPath = URI.parse(uri).fsPath;
 
-        //Uri annoyingly coverts all drive letters to lower case...so this will bring back whatever case it came in as
+        //Uri annoyingly converts all drive letters to lower case...so this will bring back whatever case it came in as
         let match = /\/\/\/([a-z]:)/i.exec(uri);
         if (match) {
             let originalDriveCasing = match[1];
@@ -806,13 +829,6 @@ export class Util {
             }
         }
         return true;
-    }
-
-    /**
-     * Given a file path, convert it to a URI string
-     */
-    public pathToUri(filePath: string) {
-        return URI.file(filePath).toString();
     }
 
     /**
@@ -1084,7 +1100,7 @@ export class Util {
      */
     public createLocationFromRange(uri: string, range: Range): Location {
         return {
-            uri: uri,
+            uri: util.pathToUri(uri),
             range: range
         };
     }
@@ -1094,7 +1110,7 @@ export class Util {
      */
     public createLocation(startLine: number, startCharacter: number, endLine: number, endCharacter: number, uri?: string): Location {
         return {
-            uri: uri,
+            uri: util.pathToUri(uri),
             range: {
                 start: {
                     line: startLine,

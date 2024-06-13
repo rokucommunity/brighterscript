@@ -9,7 +9,6 @@ import { IntegerType } from '../types/IntegerType';
 import { StringType } from '../types/StringType';
 import { BrsFile } from './BrsFile';
 import { SourceMapConsumer } from 'source-map';
-import { Lexer } from '../lexer/Lexer';
 import { TokenKind } from '../lexer/TokenKind';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import util, { standardizePath as s } from '../util';
@@ -2550,37 +2549,110 @@ describe('BrsFile', () => {
             expect(location.column).eql(4);
         });
 
-        it('computes correct locations for sourcemap', async () => {
-            let source = `function abc(name)\n    firstName = name\nend function`;
-            let tokens = Lexer.scan(source).tokens
-                //remove newlines and EOF
-                .filter(x => x.kind !== TokenKind.Eof && x.kind !== TokenKind.Newline);
+        describe('sourcemap validation', () => {
+            it('computes correct source and position in sourcemap', async () => {
+                program.options.sourceMap = true;
 
-            program.options.sourceMap = true;
-            let result = await testTranspile(source, source, 'none');
-            //load the source map
-            await SourceMapConsumer.with(result.map.toString(), null, (consumer) => {
-                let tokenResult = tokens.map(token => ({
-                    kind: token.kind,
-                    start: token.location?.range.start
-                }));
-                let sourcemapResult = tokens.map(token => {
-                    let originalPosition = consumer.originalPositionFor({
-                        //convert token 0-based line to source-map 1-based line for the lookup
-                        line: token.location?.range.start.line + 1,
-                        column: token.location?.range.start.character
+                const file = program.setFile<BrsFile>('source/main.bs', `function abc(name)\n    firstName = name\nend function`);
+                let i = 0;
+                //remove newlines and EOF
+                //set each token to a different file
+                for (const token of file.parser.tokens) {
+                    token.location.uri = util.pathToUri(s`${rootDir}/source/file${i++}.bs`);
+                }
+
+                const result = await program.getTranspiledFileContents(file.srcPath);
+                const tokens = file.parser.tokens.filter(x => x.kind !== TokenKind.Eof && x.kind !== TokenKind.Newline);
+
+                //load the source map
+                await SourceMapConsumer.with(result.map.toString(), null, (consumer) => {
+                    let sourcemapResult = tokens.map(token => {
+                        let originalPosition = consumer.originalPositionFor({
+                            //convert token 0-based line to source-map 1-based line for the lookup
+                            line: token.location?.range.start.line + 1,
+                            column: token.location?.range.start.character
+                        });
+                        return {
+                            kind: token.kind,
+                            start: Position.create(
+                                //convert source-map 1-based line to token 0-based line
+                                originalPosition.line! - 1,
+                                originalPosition.column!
+                            ),
+                            source: originalPosition.source
+                        };
                     });
-                    return {
-                        kind: token.kind,
-                        start: Position.create(
-                            //convert source-map 1-based line to token 0-based line
-                            originalPosition.line! - 1,
-                            originalPosition.column!
-                        )
-                    };
+                    expect(sourcemapResult).to.eql(
+                        tokens.map(token => ({
+                            kind: token.kind,
+                            start: token.location?.range.start,
+                            source: util.uriToPath(token.location.uri)
+                        }))
+                    );
                 });
-                expect(sourcemapResult).to.eql(tokenResult);
             });
+
+            it('supports merging AST from one file into another', async () => {
+                program.options.sourceMap = true;
+
+                const alpha = program.setFile<BrsFile>('source/alpha.bs', `
+                    function alpha()
+                        print "alpha"
+                    end function
+                `);
+                const beta = program.setFile<BrsFile>('source/beta.bs', `
+                    function beta()
+                        print "beta"
+                    end function
+                `);
+                //merge alpha into beta
+                beta.ast.statements.push(alpha.ast.statements[0]);
+
+                const result = await program.getTranspiledFileContents(beta.srcPath);
+                expect(result.code).to.eql(undent`
+                    function beta()
+                        print "beta"
+                    end function
+
+                    function alpha()
+                        print "alpha"
+                    end function
+                    '//# sourceMappingURL=./beta.brs.map
+                `);
+
+                //load the source map
+                await SourceMapConsumer.with(result.map.toString(), null, (consumer) => {
+
+                    //prin|t "beta"
+                    doTest(1, 8, s`${rootDir}/source/beta.bs`, 2, 24);
+                    //prin|t "alpha"
+                    doTest(5, 8, s`${rootDir}/source/alpha.bs`, 2, 24);
+
+                    function doTest(destLine: number, destChar: number, srcPath: string, sourceLine: number, sourceChar: number) {
+                        let originalPosition = consumer.originalPositionFor({
+                            //convert token 0-based line to source-map 1-based line for the lookup
+                            line: destLine + 1,
+                            column: destChar
+                        });
+                        expect({
+                            start: Position.create(
+                                //convert source-map 1-based line to token 0-based line
+                                originalPosition.line! - 1,
+                                originalPosition.column!
+                            ),
+                            source: originalPosition.source
+                        }).to.eql({
+                            start: Position.create(
+                                //convert source-map 1-based line to token 0-based line
+                                sourceLine,
+                                sourceChar
+                            ),
+                            source: srcPath
+                        });
+                    }
+                });
+            });
+
         });
 
         it('handles empty if block', async () => {

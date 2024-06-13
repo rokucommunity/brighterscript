@@ -68,6 +68,11 @@ export class Lexer {
     private leadingTrivia: Token[] = [];
 
     /**
+     * URI of the file being scanned (if available)
+     */
+    private uri?: string;
+
+    /**
      * A convenience function, equivalent to `new Lexer().scan(toScan)`, that converts a string
      * containing BrightScript code to an array of `Token` objects that will later be used to build
      * an abstract syntax tree.
@@ -99,6 +104,7 @@ export class Lexer {
         this.columnEnd = 0;
         this.tokens = [];
         this.diagnostics = [];
+        this.uri = util.pathToUri(options?.srcPath);
         while (!this.isAtEnd()) {
             this.scanToken();
         }
@@ -108,7 +114,7 @@ export class Lexer {
             isReserved: false,
             text: '',
             location: this.options.trackLocations
-                ? util.createLocation(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd + 1, this.options.srcPath)
+                ? util.createLocation(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd + 1, this.uri)
                 : undefined,
             leadingWhitespace: this.leadingWhitespace,
             leadingTrivia: this.leadingTrivia
@@ -1109,7 +1115,7 @@ export class Lexer {
      */
     private locationOf(): Location {
         if (this.options.trackLocations) {
-            return util.createLocation(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd, this.options?.srcPath);
+            return util.createLocation(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd, this.uri);
         } else {
             return undefined;
         }

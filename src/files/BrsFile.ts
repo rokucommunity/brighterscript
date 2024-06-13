@@ -360,7 +360,8 @@ export class BrsFile implements BscFile {
             //tokenize the input file
             let lexer = this.program.logger.time('debug', ['lexer.lex', chalk.green(this.srcPath)], () => {
                 return Lexer.scan(fileContents, {
-                    includeWhitespace: false
+                    includeWhitespace: false,
+                    srcPath: this.srcPath
                 });
             });
 

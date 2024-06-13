@@ -65,6 +65,21 @@ export class TranspileState {
 
     public newline = '\n';
 
+    private getSource(locatable: RangeLike) {
+        let srcPath = (locatable as { location: Location })?.location?.uri ?? (locatable as Location).uri;
+        if (srcPath) {
+            //if a sourceRoot is specified, use that instead of the rootDir
+            if (this.options.sourceRoot) {
+                srcPath = srcPath.replace(
+                    this.options.rootDir,
+                    this.options.sourceRoot
+                );
+            }
+        } else {
+            return this.srcPath;
+        }
+    }
+
     /**
      * Shorthand for creating a new source node
      */
@@ -75,7 +90,7 @@ export class TranspileState {
             range ? range.start.line + 1 : null,
             //range and SourceNode character are both 0-based, so no conversion necessary
             range ? range.start.character : null,
-            this.srcPath,
+            this.getSource(locatable),
             code
         );
     }
@@ -91,7 +106,7 @@ export class TranspileState {
             token.location?.range ? token.location.range.start.line + 1 : null,
             //range and SourceNode character are both 0-based, so no conversion necessary
             token.location?.range ? token.location.range.start.character : null,
-            this.srcPath,
+            this.getSource(token),
             token.text
         );
     }
@@ -131,7 +146,6 @@ export class TranspileState {
         return leadingCommentsSourceNodes;
     }
 
-
     /**
      * Create a SourceNode from a token, accounting for missing range and multi-line text
      * Adds all leading trivia for the token
@@ -162,7 +176,7 @@ export class TranspileState {
                         token.location.range.start.line + i + 1,
                         //SourceNode column is 0-based, and this starts at the beginning of the line
                         0,
-                        this.srcPath,
+                        this.getSource(token),
                         lines[i]
                     )
                 );
