@@ -4,6 +4,8 @@ import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
 import { util } from '../../../util';
+import type { AssignmentStatement } from '../../Statement';
+import { expectZeroDiagnostics } from '../../../testHelpers.spec';
 
 describe('parser primary expressions', () => {
 
@@ -60,7 +62,7 @@ describe('parser primary expressions', () => {
          * 1| b = "foo"
          * 2| c = ( 0 )
          */
-        let { statements, diagnostics } = Parser.parse([
+        let parser = Parser.parse([
             {
                 kind: TokenKind.Identifier,
                 text: 'a',
@@ -159,17 +161,17 @@ describe('parser primary expressions', () => {
                 isReserved: false,
                 location: util.createLocation(1, 9, 1, 10) //TODO are these numbers right?
             }
-        ]) as any;
+        ]);
+        const statements = parser.ast.statements as AssignmentStatement[];
 
-        expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.lengthOf(3);
-        expect(statements[0].value.range).to.deep.include(
+        expectZeroDiagnostics(parser);
+        expect(statements[0].value.location.range).to.deep.include(
             Range.create(0, 4, 0, 5)
         );
-        expect(statements[1].value.range).to.deep.include(
+        expect(statements[1].value.location.range).to.deep.include(
             Range.create(1, 4, 1, 9)
         );
-        expect(statements[2].value.range).to.deep.include(
+        expect(statements[2].value.location.range).to.deep.include(
             Range.create(2, 4, 2, 9)
         );
     });

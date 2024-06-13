@@ -5,6 +5,8 @@ import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
 import { util } from '../../../util';
+import { expectZeroDiagnostics } from '../../../testHelpers.spec';
+import type { AssignmentStatement } from '../../Statement';
 
 describe('parser boolean expressions', () => {
 
@@ -43,7 +45,7 @@ describe('parser boolean expressions', () => {
          *  +----------------------
          * 0| a = true and false
          */
-        let { statements, diagnostics } = Parser.parse([
+        const parser = Parser.parse([
             {
                 kind: TokenKind.Identifier,
                 text: 'a',
@@ -86,11 +88,10 @@ describe('parser boolean expressions', () => {
                 isReserved: false,
                 location: util.createLocation(0, 18, 0, 19)
             }
-        ]) as any;
+        ]);
 
-        expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.lengthOf(1);
-        expect(statements[0].value.range).deep.include(
+        expectZeroDiagnostics(parser);
+        expect((parser.ast.statements[0] as AssignmentStatement).value.location.range).deep.include(
             Range.create(0, 4, 0, 18)
         );
     });

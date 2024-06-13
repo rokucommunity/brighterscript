@@ -5,6 +5,8 @@ import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
 import { util } from '../../../util';
+import { expectZeroDiagnostics } from '../../../testHelpers.spec';
+import type { AssignmentStatement } from '../../Statement';
 
 describe('parser', () => {
 
@@ -397,7 +399,7 @@ describe('parser', () => {
          * 1|
          * 2| end sub
          */
-        let { statements, diagnostics } = Parser.parse([
+        const parser = Parser.parse([
             {
                 kind: TokenKind.Identifier,
                 text: '_',
@@ -454,11 +456,10 @@ describe('parser', () => {
                 isReserved: false,
                 location: util.createLocation(2, 7, 2, 8)
             }
-        ]) as any;
+        ]);
 
-        expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.lengthOf(1);
-        expect(statements[0].value.range).to.deep.include(
+        expectZeroDiagnostics(parser);
+        expect((parser.ast.statements[0] as AssignmentStatement).value.location.range).to.deep.include(
             Range.create(0, 4, 2, 7)
         );
     });

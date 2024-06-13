@@ -38,7 +38,6 @@ export interface Token {
  */
 export interface Locatable {
     location: Location;
-    [key: string]: any;
 }
 
 /**

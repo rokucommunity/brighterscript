@@ -4,7 +4,7 @@ import { Parser } from '../../Parser';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
-import { expectDiagnostics, expectDiagnosticsIncludes } from '../../../testHelpers.spec';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics } from '../../../testHelpers.spec';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { isArrayLiteralExpression, isAssignmentStatement, isDottedGetExpression, isLiteralExpression } from '../../../astUtils/reflection';
 import type { AssignmentStatement } from '../../Statement';
@@ -225,7 +225,7 @@ describe('parser array literals', () => {
          * 4|
          * 5| ]
          */
-        let { statements, diagnostics } = Parser.parse([
+        const parser = Parser.parse([
             {
                 kind: TokenKind.Identifier,
                 text: 'a',
@@ -317,14 +317,13 @@ describe('parser array literals', () => {
                 isReserved: false,
                 location: util.createLocation(5, 1, 5, 2)
             }
-        ]) as any;
+        ]);
 
-        expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.lengthOf(2);
-        expect(statements[0].value.range).deep.include(
+        expectZeroDiagnostics(parser);
+        expect((parser.ast.statements[0] as AssignmentStatement).value.location.range).deep.include(
             Range.create(0, 4, 0, 9)
         );
-        expect(statements[1].value.range).deep.include(
+        expect((parser.ast.statements[1] as AssignmentStatement).value.location.range).deep.include(
             Range.create(2, 4, 5, 1)
         );
     });

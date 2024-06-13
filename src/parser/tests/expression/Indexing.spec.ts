@@ -7,7 +7,7 @@ import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import type { IndexedSetStatement } from '../../Statement';
 import { AssignmentStatement } from '../../Statement';
-import { expectDiagnostics, expectDiagnosticsIncludes } from '../../../testHelpers.spec';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics } from '../../../testHelpers.spec';
 import { isAssignmentStatement, isDottedGetExpression, isIndexedGetExpression, isIndexedSetStatement, isLiteralExpression, isVariableExpression } from '../../../astUtils/reflection';
 import type { DottedGetExpression, IndexedGetExpression, VariableExpression } from '../../Expression';
 import { WalkMode } from '../../../astUtils/visitors';
@@ -98,7 +98,7 @@ describe('parser indexing', () => {
              * 0| a = foo.bar
              * 1| b = foo[2]
              */
-            let { statements, diagnostics } = Parser.parse([
+            const parser = Parser.parse([
                 {
                     kind: TokenKind.Identifier,
                     text: 'a',
@@ -192,9 +192,8 @@ describe('parser indexing', () => {
                 }
             ]);
 
-            expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.lengthOf(2);
-            expect(statements.map(s => (s as any).value.range)).to.deep.equal([
+            expectZeroDiagnostics(parser);
+            expect(parser.ast.statements.map(s => (s as AssignmentStatement).value.location.range)).to.deep.equal([
                 Range.create(0, 4, 0, 11),
                 Range.create(1, 4, 1, 10)
             ]);

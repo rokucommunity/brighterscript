@@ -1796,7 +1796,7 @@ export class Util {
      */
     public getFirstLocatableAt(locatables: Locatable[], position: Position) {
         for (let token of locatables) {
-            if (util.rangeContains(token.range, position)) {
+            if (util.rangeContains(token.location?.range, position)) {
                 return token;
             }
         }

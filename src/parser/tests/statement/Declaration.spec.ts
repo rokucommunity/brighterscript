@@ -4,6 +4,8 @@ import { Parser } from '../../Parser';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
+import { expectZeroDiagnostics } from '../../../testHelpers.spec';
+import { util } from '../../../util';
 
 describe('parser variable declarations', () => {
     it('allows newlines before assignments', () => {
@@ -84,36 +86,39 @@ describe('parser variable declarations', () => {
          *  +------------------
          * 0| foo = invalid
          */
-        let { statements, diagnostics } = Parser.parse(<any>[
+        const parser = Parser.parse([
             {
                 kind: TokenKind.Identifier,
                 text: 'foo',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 0, 0, 3)
+                location: util.createLocation(0, 0, 0, 3)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 4, 0, 5)
+                location: util.createLocation(0, 4, 0, 5)
             },
             {
                 kind: TokenKind.Invalid,
                 text: 'invalid',
+                leadingTrivia: [],
                 isReserved: true,
-                range: Range.create(0, 6, 0, 13)
+                location: util.createLocation(0, 6, 0, 13)
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 13, 0, 14)
+                location: util.createLocation(0, 13, 0, 14)
             }
         ]);
 
-        expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.lengthOf(1);
-        expect(statements[0].location.range).to.deep.include(
+        expectZeroDiagnostics(parser);
+        expect(parser.ast.statements[0].location?.range).to.deep.include(
             Range.create(0, 0, 0, 13)
         );
     });

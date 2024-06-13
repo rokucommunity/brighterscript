@@ -7,7 +7,7 @@ import { Range } from 'vscode-languageserver';
 import type { AssignmentStatement } from '../../Statement';
 import type { AALiteralExpression, AAMemberExpression } from '../../Expression';
 import { isAALiteralExpression, isAssignmentStatement, isDottedGetExpression, isLiteralExpression } from '../../../astUtils/reflection';
-import { expectDiagnostics, expectDiagnosticsIncludes } from '../../../testHelpers.spec';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics } from '../../../testHelpers.spec';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { util } from '../../../util';
 
@@ -260,7 +260,7 @@ describe('parser associative array literals', () => {
          * 5|
          * 6| }
          */
-        let { statements, diagnostics } = Parser.parse([
+        const parser = Parser.parse([
             {
                 kind: TokenKind.Identifier,
                 text: 'a',
@@ -352,14 +352,13 @@ describe('parser associative array literals', () => {
                 isReserved: false,
                 location: util.createLocation(5, 1, 5, 2)
             }
-        ]) as any;
+        ]);
 
-        expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.lengthOf(2);
-        expect(statements[0].value.range).to.deep.include(
+        expectZeroDiagnostics(parser);
+        expect((parser.ast.statements[0] as AssignmentStatement).value.location.range).to.deep.include(
             Range.create(0, 4, 0, 9)
         );
-        expect(statements[1].value.range).to.deep.include(
+        expect((parser.ast.statements[1] as AssignmentStatement).value.location.range).to.deep.include(
             Range.create(2, 4, 5, 1)
         );
     });
