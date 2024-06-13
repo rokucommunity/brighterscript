@@ -289,8 +289,6 @@ export class ProjectManager {
      * This is safe to call any time. Changes will be queued and flushed at the correct times
      */
     public async _handleFileChanges(changes: FileChange[]) {
-
-
         //filter any changes that are not allowed by the path filterer
         changes = this.pathFilterer.filter(changes, x => x.srcPath);
 

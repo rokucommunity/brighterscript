@@ -11,7 +11,7 @@ export class DocumentManager {
     constructor(
         private options: {
             delay: number;
-            flushHandler?: (event: FlushEvent) => Promise<void>;
+            flushHandler?: (event: FlushEvent) => any;
         }) {
     }
 
@@ -102,9 +102,8 @@ export class DocumentManager {
      * and will wait until files are flushed if there are files.
      */
     public async onIdle() {
-        if (!this.isIdle) {
+        while (!this.isIdle) {
             await this.once('flush');
-            return this.onIdle();
         }
     }
 

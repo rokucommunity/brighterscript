@@ -404,32 +404,35 @@ describe('ProjectManager', () => {
                 workspaceFolder: rootDir
             }]);
 
+            const stub = sinon.stub(manager as any, 'handleFileChange').callThrough();
+
             //register an exclusion filter
             pathFilterer.registerExcludeList(rootDir, [
                 '**/*.md'
             ]);
             //make sure the .md file is ignored
             await manager.handleFileChanges([
-                { srcPath: `${rootDir}/source/file1.md`, type: FileChangeType.Created },
-                { srcPath: `${rootDir}/source/file2.brs`, type: FileChangeType.Created }
+                { srcPath: s`${rootDir}/source/file1.md`, type: FileChangeType.Created },
+                { srcPath: s`${rootDir}/source/file2.brs`, type: FileChangeType.Created }
             ]);
-            let onFlush = manager['documentManager'].once('flush');
+            await manager.onIdle();
             expect(
-                (await onFlush)?.actions.map(x => x.srcPath)
+                stub.getCalls().map(x => x.args[0]).map(x => x.srcPath)
             ).to.eql([
                 s`${rootDir}/source/file2.brs`
             ]);
+            stub.reset();
 
             //remove all filters, make sure the markdown file is included
             pathFilterer.clear();
             await manager.handleFileChanges([
-                { srcPath: `${rootDir}/source/file1.md`, type: FileChangeType.Created },
-                { srcPath: `${rootDir}/source/file2.brs`, type: FileChangeType.Created }
+                { srcPath: s`${rootDir}/source/file1.md`, type: FileChangeType.Created },
+                { srcPath: s`${rootDir}/source/file2.brs`, type: FileChangeType.Created }
             ]);
 
-            onFlush = manager['documentManager'].once('flush');
+            await manager.onIdle();
             expect(
-                (await onFlush)?.actions.map(x => x.srcPath)
+                stub.getCalls().flatMap(x => x.args[0]).map(x => x.srcPath)
             ).to.eql([
                 s`${rootDir}/source/file1.md`,
                 s`${rootDir}/source/file2.brs`
@@ -448,6 +451,8 @@ describe('ProjectManager', () => {
                 workspaceFolder: rootDir
             }]);
 
+            const stub = sinon.stub(manager['projects'][0], 'applyFileChanges').callThrough();
+
             //register an exclusion filter
             pathFilterer.registerExcludeList(rootDir, [
                 '**/*.md'
@@ -457,9 +462,9 @@ describe('ProjectManager', () => {
                 { srcPath: `${rootDir}/source/file1.md`, type: FileChangeType.Created },
                 { srcPath: `${rootDir}/source/file2.brs`, type: FileChangeType.Created }
             ]);
-            let onFlush = manager['documentManager'].once('flush');
+            await manager.onIdle();
             expect(
-                (await onFlush)?.actions.map(x => x.srcPath)
+                stub.getCalls().flatMap(x => x.args[0]).map(x => x.srcPath)
             ).to.eql([
                 s`${rootDir}/source/file1.md`,
                 s`${rootDir}/source/file2.brs`

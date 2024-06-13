@@ -160,12 +160,14 @@ export class PathFilterer {
 }
 
 export class PathCollection {
-    constructor(options: {
-        rootDir: string;
-        globs: string[];
-    } | {
-        matcher: (path: string) => boolean;
-    }) {
+    constructor(
+        public options: {
+            rootDir: string;
+            globs: string[];
+        } | {
+            matcher: (path: string) => boolean;
+        }
+    ) {
         if ('globs' in options) {
             //build matcher patterns from the globs
             for (const glob of options.globs ?? []) {
