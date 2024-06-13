@@ -68,6 +68,7 @@ export class TranspileState {
     private getSource(locatable: RangeLike) {
         let srcPath = (locatable as { location: Location })?.location?.uri ?? (locatable as Location).uri;
         if (srcPath) {
+            srcPath = util.uriToPath(srcPath);
             //if a sourceRoot is specified, use that instead of the rootDir
             if (this.options.sourceRoot) {
                 srcPath = srcPath.replace(
@@ -75,6 +76,7 @@ export class TranspileState {
                     this.options.sourceRoot
                 );
             }
+            return srcPath;
         } else {
             return this.srcPath;
         }
