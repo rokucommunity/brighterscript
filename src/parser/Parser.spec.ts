@@ -615,7 +615,7 @@ describe('parser', () => {
                 `);
                 let { diagnostics, statements } = Parser.parse(tokens);
                 expect(diagnostics).to.be.lengthOf(0, 'Error count should be 0');
-                expect(statements[0].getLeadingTrivia()[2].text).to.equal(`'comment 1`);
+                expect(statements[0].leadingTrivia[2].text).to.equal(`'comment 1`);
             });
 
             it('works in aa literal as its own statement', () => {
@@ -652,7 +652,7 @@ describe('parser', () => {
                 let { diagnostics, statements } = Parser.parse(tokens) as any;
                 expect(diagnostics).to.be.lengthOf(0, 'Should have zero diagnostics');
 
-                expect(statements[0].func.body.statements[0].getLeadingTrivia().filter(x => x.kind === TokenKind.Comment).map(x => x.text)).members([`'comment 1`, `'comment 2`]);
+                expect(statements[0].func.body.statements[0].leadingTrivia.filter(x => x.kind === TokenKind.Comment).map(x => x.text)).members([`'comment 1`, `'comment 2`]);
             });
 
             it('if statement`', () => {
@@ -1623,7 +1623,7 @@ describe('parser', () => {
                 end function
             `);
             const funcStatements = statements.filter(isFunctionStatement);
-            const fooTrivia = funcStatements[0].getLeadingTrivia();
+            const fooTrivia = funcStatements[0].leadingTrivia;
             expect(fooTrivia.length).to.be.greaterThan(0);
             expect(fooTrivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(1);
         });
@@ -1637,7 +1637,7 @@ describe('parser', () => {
                 end sub
             `);
             const funcStatements = statements.filter(isFunctionStatement);
-            const helloTrivia = funcStatements[0].getLeadingTrivia();
+            const helloTrivia = funcStatements[0].leadingTrivia;
             expect(helloTrivia.length).to.be.greaterThan(0);
             expect(helloTrivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(3);
         });
@@ -1650,7 +1650,7 @@ describe('parser', () => {
                 end class
             `, ParseMode.BrighterScript);
             const classStatements = statements.filter(isClassStatement);
-            const trivia = classStatements[0].getLeadingTrivia();
+            const trivia = classStatements[0].leadingTrivia;
             expect(trivia.length).to.be.greaterThan(0);
             expect(trivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(2);
         });
@@ -1666,12 +1666,12 @@ describe('parser', () => {
                 end sub
             `, ParseMode.BrighterScript);
             const funcStatements = statements.filter(isFunctionStatement);
-            const helloTrivia = funcStatements[0].getLeadingTrivia();
+            const helloTrivia = funcStatements[0].leadingTrivia;
             expect(helloTrivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(0);
-            const helloAnnotationTrivia = funcStatements[0].annotations[0].getLeadingTrivia();
+            const helloAnnotationTrivia = funcStatements[0].annotations[0].leadingTrivia;
             expect(helloAnnotationTrivia.length).to.be.greaterThan(0);
             expect(helloAnnotationTrivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(2);
-            const otherAnnotationTrivia = funcStatements[0].annotations[1].getLeadingTrivia();
+            const otherAnnotationTrivia = funcStatements[0].annotations[1].leadingTrivia;
             expect(otherAnnotationTrivia.length).to.be.greaterThan(0);
             expect(otherAnnotationTrivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(1);
         });
@@ -1699,12 +1699,12 @@ describe('parser', () => {
             const methodStatements = classStatement.methods;
 
             // function getPi()
-            let trivia = methodStatements[0].getLeadingTrivia();
+            let trivia = methodStatements[0].leadingTrivia;
             expect(trivia.length).to.be.greaterThan(0);
             expect(trivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(2);
 
             // function getPie()
-            trivia = methodStatements[1].getLeadingTrivia();
+            trivia = methodStatements[1].leadingTrivia;
             expect(trivia.length).to.be.greaterThan(0);
             expect(trivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(1);
         });
@@ -1729,17 +1729,17 @@ describe('parser', () => {
             const fieldStatements = classStatement.fields;
 
             // color = "blue"
-            let trivia = fieldStatements[0].getLeadingTrivia();
+            let trivia = fieldStatements[0].leadingTrivia;
             expect(trivia.length).to.be.greaterThan(0);
             expect(trivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(2);
 
             // public name as string
-            trivia = fieldStatements[1].getLeadingTrivia();
+            trivia = fieldStatements[1].leadingTrivia;
             expect(trivia.length).to.be.greaterThan(0);
             expect(trivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(1);
 
             // private age = 42
-            trivia = fieldStatements[2].getLeadingTrivia();
+            trivia = fieldStatements[2].leadingTrivia;
             expect(trivia.length).to.be.greaterThan(0);
             expect(trivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(1);
         });
@@ -1760,17 +1760,17 @@ describe('parser', () => {
             const methodStatements = ifaceStatement.methods;
 
             // interface myIface
-            let trivia = ifaceStatement.getLeadingTrivia();
+            let trivia = ifaceStatement.leadingTrivia;
             expect(trivia.length).to.be.greaterThan(0);
             expect(trivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(1);
 
             // someField as integer
-            trivia = fieldStatements[0].getLeadingTrivia();
+            trivia = fieldStatements[0].leadingTrivia;
             expect(trivia.length).to.be.greaterThan(0);
             expect(trivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(1);
 
             // function someFunc() as string
-            trivia = methodStatements[0].getLeadingTrivia();
+            trivia = methodStatements[0].leadingTrivia;
             expect(trivia.length).to.be.greaterThan(0);
             expect(trivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(1);
         });
@@ -1786,7 +1786,7 @@ describe('parser', () => {
             const nameSpaceStatement = statements.filter(isNamespaceStatement)[0];
 
             // namespace Nested.Name.Space
-            let trivia = nameSpaceStatement.getLeadingTrivia();
+            let trivia = nameSpaceStatement.leadingTrivia;
             expect(trivia.length).to.be.greaterThan(0);
             expect(trivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(1);
         });
@@ -2315,7 +2315,7 @@ export function rangeToArray(range: Range) {
 }
 
 function expectCommentWithText(stat: Statement, text: string) {
-    const trivia = stat.getLeadingTrivia();
+    const trivia = stat.leadingTrivia;
     if (trivia) {
         expect(trivia.filter(tok => tok.kind === TokenKind.Comment).map(t => t.text).join('\n')).to.equal(text);
     } else {

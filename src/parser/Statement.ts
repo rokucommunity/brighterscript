@@ -184,7 +184,7 @@ export class AssignmentStatement extends Statement {
         return variableType;
     }
 
-    getLeadingTrivia(): Token[] {
+    get leadingTrivia(): Token[] {
         return this.tokens.name.leadingTrivia;
     }
 }
@@ -245,8 +245,8 @@ export class AugmentedAssignmentStatement extends Statement {
         return variableType;
     }
 
-    getLeadingTrivia(): Token[] {
-        return this.item.getLeadingTrivia();
+    get leadingTrivia(): Token[] {
+        return this.item.leadingTrivia;
     }
 }
 
@@ -386,8 +386,8 @@ export class Block extends Statement {
         return results;
     }
 
-    public getLeadingTrivia(): Token[] {
-        return this.statements[0]?.getLeadingTrivia() ?? [];
+    public get leadingTrivia(): Token[] {
+        return this.statements[0]?.leadingTrivia ?? [];
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -421,8 +421,8 @@ export class ExpressionStatement extends Statement {
         }
     }
 
-    getLeadingTrivia(): Token[] {
-        return this.expression.getLeadingTrivia();
+    get leadingTrivia(): Token[] {
+        return this.expression.leadingTrivia;
     }
 }
 
@@ -454,7 +454,7 @@ export class ExitForStatement extends Statement {
         //nothing to walk
     }
 
-    getLeadingTrivia(): Token[] {
+    get leadingTrivia(): Token[] {
         return this.tokens.exitFor?.leadingTrivia;
     }
 
@@ -487,7 +487,7 @@ export class ExitWhileStatement extends Statement {
         //nothing to walk
     }
 
-    getLeadingTrivia(): Token[] {
+    get leadingTrivia(): Token[] {
         return this.tokens.exitWhile?.leadingTrivia;
     }
 }
@@ -531,8 +531,8 @@ export class FunctionStatement extends Statement implements TypedefProvider {
         }
     }
 
-    public getLeadingTrivia(): Token[] {
-        return this.func.getLeadingTrivia();
+    public get leadingTrivia(): Token[] {
+        return this.func.leadingTrivia;
     }
 
     transpile(state: BrsTranspileState) {
@@ -628,8 +628,8 @@ export class IfStatement extends Statement {
 
     get isInline() {
         const allLeadingTrivia = [
-            ...this.thenBranch.getLeadingTrivia(),
-            ...this.thenBranch.statements.map(s => s.getLeadingTrivia()).flat(),
+            ...this.thenBranch.leadingTrivia,
+            ...this.thenBranch.statements.map(s => s.leadingTrivia).flat(),
             ...(this.tokens.else?.leadingTrivia ?? []),
             ...(this.tokens.endIf?.leadingTrivia ?? [])
         ];
@@ -712,11 +712,11 @@ export class IfStatement extends Statement {
         }
     }
 
-    getLeadingTrivia(): Token[] {
+    get leadingTrivia(): Token[] {
         return this.tokens.if?.leadingTrivia ?? [];
     }
 
-    getEndTrivia(): Token[] {
+    get endTrivia(): Token[] {
         return this.tokens.endIf?.leadingTrivia ?? [];
     }
 
@@ -760,8 +760,8 @@ export class IncrementStatement extends Statement {
         }
     }
 
-    getLeadingTrivia(): Token[] {
-        return this.value?.getLeadingTrivia() ?? [];
+    get leadingTrivia(): Token[] {
+        return this.value?.leadingTrivia ?? [];
     }
 }
 
@@ -836,7 +836,7 @@ export class PrintStatement extends Statement {
         }
     }
 
-    getLeadingTrivia(): Token[] {
+    get leadingTrivia(): Token[] {
         return this.tokens.print?.leadingTrivia ?? [];
     }
 }
@@ -913,7 +913,7 @@ export class DimStatement extends Statement {
         return type;
     }
 
-    getLeadingTrivia(): Token[] {
+    get leadingTrivia(): Token[] {
         return this.tokens.dim?.leadingTrivia ?? [];
     }
 }
@@ -955,7 +955,7 @@ export class GotoStatement extends Statement {
         //nothing to walk
     }
 
-    getLeadingTrivia(): Token[] {
+    get leadingTrivia(): Token[] {
         return this.tokens.goto?.leadingTrivia ?? [];
     }
 }
@@ -983,7 +983,7 @@ export class LabelStatement extends Statement {
 
     public readonly range: Range | undefined;
 
-    public getLeadingTrivia(): Token[] {
+    public get leadingTrivia(): Token[] {
         return this.tokens.name.leadingTrivia;
     }
 
@@ -1042,7 +1042,7 @@ export class ReturnStatement extends Statement {
         }
     }
 
-    getLeadingTrivia(): Token[] {
+    get leadingTrivia(): Token[] {
         return this.tokens.return?.leadingTrivia ?? [];
     }
 }
@@ -1074,7 +1074,7 @@ export class EndStatement extends Statement {
         //nothing to walk
     }
 
-    getLeadingTrivia(): Token[] {
+    get leadingTrivia(): Token[] {
         return this.tokens.end?.leadingTrivia ?? [];
     }
 }
@@ -1105,7 +1105,7 @@ export class StopStatement extends Statement {
         //nothing to walk
     }
 
-    getLeadingTrivia(): Token[] {
+    get leadingTrivia(): Token[] {
         return this.tokens.stop?.leadingTrivia ?? [];
     }
 }
@@ -1213,11 +1213,11 @@ export class ForStatement extends Statement {
         }
     }
 
-    getLeadingTrivia(): Token[] {
+    get leadingTrivia(): Token[] {
         return this.tokens.for?.leadingTrivia ?? [];
     }
 
-    public getEndTrivia(): Token[] {
+    public get endTrivia(): Token[] {
         return this.tokens.endFor?.leadingTrivia ?? [];
     }
 }
@@ -1307,11 +1307,11 @@ export class ForEachStatement extends Statement {
         return this.getSymbolTable().getSymbolType(this.tokens.item.text, options);
     }
 
-    getLeadingTrivia(): Token[] {
+    get leadingTrivia(): Token[] {
         return this.tokens.forEach?.leadingTrivia ?? [];
     }
 
-    public getEndTrivia(): Token[] {
+    public get endTrivia(): Token[] {
         return this.tokens.endFor?.leadingTrivia ?? [];
     }
 }
@@ -1380,11 +1380,11 @@ export class WhileStatement extends Statement {
         }
     }
 
-    getLeadingTrivia(): Token[] {
+    get leadingTrivia(): Token[] {
         return this.tokens.while?.leadingTrivia ?? [];
     }
 
-    public getEndTrivia(): Token[] {
+    public get endTrivia(): Token[] {
         return this.tokens.endWhile?.leadingTrivia ?? [];
     }
 }
@@ -1461,8 +1461,8 @@ export class DottedSetStatement extends Statement {
         return result;
     }
 
-    getLeadingTrivia(): Token[] {
-        return this.obj.getLeadingTrivia();
+    get leadingTrivia(): Token[] {
+        return this.obj.leadingTrivia;
     }
 }
 
@@ -1543,8 +1543,8 @@ export class IndexedSetStatement extends Statement {
         }
     }
 
-    getLeadingTrivia(): Token[] {
-        return this.obj.getLeadingTrivia();
+    get leadingTrivia(): Token[] {
+        return this.obj.leadingTrivia;
     }
 }
 
@@ -1595,7 +1595,7 @@ export class LibraryStatement extends Statement implements TypedefProvider {
         //nothing to walk
     }
 
-    getLeadingTrivia(): Token[] {
+    get leadingTrivia(): Token[] {
         return this.tokens.library?.leadingTrivia ?? [];
     }
 }
@@ -1659,11 +1659,11 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         return name;
     }
 
-    public getLeadingTrivia(): Token[] {
+    public get leadingTrivia(): Token[] {
         return this.tokens.namespace?.leadingTrivia;
     }
 
-    public getEndTrivia(): Token[] {
+    public get endTrivia(): Token[] {
         return this.tokens.endNamespace?.leadingTrivia;
     }
 
@@ -1795,7 +1795,7 @@ export class ImportStatement extends Statement implements TypedefProvider {
         //nothing to walk
     }
 
-    getLeadingTrivia(): Token[] {
+    get leadingTrivia(): Token[] {
         return this.tokens.import?.leadingTrivia ?? [];
     }
 }
@@ -1854,11 +1854,11 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         return !!this.parentInterfaceName;
     }
 
-    public getLeadingTrivia(): Token[] {
+    public get leadingTrivia(): Token[] {
         return this.tokens.interface?.leadingTrivia;
     }
 
-    public getEndTrivia(): Token[] {
+    public get endTrivia(): Token[] {
         return this.tokens.endInterface?.leadingTrivia;
     }
 
@@ -2039,7 +2039,7 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
         readonly optional?: Token;
     };
 
-    public getLeadingTrivia(): Token[] {
+    public get leadingTrivia(): Token[] {
         return this.tokens.optional?.leadingTrivia ?? this.tokens.name.leadingTrivia;
     }
 
@@ -2164,7 +2164,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         return !!this.tokens.optional;
     }
 
-    public getLeadingTrivia(): Token[] {
+    public get leadingTrivia(): Token[] {
         return this.tokens.optional?.leadingTrivia ?? this.tokens.functionType.leadingTrivia;
     }
 
@@ -2326,11 +2326,11 @@ export class ClassStatement extends Statement implements TypedefProvider {
         }
     }
 
-    public getLeadingTrivia(): Token[] {
+    public get leadingTrivia(): Token[] {
         return this.tokens.class?.leadingTrivia;
     }
 
-    public getEndTrivia(): Token[] {
+    public get endTrivia(): Token[] {
         return this.tokens.endClass?.leadingTrivia ?? [];
     }
 
@@ -2764,8 +2764,8 @@ export class MethodStatement extends FunctionStatement {
         return this.tokens.name.text;
     }
 
-    public getLeadingTrivia(): Token[] {
-        return this.func.getLeadingTrivia();
+    public get leadingTrivia(): Token[] {
+        return this.func.leadingTrivia;
     }
 
     transpile(state: BrsTranspileState) {
@@ -2979,7 +2979,7 @@ export class FieldStatement extends Statement implements TypedefProvider {
 
     public readonly range: Range | undefined;
 
-    public getLeadingTrivia(): Token[] {
+    public get leadingTrivia(): Token[] {
         return this.tokens.accessModifier?.leadingTrivia ?? this.tokens.optional?.leadingTrivia ?? this.tokens.name.leadingTrivia;
     }
 
@@ -3093,11 +3093,11 @@ export class TryCatchStatement extends Statement {
         }
     }
 
-    public getLeadingTrivia(): Token[] {
+    public get leadingTrivia(): Token[] {
         return this.tokens.try?.leadingTrivia ?? [];
     }
 
-    public getEndTrivia(): Token[] {
+    public get endTrivia(): Token[] {
         return this.tokens.endTry?.leadingTrivia ?? [];
     }
 }
@@ -3147,7 +3147,7 @@ export class CatchStatement extends Statement {
         }
     }
 
-    public getLeadingTrivia(): Token[] {
+    public get leadingTrivia(): Token[] {
         return this.tokens.catch?.leadingTrivia ?? [];
     }
 }
@@ -3202,7 +3202,7 @@ export class ThrowStatement extends Statement {
         }
     }
 
-    public getLeadingTrivia(): Token[] {
+    public get leadingTrivia(): Token[] {
         return this.tokens.throw?.leadingTrivia ?? [];
     }
 }
@@ -3253,11 +3253,11 @@ export class EnumStatement extends Statement implements TypedefProvider {
         return result;
     }
 
-    public getLeadingTrivia(): Token[] {
+    public get leadingTrivia(): Token[] {
         return this.tokens.enum?.leadingTrivia;
     }
 
-    public getEndTrivia(): Token[] {
+    public get endTrivia(): Token[] {
         return this.tokens.endEnum?.leadingTrivia ?? [];
     }
 
@@ -3434,7 +3434,7 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
         return this.tokens.name.text;
     }
 
-    public getLeadingTrivia(): Token[] {
+    public get leadingTrivia(): Token[] {
         return this.tokens.name.leadingTrivia;
     }
 
@@ -3510,7 +3510,7 @@ export class ConstStatement extends Statement implements TypedefProvider {
         return this.tokens.name.text;
     }
 
-    public getLeadingTrivia(): Token[] {
+    public get leadingTrivia(): Token[] {
         return this.tokens.const?.leadingTrivia;
     }
 
@@ -3607,7 +3607,7 @@ export class ContinueStatement extends Statement {
         //nothing to walk
     }
 
-    public getLeadingTrivia(): Token[] {
+    public get leadingTrivia(): Token[] {
         return this.tokens.continue?.leadingTrivia ?? [];
     }
 }
@@ -3659,7 +3659,7 @@ export class TypecastStatement extends Statement {
         }
     }
 
-    getLeadingTrivia(): Token[] {
+    get leadingTrivia(): Token[] {
         return this.tokens.typecast?.leadingTrivia ?? [];
     }
 
@@ -3704,7 +3704,7 @@ export class ConditionalCompileErrorStatement extends Statement {
         // nothing to walk
     }
 
-    getLeadingTrivia(): Token[] {
+    get leadingTrivia(): Token[] {
         return this.tokens.hashError.leadingTrivia ?? [];
     }
 }
@@ -3763,7 +3763,7 @@ export class AliasStatement extends Statement {
         }
     }
 
-    getLeadingTrivia(): Token[] {
+    get leadingTrivia(): Token[] {
         return this.tokens.alias?.leadingTrivia ?? [];
     }
 
@@ -3904,7 +3904,7 @@ export class ConditionalCompileStatement extends Statement {
         }
     }
 
-    getLeadingTrivia(): Token[] {
+    get leadingTrivia(): Token[] {
         return this.tokens.hashIf?.leadingTrivia ?? [];
     }
 }
@@ -3951,7 +3951,7 @@ export class ConditionalCompileConstStatement extends Statement {
     }
 
 
-    getLeadingTrivia(): Token[] {
+    get leadingTrivia(): Token[] {
         return this.tokens.hashConst.leadingTrivia ?? [];
     }
 }

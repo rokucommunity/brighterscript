@@ -15,6 +15,7 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import util, { standardizePath as s } from '../util';
 import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
 import { ParseMode, Parser } from '../parser/Parser';
+import type { FunctionStatement } from '../parser/Statement';
 import { ImportStatement } from '../parser/Statement';
 import { createToken, createVariableExpression } from '../astUtils/creators';
 import * as fsExtra from 'fs-extra';
@@ -3260,6 +3261,56 @@ describe('BrsFile', () => {
                         x[0] += 2
                         x.prop += "hello"
                     end sub
+                `);
+            });
+        });
+
+        describe('leading and end trivia', () => {
+            it('transpiles leading/end trivia', async () => {
+                await testTranspile(`
+                    'comment before function
+                    sub test(x) 'comment end of line
+                        'comment at start of function
+                        print x 'comment at end of line
+                        'comment at end of function
+                    end sub
+                    'comment after function
+                `);
+            });
+
+            it('allows editing leading trivia', async () => {
+                const mainFile = program.setFile<BrsFile>('source/amain.bs', `
+                    sub test(x)
+                        print x
+                    end sub
+                `);
+                program.validate();
+                const funcStmt = mainFile.ast.statements[0] as FunctionStatement;
+                funcStmt.leadingTrivia.push(createToken(TokenKind.Comment, `'comment before function`), createToken(TokenKind.Newline));
+                funcStmt.func.body.statements[0].leadingTrivia.unshift(createToken(TokenKind.Comment, `'comment after func declaration`));
+
+                funcStmt.func.body.statements[0].leadingTrivia.push(
+                    createToken(TokenKind.Comment, `'comment at start of function`),
+                    createToken(TokenKind.Newline)
+                );
+
+                funcStmt.func.endTrivia.push(
+                    createToken(TokenKind.Comment, `'comment at end of function`),
+                    createToken(TokenKind.Newline)
+                );
+
+                mainFile.parser.eofToken.leadingTrivia.push(createToken(TokenKind.Comment, `'comment at end of file`));
+
+
+                await testTranspile(mainFile, `
+                    'comment before function
+                    sub test(x)
+                        'comment after func declaration
+                        'comment at start of function
+                        print x
+                        'comment at end of function
+                    end sub
+                    'comment at end of file
                 `);
             });
         });

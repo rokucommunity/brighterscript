@@ -95,8 +95,8 @@ export class BinaryExpression extends Expression {
         return DynamicType.instance;
     }
 
-    getLeadingTrivia(): Token[] {
-        return this.left.getLeadingTrivia();
+    get leadingTrivia(): Token[] {
+        return this.left.leadingTrivia;
     }
 }
 
@@ -197,8 +197,8 @@ export class CallExpression extends Expression {
         return new TypePropertyReferenceType(calleeType, 'returnType');
     }
 
-    getLeadingTrivia(): Token[] {
-        return this.callee.getLeadingTrivia();
+    get leadingTrivia(): Token[] {
+        return this.callee.leadingTrivia;
     }
 }
 
@@ -255,11 +255,11 @@ export class FunctionExpression extends Expression implements TypedefProvider {
      */
     public functionStatement?: FunctionStatement;
 
-    public getLeadingTrivia(): Token[] {
+    public get leadingTrivia(): Token[] {
         return this.tokens.functionType?.leadingTrivia;
     }
 
-    public getEndTrivia(): Token[] {
+    public get endTrivia(): Token[] {
         return this.tokens.endFunctionType?.leadingTrivia;
     }
 
@@ -514,7 +514,7 @@ export class FunctionParameterExpression extends Expression {
         }
     }
 
-    getLeadingTrivia(): Token[] {
+    get leadingTrivia(): Token[] {
         return this.tokens.name.leadingTrivia;
     }
 }
@@ -599,8 +599,8 @@ export class DottedGetExpression extends Expression {
         return util.getAllDottedGetPartsAsString(this, parseMode);
     }
 
-    getLeadingTrivia(): Token[] {
-        return this.obj.getLeadingTrivia();
+    get leadingTrivia(): Token[] {
+        return this.obj.leadingTrivia;
     }
 
 }
@@ -645,8 +645,8 @@ export class XmlAttributeGetExpression extends Expression {
         }
     }
 
-    getLeadingTrivia(): Token[] {
-        return this.obj.getLeadingTrivia();
+    get leadingTrivia(): Token[] {
+        return this.obj.leadingTrivia;
     }
 }
 
@@ -727,8 +727,8 @@ export class IndexedGetExpression extends Expression {
         return super.getType(options);
     }
 
-    getLeadingTrivia(): Token[] {
-        return this.obj.getLeadingTrivia();
+    get leadingTrivia(): Token[] {
+        return this.obj.leadingTrivia;
     }
 }
 
@@ -778,7 +778,7 @@ export class GroupingExpression extends Expression {
         return this.expression.getType(options);
     }
 
-    getLeadingTrivia(): Token[] {
+    get leadingTrivia(): Token[] {
         return this.tokens.leftParen?.leadingTrivia;
     }
 }
@@ -832,7 +832,7 @@ export class LiteralExpression extends Expression {
         //nothing to walk
     }
 
-    getLeadingTrivia(): Token[] {
+    get leadingTrivia(): Token[] {
         return this.tokens.value.leadingTrivia;
     }
 }
@@ -937,11 +937,11 @@ export class ArrayLiteralExpression extends Expression {
         const innerTypes = this.elements.map(expr => expr.getType(options));
         return new ArrayType(...innerTypes);
     }
-    getLeadingTrivia(): Token[] {
+    get leadingTrivia(): Token[] {
         return this.tokens.open?.leadingTrivia;
     }
 
-    getEndTrivia(): Token[] {
+    get endTrivia(): Token[] {
         return this.tokens.close?.leadingTrivia;
     }
 }
@@ -990,7 +990,7 @@ export class AAMemberExpression extends Expression {
         return this.value.getType(options);
     }
 
-    getLeadingTrivia(): Token[] {
+    get leadingTrivia(): Token[] {
         return this.tokens.key.leadingTrivia;
     }
 
@@ -1090,11 +1090,11 @@ export class AALiteralExpression extends Expression {
         return resultType;
     }
 
-    public getLeadingTrivia(): Token[] {
+    public get leadingTrivia(): Token[] {
         return this.tokens.open?.leadingTrivia;
     }
 
-    public getEndTrivia(): Token[] {
+    public get endTrivia(): Token[] {
         return this.tokens.close?.leadingTrivia;
     }
 
@@ -1149,7 +1149,7 @@ export class UnaryExpression extends Expression {
         return util.unaryOperatorResultType(this.tokens.operator, this.right.getType(options));
     }
 
-    public getLeadingTrivia(): Token[] {
+    public get leadingTrivia(): Token[] {
         return this.tokens.operator.leadingTrivia;
     }
 }
@@ -1220,7 +1220,7 @@ export class VariableExpression extends Expression {
         return resultType;
     }
 
-    getLeadingTrivia(): Token[] {
+    get leadingTrivia(): Token[] {
         return this.tokens.name.leadingTrivia;
     }
 }
@@ -1336,7 +1336,7 @@ export class SourceLiteralExpression extends Expression {
         //nothing to walk
     }
 
-    getLeadingTrivia(): Token[] {
+    get leadingTrivia(): Token[] {
         return this.tokens.value.leadingTrivia;
     }
 }
@@ -1406,7 +1406,7 @@ export class NewExpression extends Expression {
         return result;
     }
 
-    getLeadingTrivia(): Token[] {
+    get leadingTrivia(): Token[] {
         return this.tokens.new.leadingTrivia;
     }
 }
@@ -1526,8 +1526,8 @@ export class CallfuncExpression extends Expression {
         return result;
     }
 
-    getLeadingTrivia(): Token[] {
-        return this.callee.getLeadingTrivia();
+    get leadingTrivia(): Token[] {
+        return this.callee.leadingTrivia;
     }
 }
 
@@ -1822,7 +1822,7 @@ export class AnnotationExpression extends Expression {
         return this.call.args.map(e => expressionToValue(e, strict));
     }
 
-    public getLeadingTrivia(): Token[] {
+    public get leadingTrivia(): Token[] {
         return this.tokens.at?.leadingTrivia;
     }
 
@@ -1948,8 +1948,8 @@ export class TernaryExpression extends Expression {
         }
     }
 
-    getLeadingTrivia(): Token[] {
-        return this.test.getLeadingTrivia();
+    get leadingTrivia(): Token[] {
+        return this.test.leadingTrivia;
     }
 }
 
@@ -2050,8 +2050,8 @@ export class NullCoalescingExpression extends Expression {
         }
     }
 
-    getLeadingTrivia(): Token[] {
-        return this.consequent.getLeadingTrivia();
+    get leadingTrivia(): Token[] {
+        return this.consequent.leadingTrivia;
     }
 }
 
@@ -2103,7 +2103,7 @@ export class RegexLiteralExpression extends Expression {
         //nothing to walk
     }
 
-    getLeadingTrivia(): Token[] {
+    get leadingTrivia(): Token[] {
         return this.tokens.regexLiteral?.leadingTrivia;
     }
 }
