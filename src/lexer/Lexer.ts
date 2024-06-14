@@ -111,7 +111,7 @@ export class Lexer {
                 ? util.createRange(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd + 1)
                 : undefined,
             leadingWhitespace: this.leadingWhitespace,
-            leadingTrivia: this.leadingTrivia
+            leadingTrivia: this.leadingTrivia ?? []
         });
         this.leadingWhitespace = '';
         return this;

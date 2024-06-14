@@ -78,7 +78,7 @@ export class SignatureHelpUtil {
         const funcStartPosition = func.range.start;
 
         // Get function comments in reverse order
-        const trivia = func.getLeadingTrivia().reverse();
+        const trivia = util.concatAnnotationLeadingTrivia(func).reverse();
         let functionComments = [] as string[];
 
         for (const currentToken of trivia) {
