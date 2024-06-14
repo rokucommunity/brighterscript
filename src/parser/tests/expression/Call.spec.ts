@@ -9,12 +9,13 @@ import type { ExpressionStatement, FunctionStatement } from '../../Statement';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { expectDiagnostics, expectDiagnosticsIncludes } from '../../../testHelpers.spec';
 import { isAssignmentStatement, isCallExpression, isDottedGetExpression, isDottedSetStatement, isExpressionStatement, isIndexedGetExpression, isReturnStatement } from '../../../astUtils/reflection';
+import { util } from '../../../util';
 
 describe('parser call expressions', () => {
     it('parses named function calls', () => {
         const { statements, diagnostics } = Parser.parse([
             identifier('RebootSystem'),
-            { kind: TokenKind.LeftParen, text: '(', range: null as any, leadingTrivia: [] },
+            { kind: TokenKind.LeftParen, text: '(', location: null as any, leadingTrivia: [] },
             token(TokenKind.RightParen, ')'),
             EOF
         ]);
@@ -65,7 +66,7 @@ describe('parser call expressions', () => {
     it('allows closing parentheses on separate line', () => {
         const { statements, diagnostics } = Parser.parse([
             identifier('RebootSystem'),
-            { kind: TokenKind.LeftParen, text: '(', range: null as any, leadingTrivia: [] },
+            { kind: TokenKind.LeftParen, text: '(', location: null as any, leadingTrivia: [] },
             token(TokenKind.Newline, '\\n'),
             token(TokenKind.Newline, '\\n'),
             token(TokenKind.RightParen, ')'),
@@ -128,9 +129,9 @@ describe('parser call expressions', () => {
     it('accepts arguments', () => {
         const { statements, diagnostics } = Parser.parse([
             identifier('add'),
-            { kind: TokenKind.LeftParen, text: '(', range: null as any, leadingTrivia: [] },
+            { kind: TokenKind.LeftParen, text: '(', location: null as any, leadingTrivia: [] },
             token(TokenKind.IntegerLiteral, '1'),
-            { kind: TokenKind.Comma, text: ',', range: null as any, leadingTrivia: [] },
+            { kind: TokenKind.Comma, text: ',', location: null as any, leadingTrivia: [] },
             token(TokenKind.IntegerLiteral, '2'),
             token(TokenKind.RightParen, ')'),
             EOF
@@ -148,54 +149,61 @@ describe('parser call expressions', () => {
          *  +----------------------
          * 0| foo("bar", "baz")
          */
-        const { statements, diagnostics } = Parser.parse(<any>[
+        const { statements, diagnostics } = Parser.parse([
             {
                 kind: TokenKind.Identifier,
                 text: 'foo',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 0, 0, 3)
+                location: util.createLocation(0, 0, 0, 3)
             },
             {
                 kind: TokenKind.LeftParen,
                 text: '(',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 3, 0, 4)
+                location: util.createLocation(0, 3, 0, 4)
             },
             {
                 kind: TokenKind.StringLiteral,
                 text: `"bar"`,
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 4, 0, 9)
+                location: util.createLocation(0, 4, 0, 9)
             },
             {
                 kind: TokenKind.Comma,
                 text: ',',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 9, 0, 10)
+                location: util.createLocation(0, 9, 0, 10)
             },
             {
                 kind: TokenKind.StringLiteral,
                 text: `"baz"`,
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 11, 0, 16)
+                location: util.createLocation(0, 11, 0, 16)
             },
             {
                 kind: TokenKind.RightParen,
                 text: ')',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 16, 0, 17)
+                location: util.createLocation(0, 16, 0, 17)
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 17, 0, 18)
+                location: util.createLocation(0, 17, 0, 18)
             }
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);
-        expect(statements[0].range).to.deep.include(
+        expect(statements[0].location?.range).to.deep.include(
             Range.create(0, 0, 0, 17)
         );
     });

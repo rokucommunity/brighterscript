@@ -2,7 +2,7 @@
 import { TokenKind, ReservedWords, Keywords, PreceedingRegexTypes, AllowedTriviaTokens } from './TokenKind';
 import type { Token } from './Token';
 import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Characters';
-import type { Range, Diagnostic } from 'vscode-languageserver';
+import type { Location, Range, Diagnostic } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import util from '../util';
 
@@ -68,6 +68,11 @@ export class Lexer {
     private leadingTrivia: Token[] = [];
 
     /**
+     * URI of the file being scanned (if available)
+     */
+    private uri?: string;
+
+    /**
      * A convenience function, equivalent to `new Lexer().scan(toScan)`, that converts a string
      * containing BrightScript code to an array of `Token` objects that will later be used to build
      * an abstract syntax tree.
@@ -99,6 +104,7 @@ export class Lexer {
         this.columnEnd = 0;
         this.tokens = [];
         this.diagnostics = [];
+        this.uri = util.pathToUri(options?.srcPath);
         while (!this.isAtEnd()) {
             this.scanToken();
         }
@@ -107,8 +113,8 @@ export class Lexer {
             kind: TokenKind.Eof,
             isReserved: false,
             text: '',
-            range: this.options.trackLocations
-                ? util.createRange(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd + 1)
+            location: this.options.trackLocations
+                ? util.createLocation(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd + 1, this.uri)
                 : undefined,
             leadingWhitespace: this.leadingWhitespace,
             leadingTrivia: this.leadingTrivia ?? []
@@ -1067,7 +1073,7 @@ export class Lexer {
             kind: kind,
             text: text,
             isReserved: ReservedWords.has(text.toLowerCase()),
-            range: this.rangeOf(),
+            location: this.locationOf(),
             leadingWhitespace: this.leadingWhitespace,
             leadingTrivia: []
         };
@@ -1095,13 +1101,21 @@ export class Lexer {
         this.columnBegin = this.columnEnd;
     }
 
+    private rangeOf(): Range {
+        if (this.options.trackLocations) {
+            return util.createRange(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd);
+        } else {
+            return undefined;
+        }
+    }
+
     /**
      * Creates a `Range` at the lexer's current position
      * @returns the range of `text`
      */
-    private rangeOf(): Range {
+    private locationOf(): Location {
         if (this.options.trackLocations) {
-            return util.createRange(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd);
+            return util.createLocation(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd, this.uri);
         } else {
             return undefined;
         }
@@ -1119,4 +1133,8 @@ export interface ScanOptions {
      * @default true
      */
     trackLocations?: boolean;
+    /**
+     * Path to the file where this source code originated
+     */
+    srcPath?: string;
 }

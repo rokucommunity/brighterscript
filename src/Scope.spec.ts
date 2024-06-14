@@ -795,9 +795,10 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 // only care about code and `roFontMetrics` match
-                expectDiagnostics(program, [
-                    DiagnosticMessages.unknownBrightScriptComponent('roFontMetrics')
-                ]);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.unknownBrightScriptComponent('roFontMetrics'),
+                    range: Range.create(2, 51, 2, 66)
+                }]);
             });
 
             it('infers the correct type', () => {

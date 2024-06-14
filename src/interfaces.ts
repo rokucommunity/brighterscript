@@ -934,7 +934,7 @@ export class TypeChainEntry {
         name: string;
         type: BscType;
         data: ExtraSymbolData;
-        range?: Range;
+        location?: Location;
         separatorToken?: Token;
         astNode: AstNode;
     }) {
@@ -942,20 +942,20 @@ export class TypeChainEntry {
         // make a copy of this data
         this.data = { ...options.data };
         this.type = options.type;
-        this._range = options.range;
+        this._location = options.location;
         this.separatorToken = options.separatorToken ?? createToken(TokenKind.Dot);
         this.astNode = options.astNode;
         this.isResolved = this.type?.isResolvable();
     }
 
-    get range() {
-        return this._range ?? this.astNode?.range;
+    get location(): Location {
+        return this._location ?? this.astNode?.location;
     }
 
     public readonly name: string;
     public readonly type: BscType;
     public readonly data: ExtraSymbolData;
-    private readonly _range: Range;
+    private readonly _location: Location;
     public readonly separatorToken: Token;
     public isResolved: boolean;
     public astNode: AstNode;
@@ -989,7 +989,7 @@ export interface TypeChainProcessResult {
     /**
      * the range of the first unresolved item
      */
-    range: Range;
+    location: Location;
     /**
      * Does the chain contain a dynamic type?
      */

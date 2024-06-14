@@ -226,14 +226,14 @@ describe('EnumStatement', () => {
             expectDiagnosticsIncludes(program, [{
                 ...DiagnosticMessages.nameCollision('Enum', 'Enum', 'Direction'),
                 relatedInformation: [{
-                    location: util.createLocation(
+                    location: util.createLocationFromRange(
                         URI.file(s`${rootDir}/source/main.bs`).toString(),
                         util.createRange(5, 21, 5, 30)
                     ),
                     message: 'Enum declared here'
                 },
                 {
-                    location: util.createLocation(
+                    location: util.createLocationFromRange(
                         URI.file(s`${rootDir}/source/main.bs`).toString(),
                         util.createRange(1, 21, 1, 30)
                     ),
@@ -242,14 +242,14 @@ describe('EnumStatement', () => {
             }, {
                 ...DiagnosticMessages.nameCollision('Enum', 'Enum', 'Direction'),
                 relatedInformation: [{
-                    location: util.createLocation(
+                    location: util.createLocationFromRange(
                         URI.file(s`${rootDir}/source/main.bs`).toString(),
                         util.createRange(1, 21, 1, 30)
                     ),
                     message: 'Enum declared here'
                 },
                 {
-                    location: util.createLocation(
+                    location: util.createLocationFromRange(
                         URI.file(s`${rootDir}/source/main.bs`).toString(),
                         util.createRange(5, 21, 5, 30)
                     ),
@@ -273,14 +273,14 @@ describe('EnumStatement', () => {
             expectDiagnosticsIncludes(program, [{
                 ...DiagnosticMessages.nameCollision('Enum', 'Enum', 'Direction'),
                 relatedInformation: [{
-                    location: util.createLocation(
+                    location: util.createLocationFromRange(
                         URI.file(s`${rootDir}/source/lib.bs`).toString(),
                         util.createRange(1, 21, 1, 30)
                     ),
                     message: 'Enum declared here'
                 },
                 {
-                    location: util.createLocation(
+                    location: util.createLocationFromRange(
                         URI.file(s`${rootDir}/source/main.bs`).toString(),
                         util.createRange(1, 21, 1, 30)
                     ),

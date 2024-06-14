@@ -1,18 +1,27 @@
 import { TokenKind } from './TokenKind';
-import type { Range } from 'vscode-languageserver';
+import type { Location } from 'vscode-languageserver';
 
 /**
  * Represents a chunk of BrightScript scanned by the lexer.
  */
 export interface Token {
-    /** The type of token this represents. */
+    /**
+     * The type of token this represents.
+     */
     kind: TokenKind;
-    /** The text found in the original BrightScript source, if any. */
+    /**
+     * The text found in the original BrightScript source, if any.
+     */
     text: string;
-    /** True if this token's `text` is a reserved word, otherwise `false`. */
+    /**
+     * True if this token's `text` is a reserved word, otherwise `false`.
+     *
+     */
     isReserved?: boolean;
-    /** Where the token was found. */
-    range: Range;
+    /**
+     * Where the token was found.
+     */
+    location: Location;
     /**
      * Any leading whitespace found prior to this token. Excludes newline characters.
      */
@@ -28,8 +37,7 @@ export interface Token {
  * Any object that has a range
  */
 export interface Locatable {
-    range: Range;
-    [key: string]: any;
+    location: Location;
 }
 
 /**

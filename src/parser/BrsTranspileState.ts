@@ -1,4 +1,4 @@
-import type { Range } from 'vscode-languageserver';
+import type { Location } from 'vscode-languageserver';
 import { Editor } from '../astUtils/Editor';
 import type { BrsFile } from '../files/BrsFile';
 import type { ClassStatement, ConditionalCompileStatement } from './Statement';
@@ -22,7 +22,7 @@ export class BrsTranspileState extends TranspileState {
      * Used to assist blocks in knowing when to add a comment statement to the same line as the first line of the parent
      */
     lineage = [] as Array<{
-        range?: Range;
+        location?: Location;
     }>;
 
     /**

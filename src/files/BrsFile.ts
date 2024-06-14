@@ -187,7 +187,7 @@ export class BrsFile implements BscFile {
                 //register import statements
                 if (isImportStatement(statement) && statement.tokens.path) {
                     result.push({
-                        filePathRange: statement.tokens.path.range,
+                        filePathRange: statement.tokens.path.location?.range,
                         destPath: util.getPkgPathFromTarget(this.destPath, statement.filePath),
                         sourceFile: this,
                         text: statement.tokens.path.text
@@ -226,7 +226,7 @@ export class BrsFile implements BscFile {
      */
     public getTokenAt(position: Position) {
         for (let token of this.parser.tokens) {
-            if (util.rangeContains(token.range, position)) {
+            if (util.rangeContains(token.location?.range, position)) {
                 return token;
             }
         }
@@ -237,7 +237,7 @@ export class BrsFile implements BscFile {
      */
     public getCurrentOrNextTokenAt(position: Position) {
         for (let token of this.parser.tokens) {
-            if (util.comparePositionToRange(position, token.range) < 0) {
+            if (util.comparePositionToRange(position, token.location?.range) < 0) {
                 return token;
             }
         }
@@ -252,7 +252,7 @@ export class BrsFile implements BscFile {
         this.ast.walk((node) => {
             const latestContainer = containingNode;
             //bsc walks depth-first
-            if (util.rangeContains(node.range, position)) {
+            if (util.rangeContains(node.location?.range, position)) {
                 containingNode = node;
             }
             //we had a match before, and don't now. this means we've finished walking down the whole way, and found our match
@@ -360,7 +360,8 @@ export class BrsFile implements BscFile {
             //tokenize the input file
             let lexer = this.program.logger.time('debug', ['lexer.lex', chalk.green(this.srcPath)], () => {
                 return Lexer.scan(fileContents, {
-                    includeWhitespace: false
+                    includeWhitespace: false,
+                    srcPath: this.srcPath
                 });
             });
 
@@ -368,6 +369,7 @@ export class BrsFile implements BscFile {
 
             this.program.logger.time(LogLevel.debug, ['parser.parse', chalk.green(this.srcPath)], () => {
                 this._parser = Parser.parse(lexer.tokens, {
+                    srcPath: this.srcPath,
                     mode: this.parseMode,
                     logger: this.program.logger,
                     bsConsts: getBsConst(this.program.getManifest())
@@ -449,7 +451,7 @@ export class BrsFile implements BscFile {
         for (let lexerToken of tokens) {
             for (let triviaToken of lexerToken.leadingTrivia ?? []) {
                 if (triviaToken.kind === TokenKind.Comment) {
-                    processor.tryAdd(triviaToken.text, triviaToken.range);
+                    processor.tryAdd(triviaToken.text, triviaToken.location?.range);
                 }
             }
         }
@@ -489,8 +491,8 @@ export class BrsFile implements BscFile {
             //add every parameter
             for (let param of func.parameters) {
                 scope.variableDeclarations.push({
-                    nameRange: param.tokens.name.range,
-                    lineIndex: param.tokens.name.range?.start.line,
+                    nameRange: param.tokens.name.location?.range,
+                    lineIndex: param.tokens.name.location?.range?.start.line,
                     name: param.tokens.name.text,
                     getType: () => {
                         return param.getType({ flags: SymbolTypeFlag.typetime });
@@ -502,8 +504,8 @@ export class BrsFile implements BscFile {
             func.body?.walk(createVisitor({
                 ForEachStatement: (stmt) => {
                     scope.variableDeclarations.push({
-                        nameRange: stmt.tokens.item.range,
-                        lineIndex: stmt.tokens.item.range?.start.line,
+                        nameRange: stmt.tokens.item.location?.range,
+                        lineIndex: stmt.tokens.item.location?.range?.start.line,
                         name: stmt.tokens.item.text,
                         getType: () => DynamicType.instance //TODO: Infer types from array
                     });
@@ -511,8 +513,8 @@ export class BrsFile implements BscFile {
                 LabelStatement: (stmt) => {
                     const { name: identifier } = stmt.tokens;
                     scope.labelStatements.push({
-                        nameRange: identifier.range,
-                        lineIndex: identifier.range?.start.line,
+                        nameRange: identifier.location?.range,
+                        lineIndex: identifier.location?.range?.start.line,
                         name: identifier.text
                     });
                 }
@@ -540,8 +542,8 @@ export class BrsFile implements BscFile {
             if (scope) {
                 const variableName = statement.tokens.name;
                 scope.variableDeclarations.push({
-                    nameRange: variableName.range,
-                    lineIndex: variableName.range?.start.line,
+                    nameRange: variableName.location?.range,
+                    lineIndex: variableName.location?.range?.start.line,
                     name: variableName.text,
                     getType: () => {
                         return statement.getType({ flags: SymbolTypeFlag.runtime });
@@ -582,10 +584,10 @@ export class BrsFile implements BscFile {
                 callables.push({
                     isSub: statement.func.tokens.functionType?.text.toLowerCase() === 'sub',
                     name: statement.tokens.name?.text,
-                    nameRange: statement.tokens.name?.range,
+                    nameRange: statement.tokens.name?.location?.range,
                     file: this,
                     params: params,
-                    range: statement.func.range,
+                    range: statement.func.location?.range,
                     type: funcType,
                     getName: statement.getName.bind(statement),
                     hasNamespace: !!statement.findAncestor<NamespaceStatement>(isNamespaceStatement),
@@ -633,7 +635,7 @@ export class BrsFile implements BscFile {
         if (position) {
             return this.cache.getOrAdd(`namespaceStatementForPosition-${position.line}:${position.character}`, () => {
                 for (const statement of this._cachedLookups.namespaceStatements) {
-                    if (util.rangeContains(statement.range, position)) {
+                    if (util.rangeContains(statement.location?.range, position)) {
                         return statement;
                     }
                 }
@@ -747,7 +749,7 @@ export class BrsFile implements BscFile {
      * Returns false if no namespace was found with that name
      */
     public calleeStartsWithNamespace(callee: Expression) {
-        let left = callee as any;
+        let left = callee as AstNode;
         while (isDottedGetExpression(left)) {
             left = left.obj;
         }
@@ -821,11 +823,11 @@ export class BrsFile implements BscFile {
         let tokens = this.parser.tokens;
         for (let i = 0; i < tokens.length; i++) {
             let token = tokens[i];
-            if (util.rangeContains(token.range, position)) {
+            if (util.rangeContains(token.location?.range, position)) {
                 return token;
             }
             //if the position less than this token range, then this position touches no token,
-            if (util.positionIsGreaterThanRange(position, token.range) === false) {
+            if (util.positionIsGreaterThanRange(position, token.location?.range) === false) {
                 let t = tokens[i - 1];
                 //return the token or the first token
                 return t ? t : tokens[0];
@@ -876,12 +878,12 @@ export class BrsFile implements BscFile {
         //get class fields and members
         const statementHandler = (statement: MethodStatement) => {
             if (statement.getName(file.parseMode).toLowerCase() === textToSearchFor) {
-                results.push(util.createLocation(util.pathToUri(file.srcPath), statement.range));
+                results.push(util.createLocationFromRange(util.pathToUri(file.srcPath), statement.location?.range));
             }
         };
         const fieldStatementHandler = (statement: FieldStatement) => {
             if (statement.tokens.name.text.toLowerCase() === textToSearchFor) {
-                results.push(util.createLocation(util.pathToUri(file.srcPath), statement.range));
+                results.push(util.createLocationFromRange(util.pathToUri(file.srcPath), statement.location?.range));
             }
         };
         file.parser.ast.walk(createVisitor({
@@ -968,7 +970,7 @@ export class BrsFile implements BscFile {
             const astTranspile = this.ast.transpile(state);
             const trailingComments = [];
             if (util.hasLeadingComments(this.parser.eofToken)) {
-                if (util.isLeadingCommentOnSameLine(this.ast.statements[this.ast.statements.length - 1], this.parser.eofToken)) {
+                if (util.isLeadingCommentOnSameLine(this.ast.statements[this.ast.statements.length - 1]?.location, this.parser.eofToken)) {
                     trailingComments.push(' ');
                 } else {
                     trailingComments.push('\n');
@@ -1305,7 +1307,7 @@ export class BrsFile implements BscFile {
                         fullNameLower: lowerLoopName,
                         parentNameLower: parentNameLower,
                         nameParts: nameParts.slice(0, i),
-                        nameRange: namespaceStatement.nameExpression.range,
+                        nameRange: namespaceStatement.nameExpression.location?.range,
                         lastPartName: part.text,
                         lastPartNameLower: lowerPartName,
                         functionStatements: new Map(),

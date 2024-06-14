@@ -1,6 +1,6 @@
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
-import type { Position, Range } from 'vscode-languageserver';
+import type { Location, Position } from 'vscode-languageserver';
 import { CancellationTokenSource } from 'vscode-languageserver';
 import { InternalWalkMode } from '../astUtils/visitors';
 import type { SymbolTable } from '../SymbolTable';
@@ -20,7 +20,7 @@ export abstract class AstNode {
     /**
      *  The starting and ending location of the node.
      */
-    public abstract range?: Range | undefined;
+    public abstract location?: Location | undefined;
 
     public abstract transpile(state: BrsTranspileState): TranspileResult;
 
@@ -136,7 +136,7 @@ export abstract class AstNode {
     public findChildAtPosition<TNodeType extends AstNode = AstNode>(position: Position, options?: WalkOptions): TNodeType | undefined {
         return this.findChild<TNodeType>((node) => {
             //if the current node includes this range, keep that node
-            if (util.rangeContains(node.range, position)) {
+            if (util.rangeContains(node?.location.range, position)) {
                 return node.findChildAtPosition(position, options) ?? node;
             }
         }, options);

@@ -464,7 +464,7 @@ describe('XmlFile', () => {
                     </component>
                 `
             );
-            expect(file.parentComponentName.range).to.eql(Range.create(1, 38, 1, 47));
+            expect(file.parentComponentName.location?.range).to.eql(Range.create(1, 38, 1, 47));
         });
 
         it('works for multi-line', () => {
@@ -480,7 +480,7 @@ describe('XmlFile', () => {
                     </component>
                 `
             );
-            expect(file.parentComponentName.range).to.eql(Range.create(2, 13, 2, 22));
+            expect(file.parentComponentName.location?.range).to.eql(Range.create(2, 13, 2, 22));
         });
 
         it('does not throw when unable to find extends', () => {

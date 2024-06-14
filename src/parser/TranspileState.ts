@@ -1,14 +1,15 @@
 import { SourceNode } from 'source-map';
-import type { Range } from 'vscode-languageserver';
+import type { Location } from 'vscode-languageserver';
 import type { BsConfig } from '../BsConfig';
 import { TokenKind } from '../lexer/TokenKind';
 import type { Token } from '../lexer/Token';
-import util from '../util';
+import type { RangeLike } from '../util';
+import { util } from '../util';
 import type { TranspileResult } from '../interfaces';
 
 
 interface TranspileToken {
-    range?: Range;
+    location?: Location;
     text: string;
     kind?: TokenKind;
     leadingWhitespace?: string;
@@ -64,16 +65,34 @@ export class TranspileState {
 
     public newline = '\n';
 
+    private getSource(locatable: RangeLike) {
+        let srcPath = (locatable as { location: Location })?.location?.uri ?? (locatable as Location).uri;
+        if (srcPath) {
+            srcPath = util.uriToPath(srcPath);
+            //if a sourceRoot is specified, use that instead of the rootDir
+            if (this.options.sourceRoot) {
+                srcPath = srcPath.replace(
+                    this.options.rootDir,
+                    this.options.sourceRoot
+                );
+            }
+            return srcPath;
+        } else {
+            return this.srcPath;
+        }
+    }
+
     /**
      * Shorthand for creating a new source node
      */
-    public sourceNode(locatable: { range?: Range }, code: string | SourceNode | TranspileResult): SourceNode {
+    public sourceNode(locatable: RangeLike, code: string | SourceNode | TranspileResult): SourceNode {
+        let range = util.extractRange(locatable);
         return util.sourceNodeFromTranspileResult(
             //convert 0-based range line to 1-based SourceNode line
-            locatable.range ? locatable.range.start.line + 1 : null,
+            range ? range.start.line + 1 : null,
             //range and SourceNode character are both 0-based, so no conversion necessary
-            locatable.range ? locatable.range.start.character : null,
-            this.srcPath,
+            range ? range.start.character : null,
+            this.getSource(locatable),
             code
         );
     }
@@ -86,10 +105,10 @@ export class TranspileState {
     public tokenToSourceNode(token: TranspileToken) {
         return new SourceNode(
             //convert 0-based range line to 1-based SourceNode line
-            token.range ? token.range.start.line + 1 : null,
+            token.location?.range ? token.location.range.start.line + 1 : null,
             //range and SourceNode character are both 0-based, so no conversion necessary
-            token.range ? token.range.start.character : null,
-            this.srcPath,
+            token.location?.range ? token.location.range.start.character : null,
+            this.getSource(token),
             token.text
         );
     }
@@ -129,7 +148,6 @@ export class TranspileState {
         return leadingCommentsSourceNodes;
     }
 
-
     /**
      * Create a SourceNode from a token, accounting for missing range and multi-line text
      * Adds all leading trivia for the token
@@ -142,11 +160,11 @@ export class TranspileState {
             return [new SourceNode(null, null, null, [...leadingCommentsSourceNodes, commentIfCommentedOut, defaultValue])];
         }
 
-        if (!token.range) {
+        if (!token?.location?.range) {
             return [new SourceNode(null, null, null, [...leadingCommentsSourceNodes, commentIfCommentedOut, token.text])];
         }
         //split multi-line text
-        if (token.range?.end.line > token.range?.start.line) {
+        if (token.location.range.end.line > token.location.range.start.line) {
             const lines = token.text.split(/\r?\n/g);
             const code = [
                 this.sourceNode(token, [...leadingCommentsSourceNodes, commentIfCommentedOut, lines[0]])
@@ -157,10 +175,10 @@ export class TranspileState {
                     commentIfCommentedOut,
                     new SourceNode(
                         //convert 0-based range line to 1-based SourceNode line
-                        token.range.start.line + i + 1,
+                        token.location.range.start.line + i + 1,
                         //SourceNode column is 0-based, and this starts at the beginning of the line
                         0,
-                        this.srcPath,
+                        this.getSource(token),
                         lines[i]
                     )
                 );
@@ -171,12 +189,12 @@ export class TranspileState {
         }
     }
 
-    public transpileEndBlockToken(previousLocatable: { range?: Range }, endToken: Token, defaultValue: string, alwaysAddNewlineBeforeEndToken = true) {
+    public transpileEndBlockToken(previousLocatable: { location?: Location }, endToken: Token, defaultValue: string, alwaysAddNewlineBeforeEndToken = true) {
         const result = [];
 
         if (util.hasLeadingComments(endToken)) {
             // add comments before `end token` - they should be indented
-            if (util.isLeadingCommentOnSameLine(previousLocatable, endToken)) {
+            if (util.isLeadingCommentOnSameLine(previousLocatable?.location, endToken)) {
                 this.blockDepth++;
                 result.push(' ');
             } else {

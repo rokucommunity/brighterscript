@@ -1,4 +1,4 @@
-import type { Range } from 'vscode-languageserver';
+import type { Location } from 'vscode-languageserver';
 import type { Identifier, Token } from '../lexer/Token';
 import type { SGToken } from '../parser/SGTypes';
 import { SGAttribute, SGComponent, SGInterface, SGInterfaceField, SGInterfaceFunction, SGScript } from '../parser/SGTypes';
@@ -6,22 +6,6 @@ import { TokenKind } from '../lexer/TokenKind';
 import type { Expression } from '../parser/AstNode';
 import { CallExpression, DottedGetExpression, FunctionExpression, LiteralExpression, VariableExpression } from '../parser/Expression';
 import { Block, MethodStatement } from '../parser/Statement';
-
-/**
- * A range that points to the beginning of the file. Used to give non-null ranges to programmatically-added source code.
- * (Hardcoded range to prevent circular dependency issue in `../util.ts`)
- * @deprecated don't use this, it screws up sourcemaps. Just set range to null
- */
-export const interpolatedRange = {
-    start: {
-        line: 0,
-        character: 0
-    },
-    end: {
-        line: 0,
-        character: 0
-    }
-} as Range;
 
 const tokenDefaults = {
     [TokenKind.BackTick]: '`',
@@ -91,39 +75,39 @@ const tokenDefaults = {
     [TokenKind.Whitespace]: ' '
 };
 
-export function createToken<T extends TokenKind>(kind: T, text?: string, range?: Range): Token & { kind: T } {
+export function createToken<T extends TokenKind>(kind: T, text?: string, location?: Location): Token & { kind: T } {
     return {
         kind: kind,
         text: text ?? tokenDefaults[kind as string] ?? kind.toString().toLowerCase(),
         isReserved: !text || text === kind.toString(),
-        range: range,
+        location: location,
         leadingWhitespace: '',
         leadingTrivia: []
     };
 }
 
-export function createIdentifier(name: string, range?: Range): Identifier {
+export function createIdentifier(name: string, location?: Location): Identifier {
     return {
         kind: TokenKind.Identifier,
         text: name,
         isReserved: false,
-        range: range,
+        location: location,
         leadingWhitespace: '',
         leadingTrivia: []
     };
 }
 
-export function createVariableExpression(ident: string, range?: Range): VariableExpression {
-    return new VariableExpression({ name: createToken(TokenKind.Identifier, ident, range) });
+export function createVariableExpression(ident: string, location?: Location): VariableExpression {
+    return new VariableExpression({ name: createToken(TokenKind.Identifier, ident, location) });
 }
 
-export function createDottedIdentifier(path: string[], range?: Range): DottedGetExpression {
+export function createDottedIdentifier(path: string[], location?: Location): DottedGetExpression {
     const ident = path.pop();
-    const obj = path.length > 1 ? createDottedIdentifier(path, range) : createVariableExpression(path[0], range);
+    const obj = path.length > 1 ? createDottedIdentifier(path, location) : createVariableExpression(path[0], location);
     return new DottedGetExpression({
         obj: obj,
-        name: createToken(TokenKind.Identifier, ident, range),
-        dot: createToken(TokenKind.Dot, '.', range)
+        name: createToken(TokenKind.Identifier, ident, location),
+        dot: createToken(TokenKind.Dot, '.', location)
     });
 }
 
@@ -132,30 +116,30 @@ export function createDottedIdentifier(path: string[], range?: Range): DottedGet
  * Since brightscript doesn't support strings with quotes in them, we can safely auto-detect and wrap the value in quotes in this function.
  * @param value - the string value. (value will be wrapped in quotes if they are missing)
  */
-export function createStringLiteral(value: string, range?: Range) {
+export function createStringLiteral(value: string, location?: Location) {
     //wrap the value in double quotes
     if (!value.startsWith('"') && !value.endsWith('"')) {
         value = '"' + value + '"';
     }
-    return new LiteralExpression({ value: createToken(TokenKind.StringLiteral, value, range) });
+    return new LiteralExpression({ value: createToken(TokenKind.StringLiteral, value, location) });
 }
-export function createIntegerLiteral(value: string, range?: Range) {
-    return new LiteralExpression({ value: createToken(TokenKind.IntegerLiteral, value, range) });
+export function createIntegerLiteral(value: string, location?: Location) {
+    return new LiteralExpression({ value: createToken(TokenKind.IntegerLiteral, value, location) });
 }
-export function createFloatLiteral(value: string, range?: Range) {
-    return new LiteralExpression({ value: createToken(TokenKind.FloatLiteral, value, range) });
+export function createFloatLiteral(value: string, location?: Location) {
+    return new LiteralExpression({ value: createToken(TokenKind.FloatLiteral, value, location) });
 }
-export function createDoubleLiteral(value: string, range?: Range) {
-    return new LiteralExpression({ value: createToken(TokenKind.DoubleLiteral, value, range) });
+export function createDoubleLiteral(value: string, location?: Location) {
+    return new LiteralExpression({ value: createToken(TokenKind.DoubleLiteral, value, location) });
 }
-export function createLongIntegerLiteral(value: string, range?: Range) {
-    return new LiteralExpression({ value: createToken(TokenKind.LongIntegerLiteral, value, range) });
+export function createLongIntegerLiteral(value: string, location?: Location) {
+    return new LiteralExpression({ value: createToken(TokenKind.LongIntegerLiteral, value, location) });
 }
-export function createInvalidLiteral(value?: string, range?: Range) {
-    return new LiteralExpression({ value: createToken(TokenKind.Invalid, value, range) });
+export function createInvalidLiteral(value?: string, location?: Location) {
+    return new LiteralExpression({ value: createToken(TokenKind.Invalid, value, location) });
 }
-export function createBooleanLiteral(value: string, range?: Range) {
-    return new LiteralExpression({ value: createToken(value === 'true' ? TokenKind.True : TokenKind.False, value, range) });
+export function createBooleanLiteral(value: string, location?: Location) {
+    return new LiteralExpression({ value: createToken(value === 'true' ? TokenKind.True : TokenKind.False, value, location) });
 }
 export function createFunctionExpression(kind: TokenKind.Sub | TokenKind.Function) {
     return new FunctionExpression({
@@ -185,10 +169,10 @@ export function createCall(callee: Expression, args?: Expression[]) {
     });
 }
 
-export function createSGToken(text: string, range?: Range) {
+export function createSGToken(text: string, location?: Location) {
     return {
         text: text,
-        range: range ?? interpolatedRange
+        range: location
     } as SGToken;
 }
 

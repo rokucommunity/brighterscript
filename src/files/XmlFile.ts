@@ -255,7 +255,10 @@ export class XmlFile implements BscFile {
     public parse(fileContents: string) {
         this.fileContents = fileContents;
 
-        this.parser.parse(this.destPath, fileContents);
+        this.parser.parse(fileContents, {
+            srcPath: this.srcPath,
+            destPath: this.destPath
+        });
         const diagnostics = this.parser.diagnostics.map(diagnostic => ({
             ...diagnostic,
             file: this

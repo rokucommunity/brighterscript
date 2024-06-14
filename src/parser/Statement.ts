@@ -4,7 +4,7 @@ import { TokenKind } from '../lexer/TokenKind';
 import type { DottedGetExpression, FunctionExpression, FunctionParameterExpression, LiteralExpression, TypeExpression, TypecastExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
-import type { Position, Range } from 'vscode-languageserver';
+import type { Location } from 'vscode-languageserver';
 import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
@@ -28,15 +28,15 @@ import { ArrayType } from '../types/ArrayType';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 
 export class EmptyStatement extends Statement {
-    constructor(options?: { range?: Range }
+    constructor(options?: { range?: Location }
     ) {
         super();
-        this.range = undefined;
+        this.location = undefined;
     }
     /**
      * Create a negative range to indicate this is an interpolated location
      */
-    public readonly range?: Range;
+    public readonly location?: Location;
 
     public readonly kind = AstNodeKind.EmptyStatement;
 
@@ -64,9 +64,9 @@ export class Body extends Statement implements TypedefProvider {
 
     public readonly symbolTable = new SymbolTable('Body', () => this.parent?.getSymbolTable());
 
-    public get range() {
+    public get location() {
         //this needs to be a getter because the body has its statements pushed to it after being constructed
-        return util.createBoundingRange(
+        return util.createBoundingLocation(
             ...(this.statements ?? [])
         );
     }
@@ -82,7 +82,7 @@ export class Body extends Statement implements TypedefProvider {
                 //this is the first statement. do nothing related to spacing and newlines
 
                 //if comment is on same line as prior sibling
-            } else if (util.hasLeadingComments(statement) && previousStatement && util.getLeadingComments(statement)?.[0]?.range?.start.line === previousStatement.range?.end.line) {
+            } else if (util.hasLeadingComments(statement) && previousStatement && util.getLeadingComments(statement)?.[0]?.location?.range?.start.line === previousStatement.location?.range?.end.line) {
                 result.push(
                     ' '
                 );
@@ -141,7 +141,7 @@ export class AssignmentStatement extends Statement {
             as: options.as
         };
         this.typeExpression = options.typeExpression;
-        this.range = util.createBoundingRange(util.createBoundingRangeFromTokens(this.tokens), this.value);
+        this.location = util.createBoundingLocation(util.createBoundingLocationFromTokens(this.tokens), this.value);
     }
 
     public readonly tokens: {
@@ -156,7 +156,7 @@ export class AssignmentStatement extends Statement {
 
     public readonly kind = AstNodeKind.AssignmentStatement;
 
-    public readonly range: Range | undefined;
+    public readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -180,7 +180,7 @@ export class AssignmentStatement extends Statement {
 
         // Note: compound assignments (eg. +=) are internally dealt with via the RHS being a BinaryExpression
         // so this.value will be a BinaryExpression, and BinaryExpressions can figure out their own types
-        options.typeChain?.push(new TypeChainEntry({ name: this.tokens.name.text, type: variableType, data: options.data, range: this.tokens.name.range, astNode: this }));
+        options.typeChain?.push(new TypeChainEntry({ name: this.tokens.name.text, type: variableType, data: options.data, location: this.tokens.name?.location, astNode: this }));
         return variableType;
     }
 
@@ -202,7 +202,7 @@ export class AugmentedAssignmentStatement extends Statement {
         };
         this.item = options.item;
         this.value = options.value;
-        this.range = util.createBoundingRange(this.item, util.createBoundingRangeFromTokens(this.tokens), this.value);
+        this.location = util.createBoundingLocation(this.item, util.createBoundingLocationFromTokens(this.tokens), this.value);
     }
 
     public readonly tokens: {
@@ -215,7 +215,7 @@ export class AugmentedAssignmentStatement extends Statement {
 
     public readonly kind = AstNodeKind.AugmentedAssignmentStatement;
 
-    public readonly range: Range | undefined;
+    public readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -262,95 +262,102 @@ export class Block extends Statement {
 
     public readonly kind = AstNodeKind.Block;
 
-    get range(): Range {
+    get location(): Location {
         if (this.statements.length > 0) {
-            return util.createBoundingRange(...this.statements);
+            return util.createBoundingLocation(...this.statements);
         }
-        let lastBitBefore: Position;
-        let firstBitAfter: Position;
+        let lastBitBefore: Location;
+        let firstBitAfter: Location;
 
         if (isFunctionExpression(this.parent)) {
-            lastBitBefore = util.createBoundingRange(
+            lastBitBefore = util.createBoundingLocation(
                 this.parent.tokens.functionType,
                 this.parent.tokens.leftParen,
                 ...(this.parent.parameters ?? []),
                 this.parent.tokens.rightParen,
                 this.parent.tokens.as,
                 this.parent.returnTypeExpression
-            )?.end;
-            firstBitAfter = this.parent.tokens.endFunctionType?.range?.start;
+            );
+            firstBitAfter = this.parent.tokens.endFunctionType?.location;
         } else if (isIfStatement(this.parent)) {
             if (this.parent.thenBranch === this) {
-                lastBitBefore = util.createBoundingRange(
+                lastBitBefore = util.createBoundingLocation(
                     this.parent.tokens.then,
                     this.parent.condition
-                )?.end;
-                firstBitAfter = util.createBoundingRange(
+                );
+                firstBitAfter = util.createBoundingLocation(
                     this.parent.tokens.else,
                     this.parent.elseBranch,
                     this.parent.tokens.endIf
-                )?.start;
+                );
             } else if (this.parent.elseBranch === this) {
-                lastBitBefore = this.parent.tokens.else?.range.end;
-                firstBitAfter = this.parent.tokens.endIf?.range.start;
+                lastBitBefore = this.parent.tokens.else?.location;
+                firstBitAfter = this.parent.tokens.endIf?.location;
             }
         } else if (isConditionalCompileStatement(this.parent)) {
             if (this.parent.thenBranch === this) {
-                lastBitBefore = util.createBoundingRange(
+                lastBitBefore = util.createBoundingLocation(
                     this.parent.tokens.condition,
                     this.parent.tokens.not,
                     this.parent.tokens.hashIf
-                )?.end;
-                firstBitAfter = util.createBoundingRange(
+                );
+                firstBitAfter = util.createBoundingLocation(
                     this.parent.tokens.hashElse,
                     this.parent.elseBranch,
                     this.parent.tokens.hashEndIf
-                )?.start;
+                );
             } else if (this.parent.elseBranch === this) {
-                lastBitBefore = this.parent.tokens.hashElse?.range.end;
-                firstBitAfter = this.parent.tokens.hashEndIf?.range.start;
+                lastBitBefore = this.parent.tokens.hashElse?.location;
+                firstBitAfter = this.parent.tokens.hashEndIf?.location;
             }
         } else if (isForStatement(this.parent)) {
-            lastBitBefore = util.createBoundingRange(
+            lastBitBefore = util.createBoundingLocation(
                 this.parent.increment,
                 this.parent.tokens.step,
                 this.parent.finalValue,
                 this.parent.tokens.to,
                 this.parent.counterDeclaration,
                 this.parent.tokens.for
-            )?.end;
-            firstBitAfter = this.parent.tokens.endFor?.range.start;
+            );
+            firstBitAfter = this.parent.tokens.endFor?.location;
         } else if (isForEachStatement(this.parent)) {
-            lastBitBefore = util.createBoundingRange(
+            lastBitBefore = util.createBoundingLocation(
                 this.parent.target,
                 this.parent.tokens.in,
                 this.parent.tokens.item,
                 this.parent.tokens.forEach
-            )?.end;
-            firstBitAfter = this.parent.tokens.endFor?.range.start;
+            );
+            firstBitAfter = this.parent.tokens.endFor?.location;
         } else if (isWhileStatement(this.parent)) {
-            lastBitBefore = util.createBoundingRange(
+            lastBitBefore = util.createBoundingLocation(
                 this.parent.condition,
                 this.parent.tokens.while
-            )?.end;
-            firstBitAfter = this.parent.tokens.endWhile?.range.start;
+            );
+            firstBitAfter = this.parent.tokens.endWhile?.location;
         } else if (isTryCatchStatement(this.parent)) {
-            lastBitBefore = util.createBoundingRange(
+            lastBitBefore = util.createBoundingLocation(
                 this.parent.tokens.try
-            )?.end;
-            firstBitAfter = util.createBoundingRange(
+            );
+            firstBitAfter = util.createBoundingLocation(
                 this.parent.tokens.endTry,
                 this.parent.catchStatement
-            )?.start;
+            );
         } else if (isCatchStatement(this.parent) && isTryCatchStatement(this.parent?.parent)) {
-            lastBitBefore = util.createBoundingRange(
+            lastBitBefore = util.createBoundingLocation(
                 this.parent.tokens.catch,
                 this.parent.tokens.exceptionVariable
-            )?.end;
-            firstBitAfter = this.parent.parent.tokens.endTry?.range?.start;
+            );
+            firstBitAfter = this.parent.parent.tokens.endTry?.location;
         }
-        return util.createRangeFromPositions(lastBitBefore, firstBitAfter);
-
+        if (lastBitBefore?.range && firstBitAfter?.range) {
+            return util.createLocation(
+                lastBitBefore.range.end.line,
+                lastBitBefore.range.end.character,
+                firstBitAfter.range.start.line,
+                firstBitAfter.range.start.character,
+                lastBitBefore.uri ?? firstBitAfter.uri
+            );
+        }
     }
 
     transpile(state: BrsTranspileState) {
@@ -361,8 +368,8 @@ export class Block extends Statement {
             let statement = this.statements[i];
             //is not a comment
             //if comment is on same line as parent
-            if (util.isLeadingCommentOnSameLine(state.lineage[0], statement) ||
-                util.isLeadingCommentOnSameLine(previousStatement, statement)
+            if (util.isLeadingCommentOnSameLine(state.lineage[0]?.location, statement) ||
+                util.isLeadingCommentOnSameLine(previousStatement?.location, statement)
             ) {
                 results.push(' ');
 
@@ -404,12 +411,12 @@ export class ExpressionStatement extends Statement {
     }) {
         super();
         this.expression = options.expression;
-        this.range = this.expression.range;
+        this.location = this.expression.location;
     }
     public readonly expression: Expression;
     public readonly kind = AstNodeKind.ExpressionStatement;
 
-    public readonly range: Range | undefined;
+    public readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState) {
         return this.expression.transpile(state);
@@ -435,7 +442,7 @@ export class ExitForStatement extends Statement {
         this.tokens = {
             exitFor: options?.exitFor
         };
-        this.range = this.tokens.exitFor?.range;
+        this.location = this.tokens.exitFor?.location;
     }
 
     public readonly tokens: {
@@ -444,7 +451,7 @@ export class ExitForStatement extends Statement {
 
     public readonly kind = AstNodeKind.ExitForStatement;
 
-    public readonly range?: Range;
+    public readonly location?: Location;
 
     transpile(state: BrsTranspileState) {
         return this.tokens.exitFor ? state.transpileToken(this.tokens.exitFor) : ['exit for'];
@@ -468,7 +475,7 @@ export class ExitWhileStatement extends Statement {
         this.tokens = {
             exitWhile: options?.exitWhile
         };
-        this.range = this.tokens.exitWhile?.range;
+        this.location = this.tokens.exitWhile?.location;
     }
 
     public readonly tokens: {
@@ -477,7 +484,7 @@ export class ExitWhileStatement extends Statement {
 
     public readonly kind = AstNodeKind.ExitWhileStatement;
 
-    public readonly range?: Range;
+    public readonly location?: Location;
 
     transpile(state: BrsTranspileState) {
         return this.tokens.exitWhile ? state.transpileToken(this.tokens.exitWhile) : ['exit while'];
@@ -505,7 +512,7 @@ export class FunctionStatement extends Statement implements TypedefProvider {
         this.func.symbolTable.name += `: '${this.tokens.name?.text}'`;
         this.func.functionStatement = this;
 
-        this.range = this.func.range;
+        this.location = this.func.location;
     }
 
     public readonly tokens: {
@@ -515,7 +522,7 @@ export class FunctionStatement extends Statement implements TypedefProvider {
 
     public readonly kind = AstNodeKind.FunctionStatement as AstNodeKind;
 
-    public readonly range: Range | undefined;
+    public readonly location: Location | undefined;
 
     /**
      * Get the name of this expression based on the parse mode
@@ -604,8 +611,8 @@ export class IfStatement extends Statement {
             endIf: options.endIf
         };
 
-        this.range = util.createBoundingRange(
-            util.createBoundingRangeFromTokens(this.tokens),
+        this.location = util.createBoundingLocation(
+            util.createBoundingLocationFromTokens(this.tokens),
             this.condition,
             this.thenBranch,
             this.elseBranch
@@ -624,7 +631,7 @@ export class IfStatement extends Statement {
 
     public readonly kind = AstNodeKind.IfStatement;
 
-    public readonly range: Range | undefined;
+    public readonly location: Location | undefined;
 
     get isInline() {
         const allLeadingTrivia = [
@@ -732,7 +739,7 @@ export class IncrementStatement extends Statement {
         this.tokens = {
             operator: options.operator
         };
-        this.range = util.createBoundingRange(
+        this.location = util.createBoundingLocation(
             this.value,
             this.tokens.operator
         );
@@ -745,7 +752,7 @@ export class IncrementStatement extends Statement {
 
     public readonly kind = AstNodeKind.IncrementStatement;
 
-    public readonly range: Range | undefined;
+    public readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -794,7 +801,7 @@ export class PrintStatement extends Statement {
             print: options.print
         };
         this.expressions = options.expressions;
-        this.range = util.createBoundingRange(
+        this.location = util.createBoundingLocation(
             this.tokens.print,
             ...(this.expressions ?? [])
         );
@@ -805,7 +812,7 @@ export class PrintStatement extends Statement {
     public readonly expressions: Array<Expression | PrintSeparatorTab | PrintSeparatorSpace>;
     public readonly kind = AstNodeKind.PrintStatement;
 
-    public readonly range: Range | undefined;
+    public readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState) {
         let result = [
@@ -857,7 +864,7 @@ export class DimStatement extends Statement {
             closingSquare: options.closingSquare
         };
         this.dimensions = options.dimensions;
-        this.range = util.createBoundingRange(
+        this.location = util.createBoundingLocation(
             options.dim,
             options.name,
             options.openingSquare,
@@ -876,7 +883,7 @@ export class DimStatement extends Statement {
 
     public readonly kind = AstNodeKind.DimStatement;
 
-    public readonly range: Range | undefined;
+    public readonly location: Location | undefined;
 
     public transpile(state: BrsTranspileState) {
         let result: TranspileResult = [
@@ -928,7 +935,7 @@ export class GotoStatement extends Statement {
             goto: options.goto,
             label: options.label
         };
-        this.range = util.createBoundingRange(
+        this.location = util.createBoundingLocation(
             this.tokens.goto,
             this.tokens.label
         );
@@ -941,7 +948,7 @@ export class GotoStatement extends Statement {
 
     public readonly kind = AstNodeKind.GotoStatement;
 
-    public readonly range: Range | undefined;
+    public readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -970,7 +977,7 @@ export class LabelStatement extends Statement {
             name: options.name,
             colon: options.colon
         };
-        this.range = util.createBoundingRange(
+        this.location = util.createBoundingLocation(
             this.tokens.name,
             this.tokens.colon
         );
@@ -981,7 +988,7 @@ export class LabelStatement extends Statement {
     };
     public readonly kind = AstNodeKind.LabelStatement;
 
-    public readonly range: Range | undefined;
+    public readonly location: Location | undefined;
 
     public get leadingTrivia(): Token[] {
         return this.tokens.name.leadingTrivia;
@@ -1010,7 +1017,7 @@ export class ReturnStatement extends Statement {
             return: options?.return
         };
         this.value = options?.value;
-        this.range = util.createBoundingRange(
+        this.location = util.createBoundingLocation(
             this.tokens.return,
             this.value
         );
@@ -1022,7 +1029,7 @@ export class ReturnStatement extends Statement {
     public readonly value?: Expression;
     public readonly kind = AstNodeKind.ReturnStatement;
 
-    public readonly range: Range | undefined;
+    public readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
@@ -1055,14 +1062,14 @@ export class EndStatement extends Statement {
         this.tokens = {
             end: options?.end
         };
-        this.range = this.tokens.end?.range;
+        this.location = this.tokens.end?.location;
     }
     public readonly tokens: {
         readonly end?: Token;
     };
     public readonly kind = AstNodeKind.EndStatement;
 
-    public readonly range: Range;
+    public readonly location: Location;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -1085,7 +1092,7 @@ export class StopStatement extends Statement {
     }) {
         super();
         this.tokens = { stop: options?.stop };
-        this.range = this.tokens?.stop?.range;
+        this.location = this.tokens?.stop?.location;
     }
     public readonly tokens: {
         readonly stop?: Token;
@@ -1093,7 +1100,7 @@ export class StopStatement extends Statement {
 
     public readonly kind = AstNodeKind.StopStatement;
 
-    public readonly range: Range;
+    public readonly location: Location;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -1133,7 +1140,7 @@ export class ForStatement extends Statement {
         this.body = options.body;
         this.increment = options.increment;
 
-        this.range = util.createBoundingRange(
+        this.location = util.createBoundingLocation(
             this.tokens.for,
             this.counterDeclaration,
             this.tokens.to,
@@ -1159,7 +1166,7 @@ export class ForStatement extends Statement {
 
     public readonly kind = AstNodeKind.ForStatement;
 
-    public readonly range: Range | undefined;
+    public readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
@@ -1241,7 +1248,7 @@ export class ForEachStatement extends Statement {
         this.body = options.body;
         this.target = options.target;
 
-        this.range = util.createBoundingRange(
+        this.location = util.createBoundingLocation(
             this.tokens.forEach,
             this.tokens.item,
             this.tokens.in,
@@ -1262,7 +1269,7 @@ export class ForEachStatement extends Statement {
 
     public readonly kind = AstNodeKind.ForEachStatement;
 
-    public readonly range: Range | undefined;
+    public readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
@@ -1330,7 +1337,7 @@ export class WhileStatement extends Statement {
         };
         this.body = options.body;
         this.condition = options.condition;
-        this.range = util.createBoundingRange(
+        this.location = util.createBoundingLocation(
             this.tokens.while,
             this.condition,
             this.body,
@@ -1347,7 +1354,7 @@ export class WhileStatement extends Statement {
 
     public readonly kind = AstNodeKind.WhileStatement;
 
-    public readonly range: Range | undefined;
+    public readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
@@ -1405,7 +1412,7 @@ export class DottedSetStatement extends Statement {
         };
         this.obj = options.obj;
         this.value = options.value;
-        this.range = util.createBoundingRange(
+        this.location = util.createBoundingLocation(
             this.obj,
             this.tokens.dot,
             this.tokens.name,
@@ -1423,7 +1430,7 @@ export class DottedSetStatement extends Statement {
 
     public readonly kind = AstNodeKind.DottedSetStatement;
 
-    public readonly range: Range | undefined;
+    public readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState) {
         //if the value is a compound assignment, don't add the obj, dot, name, or operator...the expression will handle that
@@ -1455,7 +1462,7 @@ export class DottedSetStatement extends Statement {
         options.typeChain?.push(new TypeChainEntry({
             name: this.tokens.name?.text,
             type: result, data: options.data,
-            range: this.tokens.name?.range,
+            location: this.tokens.name?.location,
             astNode: this
         }));
         return result;
@@ -1484,7 +1491,7 @@ export class IndexedSetStatement extends Statement {
         this.obj = options.obj;
         this.indexes = options.indexes;
         this.value = options.value;
-        this.range = util.createBoundingRange(
+        this.location = util.createBoundingLocation(
             this.obj,
             this.tokens.openingSquare,
             ...this.indexes,
@@ -1504,7 +1511,7 @@ export class IndexedSetStatement extends Statement {
 
     public readonly kind = AstNodeKind.IndexedSetStatement;
 
-    public readonly range: Range | undefined;
+    public readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState) {
         const result = [];
@@ -1558,7 +1565,7 @@ export class LibraryStatement extends Statement implements TypedefProvider {
             library: options.library,
             filePath: options.filePath
         };
-        this.range = util.createBoundingRange(
+        this.location = util.createBoundingLocation(
             this.tokens.library,
             this.tokens.filePath
         );
@@ -1570,7 +1577,7 @@ export class LibraryStatement extends Statement implements TypedefProvider {
 
     public readonly kind = AstNodeKind.LibraryStatement;
 
-    public readonly range: Range | undefined;
+    public readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
@@ -1633,21 +1640,21 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
      */
     public name: string;
 
-    public get range() {
-        return this.cacheRange();
+    public get location() {
+        return this.cacheLocation();
     }
-    private _range: Range | undefined;
+    private _location: Location | undefined;
 
-    public cacheRange() {
-        if (!this._range) {
-            this._range = util.createBoundingRange(
+    public cacheLocation() {
+        if (!this._location) {
+            this._location = util.createBoundingLocation(
                 this.tokens.namespace,
                 this.nameExpression,
                 this.body,
                 this.tokens.endNamespace
             );
         }
-        return this._range;
+        return this._location;
     }
 
     public getName(parseMode: ParseMode) {
@@ -1739,20 +1746,21 @@ export class ImportStatement extends Statement implements TypedefProvider {
             import: options.import,
             path: options.path
         };
-        this.range = util.createBoundingRange(
+        this.location = util.createBoundingLocation(
             this.tokens.import,
             this.tokens.path
         );
         if (this.tokens.path) {
             //remove quotes
             this.filePath = this.tokens.path.text.replace(/"/g, '');
-            if (this.tokens.path?.range) {
+            if (this.tokens.path?.location?.range) {
                 //adjust the range to exclude the quotes
-                this.tokens.path.range = util.createRange(
-                    this.tokens.path.range.start.line,
-                    this.tokens.path.range.start.character + 1,
-                    this.tokens.path.range.end.line,
-                    this.tokens.path.range.end.character - 1
+                this.tokens.path.location = util.createLocation(
+                    this.tokens.path.location.range.start.line,
+                    this.tokens.path.location.range.start.character + 1,
+                    this.tokens.path.location.range.end.line,
+                    this.tokens.path.location.range.end.character - 1,
+                    this.tokens.path.location.uri
                 );
             }
         }
@@ -1765,7 +1773,7 @@ export class ImportStatement extends Statement implements TypedefProvider {
 
     public readonly kind = AstNodeKind.ImportStatement;
 
-    public readonly range: Range;
+    public readonly location: Location;
 
     public readonly filePath: string;
 
@@ -1818,7 +1826,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         };
         this.parentInterfaceName = options.parentInterfaceName;
         this.body = options.body;
-        this.range = util.createBoundingRange(
+        this.location = util.createBoundingLocation(
             this.tokens.interface,
             this.tokens.name,
             this.tokens.extends,
@@ -1839,7 +1847,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         readonly endInterface?: Token;
     };
 
-    public readonly range: Range | undefined;
+    public readonly location: Location | undefined;
 
     public get fields(): InterfaceFieldStatement[] {
         return this.body.filter(x => isInterfaceFieldStatement(x)) as InterfaceFieldStatement[];
@@ -2019,7 +2027,7 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
             as: options.as
         };
         this.typeExpression = options.typeExpression;
-        this.range = util.createBoundingRange(
+        this.location = util.createBoundingLocation(
             this.tokens.optional,
             this.tokens.name,
             this.tokens.as,
@@ -2031,7 +2039,7 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
 
     public readonly typeExpression?: TypeExpression;
 
-    public readonly range: Range | undefined;
+    public readonly location: Location | undefined;
 
     public readonly tokens: {
         readonly name: Identifier;
@@ -2129,8 +2137,8 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
 
     public readonly kind = AstNodeKind.InterfaceMethodStatement;
 
-    public get range() {
-        return util.createBoundingRange(
+    public get location() {
+        return util.createBoundingLocation(
             this.tokens.optional,
             this.tokens.functionType,
             this.tokens.name,
@@ -2286,10 +2294,10 @@ export class ClassStatement extends Statement implements TypedefProvider {
             }
         }
 
-        this.range = util.createBoundingRange(
+        this.location = util.createBoundingLocation(
             this.parentClassName,
             ...(this.body ?? []),
-            util.createBoundingRangeFromTokens(this.tokens)
+            util.createBoundingLocationFromTokens(this.tokens)
         );
     }
 
@@ -2338,7 +2346,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
     public readonly methods = [] as MethodStatement[];
     public readonly fields = [] as FieldStatement[];
 
-    public readonly range: Range | undefined;
+    public readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
@@ -2735,9 +2743,9 @@ export class MethodStatement extends FunctionStatement {
             ...this.tokens,
             override: options.override
         };
-        this.range = util.createBoundingRange(
+        this.location = util.createBoundingLocation(
             ...(this.modifiers),
-            util.createBoundingRangeFromTokens(this.tokens),
+            util.createBoundingLocationFromTokens(this.tokens),
             this.func
         );
     }
@@ -2755,7 +2763,7 @@ export class MethodStatement extends FunctionStatement {
         return this.modifiers.find(x => accessModifiers.includes(x.kind));
     }
 
-    public readonly range: Range | undefined;
+    public readonly location: Location | undefined;
 
     /**
      * Get the name of this method.
@@ -2863,7 +2871,7 @@ export class MethodStatement extends FunctionStatement {
                         kind: TokenKind.Identifier,
                         text: 'super',
                         isReserved: false,
-                        range: state.classStatement.tokens.name.range,
+                        location: state.classStatement.tokens.name.location,
                         leadingWhitespace: '',
                         leadingTrivia: []
                     }
@@ -2872,7 +2880,7 @@ export class MethodStatement extends FunctionStatement {
                     kind: TokenKind.LeftParen,
                     text: '(',
                     isReserved: false,
-                    range: state.classStatement.tokens.name.range,
+                    location: state.classStatement.tokens.name.location,
                     leadingWhitespace: '',
                     leadingTrivia: []
                 },
@@ -2880,7 +2888,7 @@ export class MethodStatement extends FunctionStatement {
                     kind: TokenKind.RightParen,
                     text: ')',
                     isReserved: false,
-                    range: state.classStatement.tokens.name.range,
+                    location: state.classStatement.tokens.name.location,
                     leadingWhitespace: '',
                     leadingTrivia: []
                 },
@@ -2908,10 +2916,10 @@ export class MethodStatement extends FunctionStatement {
                     value: field.initialValue
                 })
                 : new AssignmentStatement({
-                    equals: createToken(TokenKind.Equal, '=', field.tokens.name.range),
+                    equals: createToken(TokenKind.Equal, '=', field.tokens.name.location),
                     name: thisQualifiedName,
                     //if there is no initial value, set the initial value to `invalid`
-                    value: createInvalidLiteral('invalid', field.tokens.name.range)
+                    value: createInvalidLiteral('invalid', field.tokens.name.location)
                 });
             // Add parent so namespace lookups work
             fieldAssignment.parent = state.classStatement;
@@ -2948,8 +2956,8 @@ export class FieldStatement extends Statement implements TypedefProvider {
         this.typeExpression = options.typeExpression;
         this.initialValue = options.initialValue;
 
-        this.range = util.createBoundingRange(
-            util.createBoundingRangeFromTokens(this.tokens),
+        this.location = util.createBoundingLocation(
+            util.createBoundingLocationFromTokens(this.tokens),
             this.typeExpression,
             this.initialValue
         );
@@ -2977,7 +2985,7 @@ export class FieldStatement extends Statement implements TypedefProvider {
             this.initialValue?.getType({ ...options, flags: SymbolTypeFlag.runtime }) ?? DynamicType.instance;
     }
 
-    public readonly range: Range | undefined;
+    public readonly location: Location | undefined;
 
     public get leadingTrivia(): Token[] {
         return this.tokens.accessModifier?.leadingTrivia ?? this.tokens.optional?.leadingTrivia ?? this.tokens.name.leadingTrivia;
@@ -3053,7 +3061,7 @@ export class TryCatchStatement extends Statement {
         };
         this.tryBranch = options.tryBranch;
         this.catchStatement = options.catchStatement;
-        this.range = util.createBoundingRange(
+        this.location = util.createBoundingLocation(
             this.tokens.try,
             this.tryBranch,
             this.catchStatement,
@@ -3071,7 +3079,7 @@ export class TryCatchStatement extends Statement {
 
     public readonly kind = AstNodeKind.TryCatchStatement;
 
-    public readonly range: Range | undefined;
+    public readonly location: Location | undefined;
 
     public transpile(state: BrsTranspileState): TranspileResult {
         return [
@@ -3114,7 +3122,7 @@ export class CatchStatement extends Statement {
             exceptionVariable: options?.exceptionVariable
         };
         this.catchBranch = options?.catchBranch;
-        this.range = util.createBoundingRange(
+        this.location = util.createBoundingLocation(
             this.tokens.catch,
             this.tokens.exceptionVariable,
             this.catchBranch
@@ -3130,7 +3138,7 @@ export class CatchStatement extends Statement {
 
     public readonly kind = AstNodeKind.CatchStatement;
 
-    public readonly range: Range | undefined;
+    public readonly location: Location | undefined;
 
     public transpile(state: BrsTranspileState): TranspileResult {
         return [
@@ -3162,7 +3170,7 @@ export class ThrowStatement extends Statement {
             throw: options.throw
         };
         this.expression = options.expression;
-        this.range = util.createBoundingRange(
+        this.location = util.createBoundingLocation(
             this.tokens.throw,
             this.expression
         );
@@ -3175,7 +3183,7 @@ export class ThrowStatement extends Statement {
 
     public readonly kind = AstNodeKind.ThrowStatement;
 
-    public readonly range: Range | undefined;
+    public readonly location: Location | undefined;
 
     public transpile(state: BrsTranspileState) {
         const result = [
@@ -3234,8 +3242,8 @@ export class EnumStatement extends Statement implements TypedefProvider {
 
     public readonly kind = AstNodeKind.EnumStatement;
 
-    public get range(): Range | undefined {
-        return util.createBoundingRange(
+    public get location(): Location | undefined {
+        return util.createBoundingLocation(
             this.tokens.enum,
             this.tokens.name,
             ...this.body,
@@ -3419,8 +3427,8 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
 
     public readonly kind = AstNodeKind.EnumMemberStatement;
 
-    public get range() {
-        return util.createBoundingRange(
+    public get location() {
+        return util.createBoundingLocation(
             this.tokens.name,
             this.tokens.equals,
             this.value
@@ -3492,7 +3500,7 @@ export class ConstStatement extends Statement implements TypedefProvider {
             equals: options.equals
         };
         this.value = options.value;
-        this.range = util.createBoundingRange(this.tokens.const, this.tokens.name, this.tokens.equals, this.value);
+        this.location = util.createBoundingLocation(this.tokens.const, this.tokens.name, this.tokens.equals, this.value);
     }
 
     public readonly tokens: {
@@ -3504,7 +3512,7 @@ export class ConstStatement extends Statement implements TypedefProvider {
 
     public readonly kind = AstNodeKind.ConstStatement;
 
-    public readonly range: Range | undefined;
+    public readonly location: Location | undefined;
 
     public get name() {
         return this.tokens.name.text;
@@ -3581,7 +3589,7 @@ export class ContinueStatement extends Statement {
             continue: options.continue,
             loopType: options.loopType
         };
-        this.range = util.createBoundingRange(
+        this.location = util.createBoundingLocation(
             this.tokens.continue,
             this.tokens.loopType
         );
@@ -3594,7 +3602,7 @@ export class ContinueStatement extends Statement {
 
     public readonly kind = AstNodeKind.ContinueStatement;
 
-    public readonly range: Range | undefined;
+    public readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -3624,7 +3632,7 @@ export class TypecastStatement extends Statement {
             typecast: options.typecast
         };
         this.typecastExpression = options.typecastExpression;
-        this.range = util.createBoundingRange(
+        this.location = util.createBoundingLocation(
             this.tokens.typecast,
             this.typecastExpression
         );
@@ -3638,7 +3646,7 @@ export class TypecastStatement extends Statement {
 
     public readonly kind = AstNodeKind.TypecastStatement;
 
-    public readonly range: Range;
+    public readonly location: Location;
 
     transpile(state: BrsTranspileState) {
         //the typecast statement is a comment just for debugging purposes
@@ -3678,7 +3686,7 @@ export class ConditionalCompileErrorStatement extends Statement {
             hashError: options.hashError,
             message: options.message
         };
-        this.range = util.createBoundingRange(util.createBoundingRangeFromTokens(this.tokens));
+        this.location = util.createBoundingLocation(util.createBoundingLocationFromTokens(this.tokens));
     }
 
     public readonly tokens: {
@@ -3689,7 +3697,7 @@ export class ConditionalCompileErrorStatement extends Statement {
 
     public readonly kind = AstNodeKind.ConditionalCompileErrorStatement;
 
-    public readonly range: Range | undefined;
+    public readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -3724,7 +3732,7 @@ export class AliasStatement extends Statement {
             equals: options.equals
         };
         this.value = options.value;
-        this.range = util.createBoundingRange(
+        this.location = util.createBoundingLocation(
             this.tokens.alias,
             this.tokens.name,
             this.tokens.equals,
@@ -3742,7 +3750,7 @@ export class AliasStatement extends Statement {
 
     public readonly kind = AstNodeKind.AliasStatement;
 
-    public readonly range: Range;
+    public readonly location: Location;
 
     transpile(state: BrsTranspileState) {
         //the alias statement is a comment just for debugging purposes
@@ -3794,8 +3802,8 @@ export class ConditionalCompileStatement extends Statement {
             hashEndIf: options.hashEndIf
         };
 
-        this.range = util.createBoundingRange(
-            util.createBoundingRangeFromTokens(this.tokens),
+        this.location = util.createBoundingLocation(
+            util.createBoundingLocationFromTokens(this.tokens),
             this.thenBranch,
             this.elseBranch
         );
@@ -3813,7 +3821,7 @@ export class ConditionalCompileStatement extends Statement {
 
     public readonly kind = AstNodeKind.ConditionalCompileStatement;
 
-    public readonly range: Range | undefined;
+    public readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState) {
         let results = [] as TranspileResult;
@@ -3920,7 +3928,7 @@ export class ConditionalCompileConstStatement extends Statement {
             hashConst: options.hashConst
         };
         this.assignment = options.assignment;
-        this.range = util.createBoundingRange(util.createBoundingRangeFromTokens(this.tokens), this.assignment);
+        this.location = util.createBoundingLocation(util.createBoundingLocationFromTokens(this.tokens), this.assignment);
     }
 
     public readonly tokens: {
@@ -3931,7 +3939,7 @@ export class ConditionalCompileConstStatement extends Statement {
 
     public readonly kind = AstNodeKind.ConditionalCompileConstStatement;
 
-    public readonly range: Range | undefined;
+    public readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState) {
         return [

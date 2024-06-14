@@ -3,11 +3,12 @@ import * as assert from 'assert';
 import { Parser } from '../../Parser';
 import { Lexer } from '../../../lexer/Lexer';
 import { TokenKind } from '../../../lexer/TokenKind';
-import { EOF, identifier, rangeMatch, token } from '../Parser.spec';
+import { EOF, identifier, token } from '../Parser.spec';
 import { isBlock, isFunctionStatement, isIfStatement } from '../../../astUtils/reflection';
 import type { Block, FunctionStatement, IfStatement } from '../../Statement';
 import { expectDiagnosticsIncludes, expectZeroDiagnostics } from '../../../testHelpers.spec';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
+import { util } from '../../../util';
 
 describe('parser if statements', () => {
     it('allows empty if blocks', () => {
@@ -758,12 +759,15 @@ describe('parser if statements', () => {
         expect(diagnostics).to.be.lengthOf(0);
 
         const then1 = (statements[0] as IfStatement).thenBranch;
-        expect(rangeMatch(then1.range, then1.statements)).to.be.true;
+        expect(then1.location).to.eql(util.createBoundingLocation(...then1.statements));
+
         const then2 = (statements[1] as IfStatement).thenBranch;
-        expect(rangeMatch(then2.range, then2.statements)).to.be.true;
+        expect(then2.location).to.eql(util.createBoundingLocation(...then2.statements));
+
         const else1 = (statements[2] as IfStatement).elseBranch as Block;
-        expect(rangeMatch(else1.range, else1.statements)).to.be.true;
+        expect(else1.location).to.eql(util.createBoundingLocation(...else1.statements));
+
         const else2 = (statements[3] as IfStatement).elseBranch as Block;
-        expect(rangeMatch(else2.range, else2.statements)).to.be.true;
+        expect(else2.location).to.eql(util.createBoundingLocation(...else2.statements));
     });
 });

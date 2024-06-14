@@ -75,7 +75,7 @@ export class SignatureHelpUtil {
             return undefined;
         }
         const func = statement.func;
-        const funcStartPosition = func.range.start;
+        const funcStartPosition = func.location?.range.start;
 
         // Get function comments in reverse order
         const trivia = util.concatAnnotationLeadingTrivia(func).reverse();
@@ -85,7 +85,7 @@ export class SignatureHelpUtil {
             if (!currentToken) {
                 break;
             }
-            if (currentToken.range.start.line + 1 < funcStartPosition.line) {
+            if (currentToken.location?.range.start.line + 1 < funcStartPosition.line) {
                 if (functionComments.length === 0) {
                     break;
                 }
@@ -121,7 +121,7 @@ export class SignatureHelpUtil {
             key += param.tokens.name.text;
         }
 
-        let label = util.getTextForRange(lines, util.createRangeFromPositions(func.tokens.functionType?.range.start, func.body.range.start)).trim();
+        let label = util.getTextForRange(lines, util.createRangeFromPositions(func.tokens.functionType?.location?.range.start, func.body.location?.range.start)).trim();
         if (namespaceName) {
             label = label.replace(/^(sub | function )/gim, `$1${namespaceName}.`);
         }
@@ -149,7 +149,4 @@ export class SignatureHelpUtil {
         }
         return sigHelp;
     }
-
-
 }
-

@@ -3,7 +3,7 @@ import type { Scope } from './Scope';
 import type { BrsFile, ProvidedSymbol } from './files/BrsFile';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { Program } from './Program';
-import util from './util';
+import { util } from './util';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { BscSymbol } from './SymbolTable';
 import { isCallExpression, isConstStatement, isEnumStatement, isEnumType, isFunctionStatement, isInheritableType, isInterfaceStatement, isNamespaceStatement, isNamespaceType, isReferenceType, isTypedFunctionType, isUnionType } from './astUtils/reflection';
@@ -14,10 +14,12 @@ import { BscTypeKind } from './types/BscTypeKind';
 import { getAllTypesFromUnionType } from './types/helpers';
 import type { BscType } from './types/BscType';
 import type { BscFile } from './files/BscFile';
-import type { NamespaceStatement } from './parser/Statement';
+import type { ClassStatement, ConstStatement, EnumMemberStatement, EnumStatement, InterfaceStatement, NamespaceStatement } from './parser/Statement';
 import { ParseMode } from './parser/Parser';
 import { URI } from 'vscode-uri';
 import { globalFile } from './globalCallables';
+import type { DottedGetExpression, VariableExpression } from './parser/Expression';
+import type { InheritableType } from './types';
 
 
 interface FileSymbolPair {
@@ -96,9 +98,9 @@ export class ProvidedNode {
                     typesToTry.push(currentType.defaultMemberType);
                 }
                 if (isInheritableType(currentType)) {
-                    let inheritableType = currentType as any;
+                    let inheritableType = currentType;
                     while (inheritableType?.parentType) {
-                        let parentType = inheritableType.parentType;
+                        let parentType = inheritableType.parentType as BscType;
                         if (isReferenceType(inheritableType.parentType)) {
                             const fullName = inheritableType.parentType.fullName;
                             if (fullName.includes('.')) {
@@ -109,7 +111,7 @@ export class ProvidedNode {
                             }
                         }
                         typesToTry.push(parentType);
-                        inheritableType = parentType;
+                        inheritableType = parentType as InheritableType;
                     }
 
                 }
@@ -572,13 +574,15 @@ export class CrossScopeValidator {
                                     }
                                 }
 
+                                type AstNodeWithName = VariableExpression | DottedGetExpression | EnumStatement | ClassStatement | ConstStatement | EnumMemberStatement | InterfaceStatement;
+
                                 const thatNodeKindName = otherIsGlobal ? 'Global Function' : util.getAstNodeFriendlyName(otherDupeNode) ?? 'Item';
-                                let thisNameRange = (dupeNode as any)?.tokens?.name?.range ?? dupeNode.range;
-                                let thatNameRange = (otherDupeNode as any)?.tokens?.name?.range ?? otherDupeNode?.range;
+                                let thisNameRange = (dupeNode as AstNodeWithName)?.tokens?.name?.location?.range ?? dupeNode.location?.range;
+                                let thatNameRange = (otherDupeNode as AstNodeWithName)?.tokens?.name?.location?.range ?? otherDupeNode?.location?.range;
 
                                 const relatedInformation = thatNameRange ? [{
                                     message: `${thatNodeKindName} declared here`,
-                                    location: util.createLocation(
+                                    location: util.createLocationFromRange(
                                         URI.file(otherDupe.file?.srcPath).toString(),
                                         thatNameRange
                                     )
@@ -623,7 +627,7 @@ export class CrossScopeValidator {
 
                         ...this.getCannotFindDiagnostic(scope, typeChainResult),
                         file: file,
-                        range: typeChainResult.range
+                        range: typeChainResult.location?.range
                     }, {
                         scope: scope,
                         tags: [CrossScopeValidatorDiagnosticTag]
@@ -641,7 +645,7 @@ export class CrossScopeValidator {
                 this.program.diagnostics.register({
                     ...DiagnosticMessages.incompatibleSymbolDefinition(typeChainResult.fullChainName, scopeListName),
                     file: symbol.file,
-                    range: typeChainResult.range
+                    range: typeChainResult.location?.range
                 }, {
                     tags: [CrossScopeValidatorDiagnosticTag]
                 });

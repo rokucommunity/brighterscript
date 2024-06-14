@@ -20,7 +20,7 @@ describe('TemplateStringExpression', () => {
             it('generates correct locations for quasis', () => {
                 let { tokens } = Lexer.scan('print `0xAAAAAA${"0xBBBBBB"}0xCCCCCC`');
                 expect(
-                    tokens.filter(x => /"?0x/.test(x.text)).map(x => x.range)
+                    tokens.filter(x => /"?0x/.test(x.text)).map(x => x.location?.range)
                 ).to.eql([
                     util.createRange(0, 7, 0, 15), // 0xAAAAAA
                     util.createRange(0, 17, 0, 27), // "0xBBBBBB"
@@ -34,7 +34,7 @@ describe('TemplateStringExpression', () => {
                 tokens.shift();
                 expect(
                     //compute the length of the token char spread
-                    tokens.filter(x => x.text !== '').map(x => [x.range.end.character - x.range.start.character, x.text])
+                    tokens.filter(x => x.text !== '').map(x => [x.location.range.end.character - x.location.range.start.character, x.text])
                 ).to.eql([
                     '`',
                     '${',
@@ -368,6 +368,6 @@ describe('TemplateStringExpression', () => {
             end function
         `);
         const ann = parser.ast.statements[0].annotations![0];
-        expect(ann.range).to.eql(util.createRange(1, 12, 3, 14));
+        expect(ann.location?.range).to.eql(util.createRange(1, 12, 3, 14));
     });
 });

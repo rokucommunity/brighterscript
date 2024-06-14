@@ -91,7 +91,7 @@ export class CallExpressionInfo {
     }
 
     isPositionBetweenParentheses() {
-        let boundingRange = util.createBoundingRange(this.callExpression.tokens.openingParen, this.callExpression.tokens.closingParen);
+        let boundingRange = util.createBoundingRange(this.callExpression.tokens.openingParen?.location, this.callExpression.tokens.closingParen?.location);
         return util.rangeContains(boundingRange, this.position);
     }
 
@@ -151,7 +151,7 @@ export class CallExpressionInfo {
     private getParameterIndex() {
         for (let i = this.callExpression.args.length - 1; i > -1; i--) {
             let argExpression = this.callExpression.args[i];
-            let comparison = util.comparePositionToRange(this.position, argExpression.range);
+            let comparison = util.comparePositionToRange(this.position, argExpression.location?.range);
             if (comparison >= 0) {
                 return i + comparison;
             }

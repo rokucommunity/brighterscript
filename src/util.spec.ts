@@ -1,6 +1,6 @@
 import { expect } from './chai-config.spec';
 import * as path from 'path';
-import util, { standardizePath as s } from './util';
+import { util, standardizePath as s } from './util';
 import { Position, Range } from 'vscode-languageserver';
 import type { BsConfig } from './BsConfig';
 import * as fsExtra from 'fs-extra';
@@ -944,7 +944,7 @@ describe('util', () => {
                 }, 'u/r/i').relatedInformation
             ).to.eql([{
                 message: 'Alpha',
-                location: util.createLocation(
+                location: util.createLocationFromRange(
                     'u/r/i', util.createRange(1, 2, 3, 4)
                 )
             }]);
@@ -958,7 +958,7 @@ describe('util', () => {
                     range: util.createRange(1, 2, 3, 4),
                     relatedInformation: [{
                         message: 'Alpha',
-                        location: util.createLocation(
+                        location: util.createLocationFromRange(
                             'uri', util.createRange(2, 3, 4, 5)
                         )
                     }, {
@@ -968,7 +968,7 @@ describe('util', () => {
                 }, undefined as any).relatedInformation
             ).to.eql([{
                 message: 'Alpha',
-                location: util.createLocation(
+                location: util.createLocationFromRange(
                     'uri', util.createRange(2, 3, 4, 5)
                 )
             }]);
@@ -977,9 +977,9 @@ describe('util', () => {
     describe('processTypeChain', () => {
         it('should  find the correct details in a list of type resolutions', () => {
             const nodes = [
-                createVariableExpression('Alpha', util.createRange(1, 1, 2, 2)),
-                createVariableExpression('Beta', util.createRange(2, 2, 3, 3)),
-                createVariableExpression('CharlieProp', util.createRange(3, 3, 4, 4))
+                createVariableExpression('Alpha', util.createLocation(1, 1, 2, 2)),
+                createVariableExpression('Beta', util.createLocation(2, 2, 3, 3)),
+                createVariableExpression('CharlieProp', util.createLocation(3, 3, 4, 4))
             ];
 
             const chain = [
@@ -993,13 +993,13 @@ describe('util', () => {
             expect(result.fullChainName).to.eql('AlphaNamespace.BetaProp.CharlieProp');
             expect(result.itemParentTypeName).to.eql('Beta');
             expect(result.fullNameOfItem).to.eql('Beta.CharlieProp');
-            expect(result.range).to.eql(util.createRange(3, 3, 4, 4));
+            expect(result.location.range).to.eql(util.createRange(3, 3, 4, 4));
         });
 
         it('respects the separatorToken', () => {
             const nodes = [
-                createVariableExpression('Custom', util.createRange(1, 1, 2, 2)),
-                createVariableExpression('someCallFunc', util.createRange(2, 2, 3, 3))
+                createVariableExpression('Custom', util.createLocation(1, 1, 2, 2)),
+                createVariableExpression('someCallFunc', util.createLocation(2, 2, 3, 3))
             ];
             const chain = [
                 new TypeChainEntry({ name: 'roSGNodeCustom', type: new ComponentType('Custom'), data: { flags: SymbolTypeFlag.runtime }, astNode: nodes[0] }),

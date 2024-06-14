@@ -169,12 +169,12 @@ describe('lexer', () => {
 
     it('computes range properly both with and without whitespace', () => {
         let withoutWhitespace = Lexer.scan(`sub Main()\n    bob = true\nend sub`).tokens
-            .map(x => rangeToArray(x.range));
+            .map(x => rangeToArray(x.location?.range));
 
         let withWhitespace = Lexer.scan(`sub Main()\n    bob = true\nend sub`).tokens
             //filter out the whitespace...we only care that it was computed during the scan
             .filter(x => x.kind !== TokenKind.Whitespace)
-            .map(x => rangeToArray(x.range));
+            .map(x => rangeToArray(x.location?.range));
 
         /*eslint-disable */
         let expectedLocations = [
@@ -278,7 +278,7 @@ describe('lexer', () => {
                 end sub
             `, {
                 includeWhitespace: true
-            }).tokens.map(x => [...rangeToArray(x.range), x.text]);
+            }).tokens.map(x => [...rangeToArray(x.location?.range), x.text]);
 
             expect(tokens).to.eql([
                 [0, 0, 0, 1, '\n'],
@@ -316,7 +316,7 @@ describe('lexer', () => {
                 //ignore the Eof token
                 .filter(x => x.kind !== TokenKind.Eof);
 
-            expect(tokens.map(x => x.range)).to.eql([
+            expect(tokens.map(x => x.location?.range)).to.eql([
                 Range.create(0, 0, 0, 3), // sub
                 Range.create(0, 3, 0, 4), // \n
                 Range.create(1, 0, 1, 3), // sub
@@ -722,7 +722,7 @@ describe('lexer', () => {
             );
             expect(tokens.map(x => {
                 return {
-                    range: x.range,
+                    range: x.location?.range,
                     kind: x.kind
                 };
             })).to.eql([
@@ -1162,7 +1162,7 @@ describe('lexer', () => {
     describe('location tracking', () => {
         it('tracks starting and ending locations including whitespace', () => {
             let { tokens } = Lexer.scan(`sub foo()\n    print "bar"\r\nend sub`, { includeWhitespace: true });
-            expect(tokens.map(t => t.range)).to.eql([
+            expect(tokens.map(t => t.location?.range)).to.eql([
                 Range.create(0, 0, 0, 3), // sub
                 Range.create(0, 3, 0, 4), // <space>
                 Range.create(0, 4, 0, 7), // foo
@@ -1181,7 +1181,7 @@ describe('lexer', () => {
 
         it('tracks starting and ending locations excluding whitespace', () => {
             let { tokens } = Lexer.scan(`sub foo()\n    print "bar"\r\nend sub`, { includeWhitespace: false });
-            expect(tokens.map(t => t.range)).to.eql([
+            expect(tokens.map(t => t.location?.range)).to.eql([
                 Range.create(0, 0, 0, 3), // sub
                 Range.create(0, 4, 0, 7), // foo
                 Range.create(0, 7, 0, 8), // (
@@ -1226,7 +1226,7 @@ describe('lexer', () => {
         ]);
 
         //verify the location of `rem`
-        expect(tokens.map(t => [t.range.start.character, t.range.end.character])).to.eql([
+        expect(tokens.map(t => [t.location?.range.start.character, t.location?.range.end.character])).to.eql([
             [0, 6], // person
             [6, 7], // .
             [7, 10], // rem

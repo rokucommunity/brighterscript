@@ -57,7 +57,7 @@ export class BsClassValidator {
                             this.diagnostics.push({
                                 ...DiagnosticMessages.classConstructorIllegalUseOfMBeforeSuperCall(),
                                 file: classStatement.file,
-                                range: expression.range
+                                range: expression.location?.range
                             });
                         }
                         if (isCallExpression(parent) && expressionNameLower === 'super') {
@@ -76,7 +76,7 @@ export class BsClassValidator {
                     this.diagnostics.push({
                         ...DiagnosticMessages.classConstructorMissingSuperCall(),
                         file: classStatement.file,
-                        range: newMethod.range
+                        range: newMethod.location?.range
                     });
                 }
             }
@@ -98,7 +98,7 @@ export class BsClassValidator {
                         ...DiagnosticMessages.circularReferenceDetected(
                             Array.from(names.values()).concat(className), this.scope.name),
                         file: cls.file,
-                        range: cls.tokens.name.range
+                        range: cls.tokens.name.location?.range
                     });
                     break;
                 }
@@ -134,7 +134,7 @@ export class BsClassValidator {
                         this.diagnostics.push({
                             ...DiagnosticMessages.duplicateIdentifier(memberName.text),
                             file: classStatement.file,
-                            range: memberName.range
+                            range: memberName.location?.range
                         });
                     }
 
@@ -152,7 +152,7 @@ export class BsClassValidator {
                                     ancestorAndMember.classStatement.getName(ParseMode.BrighterScript)
                                 ),
                                 file: classStatement.file,
-                                range: member.range
+                                range: member.location?.range
                             });
                         }
 
@@ -176,7 +176,7 @@ export class BsClassValidator {
                                         ancestorMemberType.toString()
                                     ),
                                     file: classStatement.file,
-                                    range: member.range
+                                    range: member.location?.range
                                 });
                             }
                         }
@@ -195,7 +195,7 @@ export class BsClassValidator {
                                     ancestorAndMember.classStatement.getName(ParseMode.BrighterScript)
                                 ),
                                 file: classStatement.file,
-                                range: member.range
+                                range: member.location?.range
                             });
                         }
 
@@ -214,7 +214,7 @@ export class BsClassValidator {
                                     ancestorAndMember.classStatement.getName(ParseMode.BrighterScript)
                                 ),
                                 file: classStatement.file,
-                                range: member.range
+                                range: member.location?.range
                             });
                         }
                     }

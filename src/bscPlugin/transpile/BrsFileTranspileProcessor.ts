@@ -124,7 +124,7 @@ export class BrsFilePreTranspileProcessor {
             return;
         }
 
-        let containingNamespace = this.event.file.getNamespaceStatementForPosition(expression.range.start)?.getName(ParseMode.BrighterScript);
+        let containingNamespace = this.event.file.getNamespaceStatementForPosition(expression.location?.range.start)?.getName(ParseMode.BrighterScript);
 
         const parts = util.splitExpression(expression);
         const processedNames: string[] = [];

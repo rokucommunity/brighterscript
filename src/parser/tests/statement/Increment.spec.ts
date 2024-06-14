@@ -5,6 +5,7 @@ import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
+import util from '../../../util';
 
 describe('parser postfix unary expressions', () => {
     it('parses postfix \'++\' for variables', () => {
@@ -103,30 +104,33 @@ describe('parser postfix unary expressions', () => {
          *  +--------------
          * 0| someNumber++
          */
-        let { statements, diagnostics } = Parser.parse(<any>[
+        let { statements, diagnostics } = Parser.parse([
             {
                 kind: TokenKind.Identifier,
                 text: 'someNumber',
                 isReserved: false,
-                range: Range.create(0, 0, 0, 10)
+                leadingTrivia: [],
+                location: util.createLocation(0, 0, 0, 10)
             },
             {
                 kind: TokenKind.PlusPlus,
                 text: '++',
                 isReserved: false,
-                range: Range.create(0, 10, 0, 12)
+                leadingTrivia: [],
+                location: util.createLocation(0, 10, 0, 12)
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 isReserved: false,
-                range: Range.create(0, 12, 0, 13)
+                leadingTrivia: [],
+                location: util.createLocation(0, 12, 0, 13)
             }
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);
-        expect(statements[0].range).deep.include(
+        expect(statements[0].location?.range).deep.include(
             Range.create(0, 0, 0, 12)
         );
     });
