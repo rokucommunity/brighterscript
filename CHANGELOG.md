@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.33](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.32...v1.0.0-alpha.33) - 2024-06-14
+### Added
+ - Adds messagePort methods to ifSocketAsync and MultiStyleLabel.drawing Styles ([#1220](https://github.com/rokucommunity/brighterscript/pull/1220))
+ - Allow updating leading trivia ([#1225](https://github.com/rokucommunity/brighterscript/pull/1225))
+### Changed
+ - Remove block starting range ([#1224](https://github.com/rokucommunity/brighterscript/pull/1224))
+ - Removed isInline property from IfStatement ([#1227](https://github.com/rokucommunity/brighterscript/pull/1227))
+ - Made AstNode.getLeadingTrivia() a getter ([#1233](https://github.com/rokucommunity/brighterscript/pull/1233))
+ - Removed expectRangeToBe helper ([#1226](https://github.com/rokucommunity/brighterscript/pull/1226))
+ - Convert .range to .location ([#1231](https://github.com/rokucommunity/brighterscript/pull/1231))
+### Fixed
+ - Fixes issue with setting roSGNodeTargetSet.targetRects ([#1223](https://github.com/rokucommunity/brighterscript/pull/1223))
+
+
+
 ## [1.0.0-alpha.32](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.31...v1.0.0-alpha.32) - 2024-06-05
 ### Fixed
  - Elevate `thenby` to a prod dependency ([#1217](https://github.com/rokucommunity/brighterscript/pull/1217))
