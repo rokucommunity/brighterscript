@@ -185,7 +185,7 @@ export class AssignmentStatement extends Statement {
     }
 
     getLeadingTrivia(): Token[] {
-        return this.tokens.name.leadingTrivia ?? [];
+        return this.tokens.name.leadingTrivia;
     }
 }
 
@@ -462,7 +462,7 @@ export class ExitForStatement extends Statement {
     }
 
     getLeadingTrivia(): Token[] {
-        return this.tokens.exitFor?.leadingTrivia ?? [];
+        return this.tokens.exitFor?.leadingTrivia;
     }
 
 }
@@ -495,7 +495,7 @@ export class ExitWhileStatement extends Statement {
     }
 
     getLeadingTrivia(): Token[] {
-        return this.tokens.exitWhile?.leadingTrivia ?? [];
+        return this.tokens.exitWhile?.leadingTrivia;
     }
 }
 
@@ -539,7 +539,7 @@ export class FunctionStatement extends Statement implements TypedefProvider {
     }
 
     public getLeadingTrivia(): Token[] {
-        return util.concatAnnotationLeadingTrivia(this, this.func.getLeadingTrivia());
+        return this.func.getLeadingTrivia();
     }
 
     transpile(state: BrsTranspileState) {
@@ -991,7 +991,7 @@ export class LabelStatement extends Statement {
     public readonly location: Location | undefined;
 
     public getLeadingTrivia(): Token[] {
-        return util.concatAnnotationLeadingTrivia(this, this.tokens.name.leadingTrivia);
+        return this.tokens.name.leadingTrivia;
     }
 
     transpile(state: BrsTranspileState) {
@@ -1667,11 +1667,11 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     }
 
     public getLeadingTrivia(): Token[] {
-        return util.concatAnnotationLeadingTrivia(this, this.tokens.namespace?.leadingTrivia);
+        return this.tokens.namespace?.leadingTrivia;
     }
 
     public getEndTrivia(): Token[] {
-        return this.tokens.endNamespace?.leadingTrivia ?? [];
+        return this.tokens.endNamespace?.leadingTrivia;
     }
 
     public getNameParts() {
@@ -1863,12 +1863,11 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
     }
 
     public getLeadingTrivia(): Token[] {
-        return util.concatAnnotationLeadingTrivia(this,
-            this.tokens.interface?.leadingTrivia);
+        return this.tokens.interface?.leadingTrivia;
     }
 
     public getEndTrivia(): Token[] {
-        return this.tokens.endInterface?.leadingTrivia ?? [];
+        return this.tokens.endInterface?.leadingTrivia;
     }
 
 
@@ -2049,7 +2048,7 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
     };
 
     public getLeadingTrivia(): Token[] {
-        return util.concatAnnotationLeadingTrivia(this, this.tokens.optional?.leadingTrivia ?? this.tokens.name.leadingTrivia);
+        return this.tokens.optional?.leadingTrivia ?? this.tokens.name.leadingTrivia;
     }
 
     public get name() {
@@ -2174,7 +2173,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
     }
 
     public getLeadingTrivia(): Token[] {
-        return util.concatAnnotationLeadingTrivia(this, this.tokens.optional?.leadingTrivia ?? this.tokens.functionType.leadingTrivia);
+        return this.tokens.optional?.leadingTrivia ?? this.tokens.functionType.leadingTrivia;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -2336,7 +2335,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
     }
 
     public getLeadingTrivia(): Token[] {
-        return util.concatAnnotationLeadingTrivia(this, this.tokens.class?.leadingTrivia);
+        return this.tokens.class?.leadingTrivia;
     }
 
     public getEndTrivia(): Token[] {
@@ -2774,7 +2773,7 @@ export class MethodStatement extends FunctionStatement {
     }
 
     public getLeadingTrivia(): Token[] {
-        return util.concatAnnotationLeadingTrivia(this, this.func.getLeadingTrivia());
+        return this.func.getLeadingTrivia();
     }
 
     transpile(state: BrsTranspileState) {
@@ -2989,7 +2988,7 @@ export class FieldStatement extends Statement implements TypedefProvider {
     public readonly location: Location | undefined;
 
     public getLeadingTrivia(): Token[] {
-        return util.concatAnnotationLeadingTrivia(this, this.tokens.accessModifier?.leadingTrivia ?? this.tokens.optional?.leadingTrivia ?? this.tokens.name?.leadingTrivia ?? []);
+        return this.tokens.accessModifier?.leadingTrivia ?? this.tokens.optional?.leadingTrivia ?? this.tokens.name.leadingTrivia;
     }
 
     public get isOptional() {
@@ -3263,7 +3262,7 @@ export class EnumStatement extends Statement implements TypedefProvider {
     }
 
     public getLeadingTrivia(): Token[] {
-        return util.concatAnnotationLeadingTrivia(this, this.tokens.enum?.leadingTrivia);
+        return this.tokens.enum?.leadingTrivia;
     }
 
     public getEndTrivia(): Token[] {
@@ -3444,7 +3443,7 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
     }
 
     public getLeadingTrivia(): Token[] {
-        return util.concatAnnotationLeadingTrivia(this, this.tokens.name.leadingTrivia);
+        return this.tokens.name.leadingTrivia;
     }
 
     public transpile(state: BrsTranspileState): TranspileResult {
@@ -3520,7 +3519,7 @@ export class ConstStatement extends Statement implements TypedefProvider {
     }
 
     public getLeadingTrivia(): Token[] {
-        return util.concatAnnotationLeadingTrivia(this, this.tokens.const?.leadingTrivia);
+        return this.tokens.const?.leadingTrivia;
     }
 
     /**

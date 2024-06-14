@@ -257,11 +257,11 @@ export class FunctionExpression extends Expression implements TypedefProvider {
     public functionStatement?: FunctionStatement;
 
     public getLeadingTrivia(): Token[] {
-        return this.tokens.functionType?.leadingTrivia ?? [];
+        return this.tokens.functionType?.leadingTrivia;
     }
 
     public getEndTrivia(): Token[] {
-        return this.tokens.endFunctionType?.leadingTrivia ?? [];
+        return this.tokens.endFunctionType?.leadingTrivia;
     }
 
     /**
@@ -516,7 +516,7 @@ export class FunctionParameterExpression extends Expression {
     }
 
     getLeadingTrivia(): Token[] {
-        return this.tokens.name.leadingTrivia ?? [];
+        return this.tokens.name.leadingTrivia;
     }
 }
 
@@ -780,7 +780,7 @@ export class GroupingExpression extends Expression {
     }
 
     getLeadingTrivia(): Token[] {
-        return this.tokens.leftParen?.leadingTrivia ?? [];
+        return this.tokens.leftParen?.leadingTrivia;
     }
 }
 
@@ -834,7 +834,7 @@ export class LiteralExpression extends Expression {
     }
 
     getLeadingTrivia(): Token[] {
-        return this.tokens.value.leadingTrivia ?? [];
+        return this.tokens.value.leadingTrivia;
     }
 }
 
@@ -939,11 +939,11 @@ export class ArrayLiteralExpression extends Expression {
         return new ArrayType(...innerTypes);
     }
     getLeadingTrivia(): Token[] {
-        return this.tokens.open?.leadingTrivia ?? [];
+        return this.tokens.open?.leadingTrivia;
     }
 
     getEndTrivia(): Token[] {
-        return this.tokens.close?.leadingTrivia ?? [];
+        return this.tokens.close?.leadingTrivia;
     }
 }
 
@@ -992,7 +992,7 @@ export class AAMemberExpression extends Expression {
     }
 
     getLeadingTrivia(): Token[] {
-        return this.tokens.key.leadingTrivia ?? [];
+        return this.tokens.key.leadingTrivia;
     }
 
 }
@@ -1092,11 +1092,11 @@ export class AALiteralExpression extends Expression {
     }
 
     public getLeadingTrivia(): Token[] {
-        return this.tokens.open?.leadingTrivia ?? [];
+        return this.tokens.open?.leadingTrivia;
     }
 
     public getEndTrivia(): Token[] {
-        return this.tokens.close?.leadingTrivia ?? [];
+        return this.tokens.close?.leadingTrivia;
     }
 
 }
@@ -1151,7 +1151,7 @@ export class UnaryExpression extends Expression {
     }
 
     public getLeadingTrivia(): Token[] {
-        return this.tokens.operator.leadingTrivia ?? [];
+        return this.tokens.operator.leadingTrivia;
     }
 }
 
@@ -1222,7 +1222,7 @@ export class VariableExpression extends Expression {
     }
 
     getLeadingTrivia(): Token[] {
-        return this.tokens.name.leadingTrivia ?? [];
+        return this.tokens.name.leadingTrivia;
     }
 }
 
@@ -1338,7 +1338,7 @@ export class SourceLiteralExpression extends Expression {
     }
 
     getLeadingTrivia(): Token[] {
-        return this.tokens.value.leadingTrivia ?? [];
+        return this.tokens.value.leadingTrivia;
     }
 }
 
@@ -1408,7 +1408,7 @@ export class NewExpression extends Expression {
     }
 
     getLeadingTrivia(): Token[] {
-        return this.tokens.new.leadingTrivia ?? [];
+        return this.tokens.new.leadingTrivia;
     }
 }
 
@@ -1824,7 +1824,7 @@ export class AnnotationExpression extends Expression {
     }
 
     public getLeadingTrivia(): Token[] {
-        return this.tokens.at?.leadingTrivia ?? [];
+        return this.tokens.at?.leadingTrivia;
     }
 
     transpile(state: BrsTranspileState) {
@@ -2105,7 +2105,7 @@ export class RegexLiteralExpression extends Expression {
     }
 
     getLeadingTrivia(): Token[] {
-        return this.tokens.regexLiteral?.leadingTrivia ?? [];
+        return this.tokens.regexLiteral?.leadingTrivia;
     }
 }
 

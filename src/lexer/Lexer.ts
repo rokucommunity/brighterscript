@@ -117,7 +117,7 @@ export class Lexer {
                 ? util.createLocation(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd + 1, this.uri)
                 : undefined,
             leadingWhitespace: this.leadingWhitespace,
-            leadingTrivia: this.leadingTrivia
+            leadingTrivia: this.leadingTrivia ?? []
         });
         this.leadingWhitespace = '';
         return this;
