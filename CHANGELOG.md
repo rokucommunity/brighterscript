@@ -269,6 +269,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.66.0-alpha.0](https://github.com/rokucommunity/brighterscript/compare/v0.65.1...v0.66.0-alpha.0) - 2023-06-09
 ### Changed
  - all the type tracking stuff!
+## [0.67.3](https://github.com/rokucommunity/brighterscript/compare/v0.67.2...v0.67.3) - 2024-06-14
+### Changed
+ - Flag using devDependency in production code ([#1222](https://github.com/rokucommunity/brighterscript/pull/1222))
+### Fixed
+ - Fix crash with missing scope ([#1234](https://github.com/rokucommunity/brighterscript/pull/1234))
+ - fix: conform bsconfig.schema.json to strict types ([#1205](https://github.com/rokucommunity/brighterscript/pull/1205))
+
+
+
+## [0.67.2](https://github.com/rokucommunity/brighterscript/compare/v0.67.1...v0.67.2) - 2024-06-03
+### Changed
+ - Fix crash with optional chaining in signature help ([#1207](https://github.com/rokucommunity/brighterscript/pull/1207))
+
+
+
+## [0.67.1](https://github.com/rokucommunity/brighterscript/compare/v0.67.0...v0.67.1) - 2024-05-16
+### Fixed
+ - remove ascii color chars in language server logs ([#1189](https://github.com/rokucommunity/brighterscript/pull/1189))
+ - crash when diagnostic is missing range ([#1174](https://github.com/rokucommunity/brighterscript/pull/1174))
 
 
 

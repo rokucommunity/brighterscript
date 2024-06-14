@@ -1724,12 +1724,15 @@ export class Util {
         expressionWalker(expression);
 
         const scope = file.program.getFirstScopeForFile(file);
-        const filteredVarNames = [...uniqueVarNames].filter((varName: string) => {
-            const varNameLower = varName.toLowerCase();
-            // TODO: include namespaces in this filter
-            return !scope.getEnumMap().has(varNameLower) &&
-                !scope.getConstMap().has(varNameLower);
-        });
+        let filteredVarNames = [...uniqueVarNames];
+        if (scope) {
+            filteredVarNames = filteredVarNames.filter((varName: string) => {
+                const varNameLower = varName.toLowerCase();
+                // TODO: include namespaces in this filter
+                return !scope.getEnumMap().has(varNameLower) &&
+                    !scope.getConstMap().has(varNameLower);
+            });
+        }
 
         return { expressions: expressions, varExpressions: variableExpressions, uniqueVarNames: filteredVarNames };
     }
