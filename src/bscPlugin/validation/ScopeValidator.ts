@@ -14,7 +14,7 @@ import type { Token } from '../../lexer/Token';
 import { AstNodeKind } from '../../parser/AstNode';
 import type { AstNode } from '../../parser/AstNode';
 import type { Expression } from '../../parser/AstNode';
-import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression } from '../../parser/Expression';
+import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression, LiteralExpression } from '../../parser/Expression';
 import { CallExpression } from '../../parser/Expression';
 import { createVisitor } from '../../astUtils/visitors';
 import type { BscType } from '../../types/BscType';
@@ -263,7 +263,7 @@ export class ScopeValidator {
         if (callName !== 'createobject' || !isLiteralExpression(call?.args[0])) {
             return;
         }
-        const firstParamToken = (call?.args[0] as any)?.tokens?.value;
+        const firstParamToken = (call?.args[0] as LiteralExpression)?.tokens?.value;
         const firstParamStringValue = firstParamToken?.text?.replace(/"/g, '');
         if (!firstParamStringValue) {
             return;
@@ -272,7 +272,7 @@ export class ScopeValidator {
 
         //if this is a `createObject('roSGNode'` call, only support known sg node types
         if (firstParamStringValueLower === 'rosgnode' && isLiteralExpression(call?.args[1])) {
-            const componentName: Token = (call?.args[1] as any)?.tokens.value;
+            const componentName: Token = call?.args[1]?.tokens.value;
             //don't validate any components with a colon in their name (probably component libraries, but regular components can have them too).
             if (!componentName || componentName?.text?.includes(':')) {
                 return;
@@ -297,7 +297,7 @@ export class ScopeValidator {
             this.addDiagnostic({
                 file: file as BscFile,
                 ...DiagnosticMessages.unknownBrightScriptComponent(firstParamStringValue),
-                range: firstParamToken.location?.location?.range
+                range: firstParamToken.location?.range
             });
         } else {
             // This is valid brightscript component

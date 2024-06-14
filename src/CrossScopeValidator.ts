@@ -19,6 +19,7 @@ import { ParseMode } from './parser/Parser';
 import { URI } from 'vscode-uri';
 import { globalFile } from './globalCallables';
 import type { DottedGetExpression, VariableExpression } from './parser/Expression';
+import type { InheritableType } from './types';
 
 
 interface FileSymbolPair {
@@ -97,9 +98,9 @@ export class ProvidedNode {
                     typesToTry.push(currentType.defaultMemberType);
                 }
                 if (isInheritableType(currentType)) {
-                    let inheritableType = currentType as any;
+                    let inheritableType = currentType;
                     while (inheritableType?.parentType) {
-                        let parentType = inheritableType.parentType;
+                        let parentType = inheritableType.parentType as BscType;
                         if (isReferenceType(inheritableType.parentType)) {
                             const fullName = inheritableType.parentType.fullName;
                             if (fullName.includes('.')) {
@@ -110,7 +111,7 @@ export class ProvidedNode {
                             }
                         }
                         typesToTry.push(parentType);
-                        inheritableType = parentType;
+                        inheritableType = parentType as InheritableType;
                     }
 
                 }

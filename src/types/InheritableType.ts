@@ -149,15 +149,14 @@ export abstract class InheritableType extends BscType {
     }
 
     protected isAncestorUnresolvedReferenceType() {
-        let p = this as InheritableType;
+        let p = this as InheritableType | ReferenceType;
         while (p) {
             if (isReferenceType(p) && !p.isResolvable()) {
                 return true;
             }
-            p = (p as any).parentType;
+            p = (p as InheritableType).parentType;
 
         }
         return false;
     }
 }
-

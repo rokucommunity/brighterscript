@@ -749,7 +749,7 @@ export class BrsFile implements BscFile {
      * Returns false if no namespace was found with that name
      */
     public calleeStartsWithNamespace(callee: Expression) {
-        let left = callee as any;
+        let left = callee as AstNode;
         while (isDottedGetExpression(left)) {
             left = left.obj;
         }

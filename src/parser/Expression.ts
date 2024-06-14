@@ -31,6 +31,7 @@ import { createToken } from '../astUtils/creators';
 import { TypedFunctionType } from '../types';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { FunctionType } from '../types/FunctionType';
+import type { BaseFunctionType } from '../types/BaseFunctionType';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -191,8 +192,8 @@ export class CallExpression extends Expression {
         if (isCallableType(calleeType) && (!isReferenceType(calleeType.returnType) || calleeType.returnType?.isResolvable())) {
             return calleeType.returnType;
         }
-        if (!isReferenceType(calleeType) && (calleeType as any)?.returnType?.isResolvable()) {
-            return (calleeType as any).returnType;
+        if (!isReferenceType(calleeType) && (calleeType as BaseFunctionType)?.returnType?.isResolvable()) {
+            return (calleeType as BaseFunctionType).returnType;
         }
         return new TypePropertyReferenceType(calleeType, 'returnType');
     }
