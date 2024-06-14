@@ -193,13 +193,13 @@ describe('Statement', () => {
 
         it('has editable leading trivia', () => {
             for (const stmt of allStatements) {
-                const beforeTrivia = stmt.getLeadingTrivia();
+                const beforeTrivia = stmt.leadingTrivia;
                 expect(beforeTrivia.length, `${stmt.kind} already has leading trivia`).to.eq(0);
-                stmt.getLeadingTrivia().push(createToken(TokenKind.Comment, 'This is an added comment'));
-                const afterComments = stmt.getLeadingTrivia().filter(t => t.kind === TokenKind.Comment);
+                stmt.leadingTrivia.push(createToken(TokenKind.Comment, 'This is an added comment'));
+                const afterComments = stmt.leadingTrivia.filter(t => t.kind === TokenKind.Comment);
                 expect(afterComments.length, `${stmt.kind} leading trivia was not edited`).to.eq(1);
                 expect(afterComments[0].text, `${stmt.kind} leading trivia was not edited`).to.eq('This is an added comment');
-                stmt.getLeadingTrivia().pop();
+                stmt.leadingTrivia.pop();
             }
         });
 

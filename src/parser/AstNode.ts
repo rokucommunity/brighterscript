@@ -179,7 +179,7 @@ export abstract class AstNode {
      * Gets all the trivia (comments, whitespace) that is directly before the start of this node
      * Note: this includes all trivia that might start on the line of the previous node
      */
-    public getLeadingTrivia(): Token[] {
+    public get leadingTrivia(): Token[] {
         return [];
     }
 
@@ -187,7 +187,7 @@ export abstract class AstNode {
      * Gets any trivia that is directly before the end of the node
      * For example, this would return all trivia before a `end function` token of a FunctionExpression
      */
-    public getEndTrivia(): Token[] {
+    public get endTrivia(): Token[] {
         return [];
     }
 

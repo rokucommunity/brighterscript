@@ -637,9 +637,9 @@ export class Util {
         if (!node) {
             return '';
         }
-        const nodeTrivia = node?.getLeadingTrivia() ?? [];
+        const nodeTrivia = node.leadingTrivia ?? [];
         const leadingTrivia = isStatement(node)
-            ? [...(node.annotations?.map(anno => anno.getLeadingTrivia() ?? []).flat() ?? []), ...nodeTrivia]
+            ? [...(node.annotations?.map(anno => anno.leadingTrivia ?? []).flat() ?? []), ...nodeTrivia]
             : nodeTrivia;
         const tokens = leadingTrivia?.filter(t => t.kind === TokenKind.Newline || t.kind === TokenKind.Comment);
         const comments = [] as Token[];
@@ -1736,7 +1736,7 @@ export class Util {
 
 
     public concatAnnotationLeadingTrivia(stmt: Statement): Token[] {
-        return [...(stmt.annotations?.map(anno => anno.getLeadingTrivia() ?? []).flat() ?? []), ...stmt.getLeadingTrivia()];
+        return [...(stmt.annotations?.map(anno => anno.leadingTrivia ?? []).flat() ?? []), ...stmt.leadingTrivia];
     }
 
     /**
@@ -2288,12 +2288,12 @@ export class Util {
 
 
     public hasLeadingComments(input: Token | AstNode) {
-        const leadingTrivia = isToken(input) ? input?.leadingTrivia : input?.getLeadingTrivia() ?? [];
+        const leadingTrivia = isToken(input) ? input?.leadingTrivia : input?.leadingTrivia ?? [];
         return !!leadingTrivia.find(t => t.kind === TokenKind.Comment);
     }
 
     public getLeadingComments(input: Token | AstNode) {
-        const leadingTrivia = isToken(input) ? input?.leadingTrivia : input?.getLeadingTrivia() ?? [];
+        const leadingTrivia = isToken(input) ? input?.leadingTrivia : input?.leadingTrivia ?? [];
         return leadingTrivia.filter(t => t.kind === TokenKind.Comment);
     }
 
