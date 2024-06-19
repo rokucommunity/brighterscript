@@ -83,7 +83,7 @@ BrighterScript adds several new features to the BrightScript language such as na
       <img height="38" src="https://user-images.githubusercontent.com/2544493/192593254-f2a32cd4-0482-40de-830d-c1d09690c46b.png">
     </a>&nbsp;&nbsp;&nbsp;
     <a href="https://digitalpictureframe.tv">
-      <img height="38" src="https://private-user-images.githubusercontent.com/22185090/340058420-8475283f-cf9b-4a77-980e-76e0d466f2bb.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3MTg2MzcyMzEsIm5iZiI6MTcxODYzNjkzMSwicGF0aCI6Ii8yMjE4NTA5MC8zNDAwNTg0MjAtODQ3NTI4M2YtY2Y5Yi00YTc3LTk4MGUtNzZlMGQ0NjZmMmJiLnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNDA2MTclMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjQwNjE3VDE1MDg1MVomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTFjMTY4ZDVkZGQ3N2JiMzQ3N2U0N2E4ZTZjOWYyZjU4MzA4Yzk1YWJkMTJjMGFjOGNlODYwZTY2MGNkOWIyOGEmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0JmFjdG9yX2lkPTAma2V5X2lkPTAmcmVwb19pZD0wIn0.vX_9stlIBfaIjIG-svocewFbEI74ybzGAkXZDQ6Me-M">
+      <img height="38" src="https://s3.us-east-1.wasabisys.com/tv.digitalpictureframe.assets/logo-wide.png">
     </a>&nbsp;&nbsp;&nbsp;
     <a href="https://www.haystack.tv/">
       <img height="38" src="https://user-images.githubusercontent.com/2544493/192610056-d1b5a382-edf4-47b9-a6a5-d2d3ee9094cb.png">
