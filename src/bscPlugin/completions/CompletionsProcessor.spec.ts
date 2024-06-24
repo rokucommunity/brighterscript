@@ -701,7 +701,7 @@ describe('CompletionsProcessor', () => {
                 expect(
                     // message = alpha|
                     processor['getBrsFileCompletions'](util.createPosition(2, 39), file)
-                ).to.eql([]);
+                ).to.eql({ global: [], scoped: [] });
             });
 
             it('does not crash when functionExpression.body is undefined (somehow...)', () => {
@@ -718,7 +718,7 @@ describe('CompletionsProcessor', () => {
                 expect(
                     // message = alpha|
                     processor['getBrsFileCompletions'](util.createPosition(2, 39), file)
-                ).to.eql([]);
+                ).to.eql({ global: [], scoped: [] });
             });
         });
 
@@ -791,7 +791,7 @@ describe('CompletionsProcessor', () => {
                 });
                 program.validate();
                 //get the name of all global completions
-                const globalCompletions = program.globalScope.getAllFiles().flatMap(x => completionProcessor.getBrsFileCompletions(position, x as BrsFile)).map(x => x.label);
+                const globalCompletions = program.globalScope.getAllFiles().flatMap(x => completionProcessor.getBrsFileCompletions(position, x as BrsFile).global).map(x => x.label);
                 //filter out completions from global scope
                 completions = completions.filter(x => !globalCompletions.includes(x.label));
                 expect(completions).to.be.empty;
@@ -807,6 +807,31 @@ describe('CompletionsProcessor', () => {
                 `);
                 program.validate();
                 let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10));
+                let labels = completions.map(x => pick(x, 'label'));
+
+                expect(labels).to.deep.include({ label: 'count' });
+            });
+
+            it('finds parameters when file is in multiple scopes', () => {
+                program.setFile('source/main.bs', `
+                    sub Main(count = 1)
+                        firstName = "bob"
+                        age = 21
+                        shoeSize = 10
+                    end sub
+                `);
+
+                program.setFile<XmlFile>('components/MyNode.xml',
+                    trim`<?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Component2" extends="Component1">
+                        <script type="text/brightscript" uri="pkg:/source/main.bs" />
+                        <interface>
+                            <function name="sayHello3"/>
+                            <function name="sayHello4"/>
+                        </interface>
+                    </component>`);
+                program.validate();
+                let completions = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 10));
                 let labels = completions.map(x => pick(x, 'label'));
 
                 expect(labels).to.deep.include({ label: 'count' });
