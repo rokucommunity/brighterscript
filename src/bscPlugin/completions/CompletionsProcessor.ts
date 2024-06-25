@@ -22,6 +22,7 @@ import type { ClassStatement, FunctionStatement, NamespaceStatement, AliasStatem
 import type { Token } from '../../lexer/Token';
 import { createIdentifier } from '../../astUtils/creators';
 import type { FunctionExpression } from '../../parser/Expression';
+import { LogLevel } from '../../Logger';
 
 export class CompletionsProcessor {
     constructor(
@@ -32,38 +33,45 @@ export class CompletionsProcessor {
 
     public process() {
         let file = this.event.file;
+        this.event.program.logger.time(LogLevel.log, ['Processing completions'], () => {
+            //find the scopes for this file
+            let scopesForFile = this.event.program.getScopesForFile(file);
 
-        //find the scopes for this file
-        let scopesForFile = this.event.program.getScopesForFile(file);
+            //if there are no scopes, include the global scope so we at least get the built-in functions
+            scopesForFile = scopesForFile.length > 0 ? scopesForFile : [this.event.program.globalScope];
 
-        //if there are no scopes, include the global scope so we at least get the built-in functions
-        scopesForFile = scopesForFile.length > 0 ? scopesForFile : [this.event.program.globalScope];
+            //get the completions from all scopes for this file
+            let completionResults: CompletionItem[] = [];
+            let globalResults: CompletionItem[] = [];
 
-        //get the completions from all scopes for this file
-        let completionResults: CompletionItem[] = [];
-        if (isXmlFile(file)) {
-            completionResults = this.getXmlFileCompletions(this.event.position, file);
-        } else if (isBrsFile(file)) {
-            //handle script import completions
-            let scriptImport = util.getScriptImportAtPosition(file.ownScriptImports, this.event.position);
-            if (scriptImport) {
-                this.event.completions.push(...this.getScriptImportCompletions(file.program, file.pkgPath, scriptImport));
-                return;
+            if (isXmlFile(file)) {
+                completionResults = this.getXmlFileCompletions(this.event.position, file);
+            } else if (isBrsFile(file)) {
+                //handle script import completions
+                let scriptImport = util.getScriptImportAtPosition(file.ownScriptImports, this.event.position);
+                if (scriptImport) {
+                    this.event.completions.push(...this.getScriptImportCompletions(file.program, file.pkgPath, scriptImport));
+                    return;
+                }
+                const results = this.getBrsFileCompletions(this.event.position, file);
+                completionResults = results.scoped;
+                globalResults = results.global;
             }
-            completionResults = this.getBrsFileCompletions(this.event.position, file);
-        }
 
-        let allCompletions = completionResults.flat();
+            this.event.completions.push(...globalResults);
 
-        //only keep completions common to every scope for this file
-        let keyCounts = new Map<string, number>();
-        for (let completion of allCompletions) {
-            let key = `${completion.label}-${completion.kind}`;
-            keyCounts.set(key, keyCounts.has(key) ? keyCounts.get(key) + 1 : 1);
-            if (keyCounts.get(key) === scopesForFile.length) {
-                this.event.completions.push(completion);
+            let allCompletions = completionResults.flat();
+
+            //only keep completions common to every scope for this file
+            let keyCounts = new Map<string, number>();
+            for (let completion of allCompletions) {
+                let key = `${completion.label}-${completion.kind}`;
+                keyCounts.set(key, keyCounts.has(key) ? keyCounts.get(key) + 1 : 1);
+                if (keyCounts.get(key) === scopesForFile.length) {
+                    this.event.completions.push(completion);
+                }
             }
-        }
+        });
     }
 
 
@@ -143,18 +151,21 @@ export class CompletionsProcessor {
     /**
      * Get completions available at the given cursor. This aggregates all values from this file and the current scope.
      */
-    public getBrsFileCompletions(position: Position, file: BrsFile): CompletionItem[] {
+    public getBrsFileCompletions(position: Position, file: BrsFile): { global: CompletionItem[]; scoped: CompletionItem[] } {
         let result = [] as CompletionItem[];
         const currentTokenByFilePosition = file.getTokenAt(position);
         const currentToken = currentTokenByFilePosition ?? file.getTokenAt(file.getClosestExpression(position)?.location?.range.start);
+
+        const emptyResult = { global: [], scoped: [] };
+
         if (!currentToken) {
-            return [];
+            return emptyResult;
         }
         const tokenKind = currentToken?.kind;
 
         //if cursor is after a comment, disable completions
         if (this.isPostionInComment(file, position)) {
-            return [];
+            return emptyResult;
         }
 
         let expression: AstNode;
@@ -165,7 +176,7 @@ export class CompletionsProcessor {
 
         if (file.tokenFollows(currentToken, TokenKind.Goto)) {
             let functionScope = file.getFunctionScopeAtPosition(position);
-            return this.getLabelCompletion(functionScope);
+            return { global: [], scoped: this.getLabelCompletion(functionScope) };
         }
 
         if (this.isTokenAdjacentTo(file, currentToken, TokenKind.Dot)) {
@@ -180,7 +191,7 @@ export class CompletionsProcessor {
             shouldLookForCallFuncMembers = true;
         } else if (this.isTokenAdjacentTo(file, currentToken, TokenKind.As)) {
             if (file.parseMode === ParseMode.BrightScript) {
-                return NativeTypeCompletions;
+                return { global: NativeTypeCompletions, scoped: [] };
             }
             expression = file.getClosestExpression(this.event.position);
             symbolTableLookupFlag = SymbolTypeFlag.typetime;
@@ -201,7 +212,7 @@ export class CompletionsProcessor {
         }
 
         if (!expression) {
-            return [];
+            return emptyResult;
         }
 
         const tokenBefore = file.getTokenBefore(file.getClosestToken(expression.location?.range?.start));
@@ -234,14 +245,25 @@ export class CompletionsProcessor {
             return symbolTableToUse;
         }
 
-        let gotSymbolsFromThisFile = false;
-        let gotSymbolsFromGlobal = false;
-        const shouldLookInNamespace: NamespaceStatement = !(shouldLookForMembers || shouldLookForCallFuncMembers) && expression.findAncestor(isNamespaceStatement);
+        const areMembers = (shouldLookForMembers || shouldLookForCallFuncMembers);
+        const notMembers = !areMembers;
+        const isAfterNew = tokenBefore?.kind === TokenKind.New;
+        const shouldLookInNamespace: NamespaceStatement = notMembers && expression.findAncestor(isNamespaceStatement);
 
         const containingClassStmt = expression.findAncestor<ClassStatement>(isClassStatement);
         const containingNamespace = expression.findAncestor<NamespaceStatement>(isNamespaceStatement);
         const containingNamespaceName = containingNamespace?.getName(ParseMode.BrighterScript);
         const containingFunctionExpression = expression.findAncestor<FunctionExpression>(isFunctionExpression);
+        const tokenIsLiteralString = (tokenKind === TokenKind.StringLiteral || tokenKind === TokenKind.TemplateStringQuasi);
+
+        const globalCompletions: CompletionItem[] = [];
+        if (!tokenIsLiteralString && notMembers && !isAfterNew && this.event.program?.globalScope) {
+            let globalSymbols: BscSymbol[] = this.event.program.globalScope.symbolTable.getOwnSymbols(symbolTableLookupFlag) ?? [];
+            if (symbolTableLookupFlag === SymbolTypeFlag.runtime) {
+                globalSymbols.push(...this.getGlobalValues());
+            }
+            globalCompletions.push(...this.getSymbolsCompletion(globalSymbols));
+        }
 
         for (const scope of this.event.scopes) {
             if (tokenKind === TokenKind.StringLiteral || tokenKind === TokenKind.TemplateStringQuasi) {
@@ -252,7 +274,7 @@ export class CompletionsProcessor {
             const symbolTable = getSymbolTableForLookups();
             let currentSymbols: BscSymbol[] = [];
 
-            if (shouldLookForMembers || shouldLookForCallFuncMembers) {
+            if (areMembers) {
                 currentSymbols = symbolTable?.getAllSymbols(symbolTableLookupFlag) ?? [];
                 const tokenType = expression.getType({ flags: SymbolTypeFlag.runtime });
                 if (isClassType(tokenType)) {
@@ -265,15 +287,12 @@ export class CompletionsProcessor {
                     });
                 }
             } else {
-                // get symbols directly from current symbol table and scope
-                if (!gotSymbolsFromThisFile) {
-                    currentSymbols = symbolTable?.getOwnSymbols(symbolTableLookupFlag) ?? [];
+                currentSymbols = symbolTable?.getOwnSymbols(symbolTableLookupFlag) ?? [];
 
-                    if (containingFunctionExpression) {
-                        currentSymbols.push(...containingFunctionExpression.getSymbolTable().getOwnSymbols(symbolTableLookupFlag));
-                    }
-                    gotSymbolsFromThisFile = true;
+                if (containingFunctionExpression) {
+                    currentSymbols.push(...containingFunctionExpression.getSymbolTable().getOwnSymbols(symbolTableLookupFlag));
                 }
+
                 if (shouldLookInNamespace) {
                     const nsNameParts = shouldLookInNamespace.getNameParts();
                     let nameSpaceTypeSofar: BscType;
@@ -290,31 +309,18 @@ export class CompletionsProcessor {
                         currentSymbols.push(...nameSpaceTypeSofar.getMemberTable().getAllSymbols(symbolTableLookupFlag));
                     }
                 }
-
                 currentSymbols.push(...this.getScopeSymbolCompletions(file, scope, symbolTableLookupFlag));
-
-                // get global symbols
-                if (!gotSymbolsFromGlobal) {
-                    currentSymbols.push(...this.event.program.globalScope.symbolTable.getOwnSymbols(symbolTableLookupFlag));
-                    if (symbolTableLookupFlag === SymbolTypeFlag.runtime) {
-                        currentSymbols.push(...this.getGlobalValues());
-                    }
-                    gotSymbolsFromGlobal = true;
-                }
             }
 
             let ignoreAllPropertyNames = false;
 
-            // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
-            switch (tokenBefore?.kind) {
-                case TokenKind.New:
-                    //we are after a new keyword; so we can only be namespaces that have a class or classes at this point
-                    currentSymbols = currentSymbols.filter(symbol => isClassType(symbol.type) || this.isNamespaceTypeWithMemberType(symbol.type, isClassType));
-                    ignoreAllPropertyNames = true;
-                    break;
+            if (isAfterNew) {
+                //we are after a new keyword; so we can only be namespaces that have a class or classes at this point
+                currentSymbols = currentSymbols.filter(symbol => isClassType(symbol.type) || this.isNamespaceTypeWithMemberType(symbol.type, isClassType));
+                ignoreAllPropertyNames = true;
             }
 
-            result.push(...this.getSymbolsCompletion(currentSymbols, shouldLookForMembers || shouldLookForCallFuncMembers));
+            result.push(...this.getSymbolsCompletion(currentSymbols, areMembers));
             if (shouldLookForMembers && currentSymbols.length === 0 && !ignoreAllPropertyNames) {
                 // could not find members of actual known types.. just try everything
                 result.push(...this.getPropertyNameCompletions(scope),
@@ -325,7 +331,7 @@ export class CompletionsProcessor {
             }
             scope.unlinkSymbolTable();
         }
-        return result;
+        return { global: globalCompletions, scoped: result };
     }
 
     private getScopeSymbolCompletions(file: BrsFile, scope: Scope, symbolTableLookupFlag: SymbolTypeFlag) {
