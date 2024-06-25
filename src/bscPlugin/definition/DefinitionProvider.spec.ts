@@ -49,12 +49,12 @@ describe('DefinitionProvider', () => {
                 m.customButton@.clickCustomButton()
             end sub
         `);
-        //   m.customButton@.click|CustomButon()
         expect(
+            //   m.customButton@.click|CustomButon()
             program.getDefinition(brsFile.srcPath, util.createPosition(2, 37))
         ).to.eql([{
             uri: URI.file(customButtonXml.srcPath).toString(),
-            range: util.createRange(4, 21, 4, 57)
+            range: util.createRange(4, 36, 4, 53)
         }, {
             uri: URI.file(customButtonBrs.srcPath).toString(),
             range: util.createRange(1, 21, 1, 38)

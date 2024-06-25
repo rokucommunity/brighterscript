@@ -119,6 +119,7 @@ export enum TokenKind {
     GetLastRunRunTimeError = 'GetLastRunRunTimeError',
     Goto = 'Goto',
     If = 'If',
+    In = 'In',
     Let = 'Let',
     Next = 'Next',
     Not = 'Not',
@@ -163,6 +164,8 @@ export enum TokenKind {
     EndInterface = 'EndInterface',
     Const = 'Const',
     Continue = 'Continue',
+    Typecast = 'Typecast',
+    Alias = 'Alias',
 
     //brighterscript source literals
     LineNumLiteral = 'LineNumLiteral',
@@ -322,7 +325,9 @@ export const Keywords: Record<string, TokenKind> = {
     throw: TokenKind.Throw,
     'end interface': TokenKind.EndInterface,
     endinterface: TokenKind.EndInterface,
-    const: TokenKind.Const
+    const: TokenKind.Const,
+    typecast: TokenKind.Typecast,
+    alias: TokenKind.Alias
 };
 //hide the constructor prototype method because it causes issues
 Keywords.constructor = undefined;
@@ -340,6 +345,21 @@ export type BlockTerminator =
     | TokenKind.EndInterface
     | TokenKind.Catch
     | TokenKind.EndTry;
+
+/** Set of keywords that end non-conditional compilation blocks. */
+export const BlockTerminators = [
+    TokenKind.Else,
+    TokenKind.EndFor,
+    TokenKind.Next,
+    TokenKind.EndIf,
+    TokenKind.EndWhile,
+    TokenKind.EndSub,
+    TokenKind.EndFunction,
+    TokenKind.EndNamespace,
+    TokenKind.EndInterface,
+    TokenKind.Catch,
+    TokenKind.EndTry
+];
 
 /** The set of operators valid for use in assignment statements. */
 export const AssignmentOperators = [
@@ -391,6 +411,7 @@ export const AllowedProperties = [
     TokenKind.GetLastRunRunTimeError,
     TokenKind.Goto,
     TokenKind.If,
+    TokenKind.In,
     TokenKind.Invalid,
     TokenKind.Let,
     TokenKind.Mod,
@@ -447,7 +468,9 @@ export const AllowedProperties = [
     TokenKind.Throw,
     TokenKind.EndInterface,
     TokenKind.Const,
-    TokenKind.Continue
+    TokenKind.Continue,
+    TokenKind.Typecast,
+    TokenKind.Alias
 ];
 
 /** List of TokenKind that are allowed as local var identifiers. */
@@ -482,7 +505,10 @@ export const AllowedLocalIdentifiers = [
     TokenKind.Catch,
     TokenKind.EndTry,
     TokenKind.Const,
-    TokenKind.Continue
+    TokenKind.Continue,
+    TokenKind.In,
+    TokenKind.Typecast,
+    TokenKind.Alias
 ];
 
 export const BrighterScriptSourceLiterals = [
@@ -614,11 +640,16 @@ export const DeclarableTypes = [
     TokenKind.Double,
     TokenKind.String,
     TokenKind.Object,
-    TokenKind.Interface,
     TokenKind.Dynamic,
     TokenKind.Void,
     TokenKind.Function
 ];
+
+/** List of TokenKind that will not break parsing a TypeExpression in Brighterscript*/
+export const AllowedTypeIdentifiers = [
+    ...AllowedProperties
+];
+
 
 /**
  * The tokens that might preceed a regex literal
@@ -663,3 +694,13 @@ export const PreceedingRegexTypes = new Set([
     TokenKind.Colon,
     TokenKind.Semicolon
 ]);
+
+/**
+ * The tokens that may be in leading trivia
+ */
+export const AllowedTriviaTokens: ReadonlyArray<TokenKind> = [
+    TokenKind.Newline,
+    TokenKind.Whitespace,
+    TokenKind.Comment,
+    TokenKind.Colon
+];

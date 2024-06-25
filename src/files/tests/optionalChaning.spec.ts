@@ -27,32 +27,32 @@ describe('optional chaining', () => {
         program.dispose();
     });
 
-    it('transpiles ?. properly', () => {
-        testTranspile(`
+    it('transpiles ?. properly', async () => {
+        await testTranspile(`
             sub main()
                 print m?.value
             end sub
         `);
     });
 
-    it('transpiles ?[ properly', () => {
-        testTranspile(`
+    it('transpiles ?[ properly', async () => {
+        await testTranspile(`
             sub main()
                 print m?["value"]
             end sub
         `);
     });
 
-    it(`transpiles '?.[`, () => {
-        testTranspile(`
+    it(`transpiles '?.[`, async () => {
+        await testTranspile(`
             sub main()
                 print m?["value"]
             end sub
         `);
     });
 
-    it(`transpiles '?@`, () => {
-        testTranspile(`
+    it(`transpiles '?@`, async () => {
+        await testTranspile(`
             sub main()
                 someXml = invalid
                 print someXml?@someAttr
@@ -60,8 +60,8 @@ describe('optional chaining', () => {
         `);
     });
 
-    it(`transpiles '?(`, () => {
-        testTranspile(`
+    it(`transpiles '?(`, async () => {
+        await testTranspile(`
             sub main()
                 localFunc = sub()
                 end sub
@@ -71,8 +71,8 @@ describe('optional chaining', () => {
         `);
     });
 
-    it('transpiles various use cases', () => {
-        testTranspile(`
+    it('transpiles various use cases', async () => {
+        await testTranspile(`
             sub main()
                 obj = {}
                 arr = []
@@ -80,12 +80,12 @@ describe('optional chaining', () => {
                 print arr?.value
                 print obj?.[0]
                 print obj?.getName()?.first?.second
-                print createObject("roByteArray")?.value
+                print createObject("roByteArray")?.Count
                 print createObject("roByteArray")?["0"]
-                print createObject("roList")?.value
+                print createObject("roList")?.Count
                 print createObject("roList")?["0"]
                 print createObject("roXmlList")?["0"]
-                print createObject("roDateTime")?.value
+                print createObject("roDateTime")?.GetYear
                 print createObject("roDateTime")?.GetTimeZoneOffset
                 print createObject("roSGNode", "Node")?[0]
                 print obj?.first?.second
@@ -96,8 +96,8 @@ describe('optional chaining', () => {
         `);
     });
 
-    it('includes final operator in chain', () => {
-        testTranspile(`
+    it('includes final operator in chain', async () => {
+        await testTranspile(`
             sub main()
                 if m.cardFolderStack <> invalid then
                     m?.cardFolderStack?.visible?.ither = false

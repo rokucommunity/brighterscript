@@ -1,7 +1,9 @@
 import type { Position } from 'vscode-languageserver';
 import { DiagnosticSeverity } from 'vscode-languageserver';
-import type { BsDiagnostic } from './interfaces';
-import type { TokenKind } from './lexer/TokenKind';
+import type { BsDiagnostic, TypeCompatibilityData } from './interfaces';
+import { TokenKind } from './lexer/TokenKind';
+import util from './util';
+import { SymbolTypeFlag } from './SymbolTypeFlag';
 
 /**
  * An object that keeps track of all possible error messages.
@@ -17,13 +19,16 @@ export let DiagnosticMessages = {
      *
      * @param name for local vars, it's the var name. for namespaced parts, it's the specific part that's unknown (`alpha.beta.charlie` would result in "cannot find name 'charlie')
      * @param fullName if a namespaced name, this is the full name `alpha.beta.charlie`, otherwise it's the same as `name`
+     * @param typeName if 'name' refers to a member, what is the the type it is a member of?
+     * @param typeDescriptor defaults to 'type' ... could also be 'namespace', etc.
      */
-    cannotFindName: (name: string, fullName?: string) => ({
-        message: `Cannot find name '${name}'`,
+    cannotFindName: (name: string, fullName?: string, typeName?: string, typeDescriptor = 'type') => ({
+        message: `Cannot find name '${name}'${typeName ? ` for ${typeDescriptor} '${typeName}'` : ''}`,
         code: 1001,
         data: {
             name: name,
-            fullName: fullName ?? name
+            fullName: fullName ?? name,
+            typeName: typeName ? typeName : undefined
         },
         severity: DiagnosticSeverity.Error
     }),
@@ -32,8 +37,8 @@ export let DiagnosticMessages = {
         code: 1002,
         severity: DiagnosticSeverity.Error
     }),
-    duplicateFunctionImplementation: (functionName: string, scopeName: string) => ({
-        message: `Duplicate function implementation for '${functionName}' when this file is included in scope '${scopeName}'.`,
+    duplicateFunctionImplementation: (functionName: string) => ({
+        message: `Duplicate function implementation for '${functionName}'.`,
         code: 1003,
         severity: DiagnosticSeverity.Error
     }),
@@ -128,18 +133,18 @@ export let DiagnosticMessages = {
         code: 1021,
         severity: DiagnosticSeverity.Error
     }),
-    namespacedClassCannotShareNamewithNonNamespacedClass: (nonNamespacedClassName: string) => ({
-        message: `Namespaced class cannot have the same name as a non-namespaced class '${nonNamespacedClassName}'`,
+    itemIsDeprecated: () => ({
+        message: `Item is deprecated`,
         code: 1022,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Hint
     }),
     cannotUseOverrideKeywordOnConstructorFunction: () => ({
         message: 'Override keyword is not allowed on class constructor method',
         code: 1023,
         severity: DiagnosticSeverity.Error
     }),
-    importStatementMustBeDeclaredAtTopOfFile: () => ({
-        message: `'import' statement must be declared at the top of the file`,
+    statementMustBeDeclaredAtTopOfFile: (statementKeyword: string) => ({
+        message: `'${statementKeyword}' statement must be declared at the top of the file`,
         code: 1024,
         severity: DiagnosticSeverity.Error
     }),
@@ -158,8 +163,8 @@ export let DiagnosticMessages = {
         code: 1027,
         severity: DiagnosticSeverity.Error
     }),
-    duplicateClassDeclaration: (scopeName: string, className: string) => ({
-        message: `Scope '${scopeName}' already contains a class with name '${className}'`,
+    nameCollision: (thisThingKind: string, thatThingKind: string, thatThingName: string) => ({
+        message: `${thisThingKind} has same name as ${thatThingKind} '${thatThingName}'`,
         code: 1028,
         severity: DiagnosticSeverity.Error
     }),
@@ -206,7 +211,7 @@ export let DiagnosticMessages = {
         code: 1036,
         severity: DiagnosticSeverity.Error
     }),
-    invalidFunctionReturnType: (typeText: string) => ({
+    __unused: (typeText: string) => ({
         message: `Function return type '${typeText}' is invalid`,
         code: 1037,
         severity: DiagnosticSeverity.Error
@@ -241,7 +246,7 @@ export let DiagnosticMessages = {
         code: 1043,
         severity: DiagnosticSeverity.Error
     }),
-    functionParameterTypeIsInvalid: (parameterName: string, typeText: string) => ({
+    __unused2: (parameterName: string, typeText: string) => ({
         message: `Function parameter '${parameterName}' is of invalid type '${typeText}'`,
         code: 1044,
         severity: DiagnosticSeverity.Error
@@ -309,7 +314,7 @@ export let DiagnosticMessages = {
         code: 1056,
         severity: DiagnosticSeverity.Error
     }),
-    libraryStatementMustBeDeclaredAtTopOfFile: () => ({
+    __unused5: () => ({
         message: `'library' statement must be declared at the top of the file`,
         code: 1057,
         severity: DiagnosticSeverity.Error
@@ -497,8 +502,8 @@ export let DiagnosticMessages = {
         code: 1093,
         severity: DiagnosticSeverity.Error
     }),
-    expectedHashElseIfToCloseHashIf: (startingLine: number) => ({
-        message: `Expected '#else if' to close '#if' conditional compilation statement starting on line ${startingLine}`,
+    expectedHashEndIfToCloseHashIf: (startingLine: number) => ({
+        message: `Expected '#end if' to close '#if' conditional compilation statement starting on line ${startingLine}`,
         code: 1094,
         severity: DiagnosticSeverity.Error
     }),
@@ -602,7 +607,7 @@ export let DiagnosticMessages = {
         code: 1115,
         severity: DiagnosticSeverity.Error
     }),
-    functionCannotHaveSameNameAsClass: (className: string) => ({
+    __unused6: (className: string) => ({
         message: `Function has same name as class '${className}'`,
         code: 1116,
         severity: DiagnosticSeverity.Error
@@ -637,7 +642,7 @@ export let DiagnosticMessages = {
         code: 1122,
         severity: DiagnosticSeverity.Error
     }),
-    cannotFindType: (typeName: string) => ({
+    __unused3: (typeName: string) => ({
         message: `Cannot find type with name '${typeName}'`,
         code: 1123,
         severity: DiagnosticSeverity.Error
@@ -657,7 +662,7 @@ export let DiagnosticMessages = {
         code: 1126,
         severity: DiagnosticSeverity.Error
     }),
-    duplicateEnumDeclaration: (scopeName: string, enumName: string) => ({
+    __unused7: (scopeName: string, enumName: string) => ({
         message: `Scope '${scopeName}' already contains an enum with name '${enumName}'`,
         code: 1127,
         severity: DiagnosticSeverity.Error
@@ -729,17 +734,133 @@ export let DiagnosticMessages = {
      *
      * @param name for function calls where we can't find the name of the function
      * @param fullName if a namespaced name, this is the full name `alpha.beta.charlie`, otherwise it's the same as `name`
+     * @param typeName if 'name' refers to a member, what is the the type it is a member of?
+     * @param typeDescriptor defaults to 'type' ... could also be 'namespace', etc.
      */
-    cannotFindFunction: (name: string, fullName?: string) => ({
-        message: `Cannot find function '${name}'`,
+    cannotFindFunction: (name: string, fullName?: string, typeName?: string, typeDescriptor = 'type') => ({
+        message: `Cannot find function '${name}'${typeName ? ` for ${typeDescriptor} '${typeName}'` : ''}`,
         code: 1140,
         data: {
             name: name,
-            fullName: fullName ?? name
+            fullName: fullName ?? name,
+            typeName: typeName ? typeName : undefined
         },
+        severity: DiagnosticSeverity.Error
+    }),
+    argumentTypeMismatch: (actualTypeString: string, expectedTypeString: string, data?: TypeCompatibilityData) => ({
+        message: `Argument of type '${actualTypeString}' is not compatible with parameter of type '${expectedTypeString}'${typeCompatibilityMessage(actualTypeString, expectedTypeString, data)}`,
+        data: data,
+        code: 1141,
+        severity: DiagnosticSeverity.Error
+    }),
+    returnTypeMismatch: (actualTypeString: string, expectedTypeString: string, data?: TypeCompatibilityData) => ({
+        message: `Type '${actualTypeString}' is not compatible with declared return type '${expectedTypeString}'${typeCompatibilityMessage(actualTypeString, expectedTypeString, data)}'`,
+        data: data,
+        code: 1142,
+        severity: DiagnosticSeverity.Error
+    }),
+    assignmentTypeMismatch: (actualTypeString: string, expectedTypeString: string, data?: TypeCompatibilityData) => ({
+        message: `Type '${actualTypeString}' is not compatible with type '${expectedTypeString}'${typeCompatibilityMessage(actualTypeString, expectedTypeString, data)}`,
+        data: data,
+        code: 1143,
+        severity: DiagnosticSeverity.Error
+    }),
+    operatorTypeMismatch: (operatorString: string, firstType: string, secondType = '') => ({
+        message: `Operator '${operatorString}' cannot be applied to type${secondType ? 's' : ''} '${firstType}'${secondType ? ` and '${secondType}'` : ''}`,
+        code: 1144,
+        severity: DiagnosticSeverity.Error
+    }),
+    incompatibleSymbolDefinition: (symbol: string, scopeName: string) => ({
+        message: `'${symbol}' is incompatible across these scopes: ${scopeName}`,
+        code: 1145,
+        severity: DiagnosticSeverity.Error
+    }),
+    memberAccessibilityMismatch: (memberName: string, accessModifierFlag: SymbolTypeFlag, definingClassName: string) => ({
+        message: `Member '${memberName}' is ${accessModifierNameFromFlag(accessModifierFlag)}${accessModifierAdditionalInfo(accessModifierFlag, definingClassName)}`, // TODO: Add scopes where it was defined
+        code: 1146,
+        severity: DiagnosticSeverity.Error
+    }),
+    typecastStatementMustBeDeclaredAtStart: () => ({
+        message: `'typecast' statement must be declared at the top of the file or beginning of function or namespace`,
+        code: 1147,
+        severity: DiagnosticSeverity.Error
+    }),
+    invalidTypecastStatementApplication: (foundApplication: string) => ({
+        message: `'typecast' statement can only be applied to 'm', but was applied to '${foundApplication}'`,
+        code: 1148,
+        severity: DiagnosticSeverity.Error
+    }),
+    itemCannotBeUsedAsType: (typeText: string) => ({
+        message: `'${typeText}' cannot be used as a type`,
+        code: 1149,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedNewlineInConditionalCompile: () => ({
+        message: `Expected newline in conditional compilation statement`,
+        code: 1151,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedTerminatorOnConditionalCompileBlock: () => ({
+        message: `Expected '#end if', '#else if', or '#else' to terminate conditional compilation block`,
+        code: 1152,
+        severity: DiagnosticSeverity.Error
+    }),
+    unsafeUnmatchedTerminatorInConditionalCompileBlock: (terminator: string) => ({
+        message: `Unsafe unmatched terminator '${terminator}' in conditional compilation block`,
+        code: 1153,
         severity: DiagnosticSeverity.Error
     })
 };
+export const defaultMaximumTruncationLength = 160;
+
+export function typeCompatibilityMessage(actualTypeString: string, expectedTypeString: string, data: TypeCompatibilityData) {
+    let message = '';
+    actualTypeString = data?.actualType?.toString() ?? actualTypeString;
+    expectedTypeString = data?.expectedType?.toString() ?? expectedTypeString;
+
+    if (data?.missingFields?.length > 0) {
+        message = `\n    Type '${actualTypeString}' is missing the following members of type '${expectedTypeString}': ` + util.truncate({
+            leadingText: ``,
+            trailingText: '',
+            itemSeparator: ', ',
+            items: data.missingFields,
+            partBuilder: (x) => x.name,
+            maxLength: defaultMaximumTruncationLength
+        });
+    } else if (data?.fieldMismatches?.length > 0) {
+        message = '. ' + util.truncate({
+            leadingText: `Type '${actualTypeString}' has incompatible members:`,
+            items: data.fieldMismatches,
+            itemSeparator: '',
+            partBuilder: (x) => `\n    member "${x.name}" should be '${x.expectedType}' but is '${x.actualType}'`,
+            maxLength: defaultMaximumTruncationLength
+        });
+    }
+    return message;
+}
+
+function accessModifierNameFromFlag(accessModifierFlag: SymbolTypeFlag) {
+    let result = TokenKind.Public;
+    // eslint-disable-next-line no-bitwise
+    if (accessModifierFlag & SymbolTypeFlag.private) {
+        result = TokenKind.Private;
+        // eslint-disable-next-line no-bitwise
+    } else if (accessModifierFlag & SymbolTypeFlag.protected) {
+        result = TokenKind.Protected;
+    }
+    return result.toLowerCase();
+}
+
+function accessModifierAdditionalInfo(accessModifierFlag: SymbolTypeFlag, className: string) {
+    // eslint-disable-next-line no-bitwise
+    if (accessModifierFlag & SymbolTypeFlag.private) {
+        return ` and only accessible from within class '${className}'`;
+        // eslint-disable-next-line no-bitwise
+    } else if (accessModifierFlag & SymbolTypeFlag.protected) {
+        return ` and only accessible from within class '${className}' and its subclasses`;
+    }
+    return TokenKind.Public;
+}
 
 export const DiagnosticCodeMap = {} as Record<keyof (typeof DiagnosticMessages), number>;
 export let diagnosticCodes = [] as number[];
