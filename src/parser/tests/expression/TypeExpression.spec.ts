@@ -11,7 +11,7 @@ import { UnionType } from '../../../types/UnionType';
 describe('TypeExpressions', () => {
 
     it('parses a type expressions after "as"', () => {
-        let { statements, diagnostics } = parse(`
+        let { ast, diagnostics } = parse(`
             sub foo(p1 as integer, p2 as string, p3 as Namespaced.SomeType)
                 print p1
                 print p2
@@ -20,8 +20,8 @@ describe('TypeExpressions', () => {
 
         `, ParseMode.BrighterScript);
         expectZeroDiagnostics(diagnostics);
-        expect(statements.length).to.eq(1);
-        const funcStmt = statements[0];
+        expect(ast.statements.length).to.eq(1);
+        const funcStmt = ast.statements[0];
         if (isFunctionStatement(funcStmt)) {
             expect(funcStmt.func.parameters.length).to.eq(3);
             for (const param of funcStmt.func.parameters) {
@@ -37,15 +37,15 @@ describe('TypeExpressions', () => {
     });
 
     it('parses a union expression of multiple types', () => {
-        let { statements, diagnostics } = parse(`
+        let { ast, diagnostics } = parse(`
             sub foo(p1 as integer or Namespaced.SomeType or string)
                 print p1
             end sub
 
         `, ParseMode.BrighterScript);
         expectZeroDiagnostics(diagnostics);
-        expect(statements.length).to.eq(1);
-        const funcStmt = statements[0];
+        expect(ast.statements.length).to.eq(1);
+        const funcStmt = ast.statements[0];
         if (isFunctionStatement(funcStmt)) {
             expect(funcStmt.func.parameters.length).to.eq(1);
             expect(isTypeExpression(funcStmt.func.parameters[0].typeExpression)).to.be.true;
@@ -58,15 +58,15 @@ describe('TypeExpressions', () => {
     });
 
     it('parses a union expression of multiple unknown types', () => {
-        let { statements, diagnostics } = parse(`
+        let { ast, diagnostics } = parse(`
             sub foo(p1 as Alpha or Beta or Charlie or Delta)
                 print p1
             end sub
 
         `, ParseMode.BrighterScript);
         expectZeroDiagnostics(diagnostics);
-        expect(statements.length).to.eq(1);
-        const funcStmt = statements[0];
+        expect(ast.statements.length).to.eq(1);
+        const funcStmt = ast.statements[0];
         if (isFunctionStatement(funcStmt)) {
             expect(funcStmt.func.parameters.length).to.eq(1);
             expect(isTypeExpression(funcStmt.func.parameters[0].typeExpression)).to.be.true;
@@ -79,15 +79,15 @@ describe('TypeExpressions', () => {
     });
 
     it('parses a union expression of multiple unknown namespaced types', () => {
-        let { statements, diagnostics } = parse(`
+        let { ast, diagnostics } = parse(`
             sub foo(p1 as NS1.Alpha or NS1.NS2.Beta or NS1.NS2.NS3.Charlie or Delta)
                 print p1
             end sub
 
         `, ParseMode.BrighterScript);
         expectZeroDiagnostics(diagnostics);
-        expect(statements.length).to.eq(1);
-        const funcStmt = statements[0];
+        expect(ast.statements.length).to.eq(1);
+        const funcStmt = ast.statements[0];
         if (isFunctionStatement(funcStmt)) {
             expect(funcStmt.func.parameters.length).to.eq(1);
             expect(isTypeExpression(funcStmt.func.parameters[0].typeExpression)).to.be.true;
@@ -100,15 +100,15 @@ describe('TypeExpressions', () => {
     });
 
     it('parses multiple union expressions on same line', () => {
-        let { statements, diagnostics } = parse(`
+        let { ast, diagnostics } = parse(`
             sub foo(p1 as Alpha or Beta or Charlie, p2 as Delta or Epsilon or Foxtrot or Gamma)
                 print p1
             end sub
 
         `, ParseMode.BrighterScript);
         expectZeroDiagnostics(diagnostics);
-        expect(statements.length).to.eq(1);
-        const funcStmt = statements[0];
+        expect(ast.statements.length).to.eq(1);
+        const funcStmt = ast.statements[0];
         if (isFunctionStatement(funcStmt)) {
             expect(funcStmt.func.parameters.length).to.eq(2);
             expect(isTypeExpression(funcStmt.func.parameters[0].typeExpression)).to.be.true;

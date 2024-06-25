@@ -160,8 +160,8 @@ describe('EnumStatement', () => {
         `, { mode: ParseMode.BrighterScript });
 
         expectZeroDiagnostics(parser);
-        expect(parser.statements[0]).instanceof(EnumStatement);
-        expect(parser.statements[1]).instanceof(InterfaceStatement);
+        expect(parser.ast.statements[0]).instanceof(EnumStatement);
+        expect(parser.ast.statements[1]).instanceof(InterfaceStatement);
     });
 
     it('allows enum at bottom of file', () => {
@@ -176,8 +176,8 @@ describe('EnumStatement', () => {
         `, { mode: ParseMode.BrighterScript });
 
         expectZeroDiagnostics(parser);
-        expect(parser.statements[0]).instanceof(InterfaceStatement);
-        expect(parser.statements[1]).instanceof(EnumStatement);
+        expect(parser.ast.statements[0]).instanceof(InterfaceStatement);
+        expect(parser.ast.statements[1]).instanceof(EnumStatement);
     });
 
     it('allows enum in namespace', () => {

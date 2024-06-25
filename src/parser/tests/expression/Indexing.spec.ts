@@ -17,7 +17,7 @@ import { util } from '../../../util';
 describe('parser indexing', () => {
     describe('one level', () => {
         it('dotted', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 identifier('foo'),
@@ -27,12 +27,12 @@ describe('parser indexing', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.exist;
-            expect(statements).not.to.be.null;
+            expect(ast.statements).to.exist;
+            expect(ast.statements).not.to.be.null;
         });
 
         it('bracketed', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 identifier('foo'),
@@ -43,13 +43,13 @@ describe('parser indexing', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.exist;
-            expect(statements).not.to.be.null;
+            expect(ast.statements).to.exist;
+            expect(ast.statements).not.to.be.null;
         });
 
         describe('dotted and bracketed', () => {
             it('single dot', () => {
-                let { statements, diagnostics } = Parser.parse([
+                let { ast, diagnostics } = Parser.parse([
                     identifier('_'),
                     token(TokenKind.Equal, '='),
                     identifier('foo'),
@@ -61,11 +61,11 @@ describe('parser indexing', () => {
                 ]);
 
                 expect(diagnostics).to.be.empty;
-                expect(statements[0]).to.be.instanceof(AssignmentStatement);
+                expect(ast.statements[0]).to.be.instanceof(AssignmentStatement);
             });
 
             it('multiple dots', () => {
-                let { diagnostics, statements } = Parser.parse([
+                let { ast, diagnostics } = Parser.parse([
                     identifier('_'),
                     token(TokenKind.Equal, '='),
                     identifier('foo'),
@@ -86,7 +86,7 @@ describe('parser indexing', () => {
                     DiagnosticMessages.unexpectedToken('.') // everything after the 2nd dot is ignored
                 ]);
                 // expect statement "_ = foo" to still be included
-                expect(statements.length).to.equal(1);
+                expect(ast.statements.length).to.equal(1);
             });
         });
 
@@ -228,7 +228,7 @@ describe('parser indexing', () => {
 
     describe('multi-level', () => {
         it('dotted', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 identifier('foo'),
@@ -238,11 +238,11 @@ describe('parser indexing', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
 
         it('bracketed', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 identifier('foo'),
@@ -259,11 +259,11 @@ describe('parser indexing', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
 
         it('mixed', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 identifier('foo'),
@@ -278,18 +278,18 @@ describe('parser indexing', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
     });
 
     describe('unfinished brackets', () => {
         it('parses expression inside of brackets', () => {
-            let { statements, diagnostics } = Parser.parse(`_ = foo[bar.baz.`);
+            let { ast, diagnostics } = Parser.parse(`_ = foo[bar.baz.`);
 
             expect(diagnostics.length).to.be.greaterThan(0);
-            expect(statements).to.be.lengthOf(1);
-            expect(isAssignmentStatement(statements[0])).to.be.true;
-            const assignStmt = statements[0] as AssignmentStatement;
+            expect(ast.statements).to.be.lengthOf(1);
+            expect(isAssignmentStatement(ast.statements[0])).to.be.true;
+            const assignStmt = ast.statements[0] as AssignmentStatement;
             expect(assignStmt.tokens.name.text).to.equal('_');
             expect(isIndexedGetExpression(assignStmt.value)).to.be.true;
             const indexedGetExpr = assignStmt.value as IndexedGetExpression;

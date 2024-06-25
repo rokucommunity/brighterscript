@@ -12,7 +12,7 @@ describe('parser', () => {
 
     describe('function expressions', () => {
         it('parses minimal empty function expressions', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.Function, 'function'),
@@ -24,11 +24,11 @@ describe('parser', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
 
         it('parses colon-separated function declarations', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.Function, 'function'),
@@ -43,11 +43,11 @@ describe('parser', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
 
         it('parses non-empty function expressions', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.Function, 'function'),
@@ -62,11 +62,11 @@ describe('parser', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
 
         it('parses functions with implicit-dynamic arguments', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.Function, 'function'),
@@ -81,11 +81,11 @@ describe('parser', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
 
         it('parses functions with typed arguments', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.Function, 'function'),
@@ -108,11 +108,11 @@ describe('parser', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
 
         it('parses functions with default argument expressions', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.Function, 'function'),
@@ -141,11 +141,11 @@ describe('parser', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
 
         it('parses functions with typed arguments and default expressions', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.Function, 'function'),
@@ -173,11 +173,11 @@ describe('parser', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
 
         it('parses return types', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.Function, 'function'),
@@ -191,13 +191,13 @@ describe('parser', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
     });
 
     describe('sub expressions', () => {
         it('parses minimal sub expressions', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.Sub, 'sub'),
@@ -209,11 +209,11 @@ describe('parser', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
 
         it('parses non-empty sub expressions', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.Sub, 'sub'),
@@ -228,11 +228,11 @@ describe('parser', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
 
         it('parses subs with implicit-dynamic arguments', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.Function, 'sub'),
@@ -247,11 +247,11 @@ describe('parser', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
 
         it('parses subs with typed arguments', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.Function, 'sub'),
@@ -274,11 +274,11 @@ describe('parser', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
 
         it('parses subs with default argument expressions', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.Sub, 'sub'),
@@ -307,11 +307,11 @@ describe('parser', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
 
         it('parses subs with typed arguments and default expressions', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.Sub, 'sub'),
@@ -339,13 +339,13 @@ describe('parser', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
     });
 
     describe('usage', () => {
         it('allows sub expressions in call arguments', () => {
-            const { statements, diagnostics } = Parser.parse([
+            const { ast, diagnostics } = Parser.parse([
                 identifier('acceptsCallback'),
                 token(TokenKind.LeftParen, '('),
                 token(TokenKind.Newline, '\\n'),
@@ -365,11 +365,11 @@ describe('parser', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
 
         it('allows function expressions in assignment RHS', () => {
-            const { statements, diagnostics } = Parser.parse([
+            const { ast, diagnostics } = Parser.parse([
                 identifier('anonymousFunction'),
                 token(TokenKind.Equal, '='),
 
@@ -386,7 +386,7 @@ describe('parser', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
     });
 

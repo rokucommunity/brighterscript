@@ -14,7 +14,7 @@ import { util } from '../../../util';
 describe('parser array literals', () => {
     describe('empty arrays', () => {
         it('on one line', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
@@ -23,11 +23,11 @@ describe('parser array literals', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
 
         it('on multiple lines', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
@@ -42,13 +42,13 @@ describe('parser array literals', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
     });
 
     describe('filled arrays', () => {
         it('on one line', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
@@ -62,11 +62,11 @@ describe('parser array literals', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
 
         it('on multiple lines with commas', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
@@ -84,11 +84,11 @@ describe('parser array literals', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
 
         it('on multiple lines without commas', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
@@ -104,13 +104,13 @@ describe('parser array literals', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
     });
 
     describe('contents', () => {
         it('can contain primitives', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
@@ -124,11 +124,11 @@ describe('parser array literals', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
 
         it('can contain other arrays', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
@@ -152,11 +152,11 @@ describe('parser array literals', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
 
         it('can contain expressions', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
@@ -171,19 +171,19 @@ describe('parser array literals', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
     });
 
     describe('unfinished', () => {
         it('will still be parsed', () => {
             // no closing brace:
-            let { statements, diagnostics } = Parser.parse(`_ = [1, data.foo`);
+            let { ast, diagnostics } = Parser.parse(`_ = [1, data.foo`);
 
             expectDiagnostics(diagnostics, [DiagnosticMessages.unmatchedLeftSquareBraceAfterArrayLiteral()]);
-            expect(statements).to.be.lengthOf(1);
-            expect(isAssignmentStatement(statements[0])).to.be.true;
-            const assignStmt = statements[0] as AssignmentStatement;
+            expect(ast.statements).to.be.lengthOf(1);
+            expect(isAssignmentStatement(ast.statements[0])).to.be.true;
+            const assignStmt = ast.statements[0] as AssignmentStatement;
             expect(isArrayLiteralExpression(assignStmt.value));
             const arryLitExpr = assignStmt.value as ArrayLiteralExpression;
             expect(isLiteralExpression(arryLitExpr.elements[0])).to.be.true;

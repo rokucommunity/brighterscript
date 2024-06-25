@@ -1125,20 +1125,20 @@ describe('util', () => {
 
     describe('getTokenDocumentation', () => {
         it('should return a string of the comment', () => {
-            const { statements } = Parser.parse(`
+            const { ast } = Parser.parse(`
                 ' This is a comment.
                 ' it has two lines
                 function getOne() as integer
                     return 1
                 end function
             `);
-            const func = (statements[0] as FunctionStatement).func;
+            const func = (ast.statements[0] as FunctionStatement).func;
             const docs = util.getNodeDocumentation(func);
             expect(docs).to.eql('This is a comment.\nit has two lines');
         });
 
         it('should pay attention to @param, @return, etc. (jsdoc tags)', () => {
-            const { statements } = Parser.parse(`
+            const { ast } = Parser.parse(`
                 ' Add 1 to a number
                 '
                 ' @public
@@ -1148,14 +1148,14 @@ describe('util', () => {
                     return num + 1
                 end function
             `);
-            const func = (statements[0] as FunctionStatement).func;
+            const func = (ast.statements[0] as FunctionStatement).func;
             const docs = util.getNodeDocumentation(func);
             expect(docs).to.eql('Add 1 to a number\n\n\n_@public_\n\n_@param_ {integer} the number to add to\n\n_@return_ {integer} the result');
         });
 
 
         it('only includes comments directly above token', () => {
-            const { statements } = Parser.parse(`
+            const { ast } = Parser.parse(`
                 const abc = "ABC" ' comment at end of line
 
                 ' plus one
@@ -1163,13 +1163,13 @@ describe('util', () => {
                     return num + 1
                 end function
             `);
-            const func = (statements[1] as FunctionStatement).func;
+            const func = (ast.statements[1] as FunctionStatement).func;
             const docs = util.getNodeDocumentation(func);
             expect(docs).to.eql('plus one');
         });
 
         it('allows jsdoc style comment blocks', () => {
-            const { statements } = Parser.parse(`
+            const { ast } = Parser.parse(`
                 ' /**
                 '  plus one
                 ' */
@@ -1177,13 +1177,13 @@ describe('util', () => {
                     return num + 1
                 end function
             `);
-            const func = (statements[0] as FunctionStatement).func;
+            const func = (ast.statements[0] as FunctionStatement).func;
             const docs = util.getNodeDocumentation(func);
             expect(docs).to.eql('plus one');
         });
 
         it('allows jsdoc style comment blocks with leading *', () => {
-            const { statements } = Parser.parse(`
+            const { ast } = Parser.parse(`
                 ' /**
                 '  * plus one
                 '  */
@@ -1191,7 +1191,7 @@ describe('util', () => {
                     return num + 1
                 end function
             `);
-            const func = (statements[0] as FunctionStatement).func;
+            const func = (ast.statements[0] as FunctionStatement).func;
             const docs = util.getNodeDocumentation(func);
             expect(docs).to.eql('plus one');
         });

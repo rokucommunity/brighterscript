@@ -11,7 +11,7 @@ import { util } from '../../../util';
 describe('parser prefix unary expressions', () => {
 
     it('parses unary \'not\'', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
             token(TokenKind.Not, 'not'),
@@ -20,11 +20,11 @@ describe('parser prefix unary expressions', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.length.greaterThan(0);
+        expect(ast.statements).to.be.length.greaterThan(0);
     });
 
     it('parses consecutive unary \'not\'', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
             token(TokenKind.Not, 'not'),
@@ -37,11 +37,11 @@ describe('parser prefix unary expressions', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.length.greaterThan(0);
+        expect(ast.statements).to.be.length.greaterThan(0);
     });
 
     it('parses unary \'-\'', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
             token(TokenKind.Minus, '-'),
@@ -50,11 +50,11 @@ describe('parser prefix unary expressions', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.length.greaterThan(0);
+        expect(ast.statements).to.be.length.greaterThan(0);
     });
 
     it('parses consecutive unary \'-\'', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
             token(TokenKind.Minus, '-'),
@@ -67,7 +67,7 @@ describe('parser prefix unary expressions', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.length.greaterThan(0);
+        expect(ast.statements).to.be.length.greaterThan(0);
     });
 
     it('location tracking', () => {

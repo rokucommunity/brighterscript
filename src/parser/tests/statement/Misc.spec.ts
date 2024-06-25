@@ -69,12 +69,12 @@ describe('parser', () => {
                     ${disallowedIdentifier} = true
                 end sub
             `);
-            let { statements, diagnostics } = Parser.parse(tokens);
+            let { ast, diagnostics } = Parser.parse(tokens);
             if (diagnostics.length === 0) {
                 console.log(DisallowedLocalIdentifiersText);
                 throw new Error(`'${disallowedIdentifier}' cannot be used as an identifier, but was not detected as an error`);
             }
-            statementList.push(statements);
+            statementList.push(ast.statements);
         });
     });
 
@@ -259,9 +259,9 @@ describe('parser', () => {
             end function
             `
         );
-        let { diagnostics, statements } = Parser.parse(tokens) as any;
+        let { ast, diagnostics } = Parser.parse(tokens) as any;
         expectZeroDiagnostics(diagnostics);
-        const mainStatements = statements[0].func.body.statements;
+        const mainStatements = ast.statements[0].func.body.statements;
 
         // 1st AA has no elements - `rem` denotes comment
         expect(mainStatements[0].value.elements.length).to.eq(0);
@@ -302,8 +302,8 @@ describe('parser', () => {
                 }
             end function
         `);
-        let { statements, diagnostics } = Parser.parse(tokens);
-        let element = ((statements as any)[0].func.body.statements[0].value.elements[0] as AAMemberExpression);
+        let { ast, diagnostics } = Parser.parse(tokens);
+        let element = ((ast.statements as any)[0].func.body.statements[0].value.elements[0] as AAMemberExpression);
         expect(diagnostics[0]?.message).not.to.exist;
         expect(element.tokens.key.text).to.equal('"has-second-layer"');
     });

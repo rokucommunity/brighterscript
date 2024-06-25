@@ -129,10 +129,6 @@ export class Parser {
         }
     }
 
-    public get statements() {
-        return this.ast.statements;
-    }
-
     /**
      * The top-level symbol table for the body of this file.
      */

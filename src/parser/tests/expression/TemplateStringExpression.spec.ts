@@ -54,16 +54,16 @@ describe('TemplateStringExpression', () => {
 
             it(`simple case`, () => {
                 let { tokens } = Lexer.scan(`a = \`hello      world\``);
-                let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+                let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
                 expect(diagnostics).to.be.lengthOf(0);
-                expect(statements[0]).instanceof(AssignmentStatement);
+                expect(ast.statements[0]).instanceof(AssignmentStatement);
             });
 
             it(`complex case`, () => {
                 let { tokens } = Lexer.scan(`a = \`hello \${a.text} world \${"template" + m.getChars()} test\``);
-                let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+                let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
                 expect(diagnostics).to.be.lengthOf(0);
-                expect(statements[0]).instanceof(AssignmentStatement);
+                expect(ast.statements[0]).instanceof(AssignmentStatement);
             });
 
             it(`complex case`, () => {
@@ -73,17 +73,17 @@ describe('TemplateStringExpression', () => {
                     the end.
                     goodnight\`
                 `);
-                let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+                let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
                 expect(diagnostics[0]?.message).not.to.exist;
-                expect(statements[0]).instanceof(AssignmentStatement);
+                expect(ast.statements[0]).instanceof(AssignmentStatement);
             });
 
             it(`complex case that tripped up the transpile tests`, () => {
 
                 let { tokens } = Lexer.scan('a = ["one", "two", `I am a complex example\n${a.isRunning(["a","b","c"])}`]');
-                let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+                let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
                 expectZeroDiagnostics(diagnostics);
-                expect(statements[0]).instanceof(AssignmentStatement);
+                expect(ast.statements[0]).instanceof(AssignmentStatement);
             });
         });
 

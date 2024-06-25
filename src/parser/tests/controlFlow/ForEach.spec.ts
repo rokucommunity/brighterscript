@@ -10,7 +10,7 @@ import util from '../../../util';
 
 describe('parser foreach loops', () => {
     it('requires a name and target', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             token(TokenKind.ForEach, 'for each'),
             identifier('word'),
             identifier('in'),
@@ -24,9 +24,9 @@ describe('parser foreach loops', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.exist;
+        expect(ast.statements).to.exist;
 
-        let forEach = statements[0] as any;
+        let forEach = ast.statements[0] as any;
         expect(forEach).to.be.instanceof(ForEachStatement);
 
         expect(forEach.tokens.item).to.deep.include(identifier('word'));
@@ -35,7 +35,7 @@ describe('parser foreach loops', () => {
     });
 
     it('allows \'next\' to terminate loop', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             token(TokenKind.ForEach, 'for each'),
             identifier('word'),
             identifier('in'),
@@ -49,8 +49,8 @@ describe('parser foreach loops', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.exist;
-        expect(statements).to.be.length.greaterThan(0);
+        expect(ast.statements).to.exist;
+        expect(ast.statements).to.be.length.greaterThan(0);
     });
 
     it('location tracking', () => {
@@ -62,7 +62,7 @@ describe('parser foreach loops', () => {
          * 1|   Rnd(a)
          * 2| end for
          */
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             {
                 kind: TokenKind.ForEach,
                 text: 'for each',
@@ -115,8 +115,8 @@ describe('parser foreach loops', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.lengthOf(1);
-        expect(statements[0].location.range).deep.include(
+        expect(ast.statements).to.be.lengthOf(1);
+        expect(ast.statements[0].location.range).deep.include(
             Range.create(0, 0, 2, 7)
         );
     });

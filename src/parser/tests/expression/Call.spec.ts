@@ -13,7 +13,7 @@ import { util } from '../../../util';
 
 describe('parser call expressions', () => {
     it('parses named function calls', () => {
-        const { statements, diagnostics } = Parser.parse([
+        const { ast, diagnostics } = Parser.parse([
             identifier('RebootSystem'),
             { kind: TokenKind.LeftParen, text: '(', location: null as any, leadingTrivia: [] },
             token(TokenKind.RightParen, ')'),
@@ -21,7 +21,7 @@ describe('parser call expressions', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.length.greaterThan(0);
+        expect(ast.statements).to.be.length.greaterThan(0);
     });
 
     it('does not invalidate the rest of the file on incomplete statement', () => {
@@ -32,9 +32,9 @@ describe('parser call expressions', () => {
             sub DoThingTwo()
             end sub
         `);
-        const { statements, diagnostics } = Parser.parse(tokens);
+        const { ast, diagnostics } = Parser.parse(tokens);
         expect(diagnostics).to.length.greaterThan(0);
-        expect(statements).to.be.length.greaterThan(0);
+        expect(ast.statements).to.be.length.greaterThan(0);
 
         //ALL of the diagnostics should be on the `DoThin` line
         let lineNumbers = diagnostics.map(x => x.range.start.line);
@@ -52,19 +52,19 @@ describe('parser call expressions', () => {
             sub DoThingTwo()
             end sub
         `);
-        const { statements, diagnostics } = Parser.parse(tokens);
+        const { ast, diagnostics } = Parser.parse(tokens);
         //there should only be 1 error
         expectDiagnostics(diagnostics, [
             DiagnosticMessages.unexpectedToken(':'),
             DiagnosticMessages.expectedRightParenAfterFunctionCallArguments()
         ]);
-        expect(statements).to.be.length.greaterThan(0);
+        expect(ast.statements).to.be.length.greaterThan(0);
         //the error should be BEFORE the `name = "bob"` statement
         expect(diagnostics[0].range.end.character).to.be.lessThan(25);
     });
 
     it('allows closing parentheses on separate line', () => {
-        const { statements, diagnostics } = Parser.parse([
+        const { ast, diagnostics } = Parser.parse([
             identifier('RebootSystem'),
             { kind: TokenKind.LeftParen, text: '(', location: null as any, leadingTrivia: [] },
             token(TokenKind.Newline, '\\n'),
@@ -74,11 +74,11 @@ describe('parser call expressions', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.length.greaterThan(0);
+        expect(ast.statements).to.be.length.greaterThan(0);
     });
 
     it('includes partial statements and expressions', () => {
-        const { statements, diagnostics } = Parser.parse(`
+        const { ast, diagnostics } = Parser.parse(`
             function processData(data)
                 data.foo.bar. = "hello"
                 data.foo.func().
@@ -94,8 +94,8 @@ describe('parser call expressions', () => {
             DiagnosticMessages.expectedPropertyNameAfterPeriod(),
             DiagnosticMessages.expectedPropertyNameAfterPeriod()
         ]);
-        expect(statements).to.be.lengthOf(1);
-        const bodyStatements = (statements[0] as FunctionStatement).func.body.statements;
+        expect(ast.statements).to.be.lengthOf(1);
+        const bodyStatements = (ast.statements[0] as FunctionStatement).func.body.statements;
         expect(bodyStatements).to.be.lengthOf(4); // each line is a statement
 
         // first should be: data.foo.bar = "hello"
@@ -127,7 +127,7 @@ describe('parser call expressions', () => {
     });
 
     it('accepts arguments', () => {
-        const { statements, diagnostics } = Parser.parse([
+        const { ast, diagnostics } = Parser.parse([
             identifier('add'),
             { kind: TokenKind.LeftParen, text: '(', location: null as any, leadingTrivia: [] },
             token(TokenKind.IntegerLiteral, '1'),
@@ -138,8 +138,8 @@ describe('parser call expressions', () => {
         ]) as any;
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.length.greaterThan(0);
-        expect(statements[0].expression.args).to.be.ok;
+        expect(ast.statements).to.be.length.greaterThan(0);
+        expect(ast.statements[0].expression.args).to.be.ok;
     });
 
     it('location tracking', () => {
@@ -149,7 +149,7 @@ describe('parser call expressions', () => {
          *  +----------------------
          * 0| foo("bar", "baz")
          */
-        const { statements, diagnostics } = Parser.parse([
+        const { ast, diagnostics } = Parser.parse([
             {
                 kind: TokenKind.Identifier,
                 text: 'foo',
@@ -202,15 +202,15 @@ describe('parser call expressions', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.lengthOf(1);
-        expect(statements[0].location?.range).to.deep.include(
+        expect(ast.statements).to.be.lengthOf(1);
+        expect(ast.statements[0].location?.range).to.deep.include(
             Range.create(0, 0, 0, 17)
         );
     });
 
     describe('unfinished', () => {
         it('continues parsing inside unfinished function calls', () => {
-            const { statements, diagnostics } = Parser.parse(`
+            const { ast, diagnostics } = Parser.parse(`
                 sub doSomething(data)
                     otherFunc(data.foo, data.bar[0]
                 end sub
@@ -221,8 +221,8 @@ describe('parser call expressions', () => {
                 DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
                 DiagnosticMessages.expectedNewlineOrColon()
             ]);
-            expect(statements).to.be.lengthOf(1);
-            const bodyStatements = (statements[0] as FunctionStatement).func.body.statements;
+            expect(ast.statements).to.be.lengthOf(1);
+            const bodyStatements = (ast.statements[0] as FunctionStatement).func.body.statements;
             expect(bodyStatements).to.be.lengthOf(1);
 
             // Function statement should still be parsed
@@ -260,7 +260,7 @@ describe('parser call expressions', () => {
         });
 
         it('gets correct diagnostic for missing close paren with invalid expression as arg', () => {
-            let { diagnostics, statements } = Parser.parse(`
+            let { ast, diagnostics } = Parser.parse(`
                 sub process(data)
                     someFunc(data.name. ,
                 end sub
@@ -268,8 +268,8 @@ describe('parser call expressions', () => {
             expectDiagnosticsIncludes(diagnostics, [
                 DiagnosticMessages.expectedRightParenAfterFunctionCallArguments()
             ]);
-            expect(statements).to.be.lengthOf(1);
-            const bodyStatements = (statements[0] as FunctionStatement).func.body.statements;
+            expect(ast.statements).to.be.lengthOf(1);
+            const bodyStatements = (ast.statements[0] as FunctionStatement).func.body.statements;
             expect(bodyStatements).to.be.lengthOf(1);
         });
     });
