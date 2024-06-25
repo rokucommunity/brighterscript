@@ -11,19 +11,19 @@ describe('parser primary expressions', () => {
 
     it('parses numeric literals', () => {
         let equals = token(TokenKind.Equal, '=');
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             identifier('_'),
             equals,
             token(TokenKind.IntegerLiteral, '5'),
             EOF
         ]);
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.have.length.greaterThan(0);
+        expect(ast.statements).to.have.length.greaterThan(0);
     });
 
     it('parses string literals', () => {
         let equals = token(TokenKind.Equal, '=');
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             identifier('_'),
             equals,
             token(TokenKind.StringLiteral, 'hello'),
@@ -31,11 +31,11 @@ describe('parser primary expressions', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.have.length.greaterThan(0);
+        expect(ast.statements).to.have.length.greaterThan(0);
     });
 
     it('parses expressions in parentheses', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
             token(TokenKind.IntegerLiteral, '1'),
@@ -49,7 +49,7 @@ describe('parser primary expressions', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.have.length.greaterThan(0);
+        expect(ast.statements).to.have.length.greaterThan(0);
 
     });
 
@@ -162,16 +162,16 @@ describe('parser primary expressions', () => {
                 location: util.createLocation(1, 9, 1, 10) //TODO are these numbers right?
             }
         ]);
-        const statements = parser.ast.statements as AssignmentStatement[];
+        const assignments = parser.ast.statements as AssignmentStatement[];
 
         expectZeroDiagnostics(parser);
-        expect(statements[0].value.location.range).to.deep.include(
+        expect(assignments[0].value.location.range).to.deep.include(
             Range.create(0, 4, 0, 5)
         );
-        expect(statements[1].value.location.range).to.deep.include(
+        expect(assignments[1].value.location.range).to.deep.include(
             Range.create(1, 4, 1, 9)
         );
-        expect(statements[2].value.location.range).to.deep.include(
+        expect(assignments[2].value.location.range).to.deep.include(
             Range.create(2, 4, 2, 9)
         );
     });

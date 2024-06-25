@@ -20,26 +20,26 @@ describe('parser print statements', () => {
     });
 
     it('parses singular print statements', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             token(TokenKind.Print),
             token(TokenKind.StringLiteral, 'Hello, world'),
             EOF
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.exist;
-        expect(statements).not.to.be.null;
+        expect(ast.statements).to.exist;
+        expect(ast.statements).not.to.be.null;
     });
 
     it('supports empty print', () => {
-        let { statements, diagnostics } = Parser.parse([token(TokenKind.Print), EOF]);
+        let { ast, diagnostics } = Parser.parse([token(TokenKind.Print), EOF]);
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.exist;
-        expect(statements).not.to.be.null;
+        expect(ast.statements).to.exist;
+        expect(ast.statements).not.to.be.null;
     });
 
     it('parses print lists with no separator', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             token(TokenKind.Print),
             token(TokenKind.StringLiteral, 'Foo'),
             token(TokenKind.StringLiteral, 'bar'),
@@ -48,12 +48,12 @@ describe('parser print statements', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.exist;
-        expect(statements).not.to.be.null;
+        expect(ast.statements).to.exist;
+        expect(ast.statements).not.to.be.null;
     });
 
     it('parses print lists with separators', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             token(TokenKind.Print),
             token(TokenKind.StringLiteral, 'Foo'),
             token(TokenKind.Semicolon),
@@ -64,8 +64,8 @@ describe('parser print statements', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.exist;
-        expect(statements).not.to.be.null;
+        expect(ast.statements).to.exist;
+        expect(ast.statements).not.to.be.null;
     });
 
     it('location tracking', () => {
@@ -75,7 +75,7 @@ describe('parser print statements', () => {
          *  +--------------
          * 1| print "foo"
          */
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             {
                 kind: TokenKind.Print,
                 text: 'print',
@@ -103,8 +103,8 @@ describe('parser print statements', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.lengthOf(1);
-        expect(statements[0].location?.range).to.deep.include(Range.create(0, 0, 0, 11));
+        expect(ast.statements).to.be.lengthOf(1);
+        expect(ast.statements[0].location?.range).to.deep.include(Range.create(0, 0, 0, 11));
     });
 
     describe('transpile', () => {

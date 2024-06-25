@@ -11,7 +11,7 @@ import type { AssignmentStatement } from '../../Statement';
 describe('parser boolean expressions', () => {
 
     it('parses boolean ANDs', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
             token(TokenKind.True, 'true'),
@@ -21,11 +21,11 @@ describe('parser boolean expressions', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.length.greaterThan(0);
+        expect(ast.statements).to.be.length.greaterThan(0);
     });
 
     it('parses boolean ORs', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
             token(TokenKind.True, 'true'),
@@ -35,7 +35,7 @@ describe('parser boolean expressions', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.length.greaterThan(0);
+        expect(ast.statements).to.be.length.greaterThan(0);
     });
 
     it('location tracking', () => {

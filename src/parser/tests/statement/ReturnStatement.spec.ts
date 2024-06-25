@@ -9,7 +9,7 @@ import util from '../../../util';
 
 describe('parser return statements', () => {
     it('parses void returns', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             token(TokenKind.Function, 'function'),
             identifier('foo'),
             token(TokenKind.LeftParen, '('),
@@ -22,11 +22,11 @@ describe('parser return statements', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.ok;
+        expect(ast.statements).to.ok;
     });
 
     it('parses literal returns', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             token(TokenKind.Function, 'function'),
             identifier('foo'),
             token(TokenKind.LeftParen, '('),
@@ -40,11 +40,11 @@ describe('parser return statements', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.ok;
+        expect(ast.statements).to.be.ok;
     });
 
     it('parses expression returns', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             token(TokenKind.Function, 'function'),
             identifier('foo'),
             token(TokenKind.LeftParen, '('),
@@ -60,7 +60,7 @@ describe('parser return statements', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.ok;
+        expect(ast.statements).to.be.ok;
     });
 
     it('location tracking', () => {
@@ -72,7 +72,7 @@ describe('parser return statements', () => {
          * 1|   return 5
          * 2| end function
          */
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             token(TokenKind.Function, 'function'),
             identifier('foo'),
             token(TokenKind.LeftParen, '('),
@@ -98,7 +98,7 @@ describe('parser return statements', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect((statements[0] as FunctionStatement).func.body.statements[0]?.location?.range).to.exist.and.to.deep.include(
+        expect((ast.statements[0] as FunctionStatement).func.body.statements[0]?.location?.range).to.exist.and.to.deep.include(
             Range.create(1, 2, 1, 10)
         );
     });

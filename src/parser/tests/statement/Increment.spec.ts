@@ -9,19 +9,19 @@ import util from '../../../util';
 
 describe('parser postfix unary expressions', () => {
     it('parses postfix \'++\' for variables', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             identifier('foo'),
             token(TokenKind.PlusPlus, '++'),
             EOF
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.exist;
-        expect(statements).not.to.be.null;
+        expect(ast.statements).to.exist;
+        expect(ast.statements).not.to.be.null;
     });
 
     it('parses postfix \'--\' for dotted get expressions', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             identifier('obj'),
             token(TokenKind.Dot, '.'),
             identifier('property'),
@@ -30,12 +30,12 @@ describe('parser postfix unary expressions', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.exist;
-        expect(statements).not.to.be.null;
+        expect(ast.statements).to.exist;
+        expect(ast.statements).not.to.be.null;
     });
 
     it('parses postfix \'++\' for indexed get expressions', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             identifier('obj'),
             token(TokenKind.LeftSquareBracket, '['),
             identifier('property'),
@@ -45,8 +45,8 @@ describe('parser postfix unary expressions', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.exist;
-        expect(statements).not.to.be.null;
+        expect(ast.statements).to.exist;
+        expect(ast.statements).not.to.be.null;
     });
 
     it('disallows consecutive postfix operators', () => {
@@ -79,7 +79,7 @@ describe('parser postfix unary expressions', () => {
     });
 
     it('allows \'++\' at the end of a function', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             token(TokenKind.Sub, 'sub'),
             identifier('foo'),
             token(TokenKind.LeftParen, '('),
@@ -93,8 +93,8 @@ describe('parser postfix unary expressions', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.exist;
-        expect(statements).not.to.be.null;
+        expect(ast.statements).to.exist;
+        expect(ast.statements).not.to.be.null;
     });
 
     it('location tracking', () => {
@@ -104,7 +104,7 @@ describe('parser postfix unary expressions', () => {
          *  +--------------
          * 0| someNumber++
          */
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             {
                 kind: TokenKind.Identifier,
                 text: 'someNumber',
@@ -129,8 +129,8 @@ describe('parser postfix unary expressions', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.lengthOf(1);
-        expect(statements[0].location?.range).deep.include(
+        expect(ast.statements).to.be.lengthOf(1);
+        expect(ast.statements[0].location?.range).deep.include(
             Range.create(0, 0, 0, 12)
         );
     });

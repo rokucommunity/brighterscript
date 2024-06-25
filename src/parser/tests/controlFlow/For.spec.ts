@@ -11,7 +11,7 @@ import util from '../../../util';
 
 describe('parser for loops', () => {
     it('accepts a \'step\' clause', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             token(TokenKind.For, 'for'),
             identifier('i'),
             token(TokenKind.Equal, '='),
@@ -25,16 +25,16 @@ describe('parser for loops', () => {
             token(TokenKind.EndFor, 'end for'),
             token(TokenKind.Newline, '\n'),
             EOF
-        ]) as any;
+        ]);
 
-        const statement = statements[0] as ForStatement;
+        const statement = ast.statements[0] as ForStatement;
         expect(diagnostics[0]?.message).not.to.exist;
         expect(statement.increment).to.be.instanceof(LiteralExpression);
         expect((statement.increment as LiteralExpression).tokens.value.text).to.equal('2');
     });
 
     it('supports omitted \'step\' clause', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             token(TokenKind.For, 'for'),
             identifier('i'),
             token(TokenKind.Equal, '='),
@@ -46,10 +46,10 @@ describe('parser for loops', () => {
             token(TokenKind.EndFor, 'end for'),
             token(TokenKind.Newline, '\n'),
             EOF
-        ]) as any;
+        ]);
 
         expect(diagnostics[0]?.message).not.to.exist;
-        expect((statements[0] as ForStatement).increment).not.to.exist;
+        expect((ast.statements[0] as ForStatement).increment).not.to.exist;
     });
 
     it('catches unterminated for reaching function boundary', () => {
@@ -60,13 +60,13 @@ describe('parser for loops', () => {
             end function
         `);
         expect(parser.diagnostics).to.be.lengthOf(1);
-        expect(parser.statements).to.be.lengthOf(1);
+        expect(parser.ast.statements).to.be.lengthOf(1);
         const functionStatements = parser.ast.findChildren<FunctionStatement>(isFunctionStatement);
         expect(functionStatements[0].func.body.statements).to.be.lengthOf(1);
     });
 
     it('allows \'next\' to terminate loop', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             token(TokenKind.For, 'for'),
             identifier('i'),
             token(TokenKind.Equal, '='),
@@ -81,7 +81,7 @@ describe('parser for loops', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.length.greaterThan(0);
+        expect(ast.statements).to.be.length.greaterThan(0);
     });
 
     it('supports a single trailing colon after the `to` expression', () => {
@@ -102,7 +102,7 @@ describe('parser for loops', () => {
          * 1|   Rnd(i)
          * 2| end for
          */
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             {
                 kind: TokenKind.For,
                 text: 'for',
@@ -169,8 +169,8 @@ describe('parser for loops', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.lengthOf(1);
-        expect(statements[0].location.range).to.deep.include(
+        expect(ast.statements).to.be.lengthOf(1);
+        expect(ast.statements[0].location.range).to.deep.include(
             Range.create(0, 0, 2, 8)
         );
     });

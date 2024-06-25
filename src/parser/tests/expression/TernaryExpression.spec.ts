@@ -46,16 +46,16 @@ describe('ternary expressions', () => {
     });
 
     it(`supports boolean expression condition`, () => {
-        let { statements, diagnostics } = parseBs(`being = isZombie = false ? "human" : "zombie"`);
-        expect(statements[0]).to.be.instanceof(AssignmentStatement);
-        expect((statements[0] as AssignmentStatement).value).to.be.instanceof(TernaryExpression);
+        let { ast, diagnostics } = parseBs(`being = isZombie = false ? "human" : "zombie"`);
+        expect(ast.statements[0]).to.be.instanceof(AssignmentStatement);
+        expect((ast.statements[0] as AssignmentStatement).value).to.be.instanceof(TernaryExpression);
         expectZeroDiagnostics(diagnostics);
     });
 
     it(`supports function condition`, () => {
-        let { statements, diagnostics } = parseBs(`a = user.getAccount() ? "logged in" : "not logged in"`);
-        expect(statements[0]).to.be.instanceof(AssignmentStatement);
-        expect((statements[0] as AssignmentStatement).value).to.be.instanceof(TernaryExpression);
+        let { ast, diagnostics } = parseBs(`a = user.getAccount() ? "logged in" : "not logged in"`);
+        expect(ast.statements[0]).to.be.instanceof(AssignmentStatement);
+        expect((ast.statements[0] as AssignmentStatement).value).to.be.instanceof(TernaryExpression);
         expectZeroDiagnostics(diagnostics);
     });
 
@@ -100,13 +100,13 @@ describe('ternary expressions', () => {
 
     describe('in assignment', () => {
         it(`simple case`, () => {
-            let { statements, diagnostics } = parseBs(`a = true ? "human" : "zombie"`);
+            let { ast, diagnostics } = parseBs(`a = true ? "human" : "zombie"`);
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(AssignmentStatement);
+            expect(ast.statements[0]).instanceof(AssignmentStatement);
         });
 
         it(`multi line arrays case`, () => {
-            let { statements, diagnostics } = parseBs(`
+            let { ast, diagnostics } = parseBs(`
                 a = true ? [
                         "one"
                         "two"
@@ -118,27 +118,27 @@ describe('ternary expressions', () => {
                     ]
             `);
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(AssignmentStatement);
+            expect(ast.statements[0]).instanceof(AssignmentStatement);
         });
 
         it(`single line assoc array`, () => {
-            let { statements, diagnostics } = parseBs(`a = true ? {"a":"a"} : {}`);
+            let { ast, diagnostics } = parseBs(`a = true ? {"a":"a"} : {}`);
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(AssignmentStatement);
+            expect(ast.statements[0]).instanceof(AssignmentStatement);
         });
 
         it(`multi line assoc array`, () => {
-            let { statements, diagnostics } = parseBs(`
+            let { ast, diagnostics } = parseBs(`
                 a = true ? {"a":"a"} : {
                     "b": "test"
                 }`
             );
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(AssignmentStatement);
+            expect(ast.statements[0]).instanceof(AssignmentStatement);
         });
 
         it(`multi line assoc array - both sides`, () => {
-            let { statements, diagnostics } = parseBs(`
+            let { ast, diagnostics } = parseBs(`
                 a = true ? {
                         "a":"a"
                         "b":"b"
@@ -147,74 +147,74 @@ describe('ternary expressions', () => {
                     }
             `);
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(AssignmentStatement);
+            expect(ast.statements[0]).instanceof(AssignmentStatement);
         });
 
         it(`in func call with array args`, () => {
-            let { statements, diagnostics } = parseBs(`m.eatBrains(a.count() > 10 ? ["a","B"] : ["c", "d"])`);
+            let { ast, diagnostics } = parseBs(`m.eatBrains(a.count() > 10 ? ["a","B"] : ["c", "d"])`);
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(ExpressionStatement);
-            expect((statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
-            let callExpression = (statements[0] as ExpressionStatement).expression as CallExpression;
+            expect(ast.statements[0]).instanceof(ExpressionStatement);
+            expect((ast.statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
+            let callExpression = (ast.statements[0] as ExpressionStatement).expression as CallExpression;
             expect(callExpression.args.length).to.equal(1);
             expect(callExpression.args[0]).instanceof(TernaryExpression);
         });
 
         it(`in func call with aa args`, () => {
-            let { statements, diagnostics } = parseBs(`m.eatBrains(a.count() > 10 ? {"a":1} : {"b": ["c", "d"]})`);
+            let { ast, diagnostics } = parseBs(`m.eatBrains(a.count() > 10 ? {"a":1} : {"b": ["c", "d"]})`);
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(ExpressionStatement);
-            expect((statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
-            let callExpression = (statements[0] as ExpressionStatement).expression as CallExpression;
+            expect(ast.statements[0]).instanceof(ExpressionStatement);
+            expect((ast.statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
+            let callExpression = (ast.statements[0] as ExpressionStatement).expression as CallExpression;
             expect(callExpression.args.length).to.equal(1);
             expect(callExpression.args[0]).instanceof(TernaryExpression);
         });
 
         it(`in simple func call`, () => {
-            let { statements, diagnostics } = parseBs(`m.eatBrains(a = true ? "a" : "b")`);
+            let { ast, diagnostics } = parseBs(`m.eatBrains(a = true ? "a" : "b")`);
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(ExpressionStatement);
-            expect((statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
-            let callExpression = (statements[0] as ExpressionStatement).expression as CallExpression;
+            expect(ast.statements[0]).instanceof(ExpressionStatement);
+            expect((ast.statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
+            let callExpression = (ast.statements[0] as ExpressionStatement).expression as CallExpression;
             expect(callExpression.args.length).to.equal(1);
             expect(callExpression.args[0]).instanceof(TernaryExpression);
         });
 
         it(`in func call with more args`, () => {
-            let { statements, diagnostics } = parseBs(`m.eatBrains(a = true ? "a" : "b", true, 12)`);
+            let { ast, diagnostics } = parseBs(`m.eatBrains(a = true ? "a" : "b", true, 12)`);
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(ExpressionStatement);
-            expect((statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
-            let callExpression = (statements[0] as ExpressionStatement).expression as CallExpression;
+            expect(ast.statements[0]).instanceof(ExpressionStatement);
+            expect((ast.statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
+            let callExpression = (ast.statements[0] as ExpressionStatement).expression as CallExpression;
             expect(callExpression.args.length).to.equal(3);
             expect(callExpression.args[0]).instanceof(TernaryExpression);
         });
 
         it(`in func call with more args, and comparing value`, () => {
-            let { statements, diagnostics } = parseBs(`m.eatBrains((a = true ? "a" : "b").count() = 3, true, 12)`);
+            let { ast, diagnostics } = parseBs(`m.eatBrains((a = true ? "a" : "b").count() = 3, true, 12)`);
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(ExpressionStatement);
-            expect((statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
-            let callExpression = (statements[0] as ExpressionStatement).expression as CallExpression;
+            expect(ast.statements[0]).instanceof(ExpressionStatement);
+            expect((ast.statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
+            let callExpression = (ast.statements[0] as ExpressionStatement).expression as CallExpression;
             expect(callExpression.args.length).to.equal(3);
         });
 
         it(`in array`, () => {
-            let { statements, diagnostics } = parseBs(`a = [a = true ? {"a":"a"} : {"b":"b"}, "c"]`);
+            let { ast, diagnostics } = parseBs(`a = [a = true ? {"a":"a"} : {"b":"b"}, "c"]`);
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(AssignmentStatement);
-            expect((statements[0] as AssignmentStatement).value).instanceof(ArrayLiteralExpression);
-            let literalExpression = (statements[0] as AssignmentStatement).value as ArrayLiteralExpression;
+            expect(ast.statements[0]).instanceof(AssignmentStatement);
+            expect((ast.statements[0] as AssignmentStatement).value).instanceof(ArrayLiteralExpression);
+            let literalExpression = (ast.statements[0] as AssignmentStatement).value as ArrayLiteralExpression;
             expect(literalExpression.elements[0]).instanceOf(TernaryExpression);
             expect(literalExpression.elements[1]).instanceOf(LiteralExpression);
         });
 
         it(`in aa`, () => {
-            let { statements, diagnostics } = parseBs(`a = {"v1": a = true ? {"a":"a"} : {"b":"b"}, "v2": "c"}`);
+            let { ast, diagnostics } = parseBs(`a = {"v1": a = true ? {"a":"a"} : {"b":"b"}, "v2": "c"}`);
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(AssignmentStatement);
-            expect((statements[0] as AssignmentStatement).value).instanceof(AALiteralExpression);
-            let literalExpression = (statements[0] as AssignmentStatement).value as AALiteralExpression;
+            expect(ast.statements[0]).instanceof(AssignmentStatement);
+            expect((ast.statements[0] as AssignmentStatement).value).instanceof(AALiteralExpression);
+            let literalExpression = (ast.statements[0] as AssignmentStatement).value as AALiteralExpression;
             expect((literalExpression.elements[0] as AAMemberExpression).tokens.key.text).is.equal('"v1"');
             expect((literalExpression.elements[0] as any).value).instanceOf(TernaryExpression);
             expect((literalExpression.elements[1] as AAMemberExpression).tokens.key.text).is.equal('"v2"');
@@ -222,31 +222,31 @@ describe('ternary expressions', () => {
         });
 
         it(`in for each`, () => {
-            let { statements, diagnostics } = parseBs(
+            let { ast, diagnostics } = parseBs(
                 `for each person in isZombieMode ? zombies : humans
                     ? "person is " ; person
                 end for
             `);
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(ForEachStatement);
-            expect((statements[0] as ForEachStatement).target).instanceof(TernaryExpression);
+            expect(ast.statements[0]).instanceof(ForEachStatement);
+            expect((ast.statements[0] as ForEachStatement).target).instanceof(TernaryExpression);
         });
 
         it('creates TernaryExpression with missing alternate', () => {
-            const { statements } = parseBs(`
+            const { ast } = parseBs(`
                 print name = "bob" ? "human":
             `);
-            const expr = (statements[0] as PrintStatement).expressions[0];
+            const expr = (ast.statements[0] as PrintStatement).expressions[0];
             expect(expr).to.be.instanceof(TernaryExpression);
             expect(expr).property('alternate').to.be.undefined;
             expect(expr).property('consequent').not.to.be.undefined;
         });
 
         it('creates TernaryExpression with missing consequent', () => {
-            const { statements } = parseBs(`
+            const { ast } = parseBs(`
                 print name = "bob" ? : "human"
             `);
-            const expr = (statements[0] as PrintStatement).expressions[0];
+            const expr = (ast.statements[0] as PrintStatement).expressions[0];
             expect(expr).to.be.instanceof(TernaryExpression);
             expect(expr).property('consequent').to.be.undefined;
             expect(expr).property('alternate').not.to.be.undefined;

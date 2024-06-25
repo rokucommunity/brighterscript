@@ -35,9 +35,9 @@ describe('NullCoalescingExpression', () => {
             ]) {
 
                 let { tokens } = Lexer.scan(`${test} ?? "human"`);
-                let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+                let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
                 expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.unexpectedToken('??').code);
-                expect(statements).not.to.be.empty;
+                expect(ast.statements).not.to.be.empty;
             }
         });
     });
@@ -54,10 +54,10 @@ describe('NullCoalescingExpression', () => {
             ]) {
 
                 let { tokens } = Lexer.scan(`${test} ?? "human"`);
-                let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+                let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
                 expect(diagnostics).to.be.empty;
-                expect(statements[0]).instanceof(AssignmentStatement);
-                expect((statements[0] as AssignmentStatement).value).instanceof(NullCoalescingExpression);
+                expect(ast.statements[0]).instanceof(AssignmentStatement);
+                expect((ast.statements[0] as AssignmentStatement).value).instanceof(NullCoalescingExpression);
             }
         });
 
@@ -73,10 +73,10 @@ describe('NullCoalescingExpression', () => {
             ]) {
 
                 let { tokens } = Lexer.scan(`result = "text" ?? ${consequent}`);
-                let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+                let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
                 expectZeroDiagnostics(diagnostics);
-                expect(statements[0]).instanceof(AssignmentStatement);
-                expect((statements[0] as AssignmentStatement).value).instanceof(NullCoalescingExpression);
+                expect(ast.statements[0]).instanceof(AssignmentStatement);
+                expect((ast.statements[0] as AssignmentStatement).value).instanceof(NullCoalescingExpression);
             }
         });
     });
@@ -84,9 +84,9 @@ describe('NullCoalescingExpression', () => {
     describe('in assignment', () => {
         it(`simple case`, () => {
             let { tokens } = Lexer.scan(`a = user ?? {"id": "default"}`);
-            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(AssignmentStatement);
+            expect(ast.statements[0]).instanceof(AssignmentStatement);
         });
 
         it(`multi line arrays case`, () => {
@@ -94,69 +94,69 @@ describe('NullCoalescingExpression', () => {
           "one"
           "two"
           "three"]`);
-            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(AssignmentStatement);
+            expect(ast.statements[0]).instanceof(AssignmentStatement);
         });
         it(`multi line assoc array`, () => {
             let { tokens } = Lexer.scan(`a = user ?? {
           "b": "test"
           }`);
-            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(AssignmentStatement);
+            expect(ast.statements[0]).instanceof(AssignmentStatement);
         });
 
         it(`in func call with array args`, () => {
             let { tokens } = Lexer.scan(`m.eatBrains(user ?? defaultUser)`);
-            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(ExpressionStatement);
-            expect((statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
-            let callExpression = (statements[0] as ExpressionStatement).expression as CallExpression;
+            expect(ast.statements[0]).instanceof(ExpressionStatement);
+            expect((ast.statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
+            let callExpression = (ast.statements[0] as ExpressionStatement).expression as CallExpression;
             expect(callExpression.args.length).to.equal(1);
             expect(callExpression.args[0]).instanceof(NullCoalescingExpression);
         });
 
         it(`in func call with more args`, () => {
             let { tokens } = Lexer.scan(`m.eatBrains(user ?? defaultUser, true, 12)`);
-            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(ExpressionStatement);
-            expect((statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
-            let callExpression = (statements[0] as ExpressionStatement).expression as CallExpression;
+            expect(ast.statements[0]).instanceof(ExpressionStatement);
+            expect((ast.statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
+            let callExpression = (ast.statements[0] as ExpressionStatement).expression as CallExpression;
             expect(callExpression.args.length).to.equal(3);
             expect(callExpression.args[0]).instanceof(NullCoalescingExpression);
         });
 
         it(`in func call with more args, and comparing value`, () => {
             let { tokens } = Lexer.scan(`m.eatBrains((items ?? ["1","2"]).count() = 3, true, 12)`);
-            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(ExpressionStatement);
-            expect((statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
-            let callExpression = (statements[0] as ExpressionStatement).expression as CallExpression;
+            expect(ast.statements[0]).instanceof(ExpressionStatement);
+            expect((ast.statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
+            let callExpression = (ast.statements[0] as ExpressionStatement).expression as CallExpression;
             expect(callExpression.args.length).to.equal(3);
         });
 
         it(`in array`, () => {
             let { tokens } = Lexer.scan(`a = [letter ?? "b", "c"]`);
-            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(AssignmentStatement);
-            expect((statements[0] as AssignmentStatement).value).instanceof(ArrayLiteralExpression);
-            let literalExpression = (statements[0] as AssignmentStatement).value as ArrayLiteralExpression;
+            expect(ast.statements[0]).instanceof(AssignmentStatement);
+            expect((ast.statements[0] as AssignmentStatement).value).instanceof(ArrayLiteralExpression);
+            let literalExpression = (ast.statements[0] as AssignmentStatement).value as ArrayLiteralExpression;
             expect(literalExpression.elements[0]).instanceOf(NullCoalescingExpression);
             expect(literalExpression.elements[1]).instanceOf(LiteralExpression);
         });
 
         it(`in aa`, () => {
             let { tokens } = Lexer.scan(`a = {"v1": letter ?? "b", "v2": "c"}`);
-            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(AssignmentStatement);
-            expect((statements[0] as AssignmentStatement).value).instanceof(AALiteralExpression);
-            let literalExpression = (statements[0] as AssignmentStatement).value as AALiteralExpression;
+            expect(ast.statements[0]).instanceof(AssignmentStatement);
+            expect((ast.statements[0] as AssignmentStatement).value).instanceof(AALiteralExpression);
+            let literalExpression = (ast.statements[0] as AssignmentStatement).value as AALiteralExpression;
             expect((literalExpression.elements[0] as AAMemberExpression).tokens.key.text).is.equal('"v1"');
             expect((literalExpression.elements[0] as AAMemberExpression).value).instanceOf(NullCoalescingExpression);
             expect((literalExpression.elements[1] as AAMemberExpression).tokens.key.text).is.equal('"v2"');
@@ -168,10 +168,10 @@ describe('NullCoalescingExpression', () => {
                 ? "person is " ; person
             end for
             `);
-            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(ForEachStatement);
-            expect((statements[0] as ForEachStatement).target).instanceof(NullCoalescingExpression);
+            expect(ast.statements[0]).instanceof(ForEachStatement);
+            expect((ast.statements[0] as ForEachStatement).target).instanceof(NullCoalescingExpression);
         });
 
     });

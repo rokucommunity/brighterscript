@@ -9,7 +9,7 @@ import { util } from '../../../util';
 
 describe('parser variable declarations', () => {
     it('allows newlines before assignments', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             token(TokenKind.Newline),
             token(TokenKind.Newline),
             token(TokenKind.Newline),
@@ -20,12 +20,12 @@ describe('parser variable declarations', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.exist;
-        expect(statements).not.to.be.null;
+        expect(ast.statements).to.exist;
+        expect(ast.statements).not.to.be.null;
     });
 
     it('allows newlines after assignments', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             identifier('hasNewlines'),
             token(TokenKind.Equal),
             token(TokenKind.True),
@@ -34,12 +34,12 @@ describe('parser variable declarations', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.exist;
-        expect(statements).not.to.be.null;
+        expect(ast.statements).to.exist;
+        expect(ast.statements).not.to.be.null;
     });
 
     it('parses literal value assignments', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             identifier('foo'),
             token(TokenKind.Equal),
             token(TokenKind.IntegerLiteral, '5'),
@@ -47,12 +47,12 @@ describe('parser variable declarations', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.exist;
-        expect(statements).not.to.be.null;
+        expect(ast.statements).to.exist;
+        expect(ast.statements).not.to.be.null;
     });
 
     it('parses evaluated value assignments', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             identifier('bar'),
             token(TokenKind.Equal),
             token(TokenKind.IntegerLiteral, '5'),
@@ -62,12 +62,12 @@ describe('parser variable declarations', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.exist;
-        expect(statements).not.to.be.null;
+        expect(ast.statements).to.exist;
+        expect(ast.statements).not.to.be.null;
     });
 
     it('parses variable aliasing', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             identifier('baz'),
             token(TokenKind.Equal),
             identifier('foo'),
@@ -75,8 +75,8 @@ describe('parser variable declarations', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.exist;
-        expect(statements).not.to.be.null;
+        expect(ast.statements).to.exist;
+        expect(ast.statements).not.to.be.null;
     });
 
     it('location tracking', () => {

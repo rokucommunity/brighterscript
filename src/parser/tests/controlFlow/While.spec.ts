@@ -11,7 +11,7 @@ import util from '../../../util';
 describe('parser while statements', () => {
 
     it('while without exit', () => {
-        const { statements, diagnostics } = Parser.parse([
+        const { ast, diagnostics } = Parser.parse([
             token(TokenKind.While, 'while'),
             token(TokenKind.True, 'true'),
             token(TokenKind.Newline, '\n'),
@@ -23,11 +23,11 @@ describe('parser while statements', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.length.greaterThan(0);
+        expect(ast.statements).to.be.length.greaterThan(0);
     });
 
     it('while with exit', () => {
-        const { statements, diagnostics } = Parser.parse([
+        const { ast, diagnostics } = Parser.parse([
             token(TokenKind.While, 'while'),
             token(TokenKind.True, 'true'),
             token(TokenKind.Newline, '\n'),
@@ -41,7 +41,7 @@ describe('parser while statements', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.length.greaterThan(0);
+        expect(ast.statements).to.be.length.greaterThan(0);
     });
 
     it('supports trailing colon at end of condition', () => {
@@ -61,7 +61,7 @@ describe('parser while statements', () => {
             end function
         `);
         expect(parser.diagnostics).to.be.lengthOf(1);
-        expect(parser.statements).to.be.lengthOf(1);
+        expect(parser.ast.statements).to.be.lengthOf(1);
         const functionStatements = parser.ast.findChildren<FunctionStatement>(isFunctionStatement);
         expect(functionStatements[0].func.body.statements).to.be.lengthOf(1);
     });
@@ -75,7 +75,7 @@ describe('parser while statements', () => {
          * 1|   Rnd(0)
          * 2| end while
          */
-        const { statements, diagnostics } = Parser.parse([
+        const { ast, diagnostics } = Parser.parse([
             {
                 kind: TokenKind.While,
                 text: 'while',
@@ -114,8 +114,8 @@ describe('parser while statements', () => {
         ]);
 
         expect(diagnostics[0]?.message).not.to.exist;
-        expect(statements).to.be.lengthOf(1);
-        expect(statements[0].location.range).deep.include(
+        expect(ast.statements).to.be.lengthOf(1);
+        expect(ast.statements[0].location.range).deep.include(
             Range.create(0, 0, 2, 9)
         );
     });
