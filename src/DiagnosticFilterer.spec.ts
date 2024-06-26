@@ -6,12 +6,13 @@ import { createSandbox } from 'sinon';
 const sinon = createSandbox();
 let rootDir = s`${process.cwd()}/rootDir`;
 
-describe('DiagnosticFilterer', () => {
+describe.only('DiagnosticFilterer', () => {
 
     let filterer: DiagnosticFilterer;
     let options = {
         rootDir: rootDir,
         diagnosticFilters: [
+            'codename',
             //ignore these codes globally
             { codes: [1, 2, 3, 'X4'] },
             //ignore all codes from lib
@@ -86,18 +87,28 @@ describe('DiagnosticFilterer', () => {
             ).to.eql([11, 12, 13, 'X14']);
         });
 
+
+        it.only('works with single file src glob', () => {
+            expect(
+                filterer.filter(options, [
+                    getDiagnostic('codename', `${rootDir}/source/main.brs`) //remove
+                ]).map(x => x.code)
+            ).to.eql([]);
+        });
+
         describe('with negative globs', () => {
             let optionsWithNegatives = {
                 rootDir: rootDir,
                 diagnosticFilters: [
                     //ignore these codes globally
-                    { codes: [1, 2] },
+                    { codes: [1, 2, 'codename'] },
                     3,
                     4,
+                    'codename',
                     //ignore all codes from lib
                     { src: 'lib/**/*.brs' },
                     //un-ignore specific errors from lib/special
-                    { src: '!lib/special/**/*.brs', codes: [1, 2, 3] },
+                    { src: '!lib/special/**/*.brs', codes: [1, 2, 3, 'codename'] },
                     //re-ignore errors from one extra special file
                     { src: 'lib/special/all-reignored.brs' },
                     //un-ignore all codes from third special file
