@@ -435,6 +435,18 @@ describe('BrsFile', () => {
                 }]);
             });
 
+            it.only('recognizes diagnostic names', () => {
+                let file = program.setFile<BrsFile>('/source/main.brs', `
+                    sub Main()
+                        'bs:disable-next-line: cannot-find-name
+                        name = unknown
+                    end sub
+                `);
+                expect(file.commentFlags[0]).to.exist;
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
         });
 
         describe('bs:disable-line', () => {

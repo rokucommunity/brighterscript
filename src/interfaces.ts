@@ -29,6 +29,11 @@ export interface BsDiagnostic extends Diagnostic {
      * A generic data container where additional details of the diagnostic can be stored. These are stripped out before being sent to a languageclient, and not printed to the console.
      */
     data?: any;
+
+    /**
+     * A human readable name for the diagnostic to be used as alternative for the code
+     */
+    name?: string;
 }
 
 export interface DiagnosticContext {

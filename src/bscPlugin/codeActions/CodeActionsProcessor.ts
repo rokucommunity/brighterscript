@@ -22,8 +22,6 @@ export class CodeActionsProcessor {
         for (const diagnostic of this.event.diagnostics) {
             if (diagnostic.code === DiagnosticCodeMap.cannotFindName || diagnostic.code === DiagnosticCodeMap.cannotFindFunction) {
                 this.suggestCannotFindName(diagnostic as any);
-            } else if (diagnostic.code === DiagnosticCodeMap.classCouldNotBeFound) {
-                this.suggestClassImports(diagnostic as any);
             } else if (diagnostic.code === DiagnosticCodeMap.xmlComponentMissingExtendsAttribute) {
                 this.addMissingExtends(diagnostic as any);
             }
@@ -83,19 +81,6 @@ export class CodeActionsProcessor {
                 ...this.event.program.findFilesForNamespace(lowerName),
                 ...this.event.program.findFilesForEnum(lowerName)
             ]
-        );
-    }
-
-    private suggestClassImports(diagnostic: DiagnosticMessageType<'classCouldNotBeFound'>) {
-        //skip if not a BrighterScript file
-        if ((diagnostic.file as BrsFile).parseMode !== ParseMode.BrighterScript) {
-            return;
-        }
-        const lowerClassName = diagnostic.data.className.toLowerCase();
-        this.suggestImports(
-            diagnostic,
-            lowerClassName,
-            this.event.program.findFilesForClass(lowerClassName)
         );
     }
 

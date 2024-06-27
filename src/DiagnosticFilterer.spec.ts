@@ -6,7 +6,7 @@ import { createSandbox } from 'sinon';
 const sinon = createSandbox();
 let rootDir = s`${process.cwd()}/rootDir`;
 
-describe.only('DiagnosticFilterer', () => {
+describe('DiagnosticFilterer', () => {
 
     let filterer: DiagnosticFilterer;
     let options = {
@@ -88,7 +88,7 @@ describe.only('DiagnosticFilterer', () => {
         });
 
 
-        it.only('works with single file src glob', () => {
+        it('works with single file src glob', () => {
             expect(
                 filterer.filter(options, [
                     getDiagnostic('codename', `${rootDir}/source/main.brs`) //remove

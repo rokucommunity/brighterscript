@@ -13,7 +13,8 @@ export let DiagnosticMessages = {
     genericParserMessage: (message: string) => ({
         message: message,
         code: 1000,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'generic-parser-message'
     }),
     /**
      *
@@ -30,125 +31,149 @@ export let DiagnosticMessages = {
             fullName: fullName ?? name,
             typeName: typeName ? typeName : undefined
         },
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'cannot-find-name'
     }),
     mismatchArgumentCount: (expectedCount: number | string, actualCount: number) => ({
         message: `Expected ${expectedCount} arguments, but got ${actualCount}.`,
         code: 1002,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'mismatch-argument-count'
     }),
     duplicateFunctionImplementation: (functionName: string) => ({
         message: `Duplicate function implementation for '${functionName}'.`,
         code: 1003,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'duplicate-function-implementation'
     }),
     referencedFileDoesNotExist: () => ({
         message: `Referenced file does not exist.`,
         code: 1004,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'referenced-file-does-not-exist'
     }),
     xmlComponentMissingComponentDeclaration: () => ({
         message: `Missing a component declaration.`,
         code: 1005,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'xml-missing-component-declaration'
     }),
     xmlComponentMissingNameAttribute: () => ({
         message: `Component must have a name attribute.`,
         code: 1006,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'xml-missing-name-attribute'
     }),
     xmlComponentMissingExtendsAttribute: () => ({
         message: `Component is mising "extends" attribute and will automatically extend "Group" by default`,
         code: 1007,
-        severity: DiagnosticSeverity.Warning
+        severity: DiagnosticSeverity.Warning,
+        name: 'xml-missing-extends-attribute'
     }),
     xmlGenericParseError: (message: string) => ({
         //generic catchall xml parse error
         message: message,
         code: 1008,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'xml-generic-parse-error'
     }),
     unnecessaryScriptImportInChildFromParent: (parentComponentName: string) => ({
         message: `Unnecessary script import: Script is already imported in ancestor component '${parentComponentName}'.`,
         code: 1009,
-        severity: DiagnosticSeverity.Warning
+        severity: DiagnosticSeverity.Warning,
+        name: 'unnecessary-script-import'
     }),
     overridesAncestorFunction: (callableName: string, currentScopeName: string, parentFilePath: string, parentScopeName: string) => ({
         message: `Function '${callableName}' included in '${currentScopeName}' overrides function in '${parentFilePath}' included in '${parentScopeName}'.`,
         code: 1010,
-        severity: DiagnosticSeverity.Hint
+        severity: DiagnosticSeverity.Hint,
+        name: 'overrides-ancestor-function'
     }),
     localVarFunctionShadowsParentFunction: (scopeName: 'stdlib' | 'scope') => ({
         message: `Local variable function has same name as ${scopeName} function and will never be called.`,
         code: 1011,
-        severity: DiagnosticSeverity.Warning
+        severity: DiagnosticSeverity.Warning,
+        name: 'local-var-function-shadow'
     }),
     scriptImportCaseMismatch: (correctFilePath: string) => ({
         message: `Script import path does not match casing of actual file path '${correctFilePath}'.`,
         code: 1012,
-        severity: DiagnosticSeverity.Warning
+        severity: DiagnosticSeverity.Warning,
+        name: 'script-import-case-mismatch'
     }),
     fileNotReferencedByAnyOtherFile: () => ({
         message: `This file is not referenced by any other file in the project.`,
         code: 1013,
-        severity: DiagnosticSeverity.Warning
+        severity: DiagnosticSeverity.Warning,
+        name: 'file-not-referenced'
     }),
     unknownDiagnosticCode: (theUnknownCode: number) => ({
         message: `Unknown diagnostic code ${theUnknownCode}`,
         code: 1014,
-        severity: DiagnosticSeverity.Warning
+        severity: DiagnosticSeverity.Warning,
+        name: 'unknown-diagnostic-code'
     }),
     scriptSrcCannotBeEmpty: () => ({
         message: `Script import cannot be empty or whitespace`,
         code: 1015,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'script-import-empty'
     }),
     expectedIdentifierAfterKeyword: (keywordText: string) => ({
         message: `Expected identifier after '${keywordText}' keyword`,
         code: 1016,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-identifier-after-keyword'
     }),
     missingCallableKeyword: () => ({
         message: `Expected 'function' or 'sub' to preceed identifier`,
         code: 1017,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-callable-keyword'
     }),
     expectedValidTypeToFollowAsKeyword: () => ({
         message: `Expected valid type to follow 'as' keyword`,
         code: 1018,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-valid-type'
     }),
     bsFeatureNotSupportedInBrsFiles: (featureName) => ({
         message: `BrighterScript feature '${featureName}' is not supported in standard BrightScript files`,
         code: 1019,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'bs-feature-not-supported'
     }),
     brsConfigJsonIsDeprecated: () => ({
         message: `'brsconfig.json' is deprecated. Please rename to 'bsconfig.json'`,
         code: 1020,
-        severity: DiagnosticSeverity.Warning
+        severity: DiagnosticSeverity.Warning,
+        name: 'brsconfig-deprecated'
     }),
     bsConfigJsonHasSyntaxErrors: (message: string) => ({
         message: `Encountered syntax errors in bsconfig.json: ${message}`,
         code: 1021,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'bsconfig-syntax-errors'
     }),
     itemIsDeprecated: () => ({
         message: `Item is deprecated`,
         code: 1022,
-        severity: DiagnosticSeverity.Hint
+        severity: DiagnosticSeverity.Hint,
+        name: 'item-deprecated'
     }),
     cannotUseOverrideKeywordOnConstructorFunction: () => ({
         message: 'Override keyword is not allowed on class constructor method',
         code: 1023,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'override-keyword-on-constructor'
     }),
     statementMustBeDeclaredAtTopOfFile: (statementKeyword: string) => ({
         message: `'${statementKeyword}' statement must be declared at the top of the file`,
         code: 1024,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'must-be-declared-at-top'
     }),
-    methodDoesNotExistOnType: (methodName: string, className: string) => ({
+    __unused8: (methodName: string, className: string) => ({
         message: `Method '${methodName}' does not exist on type '${className}'`,
         code: 1025,
         severity: DiagnosticSeverity.Error
@@ -156,19 +181,22 @@ export let DiagnosticMessages = {
     duplicateIdentifier: (memberName: string) => ({
         message: `Duplicate identifier '${memberName}'`,
         code: 1026,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'duplicate-identifier'
     }),
     missingOverrideKeyword: (ancestorClassName: string) => ({
         message: `Method has no override keyword but is declared in ancestor class '${ancestorClassName}'`,
         code: 1027,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'missing-override-keyword'
     }),
     nameCollision: (thisThingKind: string, thatThingKind: string, thatThingName: string) => ({
         message: `${thisThingKind} has same name as ${thatThingKind} '${thatThingName}'`,
         code: 1028,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'name-collision'
     }),
-    classCouldNotBeFound: (className: string, scopeName: string) => ({
+    __unused9: (className: string, scopeName: string) => ({
         message: `Class '${className}' could not be found when this file is included in scope '${scopeName}'`,
         code: 1029,
         severity: DiagnosticSeverity.Error,
@@ -179,37 +207,44 @@ export let DiagnosticMessages = {
     expectedClassFieldIdentifier: () => ({
         message: `Expected identifier in class body`,
         code: 1030,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-identifier-in-body'
     }),
     expressionIsNotConstructable: (expressionType: string) => ({
         message: `Cannot use the 'new' keyword here because '${expressionType}' is not a constructable type`,
         code: 1031,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'cannot-use-new-keyword'
     }),
     expectedKeyword: (kind: TokenKind) => ({
         message: `Expected '${kind}' keyword`,
         code: 1032,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-keyword'
     }),
     expectedLeftParenAfterCallable: (callableType: string) => ({
         message: `Expected '(' after ${callableType}`,
         code: 1033,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-left-paren-after-callable'
     }),
     expectedNameAfterCallableKeyword: (callableType: string) => ({
         message: `Expected ${callableType} name after '${callableType}' keyword`,
         code: 1034,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-name-after-callable'
     }),
     expectedLeftParenAfterCallableName: (callableType: string) => ({
         message: `Expected '(' after ${callableType} name`,
         code: 1035,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-left-paren-after-callable-name'
     }),
     tooManyCallableParameters: (actual: number, max: number) => ({
         message: `Cannot have more than ${max} parameters but found ${actual})`,
         code: 1036,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'too-many-parameters'
     }),
     __unused: (typeText: string) => ({
         message: `Function return type '${typeText}' is invalid`,
@@ -219,32 +254,38 @@ export let DiagnosticMessages = {
     requiredParameterMayNotFollowOptionalParameter: (parameterName: string) => ({
         message: `Required parameter '${parameterName}' must be declared before any optional parameters`,
         code: 1038,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'required-parameter-may-not-follow-optional'
     }),
     expectedNewlineOrColon: () => ({
         message: `Expected newline or ':' at the end of a statement`,
         code: 1039,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-newline-or-colon'
     }),
     functionNameCannotEndWithTypeDesignator: (callableType: string, name: string, designator: string) => ({
         message: `${callableType} name '${name}' cannot end with type designator '${designator}'`,
         code: 1040,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'function-name-ends-with-type'
     }),
     callableBlockMissingEndKeyword: (callableType: string) => ({
         message: `Expected 'end ${callableType}' to terminate ${callableType} block`,
         code: 1041,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'callable-block-missing-end-keyword'
     }),
     mismatchedEndCallableKeyword: (expectedCallableType: string, actualCallableType: string) => ({
         message: `Expected 'end ${expectedCallableType?.replace(/^end\s*/, '')}' to terminate ${expectedCallableType} block but found 'end ${actualCallableType?.replace(/^end\s*/, '')}' instead.`,
         code: 1042,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'mismatched-end-callable-keyword'
     }),
     expectedParameterNameButFound: (text: string) => ({
         message: `Expected parameter name, but found '${text ?? ''}'`,
         code: 1043,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-parameter-name'
     }),
     __unused2: (parameterName: string, typeText: string) => ({
         message: `Function parameter '${parameterName}' is of invalid type '${typeText}'`,
@@ -254,65 +295,77 @@ export let DiagnosticMessages = {
     cannotUseReservedWordAsIdentifier: (name: string) => ({
         message: `Cannot use reserved word '${name}' as an identifier`,
         code: 1045,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'cannot-use-reserved-word'
     }),
     expectedOperatorAfterIdentifier: (operators: TokenKind[], name: string) => {
         operators = Array.isArray(operators) ? operators : [];
         return {
             message: `Expected operator ('${operators.join(`', '`)}') after idenfifier '${name}'`,
             code: 1046,
-            severity: DiagnosticSeverity.Error
+            severity: DiagnosticSeverity.Error,
+            name: 'expected-operator-after-identifier'
         };
     },
     expectedInlineIfStatement: () => ({
         message: `If/else statement within an inline if should be also inline`,
         code: 1047,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-inline-if'
     }),
     expectedFinalNewline: () => ({
         message: `Expected newline at the end of an inline if statement`,
         code: 1048,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-final-newline'
     }),
     couldNotFindMatchingEndKeyword: (keyword: string) => ({
         message: `Could not find matching 'end ${keyword}'`,
         code: 1049,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'could-not-find-matching-end-keyword'
     }),
     expectedCatchBlockInTryCatch: () => ({
         message: `Expected 'catch' block in 'try' statement`,
         code: 1050,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-catch'
     }),
     expectedEndForOrNextToTerminateForLoop: () => ({
         message: `Expected 'end for' or 'next' to terminate 'for' loop`,
         code: 1051,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-end-for'
     }),
     expectedInAfterForEach: (name: string) => ({
         message: `Expected 'in' after 'for each ${name}'`,
         code: 1052,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-in-for-each'
     }),
     expectedExpressionAfterForEachIn: () => ({
         message: `Expected expression after 'in' keyword from 'for each' statement`,
         code: 1053,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-expression-for-each'
     }),
     unexpectedColonBeforeIfStatement: () => ({
         message: `Colon before 'if' statement is not allowed`,
         code: 1054,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'unexpected-colon-before-if'
     }),
     expectedStringLiteralAfterKeyword: (keyword: string) => ({
         message: `Missing string literal after '${keyword}' keyword`,
         code: 1055,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-string-literal'
     }),
     keywordMustBeDeclaredAtRootLevel: (keyword: string) => ({
         message: `${keyword} must be declared at the root level`,
         code: 1056,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'keyword-must-be-root-level'
     }),
     __unused5: () => ({
         message: `'library' statement must be declared at the top of the file`,
@@ -322,122 +375,146 @@ export let DiagnosticMessages = {
     expectedEndIfElseIfOrElseToTerminateThenBlock: () => ({
         message: `Expected 'end if', 'else if', or 'else' to terminate 'then' block`,
         code: 1058,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-terminator-on-then'
     }),
     expectedEndTryToTerminateTryCatch: () => ({
         message: `Expected 'end try' to terminate 'try-catch' statement`,
         code: 1059,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-terminator-on-try-catch'
     }),
     expectedEndIfToCloseIfStatement: (startingPosition: Position) => ({
         message: `Expected 'end if' to close 'if' statement started at ${startingPosition?.line + 1}:${startingPosition?.character + 1}`,
         code: 1060,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-terminator-on-if'
     }),
     expectedStatementToFollowConditionalCondition: (conditionType: string) => ({
         message: `Expected a statement to follow '${conditionType?.toLowerCase()} ...condition... then'`,
         code: 1061,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-statement-after-conditional'
     }),
     expectedStatementToFollowElse: () => ({
         message: `Expected a statement to follow 'else'`,
         code: 1062,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-statement-after-else'
     }),
     consecutiveIncrementDecrementOperatorsAreNotAllowed: () => ({
         message: `Consecutive increment/decrement operators are not allowed`,
         code: 1063,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'consecutive-increment-decrement'
     }),
     incrementDecrementOperatorsAreNotAllowedAsResultOfFunctionCall: () => ({
-        message: ``,
+        message: `Increment/decrement operators are not allowed on function calls`,
         code: 1064,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'increment-decrement-on-function-call'
     }),
     xmlUnexpectedTag: (tagName: string) => ({
         message: `Unexpected tag '${tagName}'`,
         code: 1065,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'unexpected-tag'
     }),
     expectedStatementOrFunctionCallButReceivedExpression: () => ({
         message: `Expected statement or function call but instead found expression`,
         code: 1066,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-statement-not-expression'
     }),
     xmlFunctionNotFound: (name: string) => ({
         message: `Cannot find function with name '${name}' in component scope`,
         code: 1067,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'xml-function-not-found'
     }),
     xmlInvalidFieldType: (name: string) => ({
         message: `Invalid field type ${name}`,
         code: 1068,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'xml-invalid-field-type'
     }),
     xmlUnexpectedChildren: (tagName: string) => ({
         message: `Tag '${tagName}' should not have children`,
         code: 1069,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'xml-unexpected-children'
     }),
     xmlTagMissingAttribute: (tagName: string, attrName: string) => ({
         message: `Tag '${tagName}' must have a '${attrName}' attribute`,
         code: 1070,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'xml-missing-attribute'
     }),
     expectedLabelIdentifierAfterGotoKeyword: () => ({
         message: `Expected label identifier after 'goto' keyword`,
         code: 1071,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-label'
     }),
     expectedRightSquareBraceAfterArrayOrObjectIndex: () => ({
         message: `Expected ']' after array or object index`,
         code: 1072,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-right-brace'
     }),
     expectedPropertyNameAfterPeriod: () => ({
         message: `Expected property name after '.'`,
         code: 1073,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-property-name'
     }),
     tooManyCallableArguments: (actual: number, max: number) => ({
         message: `Cannot have more than ${max} arguments but found ${actual}`,
         code: 1074,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'too-many-arguments'
     }),
     expectedRightParenAfterFunctionCallArguments: () => ({
         message: `Expected ')' after function call arguments`,
         code: 1075,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-right-paren'
     }),
     unmatchedLeftParenAfterExpression: () => ({
         message: `Unmatched '(': expected ')' after expression`,
         code: 1076,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'unmatched-left-paren'
     }),
     unmatchedLeftSquareBraceAfterArrayLiteral: () => ({
         message: `Unmatched '[': expected ']' after array literal`,
         code: 1077,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'unmatched-left-brace'
     }),
     unexpectedAAKey: () => ({
         message: `Expected identifier or string as associative array key`,
         code: 1078,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-identifier-as-key'
     }),
     expectedColonBetweenAAKeyAndvalue: () => ({
         message: `Expected ':' between associative array key and value`,
         code: 1079,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-colon-after-aa-key'
     }),
     unmatchedLeftCurlyAfterAALiteral: () => ({
         message: `Unmatched '{': expected '}' after associative array literal`,
         code: 1080,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'unmatched-left-curly'
     }),
     unexpectedToken: (text: string) => ({
         message: `Unexpected token '${text}'`,
         code: 1081,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'unexpected-token'
     }),
     /**
      * Used in the lexer anytime we encounter an unsupported character
@@ -445,167 +522,200 @@ export let DiagnosticMessages = {
     unexpectedCharacter: (text: string) => ({
         message: `Unexpected character '${text}' (char code ${text?.charCodeAt(0)})`,
         code: 1082,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'unexpected-character'
     }),
     unterminatedStringAtEndOfLine: () => ({
         message: `Unterminated string at end of line`,
         code: 1083,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'unterminated-string'
     }),
     unterminatedStringAtEndOfFile: () => ({
         message: `Unterminated string at end of file`,
         code: 1084,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'unterminated-string-at-end-of-file'
     }),
     fractionalHexLiteralsAreNotSupported: () => ({
         message: `Fractional hex literals are not supported`,
         code: 1085,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'fractional-hex-literal'
     }),
     unexpectedConditionalCompilationString: () => ({
         message: `Unexpected conditional-compilation string`,
         code: 1086,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'unexpected-conditional-compilation'
     }),
     duplicateConstDeclaration: (name: string) => ({
         message: `Attempting to redeclare #const with name '${name}'`,
         code: 1087,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'duplicate-const-declaration'
     }),
     constAliasDoesNotExist: (name: string) => ({
         message: `Attempting to create #const alias of '${name}', but no such #const exists`,
         code: 1088,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'const-alias-does-not-exist'
     }),
     invalidHashConstValue: () => ({
         message: '#const declarations can only have values of `true`, `false`, or other #const names',
         code: 1089,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'invalid-const-value'
     }),
     referencedConstDoesNotExist: () => ({
         message: `Referenced #const does not exist`,
         code: 1090,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'const-does-not-exist'
     }),
     invalidHashIfValue: () => ({
         message: `#if conditionals can only be 'true', 'false', or other #const names`,
         code: 1091,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'invalid-hash-if-value'
     }),
     hashError: (message: string) => ({
         message: `#error ${message}`,
         code: 1092,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'hash-error'
     }),
     expectedEqualAfterConstName: () => ({
         message: `Expected '=' after #const`,
         code: 1093,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-equal-after-const'
     }),
     expectedHashEndIfToCloseHashIf: (startingLine: number) => ({
         message: `Expected '#end if' to close '#if' conditional compilation statement starting on line ${startingLine}`,
         code: 1094,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-terminator-on-hash-if'
     }),
     constNameCannotBeReservedWord: () => ({
         message: `#const name cannot be a reserved word`,
         code: 1095,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'const-reservered-word'
     }),
     expectedIdentifier: () => ({
         message: `Expected identifier`,
         code: 1096,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-identifier'
     }),
     expectedAttributeNameAfterAtSymbol: () => ({
         message: `Expected xml attribute name after '@'`,
         code: 1097,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-attribute-name'
     }),
     childFieldTypeNotAssignableToBaseProperty: (childTypeName: string, baseTypeName: string, fieldName: string, childFieldType: string, parentFieldType: string) => ({
         message: `Field '${fieldName}' in class '${childTypeName}' is not assignable to the same field in base class '${baseTypeName}'. Type '${childFieldType}' is not assignable to type '${parentFieldType}'.`,
         code: 1098,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'child-field-type-not-assignable'
     }),
     classChildMemberDifferentMemberTypeThanAncestor: (memberType: string, parentMemberType: string, parentClassName: string) => ({
         message: `Class member is a ${memberType} here but a ${parentMemberType} in ancestor class '${parentClassName}'`,
         code: 1099,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'child-field-type-different'
     }),
     classConstructorMissingSuperCall: () => ({
         message: `Missing "super()" call in class constructor method.`,
         code: 1100,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'missing-super-call'
     }),
     classConstructorIllegalUseOfMBeforeSuperCall: () => ({
         message: `Illegal use of "m" before calling "super()"`,
         code: 1101,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'use-m-before-super'
     }),
     classFieldCannotBeOverridden: () => ({
         message: `Class field cannot be overridden`,
         code: 1102,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'class-field-override'
     }),
     unusedAnnotation: () => ({
         message: `This annotation is not attached to any statement`,
         code: 1103,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'unused-annotation'
     }),
     localVarShadowedByScopedFunction: () => ({
         message: `Declaring a local variable with same name as scoped function can result in unexpected behavior`,
         code: 1104,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'local-var-shadowed-by-function'
     }),
     scopeFunctionShadowedByBuiltInFunction: () => ({
         message: `Scope function will not be accessible because it has the same name as a built-in function`,
         code: 1105,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'function-shadowed-by-built-in-function'
     }),
     localVarSameNameAsClass: (className: string) => ({
         message: `Local variable has same name as class '${className}'`,
         code: 1106,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'local-var-same-name-as-class'
     }),
     unnecessaryCodebehindScriptImport: () => ({
         message: `This import is unnecessary because compiler option 'autoImportComponentScript' is enabled`,
         code: 1107,
-        severity: DiagnosticSeverity.Warning
+        severity: DiagnosticSeverity.Warning,
+        name: 'xml-unnecessary-import'
     }),
     expectedOpenParenToFollowCallfuncIdentifier: () => ({
         message: `Expected '(' to follow callfunc identifier`,
         code: 1108,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-left-paren-after-callfunc'
     }),
     expectedToken: (...tokenKinds: string[]) => ({
         message: `Expected token '${tokenKinds.join(`' or '`)}'`,
         code: 1109,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-token'
     }),
     parameterMayNotHaveSameNameAsNamespace: (paramName: string) => ({
         message: `Parameter '${paramName}' may not have the same name as namespace`,
         code: 1110,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'parameter-same-name-as-namespace'
     }),
     variableMayNotHaveSameNameAsNamespace: (variableName: string) => ({
         message: `Variable '${variableName}' may not have the same name as namespace`,
         code: 1111,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'variable-same-name-as-namespace'
     }),
     unterminatedTemplateStringAtEndOfFile: () => ({
         message: `Unterminated template string at end of file`,
         code: 1113,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'unterminated-template-string'
     }),
     unterminatedTemplateExpression: () => ({
         message: `Unterminated template string expression. '\${' must be followed by expression, then '}'`,
         code: 1114,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'unterminated-template-expression'
     }),
     duplicateComponentName: (componentName: string) => ({
         message: `There are multiple components with the name '${componentName}'`,
         code: 1115,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'duplicate-component-name'
     }),
     __unused6: (className: string) => ({
         message: `Function has same name as class '${className}'`,
@@ -615,32 +725,38 @@ export let DiagnosticMessages = {
     missingExceptionVarToFollowCatch: () => ({
         message: `Missing exception variable after 'catch' keyword`,
         code: 1117,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'missing-exception-variable'
     }),
     missingExceptionExpressionAfterThrowKeyword: () => ({
         message: `Missing exception expression after 'throw' keyword`,
         code: 1118,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'missing-exception-expression'
     }),
     missingLeftSquareBracketAfterDimIdentifier: () => ({
         message: `Missing left square bracket after 'dim' identifier`,
         code: 1119,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'missing-left-brace-after-dim'
     }),
     missingRightSquareBracketAfterDimIdentifier: () => ({
         message: `Missing right square bracket after 'dim' identifier`,
         code: 1120,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'missing-right-brace-after-dim'
     }),
     missingExpressionsInDimStatement: () => ({
         message: `Missing expression(s) in 'dim' statement`,
         code: 1121,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'missing-expression-in-dim'
     }),
     mismatchedOverriddenMemberVisibility: (childClassName: string, memberName: string, childAccessModifier: string, ancestorAccessModifier: string, ancestorClassName: string) => ({
         message: `Access modifier mismatch: '${memberName}' is ${childAccessModifier} in type '${childClassName}' but is ${ancestorAccessModifier} in base type '${ancestorClassName}'.`,
         code: 1122,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'access-modifier-mismatch'
     }),
     __unused3: (typeName: string) => ({
         message: `Cannot find type with name '${typeName}'`,
@@ -650,17 +766,20 @@ export let DiagnosticMessages = {
     enumValueMustBeType: (expectedType: string) => ({
         message: `Enum value must be type '${expectedType}'`,
         code: 1124,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'enum-value-invalid-type'
     }),
     enumValueIsRequired: (expectedType: string) => ({
         message: `Value is required for ${expectedType} enum`,
         code: 1125,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'enum-value-required'
     }),
     unknownEnumValue: (name: string, enumName: string) => ({
         message: `Property '${name}' does not exist on enum '${enumName}'`,
         code: 1126,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'unknown-enum-value'
     }),
     __unused7: (scopeName: string, enumName: string) => ({
         message: `Scope '${scopeName}' already contains an enum with name '${enumName}'`,
@@ -670,65 +789,77 @@ export let DiagnosticMessages = {
     unknownRoSGNode: (nodeName: string) => ({
         message: `Unknown roSGNode '${nodeName}'`,
         code: 1128,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'unknown-rosgnode'
     }),
     unknownBrightScriptComponent: (componentName: string) => ({
         message: `Unknown BrightScript component '${componentName}'`,
         code: 1129,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'unknown-brightscript-component'
     }),
     mismatchCreateObjectArgumentCount: (componentName: string, allowedArgCounts: number[], actualCount: number) => {
         const argCountArray = (allowedArgCounts || [1]).sort().filter((value, index, self) => self.indexOf(value) === index);
         return {
             message: `For ${componentName}, expected ${argCountArray.map(c => c.toString()).join(' or ')} total arguments, but got ${actualCount}.`,
             code: 1130,
-            severity: DiagnosticSeverity.Error
+            severity: DiagnosticSeverity.Error,
+            name: 'mismatch-createobject-argument-count'
         };
     },
     deprecatedBrightScriptComponent: (componentName: string, deprecatedDescription?: string) => ({
         message: `${componentName} has been deprecated${deprecatedDescription ? ': ' + deprecatedDescription : ''}`,
         code: 1131,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'deprecated-brightscript-component'
     }),
     circularReferenceDetected: (items: string[], scopeName: string) => ({
         message: `Circular reference detected between ${Array.isArray(items) ? items.join(' -> ') : ''} in scope '${scopeName}'`,
         code: 1132,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'circular-reference'
     }),
     unexpectedStatementOutsideFunction: () => ({
         message: `Unexpected statement found outside of function body`,
         code: 1133,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'unexpected-statement'
     }),
     detectedTooDeepFileSource: (numberOfParentDirectories: number) => ({
         message: `Expected directory depth no larger than 7, but found ${numberOfParentDirectories}`,
         code: 1134,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'directory-depth'
     }),
     illegalContinueStatement: () => ({
         message: `Continue statement must be contained within a loop statement`,
         code: 1135,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'illegal-continue'
     }),
     keywordMustBeDeclaredAtNamespaceLevel: (keyword: string) => ({
         message: `${keyword} must be declared at the root level or within a namespace`,
         code: 1136,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'keyword-must-be-at-root-or-namespace'
     }),
     itemCannotBeUsedAsVariable: (itemType: string) => ({
         message: `${itemType} cannot be used as a variable`,
         code: 1137,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'cannout-be-used-as-variable'
     }),
     callfuncHasToManyArgs: (numberOfArgs: number) => ({
         message: `You can not have more than 5 arguments in a callFunc. ${numberOfArgs} found.`,
         code: 1138,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'callfunc-has-too-many-arguments'
     }),
     noOptionalChainingInLeftHandSideOfAssignment: () => ({
         message: `Optional chaining may not be used in the left-hand side of an assignment`,
         code: 1139,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'otional-chaining-on-left-of-assignment'
     }),
     /**
      *
@@ -745,70 +876,83 @@ export let DiagnosticMessages = {
             fullName: fullName ?? name,
             typeName: typeName ? typeName : undefined
         },
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'cannot-find-function'
     }),
     argumentTypeMismatch: (actualTypeString: string, expectedTypeString: string, data?: TypeCompatibilityData) => ({
         message: `Argument of type '${actualTypeString}' is not compatible with parameter of type '${expectedTypeString}'${typeCompatibilityMessage(actualTypeString, expectedTypeString, data)}`,
         data: data,
         code: 1141,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'argument-type-mismatch'
     }),
     returnTypeMismatch: (actualTypeString: string, expectedTypeString: string, data?: TypeCompatibilityData) => ({
         message: `Type '${actualTypeString}' is not compatible with declared return type '${expectedTypeString}'${typeCompatibilityMessage(actualTypeString, expectedTypeString, data)}'`,
         data: data,
         code: 1142,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'return-type-mismatch'
     }),
     assignmentTypeMismatch: (actualTypeString: string, expectedTypeString: string, data?: TypeCompatibilityData) => ({
         message: `Type '${actualTypeString}' is not compatible with type '${expectedTypeString}'${typeCompatibilityMessage(actualTypeString, expectedTypeString, data)}`,
         data: data,
         code: 1143,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'assignment-type-mismatch'
     }),
     operatorTypeMismatch: (operatorString: string, firstType: string, secondType = '') => ({
         message: `Operator '${operatorString}' cannot be applied to type${secondType ? 's' : ''} '${firstType}'${secondType ? ` and '${secondType}'` : ''}`,
         code: 1144,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'operator-type-mismatch'
     }),
     incompatibleSymbolDefinition: (symbol: string, scopeName: string) => ({
         message: `'${symbol}' is incompatible across these scopes: ${scopeName}`,
         code: 1145,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'incompatible-definition'
     }),
     memberAccessibilityMismatch: (memberName: string, accessModifierFlag: SymbolTypeFlag, definingClassName: string) => ({
         message: `Member '${memberName}' is ${accessModifierNameFromFlag(accessModifierFlag)}${accessModifierAdditionalInfo(accessModifierFlag, definingClassName)}`, // TODO: Add scopes where it was defined
         code: 1146,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'member-accessibility-mismatch'
     }),
     typecastStatementMustBeDeclaredAtStart: () => ({
         message: `'typecast' statement must be declared at the top of the file or beginning of function or namespace`,
         code: 1147,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'typecast-must-be-at-start'
     }),
     invalidTypecastStatementApplication: (foundApplication: string) => ({
         message: `'typecast' statement can only be applied to 'm', but was applied to '${foundApplication}'`,
         code: 1148,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'invalid-typecast-statement'
     }),
     itemCannotBeUsedAsType: (typeText: string) => ({
         message: `'${typeText}' cannot be used as a type`,
         code: 1149,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'item-cannot-be-used-as-type'
     }),
     expectedNewlineInConditionalCompile: () => ({
         message: `Expected newline in conditional compilation statement`,
         code: 1151,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-newline-in-conditional-compile'
     }),
     expectedTerminatorOnConditionalCompileBlock: () => ({
         message: `Expected '#end if', '#else if', or '#else' to terminate conditional compilation block`,
         code: 1152,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'expected-terminator-on-conditional-compile'
     }),
     unsafeUnmatchedTerminatorInConditionalCompileBlock: (terminator: string) => ({
         message: `Unsafe unmatched terminator '${terminator}' in conditional compilation block`,
         code: 1153,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        name: 'unmatched-terminator-on-conditional-compile'
     })
 };
 export const defaultMaximumTruncationLength = 160;

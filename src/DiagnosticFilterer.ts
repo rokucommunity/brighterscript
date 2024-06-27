@@ -153,21 +153,10 @@ export class DiagnosticFilterer {
         }
 
         for (let filter of diagnosticFilters) {
-            if (typeof filter === 'number') {
+            if (typeof filter === 'number' || typeof filter === 'string') {
                 result.push({
                     codes: [filter],
                     isNegative: false
-                });
-                continue;
-            }
-
-            if (typeof filter === 'string') {
-                const isNegative = filter.startsWith('!');
-                const trimmedFilter = isNegative ? filter.slice(1) : filter;
-
-                result.push({
-                    src: trimmedFilter,
-                    isNegative: isNegative
                 });
                 continue;
             }
@@ -178,7 +167,7 @@ export class DiagnosticFilterer {
             }
 
             //code-only filter
-            if ('codes' in filter && !('src' in filter) && Array.isArray(filter.codes)) {
+            if ('codes' in filter && !('files' in filter) && Array.isArray(filter.codes)) {
                 result.push({
                     codes: filter.codes,
                     isNegative: false
@@ -186,24 +175,56 @@ export class DiagnosticFilterer {
                 continue;
             }
 
-            if ('src' in filter) {
-                const isNegative = filter.src.startsWith('!');
-                const trimmedFilter = isNegative ? filter.src.slice(1) : filter.src;
+            if ('files' in filter) {
+                if (typeof filter.files === 'string') {
+                    result.push(this.getNormalizedFilter(filter.files, filter));
+                    continue;
+                }
 
-                if ('codes' in filter) {
-                    result.push({
-                        src: trimmedFilter,
-                        codes: filter.codes,
-                        isNegative: isNegative
-                    });
-                } else {
-                    result.push({
-                        src: trimmedFilter,
-                        isNegative: isNegative
-                    });
+                if (Array.isArray(filter.files)) {
+                    for (const fileIdentifier of filter.files) {
+                        if (typeof fileIdentifier === 'string') {
+                            const isNegative = fileIdentifier.startsWith('!');
+                            const trimmedFilter = isNegative ? fileIdentifier.slice(1) : fileIdentifier;
+                            if ('codes' in filter) {
+                                result.push({
+                                    src: trimmedFilter,
+                                    codes: filter.codes,
+                                    isNegative: isNegative
+                                });
+                            } else {
+                                result.push({
+                                    src: trimmedFilter,
+                                    isNegative: isNegative
+                                });
+                            }
+                            continue;
+                        }
+                        if (typeof fileIdentifier === 'object' && 'src' in filter) {
+
+                        }
+                    }
                 }
             }
         }
         return result;
+    }
+
+
+    private getNormalizedFilter(fileGlob: string, filter: { files: string } | { codes?: (number | string)[] }) {
+        const isNegative = fileGlob.startsWith('!');
+        const trimmedFilter = isNegative ? fileGlob.slice(1) : fileGlob;
+        if ('codes' in filter && Array.isArray(filter.codes)) {
+            return {
+                src: trimmedFilter,
+                codes: filter.codes,
+                isNegative: isNegative
+            };
+        } else {
+            return {
+                src: trimmedFilter,
+                isNegative: isNegative
+            };
+        }
     }
 }

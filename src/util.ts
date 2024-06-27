@@ -872,13 +872,17 @@ export class Util {
      */
     public diagnosticIsSuppressed(diagnostic: BsDiagnostic) {
         const diagnosticCode = typeof diagnostic.code === 'string' ? diagnostic.code.toLowerCase() : diagnostic.code;
+        const diagnosticName = typeof diagnostic.name === 'string' ? diagnostic.name.toLowerCase() : undefined;
         for (let flag of diagnostic.file?.commentFlags ?? []) {
             //this diagnostic is affected by this flag
             if (diagnostic.range && this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
                 //if the flag acts upon this diagnostic's code
-                if (flag.codes === null || (diagnosticCode !== undefined && flag.codes.includes(diagnosticCode))) {
+                const diagCodeSuppressed = (diagnosticCode !== undefined && flag.codes?.includes(diagnosticCode)) ||
+                    (diagnosticName !== undefined && flag.codes?.includes(diagnosticName));
+                if (flag.codes === null || diagCodeSuppressed) {
                     return true;
                 }
+
             }
         }
         return false;
@@ -1804,7 +1808,7 @@ export class Util {
                 return clone;
                 //filter out null relatedInformation items
             }).filter((x): x is DiagnosticRelatedInformation => Boolean(x)),
-            code: diagnostic.code,
+            code: (diagnostic as BsDiagnostic).name ? (diagnostic as BsDiagnostic).name : diagnostic.code,
             source: 'brs'
         } as Diagnostic;
         if (diagnostic?.tags?.length > 0) {

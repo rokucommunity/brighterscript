@@ -1224,20 +1224,6 @@ describe('BrsFile BrighterScript classes', () => {
         ]);
     });
 
-    it.skip('detects calls to unknown m methods', () => {
-        program.setFile('source/main.bs', `
-            class Animal
-                sub new()
-                    m.methodThatDoesNotExist()
-                end sub
-            end class
-        `);
-        program.validate();
-        expectDiagnostics(program, [
-            DiagnosticMessages.methodDoesNotExistOnType('methodThatDoesNotExist', 'Animal')
-        ]);
-    });
-
     it('detects direct circular extends', () => {
         //direct
         program.setFile('source/Direct.bs', `
