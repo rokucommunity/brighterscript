@@ -70,21 +70,43 @@ If `true`, after a successful build, the project will be deployed to the Roku sp
 
 ## `diagnosticFilters`
 
-Type: `Array<string | number | {src: string; codes: number[]}`
+Type: `Array<string | number | {files: string | Array<string | {src: string} | {dest: string}>; codes?: Array<number | string>}`
 
 A list of filters used to hide diagnostics.
 
-- A `string` value should be a relative-to-root-dir or absolute file path or glob pattern of the files that should be excluded. Any file matching this pattern will have all diagnostics supressed. These file paths refer to the location of the source files pre-compilation and are relative to [`rootDir`](#rootdir). Absolute file paths may be used as well.
-    - A file glob may be prefixed with `!` to make it a negative pattern which "un-ignores" the files it matches. (See examples below).
-- A `number` value should be a diagnostic code. This will supress all diagnostics with that code for the whole project.
-- An object can also be provided to filter specific diagnostic codes for a file pattern. For example,
+- A `string` value should be a diagnostic code, or diagnostic shortname. This will supress all diagnostics with that code for the whole project. For example,
+    ```jsonc
+    "diagnosticFilters": [
+        "1000", 
+        "1011",
+        "BS1001"
+        "mismatch-argument-count"
+    ]
+    ```
+
+- A `number` value is treated as if it were a string, and matches all diagnostic codes that are the string representation of that number. For example, an entry of  `1234` would suppress any diagnostic with code `'1234'`.
+ - An object can also be provided to filter specific diagnostic codes for a file pattern. If no `files` property is included, any diagnostic that matches the values in the `codes` will b e suppressed. If a `string` if given for the `files` property, it is treated as a relative-to-root-dir or absolute file path or glob pattern of the files that should be excluded. These file paths refer to the location of the source files pre-compilation and are relative to [`rootDir`](#rootdir). Absolute file paths may be used as well. For example,
 
     ```jsonc
     "diagnosticFilters": [{
-        "src": "vendor/**/*",
-        "codes": [1000, 1011] //ignore these specific codes from vendor libraries
+        "files": "vendor/**/*",
+        "codes": ["1000", "1011"] //ignore these specific codes from vendor libraries
     }]
     ```
+- If an object is provided, the `files` property could also be an array, providing either a series of globs, or a specific set of files that match _either_ their `src` or `dest` paths. For example,
+
+    ```jsonc
+    "diagnosticFilters": [{
+        "files": [
+            "vendor/**/*", // all vendor files will be suppressed
+            { "src": "themes/theme1/**/*"}, // all files coming from `themes/theme1/` will be suppressed
+            { "dest": "source/common/**/*"}, // all files then will be placed in from `source/common/` will be suppressed
+        ]
+        "codes": ["1000", "1011"] //ignore these specific codes 
+    }]
+    ```
+
+- A file glob may be prefixed with `!` to make it a negative pattern which "un-ignores" the files it matches. (See examples below).
 
 Defaults to `undefined`.
 
@@ -96,8 +118,8 @@ A negative pattern can be used to un-ignore some files or codes which were previ
 
 ```jsonc
 "diagnosticFilters": [
-    { "src": "vendor/**/*" }, //ignore all codes from vendor libraries
-    { "src": "!vendor/unreliable/**/*" } //EXCEPT do show errors from this one specific library
+    { "files": "vendor/**/*" }, //ignore all codes from vendor libraries
+    { "files": "!vendor/unreliable/**/*" } //EXCEPT do show errors from this one specific library
 ]
 ```
 
@@ -105,8 +127,8 @@ A specific error code can be unignored in multiple places by using a pattern whi
 
 ```jsonc
 "diagnosticFilters": [
-    { "src": "vendor/**/*" }, //ignore all errors from vendor libraries
-    { "src": "!*/**/*", "codes": [1000] } //EXCEPT do show this particular code everywhere
+    { "files": "vendor/**/*" }, //ignore all errors from vendor libraries
+    { "files": "!*/**/*", "codes": [1000] } //EXCEPT do show this particular code everywhere
 ]
 ```
 
