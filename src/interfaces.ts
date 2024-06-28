@@ -31,9 +31,9 @@ export interface BsDiagnostic extends Diagnostic {
     data?: any;
 
     /**
-     * A human readable name for the diagnostic to be used as alternative for the code
+     * The code used for this diagnostic in v0
      */
-    name?: string;
+    legacyCode?: number | string;
 }
 
 export interface DiagnosticContext {

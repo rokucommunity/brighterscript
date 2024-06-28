@@ -2,7 +2,7 @@ import * as path from 'path';
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
 import type { Location, Position, Range } from 'vscode-languageserver';
-import { DiagnosticCodeMap, diagnosticCodes } from '../DiagnosticMessages';
+import { DiagnosticCodeMap, DiagnosticLegacyCodeMap, diagnosticCodes } from '../DiagnosticMessages';
 import type { Callable, FileReference, CommentFlag, SerializedCodeFile } from '../interfaces';
 import type { Program } from '../Program';
 import util from '../util';
@@ -282,7 +282,7 @@ export class XmlFile implements BscFile {
      * Collect all bs: comment flags
      */
     public getCommentFlags(tokens: Array<IToken & { tokenType: TokenType }>) {
-        const processor = new CommentFlagProcessor(this, ['<!--'], diagnosticCodes, [DiagnosticCodeMap.unknownDiagnosticCode]);
+        const processor = new CommentFlagProcessor(this, ['<!--'], diagnosticCodes, [DiagnosticCodeMap.unknownDiagnosticCode, DiagnosticLegacyCodeMap.unknownDiagnosticCode]);
 
         this.commentFlags = [];
         for (let token of tokens) {

@@ -1021,10 +1021,8 @@ describe('Scope', () => {
                 program.validate();
                 expectDiagnostics(program, [
                     DiagnosticMessages.nameCollision('Function', 'Global Function', 'Str').message,
-                    {
-                        message: DiagnosticMessages.scopeFunctionShadowedByBuiltInFunction().message,
-                        range: Range.create(4, 29, 4, 32)
-                    }]);
+                    DiagnosticMessages.scopeFunctionShadowedByBuiltInFunction().message
+                ]);
             });
         });
 

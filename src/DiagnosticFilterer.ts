@@ -165,7 +165,10 @@ export class DiagnosticFilterer {
             //set isSuppressed for any diagnostics with matching codes
         } else {
             for (const diagnostic of fileDiagnostics) {
-                if (filter.codes.includes(diagnostic.diagnostic.code!) || filter.codes.includes(diagnostic.diagnostic.name!)) {
+                if (filter.codes.includes(diagnostic.diagnostic.code!) ||
+                    (diagnostic.diagnostic.legacyCode &&
+                        (filter.codes.includes(diagnostic.diagnostic.legacyCode) ||
+                            filter.codes.includes(diagnostic.diagnostic.legacyCode.toString())))) {
                     diagnostic.isSuppressed = isSuppressing;
                 }
             }
