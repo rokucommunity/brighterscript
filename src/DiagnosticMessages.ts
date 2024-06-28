@@ -126,7 +126,7 @@ export let DiagnosticMessages = {
         code: 'expected-identifier-after-keyword'
     }),
     missingCallableKeyword: () => ({
-        message: `Expected 'function' or 'sub' to preceed identifier`,
+        message: `Expected 'function' or 'sub' to precede identifier`,
         legacyCode: 1017,
         severity: DiagnosticSeverity.Error,
         code: 'expected-callable-keyword'
