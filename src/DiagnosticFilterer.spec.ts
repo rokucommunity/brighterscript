@@ -16,11 +16,11 @@ describe('DiagnosticFilterer', () => {
             //ignore these codes globally
             { codes: [1, 2, 3, 'X4'] },
             //ignore all codes from lib
-            { src: 'lib/**/*.brs' },
+            { files: 'lib/**/*.brs' },
             //ignore all codes from `packages` with absolute path
-            { src: `${rootDir}/packages/**/*.brs` },
+            { files: `${rootDir}/packages/**/*.brs` },
             //ignore specific codes for main.brs
-            { src: 'source/main.brs', codes: [4] }
+            { files: 'source/main.brs', codes: [4] }
         ]
     };
 
@@ -106,15 +106,15 @@ describe('DiagnosticFilterer', () => {
                     4,
                     'codename',
                     //ignore all codes from lib
-                    { src: 'lib/**/*.brs' },
+                    { files: 'lib/**/*.brs' },
                     //un-ignore specific errors from lib/special
-                    { src: '!lib/special/**/*.brs', codes: [1, 2, 3, 'codename'] },
+                    { files: '!lib/special/**/*.brs', codes: [1, 2, 3, 'codename'] },
                     //re-ignore errors from one extra special file
-                    { src: 'lib/special/all-reignored.brs' },
+                    { files: 'lib/special/all-reignored.brs' },
                     //un-ignore all codes from third special file
-                    { src: '!lib/special/all-unignored.brs' },
+                    { files: '!lib/special/all-unignored.brs' },
                     //un-ignore code 5 globally
-                    { src: '!*/**/*', codes: [5] },
+                    { files: '!*/**/*', codes: [5] },
                     //re-ignore code 10 globally, overriding previous unignores
                     { codes: [10] }
                 ]
@@ -191,7 +191,7 @@ describe('DiagnosticFilterer', () => {
         it('handles standard diagnostic filters', () => {
             expect(
                 filterer.getDiagnosticFilters({
-                    diagnosticFilters: [{ src: 'file.brs', codes: [1, 2, 'X3'] }]
+                    diagnosticFilters: [{ files: 'file.brs', codes: [1, 2, 'X3'] }]
                 })
             ).to.eql([{ src: 'file.brs', codes: [1, 2, 'X3'], isNegative: false }]);
         });
@@ -199,7 +199,7 @@ describe('DiagnosticFilterer', () => {
         it('handles string-only diagnostic filter object', () => {
             expect(
                 filterer.getDiagnosticFilters({
-                    diagnosticFilters: [{ src: 'file.brs' }]
+                    diagnosticFilters: [{ files: 'file.brs' }]
                 })
             ).to.eql([{ src: 'file.brs', isNegative: false }]);
         });
@@ -215,9 +215,9 @@ describe('DiagnosticFilterer', () => {
         it('handles string diagnostic filter', () => {
             expect(
                 filterer.getDiagnosticFilters({
-                    diagnosticFilters: ['file.brs']
+                    diagnosticFilters: ['cannot-find-name']
                 })
-            ).to.eql([{ src: 'file.brs', isNegative: false }]);
+            ).to.eql([{ codes: ['cannot-find-name'], isNegative: false }]);
         });
 
         it('converts ignoreErrorCodes to diagnosticFilters', () => {
@@ -228,19 +228,11 @@ describe('DiagnosticFilterer', () => {
             ]);
         });
 
-        it('handles negative globs in bare strings', () => {
-            expect(filterer.getDiagnosticFilters({
-                diagnosticFilters: ['!file.brs']
-            })).to.eql([
-                { src: 'file.brs', isNegative: true }
-            ]);
-        });
-
         it('handles negative globs in objects', () => {
             expect(filterer.getDiagnosticFilters({
                 diagnosticFilters: [
                     {
-                        src: '!file.brs'
+                        files: '!file.brs'
                     }
                 ]
             })).to.eql([
@@ -252,13 +244,56 @@ describe('DiagnosticFilterer', () => {
             expect(filterer.getDiagnosticFilters({
                 diagnosticFilters: [
                     {
-                        src: '!file.brs',
+                        files: '!file.brs',
                         codes: [1, 2, 3]
                     }
                 ]
             })).to.eql([
                 { src: 'file.brs', codes: [1, 2, 3], isNegative: true }
             ]);
+        });
+    });
+
+    describe('filtering by dest', () => {
+        it('will filter by a files destPath', () => {
+            const resultDiagnostics = filterer.filter({
+                rootDir: rootDir,
+                diagnosticFilters: [
+                    {
+                        files: [
+                            { dest: 'source/remove/**/*.*' }
+                        ],
+                        codes: ['diagCode']
+                    }
+                ]
+            }, [
+                getDiagnostic('diagCode', `${rootDir}/source/common.brs`), //keep
+                getDiagnostic('diagCode', `${rootDir}/source/utils.brs`, `${rootDir}/source/remove/utils.brs`), //remove
+                getDiagnostic('diagCode', `${rootDir}/components/utils.brs`, `${rootDir}/source/remove/utils2.brs`) //remove
+            ]);
+            expect(resultDiagnostics.map(x => x.code)).to.eql(['diagCode']);
+            expect(resultDiagnostics.map(x => x.file.srcPath)).to.eql([`${rootDir}/source/common.brs`]);
+        });
+
+        it('respects order of ignores with negative globs', () => {
+            const resultDiagnostics = filterer.filter({
+                rootDir: rootDir,
+                diagnosticFilters: [{
+                    files: [
+                        { dest: 'source/**/*.*' } //ignore diagCode in files with destPath in /source/remove
+                    ],
+                    codes: ['diagCode']
+                }, {
+                    files: '!**/*.*', //unignore diagCode everywhere
+                    codes: ['diagCode']
+                }
+                ]
+            }, [
+                getDiagnostic('diagCode', `${rootDir}/source/common.brs`), //keep
+                getDiagnostic('diagCode', `${rootDir}/source/utils.brs`, `${rootDir}/source/remove/utils.brs`), //remove
+                getDiagnostic('diagCode', `${rootDir}/components/utils.brs`, `${rootDir}/source/remove/utils2.brs`) //remove
+            ]);
+            expect(resultDiagnostics.map(x => x.code)).to.eql(['diagCode', 'diagCode', 'diagCode']);
         });
     });
 
@@ -270,8 +305,16 @@ describe('DiagnosticFilterer', () => {
             getDiagnostic(3, s`${rootDir}/source/common2.brs`),
             getDiagnostic(4, s`${rootDir}/source/Common2.brs`)
         ]);
-        expect(stub.callCount).to.eql(2);
+        const expectedCallCount = options.diagnosticFilters.reduce((acc, filter) => {
+            if (typeof filter === 'object' && 'files' in (filter as any)) {
+                return acc;
+            }
+            return acc + 1;
+        }, 0);
+        expect(stub.callCount).to.eql(expectedCallCount * 2); // 2 times for 'codename', 2 times for { codes: [1, 2, 3, 'X4'] }
         expect(stub.getCalls().map(x => x.args[1])).to.eql([
+            s`${rootDir.toLowerCase()}/source/common1.brs`,
+            s`${rootDir.toLowerCase()}/source/common2.brs`,
             s`${rootDir.toLowerCase()}/source/common1.brs`,
             s`${rootDir.toLowerCase()}/source/common2.brs`
         ]);
@@ -279,10 +322,12 @@ describe('DiagnosticFilterer', () => {
 
 });
 
-function getDiagnostic(code: number | string, srcPath: string) {
+function getDiagnostic(code: number | string, srcPath: string, destPath?: string) {
+    destPath = destPath ?? srcPath;
     return {
         file: {
-            srcPath: s`${srcPath}`
+            srcPath: s`${srcPath}`,
+            destPath: s`${destPath}`
         },
         code: code
     } as BsDiagnostic;

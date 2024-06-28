@@ -435,7 +435,7 @@ describe('BrsFile', () => {
                 }]);
             });
 
-            it.only('recognizes diagnostic names', () => {
+            it('recognizes diagnostic names', () => {
                 let file = program.setFile<BrsFile>('/source/main.brs', `
                     sub Main()
                         'bs:disable-next-line: cannot-find-name
