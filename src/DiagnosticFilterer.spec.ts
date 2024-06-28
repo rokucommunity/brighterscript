@@ -272,7 +272,7 @@ describe('DiagnosticFilterer', () => {
                 getDiagnostic('diagCode', `${rootDir}/components/utils.brs`, `${rootDir}/source/remove/utils2.brs`) //remove
             ]);
             expect(resultDiagnostics.map(x => x.code)).to.eql(['diagCode']);
-            expect(resultDiagnostics.map(x => x.file.srcPath)).to.eql([`${rootDir}/source/common.brs`]);
+            expect(resultDiagnostics.map(x => x.file.srcPath)).to.eql([s`${rootDir}/source/common.brs`]);
         });
 
         it('respects order of ignores with negative globs', () => {
