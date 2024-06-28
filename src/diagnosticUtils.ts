@@ -72,7 +72,7 @@ export function printDiagnostic(
     let severityText = severityTextMap[severity];
 
     console.log('');
-    const printableDiagnosticCode = (diagnostic as BsDiagnostic).name ? (diagnostic as BsDiagnostic).name : 'BS' + diagnostic.code;
+    const printableDiagnosticCode = diagnostic.code ? diagnostic.code.toString() : 'BS' + ((diagnostic as BsDiagnostic).legacyCode ?? '');
 
     console.log(
         chalk.cyan(filePath ?? '<unknown file>') +

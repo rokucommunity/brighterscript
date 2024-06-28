@@ -11,9 +11,9 @@ export class DiagnosticSeverityAdjuster {
             if (map.has(code)) {
                 diagnostic.severity = map.get(code);
             }
-            const name = String(diagnostic.name);
-            if (name && map.has(name)) {
-                diagnostic.severity = map.get(name);
+            const legacyCode = String(diagnostic.legacyCode);
+            if (legacyCode && map.has(legacyCode)) {
+                diagnostic.severity = map.get(legacyCode);
             }
         });
     }
