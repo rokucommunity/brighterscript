@@ -323,6 +323,32 @@ describe('ProjectManager', () => {
         });
     });
 
+    describe('flushDocumentChanges', () => {
+        it('does not crash when getting undefined back from projects', async () => {
+            fsExtra.outputFileSync(`${rootDir}/source/main.brs`, ``);
+            fsExtra.outputJsonSync(`${rootDir}/project1/bsconfig.json`, {
+                rootDir: rootDir
+            });
+            await manager.syncProjects([{
+                workspaceFolder: rootDir
+            }]);
+
+            sinon.stub(manager.projects[0], 'applyFileChanges').returns(Promise.resolve([
+                //return an undefined item, which used to cause a specific crash
+                undefined
+            ]));
+
+            await manager['flushDocumentChanges']({
+                actions: [{
+                    srcPath: s`${rootDir}/source/main.brs`,
+                    type: 'set',
+                    fileContents: 'sub main():end sub',
+                    allowStandaloneProject: true
+                }]
+            });
+        });
+    });
+
     describe('handleFileChanges', () => {
         it('only sends files to the project that match the include patterns for that project', async () => {
             fsExtra.outputFileSync(`${rootDir}/source/lib1/a.brs`, ``);

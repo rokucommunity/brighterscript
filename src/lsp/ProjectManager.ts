@@ -117,7 +117,7 @@ export class ProjectManager {
             }
 
             // create a standalone project if this action was handled by zero projects and was a 'set' operation
-            const wasHandled = flatResponses.some(x => x.id === action.id && action.type === 'set');
+            const wasHandled = flatResponses.some(x => x?.id === action.id && action.type === 'set');
             if (wasHandled === false) {
                 await this.createStandaloneProject(action.srcPath);
             }
