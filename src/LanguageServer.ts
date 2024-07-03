@@ -120,7 +120,7 @@ export class LanguageServer {
         //anytime a project emits a collection of diagnostics, send them to the client
         this.projectManager.on('diagnostics', (event) => {
             this.logger.info(`Received ${event.diagnostics.length} diagnostics from project ${event.project.projectNumber}`);
-            void this.sendDiagnostics(event);
+            this.sendDiagnostics(event).catch(logAndIgnoreError);
         });
 
         // Send all open document changes whenever a project reloads. This is necessary because the project loads files from disk
@@ -128,16 +128,16 @@ export class LanguageServer {
         // because the file contents haven't changed.
         this.projectManager.on('project-reload', (event) => {
             //keep logLevel in sync with the most verbose log level found across all projects
-            void this.syncLogLevel();
+            this.syncLogLevel().catch(logAndIgnoreError);
 
             //resend all open document changes
             const documents = [...this.documents.all()];
             if (documents.length > 0) {
                 this.logger.log(`Project ${event.project?.projectNumber} reloaded. Resending all open document changes.`, documents.map(x => x.uri));
                 for (const document of this.documents.all()) {
-                    void this.onTextDocumentDidChangeContent({
+                    this.onTextDocumentDidChangeContent({
                         document: document
-                    });
+                    }).catch(logAndIgnoreError);
                 }
             }
         });
@@ -521,12 +521,12 @@ export class LanguageServer {
     private sendBusyStatus() {
         this.busyStatusIndex = ++this.busyStatusIndex <= 0 ? 0 : this.busyStatusIndex;
 
-        void this.connection.sendNotification(NotificationName.busyStatus, {
+        this.connection.sendNotification(NotificationName.busyStatus, {
             status: this.projectManager.busyStatusTracker.status,
             timestamp: Date.now(),
             index: this.busyStatusIndex,
             activeRuns: [...this.projectManager.busyStatusTracker.activeRuns]
-        });
+        }).catch(logAndIgnoreError);
     }
     private busyStatusIndex = -1;
 
@@ -641,7 +641,7 @@ export class LanguageServer {
      * Send a critical failure notification to the client, which should show a notification of some kind
      */
     private sendCriticalFailure(message: string) {
-        void this.connection.sendNotification('critical-failure', message);
+        this.connection.sendNotification('critical-failure', message).catch(logAndIgnoreError);
     }
 
     /**
@@ -722,4 +722,11 @@ interface BrightScriptClientConfiguration {
         enableThreading: boolean;
         logLevel: LogLevel | string;
     };
+}
+
+function logAndIgnoreError(error: Error) {
+    if (error?.stack) {
+        error.message = error.stack;
+    }
+    console.error(error);
 }
