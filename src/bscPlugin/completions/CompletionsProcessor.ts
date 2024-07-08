@@ -92,7 +92,7 @@ export class CompletionsProcessor {
         // always include the source scope if applicable to this file
         let sourceScope = scopesForFile.find(x => x.name === 'source');
         if (sourceScope && !scopesToProcess.includes(sourceScope)) {
-            //replace the first scope with the source scope so we always process exactly 3 scopes
+            //replace the first scope with the source scope so we process a consistent number of scopes if possible
             scopesToProcess[0] = sourceScope;
         }
         return scopesToProcess;
