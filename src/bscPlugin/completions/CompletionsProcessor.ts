@@ -25,7 +25,7 @@ import type { FunctionExpression } from '../../parser/Expression';
 import { LogLevel } from '../../Logger';
 
 
-const SCOPES_FOR_COMPLETION = 5;
+const SCOPES_FOR_COMPLETION = 3;
 
 export class CompletionsProcessor {
     constructor(
