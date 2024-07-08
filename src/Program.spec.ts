@@ -44,6 +44,15 @@ describe('Program', () => {
         program.dispose();
     });
 
+    it('does not throw exception after calling validate() after dispose()', () => {
+        program.setFile('source/themes/alpha.bs', `
+            sub main()
+            end sub
+        `);
+        program.dispose();
+        program.validate();
+    });
+
     it('Does not crash for file not referenced by any other scope', async () => {
         program.setFile('tests/testFile.spec.bs', `
             function main(args as object) as object

@@ -72,8 +72,6 @@ export class ProjectManager {
      */
     @TrackBusyStatus
     private async flushDocumentChanges(event: FlushEvent) {
-        this.logger.log('flushDocumentChanges', event.actions.map(x => x.srcPath));
-
         //ensure that we're fully initialized before proceeding
         await this.onInitialized();
 
