@@ -24,6 +24,9 @@ import { createIdentifier } from '../../astUtils/creators';
 import type { FunctionExpression } from '../../parser/Expression';
 import { LogLevel } from '../../Logger';
 
+
+const SCOPES_FOR_COMPLETION = 3;
+
 export class CompletionsProcessor {
     constructor(
         private event: ProvideCompletionsEvent
@@ -34,11 +37,9 @@ export class CompletionsProcessor {
     public process() {
         let file = this.event.file;
         this.event.program.logger.time(LogLevel.log, ['Processing completions'], () => {
-            //find the scopes for this file
-            let scopesForFile = this.event.program.getScopesForFile(file);
 
-            //if there are no scopes, include the global scope so we at least get the built-in functions
-            scopesForFile = scopesForFile.length > 0 ? scopesForFile : [this.event.program.globalScope];
+            // Find the scopes for this file - Only process the first few scopes
+            const scopesToProcess = this.getScopesForCompletion(file);
 
             //get the completions from all scopes for this file
             let completionResults: CompletionItem[] = [];
@@ -53,6 +54,7 @@ export class CompletionsProcessor {
                     this.event.completions.push(...this.getScriptImportCompletions(file.program, file.pkgPath, scriptImport));
                     return;
                 }
+
                 const results = this.getBrsFileCompletions(this.event.position, file);
                 completionResults = results.scoped;
                 globalResults = results.global;
@@ -67,11 +69,33 @@ export class CompletionsProcessor {
             for (let completion of allCompletions) {
                 let key = `${completion.label}-${completion.kind}`;
                 keyCounts.set(key, keyCounts.has(key) ? keyCounts.get(key) + 1 : 1);
-                if (keyCounts.get(key) === scopesForFile.length) {
+                if (keyCounts.get(key) === scopesToProcess.length) {
                     this.event.completions.push(completion);
                 }
             }
         });
+    }
+
+    private getScopesForCompletion(file: BscFile) {
+        //find the scopes for this file
+        let scopesForFile = this.event.program?.getScopesForFile(file) ?? [];
+
+        //if there are no scopes, include the global scope so we at least get the built-in functions
+        if (this.event.program) {
+            scopesForFile = scopesForFile.length > 0 ? scopesForFile : [this.event.program.globalScope];
+        }
+
+        // Only process the first few scopes. This might result in missing completions,
+        // but it's better than wasting TONS of cycles building essentially the same completions over and over
+        const scopesToProcess = scopesForFile.slice(0, SCOPES_FOR_COMPLETION);
+
+        // always include the source scope if applicable to this file
+        let sourceScope = scopesForFile.find(x => x.name === 'source');
+        if (sourceScope && !scopesToProcess.includes(sourceScope)) {
+            //replace the first scope with the source scope so we process a consistent number of scopes if possible
+            scopesToProcess[0] = sourceScope;
+        }
+        return scopesToProcess;
     }
 
 
@@ -265,7 +289,8 @@ export class CompletionsProcessor {
             globalCompletions.push(...this.getSymbolsCompletion(globalSymbols));
         }
 
-        for (const scope of this.event.scopes) {
+        const scopesToProcess = this.getScopesForCompletion(file);
+        for (const scope of scopesToProcess) {
             if (tokenKind === TokenKind.StringLiteral || tokenKind === TokenKind.TemplateStringQuasi) {
                 result.push(...this.getStringLiteralCompletions(scope, currentToken));
                 continue;
