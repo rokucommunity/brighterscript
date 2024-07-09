@@ -526,7 +526,7 @@ export class LanguageServer {
             timestamp: Date.now(),
             index: this.busyStatusIndex,
             activeRuns: [...this.projectManager.busyStatusTracker.activeRuns]
-        }).catch(logAndIgnoreError);
+        })?.catch(logAndIgnoreError);
     }
     private busyStatusIndex = -1;
 

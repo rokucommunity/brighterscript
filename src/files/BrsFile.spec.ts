@@ -47,6 +47,15 @@ describe('BrsFile', () => {
         program.dispose();
     });
 
+    describe('dispose', () => {
+        it('does not crash the program after it has been disposed', () => {
+            const file = program.setFile('source/main.bs', `sub main(): end sub`);
+            file.dispose();
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+    });
+
     describe('allowBrighterScriptInBrightScript', () => {
         it('is false by default', () => {
             program.setFile('source/main.brs', `
