@@ -86,8 +86,7 @@ export class CommentFlagProcessor {
                 } else {
                     this.diagnostics.push({
                         ...DiagnosticMessages.unknownDiagnosticCode(codeInt),
-                        file: this.file,
-                        range: codeToken.range
+                        location: util.createLocationFromFileRange(this.file, codeToken.range)
                     });
                 }
             }

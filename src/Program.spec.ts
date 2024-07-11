@@ -63,9 +63,8 @@ describe('Program', () => {
     it('allows diagnostics to be set on AssetFile', () => {
         const file = program.setFile<AssetFile>('manifest', ``);
         program.diagnostics.register({
-            file: file,
             message: 'Manifest is totally bogus',
-            range: util.createRange(0, 0, 0, 10),
+            location: util.createLocationFromFileRange(file, util.createRange(0, 0, 0, 10)),
             code: 10
         });
         program.validate();
@@ -232,6 +231,28 @@ describe('Program', () => {
             expect(beforeFileParse.callCount).to.equal(2);
             expect(afterFileParse.callCount).to.equal(2);
             expect(afterFileValidate.callCount).to.equal(2);
+        });
+    });
+
+    describe('getFile', () => {
+        it('can get a file from the srcPath', () => {
+            const file = program.setFile({
+                src: s`${rootDir}/source/main.brs`,
+                dest: s`${rootDir}/source/maindest.brs`
+            }, '');
+            expect(program.getFile(s`${rootDir}/source/main.brs`)).to.exist;
+            expect(program.getFile(s`${rootDir}\\source\\main.brs`)).to.exist;
+            expect(program.getFile(s`${rootDir}/SOURCE/MAIN.brs`, true)).to.exist;
+
+            expect(program.getFile(file.srcPath)).to.exist;
+        });
+
+        it('can get a file from the uri', () => {
+            const file = program.setFile({
+                src: s`${rootDir}/source/main.brs`,
+                dest: s`${rootDir}/source/maindest.brs`
+            }, '');
+            expect(program.getFile(util.getFileUri(file))).to.exist;
         });
     });
 

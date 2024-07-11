@@ -14,8 +14,6 @@ import * as diagnosticUtils from './diagnosticUtils';
 import * as fsExtra from 'fs-extra';
 import * as requireRelative from 'require-relative';
 import { Throttler } from './Throttler';
-import { AssetFile } from './files/AssetFile';
-import type { BscFile } from './files/BscFile';
 import type { BrsFile } from './files/BrsFile';
 import { URI } from 'vscode-uri';
 import { DiagnosticManager } from './DiagnosticManager';
@@ -71,18 +69,14 @@ export class ProgramBuilder {
         if (!this.program) {
             throw new Error('Cannot call `ProgramBuilder.addDiagnostic` before `ProgramBuilder.run()`');
         }
-        let file: BscFile | undefined = this.program.getFile(srcPath);
-        if (!file) {
-            // eslint-disable-next-line @typescript-eslint/dot-notation
-            const paths = this.program['getPaths'](srcPath, this.program.options.rootDir ?? this.options.rootDir);
-            file = new AssetFile(paths);
-            //keep this for backwards-compatibility. TODO remove in v1
-            // eslint-disable-next-line @typescript-eslint/dot-notation
-            file['pathAbsolute'] = file.srcPath;
-            diagnostic.file = file;
+        if (!diagnostic.location) {
+            diagnostic.location = {
+                uri: util.pathToUri(srcPath),
+                range: util.createRange(0, 0, 0, 0)
+            };
+        } else {
+            diagnostic.location.uri = util.pathToUri(srcPath);
         }
-
-        diagnostic.file = file;
         this.diagnostics.register(<any>diagnostic, { tags: ['ProgramBuilder'] });
     }
 
@@ -300,10 +294,10 @@ export class ProgramBuilder {
         //group the diagnostics by file
         let diagnosticsByFile = {} as Record<string, BsDiagnostic[]>;
         for (let diagnostic of diagnostics) {
-            if (!diagnosticsByFile[diagnostic.file.srcPath]) {
-                diagnosticsByFile[diagnostic.file.srcPath] = [];
+            if (!diagnosticsByFile[diagnostic.location.uri]) {
+                diagnosticsByFile[diagnostic.location.uri] = [];
             }
-            diagnosticsByFile[diagnostic.file.srcPath].push(diagnostic);
+            diagnosticsByFile[diagnostic.location.uri].push(diagnostic);
         }
 
         //get printing options
@@ -316,8 +310,8 @@ export class ProgramBuilder {
             //sort the diagnostics in line and column order
             let sortedDiagnostics = diagnosticsForFile.sort((a, b) => {
                 return (
-                    (a.range?.start.line ?? -1) - (b.range?.start.line ?? -1) ||
-                    (a.range?.start.character ?? -1) - (b.range?.start.character ?? -1)
+                    (a.location.range?.start.line ?? -1) - (b.location.range?.start.line ?? -1) ||
+                    (a.location.range?.start.character ?? -1) - (b.location.range?.start.character ?? -1)
                 );
             });
 

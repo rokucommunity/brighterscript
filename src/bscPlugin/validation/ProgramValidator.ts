@@ -32,8 +32,7 @@ export class ProgramValidator {
 
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.fileNotReferencedByAnyOtherFile(),
-                file: file,
-                range: util.createRange(0, 0, 0, Number.MAX_VALUE)
+                location: util.createLocationFromFileRange(file, util.createRange(0, 0, 0, Number.MAX_VALUE))
             }, { tags: [ProgramValidatorDiagnosticsTag] });
         }
     }

@@ -151,7 +151,7 @@ describe('parser', () => {
                 sub main()
                     call()a
                 end sub
-            `).diagnostics.map(x => rangeToArray(x.range))).to.eql([
+            `).diagnostics.map(x => rangeToArray(x.location.range))).to.eql([
                 [2, 26, 2, 27],
                 [2, 27, 2, 28]
             ]);
@@ -167,7 +167,7 @@ describe('parser', () => {
                 DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression().message
             );
 
-            expect(diagnostics[0]?.range).to.eql(
+            expect(diagnostics[0]?.location.range).to.eql(
                 Range.create(3, 20, 3, 32)
             );
         });

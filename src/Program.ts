@@ -79,9 +79,10 @@ export class Program {
         this.plugins = plugins || new PluginInterface([], { logger: this.logger });
         this.diagnostics = diagnosticsManager || new DiagnosticManager();
 
-        // initialize teh diagnostics Manager
+        // initialize the diagnostics Manager
         this.diagnostics.logger = this.logger;
         this.diagnostics.options = this.options;
+        this.diagnostics.program = this;
 
         //inject the bsc plugin as the first plugin in the stack.
         this.plugins.addFirst(new BscPlugin());
@@ -997,8 +998,7 @@ export class Program {
                     const { componentName } = xmlFile;
                     this.diagnostics.register({
                         ...DiagnosticMessages.duplicateComponentName(componentName.text),
-                        range: xmlFile.componentName.location?.range,
-                        file: xmlFile,
+                        location: xmlFile.componentName.location,
                         relatedInformation: xmlFiles.filter(x => x !== xmlFile).map(x => {
                             return {
                                 location: util.createLocationFromRange(
@@ -1037,6 +1037,11 @@ export class Program {
         } else if (/^(?:(?:virtual:[\/\\])|(?:\w:)|(?:[\/\\]))/gmi.exec(filePath)) {
             return this.files[
                 (normalizePath ? util.standardizePath(filePath) : filePath).toLowerCase()
+            ] as T;
+        } else if (util.isUriLike(filePath)) {
+            const path = URI.parse(filePath).path;
+            return this.files[
+                (normalizePath ? util.standardizePath(path) : path).toLowerCase()
             ] as T;
         } else {
             return this.destMap.get(
@@ -1303,14 +1308,15 @@ export class Program {
     public getCodeActions(srcPath: string, range: Range) {
         const codeActions = [] as CodeAction[];
         const file = this.getFile(srcPath);
+        const fileUri = util.getFileUri(file);
         if (file) {
             const diagnostics = this
                 //get all current diagnostics (filtered by diagnostic filters)
                 .getDiagnostics()
                 //only keep diagnostics related to this file
-                .filter(x => x.file === file)
+                .filter(x => x.location.uri === fileUri)
                 //only keep diagnostics that touch this range
-                .filter(x => util.rangesIntersectOrTouch(x.range, range));
+                .filter(x => util.rangesIntersectOrTouch(x.location.range, range));
 
             const scopes = this.getScopesForFile(file);
 

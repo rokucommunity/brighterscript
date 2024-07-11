@@ -37,7 +37,7 @@ describe('parser call expressions', () => {
         expect(ast.statements).to.be.length.greaterThan(0);
 
         //ALL of the diagnostics should be on the `DoThin` line
-        let lineNumbers = diagnostics.map(x => x.range.start.line);
+        let lineNumbers = diagnostics.map(x => x.location.range.start.line);
         for (let lineNumber of lineNumbers) {
             expect(lineNumber).to.equal(2);
         }
@@ -60,7 +60,7 @@ describe('parser call expressions', () => {
         ]);
         expect(ast.statements).to.be.length.greaterThan(0);
         //the error should be BEFORE the `name = "bob"` statement
-        expect(diagnostics[0].range.end.character).to.be.lessThan(25);
+        expect(diagnostics[0].location.range.end.character).to.be.lessThan(25);
     });
 
     it('allows closing parentheses on separate line', () => {

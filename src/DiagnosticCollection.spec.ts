@@ -2,7 +2,6 @@ import type { BsDiagnostic } from './interfaces';
 import { DiagnosticCollection } from './DiagnosticCollection';
 import type { Project } from './LanguageServer';
 import type { ProgramBuilder } from './ProgramBuilder';
-import type { BscFile } from './files/BscFile';
 import util from './util';
 import { expect } from './chai-config.spec';
 
@@ -93,9 +92,10 @@ describe('DiagnosticCollection', () => {
     });
 
     function removeDiagnostic(srcPath: string, message: string) {
+        const fileUri = util.pathToUri(srcPath);
         for (let i = 0; i < diagnostics.length; i++) {
             const diagnostic = diagnostics[i];
-            if (diagnostic.file.srcPath === srcPath && diagnostic.message === message) {
+            if (diagnostic.location.uri === fileUri && diagnostic.message === message) {
                 diagnostics.splice(i, 1);
                 return;
             }
@@ -105,12 +105,10 @@ describe('DiagnosticCollection', () => {
 
     function addDiagnostics(srcPath: string, messages: string[]) {
         const newDiagnostics: BsDiagnostic[] = [];
+        const fileUri = util.pathToUri(srcPath);
         for (const message of messages) {
             newDiagnostics.push({
-                file: {
-                    srcPath: srcPath
-                } as BscFile,
-                range: util.createRange(0, 0, 0, 0),
+                location: { uri: fileUri, range: util.createRange(0, 0, 0, 0) },
                 //the code doesn't matter as long as the messages are different, so just enforce unique messages for this test files
                 code: 123,
                 message: message

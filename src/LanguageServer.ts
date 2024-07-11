@@ -599,7 +599,7 @@ export class LanguageServer {
         if (configFilePath && path.basename(configFilePath) === 'brsconfig.json') {
             builder.addDiagnostic(configFilePath, {
                 ...DiagnosticMessages.brsConfigJsonIsDeprecated(),
-                range: util.createRange(0, 0, 0, 0)
+                location: util.createLocationFromRange(util.pathToUri(configFilePath), util.createRange(0, 0, 0, 0))
             });
             return this.sendDiagnostics();
         }

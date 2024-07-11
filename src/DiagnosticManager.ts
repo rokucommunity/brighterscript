@@ -5,7 +5,6 @@ import type { Scope } from './Scope';
 import { util } from './util';
 import { Cache } from './Cache';
 import { isBsDiagnostic, isXmlScope } from './astUtils/reflection';
-import type { BscFile } from './files/BscFile';
 import type { DiagnosticRelatedInformation } from 'vscode-languageserver-protocol';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
 import { DiagnosticSeverityAdjuster } from './DiagnosticSeverityAdjuster';
@@ -13,6 +12,7 @@ import type { FinalizedBsConfig } from './BsConfig';
 import chalk from 'chalk';
 import type { Logger } from './logging';
 import { LogLevel, createLogger } from './logging';
+import type { Program } from './Program';
 
 /**
  * Manages all diagnostics for a program.
@@ -36,6 +36,8 @@ export class DiagnosticManager {
     public logger: Logger;
 
     public options: FinalizedBsConfig;
+
+    public program: Program;
 
     /**
      * Registers a diagnostic (or multiple diagnostics) for a program.
@@ -116,10 +118,7 @@ export class DiagnosticManager {
                 } else {
                     relatedInformation.push({
                         message: `In scope '${scope.name}'`,
-                        location: util.createLocationFromRange(
-                            URI.file(diagnostic.file.srcPath).toString(),
-                            diagnostic.range
-                        )
+                        location: diagnostic.location
                     });
                 }
 
@@ -128,8 +127,27 @@ export class DiagnosticManager {
             results.push(diagnostic);
         }
         return results.filter((x) => {
-            return !util.diagnosticIsSuppressed(x);
+            return !this.isDiagnosticSuppressed(x);
         });
+    }
+
+    /**
+     * Determine whether this diagnostic should be supressed or not, based on brs comment-flags
+     */
+    public isDiagnosticSuppressed(diagnostic: BsDiagnostic) {
+        const diagnosticCode = typeof diagnostic.code === 'string' ? diagnostic.code.toLowerCase() : diagnostic.code;
+        const file = this.program?.getFile(diagnostic.location.uri);
+
+        for (let flag of file?.commentFlags ?? []) {
+            //this diagnostic is affected by this flag
+            if (diagnostic.location.range && util.rangeContains(flag.affectedRange, diagnostic.location.range.start)) {
+                //if the flag acts upon this diagnostic's code
+                if (flag.codes === null || (diagnosticCode !== undefined && flag.codes.includes(diagnosticCode))) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private filterDiagnostics(diagnostics: BsDiagnostic[]) {
@@ -146,9 +164,9 @@ export class DiagnosticManager {
     }
 
     public clearForFile(fileSrcPath: string) {
-        const fileSrcPathLower = fileSrcPath.toLowerCase();
+        const fileSrcPathUri = util.pathToUri(fileSrcPath).toLowerCase();
         for (const [key, cachedData] of this.diagnosticsCache.entries()) {
-            if (cachedData.diagnostic.file.srcPath.toLowerCase() === fileSrcPathLower) {
+            if (cachedData.diagnostic.location.uri.toLowerCase() === fileSrcPathUri) {
                 this.diagnosticsCache.delete(key);
             }
         }
@@ -204,7 +222,7 @@ export class DiagnosticManager {
         const needToMatch = {
             tag: !!filter.tag,
             scope: !!filter.scope,
-            file: !!filter.file,
+            fileUri: !!filter.fileUri,
             segment: !!filter.segment
         };
 
@@ -218,8 +236,8 @@ export class DiagnosticManager {
                 if (isMatch && needToMatch.scope) {
                     isMatch = context.scope === filter.scope;
                 }
-                if (isMatch && needToMatch.file) {
-                    isMatch = cachedData.diagnostic.file === filter.file;
+                if (isMatch && needToMatch.fileUri) {
+                    isMatch = cachedData.diagnostic.location?.uri === filter.fileUri;
                 }
                 if (isMatch && needToMatch.segment) {
                     isMatch = context.segment === filter.segment;
@@ -239,7 +257,7 @@ export class DiagnosticManager {
 
 
     private getDiagnosticKey(diagnostic: BsDiagnostic) {
-        return `${diagnostic.file?.srcPath} - ${diagnostic.code} - ${diagnostic.message} - ${util.rangeToString(diagnostic.range)}`;
+        return `${diagnostic.location.uri} ${util.rangeToString(diagnostic.location.range)} - ${diagnostic.code} - ${diagnostic.message}`;
     }
 
     private mergeRelatedInformation(target: DiagnosticRelatedInformation[], source: DiagnosticRelatedInformation[]) {
@@ -262,6 +280,6 @@ export class DiagnosticManager {
 interface DiagnosticContextFilter {
     tag?: string;
     scope?: Scope;
-    file?: BscFile;
+    fileUri?: string;
     segment?: AstNode;
 }

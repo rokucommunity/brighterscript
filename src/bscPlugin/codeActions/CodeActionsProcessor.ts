@@ -1,4 +1,3 @@
-import type { Diagnostic } from 'vscode-languageserver';
 import { CodeActionKind } from 'vscode-languageserver';
 import { codeActionUtil } from '../../CodeActionUtil';
 import type { DiagnosticMessageType } from '../../DiagnosticMessages';
@@ -6,7 +5,7 @@ import { DiagnosticCodeMap } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BscFile } from '../../files/BscFile';
 import type { XmlFile } from '../../files/XmlFile';
-import type { OnGetCodeActionsEvent } from '../../interfaces';
+import type { BsDiagnostic, OnGetCodeActionsEvent } from '../../interfaces';
 import { ParseMode } from '../../parser/Parser';
 import { util } from '../../util';
 import { isBrsFile } from '../../astUtils/reflection';
@@ -35,7 +34,7 @@ export class CodeActionsProcessor {
     /**
      * Generic import suggestion function. Shouldn't be called directly from the main loop, but instead called by more specific diagnostic handlers
      */
-    private suggestImports(diagnostic: Diagnostic, key: string, files: BscFile[]) {
+    private suggestImports(diagnostic: BsDiagnostic, key: string, files: BscFile[]) {
         //skip if we already have this suggestion
         if (this.suggestedImports.has(key) || !isBrsFile(this.event.file)) {
             return;
@@ -69,7 +68,8 @@ export class CodeActionsProcessor {
 
     private suggestCannotFindName(diagnostic: DiagnosticMessageType<'cannotFindName'>) {
         //skip if not a BrighterScript file
-        if ((diagnostic.file as BrsFile).parseMode !== ParseMode.BrighterScript) {
+        const file = this.event.program.getFile(diagnostic.location?.uri);
+        if (!file || (file as BrsFile).parseMode !== ParseMode.BrighterScript) {
             return;
         }
         const lowerName = (diagnostic.data.fullName ?? diagnostic.data.name).toLowerCase();
@@ -88,7 +88,8 @@ export class CodeActionsProcessor {
 
     private suggestClassImports(diagnostic: DiagnosticMessageType<'classCouldNotBeFound'>) {
         //skip if not a BrighterScript file
-        if ((diagnostic.file as BrsFile).parseMode !== ParseMode.BrighterScript) {
+        const file = this.event.program.getFile(diagnostic.location?.uri);
+        if (!file || (file as BrsFile).parseMode !== ParseMode.BrighterScript) {
             return;
         }
         const lowerClassName = diagnostic.data.className.toLowerCase();

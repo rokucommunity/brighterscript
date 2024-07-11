@@ -2,7 +2,7 @@ import type { BsDiagnostic } from './interfaces';
 import * as path from 'path';
 import * as minimatch from 'minimatch';
 import type { BsConfig } from './BsConfig';
-import { standardizePath as s } from './util';
+import util, { standardizePath as s } from './util';
 
 interface DiagnosticWithSuppression {
     diagnostic: BsDiagnostic;
@@ -73,17 +73,17 @@ export class DiagnosticFilterer {
         this.byFile = {};
 
         for (let diagnostic of diagnostics) {
-            const srcPath = diagnostic?.file?.srcPath ?? diagnostic?.file?.srcPath;
+            const fileUri = diagnostic?.location?.uri;
             //skip diagnostics that have issues
-            if (!srcPath) {
+            if (!fileUri) {
                 continue;
             }
-            const lowerSrcPath = srcPath.toLowerCase();
+            const lowerFileUri = fileUri.toLowerCase();
             //make a new array for this file if one does not yet exist
-            if (!this.byFile[lowerSrcPath]) {
-                this.byFile[lowerSrcPath] = [];
+            if (!this.byFile[lowerFileUri]) {
+                this.byFile[lowerFileUri] = [];
             }
-            this.byFile[lowerSrcPath].push({
+            this.byFile[lowerFileUri].push({
                 diagnostic: diagnostic,
                 isSuppressed: false
             });
@@ -99,8 +99,9 @@ export class DiagnosticFilterer {
             let src = s(
                 path.isAbsolute(filter.src) ? filter.src : `${this.rootDir}/${filter.src}`
             );
+            let uri = util.pathToUri(src);
 
-            matchedFilePaths = minimatch.match(Object.keys(this.byFile), src, {
+            matchedFilePaths = minimatch.match(Object.keys(this.byFile), uri, {
                 nocase: true
             });
 

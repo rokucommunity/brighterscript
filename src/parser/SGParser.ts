@@ -1,11 +1,12 @@
 import type { AttributeCstNode, ContentCstNode, DocumentCstNode, ElementCstNode } from '@xml-tools/parser';
 import * as parser from '@xml-tools/parser';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import type { Diagnostic } from 'vscode-languageserver';
 import util from '../util';
 import { SGAst, SGProlog, SGChildren, SGComponent, SGInterfaceField, SGInterfaceFunction, SGInterface, SGNode, SGScript, SGAttribute } from './SGTypes';
 import type { SGElement, SGToken, SGReferences } from './SGTypes';
 import { isSGComponent } from '../astUtils/xml';
+import type { BsDiagnostic } from '../interfaces';
+import type { Location, Range } from 'vscode-languageserver';
 
 export default class SGParser {
 
@@ -19,7 +20,7 @@ export default class SGParser {
     /**
      * The list of diagnostics found during the parse process
      */
-    public diagnostics = [] as Diagnostic[];
+    public diagnostics = [] as BsDiagnostic[];
 
     /**
      * The options used to parse the file
@@ -99,12 +100,12 @@ export default class SGParser {
             for (const err of lexErrors) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.xmlGenericParseError(`Syntax error: ${err.message}`),
-                    range: util.createRange(
+                    location: this.getLocationFromRange(util.createRange(
                         err.line - 1,
                         err.column,
                         err.line - 1,
                         err.column + err.length
-                    )
+                    ))
                 });
             }
         }
@@ -113,7 +114,7 @@ export default class SGParser {
             const token = err.token;
             this.diagnostics.push({
                 ...DiagnosticMessages.xmlGenericParseError(`Syntax error: ${err.message}`),
-                range: !isNaN(token.startLine) ? this.rangeFromToken(token) : util.createRange(0, 0, 0, Number.MAX_VALUE)
+                location: this.getLocationFromRange(!isNaN(token.startLine) ? this.rangeFromToken(token) : util.createRange(0, 0, 0, Number.MAX_VALUE))
             });
         }
 
@@ -128,7 +129,7 @@ export default class SGParser {
             ) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.xmlGenericParseError('Syntax error: whitespace found before the XML prolog'),
-                    range: this.rangeFromToken(token1)
+                    location: this.getLocationFromRange(this.rangeFromToken(token1))
                 });
             }
         }
@@ -140,7 +141,7 @@ export default class SGParser {
                 //error: not a component
                 this.diagnostics.push({
                     ...DiagnosticMessages.xmlUnexpectedTag(root.tokens.startTagName.text),
-                    range: root.tokens.startTagName.location?.range
+                    location: root.tokens.startTagName.location
                 });
             }
             this.ast = new SGAst({ prologElement: prolog, rootElement: root });
@@ -207,7 +208,7 @@ export default class SGParser {
             case 'field':
                 if (this.hasElements(content)) {
                     this.diagnostics.push({
-                        range: startTagName.location?.range,
+                        location: startTagName.location,
                         ...DiagnosticMessages.xmlUnexpectedChildren(startTagName.text)
                     });
                 }
@@ -215,7 +216,7 @@ export default class SGParser {
             case 'function':
                 if (this.hasElements(content)) {
                     this.diagnostics.push({
-                        range: startTagName.location?.range,
+                        location: startTagName.location,
                         ...DiagnosticMessages.xmlUnexpectedChildren(startTagName.text)
                     });
                 }
@@ -223,7 +224,7 @@ export default class SGParser {
             case 'script':
                 if (this.hasElements(content)) {
                     this.diagnostics.push({
-                        range: startTagName.location?.range,
+                        location: startTagName.location,
                         ...DiagnosticMessages.xmlUnexpectedChildren(startTagName.text)
                     });
                 }
@@ -272,7 +273,7 @@ export default class SGParser {
                         //unexpected tag
                         this.diagnostics.push({
                             ...DiagnosticMessages.xmlUnexpectedTag(name.image),
-                            range: this.rangeFromToken(name)
+                            location: this.getLocationFromRange(this.rangeFromToken(name))
                         });
                     }
                     tags.push(this.mapElement(entry));
@@ -389,6 +390,10 @@ export default class SGParser {
         return {
             scriptTagImports: []
         };
+    }
+
+    private getLocationFromRange(range: Range): Location {
+        return util.createLocationFromRange(util.pathToUri(this.options.srcPath), range);
     }
 }
 

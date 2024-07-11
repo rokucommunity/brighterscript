@@ -411,9 +411,8 @@ describe('BrsFile', () => {
                 `) as BrsFile;
                 program.diagnostics.register({
                     code: 'LINT1005',
-                    file: file,
                     message: 'Something is not right',
-                    range: util.createRange(2, 16, 2, 26)
+                    location: util.createLocationFromFileRange(file, util.createRange(2, 16, 2, 26))
                 });
                 expectZeroDiagnostics(program);
             });
@@ -1339,8 +1338,8 @@ describe('BrsFile', () => {
                 end function
             `);
             expectHasDiagnostics(program);
-            expect(program.getDiagnostics()[0].file).to.equal(file);
-            expect(program.getDiagnostics()[0].range.start.line).to.equal(1);
+            expect(program.getDiagnostics()[0].location.uri).to.equal(util.getFileUri(file));
+            expect(program.getDiagnostics()[0].location.range.start.line).to.equal(1);
         });
 
         it('supports using the `next` keyword in a for loop', () => {

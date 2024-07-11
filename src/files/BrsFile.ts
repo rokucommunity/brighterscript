@@ -345,7 +345,7 @@ export class BrsFile implements BscFile {
      * @param fileContents the raw source code to parse
      */
     public parse(fileContents: string) {
-        const diagnostics = [];
+        const diagnostics = [] as Array<BsDiagnostic>;
 
         try {
             this.fileContents = fileContents;
@@ -382,15 +382,11 @@ export class BrsFile implements BscFile {
                 ...this._parser.diagnostics as BsDiagnostic[]
             );
 
-            //attach this file to every diagnostic
-            for (let diagnostic of diagnostics) {
-                diagnostic.file = this;
-            }
+
         } catch (e) {
             this._parser = new Parser();
             diagnostics.push({
-                file: this,
-                range: util.createRange(0, 0, 0, Number.MAX_VALUE),
+                location: util.createLocationFromFileRange(this, util.createRange(0, 0, 0, Number.MAX_VALUE)),
                 ...DiagnosticMessages.genericParserMessage('Critical error parsing file: ' + JSON.stringify(serializeError(e)))
             });
         }
