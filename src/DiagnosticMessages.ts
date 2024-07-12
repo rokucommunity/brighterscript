@@ -5,6 +5,9 @@ import { TokenKind } from './lexer/TokenKind';
 import util from './util';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 
+
+export const DiagnosticCodeRegex = /^[a-z](?:[a-z0-9]*(?:-[a-z0-9]+)*)*$/;
+
 /**
  * An object that keeps track of all possible error messages.
  */

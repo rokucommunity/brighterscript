@@ -1,6 +1,6 @@
 import { expect } from './chai-config.spec';
 
-import { DiagnosticMessages } from './DiagnosticMessages';
+import { DiagnosticCodeRegex, DiagnosticMessages } from './DiagnosticMessages';
 
 describe('DiagnosticMessages', () => {
     it('has unique legacyCode for each message', () => {
@@ -16,6 +16,7 @@ describe('DiagnosticMessages', () => {
             }
         }
     });
+
     it('has unique code for each message', () => {
         let codes = {};
         for (let key in DiagnosticMessages) {
@@ -29,6 +30,7 @@ describe('DiagnosticMessages', () => {
             expect(diagCode).to.not.equal('', `Diagnostic name is empty - ${key}`);
             expect(diagCode.toLowerCase()).to.equal(obj.code, `Diagnostic name has capitals - ${key}`);
             expect(diagCode.indexOf(' ')).to.equal(-1, `Diagnostic name has space - ${key}`);
+            expect(DiagnosticCodeRegex.test(diagCode)).to.equal(true, `Diagnostic name does not match regex - ${key}`);
             //if another message already has this code
             if (!codes[obj.code]) {
                 codes[obj.code] = key;
