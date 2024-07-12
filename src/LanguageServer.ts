@@ -1305,12 +1305,12 @@ export class LanguageServer {
             //Get only the changes to diagnostics since the last time we sent them to the client
             const patch = this.diagnosticCollection.getPatch(this.projects);
 
-            for (let filePath in patch) {
-                const uri = URI.file(filePath).toString();
-                const diagnostics = patch[filePath].map(d => util.toDiagnostic(d, uri));
+            for (let fileUri in patch) {
+                // const uri = URI.file(filePath).toString();
+                const diagnostics = patch[fileUri].map(d => util.toDiagnostic(d, fileUri));
 
                 await this.connection.sendDiagnostics({
-                    uri: uri,
+                    uri: fileUri,
                     diagnostics: diagnostics
                 });
             }
