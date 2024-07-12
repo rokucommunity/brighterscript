@@ -100,7 +100,7 @@ A list of filters used to hide diagnostics.
         "files": [
             "vendor/**/*", // all vendor files will be suppressed
             { "src": "themes/theme1/**/*"}, // all files coming from `themes/theme1/` will be suppressed
-            { "dest": "source/common/**/*"}, // all files then will be placed in from `source/common/` will be suppressed
+            { "dest": "source/common/**/*"}, // all files from `source/common/` will be suppressed
         ]
         "codes": ["1000", "1011"] //ignore these specific codes 
     }]
