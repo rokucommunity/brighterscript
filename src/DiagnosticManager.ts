@@ -126,9 +126,10 @@ export class DiagnosticManager {
             diagnostic.relatedInformation = relatedInformation;
             results.push(diagnostic);
         }
-        return results.filter((x) => {
+        const filteredResults = results.filter((x) => {
             return !this.isDiagnosticSuppressed(x);
         });
+        return filteredResults;
     }
 
     /**
@@ -136,7 +137,7 @@ export class DiagnosticManager {
      */
     public isDiagnosticSuppressed(diagnostic: BsDiagnostic) {
         const diagnosticCode = typeof diagnostic.code === 'string' ? diagnostic.code.toLowerCase() : diagnostic.code;
-        const file = this.program?.getFile(diagnostic.location.uri);
+        const file = this.program?.getFile(diagnostic.location?.uri);
 
         for (let flag of file?.commentFlags ?? []) {
             //this diagnostic is affected by this flag
@@ -257,12 +258,12 @@ export class DiagnosticManager {
 
 
     private getDiagnosticKey(diagnostic: BsDiagnostic) {
-        return `${diagnostic.location.uri} ${util.rangeToString(diagnostic.location.range)} - ${diagnostic.code} - ${diagnostic.message}`;
+        return `${diagnostic.location?.uri ?? 'No uri'} ${util.rangeToString(diagnostic.location?.range)} - ${diagnostic.code} - ${diagnostic.message}`;
     }
 
     private mergeRelatedInformation(target: DiagnosticRelatedInformation[], source: DiagnosticRelatedInformation[]) {
         function getRiKey(relatedInfo: DiagnosticRelatedInformation) {
-            return `${relatedInfo.message} - ${relatedInfo.location.uri} - ${util.rangeToString(relatedInfo.location.range)}`.toLowerCase();
+            return `${relatedInfo.message} - ${relatedInfo.location?.uri} - ${util.rangeToString(relatedInfo.location?.range)}`.toLowerCase();
         }
 
         const existingKeys = target.map(ri => getRiKey(ri));

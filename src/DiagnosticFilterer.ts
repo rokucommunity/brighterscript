@@ -73,7 +73,7 @@ export class DiagnosticFilterer {
         this.byFile = {};
 
         for (let diagnostic of diagnostics) {
-            const fileUri = diagnostic?.location?.uri;
+            const fileUri = diagnostic?.location?.uri ?? 'invalid-uri';
             //skip diagnostics that have issues
             if (!fileUri) {
                 continue;

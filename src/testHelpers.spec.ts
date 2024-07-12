@@ -1,7 +1,7 @@
 import type { BsDiagnostic } from './interfaces';
 import * as assert from 'assert';
 import chalk from 'chalk';
-import type { CodeDescription, CompletionItem, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, integer, Range } from 'vscode-languageserver';
+import type { CodeDescription, CompletionItem, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, integer, Location } from 'vscode-languageserver';
 import { createSandbox } from 'sinon';
 import { expect } from './chai-config.spec';
 import type { CodeActionShorthand } from './CodeActionUtil';
@@ -39,10 +39,10 @@ function sortDiagnostics(diagnostics: BsDiagnostic[]) {
     return diagnostics.sort(
         firstBy<BsDiagnostic>('code')
             .thenBy<BsDiagnostic>('message')
-            .thenBy<BsDiagnostic>((a, b) => (a.location.range?.start?.line ?? 0) - (b.location.range?.start?.line ?? 0))
-            .thenBy<BsDiagnostic>((a, b) => (a.location.range?.start?.character ?? 0) - (b.location.range?.start?.character ?? 0))
-            .thenBy<BsDiagnostic>((a, b) => (a.location.range?.end?.line ?? 0) - (b.location.range?.end?.line ?? 0))
-            .thenBy<BsDiagnostic>((a, b) => (a.location.range?.end?.character ?? 0) - (b.location.range?.end?.character ?? 0))
+            .thenBy<BsDiagnostic>((a, b) => (a.location?.range?.start?.line ?? 0) - (b.location?.range?.start?.line ?? 0))
+            .thenBy<BsDiagnostic>((a, b) => (a.location?.range?.start?.character ?? 0) - (b.location?.range?.start?.character ?? 0))
+            .thenBy<BsDiagnostic>((a, b) => (a.location?.range?.end?.line ?? 0) - (b.location?.range?.end?.line ?? 0))
+            .thenBy<BsDiagnostic>((a, b) => (a.location?.range?.end?.character ?? 0) - (b.location?.range?.end?.character ?? 0))
     );
 }
 
@@ -60,7 +60,7 @@ function cloneObject<TOriginal, TTemplate>(original: TOriginal, template: TTempl
 }
 
 interface PartialDiagnostic {
-    range?: Range;
+    location?: Partial<Location>;
     severity?: DiagnosticSeverity;
     code?: integer | string;
     codeDescription?: Partial<CodeDescription>;
@@ -79,8 +79,12 @@ function cloneDiagnostic(actualDiagnosticInput: BsDiagnostic, expectedDiagnostic
     const actualDiagnostic = cloneObject(
         actualDiagnosticInput,
         expectedDiagnostic,
-        ['message', 'code', 'location', 'severity', 'relatedInformation']
+        ['message', 'code', 'severity', 'relatedInformation']
     );
+    //clone Location if available
+    if (expectedDiagnostic.location) {
+        actualDiagnostic.location = cloneObject(actualDiagnosticInput.location, expectedDiagnostic.location, ['uri', 'range']) as any;
+    }
     //deep clone relatedInformation if available
     if (actualDiagnostic.relatedInformation) {
         for (let j = 0; j < actualDiagnostic.relatedInformation.length; j++) {

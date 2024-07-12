@@ -118,21 +118,21 @@ describe('XmlScope', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.xmlFunctionNotFound('func2'),
-                range: Range.create(4, 24, 4, 29)
+                location: { range: Range.create(4, 24, 4, 29) }
             }, {
                 ...DiagnosticMessages.xmlTagMissingAttribute('function', 'name'),
-                range: Range.create(5, 9, 5, 17)
+                location: { range: Range.create(5, 9, 5, 17) }
             }, {
                 ...DiagnosticMessages.xmlTagMissingAttribute('function', 'name'),
-                range: Range.create(6, 9, 6, 17)
+                location: { range: Range.create(6, 9, 6, 17) }
             }, {
                 ...DiagnosticMessages.xmlTagMissingAttribute('function', 'name'),
-                range: Range.create(7, 9, 7, 17)
+                location: { range: Range.create(7, 9, 7, 17) }
             }, { // syntax error expecting '=' but found '/>'
                 code: DiagnosticMessages.xmlGenericParseError('').code
             }, { // onChange function
                 ...DiagnosticMessages.xmlFunctionNotFound('func4'),
-                range: Range.create(8, 51, 8, 56)
+                location: { range: Range.create(8, 51, 8, 56) }
             }]);
         });
 
@@ -161,22 +161,22 @@ describe('XmlScope', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.xmlInvalidFieldType('no'),
-                range: Range.create(4, 33, 4, 35)
+                location: { range: Range.create(4, 33, 4, 35) }
             }, {
                 ...DiagnosticMessages.xmlTagMissingAttribute('field', 'type'),
-                range: Range.create(5, 9, 5, 14)
+                location: { range: Range.create(5, 9, 5, 14) }
             }, {
                 ...DiagnosticMessages.xmlTagMissingAttribute('field', 'id'),
-                range: Range.create(6, 9, 6, 14)
+                location: { range: Range.create(6, 9, 6, 14) }
             }, {
                 ...DiagnosticMessages.xmlTagMissingAttribute('field', 'id'),
-                range: Range.create(8, 9, 8, 14)
+                location: { range: Range.create(8, 9, 8, 14) }
             }, {
                 ...DiagnosticMessages.xmlTagMissingAttribute('field', 'id'),
-                range: Range.create(9, 9, 9, 14)
+                location: { range: Range.create(9, 9, 9, 14) }
             }, {
                 ...DiagnosticMessages.xmlTagMissingAttribute('field', 'type'),
-                range: Range.create(9, 9, 9, 14)
+                location: { range: Range.create(9, 9, 9, 14) }
             }, { // syntax error expecting '=' but found '/>'
                 code: DiagnosticMessages.xmlGenericParseError('').code
             }]);

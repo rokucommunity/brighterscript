@@ -1039,7 +1039,7 @@ export class Program {
                 (normalizePath ? util.standardizePath(filePath) : filePath).toLowerCase()
             ] as T;
         } else if (util.isUriLike(filePath)) {
-            const path = URI.parse(filePath).path;
+            const path = URI.parse(filePath).fsPath;
             return this.files[
                 (normalizePath ? util.standardizePath(path) : path).toLowerCase()
             ] as T;
@@ -1308,8 +1308,8 @@ export class Program {
     public getCodeActions(srcPath: string, range: Range) {
         const codeActions = [] as CodeAction[];
         const file = this.getFile(srcPath);
-        const fileUri = util.getFileUri(file);
         if (file) {
+            const fileUri = util.getFileUri(file);
             const diagnostics = this
                 //get all current diagnostics (filtered by diagnostic filters)
                 .getDiagnostics()

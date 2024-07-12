@@ -753,7 +753,7 @@ export class Util {
      * Gets a URI string for a file's srcPath
      */
     public getFileUri(file: BscFile) {
-        return this.pathToUri(file.srcPath);
+        return this.pathToUri(file?.srcPath);
     }
 
     /**

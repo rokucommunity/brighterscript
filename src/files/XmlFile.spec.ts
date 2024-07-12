@@ -159,16 +159,13 @@ describe('XmlFile', () => {
                     <script type="text/brightscript" uri="ChildScene.brs" />
                 </component>`
             );
-            const diagnostics = program.getDiagnostics();
-            expect(diagnostics).to.be.lengthOf(2);
-            expect(diagnostics[0]).to.deep.include({ // expecting opening tag but got prolog
+            expectDiagnostics(program, [{ // expecting opening tag but got prolog
                 code: DiagnosticMessages.xmlGenericParseError('').code,
-                range: Range.create(1, 16, 1, 22)
-            });
-            expect(diagnostics[1]).to.deep.include({
+                location: { range: Range.create(1, 16, 1, 22) }
+            }, {
                 ...DiagnosticMessages.xmlGenericParseError('Syntax error: whitespace found before the XML prolog'),
-                range: Range.create(0, 0, 1, 16)
-            });
+                location: { range: Range.create(0, 0, 1, 16) }
+            }]);
         });
 
         it('Adds error when an unknown tag is found in xml', () => {
@@ -182,16 +179,13 @@ describe('XmlFile', () => {
                     <unexpectedToo />
                 </component>
             `);
-            const diagnostics = program.getDiagnostics();
-            expect(diagnostics).to.be.lengthOf(2);
-            expect(diagnostics[0]).to.deep.include({
+            expectDiagnostics(program, [{
                 ...DiagnosticMessages.xmlUnexpectedTag('unexpected'),
-                range: Range.create(3, 9, 3, 19)
-            });
-            expect(diagnostics[1]).to.deep.include({
+                location: { range: Range.create(3, 9, 3, 19) }
+            }, {
                 ...DiagnosticMessages.xmlUnexpectedTag('unexpectedToo'),
-                range: Range.create(5, 5, 5, 18)
-            });
+                location: { range: Range.create(5, 5, 5, 18) }
+            }]);
         });
 
         it('Adds error when no component is declared in xml', () => {
@@ -200,7 +194,7 @@ describe('XmlFile', () => {
             expectDiagnostics(program, [
                 {
                     ...DiagnosticMessages.xmlUnexpectedTag('script'),
-                    range: Range.create(0, 1, 0, 7)
+                    location: { range: Range.create(0, 1, 0, 7) }
                 },
                 DiagnosticMessages.xmlComponentMissingComponentDeclaration()
             ]);
@@ -216,7 +210,7 @@ describe('XmlFile', () => {
             program.validate();
             expectDiagnosticsIncludes(program, [{
                 message: DiagnosticMessages.xmlComponentMissingNameAttribute().message,
-                range: Range.create(1, 1, 1, 10)
+                location: { range: Range.create(1, 1, 1, 10) }
             }]);
         });
 

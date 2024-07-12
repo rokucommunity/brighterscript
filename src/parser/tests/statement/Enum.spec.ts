@@ -320,7 +320,7 @@ describe('EnumStatement', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.duplicateIdentifier('name'),
-                range: util.createRange(3, 20, 3, 24)
+                location: { range: util.createRange(3, 20, 3, 24) }
             }]);
         });
 
@@ -334,7 +334,7 @@ describe('EnumStatement', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.enumValueMustBeType('integer'),
-                range: util.createRange(3, 24, 3, 27)
+                location: { range: util.createRange(3, 24, 3, 27) }
             }]);
         });
 
@@ -348,7 +348,7 @@ describe('EnumStatement', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.enumValueMustBeType('string'),
-                range: util.createRange(3, 24, 3, 25)
+                location: { range: util.createRange(3, 24, 3, 25) }
             }]);
         });
 
@@ -362,7 +362,7 @@ describe('EnumStatement', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.enumValueIsRequired('string'),
-                range: util.createRange(3, 20, 3, 21)
+                location: { range: util.createRange(3, 20, 3, 21) }
             }]);
         });
 
@@ -397,7 +397,7 @@ describe('EnumStatement', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.enumValueMustBeType('integer'),
-                range: util.createRange(2, 33, 2, 35)
+                location: { range: util.createRange(2, 33, 2, 35) }
             }]);
         });
 
@@ -422,7 +422,7 @@ describe('EnumStatement', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.enumValueIsRequired('string'),
-                range: util.createRange(2, 20, 2, 21)
+                location: { range: util.createRange(2, 20, 2, 21) }
             }]);
         });
 
@@ -441,10 +441,10 @@ describe('EnumStatement', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.unknownEnumValue('DOWN', 'Direction'),
-                range: util.createRange(7, 36, 7, 40)
+                location: { range: util.createRange(7, 36, 7, 40) }
             }, {
                 ...DiagnosticMessages.unknownEnumValue('down', 'Direction'),
-                range: util.createRange(8, 36, 8, 40)
+                location: { range: util.createRange(8, 36, 8, 40) }
             }]);
         });
 
@@ -465,10 +465,10 @@ describe('EnumStatement', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.unknownEnumValue('DOWN', 'Enums.Direction'),
-                range: util.createRange(2, 42, 2, 46)
+                location: { range: util.createRange(2, 42, 2, 46) }
             }, {
                 ...DiagnosticMessages.unknownEnumValue('down', 'Enums.Direction'),
-                range: util.createRange(3, 42, 3, 46)
+                location: { range: util.createRange(3, 42, 3, 46) }
             }]);
         });
     });

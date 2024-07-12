@@ -128,10 +128,10 @@ describe('BrsFileValidator', () => {
         program.validate();
         expectDiagnostics(program, [{
             ...DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel('class'),
-            range: util.createRange(2, 16, 2, 27)
+            location: { range: util.createRange(2, 16, 2, 27) }
         }, {
             ...DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel('class'),
-            range: util.createRange(5, 20, 5, 30)
+            location: { range: util.createRange(5, 20, 5, 30) }
         }]);
     });
 
@@ -171,10 +171,10 @@ describe('BrsFileValidator', () => {
         program.validate();
         expectDiagnostics(program, [{
             ...DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel('enum'),
-            range: util.createRange(2, 16, 2, 26)
+            location: { range: util.createRange(2, 16, 2, 26) }
         }, {
             ...DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel('enum'),
-            range: util.createRange(6, 20, 6, 29)
+            location: { range: util.createRange(6, 20, 6, 29) }
         }]);
     });
 
@@ -209,10 +209,10 @@ describe('BrsFileValidator', () => {
         program.validate();
         expectDiagnostics(program, [{
             ...DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel('function'),
-            range: util.createRange(2, 16, 2, 30)
+            location: { range: util.createRange(2, 16, 2, 30) }
         }, {
             ...DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel('function'),
-            range: util.createRange(5, 20, 5, 33)
+            location: { range: util.createRange(5, 20, 5, 33) }
         }]);
     });
 
@@ -247,10 +247,10 @@ describe('BrsFileValidator', () => {
         program.validate();
         expectDiagnostics(program, [{
             ...DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel('namespace'),
-            range: util.createRange(2, 16, 2, 31)
+            location: { range: util.createRange(2, 16, 2, 31) }
         }, {
             ...DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel('namespace'),
-            range: util.createRange(5, 20, 5, 34)
+            location: { range: util.createRange(5, 20, 5, 34) }
         }]);
     });
 
@@ -290,10 +290,10 @@ describe('BrsFileValidator', () => {
         program.validate();
         expectDiagnostics(program, [{
             ...DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel('interface'),
-            range: util.createRange(2, 16, 2, 31)
+            location: { range: util.createRange(2, 16, 2, 31) }
         }, {
             ...DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel('interface'),
-            range: util.createRange(6, 20, 6, 34)
+            location: { range: util.createRange(6, 20, 6, 34) }
         }]);
     });
 
@@ -323,10 +323,10 @@ describe('BrsFileValidator', () => {
         program.validate();
         expectDiagnostics(program, [{
             ...DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel('const'),
-            range: util.createRange(2, 16, 2, 27)
+            location: { range: util.createRange(2, 16, 2, 27) }
         }, {
             ...DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel('const'),
-            range: util.createRange(4, 20, 4, 30)
+            location: { range: util.createRange(4, 20, 4, 30) }
         }]);
     });
 

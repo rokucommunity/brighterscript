@@ -294,33 +294,34 @@ export class ProgramBuilder {
         //group the diagnostics by file
         let diagnosticsByFile = {} as Record<string, BsDiagnostic[]>;
         for (let diagnostic of diagnostics) {
-            if (!diagnosticsByFile[diagnostic.location.uri]) {
-                diagnosticsByFile[diagnostic.location.uri] = [];
+            const diagnosticFileKey = diagnostic.location?.uri ?? 'no-uri';
+            if (!diagnosticsByFile[diagnosticFileKey]) {
+                diagnosticsByFile[diagnosticFileKey] = [];
             }
-            diagnosticsByFile[diagnostic.location.uri].push(diagnostic);
+            diagnosticsByFile[diagnosticFileKey].push(diagnostic);
         }
 
         //get printing options
         const options = diagnosticUtils.getPrintDiagnosticOptions(this.options);
         const { cwd, emitFullPaths } = options;
 
-        let srcPaths = Object.keys(diagnosticsByFile).sort();
-        for (let srcPath of srcPaths) {
-            let diagnosticsForFile = diagnosticsByFile[srcPath];
+        let fileUris = Object.keys(diagnosticsByFile).sort();
+        for (let fileUri of fileUris) {
+            let diagnosticsForFile = diagnosticsByFile[fileUri];
             //sort the diagnostics in line and column order
             let sortedDiagnostics = diagnosticsForFile.sort((a, b) => {
                 return (
-                    (a.location.range?.start.line ?? -1) - (b.location.range?.start.line ?? -1) ||
-                    (a.location.range?.start.character ?? -1) - (b.location.range?.start.character ?? -1)
+                    (a.location?.range?.start.line ?? -1) - (b.location?.range?.start.line ?? -1) ||
+                    (a.location?.range?.start.character ?? -1) - (b.location?.range?.start.character ?? -1)
                 );
             });
 
-            let filePath = srcPath;
+            let filePath = URI.parse(fileUri).fsPath;
             if (!emitFullPaths) {
                 filePath = path.relative(cwd, filePath);
             }
             //load the file text
-            const file = this.program?.getFile(srcPath);
+            const file = this.program?.getFile(fileUri);
             //get the file's in-memory contents if available
             const lines = (file as BrsFile)?.fileContents?.split(/\r?\n/g) ?? [];
 
@@ -328,7 +329,7 @@ export class ProgramBuilder {
                 //default the severity to error if undefined
                 let severity = typeof diagnostic.severity === 'number' ? diagnostic.severity : DiagnosticSeverity.Error;
                 let relatedInformation = (util.toDiagnostic(diagnostic, diagnostic.source)?.relatedInformation ?? []).map(x => {
-                    let relatedInfoFilePath = URI.parse(x.location.uri).fsPath;
+                    let relatedInfoFilePath = URI.parse(x.location?.uri).fsPath;
                     if (!emitFullPaths) {
                         relatedInfoFilePath = path.relative(cwd, relatedInfoFilePath);
                     }

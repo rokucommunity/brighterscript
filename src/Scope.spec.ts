@@ -185,7 +185,7 @@ describe('Scope', () => {
         expectDiagnostics(program, [{
             //sub test(|lineHeight| as integer)
             message: DiagnosticMessages.parameterMayNotHaveSameNameAsNamespace('lineHeight').message,
-            range: util.createRange(2, 25, 2, 35)
+            location: { range: util.createRange(2, 25, 2, 35) }
         }]);
     });
 
@@ -202,11 +202,11 @@ describe('Scope', () => {
         expectDiagnostics(program, [
             {
                 ...DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('namea'),
-                range: util.createRange(4, 16, 4, 21)
+                location: { range: util.createRange(4, 16, 4, 21) }
             },
             {
                 ...DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('NAMEA'),
-                range: util.createRange(5, 16, 5, 21)
+                location: { range: util.createRange(5, 16, 5, 21) }
             }
         ]);
     });
@@ -371,16 +371,16 @@ describe('Scope', () => {
             expectDiagnostics(program, [
                 {
                     ...DiagnosticMessages.cannotFindName('delta', 'constants.alpha.delta', 'constants.alpha', 'namespace'),
-                    file: {
-                        srcPath: buttonPrimary.srcPath
+                    location: {
+                        uri: util.getFileUri(buttonPrimary)
                     },
                     relatedInformation: [{
                         message: `In component scope 'ButtonPrimary'`
                     }]
                 }, {
                     ...DiagnosticMessages.cannotFindName('delta', 'constants.alpha.delta', 'constants.alpha', 'namespace'),
-                    file: {
-                        srcPath: buttonSecondary.srcPath
+                    location: {
+                        uri: util.getFileUri(buttonSecondary)
                     },
                     relatedInformation: [{
                         message: `In component scope 'ButtonSecondary'`
@@ -435,10 +435,10 @@ describe('Scope', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.cannotFindName('Charlie'),
-                range: util.createRange(6, 32, 6, 39)
+                location: { range: util.createRange(6, 32, 6, 39) }
             }, {
                 ...DiagnosticMessages.itemCannotBeUsedAsVariable('namespace'),
-                range: util.createRange(7, 32, 7, 50)
+                location: { range: util.createRange(7, 32, 7, 50) }
             }]);
         });
 
@@ -457,7 +457,7 @@ describe('Scope', () => {
             expectDiagnostics(program, [{
                 //|lineHeight| = 1
                 message: DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('lineHeight').message,
-                range: util.createRange(3, 24, 3, 34)
+                location: { range: util.createRange(3, 24, 3, 34) }
             }]);
         });
 
@@ -480,7 +480,7 @@ describe('Scope', () => {
             expectDiagnostics(program, [{
                 //print |lineHeight|
                 message: DiagnosticMessages.cannotFindName('lineHeight').message,
-                range: util.createRange(3, 30, 3, 40)
+                location: { range: util.createRange(3, 30, 3, 40) }
             }]);
         });
 
@@ -797,7 +797,7 @@ describe('Scope', () => {
                 // only care about code and `roFontMetrics` match
                 expectDiagnostics(program, [{
                     ...DiagnosticMessages.unknownBrightScriptComponent('roFontMetrics'),
-                    range: Range.create(2, 51, 2, 66)
+                    location: { range: Range.create(2, 51, 2, 66) }
                 }]);
             });
 
@@ -930,7 +930,7 @@ describe('Scope', () => {
                 program.validate();
                 expectDiagnostics(program, [{
                     ...DiagnosticMessages.localVarFunctionShadowsParentFunction('stdlib'),
-                    range: Range.create(2, 24, 2, 27)
+                    location: { range: Range.create(2, 24, 2, 27) }
                 }]);
             });
 
@@ -972,7 +972,7 @@ describe('Scope', () => {
                 program.validate();
                 expectDiagnostics(program, [{
                     message: DiagnosticMessages.localVarFunctionShadowsParentFunction('scope').message,
-                    range: Range.create(2, 24, 2, 32)
+                    location: { range: Range.create(2, 24, 2, 32) }
                 }]);
             });
 
@@ -989,7 +989,7 @@ describe('Scope', () => {
                 program.validate();
                 expectDiagnostics(program, [{
                     message: DiagnosticMessages.localVarShadowedByScopedFunction().message,
-                    range: Range.create(2, 24, 2, 32)
+                    location: { range: Range.create(2, 24, 2, 32) }
                 }]);
             });
 
@@ -1005,7 +1005,7 @@ describe('Scope', () => {
                 program.validate();
                 expectDiagnostics(program, [{
                     message: DiagnosticMessages.localVarShadowedByScopedFunction().message,
-                    range: Range.create(1, 29, 1, 37)
+                    location: { range: Range.create(1, 29, 1, 37) }
                 }]);
             });
 
@@ -1023,7 +1023,7 @@ describe('Scope', () => {
                     DiagnosticMessages.nameCollision('Function', 'Global Function', 'Str').message,
                     {
                         message: DiagnosticMessages.scopeFunctionShadowedByBuiltInFunction().message,
-                        range: Range.create(4, 29, 4, 32)
+                        location: { range: Range.create(4, 29, 4, 32) }
                     }]);
             });
         });

@@ -283,7 +283,7 @@ describe('Program', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.duplicateComponentName('Component1'),
-                range: Range.create(1, 17, 1, 27),
+                location: { range: Range.create(1, 17, 1, 27) },
                 relatedInformation: [{
                     location: util.createLocationFromRange(
                         URI.file(s`${rootDir}/components/component1.xml`).toString(),
@@ -293,7 +293,7 @@ describe('Program', () => {
                 }]
             }, {
                 ...DiagnosticMessages.duplicateComponentName('Component1'),
-                range: Range.create(1, 17, 1, 27),
+                location: { range: Range.create(1, 17, 1, 27) },
                 relatedInformation: [{
                     location: util.createLocationFromRange(
                         URI.file(s`${rootDir}/components/component2.xml`).toString(),
@@ -711,7 +711,7 @@ describe('Program', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.referencedFileDoesNotExist(),
-                range: Range.create(2, 42, 2, 72)
+                location: { range: Range.create(2, 42, 2, 72) }
             }]);
         });
 

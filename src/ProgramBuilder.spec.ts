@@ -189,6 +189,7 @@ describe('ProgramBuilder', () => {
                 project: s`${rootDir}/bsconfig.json`,
                 username: 'john'
             });
+            // TODO: this is not run - builder.run throws a diagnostic
             expect(builder.program.options.username).to.equal('rokudev');
         });
 
@@ -289,17 +290,15 @@ describe('ProgramBuilder', () => {
     describe('printDiagnostics', () => {
 
         it('does not crash when a diagnostic is missing range informtaion', () => {
-            const file = builder.program.setFile('source/main.brs', ``);
+            builder.program.setFile('source/main.brs', ``);
             builder.diagnostics.register([{
                 message: 'message 1',
-                code: 'test1',
-                file: file
+                code: 'test1'
             }, {
                 message: 'message 2',
-                code: 'test1',
-                file: file
+                code: 'test1'
             }] as any);
-            const stub = sinon.stub(diagnosticUtils, 'printDiagnostic').callsFake(() => { });
+            const stub = sinon.stub(diagnosticUtils, 'printDiagnostic').callsFake((...args) => { });
             //if this doesn't crash, then the test passes
             builder['printDiagnostics']();
             expect(stub.getCalls().map(x => x.args[4].message)).to.eql([
