@@ -196,8 +196,8 @@ describe('LanguageServer', () => {
                 builder: {
                     getDiagnostics: () => {
                         return [{
-                            file: {
-                                srcPath: s`${rootDir}/source/main.brs`
+                            location: {
+                                uri: util.pathToUri(s`${rootDir}/source/main.brs`)
                             },
                             code: 1000,
                             range: Range.create(1, 2, 3, 4)
@@ -209,8 +209,8 @@ describe('LanguageServer', () => {
                 builder: {
                     getDiagnostics: () => {
                         return [{
-                            file: {
-                                srcPath: s`${rootDir}/source/main.brs`
+                            location: {
+                                uri: util.pathToUri(s`${rootDir}/source/main.brs`)
                             },
                             code: 1000,
                             range: Range.create(1, 2, 3, 4)

@@ -25,11 +25,16 @@ describe('DiagnosticCollection', () => {
         const patch = collection.getPatch(projects);
         //convert the patch into our test structure
         const actual = {};
-        for (const filePath in patch) {
-            actual[filePath] = patch[filePath].map(x => x.message);
+        for (const fileUri in patch) {
+            actual[fileUri] = patch[fileUri].map(x => x.message);
+        }
+        const expectedWithUris = {};
+        for (const fileSrc in expected) {
+            const fileUri = util.pathToUri(fileSrc);
+            expectedWithUris[fileUri] = expected[fileSrc];
         }
 
-        expect(actual).to.eql(expected);
+        expect(actual).to.eql(expectedWithUris);
     }
 
     it('does not crash for diagnostics with missing locations', () => {

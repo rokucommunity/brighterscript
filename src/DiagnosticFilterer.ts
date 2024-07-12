@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as minimatch from 'minimatch';
 import type { BsConfig } from './BsConfig';
 import util, { standardizePath as s } from './util';
+import { URI } from 'vscode-uri';
 
 interface DiagnosticWithSuppression {
     diagnostic: BsDiagnostic;
@@ -91,7 +92,7 @@ export class DiagnosticFilterer {
     }
 
     private filterAllFiles(filter: NormalizedFilter) {
-        let matchedFilePaths: string[];
+        let matchedFileUris: string[];
 
         //if there's a src, match against all files
         if (filter.src) {
@@ -99,37 +100,37 @@ export class DiagnosticFilterer {
             let src = s(
                 path.isAbsolute(filter.src) ? filter.src : `${this.rootDir}/${filter.src}`
             );
-            let uri = util.pathToUri(src);
 
-            matchedFilePaths = minimatch.match(Object.keys(this.byFile), uri, {
+            const byFileSrcs = Object.keys(this.byFile).map(uri => URI.parse(uri).fsPath);
+            matchedFileUris = minimatch.match(byFileSrcs, src, {
                 nocase: true
-            });
+            }).map(src => util.pathToUri(src));
 
             //there is no src; this applies to all files
         } else {
-            matchedFilePaths = Object.keys(this.byFile);
+            matchedFileUris = Object.keys(this.byFile);
         }
 
         //filter each matched file
-        for (let filePath of matchedFilePaths) {
-            this.filterFile(filter, filePath);
+        for (let fileUri of matchedFileUris) {
+            this.filterFile(filter, fileUri);
         }
     }
 
-    private filterFile(filter: NormalizedFilter, filePath: string) {
+    private filterFile(filter: NormalizedFilter, fileUri: string) {
         //if the filter is negative, we're turning diagnostics on
         //if the filter is not negative we're turning diagnostics off
         const isSuppressing = !filter.isNegative;
 
         //if there is no code, set isSuppressed on every diagnostic in this file
         if (!filter.codes) {
-            this.byFile[filePath].forEach(diagnostic => {
+            this.byFile[fileUri].forEach(diagnostic => {
                 diagnostic.isSuppressed = isSuppressing;
             });
 
             //set isSuppressed for any diagnostics with matching codes
         } else {
-            let fileDiagnostics = this.byFile[filePath];
+            let fileDiagnostics = this.byFile[fileUri];
             for (const diagnostic of fileDiagnostics) {
                 if (filter.codes.includes(diagnostic.diagnostic.code!)) {
                     diagnostic.isSuppressed = isSuppressing;
