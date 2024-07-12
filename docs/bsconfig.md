@@ -74,7 +74,7 @@ Type: `Array<string | number | {files: string | Array<string | {src: string} | {
 
 A list of filters used to hide diagnostics.
 
-- A `string` value should be a diagnostic code, or diagnostic shortname. This will supress all diagnostics with that code for the whole project. For example,
+- A `string` value should be a diagnostic code, or diagnostic shortname. This will supress all diagnostics with that code for the whole project. For example:
     ```jsonc
     "diagnosticFilters": [
         "1000", 
