@@ -4,7 +4,6 @@ import * as diagnosticUtils from './diagnosticUtils';
 import { Range, DiagnosticSeverity } from 'vscode-languageserver';
 import { util } from './util';
 import chalk from 'chalk';
-import { AssetFile } from './files/AssetFile';
 import { createSandbox } from 'sinon';
 import undent from 'undent';
 import type { BsDiagnostic } from './interfaces';

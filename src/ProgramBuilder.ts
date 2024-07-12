@@ -100,7 +100,7 @@ export class ProgramBuilder {
             this.loadRequires();
             this.loadPlugins();
         } catch (e: any) {
-            if (e?.file && e.message && e.code) {
+            if (e?.location && e.message && e.code) {
                 let err = e as BsDiagnostic;
                 this.diagnostics.register(err);
             } else {
