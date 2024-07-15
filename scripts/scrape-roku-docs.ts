@@ -1268,7 +1268,6 @@ class Runner {
                 },
                 ifsystemlog: {
                     methods: [{
-
                         description: 'Returns the message port (if any) currently associated with the object',
                         name: 'GetMessagePort',
                         params: [],
