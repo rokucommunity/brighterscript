@@ -104,7 +104,7 @@ export class DiagnosticFilterer {
             const byFileSrcs = Object.keys(this.byFile).map(uri => URI.parse(uri).fsPath);
             matchedFileUris = minimatch.match(byFileSrcs, src, {
                 nocase: true
-            }).map(src => util.pathToUri(src));
+            }).map(src => util.pathToUri(src).toLowerCase());
 
             //there is no src; this applies to all files
         } else {
@@ -121,16 +121,16 @@ export class DiagnosticFilterer {
         //if the filter is negative, we're turning diagnostics on
         //if the filter is not negative we're turning diagnostics off
         const isSuppressing = !filter.isNegative;
-
+        const lowerFileUri = fileUri.toLowerCase();
         //if there is no code, set isSuppressed on every diagnostic in this file
         if (!filter.codes) {
-            this.byFile[fileUri].forEach(diagnostic => {
+            this.byFile[lowerFileUri].forEach(diagnostic => {
                 diagnostic.isSuppressed = isSuppressing;
             });
 
             //set isSuppressed for any diagnostics with matching codes
         } else {
-            let fileDiagnostics = this.byFile[fileUri];
+            let fileDiagnostics = this.byFile[lowerFileUri];
             for (const diagnostic of fileDiagnostics) {
                 if (filter.codes.includes(diagnostic.diagnostic.code!)) {
                     diagnostic.isSuppressed = isSuppressing;
