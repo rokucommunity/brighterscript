@@ -1274,7 +1274,6 @@ class Runner {
                         params: [],
                         returnDescription: 'The message port.',
                         returnType: 'Object'
-
                     }, {
                         description: 'Sets the roMessagePort to be used to receive events.',
                         name: 'SetMessagePort',
