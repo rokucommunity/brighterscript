@@ -1,3 +1,4 @@
+/* eslint-disable import/no-extraneous-dependencies */
 /* eslint-disable @typescript-eslint/dot-notation */
 /* eslint-disable @typescript-eslint/no-var-requires */
 /* eslint-disable @typescript-eslint/no-require-imports */
@@ -294,7 +295,8 @@ class Runner {
                 let match;
                 while (match = regexp.exec(manager.markdown)) {
 
-                    const { statements, diagnostics } = Parser.parse(match[0]);
+                    const { ast, diagnostics } = Parser.parse(match[0]);
+                    const statements = ast.statements;
                     if (diagnostics.length === 0) {
                         const signature = {
                             params: [],
@@ -805,7 +807,8 @@ class Runner {
             functionSignatureToParse = functionSignatureToParse.replace(variadicRegex, ')');
         }
 
-        const { statements } = Parser.parse(functionSignatureToParse);
+        const { ast } = Parser.parse(functionSignatureToParse);
+        const statements = ast.statements;
         if (statements.length > 0) {
             const func = statements[0] as FunctionStatement;
             const signature = {
@@ -1261,6 +1264,54 @@ class Runner {
                             }
                         ],
                         returnType: 'Void'
+                    }]
+                },
+                ifsystemlog: {
+                    methods: [{
+
+                        description: 'Returns the message port (if any) currently associated with the object',
+                        name: 'GetMessagePort',
+                        params: [],
+                        returnDescription: 'The message port.',
+                        returnType: 'Object'
+
+                    }, {
+                        description: 'Sets the roMessagePort to be used to receive events.',
+                        name: 'SetMessagePort',
+                        params: [
+                            {
+                                default: null,
+                                description: 'The port to be used to receive events.',
+                                isRequired: true,
+                                name: 'port',
+                                type: 'Object'
+                            }
+                        ],
+                        returnType: 'Void'
+                    }]
+                },
+                ifarrayslice: {
+                    methods: [{
+                        description: 'Returns a new array object with a shallow copy of the specified portion of the array.\n\nThe **start_pos** and **end_pos** fields specify the 0-based indices of items in the array, where the **end_pos** field represents the position **past** the last element to be copied.',
+                        name: 'Slice',
+                        params: [
+                            {
+                                default: null,
+                                description: 'The 0-based index of first element to copy. A negative index specifies an offset from the end of the array. The default value is 0.',
+                                isRequired: false,
+                                name: 'start_pos',
+                                type: 'integer'
+                            },
+                            {
+                                default: null,
+                                description: 'The 0-based index past last element to copy. A negative index indicates an offset from the end of the array. The default value is the array length.',
+                                isRequired: false,
+                                name: 'end_pos',
+                                type: 'integer'
+                            }
+                        ],
+                        returnDescription: 'Shallow copy of specified portion of the array',
+                        returnType: 'Object'
                     }]
                 }
             }
