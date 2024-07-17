@@ -83,7 +83,7 @@ export class ProjectManager {
             action.id = idSequence++;
         }
 
-        console.info(`Flushing ${actions.length} document changes`, actions.map(x => ({
+        this.logger.info(`Flushing ${actions.length} document changes`, actions.map(x => ({
             type: x.type,
             srcPath: x.srcPath
         })));
@@ -642,6 +642,8 @@ export class ProjectManager {
         if (idx > -1) {
             this.projects.splice(idx, 1);
         }
+        //anytime we remove a project, we should emit an event that clears all of its diagnostics
+        // this.emit('diagnostics', { project: project, diagnostics: [] });
         project?.dispose();
         this.busyStatusTracker.endAllRunsForScope(project);
     }

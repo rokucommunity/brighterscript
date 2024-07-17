@@ -240,7 +240,7 @@ export class LanguageServer {
     public async onInitialized() {
         this.logger.log('onInitialized');
 
-        //set our logger to the most verbose loglevel found across any project
+        //set our logger to the most verbose logLevel found across any project
         await this.syncLogLevel();
 
         try {
