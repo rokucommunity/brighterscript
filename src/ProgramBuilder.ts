@@ -129,6 +129,12 @@ export class ProgramBuilder {
             this.loadRequires();
             this.loadPlugins();
         } catch (e: any) {
+            //something went terribly wrong. grab a few sane options defaults before we quit
+            this.options = {
+                ...this.options ?? {},
+                showDiagnosticsInConsole: options?.showDiagnosticsInConsole ?? this.options?.showDiagnosticsInConsole
+            } as typeof this.options;
+
             if (e?.file && e.message && e.code) {
                 let err = e as BsDiagnostic;
                 this.staticDiagnostics.push(err);
