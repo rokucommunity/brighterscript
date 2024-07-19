@@ -2,7 +2,6 @@ import * as micromatch from 'micromatch';
 import * as path from 'path';
 import type { Logger } from '../logging';
 import { createLogger } from '../logging';
-import util from '../util';
 
 /**
  * Manage collections of glob patterns used to filter paths.
