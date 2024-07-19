@@ -390,7 +390,6 @@ export class ProjectManager {
     private async reloadProject(project: LspProject) {
         this.removeProject(project);
         project = await this.createAndActivateProject(project.activateOptions);
-        this.emit('project-reload', { project: project });
     }
 
     /**
@@ -761,7 +760,6 @@ export class ProjectManager {
     public on(eventName: 'validate-begin', handler: (data: { project: LspProject }) => MaybePromise<void>);
     public on(eventName: 'validate-end', handler: (data: { project: LspProject }) => MaybePromise<void>);
     public on(eventName: 'critical-failure', handler: (data: { project: LspProject; message: string }) => MaybePromise<void>);
-    public on(eventName: 'project-reload', handler: (data: { project: LspProject }) => MaybePromise<void>);
     public on(eventName: 'project-activate', handler: (data: { project: LspProject }) => MaybePromise<void>);
     public on(eventName: 'diagnostics', handler: (data: { project: LspProject; diagnostics: LspDiagnostic[] }) => MaybePromise<void>);
     public on(eventName: string, handler: (payload: any) => MaybePromise<void>) {
@@ -774,7 +772,6 @@ export class ProjectManager {
     private emit(eventName: 'validate-begin', data: { project: LspProject });
     private emit(eventName: 'validate-end', data: { project: LspProject });
     private emit(eventName: 'critical-failure', data: { project: LspProject; message: string });
-    private emit(eventName: 'project-reload', data: { project: LspProject });
     private emit(eventName: 'project-activate', data: { project: LspProject });
     private emit(eventName: 'diagnostics', data: { project: LspProject; diagnostics: LspDiagnostic[] });
     private async emit(eventName: string, data?) {

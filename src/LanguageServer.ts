@@ -48,7 +48,6 @@ import ignore from 'ignore';
 import * as micromatch from 'micromatch';
 import type { LspProject, LspDiagnostic } from './lsp/LspProject';
 import { PathFilterer } from './lsp/PathFilterer';
-import type { Project } from './lsp/Project';
 import type { WorkspaceConfig } from './lsp/ProjectManager';
 import { ProjectManager } from './lsp/ProjectManager';
 import * as fsExtra from 'fs-extra';
@@ -115,35 +114,29 @@ export class LanguageServer {
             this.sendDiagnostics(event).catch(logAndIgnoreError);
         });
 
-        // Send all open document changes whenever a project is created or reloaded. This is necessary because the project loads files from disk
+        // Send all open document changes whenever a project is activated. This is necessary because at project startup, the project loads files from disk
         // and may not have the latest unsaved file changes. Any existing projects that already use these files will just ignore the changes
         // because the file contents haven't changed.
-        this.projectManager.on('project-reload', (event) => {
-            this.sendOpenDocumentChanges(event.project);
-        });
+
         this.projectManager.on('project-activate', (event) => {
-            this.sendOpenDocumentChanges(event.project);
+            //keep logLevel in sync with the most verbose log level found across all projects
+            this.syncLogLevel().catch(logAndIgnoreError);
+
+            //resend all open document changes
+            const documents = [...this.documents.all()];
+            if (documents.length > 0) {
+                this.logger.log(`Project ${event.project?.projectNumber} loaded or changed. Resending all open document changes.`, documents.map(x => x.uri));
+                for (const document of this.documents.all()) {
+                    this.onTextDocumentDidChangeContent({
+                        document: document
+                    }).catch(logAndIgnoreError);
+                }
+            }
         });
 
         this.projectManager.busyStatusTracker.on('change', (event) => {
             this.sendBusyStatus();
         });
-    }
-
-    private sendOpenDocumentChanges(project: LspProject) {
-        //keep logLevel in sync with the most verbose log level found across all projects
-        this.syncLogLevel().catch(logAndIgnoreError);
-
-        //resend all open document changes
-        const documents = [...this.documents.all()];
-        if (documents.length > 0) {
-            this.logger.log(`Project ${project?.projectNumber} loaded or changed. Resending all open document changes.`, documents.map(x => x.uri));
-            for (const document of this.documents.all()) {
-                this.onTextDocumentDidChangeContent({
-                    document: document
-                }).catch(logAndIgnoreError);
-            }
-        }
     }
 
     //run the server

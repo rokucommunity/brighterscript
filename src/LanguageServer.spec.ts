@@ -159,7 +159,7 @@ describe('LanguageServer', () => {
         });
     });
 
-    describe('project-reload', () => {
+    describe('project-activate', () => {
         it('should sync all open document changes to all projects', async () => {
 
             //force an open text document
@@ -173,7 +173,7 @@ describe('LanguageServer', () => {
                 return Promise.resolve();
             });
 
-            server['projectManager']['emit']('project-reload', {
+            server['projectManager']['emit']('project-activate', {
                 project: server['projectManager'].projects[0]
             });
 
@@ -190,7 +190,7 @@ describe('LanguageServer', () => {
         });
 
         it('handles when there were no open documents', () => {
-            server['projectManager']['emit']('project-reload', {
+            server['projectManager']['emit']('project-activate', {
                 project: {
                     projectNumber: 1
                 }
