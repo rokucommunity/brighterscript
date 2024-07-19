@@ -7,7 +7,7 @@ export class DiagnosticCollection {
     private previousDiagnosticsByFile: Record<string, KeyedDiagnostic[]> = {};
 
     /**
-     * Get a patch of any changed diagnostics since last time. This takes a single project and diagnostics, but evaulates
+     * Get a patch of any changed diagnostics since last time. This takes a single project and diagnostics, but evaluates
      * the patch based on all previously seen projects. It's supposed to be a rolling patch.
      * This will include _ALL_ diagnostics for a file if any diagnostics have changed for that file, due to how the language server expects diagnostics to be sent.
      */
@@ -41,7 +41,7 @@ export class DiagnosticCollection {
             for (let i = diagnostics.length - 1; i >= 0; i--) {
                 const diagnostic = diagnostics[i];
 
-                //remember this diagnostic key for use when deduping down below
+                //remember this diagnostic key for use when deduplicating down below
                 diagnosticsByKey.set(diagnostic.key, diagnostic);
 
                 //unlink the diagnostic from this project

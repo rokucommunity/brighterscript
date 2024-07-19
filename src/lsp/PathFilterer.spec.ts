@@ -1,4 +1,4 @@
-import { PathFilterer } from './PathFilterer';
+import { PathCollection, PathFilterer } from './PathFilterer';
 import { rootDir } from '../testHelpers.spec';
 import { expect } from 'chai';
 import { standardizePath as s } from '../util';
@@ -22,6 +22,16 @@ describe('PathFilterer', () => {
             s`${rootDir}/a/b/c/d.xml`,
             s`${rootDir}/e.txt`
         ]);
+    });
+
+    it('supports standalone workspace style', () => {
+        const filterer = new PathCollection({
+            rootDir: 'c:/projects/roku/local3/brighterscript/src/lsp/standalone-project-1',
+            globs: ['c:/projects/roku/local3/brighterscript/.tmp/rootDir/source/main.bs']
+        });
+        expect(
+            filterer.isMatch(s`c:/projects/roku/local3/brighterscript/.tmp/rootDir/source/main.bs`)
+        ).to.be.true;
     });
 
     it('filters files', () => {

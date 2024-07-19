@@ -10,6 +10,11 @@ import type { Logger, LogLevel } from '../logging';
 export interface LspProject {
 
     /**
+     * Is this a standalone project?
+     */
+    isStandaloneProject: boolean;
+
+    /**
      * A logger instance used for logging in this project
      */
     logger: Logger;

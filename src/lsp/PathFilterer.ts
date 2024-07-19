@@ -2,6 +2,7 @@ import * as micromatch from 'micromatch';
 import * as path from 'path';
 import type { Logger } from '../logging';
 import { createLogger } from '../logging';
+import util from '../util';
 
 /**
  * Manage collections of glob patterns used to filter paths.
@@ -172,10 +173,8 @@ export class PathCollection {
             //build matcher patterns from the globs
             for (const glob of options.globs ?? []) {
                 const pattern = path.resolve(
-                    path.posix.join(
-                        options.rootDir,
-                        glob
-                    )
+                    options.rootDir,
+                    glob
                 ).replace(/\\+/g, '/');
                 this.matchers.push(
                     micromatch.matcher(pattern)

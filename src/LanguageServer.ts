@@ -72,14 +72,6 @@ export class LanguageServer {
      */
     private projectManager: ProjectManager;
 
-    /**
-     * These projects are created on the fly whenever a file is opened that is not included
-     * in any of the workspace-based projects.
-     * Basically these are single-file projects to at least get parsing for standalone files.
-     * Also, they should only be created when the file is opened, and destroyed when the file is closed.
-     */
-    protected standaloneFileProjects = {} as Record<string, Project>;
-
     private hasConfigurationCapability = false;
 
     /**
@@ -123,28 +115,35 @@ export class LanguageServer {
             this.sendDiagnostics(event).catch(logAndIgnoreError);
         });
 
-        // Send all open document changes whenever a project reloads. This is necessary because the project loads files from disk
+        // Send all open document changes whenever a project is created or reloaded. This is necessary because the project loads files from disk
         // and may not have the latest unsaved file changes. Any existing projects that already use these files will just ignore the changes
         // because the file contents haven't changed.
         this.projectManager.on('project-reload', (event) => {
-            //keep logLevel in sync with the most verbose log level found across all projects
-            this.syncLogLevel().catch(logAndIgnoreError);
-
-            //resend all open document changes
-            const documents = [...this.documents.all()];
-            if (documents.length > 0) {
-                this.logger.log(`Project ${event.project?.projectNumber} reloaded. Resending all open document changes.`, documents.map(x => x.uri));
-                for (const document of this.documents.all()) {
-                    this.onTextDocumentDidChangeContent({
-                        document: document
-                    }).catch(logAndIgnoreError);
-                }
-            }
+            this.sendOpenDocumentChanges(event.project);
+        });
+        this.projectManager.on('project-activate', (event) => {
+            this.sendOpenDocumentChanges(event.project);
         });
 
         this.projectManager.busyStatusTracker.on('change', (event) => {
             this.sendBusyStatus();
         });
+    }
+
+    private sendOpenDocumentChanges(project: LspProject) {
+        //keep logLevel in sync with the most verbose log level found across all projects
+        this.syncLogLevel().catch(logAndIgnoreError);
+
+        //resend all open document changes
+        const documents = [...this.documents.all()];
+        if (documents.length > 0) {
+            this.logger.log(`Project ${project?.projectNumber} loaded or changed. Resending all open document changes.`, documents.map(x => x.uri));
+            for (const document of this.documents.all()) {
+                this.onTextDocumentDidChangeContent({
+                    document: document
+                }).catch(logAndIgnoreError);
+            }
+        }
     }
 
     //run the server

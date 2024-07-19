@@ -67,7 +67,7 @@ function cloneObject<TOriginal, TTemplate>(original: TOriginal, template: TTempl
     return clone;
 }
 
-interface PartialDiagnostic {
+export interface PartialDiagnostic {
     range?: Range;
     severity?: DiagnosticSeverity;
     code?: integer | string;
@@ -83,7 +83,7 @@ interface PartialDiagnostic {
 /**
  *  Helper function to clone a Diagnostic so it will give partial data that has the same properties as the expected
  */
-function cloneDiagnostic(actualDiagnosticInput: BsDiagnostic, expectedDiagnostic: BsDiagnostic) {
+export function cloneDiagnostic(actualDiagnosticInput: BsDiagnostic, expectedDiagnostic: BsDiagnostic) {
     const actualDiagnostic = cloneObject(
         actualDiagnosticInput,
         expectedDiagnostic,
@@ -127,12 +127,21 @@ export async function expectDiagnosticsAsync(arg: DiagnosticCollectionAsync, exp
  * @param arg - any object that contains diagnostics (such as `Program`, `Scope`, or even an array of diagnostics)
  * @param expected an array of expected diagnostics. if it's a string, assume that's a diagnostic error message
  */
-export function expectDiagnostics(arg: DiagnosticCollection, expected: Array<PartialDiagnostic | string | number>) {
-    const actualDiagnostics = sortDiagnostics(
-        getDiagnostics(arg)
-    );
-    const expectedDiagnostics = sortDiagnostics(
-        expected.map(x => {
+export function expectDiagnostics(arg: DiagnosticCollection, expectedDiagnostics: Array<PartialDiagnostic | string | number>) {
+    const [actual, expected] = normalizeDiagnostics(getDiagnostics(arg), expectedDiagnostics);
+    expect(actual).to.eql(expected);
+}
+
+/**
+ * Normalizes a collection of diagnostics for comparison
+ * @param actualDiagnostics
+ * @param expectedDiagnostics
+ */
+export function normalizeDiagnostics(actualDiagnostics: BsDiagnostic[], expectedDiagnostics: Array<PartialDiagnostic | string | number>) {
+    actualDiagnostics = sortDiagnostics([...actualDiagnostics]);
+
+    expectedDiagnostics = sortDiagnostics(
+        expectedDiagnostics.map(x => {
             let result = x;
             if (typeof x === 'string') {
                 result = { message: x };
@@ -143,13 +152,12 @@ export function expectDiagnostics(arg: DiagnosticCollection, expected: Array<Par
         })
     );
 
-    const actual = [] as BsDiagnostic[];
     for (let i = 0; i < actualDiagnostics.length; i++) {
-        const expectedDiagnostic = expectedDiagnostics[i];
+        const expectedDiagnostic = expectedDiagnostics[i] as BsDiagnostic;
         const actualDiagnostic = cloneDiagnostic(actualDiagnostics[i], expectedDiagnostic);
-        actual.push(actualDiagnostic as any);
+        actualDiagnostics[i] = actualDiagnostic as any;
     }
-    expect(actual).to.eql(expectedDiagnostics);
+    return [actualDiagnostics, expectedDiagnostics];
 }
 
 /**
