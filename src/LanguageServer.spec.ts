@@ -95,6 +95,7 @@ describe('LanguageServer', () => {
         server['hasConfigurationCapability'] = true;
     });
     afterEach(() => {
+        sinon.restore();
         fsExtra.emptyDirSync(tempDir);
         server['dispose']();
         LanguageServer.enableThreadingDefault = enableThreadingDefault;
