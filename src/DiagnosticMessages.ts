@@ -53,7 +53,7 @@ export let DiagnosticMessages = {
         message: `Referenced file does not exist.`,
         legacyCode: 1004,
         severity: DiagnosticSeverity.Error,
-        code: 'referenced-file-does-not-exist'
+        code: 'file-not-found'
     }),
     xmlComponentMissingComponentDeclaration: () => ({
         message: `Missing a component declaration.`,
