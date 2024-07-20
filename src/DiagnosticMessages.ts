@@ -47,7 +47,7 @@ export let DiagnosticMessages = {
         message: `Duplicate function implementation for '${functionName}'.`,
         legacyCode: 1003,
         severity: DiagnosticSeverity.Error,
-        code: 'duplicate-function-implementation'
+        code: 'duplicate-function'
     }),
     referencedFileDoesNotExist: () => ({
         message: `Referenced file does not exist.`,
