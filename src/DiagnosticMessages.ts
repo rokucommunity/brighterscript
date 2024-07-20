@@ -41,7 +41,7 @@ export let DiagnosticMessages = {
         message: `Expected ${expectedCount} arguments, but got ${actualCount}.`,
         legacyCode: 1002,
         severity: DiagnosticSeverity.Error,
-        code: 'mismatch-argument-count'
+        code: 'incorrect-argument-count'
     }),
     duplicateFunctionImplementation: (functionName: string) => ({
         message: `Duplicate function implementation for '${functionName}'.`,
