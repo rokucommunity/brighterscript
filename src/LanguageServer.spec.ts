@@ -1,7 +1,7 @@
 import { expect } from './chai-config.spec';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { DidChangeWatchedFilesParams, Location } from 'vscode-languageserver';
+import type { DidChangeWatchedFilesParams, Location, PublishDiagnosticsParams } from 'vscode-languageserver';
 import { FileChangeType } from 'vscode-languageserver';
 import { Deferred } from './deferred';
 import { CustomCommands, LanguageServer } from './LanguageServer';
@@ -10,7 +10,8 @@ import { standardizePath as s, util } from './util';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import type { Program } from './Program';
 import * as assert from 'assert';
-import { expectZeroDiagnostics, trim } from './testHelpers.spec';
+import type { PartialDiagnostic } from './testHelpers.spec';
+import { expectZeroDiagnostics, normalizeDiagnostics, trim } from './testHelpers.spec';
 import { isBrsFile, isLiteralString } from './astUtils/reflection';
 import { createVisitor, WalkMode } from './astUtils/visitors';
 import { tempDir, rootDir } from './testHelpers.spec';
@@ -19,6 +20,8 @@ import { BusyStatusTracker } from './BusyStatusTracker';
 import type { BscFile } from '.';
 import type { Project } from './lsp/Project';
 import { LogLevel, Logger, createLogger } from './logging';
+import { DiagnosticMessages } from './DiagnosticMessages';
+import { standardizePath } from 'roku-deploy';
 
 const sinon = createSandbox();
 
@@ -92,6 +95,7 @@ describe('LanguageServer', () => {
         server['hasConfigurationCapability'] = true;
     });
     afterEach(() => {
+        sinon.restore();
         fsExtra.emptyDirSync(tempDir);
         server['dispose']();
         LanguageServer.enableThreadingDefault = enableThreadingDefault;
@@ -155,7 +159,7 @@ describe('LanguageServer', () => {
         });
     });
 
-    describe('project-reload', () => {
+    describe('project-activate', () => {
         it('should sync all open document changes to all projects', async () => {
 
             //force an open text document
@@ -169,7 +173,7 @@ describe('LanguageServer', () => {
                 return Promise.resolve();
             });
 
-            server['projectManager']['emit']('project-reload', {
+            server['projectManager']['emit']('project-activate', {
                 project: server['projectManager'].projects[0]
             });
 
@@ -186,7 +190,7 @@ describe('LanguageServer', () => {
         });
 
         it('handles when there were no open documents', () => {
-            server['projectManager']['emit']('project-reload', {
+            server['projectManager']['emit']('project-activate', {
                 project: {
                     projectNumber: 1
                 }
@@ -1201,6 +1205,187 @@ describe('LanguageServer', () => {
             semanticTokensPromise
         ]);
         expectZeroDiagnostics((server['projectManager'].projects[0] as Project)['builder'].program);
+    });
+
+    describe('sendDiagnostics', () => {
+        let diagnostics = {};
+        let diagnosticsDeferred = new Deferred();
+
+        beforeEach(() => {
+            server['connection'] = connection as any;
+            sinon.stub(Logger.prototype, 'write').callsFake(() => {
+                //do nothing, logging is too noisy
+            });
+
+            diagnosticsDeferred = new Deferred();
+
+            let timer = setTimeout(() => { }, 0);
+            sinon.stub(server['connection'], 'sendDiagnostics').callsFake((params: PublishDiagnosticsParams) => {
+                clearTimeout(timer);
+                if (params.diagnostics.length === 0) {
+                    delete diagnostics[params.uri];
+                } else {
+                    diagnostics[params.uri] = params.diagnostics;
+                }
+                //debounce the promise so we get the final snapshot of diagnostics sent
+                timer = setTimeout(() => {
+                    diagnosticsDeferred.resolve();
+                    diagnosticsDeferred = new Deferred();
+                }, 100);
+                return Promise.resolve();
+            });
+        });
+
+        async function diagnosticsEquals(expectedDiagnostics: Record<string, Array<PartialDiagnostic | string | number>>) {
+            //wait for a patch
+            await diagnosticsDeferred.promise;
+
+            let actualDiagnostics = { ...diagnostics };
+
+            //normalize the keys
+            for (let collection of [actualDiagnostics, expectedDiagnostics]) {
+                //convert a URI-like string to an fsPath
+                for (let key in collection) {
+                    let keyNormalized = key.startsWith('file:') ? URI.parse(key).fsPath : key;
+                    keyNormalized = standardizePath(
+                        path.isAbsolute(keyNormalized) ? keyNormalized : s`${rootDir}/${keyNormalized}`
+                    );
+                    //if we changed the key, replace this in the collection
+                    if (keyNormalized !== key) {
+                        collection[keyNormalized] = collection[key];
+                        delete collection[key];
+                    }
+                }
+            }
+
+            //normalize the actual diagnostics so it has diagnostics in the same format as the expected
+            for (let key in actualDiagnostics) {
+                const [actual, expected] = normalizeDiagnostics(actualDiagnostics[key], expectedDiagnostics[key] ?? []);
+                actualDiagnostics[key] = actual;
+                expectedDiagnostics[key] = expected;
+            }
+            expect(actualDiagnostics).to.eql(expectedDiagnostics);
+        }
+
+        it('clears standalone file project diagnostics when that file is adopted by at least one project', async () => {
+            const projectManager = server['projectManager'];
+            const documentManager = projectManager['documentManager'];
+
+            //force instant document flushes
+            documentManager['options'].delay = 0;
+
+            //build a small functional project
+            fsExtra.outputFileSync(`${rootDir}/source/main.bs`, `
+                sub main()
+                    alpha.beta()
+                    print missing
+                end sub
+            `);
+            fsExtra.outputFileSync(`${rootDir}/source/lib.bs`, `
+                    namespace alpha
+                    sub beta()
+                    end sub
+                end namespace
+            `);
+            fsExtra.outputFileSync(`${rootDir}/bsconfig.json`, `
+                {
+                    "files": ["source/**/*.bs"],
+                    //silence the logger, it's noisy
+                    "logLevel": "error"
+                }
+            `);
+            server.run();
+
+            await server['onInitialized']();
+
+            await diagnosticsEquals({
+                'source/main.bs': [
+                    DiagnosticMessages.cannotFindName('missing').message
+                ]
+            });
+
+            const document = TextDocument.create(
+                URI.file(s`${rootDir}/source/main.bs`).toString(),
+                'brightscript',
+                0, `
+                    sub main()
+                        alpha.beta()
+                        print missing2
+                    end sub
+                `
+            );
+            //open the main.bs file so it gets reloaded in a standalone project
+            server['documents'].all = () => [document];
+
+            await server['onTextDocumentDidChangeContent']({
+                document: document
+            });
+
+            await diagnosticsEquals({
+                'source/main.bs': [
+                    DiagnosticMessages.cannotFindName('missing2').message
+                ]
+            });
+
+            //mangle the bsconfig and then sync the project. this should produce new diagnostics from the file as it's now in a standalone project
+            fsExtra.outputFileSync(`${rootDir}/bsconfig.json`, `
+                    {
+                        "files": ["source/lib.bs"]
+                //missing closing curly brace (and also have a comma, oops
+            `);
+
+            //tell the language server we've changed a bsconfig. it'll reload the file (fail cuz syntax error) and create a standalone project for the opened file
+            await server['onDidChangeWatchedFiles']({
+                changes: [{
+                    type: FileChangeType.Changed,
+                    uri: URI.file(`${rootDir}/bsconfig.json`).toString()
+                }]
+            });
+
+            //wait for the manager to settle
+            await projectManager.onIdle();
+
+            //we should get a patch clearing the diagnostics from the unloaded main project, then
+            //when the standalone project finishes loading, we should get another diagnostics patch, then
+            //when the project activates, we flush open document changes. So now the opened copy of the file is re-processed and we get the correct error message `missing2`
+            await diagnosticsEquals({
+                'source/main.bs': [
+                    DiagnosticMessages.cannotFindName('alpha').message,
+                    DiagnosticMessages.cannotFindName('missing2').message
+                ],
+                'bsconfig.json': [
+                    'Encountered syntax errors in bsconfig.json: CloseBraceExpected'
+                ]
+            });
+
+
+            //now fix the bsconfig and sync again. This should dispose the standalone project and send new diagnostics
+            fsExtra.outputFileSync(`${rootDir}/bsconfig.json`, `
+                {
+                    "files": ["source/**/*.bs"],
+                    //silence the logger, it's noisy
+                    "logLevel": "error"
+                }
+            `);
+
+            //tell the language server we've changed a bsconfig
+            await server['onDidChangeWatchedFiles']({
+                changes: [{
+                    type: FileChangeType.Changed,
+                    uri: URI.file(`${rootDir}/bsconfig.json`).toString()
+                }]
+            });
+
+            //let the manager settle
+            await projectManager.onIdle();
+
+            //and then get more diagnostics when the opened file is parsed as well
+            await diagnosticsEquals({
+                'source/main.bs': [
+                    DiagnosticMessages.cannotFindName('missing2').message
+                ]
+            });
+        });
     });
 });
 

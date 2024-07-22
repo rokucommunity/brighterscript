@@ -1,5 +1,5 @@
-import { PathFilterer } from './PathFilterer';
-import { rootDir } from '../testHelpers.spec';
+import { PathCollection, PathFilterer } from './PathFilterer';
+import { cwd, rootDir } from '../testHelpers.spec';
 import { expect } from 'chai';
 import { standardizePath as s } from '../util';
 
@@ -22,6 +22,16 @@ describe('PathFilterer', () => {
             s`${rootDir}/a/b/c/d.xml`,
             s`${rootDir}/e.txt`
         ]);
+    });
+
+    it('supports standalone workspace style', () => {
+        const filterer = new PathCollection({
+            rootDir: s`${cwd}/src/lsp/standalone-project-1`,
+            globs: [s`${cwd}/.tmp/rootDir/source/main.bs`]
+        });
+        expect(
+            filterer.isMatch(`${cwd}/.tmp/rootDir/source/main.bs`)
+        ).to.be.true;
     });
 
     it('filters files', () => {

@@ -129,6 +129,11 @@ export class ProgramBuilder {
             this.loadRequires();
             this.loadPlugins();
         } catch (e: any) {
+            //For now, just use a default options object so we have a functioning program
+            this.options = util.normalizeConfig({
+                showDiagnosticsInConsole: options?.showDiagnosticsInConsole
+            });
+
             if (e?.file && e.message && e.code) {
                 let err = e as BsDiagnostic;
                 this.staticDiagnostics.push(err);
@@ -136,11 +141,8 @@ export class ProgramBuilder {
                 //if this is not a diagnostic, something else is wrong...
                 throw e;
             }
-            this.printDiagnostics();
 
-            //we added diagnostics, so hopefully that draws attention to the underlying issues.
-            //For now, just use a default options object so we have a functioning program
-            this.options = util.normalizeConfig({});
+            this.printDiagnostics();
         }
         this.logger.logLevel = this.options.logLevel;
 
@@ -365,7 +367,7 @@ export class ProgramBuilder {
     }
 
     /**
-     * Run the process once, allowing cancelability.
+     * Run the process once, allowing it to be cancelled.
      * NOTE: This should only be called by `runOnce`.
      */
     private async _runOnce(options: { cancellationToken: { isCanceled: any }; skipValidation: boolean }) {

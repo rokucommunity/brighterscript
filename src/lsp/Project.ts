@@ -7,6 +7,7 @@ import type { CompilerPlugin, Hover, MaybePromise } from '../interfaces';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { URI } from 'vscode-uri';
 import { Deferred } from '../deferred';
+import type { StandardizedFileEntry } from 'roku-deploy';
 import { rokuDeploy } from 'roku-deploy';
 import type { DocumentSymbol, Position, Range, Location, WorkspaceSymbol } from 'vscode-languageserver-protocol';
 import { CompletionList } from 'vscode-languageserver-protocol';
@@ -71,15 +72,17 @@ export class Project implements LspProject {
             skipInitialValidation: true
         } as BsConfig;
 
-        //Assign .files (mostly used for standalone projects) if avaiable, as a dedicated assignment because `undefined` overrides the default value in the `bsconfig.json`
+        //Assign .files (mostly used for standalone projects) if available, as a dedicated assignment because `undefined` overrides the default value in the `bsconfig.json`
         if (options.files) {
-            builderOptions.files = options.files;
+            builderOptions.files = rokuDeploy.normalizeFilesArray(options.files);
         }
 
         //run the builder to initialize the program. Skip validation for now, we'll trigger it soon in a more cancellable way
         await this.builder.run({
             ...builderOptions,
-            skipInitialValidation: true
+            skipInitialValidation: true,
+            //don't show diagnostics in the console since this is run via the language server, they're presented in a different way
+            showDiagnosticsInConsole: false
         });
 
         //flush diagnostics every time the program finishes validating
@@ -114,6 +117,8 @@ export class Project implements LspProject {
             filePatterns: this.filePatterns
         };
     }
+
+    public isStandaloneProject = false;
 
     public logger: Logger;
 
@@ -252,7 +257,7 @@ export class Project implements LspProject {
         }
         if (didChangeFiles) {
             //trigger a validation (but don't wait for it. That way we can cancel it sooner if we get new incoming data or requests)
-            void this.validate();
+            this.validate().catch(e => this.logger.error(e));
         }
 
         this.logger.debug('project.applyFileChanges done', documentActions.map(x => x.srcPath));
@@ -264,7 +269,14 @@ export class Project implements LspProject {
      * Determine if this project will accept the file at the specified path (i.e. does it match a pattern in the project's files array)
      */
     private willAcceptFile(srcPath: string) {
-        return !!rokuDeploy.getDestPath(srcPath, this.builder.program.options.files, this.builder.program.options.rootDir);
+        srcPath = util.standardizePath(srcPath);
+        if (rokuDeploy.getDestPath(srcPath, this.builder.program.options.files, this.builder.program.options.rootDir) !== undefined) {
+            return true;
+            //is this exact path in the `files` array? (this check is mostly for standalone projects)
+        } else if ((this.builder.program.options.files as StandardizedFileEntry[]).find(x => s`${x.src}` === srcPath)) {
+            return true;
+        }
+        return false;
     }
 
     /**
