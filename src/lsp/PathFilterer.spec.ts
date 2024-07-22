@@ -1,5 +1,5 @@
 import { PathCollection, PathFilterer } from './PathFilterer';
-import { rootDir } from '../testHelpers.spec';
+import { cwd, rootDir } from '../testHelpers.spec';
 import { expect } from 'chai';
 import { standardizePath as s } from '../util';
 
@@ -26,11 +26,11 @@ describe('PathFilterer', () => {
 
     it('supports standalone workspace style', () => {
         const filterer = new PathCollection({
-            rootDir: 'c:/projects/roku/local3/brighterscript/src/lsp/standalone-project-1',
-            globs: ['c:/projects/roku/local3/brighterscript/.tmp/rootDir/source/main.bs']
+            rootDir: s`${cwd}/src/lsp/standalone-project-1`,
+            globs: [s`${cwd}/.tmp/rootDir/source/main.bs`]
         });
         expect(
-            filterer.isMatch(s`c:/projects/roku/local3/brighterscript/.tmp/rootDir/source/main.bs`)
+            filterer.isMatch(`${cwd}/.tmp/rootDir/source/main.bs`)
         ).to.be.true;
     });
 
