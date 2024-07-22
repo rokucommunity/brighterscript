@@ -126,7 +126,7 @@ export async function expectDiagnosticsAsync(arg: DiagnosticCollectionAsync, exp
 /**
  * Ensure the DiagnosticCollection exactly contains the data from expected list.
  * @param arg - any object that contains diagnostics (such as `Program`, `Scope`, or even an array of diagnostics)
- * @param expected an array of expected diagnostics. if it's a string, assume that's a diagnostic error message
+ * @param expectedDiagnostics an array of expected diagnostics. if it's a string, assume that's a diagnostic error message
  */
 export function expectDiagnostics(arg: DiagnosticCollection, expectedDiagnostics: Array<PartialDiagnostic | string | number>) {
     const [actual, expected] = normalizeDiagnostics(getDiagnostics(arg), expectedDiagnostics);
@@ -135,8 +135,8 @@ export function expectDiagnostics(arg: DiagnosticCollection, expectedDiagnostics
 
 /**
  * Normalizes a collection of diagnostics for comparison
- * @param actualDiagnostics
- * @param expectedDiagnostics
+ * @param actualDiagnostics the actual diagnostics that were found
+ * @param expectedDiagnostics the diagnostics we're expecing
  */
 export function normalizeDiagnostics(actualDiagnostics: BsDiagnostic[], expectedDiagnostics: Array<PartialDiagnostic | string | number>) {
     actualDiagnostics = sortDiagnostics([...actualDiagnostics]);
