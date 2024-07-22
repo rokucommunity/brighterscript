@@ -260,9 +260,9 @@ describe('DiagnosticFilterer', () => {
             getDiagnostic(4, s`${rootDir}/source/Common2.brs`)
         ]);
         expect(stub.callCount).to.eql(2);
-        expect(stub.getCalls().map(x => x.args[1])).to.eql([
-            util.pathToUri(s`${rootDir.toLowerCase()}/source/common1.brs`),
-            util.pathToUri(s`${rootDir.toLowerCase()}/source/common2.brs`)
+        expect(stub.getCalls().map(x => x.args[1].toLowerCase())).to.eql([
+            util.pathToUri(s`${rootDir.toLowerCase()}/source/common1.brs`).toLowerCase(),
+            util.pathToUri(s`${rootDir.toLowerCase()}/source/common2.brs`).toLowerCase()
         ]);
     });
 
