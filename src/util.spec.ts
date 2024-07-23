@@ -559,7 +559,7 @@ describe('util', () => {
         let id = 1;
 
         beforeEach(() => {
-            // `require` caches plugins, so  generate a unique plugin name for every test
+            // `require` caches plugins, so generate a unique plugin name for every test
             pluginPath = `${tempDir}/plugin${id++}.js`;
         });
 

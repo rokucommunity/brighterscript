@@ -76,6 +76,8 @@ export class WorkerThreadProject implements LspProject {
 
     public logger: Logger;
 
+    public isStandaloneProject = false;
+
     private activationDeferred = new Deferred();
 
     /**

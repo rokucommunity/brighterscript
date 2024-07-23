@@ -102,7 +102,11 @@ export class ProjectManager {
                 return action.type === 'delete' || filterer.isMatch(action.srcPath);
             });
             if (projectActions.length > 0) {
-                return project.applyFileChanges(projectActions);
+                const responseActions = await project.applyFileChanges(projectActions);
+                return responseActions.map(x => ({
+                    project: project,
+                    action: x
+                }));
             }
         }));
 
@@ -110,17 +114,33 @@ export class ProjectManager {
         const flatResponses = responses.flat();
         for (const action of actions) {
             //skip this action if it doesn't support standalone projects
-            if (!action.allowStandaloneProject || action.type === 'delete') {
+            if (!action.allowStandaloneProject || action.type !== 'set') {
                 continue;
             }
 
-            // create a standalone project if this action was handled by zero projects and was a 'set' operation
-            const wasHandled = flatResponses.some(x => x?.id === action.id && action.type === 'set');
-            if (wasHandled === false) {
+            //a list of responses that handled this action
+            const handledResponses = flatResponses.filter(x => x?.action?.id === action.id && x?.action?.status === 'accepted');
+
+            //remove any standalone project created for this file since it was handled by a normal project
+            if (handledResponses.some(x => x.project.isStandaloneProject === false)) {
+                this.removeStandaloneProject(action.srcPath);
+
+                // create a standalone project if this action was handled by zero normal projects.
+                //(save to call even if there's already a standalone project, won't create dupes)
+            } else {
+                //TODO only create standalone projects for files we understand (brightscript, brighterscript, scenegraph xml, etc)
                 await this.createStandaloneProject(action.srcPath);
             }
+            this.logger.log('flushDocumentChanges complete', event.actions.map(x => x.srcPath));
         }
-        this.logger.log('flushDocumentChanges complete', event.actions.map(x => x.srcPath));
+    }
+
+    /**
+     * Get a standalone project for a given file path
+     */
+    private getStandaloneProject(srcPath: string) {
+        srcPath = util.standardizePath(srcPath);
+        return this.standaloneProjects.find(x => x.srcPath === srcPath);
     }
 
     /**
@@ -128,6 +148,11 @@ export class ProjectManager {
      */
     private async createStandaloneProject(srcPath: string) {
         srcPath = util.standardizePath(srcPath);
+
+        //if we already have a standalone project with this path, do nothing because it already exists
+        if (this.getStandaloneProject(srcPath)) {
+            return;
+        }
 
         this.logger.log(`Creating standalone project for '${srcPath}'`);
 
@@ -144,8 +169,11 @@ export class ProjectManager {
                 dest: 'source/standalone.brs'
             }]
         };
+
         const project = this.constructProject(projectOptions) as StandaloneProject;
         project.srcPath = srcPath;
+        project.isStandaloneProject = true;
+
         this.standaloneProjects.push(project);
         await this.activateProject(project, projectOptions);
     }
@@ -362,7 +390,6 @@ export class ProjectManager {
     private async reloadProject(project: LspProject) {
         this.removeProject(project);
         project = await this.createAndActivateProject(project.activateOptions);
-        this.emit('project-reload', { project: project });
     }
 
     /**
@@ -406,7 +433,7 @@ export class ProjectManager {
     public async getCompletions(options: { srcPath: string; position: Position; cancellationToken?: CancellationToken }): Promise<CompletionList> {
         await this.onIdle();
 
-        //if the request has been cancelled since originall requested due to idle time being slow, skip the rest of the wor
+        //if the request has been cancelled since originally requested due to idle time being slow, skip the rest of the wor
         if (options?.cancellationToken?.isCancellationRequested) {
             this.logger.log('ProjectManager getCompletions cancelled', options);
             return;
@@ -643,7 +670,7 @@ export class ProjectManager {
             this.projects.splice(idx, 1);
         }
         //anytime we remove a project, we should emit an event that clears all of its diagnostics
-        // this.emit('diagnostics', { project: project, diagnostics: [] });
+        this.emit('diagnostics', { project: project, diagnostics: [] });
         project?.dispose();
         this.busyStatusTracker.endAllRunsForScope(project);
     }
@@ -722,6 +749,9 @@ export class ProjectManager {
     private async activateProject(project: LspProject, config: ProjectConfig) {
         await project.activate(config);
 
+        //send an event to indicate that this project has been activated
+        this.emit('project-activate', { project: project });
+
         //register this project's list of files with the path filterer
         const unregister = this.pathFilterer.registerIncludeList(project.rootDir, project.filePatterns);
         project.disposables.push({ dispose: unregister });
@@ -730,7 +760,7 @@ export class ProjectManager {
     public on(eventName: 'validate-begin', handler: (data: { project: LspProject }) => MaybePromise<void>);
     public on(eventName: 'validate-end', handler: (data: { project: LspProject }) => MaybePromise<void>);
     public on(eventName: 'critical-failure', handler: (data: { project: LspProject; message: string }) => MaybePromise<void>);
-    public on(eventName: 'project-reload', handler: (data: { project: LspProject }) => MaybePromise<void>);
+    public on(eventName: 'project-activate', handler: (data: { project: LspProject }) => MaybePromise<void>);
     public on(eventName: 'diagnostics', handler: (data: { project: LspProject; diagnostics: LspDiagnostic[] }) => MaybePromise<void>);
     public on(eventName: string, handler: (payload: any) => MaybePromise<void>) {
         this.emitter.on(eventName, handler as any);
@@ -742,7 +772,7 @@ export class ProjectManager {
     private emit(eventName: 'validate-begin', data: { project: LspProject });
     private emit(eventName: 'validate-end', data: { project: LspProject });
     private emit(eventName: 'critical-failure', data: { project: LspProject; message: string });
-    private emit(eventName: 'project-reload', data: { project: LspProject });
+    private emit(eventName: 'project-activate', data: { project: LspProject });
     private emit(eventName: 'diagnostics', data: { project: LspProject; diagnostics: LspDiagnostic[] });
     private async emit(eventName: string, data?) {
         //emit these events on next tick, otherwise they will be processed immediately which could cause issues
