@@ -84,8 +84,8 @@ BrighterScript adds several new features to the BrightScript language such as na
      <a href="https://www.miraclechannel.ca/corcoplus">
       <img height="38" src="https://user-images.githubusercontent.com/2544493/192593254-f2a32cd4-0482-40de-830d-c1d09690c46b.png">
     </a>&nbsp;&nbsp;&nbsp;
-    <a href="https://channelstore.roku.com/details/222212/phototv">
-      <img height="38" src="https://user-images.githubusercontent.com/2544493/169118062-81d94da5-2323-4e31-b19d-7db3f9c88dff.png">
+    <a href="https://digitalpictureframe.tv">
+      <img height="38" src="https://s3.us-east-1.wasabisys.com/tv.digitalpictureframe.assets/logo-wide.png">
     </a>&nbsp;&nbsp;&nbsp;
     <a href="https://www.haystack.tv/">
       <img height="38" src="https://user-images.githubusercontent.com/2544493/192610056-d1b5a382-edf4-47b9-a6a5-d2d3ee9094cb.png">
