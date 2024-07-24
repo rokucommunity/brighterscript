@@ -40,4 +40,9 @@ export class BrsTranspileState extends TranspileState {
      * Used by ConditionalCompileStatement to determine if there's already an conditional compile going on
      */
     public conditionalCompileStatement?: ConditionalCompileStatement;
+
+    /**
+     * Do not transpile leading comments
+     */
+    public skipLeadingComments = false;
 }

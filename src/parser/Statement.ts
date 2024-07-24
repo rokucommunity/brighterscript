@@ -2584,6 +2584,14 @@ export class ClassStatement extends Statement implements TypedefProvider {
                 }
 
                 state.classStatement = this;
+                state.skipLeadingComments = true;
+                //add leading comments
+                if (statement.leadingTrivia.filter(token => token.kind === TokenKind.Comment).length > 0) {
+                    result.push(
+                        ...state.transpileComments(statement.leadingTrivia),
+                        state.indent()
+                    );
+                }
                 result.push(
                     'instance.',
                     state.transpileToken(statement.tokens.name),
@@ -2592,6 +2600,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
                     state.newline,
                     state.indent()
                 );
+                state.skipLeadingComments = false;
                 delete state.classStatement;
             } else {
                 //other random statements (probably just comments)

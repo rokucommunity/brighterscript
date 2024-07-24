@@ -114,9 +114,19 @@ export class TranspileState {
     }
 
     public transpileLeadingComments(token: TranspileToken) {
-        const leadingCommentsSourceNodes = [];
         const leadingTrivia = (token?.leadingTrivia ?? []);
-        const justComments = leadingTrivia.filter(t => t.kind === TokenKind.Comment || t.kind === TokenKind.Newline);
+        const leadingCommentsSourceNodes = this.transpileComments(leadingTrivia);
+        if (leadingCommentsSourceNodes.length > 0 && token.text) {
+            // indent in preparation for next text
+            leadingCommentsSourceNodes.push(this.indent());
+        }
+
+        return leadingCommentsSourceNodes;
+    }
+
+    public transpileComments(tokens: TranspileToken[]) {
+        const leadingCommentsSourceNodes = [];
+        const justComments = tokens.filter(t => t.kind === TokenKind.Comment || t.kind === TokenKind.Newline);
         let newLinesSinceComment = 0;
 
         let transpiledCommentAlready = false;
@@ -140,11 +150,6 @@ export class TranspileState {
             }
             transpiledCommentAlready = true;
         }
-        if (leadingCommentsSourceNodes.length > 0 && token.text) {
-            // indent in preparation for next text
-            leadingCommentsSourceNodes.push(this.indent());
-        }
-
         return leadingCommentsSourceNodes;
     }
 
@@ -152,8 +157,8 @@ export class TranspileState {
      * Create a SourceNode from a token, accounting for missing range and multi-line text
      * Adds all leading trivia for the token
      */
-    public transpileToken(token: TranspileToken, defaultValue?: string, commentOut = false): TranspileResult {
-        const leadingCommentsSourceNodes = this.transpileLeadingComments(token);
+    public transpileToken(token: TranspileToken, defaultValue?: string, commentOut = false, skipLeadingComments = false): TranspileResult {
+        const leadingCommentsSourceNodes = skipLeadingComments ? [] : this.transpileLeadingComments(token);
         const commentIfCommentedOut = commentOut ? `'` : '';
 
         if (!token?.text && defaultValue !== undefined) {
