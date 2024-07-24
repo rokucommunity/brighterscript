@@ -284,7 +284,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         let results = [] as TranspileResult;
         //'function'|'sub'
         results.push(
-            state.transpileToken(this.tokens.functionType, 'function')
+            state.transpileToken(this.tokens.functionType, 'function', false, state.skipLeadingComments)
         );
         //functionName?
         if (name) {
