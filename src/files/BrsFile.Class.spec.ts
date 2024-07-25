@@ -1191,6 +1191,63 @@ describe('BrsFile BrighterScript classes', () => {
                 end function
             `, 'trim', 'source/main.bs');
         });
+
+
+        it('puts leading comments from methods in correct place', async () => {
+            await testTranspile(`
+                    class Duck
+                        ' hatch from egg
+                        sub new()
+                        end sub
+                        ' it must be a duck
+                        sub quack()
+                            ' what does a duck say?
+                            print "quack"
+                        end sub
+                    end class
+                `, `
+                    function __Duck_builder()
+                        instance = {}
+                        ' hatch from egg
+                        instance.new = sub()
+                        end sub
+                        ' it must be a duck
+                        instance.quack = sub()
+                            ' what does a duck say?
+                            print "quack"
+                        end sub
+                        return instance
+                    end function
+                    function Duck()
+                        instance = __Duck_builder()
+                        instance.new()
+                        return instance
+                    end function
+                `, undefined, 'source/main.bs');
+        });
+
+        it('puts leading comments from fields in correct place', async () => {
+            await testTranspile(`
+                    class Duck
+                        ' what kind of duck?
+                        type as string = "mallard"
+                    end class
+                `, `
+                    function __Duck_builder()
+                        instance = {}
+                        instance.new = sub()
+                            ' what kind of duck?
+                            m.type = "mallard"
+                        end sub
+                        return instance
+                    end function
+                    function Duck()
+                        instance = __Duck_builder()
+                        instance.new()
+                        return instance
+                    end function
+                `, undefined, 'source/main.bs');
+        });
     });
 
     it('detects using `new` keyword on non-classes', () => {

@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.34](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.33...v1.0.0-alpha.34) - 2024-07-24
+### Changed
+ - Export `Location` so it can be used directly in plugins ([#1236](https://github.com/rokucommunity/brighterscript/pull/1236))
+ - Removes `Parser.statements` ([#1239](https://github.com/rokucommunity/brighterscript/pull/1239))
+ - Sets a hard limit of number of scopes to check for completions ([#1244](https://github.com/rokucommunity/brighterscript/pull/1244))
+### Fixed
+ - Fixes completions when file is used in multiple scopes ([#1238](https://github.com/rokucommunity/brighterscript/pull/1238))
+ - Fixes ifSystemLog and ifArraySlice docs ([#1250](https://github.com/rokucommunity/brighterscript/pull/1250))
+
+
+
 ## [1.0.0-alpha.33](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.32...v1.0.0-alpha.33) - 2024-06-14
 ### Added
  - Adds messagePort methods to ifSocketAsync and MultiStyleLabel.drawing Styles ([#1220](https://github.com/rokucommunity/brighterscript/pull/1220))
