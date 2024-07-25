@@ -2229,7 +2229,7 @@ describe('BrsFile', () => {
                 `);
             });
 
-            it('does not falsly add underscores when variable shadows namespace', async () => {
+            it('does not falsely add underscores when variable shadows namespace', async () => {
                 await testTranspile(`
                     namespace alpha
                         function toStr()
@@ -2253,7 +2253,7 @@ describe('BrsFile', () => {
                 `);
             });
 
-            it('does not falsly add underscores when parameter shadows namespace', async () => {
+            it('does not falsely add underscores when parameter shadows namespace', async () => {
                 await testTranspile(`
                     namespace alpha
                         function toStr()
