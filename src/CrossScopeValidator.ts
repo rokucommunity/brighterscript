@@ -507,7 +507,7 @@ export class CrossScopeValidator {
 
     addDiagnosticsForScopes(scopes: Scope[]) { //, changedFiles: BrsFile[]) {
         const addDuplicateSymbolDiagnostics = true;
-        const missingSymbolInScope = new Map<BrsFile, Map<UnresolvedSymbol, Set<Scope>>>();
+        const missingSymbolInScope = new Map<UnresolvedSymbol, Set<Scope>>();
         this.providedTreeMap.clear();
         this.clearResolutionsForScopes(scopes);
 
@@ -598,34 +598,28 @@ export class CrossScopeValidator {
             }
             // build map of the symbols and scopes where the symbols are missing per file
             for (const missingSymbol of missingSymbols) {
-                let missingSymbolPerFile = missingSymbolInScope.get(missingSymbol.file);
-                if (!missingSymbolPerFile) {
-                    missingSymbolPerFile = new Map<UnresolvedSymbol, Set<Scope>>();
-                    missingSymbolInScope.set(missingSymbol.file, missingSymbolPerFile);
-                }
-                let scopesWithMissingSymbol = missingSymbolPerFile.get(missingSymbol);
+
+                let scopesWithMissingSymbol = missingSymbolInScope.get(missingSymbol);
                 if (!scopesWithMissingSymbol) {
                     scopesWithMissingSymbol = new Set<Scope>();
-                    missingSymbolPerFile.set(missingSymbol, scopesWithMissingSymbol);
+                    missingSymbolInScope.set(missingSymbol, scopesWithMissingSymbol);
                 }
                 scopesWithMissingSymbol.add(scope);
             }
         }
 
-        // Check each file for missing symbols - if they are missing in SOME scopes, add diagnostic
-        for (let [_, missingSymbolPerFile] of missingSymbolInScope.entries()) {
-            for (const [symbol, scopeList] of missingSymbolPerFile) {
-                const typeChainResult = util.processTypeChain(symbol.typeChain);
+        // If symbols are missing in SOME scopes, add diagnostic
+        for (const [symbol, scopeList] of missingSymbolInScope.entries()) {
+            const typeChainResult = util.processTypeChain(symbol.typeChain);
 
-                for (const scope of scopeList) {
-                    this.program.diagnostics.register({
-                        ...this.getCannotFindDiagnostic(scope, typeChainResult),
-                        location: typeChainResult.location
-                    }, {
-                        scope: scope,
-                        tags: [CrossScopeValidatorDiagnosticTag]
-                    });
-                }
+            for (const scope of scopeList) {
+                this.program.diagnostics.register({
+                    ...this.getCannotFindDiagnostic(scope, typeChainResult),
+                    location: typeChainResult.location
+                }, {
+                    scope: scope,
+                    tags: [CrossScopeValidatorDiagnosticTag]
+                });
             }
         }
 
