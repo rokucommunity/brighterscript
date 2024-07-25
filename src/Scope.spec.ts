@@ -372,7 +372,7 @@ describe('Scope', () => {
                 {
                     ...DiagnosticMessages.cannotFindName('delta', 'constants.alpha.delta', 'constants.alpha', 'namespace'),
                     location: {
-                        uri: util.getFileUri(buttonPrimary)
+                        uri: util.pathToUri(buttonPrimary?.srcPath)
                     },
                     relatedInformation: [{
                         message: `In component scope 'ButtonPrimary'`
@@ -380,7 +380,7 @@ describe('Scope', () => {
                 }, {
                     ...DiagnosticMessages.cannotFindName('delta', 'constants.alpha.delta', 'constants.alpha', 'namespace'),
                     location: {
-                        uri: util.getFileUri(buttonSecondary)
+                        uri: util.pathToUri(buttonSecondary?.srcPath)
                     },
                     relatedInformation: [{
                         message: `In component scope 'ButtonSecondary'`

@@ -16,7 +16,6 @@ import { expectZeroDiagnostics, trim } from './testHelpers.spec';
 import { isBrsFile, isLiteralString } from './astUtils/reflection';
 import { createVisitor, WalkMode } from './astUtils/visitors';
 import { tempDir, rootDir } from './testHelpers.spec';
-import { URI } from 'vscode-uri';
 import { BusyStatusTracker } from './BusyStatusTracker';
 import type { BscFile } from './files/BscFile';
 
@@ -1146,7 +1145,7 @@ describe('LanguageServer', () => {
             `;
         };
 
-        const uri = URI.file(s`${rootDir}/source/sgnode.bs`).toString();
+        const uri = util.pathToUri(s`${rootDir}/source/sgnode.bs`);
 
         fsExtra.outputFileSync(s`${rootDir}/source/sgnode.bs`, getContents());
         server.run();

@@ -1,4 +1,3 @@
-import { URI } from 'vscode-uri';
 import { DiagnosticTag, type Range } from 'vscode-languageserver';
 import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isComponentType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isStringType, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
@@ -762,7 +761,7 @@ export class ScopeValidator {
                     relatedInformation: [{
                         message: 'Enum declared here',
                         location: util.createLocationFromRange(
-                            URI.file(enumFileLink?.file.srcPath).toString(),
+                            util.pathToUri(enumFileLink?.file.srcPath),
                             enumFileLink?.item?.tokens.name.location?.range
                         )
                     }]
@@ -939,7 +938,7 @@ export class ScopeValidator {
                             related.push({
                                 message: `Function declared here`,
                                 location: util.createLocationFromRange(
-                                    URI.file(ownCallable.callable.file?.srcPath).toString(),
+                                    util.pathToUri(ownCallable.callable.file?.srcPath),
                                     thatNameRange
                                 )
                             });
@@ -1074,7 +1073,7 @@ export class ScopeValidator {
                     relatedInformation: [{
                         message: 'Function declared here',
                         location: util.createLocationFromRange(
-                            URI.file(callable[0].callable.file.srcPath).toString(),
+                            util.pathToUri(callable[0].callable.file.srcPath),
                             callable[0].callable.nameRange
                         )
                     }]
@@ -1090,7 +1089,7 @@ export class ScopeValidator {
                     relatedInformation: [{
                         message: 'Class declared here',
                         location: util.createLocationFromRange(
-                            URI.file(classStmtLink.file.srcPath).toString(),
+                            util.pathToUri(classStmtLink.file.srcPath),
                             classStmtLink?.item.tokens.name.location?.range
                         )
                     }]
@@ -1100,7 +1099,7 @@ export class ScopeValidator {
     }
 
     private detectVariableNamespaceCollisions(file: BrsFile) {
-        this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, fileUri: util.getFileUri(file), tag: ScopeValidatorDiagnosticTag.NamespaceCollisions });
+        this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, fileUri: util.pathToUri(file?.srcPath), tag: ScopeValidatorDiagnosticTag.NamespaceCollisions });
 
         //find all function parameters
         // eslint-disable-next-line @typescript-eslint/dot-notation
@@ -1116,7 +1115,7 @@ export class ScopeValidator {
                         relatedInformation: [{
                             message: 'Namespace declared here',
                             location: util.createLocationFromRange(
-                                URI.file(namespace.file.srcPath).toString(),
+                                util.pathToUri(namespace.file.srcPath),
                                 namespace.nameRange
                             )
                         }]
@@ -1137,7 +1136,7 @@ export class ScopeValidator {
                     relatedInformation: [{
                         message: 'Namespace declared here',
                         location: util.createLocationFromRange(
-                            URI.file(namespace.file.srcPath).toString(),
+                            util.pathToUri(namespace.file.srcPath),
                             namespace.nameRange
                         )
                     }]
@@ -1150,7 +1149,7 @@ export class ScopeValidator {
         if (!scope.xmlFile.parser.ast?.componentElement?.interfaceElement) {
             return;
         }
-        this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, fileUri: util.getFileUri(scope.xmlFile), tag: ScopeValidatorDiagnosticTag.XMLInterface });
+        this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, fileUri: util.pathToUri(scope.xmlFile?.srcPath), tag: ScopeValidatorDiagnosticTag.XMLInterface });
 
         const iface = scope.xmlFile.parser.ast.componentElement.interfaceElement;
         const callableContainerMap = scope.getCallableContainerMap();
@@ -1206,7 +1205,7 @@ export class ScopeValidator {
      * Detect when a child has imported a script that an ancestor also imported
      */
     private diagnosticDetectDuplicateAncestorScriptImports(scope: XmlScope) {
-        this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, fileUri: util.getFileUri(scope.xmlFile), tag: ScopeValidatorDiagnosticTag.XMLImports });
+        this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, fileUri: util.pathToUri(scope.xmlFile?.srcPath), tag: ScopeValidatorDiagnosticTag.XMLImports });
         if (scope.xmlFile.parentComponent) {
             //build a lookup of pkg paths -> FileReference so we can more easily look up collisions
             let parentScriptImports = scope.xmlFile.getAncestorScriptTagImports();

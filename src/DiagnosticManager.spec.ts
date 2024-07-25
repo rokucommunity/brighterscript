@@ -12,7 +12,7 @@ describe('DiagnosticManager', () => {
             const diagnostic: BsDiagnostic = {
                 message: 'crash',
                 //important part of the test. range must be missing
-                location: { uri: util.getFileUri(file), range: undefined }
+                location: { uri: util.pathToUri(file?.srcPath), range: undefined }
             };
 
             file.commentFlags.push({

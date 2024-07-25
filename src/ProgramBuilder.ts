@@ -15,7 +15,6 @@ import * as fsExtra from 'fs-extra';
 import * as requireRelative from 'require-relative';
 import { Throttler } from './Throttler';
 import type { BrsFile } from './files/BrsFile';
-import { URI } from 'vscode-uri';
 import { DiagnosticManager } from './DiagnosticManager';
 
 /**
@@ -316,7 +315,7 @@ export class ProgramBuilder {
                 );
             });
 
-            let filePath = URI.parse(fileUri).fsPath;
+            let filePath = util.uriToPath(fileUri);
             if (!emitFullPaths) {
                 filePath = path.relative(cwd, filePath);
             }
@@ -329,7 +328,7 @@ export class ProgramBuilder {
                 //default the severity to error if undefined
                 let severity = typeof diagnostic.severity === 'number' ? diagnostic.severity : DiagnosticSeverity.Error;
                 let relatedInformation = (util.toDiagnostic(diagnostic, diagnostic.source)?.relatedInformation ?? []).map(x => {
-                    let relatedInfoFilePath = URI.parse(x.location?.uri).fsPath;
+                    let relatedInfoFilePath = util.uriToPath(x.location?.uri);
                     if (!emitFullPaths) {
                         relatedInfoFilePath = path.relative(cwd, relatedInfoFilePath);
                     }

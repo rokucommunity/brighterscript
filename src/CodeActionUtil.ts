@@ -1,7 +1,7 @@
 import type { Diagnostic, Position, Range, WorkspaceEdit } from 'vscode-languageserver';
 import { CodeActionKind, CodeAction, TextEdit } from 'vscode-languageserver';
-import { URI } from 'vscode-uri';
 import type { BsDiagnostic } from './interfaces';
+import util from './util';
 
 export class CodeActionUtil {
 
@@ -10,7 +10,7 @@ export class CodeActionUtil {
             changes: {}
         } as WorkspaceEdit;
         for (const change of obj.changes) {
-            const uri = URI.file(change.filePath).toString();
+            const uri = util.pathToUri(change.filePath);
 
             //create the edit changes array for this uri
             if (!edit.changes![uri]) {

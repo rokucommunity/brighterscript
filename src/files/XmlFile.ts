@@ -259,10 +259,7 @@ export class XmlFile implements BscFile {
             srcPath: this.srcPath,
             destPath: this.destPath
         });
-        /*const diagnostics = this.parser.diagnostics.map(diagnostic => ({
-            ...diagnostic,
-            file: this
-        }));*/
+
         this.program?.diagnostics.register(this.parser.diagnostics);
         this.getCommentFlags(this.parser.tokens as any[]);
     }

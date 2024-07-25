@@ -1001,10 +1001,7 @@ export class Program {
                         location: xmlFile.componentName.location,
                         relatedInformation: xmlFiles.filter(x => x !== xmlFile).map(x => {
                             return {
-                                location: util.createLocationFromRange(
-                                    URI.file(xmlFile.srcPath ?? xmlFile.srcPath).toString(),
-                                    x.componentName.location?.range
-                                ),
+                                location: x.componentName.location,
                                 message: 'Also defined here'
                             };
                         })
@@ -1309,7 +1306,7 @@ export class Program {
         const codeActions = [] as CodeAction[];
         const file = this.getFile(srcPath);
         if (file) {
-            const fileUri = util.getFileUri(file);
+            const fileUri = util.pathToUri(file?.srcPath);
             const diagnostics = this
                 //get all current diagnostics (filtered by diagnostic filters)
                 .getDiagnostics()

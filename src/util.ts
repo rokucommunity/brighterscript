@@ -750,13 +750,6 @@ export class Util {
     }
 
     /**
-     * Gets a URI string for a file's srcPath
-     */
-    public getFileUri(file: BscFile) {
-        return this.pathToUri(file?.srcPath);
-    }
-
-    /**
      * Given a file path, convert it to a URI string
      */
     public pathToUri(filePath: string) {
@@ -1098,7 +1091,7 @@ export class Util {
      * Helper for creating `Location` objects from a file and range
      */
     public createLocationFromFileRange(file: BscFile, range: Range): Location {
-        return this.createLocationFromRange(util.getFileUri(file), range);
+        return this.createLocationFromRange(this.pathToUri(file?.srcPath), range);
     }
 
     /**

@@ -1,5 +1,4 @@
 import { expect } from '../../chai-config.spec';
-import { URI } from 'vscode-uri';
 import type { Range } from 'vscode-languageserver';
 import { Program } from '../../Program';
 import { expectCodeActions, trim } from '../../testHelpers.spec';
@@ -93,7 +92,7 @@ describe('CodeActionsProcessor', () => {
                 util.createRange(1, 5, 1, 5)
             );
             expect(
-                codeActions[0].edit!.changes![URI.file(s`${rootDir}/components/comp1.xml`).toString()][0].range
+                codeActions[0].edit!.changes![util.pathToUri(s`${rootDir}/components/comp1.xml`)][0].range
             ).to.eql(
                 util.createRange(1, 51, 1, 51)
             );

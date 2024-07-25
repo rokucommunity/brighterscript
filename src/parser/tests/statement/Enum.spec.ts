@@ -11,7 +11,6 @@ import type { BrsFile } from '../../../files/BrsFile';
 import { CancellationTokenSource } from 'vscode-languageserver-protocol';
 import { WalkMode } from '../../../astUtils/visitors';
 import { isEnumStatement } from '../../../astUtils/reflection';
-import { URI } from 'vscode-uri';
 import { rootDir } from '../../../testHelpers.spec';
 
 const sinon = createSandbox();
@@ -227,14 +226,14 @@ describe('EnumStatement', () => {
                 ...DiagnosticMessages.nameCollision('Enum', 'Enum', 'Direction'),
                 relatedInformation: [{
                     location: util.createLocationFromRange(
-                        URI.file(s`${rootDir}/source/main.bs`).toString(),
+                        util.pathToUri(s`${rootDir}/source/main.bs`),
                         util.createRange(5, 21, 5, 30)
                     ),
                     message: 'Enum declared here'
                 },
                 {
                     location: util.createLocationFromRange(
-                        URI.file(s`${rootDir}/source/main.bs`).toString(),
+                        util.pathToUri(s`${rootDir}/source/main.bs`),
                         util.createRange(1, 21, 1, 30)
                     ),
                     message: `In scope 'source'`
@@ -243,14 +242,14 @@ describe('EnumStatement', () => {
                 ...DiagnosticMessages.nameCollision('Enum', 'Enum', 'Direction'),
                 relatedInformation: [{
                     location: util.createLocationFromRange(
-                        URI.file(s`${rootDir}/source/main.bs`).toString(),
+                        util.pathToUri(s`${rootDir}/source/main.bs`),
                         util.createRange(1, 21, 1, 30)
                     ),
                     message: 'Enum declared here'
                 },
                 {
                     location: util.createLocationFromRange(
-                        URI.file(s`${rootDir}/source/main.bs`).toString(),
+                        util.pathToUri(s`${rootDir}/source/main.bs`),
                         util.createRange(5, 21, 5, 30)
                     ),
                     message: `In scope 'source'`
@@ -274,14 +273,14 @@ describe('EnumStatement', () => {
                 ...DiagnosticMessages.nameCollision('Enum', 'Enum', 'Direction'),
                 relatedInformation: [{
                     location: util.createLocationFromRange(
-                        URI.file(s`${rootDir}/source/lib.bs`).toString(),
+                        util.pathToUri(s`${rootDir}/source/lib.bs`),
                         util.createRange(1, 21, 1, 30)
                     ),
                     message: 'Enum declared here'
                 },
                 {
                     location: util.createLocationFromRange(
-                        URI.file(s`${rootDir}/source/main.bs`).toString(),
+                        util.pathToUri(s`${rootDir}/source/main.bs`),
                         util.createRange(1, 21, 1, 30)
                     ),
                     message: `In scope 'source'`

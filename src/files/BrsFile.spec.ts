@@ -18,7 +18,6 @@ import type { FunctionStatement } from '../parser/Statement';
 import { ImportStatement } from '../parser/Statement';
 import { createToken, createVariableExpression } from '../astUtils/creators';
 import * as fsExtra from 'fs-extra';
-import { URI } from 'vscode-uri';
 import undent from 'undent';
 import { tempDir, rootDir } from '../testHelpers.spec';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
@@ -1338,7 +1337,7 @@ describe('BrsFile', () => {
                 end function
             `);
             expectHasDiagnostics(program);
-            expect(program.getDiagnostics()[0].location.uri).to.equal(util.getFileUri(file));
+            expect(program.getDiagnostics()[0].location.uri).to.equal(util.pathToUri(file?.srcPath));
             expect(program.getDiagnostics()[0].location.range.start.line).to.equal(1);
         });
 
@@ -4001,7 +4000,7 @@ describe('BrsFile', () => {
             program.validate();
             //print alpha.beta.char|lie
             expect(program.getDefinition(file.srcPath, Position.create(2, 41))).to.eql([{
-                uri: URI.file(file.srcPath).toString(),
+                uri: util.pathToUri(file.srcPath),
                 range: util.createRange(5, 26, 5, 33)
             }]);
         });
@@ -4020,7 +4019,7 @@ describe('BrsFile', () => {
             program.validate();
             //print alpha.beta.char|lie
             expect(program.getDefinition(file.srcPath, Position.create(2, 40))).to.eql([{
-                uri: URI.file(file.srcPath).toString(),
+                uri: util.pathToUri(file.srcPath),
                 range: util.createRange(5, 25, 5, 31)
             }]);
         });
@@ -4037,7 +4036,7 @@ describe('BrsFile', () => {
             program.validate();
             // sub test(selectedMovie as Mo|vie)
             expect(program.getDefinition(file.srcPath, Position.create(1, 44))).to.eql([{
-                uri: URI.file(file.srcPath).toString(),
+                uri: util.pathToUri(file.srcPath),
                 range: util.createRange(4, 26, 4, 31)
             }]);
         });
@@ -4056,7 +4055,7 @@ describe('BrsFile', () => {
             program.validate();
             //sub test(selectedMovie as interfaces.Mo|vie)
             expect(program.getDefinition(file.srcPath, Position.create(1, 55))).to.eql([{
-                uri: URI.file(file.srcPath).toString(),
+                uri: util.pathToUri(file.srcPath),
                 range: util.createRange(5, 30, 5, 35)
             }]);
         });
@@ -4073,7 +4072,7 @@ describe('BrsFile', () => {
             program.validate();
             //sub test(selectedMovie as Mo|vie)
             expect(program.getDefinition(file.srcPath, Position.create(1, 44))).to.eql([{
-                uri: URI.file(file.srcPath).toString(),
+                uri: util.pathToUri(file.srcPath),
                 range: util.createRange(4, 22, 4, 27)
             }]);
         });
@@ -4092,7 +4091,7 @@ describe('BrsFile', () => {
             program.validate();
             //sub test(selectedMovie as classes.Mo|vie)
             expect(program.getDefinition(file.srcPath, Position.create(1, 52))).to.eql([{
-                uri: URI.file(file.srcPath).toString(),
+                uri: util.pathToUri(file.srcPath),
                 range: util.createRange(5, 26, 5, 31)
             }]);
         });
@@ -4123,7 +4122,7 @@ describe('BrsFile', () => {
             program.validate();
             //print alpha.beta.char|lie
             expect(program.getDefinition(file.srcPath, Position.create(2, 48))).to.eql([{
-                uri: URI.file(file.srcPath).toString(),
+                uri: util.pathToUri(file.srcPath),
                 range: util.createRange(6, 24, 6, 31)
             }]);
         });

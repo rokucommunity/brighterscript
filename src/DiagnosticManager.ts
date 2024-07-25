@@ -1,5 +1,4 @@
 import type { DiagnosticContext, BsDiagnostic, DiagnosticContextPair } from './interfaces';
-import { URI } from 'vscode-uri';
 import type { AstNode } from './parser/AstNode';
 import type { Scope } from './Scope';
 import { util } from './util';
@@ -111,7 +110,7 @@ export class DiagnosticManager {
                     relatedInformation.push({
                         message: `In component scope '${scope?.xmlFile?.componentName?.text}'`,
                         location: util.createLocationFromRange(
-                            URI.file(scope.xmlFile.srcPath).toString(),
+                            util.pathToUri(scope.xmlFile?.srcPath),
                             scope?.xmlFile?.ast?.componentElement?.getAttribute('name')?.tokens?.value?.location?.range ?? util.createRange(0, 0, 0, 10)
                         )
                     });

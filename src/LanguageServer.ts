@@ -457,7 +457,7 @@ export class LanguageServer {
      * anytime the program wants to load a file, check with our in-memory document cache first
      */
     private documentFileResolver(srcPath: string) {
-        let pathUri = URI.file(srcPath).toString();
+        let pathUri = util.pathToUri(srcPath);
         let document = this.documents.get(pathUri);
         if (document) {
             return document.getText();
@@ -469,7 +469,7 @@ export class LanguageServer {
         if (workspacePath.startsWith('file:')) {
             scopeUri = URI.parse(workspacePath).toString();
         } else {
-            scopeUri = URI.file(workspacePath).toString();
+            scopeUri = util.pathToUri(workspacePath);
         }
         let config = {
             configFile: undefined

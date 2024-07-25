@@ -7,7 +7,6 @@ import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
-import { URI } from 'vscode-uri';
 import type { FunctionStatement, PrintStatement } from './parser/Statement';
 import { EmptyStatement } from './parser/Statement';
 import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
@@ -252,7 +251,7 @@ describe('Program', () => {
                 src: s`${rootDir}/source/main.brs`,
                 dest: s`${rootDir}/source/maindest.brs`
             }, '');
-            expect(program.getFile(util.getFileUri(file))).to.exist;
+            expect(program.getFile(util.pathToUri(file?.srcPath))).to.exist;
         });
     });
 
@@ -281,12 +280,14 @@ describe('Program', () => {
                 </component>
             `);
             program.validate();
+            // the duplicate of component1.xml, which is in component2.xml is first
+            // the duplicate of component2.xml, which is in component1.xml is second
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.duplicateComponentName('Component1'),
                 location: { range: Range.create(1, 17, 1, 27) },
                 relatedInformation: [{
                     location: util.createLocationFromRange(
-                        URI.file(s`${rootDir}/components/component1.xml`).toString(),
+                        util.pathToUri(s`${rootDir}/components/component2.xml`),
                         Range.create(1, 17, 1, 27)
                     ),
                     message: 'Also defined here'
@@ -296,7 +297,7 @@ describe('Program', () => {
                 location: { range: Range.create(1, 17, 1, 27) },
                 relatedInformation: [{
                     location: util.createLocationFromRange(
-                        URI.file(s`${rootDir}/components/component2.xml`).toString(),
+                        util.pathToUri(s`${rootDir}/components/component1.xml`),
                         Range.create(1, 17, 1, 27)
                     ),
                     message: 'Also defined here'
