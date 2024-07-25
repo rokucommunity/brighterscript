@@ -1306,7 +1306,6 @@ export class LanguageServer {
             const patch = this.diagnosticCollection.getPatch(this.projects);
 
             for (let fileUri in patch) {
-                // const uri = URI.file(filePath).toString();
                 const diagnostics = patch[fileUri].map(d => util.toDiagnostic(d, fileUri));
 
                 await this.connection.sendDiagnostics({
