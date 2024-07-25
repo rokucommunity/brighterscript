@@ -203,7 +203,7 @@ export class Util {
             if (parseErrors.length > 0) {
                 let err = parseErrors[0];
                 let diagnostic = {
-                    ...DiagnosticMessages.bsConfigJsonHasSyntaxErrors(printParseErrorCode(parseErrors[0].error)),
+                    ...DiagnosticMessages.syntaxError(`Syntax errors in bsconfig.json: ${printParseErrorCode(parseErrors[0].error)}`),
                     file: {
                         srcPath: configFilePath
                     },
@@ -871,14 +871,18 @@ export class Util {
      * Determine whether this diagnostic should be supressed or not, based on brs comment-flags
      */
     public diagnosticIsSuppressed(diagnostic: BsDiagnostic) {
-        const diagnosticCode = typeof diagnostic.code === 'string' ? diagnostic.code.toLowerCase() : diagnostic.code;
+        const diagnosticCode = typeof diagnostic.code === 'string' ? diagnostic.code.toLowerCase() : diagnostic.code?.toString() ?? undefined;
+        const diagnosticLegacyCode = typeof diagnostic.legacyCode === 'string' ? diagnostic.legacyCode.toLowerCase() : diagnostic.legacyCode;
         for (let flag of diagnostic.file?.commentFlags ?? []) {
             //this diagnostic is affected by this flag
             if (diagnostic.range && this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
                 //if the flag acts upon this diagnostic's code
-                if (flag.codes === null || (diagnosticCode !== undefined && flag.codes.includes(diagnosticCode))) {
+                const diagCodeSuppressed = (diagnosticCode !== undefined && flag.codes?.includes(diagnosticCode)) ||
+                    (diagnosticLegacyCode !== undefined && flag.codes?.includes(diagnosticLegacyCode));
+                if (flag.codes === null || diagCodeSuppressed) {
                     return true;
                 }
+
             }
         }
         return false;
@@ -1804,7 +1808,7 @@ export class Util {
                 return clone;
                 //filter out null relatedInformation items
             }).filter((x): x is DiagnosticRelatedInformation => Boolean(x)),
-            code: diagnostic.code,
+            code: diagnostic.code ? diagnostic.code : (diagnostic as BsDiagnostic).legacyCode,
             source: 'brs'
         } as Diagnostic;
         if (diagnostic?.tags?.length > 0) {

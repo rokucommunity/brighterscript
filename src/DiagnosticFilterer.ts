@@ -11,18 +11,21 @@ interface DiagnosticWithSuppression {
 
 interface NormalizedFilter {
     src?: string;
+    dest?: string;
     codes?: (number | string)[];
     isNegative: boolean;
 }
 
 export class DiagnosticFilterer {
     private byFile: Record<string, DiagnosticWithSuppression[]>;
+    private fileDestSrcMap: Record<string, string>;
     private filters: NormalizedFilter[] | undefined;
     private rootDir: string | undefined;
 
 
     constructor() {
         this.byFile = {};
+        this.fileDestSrcMap = {};
     }
 
     /**
@@ -41,6 +44,7 @@ export class DiagnosticFilterer {
 
         //clean up
         this.byFile = {};
+        this.fileDestSrcMap = {};
         delete this.rootDir;
         delete this.filters;
 
@@ -71,9 +75,10 @@ export class DiagnosticFilterer {
      */
     private groupByFile(diagnostics: BsDiagnostic[]) {
         this.byFile = {};
-
+        this.fileDestSrcMap = {};
         for (let diagnostic of diagnostics) {
-            const srcPath = diagnostic?.file?.srcPath ?? diagnostic?.file?.srcPath;
+            const srcPath = diagnostic?.file?.srcPath;
+
             //skip diagnostics that have issues
             if (!srcPath) {
                 continue;
@@ -88,13 +93,27 @@ export class DiagnosticFilterer {
                 isSuppressed: false
             });
         }
+        for (let diagnostic of diagnostics) {
+            const destPath = diagnostic?.file?.destPath;
+            const srcPath = diagnostic?.file?.srcPath;
+
+            //skip diagnostics that have issues
+            if (!destPath || !srcPath) {
+                continue;
+            }
+
+            const lowerDestPath = destPath.toLowerCase();
+            const lowerSrcPath = srcPath.toLowerCase();
+            this.fileDestSrcMap[lowerDestPath] = lowerSrcPath;
+        }
     }
 
     private filterAllFiles(filter: NormalizedFilter) {
         let matchedFilePaths: string[];
 
-        //if there's a src, match against all files
         if (filter.src) {
+            //if there's a src, match against all files
+
             //prepend rootDir to src if the filter is a relative path
             let src = s(
                 path.isAbsolute(filter.src) ? filter.src : `${this.rootDir}/${filter.src}`
@@ -104,8 +123,22 @@ export class DiagnosticFilterer {
                 nocase: true
             });
 
-            //there is no src; this applies to all files
+        } else if (filter.dest) {
+            // applies to file dest location
+
+            //prepend rootDir to dest if the filter is a relative path
+            let dest = s(
+                path.isAbsolute(filter.dest) ? filter.dest : `${this.rootDir}/${filter.dest}`
+            );
+            // search against the set of file destinations
+            const matchedDestFilePaths = minimatch.match(Object.keys(this.fileDestSrcMap), dest, {
+                nocase: true
+            });
+            // convert to file srcs
+            matchedFilePaths = matchedDestFilePaths.map(destPath => this.fileDestSrcMap[destPath]);
+
         } else {
+            //there is no src; this applies to all files
             matchedFilePaths = Object.keys(this.byFile);
         }
 
@@ -120,17 +153,22 @@ export class DiagnosticFilterer {
         //if the filter is not negative we're turning diagnostics off
         const isSuppressing = !filter.isNegative;
 
+        // get correct diagnostics set
+        const fileDiagnostics = this.byFile[filePath];
+
         //if there is no code, set isSuppressed on every diagnostic in this file
         if (!filter.codes) {
-            this.byFile[filePath].forEach(diagnostic => {
+            fileDiagnostics.forEach(diagnostic => {
                 diagnostic.isSuppressed = isSuppressing;
             });
 
             //set isSuppressed for any diagnostics with matching codes
         } else {
-            let fileDiagnostics = this.byFile[filePath];
             for (const diagnostic of fileDiagnostics) {
-                if (filter.codes.includes(diagnostic.diagnostic.code!)) {
+                if (filter.codes.includes(diagnostic.diagnostic.code!) ||
+                    (diagnostic.diagnostic.legacyCode &&
+                        (filter.codes.includes(diagnostic.diagnostic.legacyCode) ||
+                            filter.codes.includes(diagnostic.diagnostic.legacyCode.toString())))) {
                     diagnostic.isSuppressed = isSuppressing;
                 }
             }
@@ -153,21 +191,10 @@ export class DiagnosticFilterer {
         }
 
         for (let filter of diagnosticFilters) {
-            if (typeof filter === 'number') {
+            if (typeof filter === 'number' || typeof filter === 'string') {
                 result.push({
                     codes: [filter],
                     isNegative: false
-                });
-                continue;
-            }
-
-            if (typeof filter === 'string') {
-                const isNegative = filter.startsWith('!');
-                const trimmedFilter = isNegative ? filter.slice(1) : filter;
-
-                result.push({
-                    src: trimmedFilter,
-                    isNegative: isNegative
                 });
                 continue;
             }
@@ -178,7 +205,7 @@ export class DiagnosticFilterer {
             }
 
             //code-only filter
-            if ('codes' in filter && !('src' in filter) && Array.isArray(filter.codes)) {
+            if ('codes' in filter && !('files' in filter) && Array.isArray(filter.codes)) {
                 result.push({
                     codes: filter.codes,
                     isNegative: false
@@ -186,24 +213,67 @@ export class DiagnosticFilterer {
                 continue;
             }
 
-            if ('src' in filter) {
-                const isNegative = filter.src.startsWith('!');
-                const trimmedFilter = isNegative ? filter.src.slice(1) : filter.src;
+            if ('files' in filter) {
+                if (typeof filter.files === 'string') {
+                    result.push(this.getNormalizedFilter(filter.files, filter));
+                    continue;
+                }
 
-                if ('codes' in filter) {
-                    result.push({
-                        src: trimmedFilter,
-                        codes: filter.codes,
-                        isNegative: isNegative
-                    });
-                } else {
-                    result.push({
-                        src: trimmedFilter,
-                        isNegative: isNegative
-                    });
+                if (Array.isArray(filter.files)) {
+                    for (const fileIdentifier of filter.files) {
+                        if (typeof fileIdentifier === 'string') {
+                            result.push(this.getNormalizedFilter(fileIdentifier, filter));
+                            continue;
+                        }
+                        if (typeof fileIdentifier === 'object') {
+                            if ('src' in fileIdentifier) {
+                                result.push(this.getNormalizedFilter(fileIdentifier.src, filter));
+                                continue;
+                            }
+                            if ('dest' in fileIdentifier) {
+                                result.push(this.getNormalizedFilter(fileIdentifier.dest, filter, 'dest'));
+                                continue;
+                            }
+                        }
+                    }
                 }
             }
         }
         return result;
+    }
+
+
+    private getNormalizedFilter(fileGlob: string, filter: { files: string } | { codes?: (number | string)[] }, locationKey: 'src' | 'dest' = 'src'): NormalizedFilter {
+        const isNegative = fileGlob.startsWith('!');
+        const trimmedFilter = isNegative ? fileGlob.slice(1) : fileGlob;
+        if (locationKey === 'src') {
+            if ('codes' in filter && Array.isArray(filter.codes)) {
+                return {
+                    src: trimmedFilter,
+                    codes: filter.codes,
+                    isNegative: isNegative
+                };
+            } else {
+                return {
+                    src: trimmedFilter,
+                    isNegative: isNegative
+                };
+            }
+        } else {
+            // dest
+            if ('codes' in filter && Array.isArray(filter.codes)) {
+                return {
+                    dest: trimmedFilter,
+                    codes: filter.codes,
+                    isNegative: isNegative
+                };
+            } else {
+                return {
+                    dest: trimmedFilter,
+                    isNegative: isNegative
+                };
+            }
+        }
+
     }
 }
