@@ -116,7 +116,7 @@ describe('optional chaining', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.noOptionalChainingInLeftHandSideOfAssignment(),
-                range: util.createRange(2, 20, 2, 24)
+                location: { range: util.createRange(2, 20, 2, 24) }
             }]);
         });
 
@@ -129,7 +129,7 @@ describe('optional chaining', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.noOptionalChainingInLeftHandSideOfAssignment(),
-                range: util.createRange(2, 20, 2, 29)
+                location: { range: util.createRange(2, 20, 2, 29) }
             }]);
         });
 
@@ -143,7 +143,7 @@ describe('optional chaining', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.noOptionalChainingInLeftHandSideOfAssignment(),
-                range: util.createRange(3, 20, 3, 27)
+                location: { range: util.createRange(3, 20, 3, 27) }
             }]);
         });
 
@@ -157,7 +157,7 @@ describe('optional chaining', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.noOptionalChainingInLeftHandSideOfAssignment(),
-                range: util.createRange(3, 20, 3, 30)
+                location: { range: util.createRange(3, 20, 3, 30) }
             }]);
         });
 
@@ -172,10 +172,10 @@ describe('optional chaining', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.noOptionalChainingInLeftHandSideOfAssignment(),
-                range: util.createRange(3, 20, 3, 39)
+                location: { range: util.createRange(3, 20, 3, 39) }
             }, {
                 ...DiagnosticMessages.noOptionalChainingInLeftHandSideOfAssignment(),
-                range: util.createRange(4, 20, 4, 33)
+                location: { range: util.createRange(4, 20, 4, 33) }
             }]);
         });
     });

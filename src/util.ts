@@ -47,6 +47,7 @@ import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { ComponentType } from './types/ComponentType';
 import { FunctionType } from './types/FunctionType';
 import type { AssignmentStatement } from './parser/Statement';
+import type { BscFile } from './files/BscFile';
 
 export class Util {
     public clearConsole() {
@@ -204,10 +205,10 @@ export class Util {
                 let err = parseErrors[0];
                 let diagnostic = {
                     ...DiagnosticMessages.bsConfigJsonHasSyntaxErrors(printParseErrorCode(parseErrors[0].error)),
-                    file: {
-                        srcPath: configFilePath
-                    },
-                    range: this.getRangeFromOffsetLength(projectFileContents, err.offset, err.length)
+                    location: {
+                        uri: this.pathToUri(configFilePath),
+                        range: this.getRangeFromOffsetLength(projectFileContents, err.offset, err.length)
+                    }
                 } as BsDiagnostic;
                 throw diagnostic; //eslint-disable-line @typescript-eslint/no-throw-literal
             }
@@ -744,7 +745,7 @@ export class Util {
     /**
      * Does the string appear to be a uri (i.e. does it start with `file:`)
      */
-    private isUriLike(filePath: string) {
+    public isUriLike(filePath: string) {
         return filePath?.indexOf('file:') === 0;// eslint-disable-line @typescript-eslint/prefer-string-starts-ends-with
     }
 
@@ -867,22 +868,6 @@ export class Util {
         }
     }
 
-    /**
-     * Determine whether this diagnostic should be supressed or not, based on brs comment-flags
-     */
-    public diagnosticIsSuppressed(diagnostic: BsDiagnostic) {
-        const diagnosticCode = typeof diagnostic.code === 'string' ? diagnostic.code.toLowerCase() : diagnostic.code;
-        for (let flag of diagnostic.file?.commentFlags ?? []) {
-            //this diagnostic is affected by this flag
-            if (diagnostic.range && this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
-                //if the flag acts upon this diagnostic's code
-                if (flag.codes === null || (diagnosticCode !== undefined && flag.codes.includes(diagnosticCode))) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
 
     /**
      * Walks up the chain to find the closest bsconfig.json file
@@ -1100,6 +1085,13 @@ export class Util {
             uri: util.pathToUri(uri),
             range: range
         };
+    }
+
+    /**
+     * Helper for creating `Location` objects from a file and range
+     */
+    public createLocationFromFileRange(file: BscFile, range: Range): Location {
+        return this.createLocationFromRange(this.pathToUri(file?.srcPath), range);
     }
 
     /**
@@ -1784,9 +1776,13 @@ export class Util {
                 location: util.createLocationFromRange('   ', util.createRange(0, 0, 0, 0))
             });
         }
+
+        const range = (diagnostic as BsDiagnostic).location?.range ??
+            (diagnostic as Diagnostic).range;
+
         let result = {
             severity: diagnostic.severity,
-            range: diagnostic.range,
+            range: range,
             message: diagnostic.message,
             relatedInformation: relatedInformation.map(x => {
 
@@ -1795,7 +1791,7 @@ export class Util {
                 if (!clone.location) {
                     // use the fallback location if available
                     if (relatedInformationFallbackLocation) {
-                        clone.location = util.createLocationFromRange(relatedInformationFallbackLocation, diagnostic.range);
+                        clone.location = util.createLocationFromRange(relatedInformationFallbackLocation, range);
                     } else {
                         //remove this related information so it doesn't bring crash the language server
                         return undefined;
@@ -2074,8 +2070,7 @@ export class Util {
         if (fileDepth >= 8) {
             file.program?.diagnostics.register({
                 ...DiagnosticMessages.detectedTooDeepFileSource(fileDepth),
-                file: file,
-                range: this.createRange(0, 0, 0, Number.MAX_VALUE)
+                location: util.createLocationFromFileRange(file, this.createRange(0, 0, 0, Number.MAX_VALUE))
             });
         }
     }

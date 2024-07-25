@@ -6,7 +6,6 @@ import type { Location } from 'vscode-languageserver-protocol';
 import type { ClassStatement, FunctionStatement, NamespaceStatement } from '../../parser/Statement';
 import { ParseMode } from '../../parser/Parser';
 import util from '../../util';
-import { URI } from 'vscode-uri';
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
 import type { Token } from '../../lexer/Token';
 import type { XmlFile } from '../../files/XmlFile';
@@ -56,10 +55,7 @@ export class DefinitionProvider {
             const constant = scope?.getConstFileLink(fullName, containingNamespace);
             if (constant) {
                 this.event.definitions.push(
-                    util.createLocationFromRange(
-                        URI.file(constant.file.srcPath).toString(),
-                        constant.item.tokens.name?.location?.range
-                    )
+                    constant.item.tokens.name?.location
                 );
                 return;
             }
@@ -68,20 +64,14 @@ export class DefinitionProvider {
                 const enumLink = scope.getEnumFileLink(fullName, containingNamespace);
                 if (enumLink) {
                     this.event.definitions.push(
-                        util.createLocationFromRange(
-                            URI.file(enumLink.file.srcPath).toString(),
-                            enumLink.item.tokens.name.location?.range
-                        )
+                        enumLink.item.tokens.name.location
                     );
                     return;
                 }
                 const enumMemberLink = scope.getEnumMemberFileLink(fullName, containingNamespace);
                 if (enumMemberLink) {
                     this.event.definitions.push(
-                        util.createLocationFromRange(
-                            URI.file(enumMemberLink.file.srcPath).toString(),
-                            enumMemberLink.item.tokens.name.location?.range
-                        )
+                        enumMemberLink.item.tokens.name.location
                     );
                     return;
                 }
@@ -89,10 +79,7 @@ export class DefinitionProvider {
                 const interfaceFileLink = scope.getInterfaceFileLink(fullName, containingNamespace);
                 if (interfaceFileLink) {
                     this.event.definitions.push(
-                        util.createLocationFromRange(
-                            URI.file(interfaceFileLink.file.srcPath).toString(),
-                            interfaceFileLink.item.tokens.name.location?.range
-                        )
+                        interfaceFileLink.item.tokens.name.location
                     );
                     return;
                 }
@@ -100,10 +87,7 @@ export class DefinitionProvider {
                 const classFileLink = scope.getClassFileLink(fullName, containingNamespace);
                 if (classFileLink) {
                     this.event.definitions.push(
-                        util.createLocationFromRange(
-                            URI.file(classFileLink.file.srcPath).toString(),
-                            classFileLink.item.tokens.name.location?.range
-                        )
+                        classFileLink.item.tokens.name.location
                     );
                     return;
                 }

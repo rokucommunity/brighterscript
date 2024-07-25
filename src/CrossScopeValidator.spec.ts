@@ -6,6 +6,7 @@ import type { BrsFile } from './files/BrsFile';
 import { trim, expectZeroDiagnostics, expectDiagnostics, expectDiagnosticsIncludes } from './testHelpers.spec';
 import { expect } from 'chai';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
+import util from './util';
 
 describe('CrossScopeValidator', () => {
     let sinon = sinonImport.createSandbox();
@@ -1153,15 +1154,11 @@ describe('CrossScopeValidator', () => {
             expectDiagnostics(program, [
                 {
                     message: DiagnosticMessages.cannotFindName('fontName', 'TextOptions.fontName', 'TextOptions').message,
-                    file: {
-                        srcPath: button1.srcPath
-                    }
+                    location: { uri: util.pathToUri(button1.srcPath) }
                 },
                 {
                     message: DiagnosticMessages.cannotFindName('fontName', 'TextOptions.fontName', 'TextOptions').message,
-                    file: {
-                        srcPath: button2.srcPath
-                    }
+                    location: { uri: util.pathToUri(button2.srcPath) }
                 }
             ]);
         });
@@ -1221,15 +1218,11 @@ describe('CrossScopeValidator', () => {
             expectDiagnostics(program, [
                 {
                     message: DiagnosticMessages.mismatchArgumentCount(1, 0).message,
-                    file: {
-                        srcPath: button1.srcPath
-                    }
+                    location: { uri: util.pathToUri(button1.srcPath) }
                 },
                 {
                     message: DiagnosticMessages.mismatchArgumentCount(1, 0).message,
-                    file: {
-                        srcPath: button2.srcPath
-                    }
+                    location: { uri: util.pathToUri(button2.srcPath) }
                 }
             ]);
         });
@@ -1397,15 +1390,11 @@ describe('CrossScopeValidator', () => {
             expectDiagnostics(program, [
                 {
                     message: DiagnosticMessages.cannotFindName('getValue', 'alpha.beta.getValue', 'alpha.beta', 'namespace').message,
-                    file: {
-                        srcPath: button1.srcPath
-                    }
+                    location: { uri: util.pathToUri(button1.srcPath) }
                 },
                 {
                     message: DiagnosticMessages.cannotFindName('getValue').message,
-                    file: {
-                        srcPath: button2.srcPath
-                    }
+                    location: { uri: util.pathToUri(button2.srcPath) }
                 }
             ]);
         });
@@ -1451,9 +1440,7 @@ describe('CrossScopeValidator', () => {
                 expectDiagnostics(program, [
                     {
                         message: DiagnosticMessages.cannotFindFunction('someFunc', 'alpha.beta.someFunc', 'alpha.beta', 'namespace').message,
-                        file: {
-                            srcPath: widgetFile.srcPath
-                        }
+                        location: { uri: util.pathToUri(widgetFile.srcPath) }
                     }
                 ]);
 

@@ -4,7 +4,6 @@ import * as diagnosticUtils from './diagnosticUtils';
 import { Range, DiagnosticSeverity } from 'vscode-languageserver';
 import { util } from './util';
 import chalk from 'chalk';
-import { AssetFile } from './files/AssetFile';
 import { createSandbox } from 'sinon';
 import undent from 'undent';
 import type { BsDiagnostic } from './interfaces';
@@ -27,16 +26,15 @@ describe('diagnosticUtils', () => {
             //print a diagnostic that has an AssetFile. It should not explode
             diagnosticUtils.printDiagnostic(options, DiagnosticSeverity.Error, './temp/file.brs', [], {
                 message: 'Bad thing happened',
-                range: null, //important...this needs to be null for the test to pass,
-                code: 1234,
-                file: new AssetFile({ srcPath: 'src', destPath: 'dest' })
+                location: null, //important...this needs to be null for the test to pass,
+                code: 1234
             } as any);
         });
         it('does not crash when range is undefined', () => {
             //print a diagnostic that doesn't have a range...it should not explode
             diagnosticUtils.printDiagnostic(options, DiagnosticSeverity.Error, './temp/file.brs', [], {
                 message: 'Bad thing happened',
-                range: null, //important...this needs to be null for the test to pass,
+                location: null, //important...this needs to be null for the test to pass,
                 code: 1234
             } as any);
         });
@@ -45,7 +43,7 @@ describe('diagnosticUtils', () => {
             //print a diagnostic that doesn't have a range...it should not explode
             diagnosticUtils.printDiagnostic(options, DiagnosticSeverity.Error, undefined, [], {
                 message: 'Bad thing happened',
-                range: Range.create(0, 0, 2, 2),
+                location: Range.create(0, 0, 2, 2),
                 code: 1234
             } as any);
         });
@@ -252,7 +250,7 @@ describe('diagnosticUtils', () => {
 
         function testGetDiagnosticLine(range: Range, squigglyText: string, lineLength = 20) {
             expect(
-                diagnosticUtils.getDiagnosticLine({ range: range } as any, '1'.repeat(lineLength), color)
+                diagnosticUtils.getDiagnosticLine({ location: { range: range } } as any, '1'.repeat(lineLength), color)
             ).to.eql([
                 chalk.bgWhite(' ' + chalk.black((range.start.line + 1).toString()) + ' ') + ' ' + '1'.repeat(lineLength),
                 chalk.bgWhite(' ' + chalk.white(' '.repeat((range.start.line + 1).toString().length)) + ' ') + ' ' + squigglyText.padEnd(lineLength, ' ')

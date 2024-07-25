@@ -7,8 +7,6 @@ import * as fsExtra from 'fs-extra';
 import { createSandbox } from 'sinon';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { tempDir, rootDir, expectTypeToBe } from './testHelpers.spec';
-import { Program } from './Program';
-import type { BsDiagnostic } from './interfaces';
 import { TypeChainEntry } from './interfaces';
 import { NamespaceType } from './types/NamespaceType';
 import { ClassType } from './types/ClassType';
@@ -21,7 +19,6 @@ import { createDottedIdentifier, createVariableExpression } from './astUtils/cre
 import { Parser } from './parser/Parser';
 import type { FunctionStatement } from './parser/Statement';
 import { ComponentType } from './types/ComponentType';
-import type { BrsFile } from './files/BrsFile';
 
 const sinon = createSandbox();
 
@@ -70,31 +67,6 @@ describe('util', () => {
             expect(
                 util.getAllDottedGetPartsAsString(createDottedIdentifier(['alpha', 'beta']))
             ).to.eql('alpha.beta');
-        });
-    });
-
-    describe('diagnosticIsSuppressed', () => {
-        it('does not crash when diagnostic is missing location information', () => {
-            const program = new Program({});
-            const file = program.setFile('source/main.brs', '') as BrsFile;
-            const diagnostic: BsDiagnostic = {
-                file: file,
-                message: 'crash',
-                //important part of the test. range must be missing
-                range: undefined as any
-            };
-
-            file.commentFlags.push({
-                affectedRange: util.createRange(1, 2, 3, 4),
-                codes: [1, 2, 3],
-                file: file,
-                range: util.createRange(1, 2, 3, 4)
-            });
-            program.diagnostics.register(diagnostic);
-
-            util.diagnosticIsSuppressed(diagnostic);
-
-            //test passes if there's no crash
         });
     });
 
@@ -935,8 +907,7 @@ describe('util', () => {
             expect(
                 util.toDiagnostic({
                     ...DiagnosticMessages.cannotFindName('someVar'),
-                    file: undefined as any,
-                    range: util.createRange(1, 2, 3, 4),
+                    location: { uri: null, range: util.createRange(1, 2, 3, 4) },
                     relatedInformation: [{
                         message: 'Alpha',
                         location: undefined as any
@@ -954,8 +925,7 @@ describe('util', () => {
             expect(
                 util.toDiagnostic({
                     ...DiagnosticMessages.cannotFindName('someVar'),
-                    file: undefined as any,
-                    range: util.createRange(1, 2, 3, 4),
+                    location: { uri: null, range: util.createRange(1, 2, 3, 4) },
                     relatedInformation: [{
                         message: 'Alpha',
                         location: util.createLocationFromRange(

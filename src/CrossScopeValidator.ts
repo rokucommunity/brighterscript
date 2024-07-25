@@ -16,7 +16,6 @@ import type { BscType } from './types/BscType';
 import type { BscFile } from './files/BscFile';
 import type { ClassStatement, ConstStatement, EnumMemberStatement, EnumStatement, InterfaceStatement, NamespaceStatement } from './parser/Statement';
 import { ParseMode } from './parser/Parser';
-import { URI } from 'vscode-uri';
 import { globalFile } from './globalCallables';
 import type { DottedGetExpression, VariableExpression } from './parser/Expression';
 import type { InheritableType } from './types';
@@ -508,7 +507,7 @@ export class CrossScopeValidator {
 
     addDiagnosticsForScopes(scopes: Scope[]) { //, changedFiles: BrsFile[]) {
         const addDuplicateSymbolDiagnostics = true;
-        const missingSymbolInScope = new Map<BrsFile, Map<UnresolvedSymbol, Set<Scope>>>();
+        const missingSymbolInScope = new Map<UnresolvedSymbol, Set<Scope>>();
         this.providedTreeMap.clear();
         this.clearResolutionsForScopes(scopes);
 
@@ -582,15 +581,11 @@ export class CrossScopeValidator {
 
                                 const relatedInformation = thatNameRange ? [{
                                     message: `${thatNodeKindName} declared here`,
-                                    location: util.createLocationFromRange(
-                                        URI.file(otherDupe.file?.srcPath).toString(),
-                                        thatNameRange
-                                    )
+                                    location: util.createLocationFromFileRange(otherDupe.file, thatNameRange)
                                 }] : undefined;
                                 this.program.diagnostics.register({
                                     ...DiagnosticMessages.nameCollision(thisNodeKindName, thatNodeKindName, thatName),
-                                    file: dupe.file,
-                                    range: thisNameRange,
+                                    location: util.createLocationFromFileRange(dupe.file, thisNameRange),
                                     relatedInformation: relatedInformation
                                 }, {
                                     scope: scope,
@@ -603,36 +598,28 @@ export class CrossScopeValidator {
             }
             // build map of the symbols and scopes where the symbols are missing per file
             for (const missingSymbol of missingSymbols) {
-                let missingSymbolPerFile = missingSymbolInScope.get(missingSymbol.file);
-                if (!missingSymbolPerFile) {
-                    missingSymbolPerFile = new Map<UnresolvedSymbol, Set<Scope>>();
-                    missingSymbolInScope.set(missingSymbol.file, missingSymbolPerFile);
-                }
-                let scopesWithMissingSymbol = missingSymbolPerFile.get(missingSymbol);
+
+                let scopesWithMissingSymbol = missingSymbolInScope.get(missingSymbol);
                 if (!scopesWithMissingSymbol) {
                     scopesWithMissingSymbol = new Set<Scope>();
-                    missingSymbolPerFile.set(missingSymbol, scopesWithMissingSymbol);
+                    missingSymbolInScope.set(missingSymbol, scopesWithMissingSymbol);
                 }
                 scopesWithMissingSymbol.add(scope);
             }
         }
 
-        // Check each file for missing symbols - if they are missing in SOME scopes, add diagnostic
-        for (let [file, missingSymbolPerFile] of missingSymbolInScope.entries()) {
-            for (const [symbol, scopeList] of missingSymbolPerFile) {
-                const typeChainResult = util.processTypeChain(symbol.typeChain);
+        // If symbols are missing in SOME scopes, add diagnostic
+        for (const [symbol, scopeList] of missingSymbolInScope.entries()) {
+            const typeChainResult = util.processTypeChain(symbol.typeChain);
 
-                for (const scope of scopeList) {
-                    this.program.diagnostics.register({
-
-                        ...this.getCannotFindDiagnostic(scope, typeChainResult),
-                        file: file,
-                        range: typeChainResult.location?.range
-                    }, {
-                        scope: scope,
-                        tags: [CrossScopeValidatorDiagnosticTag]
-                    });
-                }
+            for (const scope of scopeList) {
+                this.program.diagnostics.register({
+                    ...this.getCannotFindDiagnostic(scope, typeChainResult),
+                    location: typeChainResult.location
+                }, {
+                    scope: scope,
+                    tags: [CrossScopeValidatorDiagnosticTag]
+                });
             }
         }
 
@@ -644,8 +631,7 @@ export class CrossScopeValidator {
                 const scopeListName = [...incompatibleScopes.values()].map(s => s.name).join(', ');
                 this.program.diagnostics.register({
                     ...DiagnosticMessages.incompatibleSymbolDefinition(typeChainResult.fullChainName, scopeListName),
-                    file: symbol.file,
-                    range: typeChainResult.location?.range
+                    location: typeChainResult.location
                 }, {
                     tags: [CrossScopeValidatorDiagnosticTag]
                 });

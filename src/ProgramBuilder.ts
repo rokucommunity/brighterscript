@@ -14,10 +14,7 @@ import * as diagnosticUtils from './diagnosticUtils';
 import * as fsExtra from 'fs-extra';
 import * as requireRelative from 'require-relative';
 import { Throttler } from './Throttler';
-import { AssetFile } from './files/AssetFile';
-import type { BscFile } from './files/BscFile';
 import type { BrsFile } from './files/BrsFile';
-import { URI } from 'vscode-uri';
 import { DiagnosticManager } from './DiagnosticManager';
 
 /**
@@ -71,18 +68,14 @@ export class ProgramBuilder {
         if (!this.program) {
             throw new Error('Cannot call `ProgramBuilder.addDiagnostic` before `ProgramBuilder.run()`');
         }
-        let file: BscFile | undefined = this.program.getFile(srcPath);
-        if (!file) {
-            // eslint-disable-next-line @typescript-eslint/dot-notation
-            const paths = this.program['getPaths'](srcPath, this.program.options.rootDir ?? this.options.rootDir);
-            file = new AssetFile(paths);
-            //keep this for backwards-compatibility. TODO remove in v1
-            // eslint-disable-next-line @typescript-eslint/dot-notation
-            file['pathAbsolute'] = file.srcPath;
-            diagnostic.file = file;
+        if (!diagnostic.location) {
+            diagnostic.location = {
+                uri: util.pathToUri(srcPath),
+                range: util.createRange(0, 0, 0, 0)
+            };
+        } else {
+            diagnostic.location.uri = util.pathToUri(srcPath);
         }
-
-        diagnostic.file = file;
         this.diagnostics.register(<any>diagnostic, { tags: ['ProgramBuilder'] });
     }
 
@@ -106,7 +99,7 @@ export class ProgramBuilder {
             this.loadRequires();
             this.loadPlugins();
         } catch (e: any) {
-            if (e?.file && e.message && e.code) {
+            if (e?.location && e.message && e.code) {
                 let err = e as BsDiagnostic;
                 this.diagnostics.register(err);
             } else {
@@ -300,33 +293,34 @@ export class ProgramBuilder {
         //group the diagnostics by file
         let diagnosticsByFile = {} as Record<string, BsDiagnostic[]>;
         for (let diagnostic of diagnostics) {
-            if (!diagnosticsByFile[diagnostic.file.srcPath]) {
-                diagnosticsByFile[diagnostic.file.srcPath] = [];
+            const diagnosticFileKey = diagnostic.location?.uri ?? 'no-uri';
+            if (!diagnosticsByFile[diagnosticFileKey]) {
+                diagnosticsByFile[diagnosticFileKey] = [];
             }
-            diagnosticsByFile[diagnostic.file.srcPath].push(diagnostic);
+            diagnosticsByFile[diagnosticFileKey].push(diagnostic);
         }
 
         //get printing options
         const options = diagnosticUtils.getPrintDiagnosticOptions(this.options);
         const { cwd, emitFullPaths } = options;
 
-        let srcPaths = Object.keys(diagnosticsByFile).sort();
-        for (let srcPath of srcPaths) {
-            let diagnosticsForFile = diagnosticsByFile[srcPath];
+        let fileUris = Object.keys(diagnosticsByFile).sort();
+        for (let fileUri of fileUris) {
+            let diagnosticsForFile = diagnosticsByFile[fileUri];
             //sort the diagnostics in line and column order
             let sortedDiagnostics = diagnosticsForFile.sort((a, b) => {
                 return (
-                    (a.range?.start.line ?? -1) - (b.range?.start.line ?? -1) ||
-                    (a.range?.start.character ?? -1) - (b.range?.start.character ?? -1)
+                    (a.location?.range?.start.line ?? -1) - (b.location?.range?.start.line ?? -1) ||
+                    (a.location?.range?.start.character ?? -1) - (b.location?.range?.start.character ?? -1)
                 );
             });
 
-            let filePath = srcPath;
+            let filePath = util.uriToPath(fileUri);
             if (!emitFullPaths) {
                 filePath = path.relative(cwd, filePath);
             }
             //load the file text
-            const file = this.program?.getFile(srcPath);
+            const file = this.program?.getFile(fileUri);
             //get the file's in-memory contents if available
             const lines = (file as BrsFile)?.fileContents?.split(/\r?\n/g) ?? [];
 
@@ -334,7 +328,7 @@ export class ProgramBuilder {
                 //default the severity to error if undefined
                 let severity = typeof diagnostic.severity === 'number' ? diagnostic.severity : DiagnosticSeverity.Error;
                 let relatedInformation = (util.toDiagnostic(diagnostic, diagnostic.source)?.relatedInformation ?? []).map(x => {
-                    let relatedInfoFilePath = URI.parse(x.location.uri).fsPath;
+                    let relatedInfoFilePath = util.uriToPath(x.location?.uri);
                     if (!emitFullPaths) {
                         relatedInfoFilePath = path.relative(cwd, relatedInfoFilePath);
                     }

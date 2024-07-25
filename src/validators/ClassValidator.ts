@@ -56,8 +56,7 @@ export class BsClassValidator {
                         if (expressionNameLower === 'm') {
                             this.diagnostics.push({
                                 ...DiagnosticMessages.classConstructorIllegalUseOfMBeforeSuperCall(),
-                                file: classStatement.file,
-                                range: expression.location?.range
+                                location: expression.location
                             });
                         }
                         if (isCallExpression(parent) && expressionNameLower === 'super') {
@@ -75,8 +74,7 @@ export class BsClassValidator {
                 if (!superCall && !(classStatement.file as BrsFile).isTypedef) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.classConstructorMissingSuperCall(),
-                        file: classStatement.file,
-                        range: newMethod.location?.range
+                        location: newMethod.location
                     });
                 }
             }
@@ -97,8 +95,7 @@ export class BsClassValidator {
                     this.diagnostics.push({
                         ...DiagnosticMessages.circularReferenceDetected(
                             Array.from(names.values()).concat(className), this.scope.name),
-                        file: cls.file,
-                        range: cls.tokens.name.location?.range
+                        location: cls.tokens.name.location
                     });
                     break;
                 }
@@ -133,8 +130,7 @@ export class BsClassValidator {
                     if (methods[lowerMemberName] || fields[lowerMemberName]) {
                         this.diagnostics.push({
                             ...DiagnosticMessages.duplicateIdentifier(memberName.text),
-                            file: classStatement.file,
-                            range: memberName.location?.range
+                            location: memberName.location
                         });
                     }
 
@@ -151,8 +147,7 @@ export class BsClassValidator {
                                     ancestorMemberKind,
                                     ancestorAndMember.classStatement.getName(ParseMode.BrighterScript)
                                 ),
-                                file: classStatement.file,
-                                range: member.location?.range
+                                location: member.location
                             });
                         }
 
@@ -175,8 +170,7 @@ export class BsClassValidator {
                                         childFieldType.toString(),
                                         ancestorMemberType.toString()
                                     ),
-                                    file: classStatement.file,
-                                    range: member.location?.range
+                                    location: member.location
                                 });
                             }
                         }
@@ -194,8 +188,7 @@ export class BsClassValidator {
                                 ...DiagnosticMessages.missingOverrideKeyword(
                                     ancestorAndMember.classStatement.getName(ParseMode.BrighterScript)
                                 ),
-                                file: classStatement.file,
-                                range: member.location?.range
+                                location: member.location
                             });
                         }
 
@@ -213,8 +206,7 @@ export class BsClassValidator {
                                     ancestorAndMember.member.accessModifier?.text || 'public',
                                     ancestorAndMember.classStatement.getName(ParseMode.BrighterScript)
                                 ),
-                                file: classStatement.file,
-                                range: member.location?.range
+                                location: member.location
                             });
                         }
                     }

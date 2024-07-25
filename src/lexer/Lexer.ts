@@ -2,9 +2,10 @@
 import { TokenKind, ReservedWords, Keywords, PreceedingRegexTypes, AllowedTriviaTokens } from './TokenKind';
 import type { Token } from './Token';
 import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Characters';
-import type { Location, Range, Diagnostic } from 'vscode-languageserver';
+import type { Location } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import util from '../util';
+import type { BsDiagnostic } from '../interfaces';
 
 export class Lexer {
     /**
@@ -50,7 +51,7 @@ export class Lexer {
     /**
      * The errors produced from `source.`
      */
-    public diagnostics: Diagnostic[];
+    public diagnostics: BsDiagnostic[];
 
     /**
      * The options used to scan this file
@@ -389,7 +390,7 @@ export class Lexer {
         } else {
             this.diagnostics.push({
                 ...DiagnosticMessages.unexpectedCharacter(c),
-                range: this.rangeOf()
+                location: this.locationOf()
             });
         }
     }
@@ -503,7 +504,7 @@ export class Lexer {
                 // BrightScript doesn't support multi-line strings
                 this.diagnostics.push({
                     ...DiagnosticMessages.unterminatedStringAtEndOfLine(),
-                    range: this.rangeOf()
+                    location: this.locationOf()
                 });
                 isUnterminated = true;
                 break;
@@ -516,7 +517,7 @@ export class Lexer {
             // terminating a string with EOF is also not allowed
             this.diagnostics.push({
                 ...DiagnosticMessages.unterminatedStringAtEndOfFile(),
-                range: this.rangeOf()
+                location: this.locationOf()
             });
             isUnterminated = true;
         }
@@ -637,7 +638,7 @@ export class Lexer {
 
                     this.diagnostics.push({
                         ...DiagnosticMessages.unexpectedConditionalCompilationString(),
-                        range: this.rangeOf()
+                        location: this.locationOf()
                     });
                 }
 
@@ -777,7 +778,7 @@ export class Lexer {
             this.advance(); // consume the "."
             this.diagnostics.push({
                 ...DiagnosticMessages.fractionalHexLiteralsAreNotSupported(),
-                range: this.rangeOf()
+                location: this.locationOf()
             });
             return;
         }
@@ -993,7 +994,7 @@ export class Lexer {
             default:
                 this.diagnostics.push({
                     ...DiagnosticMessages.unexpectedConditionalCompilationString(),
-                    range: this.rangeOf()
+                    location: this.locationOf()
                 });
         }
     }
@@ -1101,17 +1102,9 @@ export class Lexer {
         this.columnBegin = this.columnEnd;
     }
 
-    private rangeOf(): Range {
-        if (this.options.trackLocations) {
-            return util.createRange(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd);
-        } else {
-            return undefined;
-        }
-    }
-
     /**
-     * Creates a `Range` at the lexer's current position
-     * @returns the range of `text`
+     * Creates a `Location` at the lexer's current position
+     * @returns the location of `text`
      */
     private locationOf(): Location {
         if (this.options.trackLocations) {

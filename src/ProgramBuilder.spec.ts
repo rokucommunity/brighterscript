@@ -189,6 +189,7 @@ describe('ProgramBuilder', () => {
                 project: s`${rootDir}/bsconfig.json`,
                 username: 'john'
             });
+            // TODO: this is not run - builder.run throws a diagnostic
             expect(builder.program.options.username).to.equal('rokudev');
         });
 
@@ -289,17 +290,15 @@ describe('ProgramBuilder', () => {
     describe('printDiagnostics', () => {
 
         it('does not crash when a diagnostic is missing range informtaion', () => {
-            const file = builder.program.setFile('source/main.brs', ``);
+            builder.program.setFile('source/main.brs', ``);
             builder.diagnostics.register([{
                 message: 'message 1',
-                code: 'test1',
-                file: file
+                code: 'test1'
             }, {
                 message: 'message 2',
-                code: 'test1',
-                file: file
+                code: 'test1'
             }] as any);
-            const stub = sinon.stub(diagnosticUtils, 'printDiagnostic').callsFake(() => { });
+            const stub = sinon.stub(diagnosticUtils, 'printDiagnostic').callsFake((...args) => { });
             //if this doesn't crash, then the test passes
             builder['printDiagnostics']();
             expect(stub.getCalls().map(x => x.args[4].message)).to.eql([
@@ -330,12 +329,10 @@ describe('ProgramBuilder', () => {
         it('prints diagnostic, when file is present in project', () => {
             builder.options.showDiagnosticsInConsole = true;
 
-            let diagnostics = createBsDiagnostic('p1', ['m1']);
-            let f1 = diagnostics[0].file as BrsFile;
-            f1.fileContents = `l1\nl2\nl3`;
-            sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
+            let diagnostics = createBsDiagnostics('p1', ['m1']);
+            builder.program.setFile('p1', `l1\nl2\nl3`);
 
-            sinon.stub(builder.program, 'getFile').returns(f1);
+            sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
 
             let printStub = sinon.stub(diagnosticUtils, 'printDiagnostic');
 
@@ -348,13 +345,9 @@ describe('ProgramBuilder', () => {
     it('prints diagnostic, when file has no lines', () => {
         builder.options.showDiagnosticsInConsole = true;
 
-        let diagnostics = createBsDiagnostic('p1', ['m1']);
-        let f1 = diagnostics[0].file as BrsFile;
-        (f1.fileContents as any) = null;
+        let diagnostics = createBsDiagnostics('p1', ['m1']);
+        builder.program.setFile('p1', null);
         sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
-
-        sinon.stub(builder.program, 'getFile').returns(f1);
-
         let printStub = sinon.stub(diagnosticUtils, 'printDiagnostic');
 
         builder['printDiagnostics']();
@@ -365,7 +358,7 @@ describe('ProgramBuilder', () => {
     it('prints diagnostic, when no file present', () => {
         builder.options.showDiagnosticsInConsole = true;
 
-        let diagnostics = createBsDiagnostic('p1', ['m1']);
+        let diagnostics = createBsDiagnostics('p1', ['m1']);
         sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
 
         sinon.stub(builder.program, 'getFile').returns(null as any);
@@ -427,12 +420,11 @@ describe('ProgramBuilder', () => {
     });
 });
 
-function createBsDiagnostic(filePath: string, messages: string[]): BsDiagnostic[] {
+function createBsDiagnostics(filePath: string, messages: string[]): BsDiagnostic[] {
     let file = new BrsFile({ srcPath: filePath, destPath: filePath, program: null });
     let diagnostics = [];
     for (let message of messages) {
         let d = createDiagnostic(file, 1, message);
-        d.file = file;
         diagnostics.push(d);
     }
     return diagnostics;
@@ -447,11 +439,10 @@ function createDiagnostic(
     endCol = 99999,
     severity: DiagnosticSeverity = DiagnosticSeverity.Error
 ) {
-    const diagnostic = {
+    const diagnostic: BsDiagnostic = {
         code: code,
         message: message,
-        range: util.createRange(startLine, startCol, endLine, endCol),
-        file: file,
+        location: util.createLocationFromFileRange(file, util.createRange(startLine, startCol, endLine, endCol)),
         severity: severity
     };
     return diagnostic;

@@ -18,7 +18,6 @@ import type { FunctionStatement } from '../parser/Statement';
 import { ImportStatement } from '../parser/Statement';
 import { createToken, createVariableExpression } from '../astUtils/creators';
 import * as fsExtra from 'fs-extra';
-import { URI } from 'vscode-uri';
 import undent from 'undent';
 import { tempDir, rootDir } from '../testHelpers.spec';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
@@ -117,7 +116,7 @@ describe('BrsFile', () => {
     });
 
     it('flags namespaces used as variables', () => {
-        program.setFile('source/main.bs', `
+        const file = program.setFile('source/main.bs', `
             sub main()
                 alpha.beta.charlie.test()
                 print alpha
@@ -137,13 +136,13 @@ describe('BrsFile', () => {
         program.validate();
         expectDiagnostics(program, [{
             ...DiagnosticMessages.itemCannotBeUsedAsVariable('namespace'),
-            range: util.createRange(3, 22, 3, 27)
+            location: util.createLocationFromFileRange(file, util.createRange(3, 22, 3, 27))
         }, {
             ...DiagnosticMessages.itemCannotBeUsedAsVariable('namespace'),
-            range: util.createRange(4, 22, 4, 32)
+            location: util.createLocationFromFileRange(file, util.createRange(4, 22, 4, 32))
         }, {
             ...DiagnosticMessages.itemCannotBeUsedAsVariable('namespace'),
-            range: util.createRange(5, 22, 5, 40)
+            location: util.createLocationFromFileRange(file, util.createRange(5, 22, 5, 40))
         }]);
     });
 
@@ -411,15 +410,14 @@ describe('BrsFile', () => {
                 `) as BrsFile;
                 program.diagnostics.register({
                     code: 'LINT1005',
-                    file: file,
                     message: 'Something is not right',
-                    range: util.createRange(2, 16, 2, 26)
+                    location: util.createLocationFromFileRange(file, util.createRange(2, 16, 2, 26))
                 });
                 expectZeroDiagnostics(program);
             });
 
             it('adds diagnostics for unknown numeric diagnostic codes', () => {
-                program.setFile('source/main.brs', `
+                const file = program.setFile('source/main.brs', `
                     sub main()
                         print "hi" 'bs:disable-line: 123456 999999   aaaab
                     end sub
@@ -428,10 +426,10 @@ describe('BrsFile', () => {
                 program.validate();
                 expectDiagnostics(program, [{
                     ...DiagnosticMessages.unknownDiagnosticCode(123456),
-                    range: Range.create(2, 53, 2, 59)
+                    location: util.createLocationFromFileRange(file, Range.create(2, 53, 2, 59))
                 }, {
                     ...DiagnosticMessages.unknownDiagnosticCode(999999),
-                    range: Range.create(2, 60, 2, 66)
+                    location: util.createLocationFromFileRange(file, Range.create(2, 60, 2, 66))
                 }]);
             });
 
@@ -456,7 +454,7 @@ describe('BrsFile', () => {
             });
 
             it('works for specific codes', () => {
-                program.setFile('source/main.brs', `
+                const file = program.setFile('source/main.brs', `
                     sub main()
                         'should not have any errors
                         DoSomething(1) 'bs:disable-line:1002
@@ -470,7 +468,7 @@ describe('BrsFile', () => {
                 program.validate();
 
                 expectDiagnostics(program, [{
-                    range: Range.create(5, 24, 5, 35)
+                    location: util.createLocationFromFileRange(file, Range.create(5, 24, 5, 35))
                 }]);
             });
 
@@ -1339,8 +1337,8 @@ describe('BrsFile', () => {
                 end function
             `);
             expectHasDiagnostics(program);
-            expect(program.getDiagnostics()[0].file).to.equal(file);
-            expect(program.getDiagnostics()[0].range.start.line).to.equal(1);
+            expect(program.getDiagnostics()[0].location.uri).to.equal(util.pathToUri(file?.srcPath));
+            expect(program.getDiagnostics()[0].location.range.start.line).to.equal(1);
         });
 
         it('supports using the `next` keyword in a for loop', () => {
@@ -4048,7 +4046,7 @@ describe('BrsFile', () => {
             program.validate();
             //print alpha.beta.char|lie
             expect(program.getDefinition(file.srcPath, Position.create(2, 41))).to.eql([{
-                uri: URI.file(file.srcPath).toString(),
+                uri: util.pathToUri(file.srcPath),
                 range: util.createRange(5, 26, 5, 33)
             }]);
         });
@@ -4067,7 +4065,7 @@ describe('BrsFile', () => {
             program.validate();
             //print alpha.beta.char|lie
             expect(program.getDefinition(file.srcPath, Position.create(2, 40))).to.eql([{
-                uri: URI.file(file.srcPath).toString(),
+                uri: util.pathToUri(file.srcPath),
                 range: util.createRange(5, 25, 5, 31)
             }]);
         });
@@ -4084,7 +4082,7 @@ describe('BrsFile', () => {
             program.validate();
             // sub test(selectedMovie as Mo|vie)
             expect(program.getDefinition(file.srcPath, Position.create(1, 44))).to.eql([{
-                uri: URI.file(file.srcPath).toString(),
+                uri: util.pathToUri(file.srcPath),
                 range: util.createRange(4, 26, 4, 31)
             }]);
         });
@@ -4103,7 +4101,7 @@ describe('BrsFile', () => {
             program.validate();
             //sub test(selectedMovie as interfaces.Mo|vie)
             expect(program.getDefinition(file.srcPath, Position.create(1, 55))).to.eql([{
-                uri: URI.file(file.srcPath).toString(),
+                uri: util.pathToUri(file.srcPath),
                 range: util.createRange(5, 30, 5, 35)
             }]);
         });
@@ -4120,7 +4118,7 @@ describe('BrsFile', () => {
             program.validate();
             //sub test(selectedMovie as Mo|vie)
             expect(program.getDefinition(file.srcPath, Position.create(1, 44))).to.eql([{
-                uri: URI.file(file.srcPath).toString(),
+                uri: util.pathToUri(file.srcPath),
                 range: util.createRange(4, 22, 4, 27)
             }]);
         });
@@ -4139,7 +4137,7 @@ describe('BrsFile', () => {
             program.validate();
             //sub test(selectedMovie as classes.Mo|vie)
             expect(program.getDefinition(file.srcPath, Position.create(1, 52))).to.eql([{
-                uri: URI.file(file.srcPath).toString(),
+                uri: util.pathToUri(file.srcPath),
                 range: util.createRange(5, 26, 5, 31)
             }]);
         });
@@ -4170,14 +4168,14 @@ describe('BrsFile', () => {
             program.validate();
             //print alpha.beta.char|lie
             expect(program.getDefinition(file.srcPath, Position.create(2, 48))).to.eql([{
-                uri: URI.file(file.srcPath).toString(),
+                uri: util.pathToUri(file.srcPath),
                 range: util.createRange(6, 24, 6, 31)
             }]);
         });
     });
 
     it('catches mismatched `end` keywords for functions', () => {
-        program.setFile('source/main.brs', `
+        const file = program.setFile('source/main.brs', `
             function speak()
             end sub
             sub walk()
@@ -4186,10 +4184,10 @@ describe('BrsFile', () => {
         program.validate();
         expectDiagnostics(program, [{
             ...DiagnosticMessages.mismatchedEndCallableKeyword('function', 'sub'),
-            range: util.createRange(2, 12, 2, 19)
+            location: util.createLocationFromFileRange(file, util.createRange(2, 12, 2, 19))
         }, {
             ...DiagnosticMessages.mismatchedEndCallableKeyword('sub', 'function'),
-            range: util.createRange(4, 12, 4, 24)
+            location: util.createLocationFromFileRange(file, util.createRange(4, 12, 4, 24))
         }]);
     });
 
@@ -5271,7 +5269,7 @@ describe('BrsFile', () => {
         program.validate();
         expectDiagnostics(program, [{
             ...DiagnosticMessages.tooManyCallableParameters(64, 63),
-            range: util.createRange(1, 638, 1, 641)
+            location: { range: util.createRange(1, 638, 1, 641) }
         }]);
     });
 
@@ -5283,10 +5281,10 @@ describe('BrsFile', () => {
         program.validate();
         expectDiagnostics(program, [{
             ...DiagnosticMessages.tooManyCallableParameters(65, 63),
-            range: util.createRange(1, 638, 1, 641)
+            location: { range: util.createRange(1, 638, 1, 641) }
         }, {
             ...DiagnosticMessages.tooManyCallableParameters(65, 63),
-            range: util.createRange(1, 648, 1, 651)
+            location: { range: util.createRange(1, 648, 1, 651) }
         }]);
     });
 
@@ -5315,7 +5313,7 @@ describe('BrsFile', () => {
             {
                 ...DiagnosticMessages.itemIsDeprecated(),
                 // url.|setPort|(80)
-                range: util.createRange(3, 20, 3, 27)
+                location: { range: util.createRange(3, 20, 3, 27) }
             }
         ]);
     });

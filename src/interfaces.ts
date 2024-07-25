@@ -1,4 +1,4 @@
-import type { Range, Diagnostic, CodeAction, Position, CompletionItem, Location, DocumentSymbol, WorkspaceSymbol } from 'vscode-languageserver-protocol';
+import type { Range, CodeAction, Position, CompletionItem, Location, DocumentSymbol, WorkspaceSymbol, DiagnosticSeverity, CodeDescription, DiagnosticTag, DiagnosticRelatedInformation } from 'vscode-languageserver-protocol';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -23,10 +23,53 @@ import { TokenKind } from './lexer/TokenKind';
 import type { BscTypeKind } from './types/BscTypeKind';
 import { createToken } from './astUtils/creators';
 
-export interface BsDiagnostic extends Diagnostic {
-    file: BscFile;
+export interface BsDiagnostic {
     /**
-     * A generic data container where additional details of the diagnostic can be stored. These are stripped out before being sent to a languageclient, and not printed to the console.
+     * The location at which the message applies
+     */
+    location: Location;
+    /**
+     * The diagnostic's severity. Can be omitted. If omitted it is up to the
+     * client to interpret diagnostics as error, warning, info or hint.
+     */
+    severity?: DiagnosticSeverity;
+    /**
+     * The diagnostic's code, which usually appear in the user interface.
+     */
+    code?: number | string;
+    /**
+     * An optional property to describe the error code.
+     * Requires the code field (above) to be present/not null.
+     *
+     * @since 3.16.0
+     */
+    codeDescription?: CodeDescription;
+    /**
+     * A human-readable string describing the source of this
+     * diagnostic, e.g. 'typescript' or 'super lint'. It usually
+     * appears in the user interface.
+     */
+    source?: string;
+    /**
+     * The diagnostic's message. It usually appears in the user interface
+     */
+    message: string;
+    /**
+     * Additional metadata about the diagnostic.
+     *
+     * @since 3.15.0
+     */
+    tags?: DiagnosticTag[];
+    /**
+     * An array of related diagnostic information, e.g. when symbol-names within
+     * a scope collide all definitions can be marked via this property.
+     */
+    relatedInformation?: DiagnosticRelatedInformation[];
+    /**
+     * A data entry field that is preserved between a `textDocument/publishDiagnostics`
+     * notification and `textDocument/codeAction` request.
+     *
+     * @since 3.16.0
      */
     data?: any;
 }
