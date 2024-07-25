@@ -203,7 +203,7 @@ export class Util {
             if (parseErrors.length > 0) {
                 let err = parseErrors[0];
                 let diagnostic = {
-                    ...DiagnosticMessages.bsConfigJsonHasSyntaxErrors(printParseErrorCode(parseErrors[0].error)),
+                    ...DiagnosticMessages.syntaxError(`Syntax errors in bsconfig.json: ${printParseErrorCode(parseErrors[0].error)}`),
                     file: {
                         srcPath: configFilePath
                     },

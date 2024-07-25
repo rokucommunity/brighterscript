@@ -37,7 +37,6 @@ import { URI } from 'vscode-uri';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import type { BsConfig } from './BsConfig';
 import { Deferred } from './deferred';
-import { DiagnosticMessages } from './DiagnosticMessages';
 import { ProgramBuilder } from './ProgramBuilder';
 import { standardizePath as s, util } from './util';
 import { Throttler } from './Throttler';
@@ -594,14 +593,6 @@ export class LanguageServer {
             firstRunDeferred.reject(e);
             newProject.isFirstRunComplete = true;
             newProject.isFirstRunSuccessful = false;
-        }
-        //if we found a deprecated brsconfig.json, add a diagnostic warning the user
-        if (configFilePath && path.basename(configFilePath) === 'brsconfig.json') {
-            builder.addDiagnostic(configFilePath, {
-                ...DiagnosticMessages.brsConfigJsonIsDeprecated(),
-                range: util.createRange(0, 0, 0, 0)
-            });
-            return this.sendDiagnostics();
         }
     }
 

@@ -59,32 +59,32 @@ export let DiagnosticMessages = {
         message: `Missing a component declaration.`,
         legacyCode: 1005,
         severity: DiagnosticSeverity.Error,
-        code: 'xml-missing-component-declaration'
+        code: 'missing-component-element'
     }),
     xmlComponentMissingNameAttribute: () => ({
         message: `Component must have a name attribute.`,
         legacyCode: 1006,
         severity: DiagnosticSeverity.Error,
-        code: 'xml-missing-name-attribute'
+        code: 'missing-name-attribute'
     }),
     xmlComponentMissingExtendsAttribute: () => ({
         message: `Component is mising "extends" attribute and will automatically extend "Group" by default`,
         legacyCode: 1007,
         severity: DiagnosticSeverity.Warning,
-        code: 'xml-missing-extends-attribute'
+        code: 'missing-extends-attribute'
     }),
-    xmlGenericParseError: (message: string) => ({
+    syntaxError: (message: string) => ({
         //generic catchall xml parse error
         message: message,
         legacyCode: 1008,
         severity: DiagnosticSeverity.Error,
-        code: 'xml-generic-parse-error'
+        code: 'syntax-error'
     }),
     unnecessaryScriptImportInChildFromParent: (parentComponentName: string) => ({
         message: `Unnecessary script import: Script is already imported in ancestor component '${parentComponentName}'.`,
         legacyCode: 1009,
         severity: DiagnosticSeverity.Warning,
-        code: 'unnecessary-script-import'
+        code: 'redundant-import'
     }),
     overridesAncestorFunction: (callableName: string, currentScopeName: string, parentFilePath: string, parentScopeName: string) => ({
         message: `Function '${callableName}' included in '${currentScopeName}' overrides function in '${parentFilePath}' included in '${parentScopeName}'.`,
@@ -96,13 +96,13 @@ export let DiagnosticMessages = {
         message: `Local variable function has same name as ${scopeName} function and will never be called.`,
         legacyCode: 1011,
         severity: DiagnosticSeverity.Warning,
-        code: 'local-var-function-shadow'
+        code: 'variable-shadows-function'
     }),
     scriptImportCaseMismatch: (correctFilePath: string) => ({
         message: `Script import path does not match casing of actual file path '${correctFilePath}'.`,
         legacyCode: 1012,
         severity: DiagnosticSeverity.Warning,
-        code: 'script-import-case-mismatch'
+        code: 'import-case-mismatch'
     }),
     fileNotReferencedByAnyOtherFile: () => ({
         message: `This file is not referenced by any other file in the project.`,
@@ -120,21 +120,21 @@ export let DiagnosticMessages = {
         message: `Script import cannot be empty or whitespace`,
         legacyCode: 1015,
         severity: DiagnosticSeverity.Error,
-        code: 'script-import-empty'
+        code: 'invalid-import-path'
     }),
     expectedIdentifierAfterKeyword: (keywordText: string) => ({
         message: `Expected identifier after '${keywordText}' keyword`,
         legacyCode: 1016,
         severity: DiagnosticSeverity.Error,
-        code: 'expected-identifier-after-keyword'
+        code: 'missing-identifier'
     }),
     missingCallableKeyword: () => ({
         message: `Expected 'function' or 'sub' to precede identifier`,
         legacyCode: 1017,
         severity: DiagnosticSeverity.Error,
-        code: 'expected-callable-keyword'
+        code: 'missing-leading-keyword'
     }),
-    expectedValidTypeToFollowAsKeyword: () => ({
+    __unused12: () => ({
         message: `Expected valid type to follow 'as' keyword`,
         legacyCode: 1018,
         severity: DiagnosticSeverity.Error,
@@ -146,7 +146,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'bs-feature-not-supported'
     }),
-    brsConfigJsonIsDeprecated: () => ({
+    __ununsed12: () => ({
         message: `'brsconfig.json' is deprecated. Please rename to 'bsconfig.json'`,
         legacyCode: 1020,
         severity: DiagnosticSeverity.Warning,
@@ -690,13 +690,13 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'expected-token'
     }),
-    __unused8: (paramName: string) => ({
+    __unused10: (paramName: string) => ({
         message: `Parameter '${paramName}' may not have the same name as namespace`,
         legacyCode: 1110,
         severity: DiagnosticSeverity.Error,
         code: 'parameter-same-name-as-namespace'
     }),
-    __unused9: (variableName: string) => ({
+    __unused11: (variableName: string) => ({
         message: `Variable '${variableName}' may not have the same name as namespace`,
         legacyCode: 1111,
         severity: DiagnosticSeverity.Error,
