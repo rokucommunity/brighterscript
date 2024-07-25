@@ -277,6 +277,38 @@ describe('HoverProcessor', () => {
             expect(hover?.contents).to.eql([fence('sub name.Klass.noop() as void')]);
         });
 
+        it('finds local variables that shadow namespaces', () => {
+            program.setFile('source/main.bs', `
+                sub foo1(alpha as string)
+                    print alpha.toStr() ' in foo1()
+                end sub
+
+                sub foo2()
+                    alpha = 123
+                    print alpha.toStr() ' in foo2()
+                end sub
+
+                namespace alpha
+                    function toStr()
+                        return "alpha"
+                    end function
+                end namespace
+            `);
+            program.validate();
+            //  sub foo1(alp|ha as string)
+            let hover = program.getHover('source/main.bs', util.createPosition(1, 29))[0];
+            expect(hover?.contents).to.eql([fence('alpha as string')]);
+            // print alp|ha.toStr() ' in foo1()
+            hover = program.getHover('source/main.bs', util.createPosition(2, 30))[0];
+            expect(hover?.contents).to.eql([fence('alpha as string')]);
+            //  alp|ha = 123
+            hover = program.getHover('source/main.bs', util.createPosition(6, 23))[0];
+            expect(hover?.contents).to.eql([fence('alpha as integer')]);
+            //  print alp|ha.toStr() ' in foo2()
+            hover = program.getHover('source/main.bs', util.createPosition(7, 30))[0];
+            expect(hover?.contents).to.eql([fence('alpha as integer')]);
+        });
+
         it('finds types properly', () => {
             program.setFile('source/main.bs', `
                 class Person
