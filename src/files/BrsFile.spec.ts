@@ -2228,6 +2228,52 @@ describe('BrsFile', () => {
                     end sub
                 `);
             });
+
+            it('does not falsely add underscores when variable shadows namespace', async () => {
+                await testTranspile(`
+                    namespace alpha
+                        function toStr()
+                            return "ALPHA"
+                        end function
+
+                        sub foo()
+                            alpha = 1
+                            print alpha.toStr()
+                        end sub
+                    end namespace
+                `, `
+                    function alpha_toStr()
+                        return "ALPHA"
+                    end function
+
+                    sub alpha_foo()
+                        alpha = 1
+                        print alpha.toStr()
+                    end sub
+                `);
+            });
+
+            it('does not falsely add underscores when parameter shadows namespace', async () => {
+                await testTranspile(`
+                    namespace alpha
+                        function toStr()
+                            return "ALPHA"
+                        end function
+                    end namespace
+
+                    sub foo(alpha)
+                        print alpha.toStr()
+                    end sub
+                `, `
+                    function alpha_toStr()
+                        return "ALPHA"
+                    end function
+
+                    sub foo(alpha)
+                        print alpha.toStr()
+                    end sub
+                `);
+            });
         });
         it('includes all text to end of line for a non-terminated string', async () => {
             await testTranspile(
