@@ -39,7 +39,7 @@ describe('AnnotationExpression', () => {
             expect(getArguments('`hello`')).to.eql(['hello']);
         });
 
-        it.only('work with complex template string', () => {
+        it('work with complex template string', () => {
             expect(getArguments('`createObject("roSGNode", "BrsComponent")`')).to.eql([`createObject("roSGNode", "BrsComponent")`]);
         });
     });
