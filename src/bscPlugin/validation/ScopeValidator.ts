@@ -105,8 +105,6 @@ export class ScopeValidator {
 
             const thisFileHasChanges = this.event.changedFiles.includes(file);
 
-            this.detectVariableNamespaceCollisions(file);
-
             if (thisFileHasChanges || this.doesFileProvideChangedSymbol(file, this.event.changedSymbols)) {
                 this.diagnosticDetectFunctionCollisions(file);
             }
@@ -1094,53 +1092,6 @@ export class ScopeValidator {
                         )
                     }]
                 });
-            }
-        }
-    }
-
-    private detectVariableNamespaceCollisions(file: BrsFile) {
-        this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, fileUri: util.pathToUri(file?.srcPath), tag: ScopeValidatorDiagnosticTag.NamespaceCollisions });
-
-        //find all function parameters
-        // eslint-disable-next-line @typescript-eslint/dot-notation
-        for (let func of file['_cachedLookups'].functionExpressions) {
-            for (let param of func.parameters) {
-                let lowerParamName = param.tokens.name.text.toLowerCase();
-                let namespace = this.event.scope.getNamespace(lowerParamName, param.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript).toLowerCase());
-                //see if the param matches any starting namespace part
-                if (namespace) {
-                    this.addMultiScopeDiagnostic({
-                        ...DiagnosticMessages.parameterMayNotHaveSameNameAsNamespace(param.tokens.name.text),
-                        location: param.tokens.name.location,
-                        relatedInformation: [{
-                            message: 'Namespace declared here',
-                            location: util.createLocationFromRange(
-                                util.pathToUri(namespace.file.srcPath),
-                                namespace.nameRange
-                            )
-                        }]
-                    }, ScopeValidatorDiagnosticTag.NamespaceCollisions);
-                }
-            }
-        }
-
-        // eslint-disable-next-line @typescript-eslint/dot-notation
-        for (let assignment of file['_cachedLookups'].assignmentStatements) {
-            let lowerAssignmentName = assignment.tokens.name.text.toLowerCase();
-            let namespace = this.event.scope.getNamespace(lowerAssignmentName, assignment.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript).toLowerCase());
-            //see if the param matches any starting namespace part
-            if (namespace) {
-                this.addMultiScopeDiagnostic({
-                    ...DiagnosticMessages.variableMayNotHaveSameNameAsNamespace(assignment.tokens.name.text),
-                    location: assignment.tokens.name.location,
-                    relatedInformation: [{
-                        message: 'Namespace declared here',
-                        location: util.createLocationFromRange(
-                            util.pathToUri(namespace.file.srcPath),
-                            namespace.nameRange
-                        )
-                    }]
-                }, ScopeValidatorDiagnosticTag.NamespaceCollisions);
             }
         }
     }

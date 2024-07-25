@@ -582,12 +582,12 @@ export let DiagnosticMessages = {
         code: 1109,
         severity: DiagnosticSeverity.Error
     }),
-    parameterMayNotHaveSameNameAsNamespace: (paramName: string) => ({
+    __unused8: (paramName: string) => ({
         message: `Parameter '${paramName}' may not have the same name as namespace`,
         code: 1110,
         severity: DiagnosticSeverity.Error
     }),
-    variableMayNotHaveSameNameAsNamespace: (variableName: string) => ({
+    __unused9: (variableName: string) => ({
         message: `Variable '${variableName}' may not have the same name as namespace`,
         code: 1111,
         severity: DiagnosticSeverity.Error

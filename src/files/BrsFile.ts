@@ -751,12 +751,15 @@ export class BrsFile implements BscFile {
         }
 
         if (isVariableExpression(left)) {
-            let lowerName = left.tokens.name.text.toLowerCase();
-            //find the first scope that contains this namespace
-            let scopes = this.program.getScopesForFile(this);
-            for (let scope of scopes) {
-                if (scope.namespaceLookup.has(lowerName)) {
-                    return true;
+            const leftType = left.getType({ flags: SymbolTypeFlag.runtime });
+            if (isNamespaceType(leftType)) {
+                let lowerName = left.tokens.name.text.toLowerCase();
+                //find the first scope that contains this namespace
+                let scopes = this.program.getScopesForFile(this);
+                for (let scope of scopes) {
+                    if (scope.namespaceLookup.has(lowerName)) {
+                        return true;
+                    }
                 }
             }
         }

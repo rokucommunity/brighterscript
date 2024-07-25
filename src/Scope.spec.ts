@@ -158,7 +158,7 @@ describe('Scope', () => {
         expectZeroDiagnostics(program);
     });
 
-    it('flags parameter with same name as namespace', () => {
+    it('allows parameter with same name as namespace', () => {
         program.setFile('source/main.bs', `
             namespace NameA.NameB
             end namespace
@@ -166,12 +166,10 @@ describe('Scope', () => {
             end sub
         `);
         program.validate();
-        expectDiagnostics(program, [
-            DiagnosticMessages.parameterMayNotHaveSameNameAsNamespace('nameA')
-        ]);
+        expectZeroDiagnostics(program);
     });
 
-    it('flags parameter with same name as a sub namespace part', () => {
+    it('allows parameter with same name as a sub namespace part', () => {
         program.setFile('source/main.bs', `
             namespace alpha
                 sub test(lineHeight as integer)
@@ -182,14 +180,10 @@ describe('Scope', () => {
             end namespace
         `);
         program.validate();
-        expectDiagnostics(program, [{
-            //sub test(|lineHeight| as integer)
-            message: DiagnosticMessages.parameterMayNotHaveSameNameAsNamespace('lineHeight').message,
-            location: { range: util.createRange(2, 25, 2, 35) }
-        }]);
+        expectZeroDiagnostics(program);
     });
 
-    it('flags assignments with same name as namespace', () => {
+    it('allows assignments with same name as namespace', () => {
         program.setFile('source/main.bs', `
             namespace NameA.NameB
             end namespace
@@ -199,16 +193,7 @@ describe('Scope', () => {
             end sub
         `);
         program.validate();
-        expectDiagnostics(program, [
-            {
-                ...DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('namea'),
-                location: { range: util.createRange(4, 16, 4, 21) }
-            },
-            {
-                ...DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('NAMEA'),
-                location: { range: util.createRange(5, 16, 5, 21) }
-            }
-        ]);
+        expectZeroDiagnostics(program);
     });
 
     it('allows getting all scopes', () => {
@@ -442,7 +427,7 @@ describe('Scope', () => {
             }]);
         });
 
-        it('flags assignment with same name as a sub namespace part', () => {
+        it('allows assignment with same name as a sub namespace part', () => {
             program.setFile('source/main.bs', `
                 namespace alpha
                     sub test()
@@ -454,11 +439,7 @@ describe('Scope', () => {
                 end namespace
             `);
             program.validate();
-            expectDiagnostics(program, [{
-                //|lineHeight| = 1
-                message: DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('lineHeight').message,
-                location: { range: util.createRange(3, 24, 3, 34) }
-            }]);
+            expectZeroDiagnostics(program);
         });
 
         it('flags local vars with same name as a sub namespace part', () => {
