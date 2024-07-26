@@ -520,6 +520,17 @@ export class Util {
         return path.join(...resultParts);
     }
 
+    public getImportPackagePath(srcPath: string, pkgTargetPath: string) {
+        const srcExt = this.getExtension(srcPath);
+        const lowerSrcExt = srcExt.toLowerCase();
+        const lowerTargetExt = this.getExtension(pkgTargetPath).toLowerCase();
+        if (lowerSrcExt === '.bs' && lowerTargetExt === '.brs') {
+            // if source is .bs, use that as the import extenstion
+            return pkgTargetPath.substring(0, pkgTargetPath.length - lowerTargetExt.length) + srcExt;
+        }
+        return pkgTargetPath;
+    }
+
     /**
      * Walks left in a DottedGetExpression and returns a VariableExpression if found, or undefined if not found
      */
