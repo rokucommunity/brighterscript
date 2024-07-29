@@ -15,12 +15,9 @@ import { CancellationTokenSource } from 'vscode-languageserver-protocol';
 import type { DocumentAction, DocumentActionWithStatus } from './DocumentManager';
 import type { SignatureInfoObj } from '../Program';
 import type { BsConfig } from '../BsConfig';
-import { LogLevel } from '../Logger';
-import type { Logger } from '../logging';
+import type { Logger, LogLevel } from '../logging';
 import { createLogger } from '../logging';
-import { Trace } from '../common/Decorators';
 
-@Trace(LogLevel.debug)
 export class Project implements LspProject {
     public constructor(
         options?: {
@@ -37,6 +34,8 @@ export class Project implements LspProject {
      * Activates this project. Every call to `activate` should completely reset the project, clear all used ram and start from scratch.
      */
     public async activate(options: ProjectConfig): Promise<ActivateResponse> {
+        this.logger.info('Project.activate', options.projectPath);
+
         this.activateOptions = options;
         this.projectPath = options.projectPath ? util.standardizePath(options.projectPath) : options.projectPath;
         this.workspaceFolder = options.workspaceFolder ? util.standardizePath(options.workspaceFolder) : options.workspaceFolder;
@@ -165,6 +164,8 @@ export class Project implements LspProject {
      * This will cancel any currently running validation and then run a new one.
      */
     public async validate() {
+        this.logger.debug('Project.validate');
+
         this.cancelValidate();
         //store
         this.validationCancelToken = new CancellationTokenSource();
@@ -213,7 +214,7 @@ export class Project implements LspProject {
      * This will cancel any pending validation cycles and queue a future validation cycle instead.
      */
     public async applyFileChanges(documentActions: DocumentAction[]): Promise<DocumentActionWithStatus[]> {
-        this.logger.debug('project.applyFileChanges', documentActions.map(x => x.srcPath));
+        this.logger.debug('Project.applyFileChanges', documentActions.map(x => x.srcPath));
 
         await this.onIdle();
 
@@ -287,6 +288,8 @@ export class Project implements LspProject {
      * @returns true if this program accepted and added the file. false if the program didn't want the file, or if the contents didn't change
      */
     private setFile(srcPath: string, fileContents: string) {
+        this.logger.debug('Project.setFile', { srcPath: srcPath, fileContentsLength: fileContents.length });
+
         const { files, rootDir } = this.builder.program.options;
 
         //get the dest path for this file.
@@ -318,6 +321,8 @@ export class Project implements LspProject {
      * @returns true if we found and removed at least one file, or false if no files were removed
      */
     private removeFileOrDirectory(srcPath: string) {
+        this.logger.debug('Project.removeFileOrDirectory', srcPath);
+
         srcPath = util.standardizePath(srcPath);
         //if this is a direct file match, remove the file
         if (this.builder.program.hasFile(srcPath)) {
@@ -331,6 +336,8 @@ export class Project implements LspProject {
         for (let file of Object.values(this.builder.program.files)) {
             //if the file path starts with the parent path and the file path does not exactly match the folder path
             if (file.srcPath?.toLowerCase().startsWith(lowerSrcPath)) {
+                this.logger.debug('Project.removeFileOrDirectory removing file because it matches the given directory', { dir: srcPath, srcPath: file.srcPath });
+
                 this.builder.program.removeFile(file.srcPath, false);
                 removedSomeFiles = true;
             }
@@ -417,7 +424,7 @@ export class Project implements LspProject {
     public async getCompletions(options: { srcPath: string; position: Position }): Promise<CompletionList> {
         await this.onIdle();
 
-        this.logger.debug('project.getCompletions', options.srcPath, options.position);
+        this.logger.debug('Project.getCompletions', options.srcPath, options.position);
 
         if (this.builder.program.hasFile(options.srcPath)) {
             const completions = this.builder.program.getCompletions(options.srcPath, options.position);

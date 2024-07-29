@@ -14,8 +14,7 @@ import { Deferred } from '../../deferred';
 import type { FileTranspileResult, SignatureInfoObj } from '../../Program';
 import type { Position, Range, Location, DocumentSymbol, WorkspaceSymbol, CodeAction, CompletionList } from 'vscode-languageserver-protocol';
 import type { Logger } from '../../logging';
-import { LogLevel, createLogger } from '../../logging';
-import { Trace } from '../../common/Decorators';
+import { createLogger } from '../../logging';
 
 export const workerPool = new WorkerPool(() => {
     return new Worker(
@@ -37,7 +36,6 @@ if (!isMainThread) {
     runner.run(parentPort);
 }
 
-@Trace(LogLevel.debug)
 export class WorkerThreadProject implements LspProject {
     public constructor(
         options?: {
