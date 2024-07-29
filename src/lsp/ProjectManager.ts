@@ -15,15 +15,13 @@ import { BusyStatusTracker } from '../BusyStatusTracker';
 import * as fastGlob from 'fast-glob';
 import { PathCollection, PathFilterer } from './PathFilterer';
 import type { Logger } from '../logging';
-import { LogLevel, createLogger } from '../logging';
-import { Trace } from '../common/Decorators';
+import { createLogger } from '../logging';
 import { Cache } from '../Cache';
 import { ActionQueue } from './ActionQueue';
 
 /**
  * Manages all brighterscript projects for the language server
  */
-@Trace(LogLevel.debug)
 export class ProjectManager {
     constructor(options?: {
         pathFilterer: PathFilterer;
@@ -72,6 +70,13 @@ export class ProjectManager {
      */
     @TrackBusyStatus
     private async flushDocumentChanges(event: FlushEvent) {
+
+        this.logger.info(`flushDocumentChanges`, event?.actions?.map(x => ({
+            type: x.type,
+            srcPath: x.srcPath,
+            allowStandaloneProject: x.allowStandaloneProject
+        })));
+
         //ensure that we're fully initialized before proceeding
         await this.onInitialized();
 
@@ -82,11 +87,6 @@ export class ProjectManager {
         for (const action of actions) {
             action.id = idSequence++;
         }
-
-        this.logger.info(`Flushing ${actions.length} document changes`, actions.map(x => ({
-            type: x.type,
-            srcPath: x.srcPath
-        })));
 
         //apply all of the document actions to each project in parallel
         const responses = await Promise.all(this.projects.map(async (project) => {
@@ -131,7 +131,11 @@ export class ProjectManager {
                 //TODO only create standalone projects for files we understand (brightscript, brighterscript, scenegraph xml, etc)
                 await this.createStandaloneProject(action.srcPath);
             }
-            this.logger.log('flushDocumentChanges complete', event.actions.map(x => x.srcPath));
+            this.logger.info('flushDocumentChanges complete', actions.map(x => ({
+                type: x.type,
+                srcPath: x.srcPath,
+                allowStandaloneProject: x.allowStandaloneProject
+            })));
         }
     }
 
@@ -151,6 +155,7 @@ export class ProjectManager {
 
         //if we already have a standalone project with this path, do nothing because it already exists
         if (this.getStandaloneProject(srcPath)) {
+            this.logger.log('createStandaloneProject skipping because we already have one for this path');
             return;
         }
 
@@ -242,11 +247,12 @@ export class ProjectManager {
     public async syncProjects(workspaceConfigs: WorkspaceConfig[], forceReload = false) {
         //if we're force reloading, destroy all projects and start fresh
         if (forceReload) {
-            this.logger.log('Force reloading all projects');
+            this.logger.log('syncProjects: forceReload is true so removing all existing projects');
             for (const project of this.projects) {
                 this.removeProject(project);
             }
         }
+        this.logger.log('syncProjects', workspaceConfigs.map(x => x.workspaceFolder));
 
         this.syncPromise = (async () => {
             //build a list of unique projects across all workspace folders
@@ -307,6 +313,7 @@ export class ProjectManager {
 
     public handleFileChanges(changes: FileChange[]) {
         this.logger.log('handleFileChanges', changes.map(x => x.srcPath));
+
         //this function should NOT be marked as async, because typescript wraps the body in an async call sometimes. These need to be registered synchronously
         return this.fileChangesQueue.run(async (changes) => {
             this.logger.log('handleFileChanges -> run', changes.map(x => x.srcPath));
@@ -388,6 +395,8 @@ export class ProjectManager {
      * Given a project, forcibly reload it by removing it and re-adding it
      */
     private async reloadProject(project: LspProject) {
+        this.logger.log('Reloading project', { projectPath: project.projectPath });
+
         this.removeProject(project);
         project = await this.createAndActivateProject(project.activateOptions);
     }
@@ -667,6 +676,7 @@ export class ProjectManager {
     private removeProject(project: LspProject) {
         const idx = this.projects.findIndex(x => x.projectPath === project?.projectPath);
         if (idx > -1) {
+            this.logger.log('Removing project', { projectPath: project.projectPath, projectNumber: project.projectNumber });
             this.projects.splice(idx, 1);
         }
         //anytime we remove a project, we should emit an event that clears all of its diagnostics

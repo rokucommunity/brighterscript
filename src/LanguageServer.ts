@@ -51,11 +51,9 @@ import { PathFilterer } from './lsp/PathFilterer';
 import type { WorkspaceConfig } from './lsp/ProjectManager';
 import { ProjectManager } from './lsp/ProjectManager';
 import * as fsExtra from 'fs-extra';
-import { Trace } from './common/Decorators';
 import type { MaybePromise } from './interfaces';
 import { workerPool } from './lsp/worker/WorkerThreadProject';
 
-@Trace()
 export class LanguageServer {
     /**
      * The default threading setting for the language server. Can be overridden by per-workspace settings
@@ -110,7 +108,7 @@ export class LanguageServer {
 
         //anytime a project emits a collection of diagnostics, send them to the client
         this.projectManager.on('diagnostics', (event) => {
-            this.logger.info(`Received ${event.diagnostics.length} diagnostics from project ${event.project.projectNumber}`);
+            this.logger.debug(`Received ${event.diagnostics.length} diagnostics from project ${event.project.projectNumber}`);
             this.sendDiagnostics(event).catch(logAndIgnoreError);
         });
 
@@ -319,14 +317,14 @@ export class LanguageServer {
             }
         );
         if (workspaceResult) {
-            this.logger.log(`Setting global logLevel to '${workspaceResult.logLevelText}' based on configuration from workspace '${workspaceResult?.item?.uri}'`);
+            this.logger.info(`Setting global logLevel to '${workspaceResult.logLevelText}' based on configuration from workspace '${workspaceResult?.item?.uri}'`);
             this.logger.logLevel = workspaceResult.logLevel;
             return;
         }
 
         let projectResult = await getLogLevel(this.projectManager.projects, (project) => project.logger.logLevel);
         if (projectResult) {
-            this.logger.log(`Setting global logLevel to '${projectResult.logLevelText}' based on project #${projectResult?.item?.projectNumber}`);
+            this.logger.info(`Setting global logLevel to '${projectResult.logLevelText}' based on project #${projectResult?.item?.projectNumber}`);
             this.logger.logLevel = projectResult.logLevel;
             return;
         }
@@ -362,7 +360,7 @@ export class LanguageServer {
             allowStandaloneProject: this.documents.get(x.uri) !== undefined
         }));
 
-        this.logger.info('onDidChangeWatchedFiles', changes);
+        this.logger.debug('onDidChangeWatchedFiles', changes);
 
         //if the client changed any files containing include/exclude patterns, rebuild the path filterer before processing these changes
         if (
@@ -383,6 +381,8 @@ export class LanguageServer {
 
     @AddStackToErrorMessage
     private async onDocumentClose(event: TextDocumentChangeEvent<TextDocument>): Promise<void> {
+        this.logger.debug('onDocumentClose', event.document.uri);
+
         await this.projectManager.handleFileClose({
             srcPath: util.uriToPath(event.document.uri)
         });
@@ -393,7 +393,8 @@ export class LanguageServer {
      */
     @AddStackToErrorMessage
     public async onCompletion(params: CompletionParams, cancellationToken: CancellationToken, workDoneProgress: WorkDoneProgressReporter, resultProgress: ResultProgressReporter<CompletionItem[]>): Promise<CompletionList> {
-        this.logger.info('onCompletion', params, cancellationToken);
+        this.logger.debug('onCompletion', params, cancellationToken);
+
         const srcPath = util.uriToPath(params.textDocument.uri);
         const completions = await this.projectManager.getCompletions({
             srcPath: srcPath,
@@ -405,7 +406,7 @@ export class LanguageServer {
 
     @AddStackToErrorMessage
     public async onDidChangeConfiguration(args: DidChangeConfigurationParams) {
-        this.logger.log('configuration changed. Reloading all projects');
+        this.logger.log('onDidChangeConfiguration', 'Reloading all projects');
 
         //if configuration changed, rebuild the path filterer
         await this.rebuildPathFilterer();
@@ -416,6 +417,8 @@ export class LanguageServer {
 
     @AddStackToErrorMessage
     public async onHover(params: TextDocumentPositionParams) {
+        this.logger.debug('onHover', params);
+
         const srcPath = util.uriToPath(params.textDocument.uri);
         const result = await this.projectManager.getHover({ srcPath: srcPath, position: params.position });
         return result;
@@ -423,12 +426,16 @@ export class LanguageServer {
 
     @AddStackToErrorMessage
     public async onWorkspaceSymbol(params: WorkspaceSymbolParams) {
+        this.logger.debug('onWorkspaceSymbol', params);
+
         const result = await this.projectManager.getWorkspaceSymbol();
         return result;
     }
 
     @AddStackToErrorMessage
     public async onDocumentSymbol(params: DocumentSymbolParams) {
+        this.logger.debug('onDocumentSymbol', params);
+
         const srcPath = util.uriToPath(params.textDocument.uri);
         const result = await this.projectManager.getDocumentSymbol({ srcPath: srcPath });
         return result;
@@ -436,6 +443,8 @@ export class LanguageServer {
 
     @AddStackToErrorMessage
     public async onDefinition(params: TextDocumentPositionParams) {
+        this.logger.debug('onDefinition', params);
+
         const srcPath = util.uriToPath(params.textDocument.uri);
 
         const result = this.projectManager.getDefinition({ srcPath: srcPath, position: params.position });
@@ -444,6 +453,8 @@ export class LanguageServer {
 
     @AddStackToErrorMessage
     public async onSignatureHelp(params: SignatureHelpParams) {
+        this.logger.debug('onSignatureHelp', params);
+
         const srcPath = util.uriToPath(params.textDocument.uri);
         const result = await this.projectManager.getSignatureHelp({ srcPath: srcPath, position: params.position });
         if (result) {
@@ -460,6 +471,8 @@ export class LanguageServer {
 
     @AddStackToErrorMessage
     public async onReferences(params: ReferenceParams) {
+        this.logger.debug('onReferences', params);
+
         const srcPath = util.uriToPath(params.textDocument.uri);
         const result = await this.projectManager.getReferences({ srcPath: srcPath, position: params.position });
         return result ?? [];
@@ -468,6 +481,8 @@ export class LanguageServer {
 
     @AddStackToErrorMessage
     private async onFullSemanticTokens(params: SemanticTokensParams) {
+        this.logger.debug('onFullSemanticTokens', params);
+
         const srcPath = util.uriToPath(params.textDocument.uri);
         const result = await this.projectManager.getSemanticTokens({ srcPath: srcPath });
 
@@ -478,6 +493,8 @@ export class LanguageServer {
 
     @AddStackToErrorMessage
     public async onCodeAction(params: CodeActionParams) {
+        this.logger.debug('onCodeAction', params);
+
         const srcPath = util.uriToPath(params.textDocument.uri);
         const result = await this.projectManager.getCodeActions({ srcPath: srcPath, range: params.range });
         return result;
@@ -486,6 +503,8 @@ export class LanguageServer {
 
     @AddStackToErrorMessage
     public async onExecuteCommand(params: ExecuteCommandParams) {
+        this.logger.debug('onExecuteCommand', params);
+
         if (params.command === CustomCommands.TranspileFile) {
             const args = {
                 srcPath: params.arguments[0] as string
