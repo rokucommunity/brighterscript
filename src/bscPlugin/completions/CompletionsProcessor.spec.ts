@@ -1291,6 +1291,35 @@ describe('CompletionsProcessor', () => {
             expect(completions).to.exist;
             expect(completions.map(comp => comp.label)).to.include('common2.bs');
             expect(completions.map(comp => comp.label)).to.include('../components/widget.bs');
+            expect(completions.map(comp => comp.label)).to.include('pkg:/components/widget.bs');
+            expect(completions.map(comp => comp.label)).to.include('pkg:/source/common2.bs');
+        });
+
+        it('should show import completions with original extensions', () => {
+            program.setFile('source/common.bs', `
+                import "
+            `);
+            program.setFile('source/common2.brs', `
+                sub SayHello()
+                end sub
+            `);
+            program.setFile('components/widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="widget.bs"/>
+                </component>
+            `);
+            program.setFile('components/widget.bs', `
+                import "pkg:/source/common.bs"
+            `);
+            program.validate();
+            // import "|
+            const completions = program.getCompletions('source/common.bs', util.createPosition(1, 25));
+            expect(completions).to.exist;
+            expect(completions.map(comp => comp.label)).to.include('common2.brs');
+            expect(completions.map(comp => comp.label)).to.include('../components/widget.bs');
+            expect(completions.map(comp => comp.label)).to.include('pkg:/components/widget.bs');
+            expect(completions.map(comp => comp.label)).to.include('pkg:/source/common2.brs');
         });
     });
 

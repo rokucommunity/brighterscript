@@ -141,6 +141,7 @@ export class CompletionsProcessor {
                 let relativePath = util.getRelativePath(sourcePkgPath, file.destPath).replace(/\\/g, '/');
                 let pkgPathStandardized = file.pkgPath.replace(/\\/g, '/');
                 let filePkgPath = `pkg:/${pkgPathStandardized}`;
+                let importPkgPath = util.getImportPackagePath(file.srcPath, filePkgPath);
                 let lowerFilePkgPath = filePkgPath.toLowerCase();
                 if (!resultPkgPaths[lowerFilePkgPath]) {
                     resultPkgPaths[lowerFilePkgPath] = true;
@@ -157,11 +158,11 @@ export class CompletionsProcessor {
 
                     //add the absolute path
                     result.push({
-                        label: filePkgPath,
+                        label: importPkgPath,
                         detail: file.srcPath,
                         kind: CompletionItemKind.File,
                         textEdit: {
-                            newText: filePkgPath,
+                            newText: importPkgPath,
                             range: scriptImport.filePathRange
                         }
                     });
