@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.67.5](https://github.com/rokucommunity/brighterscript/compare/v0.67.4...v0.67.5) - 2024-07-31
+### Fixed
+ - templatestring support for `annotation.getArguments()` ([#1264](https://github.com/rokucommunity/brighterscript/pull/1264))
+
+
+
 ## [0.67.4](https://github.com/rokucommunity/brighterscript/compare/v0.67.3...v0.67.4) - 2024-07-24
 ### Changed
  - upgrade to [roku-deploy@3.12.1](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3121---2024-07-19). Notable changes since 3.12.0:
