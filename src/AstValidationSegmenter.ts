@@ -1,5 +1,5 @@
 import type { DottedGetExpression, TypeExpression, VariableExpression } from './parser/Expression';
-import { isAliasStatement, isBinaryExpression, isBody, isClassStatement, isDottedGetExpression, isInterfaceStatement, isNamespaceStatement, isTypeExpression, isVariableExpression } from './astUtils/reflection';
+import { isAliasStatement, isBinaryExpression, isBlock, isBody, isClassStatement, isConditionalCompileStatement, isDottedGetExpression, isInterfaceStatement, isNamespaceStatement, isTypeExpression, isVariableExpression } from './astUtils/reflection';
 import { ChildrenSkipper, WalkMode, createVisitor } from './astUtils/visitors';
 import type { ExtraSymbolData, GetTypeOptions, TypeChainEntry } from './interfaces';
 import type { AstNode, Expression } from './parser/AstNode';
@@ -129,6 +129,11 @@ export class AstValidationSegmenter {
 
     checkSegmentWalk(segment: AstNode) {
         if (isNamespaceStatement(segment) || isBody(segment)) {
+            // skip namespaces and namespace bodies - no symbols to verify in those
+            return;
+        }
+        if (isConditionalCompileStatement(segment) || isBlock(segment)) {
+            // skip conditional compile statements and blocks - no symbols to verify in those
             return;
         }
         this.currentNamespaceStatement = segment.findAncestor(isNamespaceStatement);
