@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.35](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.34...v1.0.0-alpha.35) - 2024-07-31
+### Changed
+ - Remove `file` prop from `BsDiagnostic` ([#1248](https://github.com/rokucommunity/brighterscript/pull/1248))
+### Fixed
+ - Ensures conditional compiltion blocks have proper validation segments ([#1267](https://github.com/rokucommunity/brighterscript/pull/1267))
+ - Allow variables and parameters to shadow namespaces ([#1263](https://github.com/rokucommunity/brighterscript/pull/1263))
+ - Ensure methods leading comments are transpiled above instance function def ([#1257](https://github.com/rokucommunity/brighterscript/pull/1257))
+ - Make absolute import completions use original extension ([#1266](https://github.com/rokucommunity/brighterscript/pull/1266))
+
+
+
 ## [1.0.0-alpha.34](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.33...v1.0.0-alpha.34) - 2024-07-24
 ### Changed
  - Export `Location` so it can be used directly in plugins ([#1236](https://github.com/rokucommunity/brighterscript/pull/1236))
