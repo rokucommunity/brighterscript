@@ -5,7 +5,7 @@ import type { CodeAction, Position, Range, SignatureInformation, Location, Docum
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeFileAddEvent, BeforeFileRemoveEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj } from './interfaces';
+import type { FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeFileAddEvent, BeforeFileRemoveEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj, SerializeFileEvent } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DependencyGraph } from './DependencyGraph';
@@ -1457,21 +1457,21 @@ export class Program {
      * @param files the list of files that should be prepared
      */
     private async prepare(files: BscFile[]) {
-        const programEvent = {
+        const programEvent: PrepareProgramEvent = {
             program: this,
             editor: this.editor,
             files: files
-        } as PrepareProgramEvent;
+        };
 
         //assign an editor to every file
-        for (const file of files) {
+        for (const file of programEvent.files) {
             //if the file doesn't have an editor yet, assign one now
             if (!file.editor) {
                 file.editor = new Editor();
             }
         }
 
-        files.sort((a, b) => {
+        programEvent.files.sort((a, b) => {
             if (a.pkgPath < b.pkgPath) {
                 return -1;
             } else if (a.pkgPath > b.pkgPath) {
@@ -1488,24 +1488,35 @@ export class Program {
 
         const entries: TranspileObj[] = [];
 
-        for (const file of files) {
-            //if the file doesn't have an editor yet, assign one now
-            if (!file.editor) {
-                file.editor = new Editor();
+        //group the files by scope. The files are grouped by the scope that has the most files in it,
+        //so this should result in the fewest number of scopes needing to be linked
+        for (const [scope, files] of this.groupFilesByScope(programEvent.files)) {
+
+            //link the symbol table for all the files in this scope
+            scope?.linkSymbolTable();
+
+            for (const file of files) {
+                //if the file doesn't have an editor yet, assign one now
+                if (!file.editor) {
+                    file.editor = new Editor();
+                }
+                const event = {
+                    program: this,
+                    file: file,
+                    editor: file.editor,
+                    scope: scope,
+                    outputPath: this.getOutputPath(file, stagingDir)
+                } as PrepareFileEvent & { outputPath: string };
+
+                await this.plugins.emitAsync('beforePrepareFile', event);
+                await this.plugins.emitAsync('prepareFile', event);
+                await this.plugins.emitAsync('afterPrepareFile', event);
+
+                //TODO remove this in v1
+                entries.push(event);
             }
-            const event = {
-                program: this,
-                file: file,
-                editor: file.editor,
-                outputPath: this.getOutputPath(file, stagingDir)
-            } as PrepareFileEvent & { outputPath: string };
-
-            await this.plugins.emitAsync('beforePrepareFile', event);
-            await this.plugins.emitAsync('prepareFile', event);
-            await this.plugins.emitAsync('afterPrepareFile', event);
-
-            //TODO remove this in v1
-            entries.push(event);
+            //unlink the symbolTable so the next loop iteration can link theirs
+            scope?.unlinkSymbolTable();
         }
 
         await this.plugins.emitAsync('afterPrepareProgram', programEvent);
@@ -1544,9 +1555,10 @@ export class Program {
 
             // serialize each file
             for (const file of files) {
-                const event = {
+                const event: SerializeFileEvent = {
                     program: this,
                     file: file,
+                    scope: scope,
                     result: allFiles
                 };
                 await this.plugins.emitAsync('beforeSerializeFile', event);
