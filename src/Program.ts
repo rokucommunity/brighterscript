@@ -285,6 +285,14 @@ export class Program {
 
     protected addScope(scope: Scope) {
         this.scopes[scope.name] = scope;
+        delete this.sortedScopeNames;
+    }
+
+    protected removeScope(scope: Scope) {
+        if (this.scopes[scope.name]) {
+            delete this.scopes[scope.name];
+            delete this.sortedScopeNames;
+        }
     }
 
     /**
@@ -773,7 +781,7 @@ export class Program {
                 scope.dispose();
                 //notify dependencies of this scope that it has been removed
                 this.dependencyGraph.remove(scope.dependencyGraphKey!);
-                delete this.scopes[file.destPath];
+                this.removeScope(this.scopes[file.destPath]);
                 this.plugins.emit('afterScopeDispose', scopeDisposeEvent);
             }
             //remove the file from the program
@@ -1047,11 +1055,14 @@ export class Program {
         }
     }
 
+    private sortedScopeNames: string[] = undefined;
+
     /**
      * Gets a sorted list of all scopeNames, always beginning with "global", "source", then any others in alphabetical order
      */
     private getSortedScopeNames() {
-        return Object.keys(this.scopes).sort((a, b) => {
+        if (!this.sortedScopeNames) {
+            this.sortedScopeNames = Object.keys(this.scopes).sort((a, b) => {
             if (a === 'global') {
                 return -1;
             } else if (b === 'global') {
@@ -1069,6 +1080,8 @@ export class Program {
             }
             return 0;
         });
+        }
+        return this.sortedScopeNames;
     }
 
     /**
@@ -1471,6 +1484,7 @@ export class Program {
             }
         }
 
+        //sort the entries to make transpiling more deterministic
         programEvent.files.sort((a, b) => {
             if (a.pkgPath < b.pkgPath) {
                 return -1;
