@@ -24,6 +24,7 @@ import { StringType, TypedFunctionType, DynamicType, FloatType, IntegerType, Int
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { ComponentType } from './types/ComponentType';
 import * as path from 'path';
+import undent from 'undent';
 
 const sinon = createSandbox();
 
@@ -2700,6 +2701,35 @@ describe('Program', () => {
                 fsExtra.pathExistsSync(`${stagingDir}/source/bslib.brs`)
             ).to.be.true;
         });
+
+        it('transpiles namespaces properly', async () => {
+            program.options.autoImportComponentScript = true;
+            program.setFile('manifest', '');
+            program.setFile('components/MainScene.xml', trim`
+                <component name="MainScene" extends="Scene">
+                </component>
+            `);
+            program.setFile('source/main.bs', `
+                namespace alpha
+                    sub test()
+                    end sub
+                end namespace
+                sub init()
+                    alpha.test()
+                end sub
+            `);
+            await program.build();
+            expect(
+                fsExtra.readFileSync(`${stagingDir}/source/main.brs`).toString()
+            ).to.eql(undent`
+                sub alpha_test()
+                end sub
+
+                sub init()
+                    alpha_test()
+                end sub
+            `);
+        });
     });
 
     describe('global symbol table', () => {
@@ -3049,5 +3079,74 @@ describe('Program', () => {
             expect(manifest.get('build_version')).to.equal('0');
             expect(manifest.get('supports_input_launch')).to.equal('1');
         }
+    });
+
+    describe('groupFilesByScope', () => {
+
+        it('groups files by largest-to-smallest scope', () => {
+            program.setFile('images/logo.png', '');
+            program.setFile('source/main.bs', '');
+            program.setFile('source/lib1.bs', '');
+            program.setFile('source/lib2.bs', '');
+            program.setFile('source/lib3.bs', '');
+            program.setFile('source/lib4.bs', '');
+            program.setFile('source/lib5.bs', '');
+            program.setFile('components/Alpha.bs', '');
+            program.setFile('components/Alpha.xml', `
+                <component name="Alpha">
+                    <script uri="pkg:/components/Alpha.bs" />
+                    <script uri="pkg:/source/lib1.bs" />
+                    <script uri="pkg:/source/lib2.bs" />
+                </comonent>
+            `);
+            program.setFile('components/Beta.bs', '');
+            program.setFile('components/Beta.xml', `
+                <component name="Beta">
+                    <script uri="pkg:/components/Beta.bs" />
+                    <script uri="pkg:/source/lib3.bs" />
+                </comonent>
+            `);
+            program.setFile('components/Charlie.bs', '');
+            program.setFile('components/Charlie.xml', `
+                <component name="Charlie">
+                    <script uri="pkg:/components/Charlie.bs" />
+                    <script uri="pkg:/source/lib4.bs" />
+                    <script uri="pkg:/source/lib5.bs" />
+                </comonent>
+            `);
+
+            const buckets = program['groupFilesByScope'](Object.values(program.files));
+            expect(
+                [...buckets.entries()].reduce((acc, [key, value]) => {
+                    acc[key.name] = [...value].map(x => x.destPath);
+                    return acc;
+                }, {})
+            ).to.eql({
+                //files without a scope are dumped into the global scope
+                'global': [
+                    s`images/logo.png`
+                ],
+                'source': [
+                    s`source/lib1.bs`,
+                    s`source/lib2.bs`,
+                    s`source/lib3.bs`,
+                    s`source/lib4.bs`,
+                    s`source/lib5.bs`,
+                    s`source/main.bs`
+                ],
+                [s`components/Alpha.xml`]: [
+                    s`components/Alpha.bs`,
+                    s`components/Alpha.xml`
+                ],
+                [s`components/Beta.xml`]: [
+                    s`components/Beta.bs`,
+                    s`components/Beta.xml`
+                ],
+                [s`components/Charlie.xml`]: [
+                    s`components/Charlie.bs`,
+                    s`components/Charlie.xml`
+                ]
+            });
+        });
     });
 });

@@ -1535,21 +1535,27 @@ export class Program {
             result: allFiles
         });
 
-        //sort the entries to make transpiling more deterministic
-        files = serializeProgramEvent.files.sort((a, b) => {
-            return a.srcPath < b.srcPath ? -1 : 1;
-        });
+        //group the files by scope. The files are grouped by the scope that has the most files in it,
+        //so this should result in the fewest number of scopes needing to be linked
+        for (const [scope, files] of this.groupFilesByScope(serializeProgramEvent.files)) {
 
-        // serialize each file
-        for (const file of files) {
-            const event = {
-                program: this,
-                file: file,
-                result: allFiles
-            };
-            await this.plugins.emitAsync('beforeSerializeFile', event);
-            await this.plugins.emitAsync('serializeFile', event);
-            await this.plugins.emitAsync('afterSerializeFile', event);
+            //link the symbol table for all the files in this scope
+            scope?.linkSymbolTable();
+
+            // serialize each file
+            for (const file of files) {
+                const event = {
+                    program: this,
+                    file: file,
+                    result: allFiles
+                };
+                await this.plugins.emitAsync('beforeSerializeFile', event);
+                await this.plugins.emitAsync('serializeFile', event);
+                await this.plugins.emitAsync('afterSerializeFile', event);
+            }
+
+            //unlink the symbolTable so the next loop iteration can link theirs
+            scope?.unlinkSymbolTable();
         }
 
         this.plugins.emit('afterSerializeProgram', {
@@ -1559,6 +1565,64 @@ export class Program {
         });
 
         return allFiles;
+    }
+
+    /**
+     * Get a map of files grouped by scope, where the files are only in the scope bucket that has the most files in it.
+     */
+    private groupFilesByScope(files: BscFile[]) {
+
+        //sort the entries to make transpiling more deterministic
+        files = files.sort((a, b) => {
+            return a.srcPath < b.srcPath ? -1 : 1;
+        });
+
+        //keep a map of files-by-scope and scopes-by-file, so we can surgically remove files from other scope's sets
+        const filesetByScope = new Map<Scope, Set<BscFile>>();
+        const filesetsByFile = new Map<BscFile, Set<Set<BscFile>>>();
+
+        for (const file of files) {
+            const scopes = this.getScopesForFile(file);
+            //if a file is in no scopes, push it to the global scope. This is a workaround for files that are not in any scope
+            if (scopes.length === 0) {
+                scopes.push(this.globalScope);
+            }
+            for (const scope of scopes) {
+                const scopeFileset = filesetByScope.get(scope) ?? new Set<BscFile>();
+                scopeFileset.add(file);
+                filesetByScope.set(scope, scopeFileset);
+
+                //keep track of every `set` this file has been added to, so we can remove it from them all later if need be
+                const filesetsForFile = filesetsByFile.get(file) ?? new Set();
+                filesetsForFile.add(scopeFileset);
+                filesetsByFile.set(file, filesetsForFile);
+            }
+        }
+
+        //keep scopes that have the highest number of files
+        const processedFiles = new Set<BscFile>();
+
+        let filesetsByScopeEntries = [...filesetByScope.entries()];
+        //on every iteration, process the scope with the largest number of files
+        while (filesetsByScopeEntries.length > 0) {
+            filesetsByScopeEntries = filesetsByScopeEntries.sort(firstBy(([scope, files]) => files.size, -1));
+            //this is te scope with the most files
+            const [, scopeFileset] = filesetsByScopeEntries.shift();
+            //mark each file as "processed" and remove the file from other scopeFilesets
+            for (const file of scopeFileset) {
+                if (!processedFiles.has(file)) {
+                    processedFiles.add(file);
+                }
+                const filesetsForFile = filesetsByFile.get(file);
+                //remove this scope's fileset from the list
+                filesetsForFile.delete(scopeFileset);
+                for (const fileset of filesetsForFile) {
+                    fileset.delete(file);
+                }
+            }
+        }
+
+        return filesetByScope;
     }
 
     /**
