@@ -1063,23 +1063,23 @@ export class Program {
     private getSortedScopeNames() {
         if (!this.sortedScopeNames) {
             this.sortedScopeNames = Object.keys(this.scopes).sort((a, b) => {
-            if (a === 'global') {
-                return -1;
-            } else if (b === 'global') {
-                return 1;
-            }
-            if (a === 'source') {
-                return -1;
-            } else if (b === 'source') {
-                return 1;
-            }
-            if (a < b) {
-                return -1;
-            } else if (b < a) {
-                return 1;
-            }
-            return 0;
-        });
+                if (a === 'global') {
+                    return -1;
+                } else if (b === 'global') {
+                    return 1;
+                }
+                if (a === 'source') {
+                    return -1;
+                } else if (b === 'source') {
+                    return 1;
+                }
+                if (a < b) {
+                    return -1;
+                } else if (b < a) {
+                    return 1;
+                }
+                return 0;
+            });
         }
         return this.sortedScopeNames;
     }
@@ -1501,6 +1501,7 @@ export class Program {
         const stagingDir = this.getStagingDir();
 
         const entries: TranspileObj[] = [];
+        const close = this.logger.timeStart('log', 'serializeFiles--timing');
 
         //group the files by scope. The files are grouped by the scope that has the most files in it,
         //so this should result in the fewest number of scopes needing to be linked
@@ -1532,6 +1533,7 @@ export class Program {
             //unlink the symbolTable so the next loop iteration can link theirs
             scope?.unlinkSymbolTable();
         }
+        close();
 
         await this.plugins.emitAsync('afterPrepareProgram', programEvent);
         return files;
@@ -1559,6 +1561,7 @@ export class Program {
             files: files,
             result: allFiles
         });
+        const close = this.logger.timeStart('log', 'serializeFiles--timing');
 
         //group the files by scope. The files are grouped by the scope that has the most files in it,
         //so this should result in the fewest number of scopes needing to be linked
@@ -1583,6 +1586,7 @@ export class Program {
             //unlink the symbolTable so the next loop iteration can link theirs
             scope?.unlinkSymbolTable();
         }
+        close();
 
         this.plugins.emit('afterSerializeProgram', {
             program: this,
@@ -1596,13 +1600,26 @@ export class Program {
     /**
      * Get a map of files grouped by scope, where the files are only in the scope bucket that has the most files in it.
      */
+    private groupFilesByScope2(files: BscFile[]) {
+        const filesetByScope = new Map<Scope, BscFile[]>();
+
+        for (const file of files) {
+            let scope = this.getFirstScopeForFile(file) ?? this.globalScope;
+            let scopeFileset = filesetByScope.get(scope);
+            if (!scopeFileset) {
+                scopeFileset = [];
+                filesetByScope.set(scope, scopeFileset);
+            }
+            scopeFileset.push(file);
+        }
+        return filesetByScope;
+    }
+
+
+    /**
+     * Get a map of files grouped by scope, where the files are only in the scope bucket that has the most files in it.
+     */
     private groupFilesByScope(files: BscFile[]) {
-
-        //sort the entries to make transpiling more deterministic
-        files = files.sort((a, b) => {
-            return a.srcPath < b.srcPath ? -1 : 1;
-        });
-
         //keep a map of files-by-scope and scopes-by-file, so we can surgically remove files from other scope's sets
         const filesetByScope = new Map<Scope, Set<BscFile>>();
         const filesetsByFile = new Map<BscFile, Set<Set<BscFile>>>();
@@ -1647,7 +1664,6 @@ export class Program {
                 }
             }
         }
-
         return filesetByScope;
     }
 
