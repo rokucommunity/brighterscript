@@ -1501,39 +1501,34 @@ export class Program {
         const stagingDir = this.getStagingDir();
 
         const entries: TranspileObj[] = [];
-        const close = this.logger.timeStart('log', 'serializeFiles--timing');
 
-        //group the files by scope. The files are grouped by the scope that has the most files in it,
-        //so this should result in the fewest number of scopes needing to be linked
-        for (const [scope, files] of this.groupFilesByScope(programEvent.files)) {
-
+        for (const file of files) {
+            const scope = this.getFirstScopeForFile(file);
             //link the symbol table for all the files in this scope
             scope?.linkSymbolTable();
 
-            for (const file of files) {
-                //if the file doesn't have an editor yet, assign one now
-                if (!file.editor) {
-                    file.editor = new Editor();
-                }
-                const event = {
-                    program: this,
-                    file: file,
-                    editor: file.editor,
-                    scope: scope,
-                    outputPath: this.getOutputPath(file, stagingDir)
-                } as PrepareFileEvent & { outputPath: string };
-
-                await this.plugins.emitAsync('beforePrepareFile', event);
-                await this.plugins.emitAsync('prepareFile', event);
-                await this.plugins.emitAsync('afterPrepareFile', event);
-
-                //TODO remove this in v1
-                entries.push(event);
+            //if the file doesn't have an editor yet, assign one now
+            if (!file.editor) {
+                file.editor = new Editor();
             }
+            const event = {
+                program: this,
+                file: file,
+                editor: file.editor,
+                scope: scope,
+                outputPath: this.getOutputPath(file, stagingDir)
+            } as PrepareFileEvent & { outputPath: string };
+
+            await this.plugins.emitAsync('beforePrepareFile', event);
+            await this.plugins.emitAsync('prepareFile', event);
+            await this.plugins.emitAsync('afterPrepareFile', event);
+
+            //TODO remove this in v1
+            entries.push(event);
+
             //unlink the symbolTable so the next loop iteration can link theirs
             scope?.unlinkSymbolTable();
         }
-        close();
 
         await this.plugins.emitAsync('afterPrepareProgram', programEvent);
         return files;
@@ -1556,115 +1551,29 @@ export class Program {
             files: files,
             result: allFiles
         });
-        await this.plugins.emitAsync('onSerializeProgram', {
-            program: this,
-            files: files,
-            result: allFiles
-        });
-        const close = this.logger.timeStart('log', 'serializeFiles--timing');
+        await this.plugins.emitAsync('onSerializeProgram', serializeProgramEvent);
 
-        //group the files by scope. The files are grouped by the scope that has the most files in it,
-        //so this should result in the fewest number of scopes needing to be linked
-        for (const [scope, files] of this.groupFilesByScope(serializeProgramEvent.files)) {
-
+        // serialize each file
+        for (const file of files) {
+            const scope = this.getFirstScopeForFile(file);
             //link the symbol table for all the files in this scope
             scope?.linkSymbolTable();
-
-            // serialize each file
-            for (const file of files) {
-                const event: SerializeFileEvent = {
-                    program: this,
-                    file: file,
-                    scope: scope,
-                    result: allFiles
-                };
-                await this.plugins.emitAsync('beforeSerializeFile', event);
-                await this.plugins.emitAsync('serializeFile', event);
-                await this.plugins.emitAsync('afterSerializeFile', event);
-            }
-
+            const event: SerializeFileEvent = {
+                program: this,
+                file: file,
+                scope: scope,
+                result: allFiles
+            };
+            await this.plugins.emitAsync('beforeSerializeFile', event);
+            await this.plugins.emitAsync('serializeFile', event);
+            await this.plugins.emitAsync('afterSerializeFile', event);
             //unlink the symbolTable so the next loop iteration can link theirs
             scope?.unlinkSymbolTable();
         }
-        close();
 
-        this.plugins.emit('afterSerializeProgram', {
-            program: this,
-            files: files,
-            result: allFiles
-        });
+        this.plugins.emit('afterSerializeProgram', serializeProgramEvent);
 
         return allFiles;
-    }
-
-    /**
-     * Get a map of files grouped by scope, where the files are only in the scope bucket that has the most files in it.
-     */
-    private groupFilesByScope2(files: BscFile[]) {
-        const filesetByScope = new Map<Scope, BscFile[]>();
-
-        for (const file of files) {
-            let scope = this.getFirstScopeForFile(file) ?? this.globalScope;
-            let scopeFileset = filesetByScope.get(scope);
-            if (!scopeFileset) {
-                scopeFileset = [];
-                filesetByScope.set(scope, scopeFileset);
-            }
-            scopeFileset.push(file);
-        }
-        return filesetByScope;
-    }
-
-
-    /**
-     * Get a map of files grouped by scope, where the files are only in the scope bucket that has the most files in it.
-     */
-    private groupFilesByScope(files: BscFile[]) {
-        //keep a map of files-by-scope and scopes-by-file, so we can surgically remove files from other scope's sets
-        const filesetByScope = new Map<Scope, Set<BscFile>>();
-        const filesetsByFile = new Map<BscFile, Set<Set<BscFile>>>();
-
-        for (const file of files) {
-            const scopes = this.getScopesForFile(file);
-            //if a file is in no scopes, push it to the global scope. This is a workaround for files that are not in any scope
-            if (scopes.length === 0) {
-                scopes.push(this.globalScope);
-            }
-            for (const scope of scopes) {
-                const scopeFileset = filesetByScope.get(scope) ?? new Set<BscFile>();
-                scopeFileset.add(file);
-                filesetByScope.set(scope, scopeFileset);
-
-                //keep track of every `set` this file has been added to, so we can remove it from them all later if need be
-                const filesetsForFile = filesetsByFile.get(file) ?? new Set();
-                filesetsForFile.add(scopeFileset);
-                filesetsByFile.set(file, filesetsForFile);
-            }
-        }
-
-        //keep scopes that have the highest number of files
-        const processedFiles = new Set<BscFile>();
-
-        let filesetsByScopeEntries = [...filesetByScope.entries()];
-        //on every iteration, process the scope with the largest number of files
-        while (filesetsByScopeEntries.length > 0) {
-            filesetsByScopeEntries = filesetsByScopeEntries.sort(firstBy(([scope, files]) => files.size, -1));
-            //this is te scope with the most files
-            const [, scopeFileset] = filesetsByScopeEntries.shift();
-            //mark each file as "processed" and remove the file from other scopeFilesets
-            for (const file of scopeFileset) {
-                if (!processedFiles.has(file)) {
-                    processedFiles.add(file);
-                }
-                const filesetsForFile = filesetsByFile.get(file);
-                //remove this scope's fileset from the list
-                filesetsForFile.delete(scopeFileset);
-                for (const fileset of filesetsForFile) {
-                    fileset.delete(file);
-                }
-            }
-        }
-        return filesetByScope;
     }
 
     /**
