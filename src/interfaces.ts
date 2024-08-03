@@ -785,6 +785,7 @@ export type BeforePrepareProgramEvent = PrepareProgramEvent;
 export interface PrepareProgramEvent {
     program: Program;
     editor: Editor;
+    files: BscFile[];
 }
 export type AfterPrepareProgramEvent = PrepareProgramEvent;
 
@@ -797,6 +798,12 @@ export interface PrepareFileEvent<TFile extends BscFile = BscFile> {
     program: Program;
     file: TFile;
     editor: Editor;
+    /**
+     * The scope that was linked for this event. A file may be included in multiple scopes, but we choose the most relevant scope.
+     * Plugins may unlink this scope and link another one, but must then reassign this property to that new scope so that other
+     * plugins can reference it.
+     */
+    scope: Scope;
 }
 export type OnPrepareFileEvent<TFile extends BscFile = BscFile> = PrepareFileEvent<TFile>;
 export type AfterPrepareFileEvent<TFile extends BscFile = BscFile> = PrepareFileEvent<TFile>;
@@ -837,6 +844,12 @@ export type BeforeSerializeFileEvent<TFile extends BscFile = BscFile> = Serializ
 export interface SerializeFileEvent<TFile extends BscFile = BscFile> {
     program: Program;
     file: TFile;
+    /**
+     * The scope that was linked for this event. A file may be included in multiple scopes, but we choose the most relevant scope.
+     * Plugins may unlink this scope and link another one, but must then reassign this property to that new scope so that other
+     * plugins can reference it.
+     */
+    scope: Scope;
     /**
      * The list of all files created across all the `SerializeFile` events.
      * The key is the pkgPath of the file, and the

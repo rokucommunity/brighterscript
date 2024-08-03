@@ -24,6 +24,7 @@ import { StringType, TypedFunctionType, DynamicType, FloatType, IntegerType, Int
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { ComponentType } from './types/ComponentType';
 import * as path from 'path';
+import undent from 'undent';
 
 const sinon = createSandbox();
 
@@ -2699,6 +2700,35 @@ describe('Program', () => {
             expect(
                 fsExtra.pathExistsSync(`${stagingDir}/source/bslib.brs`)
             ).to.be.true;
+        });
+
+        it('transpiles namespaces properly', async () => {
+            program.options.autoImportComponentScript = true;
+            program.setFile('manifest', '');
+            program.setFile('components/MainScene.xml', trim`
+                <component name="MainScene" extends="Scene">
+                </component>
+            `);
+            program.setFile('source/main.bs', `
+                namespace alpha
+                    sub test()
+                    end sub
+                end namespace
+                sub init()
+                    alpha.test()
+                end sub
+            `);
+            await program.build();
+            expect(
+                fsExtra.readFileSync(`${stagingDir}/source/main.brs`).toString()
+            ).to.eql(undent`
+                sub alpha_test()
+                end sub
+
+                sub init()
+                    alpha_test()
+                end sub
+            `);
         });
     });
 

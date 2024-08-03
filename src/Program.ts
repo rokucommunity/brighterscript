@@ -5,7 +5,7 @@ import type { CodeAction, Position, Range, SignatureInformation, Location, Docum
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeFileAddEvent, BeforeFileRemoveEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj } from './interfaces';
+import type { FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeFileAddEvent, BeforeFileRemoveEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj, SerializeFileEvent } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DependencyGraph } from './DependencyGraph';
@@ -285,6 +285,14 @@ export class Program {
 
     protected addScope(scope: Scope) {
         this.scopes[scope.name] = scope;
+        delete this.sortedScopeNames;
+    }
+
+    protected removeScope(scope: Scope) {
+        if (this.scopes[scope.name]) {
+            delete this.scopes[scope.name];
+            delete this.sortedScopeNames;
+        }
     }
 
     /**
@@ -773,7 +781,7 @@ export class Program {
                 scope.dispose();
                 //notify dependencies of this scope that it has been removed
                 this.dependencyGraph.remove(scope.dependencyGraphKey!);
-                delete this.scopes[file.destPath];
+                this.removeScope(this.scopes[file.destPath]);
                 this.plugins.emit('afterScopeDispose', scopeDisposeEvent);
             }
             //remove the file from the program
@@ -1047,28 +1055,33 @@ export class Program {
         }
     }
 
+    private sortedScopeNames: string[] = undefined;
+
     /**
      * Gets a sorted list of all scopeNames, always beginning with "global", "source", then any others in alphabetical order
      */
     private getSortedScopeNames() {
-        return Object.keys(this.scopes).sort((a, b) => {
-            if (a === 'global') {
-                return -1;
-            } else if (b === 'global') {
-                return 1;
-            }
-            if (a === 'source') {
-                return -1;
-            } else if (b === 'source') {
-                return 1;
-            }
-            if (a < b) {
-                return -1;
-            } else if (b < a) {
-                return 1;
-            }
-            return 0;
-        });
+        if (!this.sortedScopeNames) {
+            this.sortedScopeNames = Object.keys(this.scopes).sort((a, b) => {
+                if (a === 'global') {
+                    return -1;
+                } else if (b === 'global') {
+                    return 1;
+                }
+                if (a === 'source') {
+                    return -1;
+                } else if (b === 'source') {
+                    return 1;
+                }
+                if (a < b) {
+                    return -1;
+                } else if (b < a) {
+                    return 1;
+                }
+                return 0;
+            });
+        }
+        return this.sortedScopeNames;
     }
 
     /**
@@ -1457,21 +1470,22 @@ export class Program {
      * @param files the list of files that should be prepared
      */
     private async prepare(files: BscFile[]) {
-        const programEvent = {
+        const programEvent: PrepareProgramEvent = {
             program: this,
             editor: this.editor,
             files: files
-        } as PrepareProgramEvent;
+        };
 
         //assign an editor to every file
-        for (const file of files) {
+        for (const file of programEvent.files) {
             //if the file doesn't have an editor yet, assign one now
             if (!file.editor) {
                 file.editor = new Editor();
             }
         }
 
-        files.sort((a, b) => {
+        //sort the entries to make transpiling more deterministic
+        programEvent.files.sort((a, b) => {
             if (a.pkgPath < b.pkgPath) {
                 return -1;
             } else if (a.pkgPath > b.pkgPath) {
@@ -1489,6 +1503,10 @@ export class Program {
         const entries: TranspileObj[] = [];
 
         for (const file of files) {
+            const scope = this.getFirstScopeForFile(file);
+            //link the symbol table for all the files in this scope
+            scope?.linkSymbolTable();
+
             //if the file doesn't have an editor yet, assign one now
             if (!file.editor) {
                 file.editor = new Editor();
@@ -1497,6 +1515,7 @@ export class Program {
                 program: this,
                 file: file,
                 editor: file.editor,
+                scope: scope,
                 outputPath: this.getOutputPath(file, stagingDir)
             } as PrepareFileEvent & { outputPath: string };
 
@@ -1506,6 +1525,9 @@ export class Program {
 
             //TODO remove this in v1
             entries.push(event);
+
+            //unlink the symbolTable so the next loop iteration can link theirs
+            scope?.unlinkSymbolTable();
         }
 
         await this.plugins.emitAsync('afterPrepareProgram', programEvent);
@@ -1529,34 +1551,27 @@ export class Program {
             files: files,
             result: allFiles
         });
-        await this.plugins.emitAsync('onSerializeProgram', {
-            program: this,
-            files: files,
-            result: allFiles
-        });
-
-        //sort the entries to make transpiling more deterministic
-        files = serializeProgramEvent.files.sort((a, b) => {
-            return a.srcPath < b.srcPath ? -1 : 1;
-        });
+        await this.plugins.emitAsync('onSerializeProgram', serializeProgramEvent);
 
         // serialize each file
         for (const file of files) {
-            const event = {
+            const scope = this.getFirstScopeForFile(file);
+            //link the symbol table for all the files in this scope
+            scope?.linkSymbolTable();
+            const event: SerializeFileEvent = {
                 program: this,
                 file: file,
+                scope: scope,
                 result: allFiles
             };
             await this.plugins.emitAsync('beforeSerializeFile', event);
             await this.plugins.emitAsync('serializeFile', event);
             await this.plugins.emitAsync('afterSerializeFile', event);
+            //unlink the symbolTable so the next loop iteration can link theirs
+            scope?.unlinkSymbolTable();
         }
 
-        this.plugins.emit('afterSerializeProgram', {
-            program: this,
-            files: files,
-            result: allFiles
-        });
+        this.plugins.emit('afterSerializeProgram', serializeProgramEvent);
 
         return allFiles;
     }
