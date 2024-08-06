@@ -711,6 +711,26 @@ describe('HoverProcessor', () => {
             let hover = program.getHover(file.srcPath, util.createPosition(6, 40))[0];
             expect(hover?.contents).eql([fence('MyIFace.member as invalid')]);
         });
+
+        it('has m as an AA in inline function', () => {
+            const file = program.setFile('source/main.bs', `
+                class Test
+                    sub method()
+                        stub = function()
+                            m.whatever = false
+                        end function
+                    end sub
+                end class
+            `);
+            program.validate();
+
+            // |m.whatever = false
+            let hover = program.getHover(file.srcPath, util.createPosition(4, 29))[0];
+            expect(hover?.contents).eql([fence('m as roAssociativeArray')]);
+            // m.what|ever = false
+            hover = program.getHover(file.srcPath, util.createPosition(4, 35))[0];
+            expect(hover?.contents).eql([fence('whatever as dynamic')]);
+        });
     });
 
     describe('callFunc', () => {
