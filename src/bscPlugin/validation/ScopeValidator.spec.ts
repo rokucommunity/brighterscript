@@ -1784,6 +1784,34 @@ describe('ScopeValidator', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        it('allows anything on m in an anonymous function', () => {
+            program.setFile('source/main.bs', `
+                function test()
+                    stub = function()
+                        m.something = true
+                    end function
+                    return stub
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows anything on m in an anonymous function in a class method', () => {
+            program.setFile('source/main.bs', `
+                class SomeKlass
+                    function test()
+                        stub = function()
+                            m.something = true
+                        end function
+                        return stub
+                    end function
+                end class
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('itemCannotBeUsedAsVariable', () => {
