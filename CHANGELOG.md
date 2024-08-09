@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.36](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.35...v1.0.0-alpha.36) - 2024-08-09
+### Fixed
+ - `m` should be typed as roAssociativeArray for all inline functions ([#1272](https://github.com/rokucommunity/brighterscript/pull/1272))
+ - Fixes namespace transpiling bug by linking scopes during transpile ([#1271](https://github.com/rokucommunity/brighterscript/pull/1271))
+
+
+
 ## [1.0.0-alpha.35](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.34...v1.0.0-alpha.35) - 2024-07-31
 ### Changed
  - Remove `file` prop from `BsDiagnostic` ([#1248](https://github.com/rokucommunity/brighterscript/pull/1248))
