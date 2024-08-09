@@ -1,7 +1,7 @@
-import type { Range } from 'vscode-languageserver';
-import { AstEditor } from '../astUtils/AstEditor';
+import type { Location } from 'vscode-languageserver';
+import { Editor } from '../astUtils/Editor';
 import type { BrsFile } from '../files/BrsFile';
-import type { ClassStatement } from './Statement';
+import type { ClassStatement, ConditionalCompileStatement } from './Statement';
 import { TranspileState } from './TranspileState';
 
 export class BrsTranspileState extends TranspileState {
@@ -22,7 +22,7 @@ export class BrsTranspileState extends TranspileState {
      * Used to assist blocks in knowing when to add a comment statement to the same line as the first line of the parent
      */
     lineage = [] as Array<{
-        range?: Range;
+        location?: Location;
     }>;
 
     /**
@@ -32,6 +32,17 @@ export class BrsTranspileState extends TranspileState {
 
     /**
      * An AST editor that can be used by the AST nodes to do various transformations to the AST which will be reverted at the end of the transpile cycle
+     * TODO remove this before file_api is merged
      */
-    public editor = new AstEditor();
+    public editor = new Editor();
+
+    /**
+     * Used by ConditionalCompileStatement to determine if there's already an conditional compile going on
+     */
+    public conditionalCompileStatement?: ConditionalCompileStatement;
+
+    /**
+     * Do not transpile leading comments
+     */
+    public skipLeadingComments = false;
 }

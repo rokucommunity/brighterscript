@@ -30,18 +30,18 @@ export class DiagnosticCollection {
         const keys = {};
         //build the full current set of diagnostics by file
         for (let diagnostic of diagnostics) {
-            const srcPath = diagnostic.file.srcPath ?? diagnostic.file.srcPath;
+            const fileUri = diagnostic.location.uri;
             //ensure the file entry exists
-            if (!result[srcPath]) {
-                result[srcPath] = [];
+            if (!result[fileUri]) {
+                result[fileUri] = [];
             }
-            const diagnosticMap = result[srcPath];
+            const diagnosticMap = result[fileUri];
 
             //fall back to a default range if missing
-            const range = diagnostic?.range ?? util.createRange(0, 0, 0, 0);
+            const range = diagnostic?.location?.range ?? util.createRange(0, 0, 0, 0);
 
             diagnostic.key =
-                srcPath.toLowerCase() + '-' +
+                fileUri.toLowerCase() + '-' +
                 diagnostic.code + '-' +
                 range.start.line + '-' +
                 range.start.character + '-' +
