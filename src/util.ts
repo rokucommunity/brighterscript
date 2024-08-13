@@ -36,7 +36,6 @@ import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
 import type { AstNode, Expression, Statement } from './parser/AstNode';
 import { components, events, interfaces } from './roku-types';
-import { createToken } from './astUtils/creators';
 
 export class Util {
     public clearConsole() {
