@@ -2,7 +2,7 @@ import { SourceNode } from 'source-map';
 import type { Location } from 'vscode-languageserver';
 import type { BsConfig } from '../BsConfig';
 import { TokenKind } from '../lexer/TokenKind';
-import { isToken, type Token } from '../lexer/Token';
+import { type Token } from '../lexer/Token';
 import type { RangeLike } from '../util';
 import { util } from '../util';
 import type { TranspileResult } from '../interfaces';
