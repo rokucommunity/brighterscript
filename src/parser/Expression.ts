@@ -143,11 +143,14 @@ export class CallExpression extends Expression {
 
     transpile(state: BrsTranspileState, nameOverride?: string) {
         let result: TranspileResult = [];
-        throw new Error('crash');
 
         //transpile the name
         if (nameOverride) {
-            result.push(state.sourceNode(this.callee, nameOverride));
+            result.push(
+                //transpile leading comments since we're bypassing callee.transpile (which would normally do this)
+                ...state.transpileLeadingCommentsForAstNode(this),
+                state.sourceNode(this.callee, nameOverride)
+            );
         } else {
             result.push(...this.callee.transpile(state));
         }
@@ -554,6 +557,7 @@ export class DottedGetExpression extends Expression {
         //if the callee starts with a namespace name, transpile the name
         if (state.file.calleeStartsWithNamespace(this)) {
             return [
+                ...state.transpileLeadingCommentsForAstNode(this),
                 state.sourceNode(this, this.getName(ParseMode.BrightScript))
             ];
         } else {
@@ -1185,6 +1189,8 @@ export class VariableExpression extends Expression {
         //if the callee is the name of a known namespace function
         if (namespace && state.file.calleeIsKnownNamespaceFunction(this, namespace.getName(ParseMode.BrighterScript))) {
             result.push(
+                //transpile leading comments since the token isn't being transpiled directly
+                ...state.transpileLeadingCommentsForAstNode(this),
                 state.sourceNode(this, [
                     namespace.getName(ParseMode.BrightScript),
                     '_',

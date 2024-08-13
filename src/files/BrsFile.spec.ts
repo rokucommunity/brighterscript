@@ -2615,22 +2615,41 @@ describe('BrsFile', () => {
         it('includes comments above namespaced method call', async () => {
             await testTranspile(`
                 sub main()
-                    'delay for a bit
-                    utils.delay(sub()
-                    end sub)
+                    'do nothing
+                    utils.noop()
                 end sub
                 namespace utils
-                    function delay(callback as function)
-                    end function
+                    sub noop()
+                    end sub
                 end namespace
             `, `
                 sub main()
-                    'delay for a bit
-                    utils_delay(sub()
-                    end sub)
+                    'do nothing
+                    utils_noop()
                 end sub
-                function utils_delay(callback as function)
-                end function
+                sub utils_noop()
+                end sub
+            `, undefined, 'source/main.bs');
+        });
+
+        it('includes comments above inferred namespace function call', async () => {
+            await testTranspile(`
+                namespace utils
+                    sub test()
+                        'do nothing
+                        noop()
+                    end sub
+                    sub noop()
+                    end sub
+                end namespace
+            `, `
+                sub utils_test()
+                    'do nothing
+                    utils_noop()
+                end sub
+
+                sub utils_noop()
+                end sub
             `, undefined, 'source/main.bs');
         });
 

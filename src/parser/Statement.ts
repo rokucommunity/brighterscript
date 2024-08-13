@@ -419,7 +419,10 @@ export class ExpressionStatement extends Statement {
     public readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState) {
-        return this.expression.transpile(state);
+        return [
+            state.transpileAnnotations(this),
+            this.expression.transpile(state)
+        ];
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
