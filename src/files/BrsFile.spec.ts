@@ -2509,6 +2509,150 @@ describe('BrsFile', () => {
             `, 'trim', 'source/main.bs');
         });
 
+        it('includes annotation comments for class', async () => {
+            await testTranspile(`
+                'comment1
+                @annotation
+                'comment2
+                @annotation()
+                'comment3
+                class Beta
+                end class
+            `, `
+                function __Beta_builder()
+                    instance = {}
+                    instance.new = sub()
+                    end sub
+                    return instance
+                end function
+                'comment1
+                'comment2
+                'comment3
+                function Beta()
+                    instance = __Beta_builder()
+                    instance.new()
+                    return instance
+                end function
+            `, undefined, 'source/main.bs');
+        });
+
+        it('includes annotation comments for function', async () => {
+            await testTranspile(`
+                'comment1
+                @annotation
+                'comment2
+                @annotation()
+                'comment3
+                function alpha()
+                end function
+            `, `
+                'comment1
+                'comment2
+                'comment3
+                function alpha()
+                end function
+            `, undefined, 'source/main.bs');
+        });
+
+        it('includes annotation comments for enum', async () => {
+            await testTranspile(`
+                'comment1
+                @annotation
+                'comment2
+                @annotation()
+                'comment3
+                enum Direction
+                    up = "up"
+                end enum
+            `, `
+                'comment1
+                'comment2
+                'comment3
+            `, undefined, 'source/main.bs');
+        });
+
+        it('includes annotation comments for const', async () => {
+            await testTranspile(`
+                'comment1
+                @annotation
+                'comment2
+                @annotation()
+                'comment3
+                const direction = "up"
+            `, `
+                'comment1
+                'comment2
+                'comment3
+            `, undefined, 'source/main.bs');
+        });
+
+        it('includes annotation comments for empty namespaces', async () => {
+            await testTranspile(`
+                'comment1
+                @annotation
+                'comment2
+                @annotation()
+                'comment3
+                namespace alpha
+                    'comment4
+                    @annotation
+                    'comment5
+                    @annotation()
+                    'comment6
+                    namespace beta
+                    end namespace
+                end namespace
+            `, `
+                'comment1
+                'comment2
+                'comment3
+                'comment4
+                'comment5
+                'comment6
+            `, undefined, 'source/main.bs');
+        });
+
+        it('includes comments above namespaced method call', async () => {
+            await testTranspile(`
+                sub main()
+                    'do nothing
+                    utils.noop()
+                end sub
+                namespace utils
+                    sub noop()
+                    end sub
+                end namespace
+            `, `
+                sub main()
+                    'do nothing
+                    utils_noop()
+                end sub
+                sub utils_noop()
+                end sub
+            `, undefined, 'source/main.bs');
+        });
+
+        it('includes comments above inferred namespace function call', async () => {
+            await testTranspile(`
+                namespace utils
+                    sub test()
+                        'do nothing
+                        noop()
+                    end sub
+                    sub noop()
+                    end sub
+                end namespace
+            `, `
+                sub utils_test()
+                    'do nothing
+                    utils_noop()
+                end sub
+
+                sub utils_noop()
+                end sub
+            `, undefined, 'source/main.bs');
+        });
+
         it('keeps end-of-line comments with their line', async () => {
             await testTranspile(`
                 function DoSomething() 'comment 1
