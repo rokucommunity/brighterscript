@@ -143,6 +143,7 @@ export class CallExpression extends Expression {
 
     transpile(state: BrsTranspileState, nameOverride?: string) {
         let result: TranspileResult = [];
+        throw new Error('crash');
 
         //transpile the name
         if (nameOverride) {
@@ -1828,7 +1829,8 @@ export class AnnotationExpression extends Expression {
     }
 
     transpile(state: BrsTranspileState) {
-        return [];
+        //transpile only our leading comments
+        return state.transpileComments(this.leadingTrivia);
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {

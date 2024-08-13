@@ -2509,6 +2509,131 @@ describe('BrsFile', () => {
             `, 'trim', 'source/main.bs');
         });
 
+        it('includes annotation comments for class', async () => {
+            await testTranspile(`
+                'comment1
+                @annotation
+                'comment2
+                @annotation()
+                'comment3
+                class Beta
+                end class
+            `, `
+                function __Beta_builder()
+                    instance = {}
+                    instance.new = sub()
+                    end sub
+                    return instance
+                end function
+                'comment1
+                'comment2
+                'comment3
+                function Beta()
+                    instance = __Beta_builder()
+                    instance.new()
+                    return instance
+                end function
+            `, undefined, 'source/main.bs');
+        });
+
+        it('includes annotation comments for function', async () => {
+            await testTranspile(`
+                'comment1
+                @annotation
+                'comment2
+                @annotation()
+                'comment3
+                function alpha()
+                end function
+            `, `
+                'comment1
+                'comment2
+                'comment3
+                function alpha()
+                end function
+            `, undefined, 'source/main.bs');
+        });
+
+        it('includes annotation comments for enum', async () => {
+            await testTranspile(`
+                'comment1
+                @annotation
+                'comment2
+                @annotation()
+                'comment3
+                enum Direction
+                    up = "up"
+                end enum
+            `, `
+                'comment1
+                'comment2
+                'comment3
+            `, undefined, 'source/main.bs');
+        });
+
+        it('includes annotation comments for const', async () => {
+            await testTranspile(`
+                'comment1
+                @annotation
+                'comment2
+                @annotation()
+                'comment3
+                const direction = "up"
+            `, `
+                'comment1
+                'comment2
+                'comment3
+            `, undefined, 'source/main.bs');
+        });
+
+        it('includes annotation comments for empty namespaces', async () => {
+            await testTranspile(`
+                'comment1
+                @annotation
+                'comment2
+                @annotation()
+                'comment3
+                namespace alpha
+                    'comment4
+                    @annotation
+                    'comment5
+                    @annotation()
+                    'comment6
+                    namespace beta
+                    end namespace
+                end namespace
+            `, `
+                'comment1
+                'comment2
+                'comment3
+                'comment4
+                'comment5
+                'comment6
+            `, undefined, 'source/main.bs');
+        });
+
+        it('includes comments above namespaced method call', async () => {
+            await testTranspile(`
+                sub main()
+                    'delay for a bit
+                    utils.delay(sub()
+                    end sub)
+                end sub
+                namespace utils
+                    function delay(callback as function)
+                    end function
+                end namespace
+            `, `
+                sub main()
+                    'delay for a bit
+                    utils_delay(sub()
+                    end sub)
+                end sub
+                function utils_delay(callback as function)
+                end function
+            `, undefined, 'source/main.bs');
+        });
+
         it('keeps end-of-line comments with their line', async () => {
             await testTranspile(`
                 function DoSomething() 'comment 1
