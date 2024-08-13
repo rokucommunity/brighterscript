@@ -121,6 +121,12 @@ export abstract class AstNode {
             walkMode: WalkMode.visitAllRecursive
         });
     }
+
+    /**
+     * Clone this node and all of its children. This creates a completely detached and identical copy of the AST.
+     * All tokens, statements, expressions, range, and location are cloned.
+     */
+    public abstract clone();
 }
 
 export abstract class Statement extends AstNode {

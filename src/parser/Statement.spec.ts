@@ -125,4 +125,8 @@ describe('Statement', () => {
         });
     });
 
+    describe('clone', () => {
+
+    });
+
 });

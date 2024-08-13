@@ -37,4 +37,8 @@ export class FloatType implements BscType {
     public toTypeString(): string {
         return this.toString();
     }
+
+    public clone() {
+        return new FloatType(this.typeText);
+    }
 }

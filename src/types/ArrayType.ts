@@ -44,4 +44,8 @@ export class ArrayType implements BscType {
     public toTypeString(): string {
         return 'object';
     }
+
+    public clone() {
+        return new ArrayType(...this.innerTypes?.map(x => x?.clone()) ?? []);
+    }
 }

@@ -36,6 +36,7 @@ import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
 import type { AstNode, Expression, Statement } from './parser/AstNode';
 import { components, events, interfaces } from './roku-types';
+import { createToken } from './astUtils/creators';
 
 export class Util {
     public clearConsole() {
@@ -992,6 +993,34 @@ export class Util {
                 character: endPosition.character
             }
         };
+    }
+
+    /**
+     * Clone a range
+     */
+    public cloneRange(range: Range) {
+        if (range) {
+            return this.createRange(range.start.line, range.start.character, range.end.line, range.end.character);
+        } else {
+            return range;
+        }
+    }
+
+    /**
+     * Clone every token
+     */
+    public cloneToken<T extends Token>(token: T) {
+        if (token) {
+            return {
+                kind: token.kind,
+                range: this.cloneRange(token.range),
+                text: token.text,
+                isReserved: token.isReserved,
+                leadingWhitespace: token.leadingWhitespace
+            } as T;
+        } else {
+            return token;
+        }
     }
 
     /**
