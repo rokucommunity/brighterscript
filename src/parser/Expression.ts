@@ -1187,7 +1187,7 @@ export class VariableExpression extends Expression {
         let result: TranspileResult = [];
         const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
         //if the callee is the name of a known namespace function
-        if (namespace && state.file.calleeIsKnownNamespaceFunction(this, namespace.getName(ParseMode.BrighterScript))) {
+        if (namespace && util.isCalleeMemberOfNamespace(this.tokens.name.text, this, namespace)) {
             result.push(
                 //transpile leading comments since the token isn't being transpiled directly
                 ...state.transpileLeadingCommentsForAstNode(this),
@@ -1197,7 +1197,6 @@ export class VariableExpression extends Expression {
                     this.getName(ParseMode.BrightScript)
                 ])
             );
-
             //transpile  normally
         } else {
             result.push(

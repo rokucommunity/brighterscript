@@ -149,6 +149,7 @@ export class ScopeValidator {
                         this.validateAssignmentStatement(file, assignStmt);
                         // Note: this also includes For statements
                         this.detectShadowedLocalVar(file, {
+                            expr: assignStmt,
                             name: assignStmt.tokens.name.text,
                             type: this.getNodeTypeWrapper(file, assignStmt, { flags: SymbolTypeFlag.runtime }),
                             nameRange: assignStmt.tokens.name.location?.range
@@ -165,6 +166,7 @@ export class ScopeValidator {
                     },
                     ForEachStatement: (forEachStmt) => {
                         this.detectShadowedLocalVar(file, {
+                            expr: forEachStmt,
                             name: forEachStmt.tokens.item.text,
                             type: this.getNodeTypeWrapper(file, forEachStmt, { flags: SymbolTypeFlag.runtime }),
                             nameRange: forEachStmt.tokens.item.location?.range
@@ -172,6 +174,7 @@ export class ScopeValidator {
                     },
                     FunctionParameterExpression: (funcParam) => {
                         this.detectShadowedLocalVar(file, {
+                            expr: funcParam,
                             name: funcParam.tokens.name.text,
                             type: this.getNodeTypeWrapper(file, funcParam, { flags: SymbolTypeFlag.runtime }),
                             nameRange: funcParam.tokens.name.location?.range
@@ -372,11 +375,7 @@ export class ScopeValidator {
                 }
 
                 if (isCallableType(paramType) && isClassType(argType) && isClassStatement(data.definingNode)) {
-                    // the param is expecting a function, but we're passing a Class... are we actually passing the constructor? then we're ok!
-                    const namespace = expression.findAncestor<NamespaceStatement>(isNamespaceStatement);
-                    if (file.calleeIsKnownFunction(arg, namespace?.getName(ParseMode.BrighterScript))) {
-                        argType = data.definingNode.getConstructorType();
-                    }
+                    argType = data.definingNode.getConstructorType();
                 }
 
                 const compatibilityData: TypeCompatibilityData = {};
@@ -716,11 +715,13 @@ export class ScopeValidator {
             return;
         }
 
-        const containingNamespaceName = expression.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
+        const containingNamespace = expression.findAncestor<NamespaceStatement>(isNamespaceStatement);
+        const containingNamespaceName = containingNamespace?.getName(ParseMode.BrighterScript);
 
         if (!(isCallExpression(expression.parent) && isNewExpression(expression.parent?.parent))) {
             const classUsedAsVarEntry = this.checkTypeChainForClassUsedAsVar(typeChain, containingNamespaceName);
-            if (classUsedAsVarEntry) {
+            const isClassInNamespace = containingNamespace?.getSymbolTable().hasSymbol(typeChain[0].name, SymbolTypeFlag.runtime);
+            if (classUsedAsVarEntry && !isClassInNamespace) {
 
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.itemCannotBeUsedAsVariable(classUsedAsVarEntry.toString()),
@@ -1029,10 +1030,12 @@ export class ScopeValidator {
         }
     }
 
-    public detectShadowedLocalVar(file: BrsFile, varDeclaration: { name: string; type: BscType; nameRange: Range }) {
+    public detectShadowedLocalVar(file: BrsFile, varDeclaration: { expr: AstNode; name: string; type: BscType; nameRange: Range }) {
         const varName = varDeclaration.name;
         const lowerVarName = varName.toLowerCase();
         const callableContainerMap = this.event.scope.getCallableContainerMap();
+        const containingNamespace = varDeclaration.expr?.findAncestor<NamespaceStatement>(isNamespaceStatement);
+        const localVarIsInNamespace = util.isVariableMemberOfNamespace(varDeclaration.name, varDeclaration.expr, containingNamespace);
 
         const varIsFunction = () => {
             return isCallableType(varDeclaration.type);
@@ -1049,7 +1052,7 @@ export class ScopeValidator {
                     location: util.createLocationFromFileRange(file, varDeclaration.nameRange)
                 });
             }
-        } else if (callableContainerMap.has(lowerVarName)) {
+        } else if (callableContainerMap.has(lowerVarName) && !localVarIsInNamespace) {
             const callable = callableContainerMap.get(lowerVarName);
             //is same name as a callable
             if (varIsFunction()) {
@@ -1078,7 +1081,7 @@ export class ScopeValidator {
                 });
             }
             //has the same name as an in-scope class
-        } else {
+        } else if (!localVarIsInNamespace) {
             const classStmtLink = this.event.scope.getClassFileLink(lowerVarName);
             if (classStmtLink) {
                 this.addMultiScopeDiagnostic({

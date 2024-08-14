@@ -16,7 +16,7 @@ import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiag
 import { ParseMode, Parser } from '../parser/Parser';
 import type { FunctionStatement } from '../parser/Statement';
 import { ImportStatement } from '../parser/Statement';
-import { createToken, createVariableExpression } from '../astUtils/creators';
+import { createToken } from '../astUtils/creators';
 import * as fsExtra from 'fs-extra';
 import undent from 'undent';
 import { tempDir, rootDir } from '../testHelpers.spec';
@@ -2227,7 +2227,11 @@ describe('BrsFile', () => {
                 `);
             });
 
-            it('does not falsely add underscores when variable shadows namespace', async () => {
+        });
+
+        describe('shadowing', () => {
+
+            it('does not add underscores when variable shadows namespace', async () => {
                 await testTranspile(`
                     namespace alpha
                         function toStr()
@@ -2251,7 +2255,7 @@ describe('BrsFile', () => {
                 `);
             });
 
-            it('does not falsely add underscores when parameter shadows namespace', async () => {
+            it('does not add underscores when parameter shadows namespace', async () => {
                 await testTranspile(`
                     namespace alpha
                         function toStr()
@@ -2272,7 +2276,218 @@ describe('BrsFile', () => {
                     end sub
                 `);
             });
+
+            it('does not add underscores when var shadows namespaced func, used as an argument', async () => {
+                await testTranspile(`
+                    namespace alpha
+                        function foo()
+                        end function
+
+                        function bar()
+                            foo = 1
+                            m.data = []
+                            m.data.push(foo)
+                        end function
+                    end namespace
+                `, `
+                    function alpha_foo()
+                    end function
+
+                    function alpha_bar()
+                        foo = 1
+                        m.data = []
+                        m.data.push(foo)
+                    end function
+                `);
+            });
+
+            it('does not add underscores when inline func var shadows namespaced func, used as an argument', async () => {
+                await testTranspile(`
+                    namespace alpha
+                        function foo()
+                        end function
+
+                        function bar()
+                            foo = function()
+                                return 1
+                            end function
+                            m.data = []
+                            m.data.push(foo)
+                        end function
+                    end namespace
+                `, `
+                    function alpha_foo()
+                    end function
+
+                    function alpha_bar()
+                        foo = function()
+                            return 1
+                        end function
+                        m.data = []
+                        m.data.push(foo)
+                    end function
+                `);
+            });
+
+            it('does not add underscores when param shadows namespaced func, used as an argument', async () => {
+                await testTranspile(`
+                    namespace alpha
+                        function foo()
+                        end function
+
+                        function bar(foo)
+                            m.data = []
+                            m.data.push(foo)
+                        end function
+                    end namespace
+                `, `
+                    function alpha_foo()
+                    end function
+
+                    function alpha_bar(foo)
+                        m.data = []
+                        m.data.push(foo)
+                    end function
+                `);
+            });
+
+            it('does not add underscores when param shadows namespaced class, used as an argument', async () => {
+                await testTranspile(`
+                    namespace alpha
+                        class foo
+                        end class
+
+                        function bar(foo)
+                            m.data = []
+                            m.data.push(foo)
+                        end function
+                    end namespace
+                `, `
+                    function __alpha_foo_builder()
+                        instance = {}
+                        instance.new = sub()
+                        end sub
+                        return instance
+                    end function
+                    function alpha_foo()
+                        instance = __alpha_foo_builder()
+                        instance.new()
+                        return instance
+                    end function
+
+                    function alpha_bar(foo)
+                        m.data = []
+                        m.data.push(foo)
+                    end function
+                `);
+            });
+
+            it('does not insert const value when param shadows namespaced const', async () => {
+                await testTranspile(`
+                    namespace alpha
+                        const foo = 1222
+
+                        function bar(foo)
+                            print foo
+                        end function
+                    end namespace
+                `, `
+                    function alpha_bar(foo)
+                        print foo
+                    end function
+                `);
+            });
+
+            it('does not insert const value when param shadows const', async () => {
+                await testTranspile(`
+                    const foo = 1222
+
+                    function bar(foo)
+                        print foo
+                    end function
+                `, `
+                    function bar(foo)
+                        print foo
+                    end function
+                `);
+            });
+
+            it('does not insert enum value when param shadows namespaced const', async () => {
+                await testTranspile(`
+                    namespace alpha
+                        enum foo
+                            up
+                            down
+                        end enum
+
+                        function bar(foo)
+                            print foo.whatever
+                        end function
+                    end namespace
+                `, `
+                    function alpha_bar(foo)
+                        print foo.whatever
+                    end function
+                `);
+            });
+
+            it('inserts const value when using namespaced const defined in other namespace statement', async () => {
+                await testTranspile(`
+                    namespace alpha
+                        const foo = 1222
+                    end namespace
+
+                    namespace alpha
+                        function bar()
+                            print foo
+                        end function
+                    end namespace
+                `, `
+                    function alpha_bar()
+                        print 1222
+                    end function
+                `);
+            });
+
+            it('does not replace variable arg that shadows namespace name', async () => {
+                await testTranspile(`
+                    namespace alpha
+                        const foo = 1222
+                    end namespace
+
+                    function bar(alpha)
+                        print alpha.foo
+                    end function
+                `, `
+                    function bar(alpha)
+                        print alpha.foo
+                    end function
+                `);
+            });
+
+            it('does not replace defined variable that shadows namespace name', async () => {
+                await testTranspile(`
+                    namespace alpha
+                        const foo = 1222
+                    end namespace
+
+                    function bar()
+                        alpha = {
+                            foo: 1
+                        }
+                        print alpha.foo
+                    end function
+                `, `
+                    function bar()
+                        alpha = {
+                            foo: 1
+                        }
+                        print alpha.foo
+                    end function
+                `);
+            });
         });
+
         it('includes all text to end of line for a non-terminated string', async () => {
             await testTranspile(
                 'sub main()\n    name = "john \nend sub',
@@ -5430,19 +5645,6 @@ describe('BrsFile', () => {
             ...DiagnosticMessages.tooManyCallableParameters(65, 63),
             location: { range: util.createRange(1, 648, 1, 651) }
         }]);
-    });
-
-    describe('calleeIsKnownNamespaceFunction', () => {
-        it('does not crash when namespace is missing', () => {
-            const file = program.setFile<BrsFile>('source/main.bs', `
-                sub main()
-                    someNamespace.someFunc()
-                end sub
-            `);
-            expect(
-                file.calleeIsKnownNamespaceFunction(createVariableExpression('alpha'), 'beta')
-            ).to.be.false;
-        });
     });
 
     it('handles deprecated .setPort() on rourltransfer', () => {

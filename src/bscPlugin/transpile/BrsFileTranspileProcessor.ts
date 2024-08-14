@@ -123,8 +123,8 @@ export class BrsFilePreTranspileProcessor {
             // skip any changes in an Alias Statement
             return;
         }
-
-        let containingNamespace = this.event.file.getNamespaceStatementForPosition(expression.location?.range.start)?.getName(ParseMode.BrighterScript);
+        let containingNamespaceStmt = this.event.file.getNamespaceStatementForPosition(expression.location?.range.start);
+        let containingNamespace = containingNamespaceStmt?.getName(ParseMode.BrighterScript);
 
         const parts = util.splitExpression(expression);
         const processedNames: string[] = [];
@@ -149,8 +149,12 @@ export class BrsFilePreTranspileProcessor {
                 return;
             }
 
-            let value: Expression;
+            if (!currentPartIsAlias && firstPart && util.isVariableShadowingSomething(entityName, part)) {
+                // this expression starts with a variable that has been redefined, so skip it
+                return;
+            }
 
+            let value: Expression;
             let constStatement = scope?.getConstFileLink(entityName, containingNamespace)?.item;
             let enumInfo = this.getEnumInfo(entityName, containingNamespace, scope);
             let namespaceInfo = isAlias && this.getNamespaceInfo(entityName, scope);
