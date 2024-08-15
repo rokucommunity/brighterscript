@@ -239,7 +239,7 @@ export class ExpressionStatement extends Statement {
         readonly expression: Expression
     ) {
         super();
-        this.range = this.expression.range;
+        this.range = this.expression?.range;
     }
 
     public readonly range: Range | undefined;
@@ -377,7 +377,7 @@ export class FunctionStatement extends Statement implements TypedefProvider {
         public func: FunctionExpression
     ) {
         super();
-        this.range = this.func.range;
+        this.range = this.func?.range;
     }
 
     public readonly range: Range | undefined;
@@ -680,7 +680,7 @@ export class PrintStatement extends Statement {
             },
             this.expressions?.map(e => {
                 if (isExpression(e as any)) {
-                    return (e as Expression)?.clone();
+                    return (e as Expression).clone();
                 } else {
                     return util.cloneToken(e as Token);
                 }
@@ -1515,7 +1515,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
             this.tokens.name,
             this.tokens.extends,
             this.parentInterfaceName,
-            ...this.body,
+            ...this.body ?? [],
             this.tokens.endInterface
         );
     }
@@ -1740,7 +1740,7 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
             util.cloneToken(this.tokens.name),
             util.cloneToken(this.tokens.as),
             util.cloneToken(this.tokens.type),
-            this.type.clone(),
+            this.type?.clone(),
             util.cloneToken(this.tokens.optional)
         );
     }
