@@ -4264,6 +4264,115 @@ describe('Scope', () => {
             program.validate();
             expectDiagnosticsIncludes(program, DiagnosticMessages.localVarSameNameAsClass('Person').message);
         });
+
+        it('allows reusing a namespaced class name as "for each" variable in a method', () => {
+            program.setFile<BrsFile>('source/file.bs', `
+                namespace alpha
+                    class Person
+                        name as string
+                        children as Person[]
+
+                        sub test()
+                            for each person in m.children
+                                print person.name
+                            end for
+                        end sub
+                    end class
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows reusing a namespaced function name as "for each" variable in a method', () => {
+            program.setFile<BrsFile>('source/file.bs', `
+                namespace alpha
+                    sub bar()
+                    end sub
+
+                    sub test()
+                        for each bar in m.bars
+                            print bar.whatever
+                        end for
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows reusing a namespaced class name as variable in a method', () => {
+            program.setFile<BrsFile>('source/file.bs', `
+                namespace alpha
+                    class Person
+                        name as string
+                        children as Person[]
+                    end class
+
+                    sub test()
+                        person = {name: 123}
+                        print person
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows using a namespace name as a parameter inside a function in the namespace', () => {
+            program.setFile<BrsFile>('source/file.bs', `
+                namespace alpha
+                    sub foo(alpha as string)
+                        print alpha
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows using a namespace name as a variable inside a function in the namespace', () => {
+            program.setFile<BrsFile>('source/file.bs', `
+                namespace alpha
+                    sub foo()
+                        alpha = "hello"
+                        print alpha
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows using a namespace name as a variable, and claling methods on it', () => {
+            program.setFile<BrsFile>('source/file.bs', `
+                namespace alpha
+                    sub foo()
+                        alpha = "hello"
+                        print alpha.len()
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows shadowing namespaced function in same namespace', () => {
+            program.setFile<BrsFile>('source/file.bs', `
+                namespace alpha
+                    sub foo()
+                    end sub
+
+                    sub test()
+                        foo = 1
+                        m.data = []
+                        m.data.push(foo)
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
 

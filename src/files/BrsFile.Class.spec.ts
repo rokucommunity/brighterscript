@@ -1178,7 +1178,7 @@ describe('BrsFile BrighterScript classes', () => {
                         button = Alpha_Button()
                         items = [
                             m.button
-                            Alpha_button
+                            button
                             Alpha_Button
                         ]
                     end sub

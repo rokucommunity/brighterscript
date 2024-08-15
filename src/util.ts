@@ -11,7 +11,7 @@ import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, TranspileResult, TypeChainEntry, TypeChainProcessResult, GetTypeOptions } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, TranspileResult, TypeChainEntry, TypeChainProcessResult, GetTypeOptions, ExtraSymbolData } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -26,7 +26,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { LogLevel, createLogger } from './logging';
 import { isToken, type Identifier, type Locatable, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLiteralString, isLongIntegerType, isNamespaceType, isNewExpression, isNumberType, isStatement, isStringType, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUnionType, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLiteralString, isLongIntegerType, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isReferenceType, isStatement, isStringType, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUnionType, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import * as requireRelative from 'require-relative';
@@ -46,7 +46,7 @@ import { BinaryOperatorReferenceType } from './types/ReferenceType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { ComponentType } from './types/ComponentType';
 import { FunctionType } from './types/FunctionType';
-import type { AssignmentStatement } from './parser/Statement';
+import type { AssignmentStatement, NamespaceStatement } from './parser/Statement';
 import type { BscFile } from './files/BscFile';
 
 export class Util {
@@ -2345,6 +2345,64 @@ export class Util {
                 }
             }
         }
+    }
+
+    public symbolComesFromSameNode(symbolName: string, definingNode: AstNode, symbolTable: SymbolTable) {
+        let nsData: ExtraSymbolData = {};
+        symbolTable.getSymbolType(symbolName, { flags: SymbolTypeFlag.runtime, data: nsData });
+
+        if (definingNode === nsData?.definingNode) {
+            return true;
+        }
+        return false;
+    }
+
+    public isCalleeMemberOfNamespace(symbolName: string, nodeWhereUsed: AstNode, namespace?: NamespaceStatement) {
+        namespace = namespace ?? nodeWhereUsed.findAncestor<NamespaceStatement>(isNamespaceStatement);
+
+        if (!this.isVariableMemberOfNamespace(symbolName, nodeWhereUsed, namespace)) {
+            return false;
+        }
+        const exprType = nodeWhereUsed.getType({ flags: SymbolTypeFlag.runtime });
+
+        if (isCallableType(exprType) || isClassType(exprType)) {
+            return true;
+        }
+        return false;
+    }
+
+    public isVariableMemberOfNamespace(symbolName: string, nodeWhereUsed: AstNode, namespace?: NamespaceStatement) {
+        namespace = namespace ?? nodeWhereUsed.findAncestor<NamespaceStatement>(isNamespaceStatement);
+        if (!isNamespaceStatement(namespace)) {
+            return false;
+        }
+        let varData: ExtraSymbolData = {};
+        nodeWhereUsed.getType({ flags: SymbolTypeFlag.runtime, data: varData });
+        return this.symbolComesFromSameNode(symbolName, varData?.definingNode, namespace.getSymbolTable());
+    }
+
+    public isVariableShadowingSomething(symbolName: string, nodeWhereUsed: AstNode) {
+        let varData: ExtraSymbolData = {};
+        let exprType = nodeWhereUsed.getType({ flags: SymbolTypeFlag.runtime, data: varData });
+        if (isReferenceType(exprType)) {
+            exprType = (exprType as any).getTarget();
+        }
+        const namespace = nodeWhereUsed?.findAncestor<NamespaceStatement>(isNamespaceStatement);
+
+        if (isNamespaceStatement(namespace)) {
+            let namespaceHasSymbol = namespace.getSymbolTable().hasSymbol(symbolName, SymbolTypeFlag.runtime);
+            // check if the namespace has a symbol with the same name, but different definiton
+            if (namespaceHasSymbol && !this.symbolComesFromSameNode(symbolName, varData.definingNode, namespace.getSymbolTable())) {
+                return true;
+            }
+        }
+        const bodyTable = nodeWhereUsed.getRoot().getSymbolTable();
+        const hasSymbolAtFileLevel = bodyTable.hasSymbol(symbolName, SymbolTypeFlag.runtime);
+        if (hasSymbolAtFileLevel && !this.symbolComesFromSameNode(symbolName, varData.definingNode, bodyTable)) {
+            return true;
+        }
+
+        return false;
     }
 }
 

@@ -767,55 +767,6 @@ export class BrsFile implements BscFile {
     }
 
     /**
-     * Determine if the callee (i.e. function name) is a known function declared on the given namespace.
-     */
-    public calleeIsKnownNamespaceFunction(callee: Expression, namespaceName: string | undefined) {
-        //if we have a variable and a namespace
-        if (isVariableExpression(callee) && namespaceName) {
-            let lowerCalleeName = callee?.tokens.name?.text?.toLowerCase();
-            if (lowerCalleeName) {
-                let scopes = this.program.getScopesForFile(this);
-                for (let scope of scopes) {
-                    let namespace = scope.namespaceLookup.get(namespaceName.toLowerCase());
-                    if (!namespace) {
-                        continue;
-                    }
-                    if (namespace.functionStatements.has(lowerCalleeName)) {
-                        return true;
-                    }
-                    if (namespace.classStatements.has(lowerCalleeName)) {
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Determine if the callee (i.e. function name) is a known function
-     */
-    public calleeIsKnownFunction(callee: Expression, namespaceName?: string) {
-        //if we have a variable and a namespace
-        if (isVariableExpression(callee)) {
-            if (namespaceName) {
-                return this.calleeIsKnownNamespaceFunction(callee, namespaceName);
-            }
-            let scopes = this.program.getScopesForFile(this);
-            let lowerCalleeName = callee?.tokens.name?.text?.toLowerCase();
-            for (let scope of scopes) {
-                if (scope.getCallableByName(lowerCalleeName)) {
-                    return true;
-                }
-                if (scope.getClass(lowerCalleeName)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    /**
      * Get the token closest to the position. if no token is found, the previous token is returned
      */
     public getClosestToken(position: Position) {
