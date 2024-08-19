@@ -513,7 +513,6 @@ export class FunctionStatement extends Statement implements TypedefProvider {
         };
         this.func = options.func;
         this.func.symbolTable.name += `: '${this.tokens.name?.text}'`;
-        this.func.functionStatement = this;
 
         this.location = this.func.location;
     }
