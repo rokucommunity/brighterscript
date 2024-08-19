@@ -30,7 +30,11 @@ export class DiagnosticCollection {
         const keys = {};
         //build the full current set of diagnostics by file
         for (let diagnostic of diagnostics) {
-            const fileUri = diagnostic.location.uri;
+            const fileUri = diagnostic?.location?.uri;
+            if (!fileUri) {
+                continue;
+            }
+
             //ensure the file entry exists
             if (!result[fileUri]) {
                 result[fileUri] = [];
