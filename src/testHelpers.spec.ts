@@ -7,7 +7,7 @@ import { expect } from './chai-config.spec';
 import type { CodeActionShorthand } from './CodeActionUtil';
 import { codeActionUtil } from './CodeActionUtil';
 import type { BrsFile } from './files/BrsFile';
-import type { Program } from './Program';
+import { Program } from './Program';
 import { standardizePath as s } from './util';
 import { getDiagnosticLine } from './diagnosticUtils';
 import { firstBy } from 'thenby';
@@ -175,11 +175,13 @@ export function expectZeroDiagnostics(arg: DiagnosticCollection) {
             diagnostic.message = diagnostic.message.replace(/\r/g, '\\r').replace(/\n/g, '\\n');
             message += `\n        • bs${diagnostic.code} "${diagnostic.message}" at ${diagnostic.location?.uri ?? ''}#(${diagnostic.location.range?.start.line}:${diagnostic.location.range?.start.character})-(${diagnostic.location.range?.end.line}:${diagnostic.location.range?.end.character})`;
             //print the line containing the error (if we can find it)srcPath
-            const file = (arg as any).getFile(diagnostic.location.uri);
+            if (arg instanceof Program) {
+                const file = arg.getFile(diagnostic.location.uri);
 
-            const line = (file as BrsFile)?.fileContents?.split(/\r?\n/g)?.[diagnostic.location.range?.start.line];
-            if (line) {
-                message += '\n' + getDiagnosticLine(diagnostic, line, chalk.red);
+                const line = (file as BrsFile)?.fileContents?.split(/\r?\n/g)?.[diagnostic.location.range?.start.line];
+                if (line) {
+                    message += '\n' + getDiagnosticLine(diagnostic, line, chalk.red);
+                }
             }
         }
         assert.fail(message);

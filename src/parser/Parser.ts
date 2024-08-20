@@ -35,8 +35,7 @@ import {
     EndStatement,
     EnumMemberStatement,
     EnumStatement,
-    ExitForStatement,
-    ExitWhileStatement,
+    ExitStatement,
     ExpressionStatement,
     ForEachStatement,
     FieldStatement,
@@ -1108,8 +1107,8 @@ export class Parser {
             return this.whileStatement();
         }
 
-        if (this.check(TokenKind.ExitWhile)) {
-            return this.exitWhile();
+        if (this.checkAny(TokenKind.Exit, TokenKind.ExitWhile)) {
+            return this.exitStatement();
         }
 
         if (this.check(TokenKind.For)) {
@@ -1118,10 +1117,6 @@ export class Parser {
 
         if (this.check(TokenKind.ForEach)) {
             return this.forEachStatement();
-        }
-
-        if (this.check(TokenKind.ExitFor)) {
-            return this.exitFor();
         }
 
         if (this.check(TokenKind.End)) {
@@ -1235,10 +1230,24 @@ export class Parser {
         });
     }
 
-    private exitWhile(): ExitWhileStatement {
-        let keyword = this.advance();
+    private exitStatement(): ExitStatement {
+        const exitToken = this.advance();
+        if (exitToken.kind === TokenKind.ExitWhile) {
+            // `exitwhile` is allowed in code, and means `exit while`
+            // use an ExitStatement that is nicer to work with
 
-        return new ExitWhileStatement({ exitWhile: keyword });
+            return new ExitStatement({
+                exit: createToken(TokenKind.Exit, 'exit', exitToken.location),
+                loopType: createToken(TokenKind.While, 'while', exitToken.location)
+            });
+        }
+        return new ExitStatement({
+            exit: exitToken,
+            loopType: this.tryConsume(
+                DiagnosticMessages.expectedToken(TokenKind.While, TokenKind.For),
+                TokenKind.While, TokenKind.For
+            )
+        });
     }
 
     private forStatement(): ForStatement {
@@ -1335,12 +1344,6 @@ export class Parser {
             target: target,
             body: body
         });
-    }
-
-    private exitFor(): ExitForStatement {
-        let keyword = this.advance();
-
-        return new ExitForStatement({ exitFor: keyword });
     }
 
     private namespaceStatement(): NamespaceStatement | undefined {

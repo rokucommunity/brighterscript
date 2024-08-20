@@ -108,7 +108,6 @@ export enum TokenKind {
     EndWhile = 'EndWhile',
     Eval = 'Eval',
     Exit = 'Exit',
-    ExitFor = 'ExitFor', // not technically a reserved word, but definitely a tokenKind
     ExitWhile = 'ExitWhile',
     False = 'False',
     For = 'For',
@@ -269,9 +268,7 @@ export const Keywords: Record<string, TokenKind> = {
     endwhile: TokenKind.EndWhile,
     'end while': TokenKind.EndWhile,
     exit: TokenKind.Exit,
-    'exit for': TokenKind.ExitFor, // note: 'exitfor' (no space) is *not* a keyword
     exitwhile: TokenKind.ExitWhile,
-    'exit while': TokenKind.ExitWhile,
     false: TokenKind.False,
     for: TokenKind.For,
     'for each': TokenKind.ForEach, // note: 'foreach' (no space) is *not* a keyword
@@ -400,7 +397,6 @@ export const AllowedProperties = [
     TokenKind.EndWhile,
     TokenKind.Eval,
     TokenKind.Exit,
-    TokenKind.ExitFor,
     TokenKind.ExitWhile,
     TokenKind.False,
     TokenKind.For,
@@ -476,7 +472,6 @@ export const AllowedProperties = [
 /** List of TokenKind that are allowed as local var identifiers. */
 export const AllowedLocalIdentifiers = [
     TokenKind.EndFor,
-    TokenKind.ExitFor,
     TokenKind.ForEach,
     TokenKind.Void,
     TokenKind.Boolean,
