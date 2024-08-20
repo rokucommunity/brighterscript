@@ -350,7 +350,7 @@ export let DiagnosticMessages = {
         message: `Expected expression after 'in' keyword from 'for each' statement`,
         legacyCode: 1053,
         severity: DiagnosticSeverity.Error,
-        code: 'expected-expression-for-each'
+        code: 'missing-loop-expression'
     }),
     unexpectedColonBeforeIfStatement: () => ({
         message: `Colon before 'if' statement is not allowed`,
