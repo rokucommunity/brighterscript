@@ -405,13 +405,13 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'expected-statement-after-else'
     }),
-    consecutiveIncrementDecrementOperatorsAreNotAllowed: () => ({
-        message: `Consecutive increment/decrement operators are not allowed`,
+    unexpectedOperator: () => ({
+        message: `Unexpected operator`,
         legacyCode: 1063,
         severity: DiagnosticSeverity.Error,
         code: 'unexpected-operator'
     }),
-    incrementDecrementOperatorsAreNotAllowedAsResultOfFunctionCall: () => ({
+    __unused13: () => ({
         message: `Increment/decrement operators are not allowed on function calls`,
         legacyCode: 1064,
         severity: DiagnosticSeverity.Error,

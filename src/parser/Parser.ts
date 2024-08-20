@@ -2321,13 +2321,13 @@ export class Parser {
 
             if (this.checkAny(TokenKind.PlusPlus, TokenKind.MinusMinus)) {
                 this.diagnostics.push({
-                    ...DiagnosticMessages.consecutiveIncrementDecrementOperatorsAreNotAllowed(),
+                    ...DiagnosticMessages.unexpectedOperator(),
                     range: this.peek().location?.range
                 });
                 throw this.lastDiagnosticAsError();
             } else if (isCallExpression(expr)) {
                 this.diagnostics.push({
-                    ...DiagnosticMessages.incrementDecrementOperatorsAreNotAllowedAsResultOfFunctionCall(),
+                    ...DiagnosticMessages.unexpectedOperator(),
                     range: expressionStart.location?.range
                 });
                 throw this.lastDiagnosticAsError();
