@@ -452,25 +452,25 @@ export let DiagnosticMessages = {
         message: `Cannot find function with name '${name}' in component scope`,
         legacyCode: 1067,
         severity: DiagnosticSeverity.Error,
-        code: 'xml-function-not-found'
+        code: 'function-not-found'
     }),
     xmlInvalidFieldType: (name: string) => ({
         message: `Invalid field type ${name}`,
         legacyCode: 1068,
         severity: DiagnosticSeverity.Error,
-        code: 'xml-invalid-field-type'
+        code: 'invalid-field-type'
     }),
     xmlUnexpectedChildren: (tagName: string) => ({
         message: `Tag '${tagName}' should not have children`,
         legacyCode: 1069,
         severity: DiagnosticSeverity.Error,
-        code: 'xml-unexpected-children'
+        code: 'unexpected-children'
     }),
     xmlTagMissingAttribute: (tagName: string, attrName: string) => ({
         message: `Tag '${tagName}' must have a '${attrName}' attribute`,
         legacyCode: 1070,
         severity: DiagnosticSeverity.Error,
-        code: 'xml-missing-attribute'
+        code: 'expected-attribute'
     }),
     expectedLabelIdentifierAfterGotoKeyword: () => ({
         message: `Expected label identifier after 'goto' keyword`,
@@ -695,7 +695,7 @@ export let DiagnosticMessages = {
         message: `This import is unnecessary because compiler option 'autoImportComponentScript' is enabled`,
         legacyCode: 1107,
         severity: DiagnosticSeverity.Warning,
-        code: 'xml-unnecessary-import'
+        code: 'unnecessary-import'
     }),
     expectedOpenParenToFollowCallfuncIdentifier: () => ({
         message: `Expected '(' to follow callfunc identifier`,
@@ -881,7 +881,7 @@ export let DiagnosticMessages = {
         message: `Optional chaining may not be used in the left - hand side of an assignment`,
         legacyCode: 1139,
         severity: DiagnosticSeverity.Error,
-        code: 'otional-chaining-on-left-of-assignment'
+        code: 'optional-chaining-on-left-of-assignment'
     }),
     /**
      *
