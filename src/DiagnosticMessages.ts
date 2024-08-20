@@ -484,11 +484,11 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'expected-right-brace'
     }),
-    expectedPropertyNameAfterPeriod: () => ({
+    __unused21: () => ({
         message: `Expected property name after '.'`,
         legacyCode: 1073,
         severity: DiagnosticSeverity.Error,
-        code: 'expected-identifier'
+        code: 'expected-property-name'
     }),
     tooManyCallableArguments: (actual: number, max: number) => ({
         message: `Cannot have more than ${max} arguments but found ${actual} `,

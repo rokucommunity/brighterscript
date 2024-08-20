@@ -2862,7 +2862,7 @@ export class Parser {
                 } else {
                     let dot = this.previous();
                     let name = this.tryConsume(
-                        DiagnosticMessages.expectedPropertyNameAfterPeriod(),
+                        DiagnosticMessages.expectedIdentifier(),
                         TokenKind.Identifier,
                         ...AllowedProperties
                     );

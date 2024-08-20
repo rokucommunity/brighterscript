@@ -469,7 +469,7 @@ describe('parser', () => {
             let { tokens } = Lexer.scan(`print a.`);
             let { ast, diagnostics } = Parser.parse(tokens);
             let printStatement = ast.statements[0] as PrintStatement;
-            expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.expectedPropertyNameAfterPeriod());
+            expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.expectedIdentifier());
             expect(printStatement).to.be.instanceof(PrintStatement);
             expect(printStatement.expressions[0]).to.be.instanceof(VariableExpression);
         });
@@ -478,7 +478,7 @@ describe('parser', () => {
             let { tokens } = Lexer.scan(`print a.b.`);
             let { ast, diagnostics } = Parser.parse(tokens);
             let printStatement = ast.statements[0] as PrintStatement;
-            expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.expectedPropertyNameAfterPeriod());
+            expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.expectedIdentifier());
             expect(printStatement).to.be.instanceof(PrintStatement);
             expect(printStatement.expressions[0]).to.be.instanceof(DottedGetExpression);
         });
