@@ -6,6 +6,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.36](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.35...v1.0.0-alpha.36) - 2024-08-09
+### Fixed
+ - `m` should be typed as roAssociativeArray for all inline functions ([#1272](https://github.com/rokucommunity/brighterscript/pull/1272))
+ - Fixes namespace transpiling bug by linking scopes during transpile ([#1271](https://github.com/rokucommunity/brighterscript/pull/1271))
+
+
+
+## [1.0.0-alpha.35](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.34...v1.0.0-alpha.35) - 2024-07-31
+### Changed
+ - Remove `file` prop from `BsDiagnostic` ([#1248](https://github.com/rokucommunity/brighterscript/pull/1248))
+### Fixed
+ - Ensures conditional compiltion blocks have proper validation segments ([#1267](https://github.com/rokucommunity/brighterscript/pull/1267))
+ - Allow variables and parameters to shadow namespaces ([#1263](https://github.com/rokucommunity/brighterscript/pull/1263))
+ - Ensure methods leading comments are transpiled above instance function def ([#1257](https://github.com/rokucommunity/brighterscript/pull/1257))
+ - Make absolute import completions use original extension ([#1266](https://github.com/rokucommunity/brighterscript/pull/1266))
+
+
+
 ## [1.0.0-alpha.34](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.33...v1.0.0-alpha.34) - 2024-07-24
 ### Changed
  - Export `Location` so it can be used directly in plugins ([#1236](https://github.com/rokucommunity/brighterscript/pull/1236))
@@ -295,6 +313,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.66.0-alpha.0](https://github.com/rokucommunity/brighterscript/compare/v0.65.1...v0.66.0-alpha.0) - 2023-06-09
 ### Changed
  - all the type tracking stuff!
+## [0.67.5](https://github.com/rokucommunity/brighterscript/compare/v0.67.4...v0.67.5) - 2024-07-31
+### Fixed
+ - templatestring support for `annotation.getArguments()` ([#1264](https://github.com/rokucommunity/brighterscript/pull/1264))
+
+
+
+## [0.67.4](https://github.com/rokucommunity/brighterscript/compare/v0.67.3...v0.67.4) - 2024-07-24
+### Changed
+ - upgrade to [roku-deploy@3.12.1](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3121---2024-07-19). Notable changes since 3.12.0:
+     - Fix bug with absolute paths and getDestPath ([roku-deploy#171](https://github.com/rokucommunity/roku-deploy/pull/171))
+
+
+
 ## [0.67.3](https://github.com/rokucommunity/brighterscript/compare/v0.67.2...v0.67.3) - 2024-06-14
 ### Changed
  - Flag using devDependency in production code ([#1222](https://github.com/rokucommunity/brighterscript/pull/1222))

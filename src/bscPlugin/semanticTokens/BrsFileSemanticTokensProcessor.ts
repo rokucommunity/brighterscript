@@ -20,7 +20,9 @@ export class BrsFileSemanticTokensProcessor {
     public process() {
         const scope = this.event.scopes[0];
         this.result.clear();
-        scope.linkSymbolTable();
+        if (scope) {
+            scope.linkSymbolTable();
+        }
 
         this.event.file.ast.walk(createVisitor({
             VariableExpression: (node) => {
@@ -57,7 +59,9 @@ export class BrsFileSemanticTokensProcessor {
             walkMode: WalkMode.visitAllRecursive
         });
 
-        scope.unlinkSymbolTable();
+        if (scope) {
+            scope.unlinkSymbolTable();
+        }
 
         //add all tokens to the event
         this.event.semanticTokens.push(

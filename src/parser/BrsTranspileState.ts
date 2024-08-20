@@ -3,6 +3,7 @@ import { Editor } from '../astUtils/Editor';
 import type { BrsFile } from '../files/BrsFile';
 import type { ClassStatement, ConditionalCompileStatement } from './Statement';
 import { TranspileState } from './TranspileState';
+import type { Statement } from './AstNode';
 
 export class BrsTranspileState extends TranspileState {
     public constructor(
@@ -45,4 +46,13 @@ export class BrsTranspileState extends TranspileState {
      * Do not transpile leading comments
      */
     public skipLeadingComments = false;
+
+    /**
+     * Transpile all leading trivia for a given statement, including comments mixed between annotations
+     */
+    public transpileAnnotations(node: Statement) {
+        return (node?.annotations ?? []).map(x => {
+            return x.transpile(this);
+        });
+    }
 }

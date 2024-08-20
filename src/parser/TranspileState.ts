@@ -2,11 +2,10 @@ import { SourceNode } from 'source-map';
 import type { Location } from 'vscode-languageserver';
 import type { BsConfig } from '../BsConfig';
 import { TokenKind } from '../lexer/TokenKind';
-import type { Token } from '../lexer/Token';
+import { type Token } from '../lexer/Token';
 import type { RangeLike } from '../util';
 import { util } from '../util';
 import type { TranspileResult } from '../interfaces';
-
 
 interface TranspileToken {
     location?: Location;
@@ -113,6 +112,17 @@ export class TranspileState {
         );
     }
 
+    public transpileLeadingCommentsForAstNode(node: { leadingTrivia?: Token[] }) {
+        const leadingTrivia = node?.leadingTrivia ?? [];
+        const leadingCommentsSourceNodes = this.transpileComments(leadingTrivia);
+        if (leadingCommentsSourceNodes.length > 0) {
+            // indent in preparation for next text
+            leadingCommentsSourceNodes.push(this.indent());
+        }
+
+        return leadingCommentsSourceNodes;
+    }
+
     public transpileLeadingComments(token: TranspileToken) {
         const leadingTrivia = (token?.leadingTrivia ?? []);
         const leadingCommentsSourceNodes = this.transpileComments(leadingTrivia);
@@ -124,7 +134,7 @@ export class TranspileState {
         return leadingCommentsSourceNodes;
     }
 
-    public transpileComments(tokens: TranspileToken[]) {
+    public transpileComments(tokens: TranspileToken[], prepNextLine = false): Array<string | SourceNode> {
         const leadingCommentsSourceNodes = [];
         const justComments = tokens.filter(t => t.kind === TokenKind.Comment || t.kind === TokenKind.Newline);
         let newLinesSinceComment = 0;
@@ -149,6 +159,10 @@ export class TranspileState {
                 leadingCommentsSourceNodes.push(this.newline);
             }
             transpiledCommentAlready = true;
+        }
+        //if we should prepare for the next line, add an indent (only if applicable)
+        if (prepNextLine && transpiledCommentAlready) {
+            leadingCommentsSourceNodes.push(this.indent());
         }
         return leadingCommentsSourceNodes;
     }

@@ -211,10 +211,10 @@ describe('BrsFile BrighterScript classes', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.classConstructorIllegalUseOfMBeforeSuperCall(),
-                range: Range.create(9, 24, 9, 25)
+                location: { range: Range.create(9, 24, 9, 25) }
             }, {
                 ...DiagnosticMessages.classConstructorIllegalUseOfMBeforeSuperCall(),
-                range: Range.create(9, 33, 9, 34)
+                location: { range: Range.create(9, 33, 9, 34) }
             }]);
         });
     });
@@ -1178,7 +1178,7 @@ describe('BrsFile BrighterScript classes', () => {
                         button = Alpha_Button()
                         items = [
                             m.button
-                            Alpha_button
+                            button
                             Alpha_Button
                         ]
                     end sub
@@ -1391,16 +1391,16 @@ describe('BrsFile BrighterScript classes', () => {
         program.validate();
         expectDiagnostics(program, [{
             ...DiagnosticMessages.duplicateIdentifier('name'),
-            range: Range.create(3, 23, 3, 27)
+            location: { range: Range.create(3, 23, 3, 27) }
         }, {
             ...DiagnosticMessages.duplicateIdentifier('name'),
-            range: Range.create(4, 27, 4, 31)
+            location: { range: Range.create(4, 27, 4, 31) }
         }, {
             ...DiagnosticMessages.duplicateIdentifier('age'),
-            range: Range.create(8, 27, 8, 30)
+            location: { range: Range.create(8, 27, 8, 30) }
         }, {
             ...DiagnosticMessages.duplicateIdentifier('age'),
-            range: Range.create(10, 23, 10, 26)
+            location: { range: Range.create(10, 23, 10, 26) }
         }]);
     });
 
@@ -1551,7 +1551,7 @@ describe('BrsFile BrighterScript classes', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.cannotFindName('Animal'),
-                range: Range.create(1, 35, 1, 41)
+                location: { range: Range.create(1, 35, 1, 41) }
             }]);
         });
 

@@ -1,7 +1,7 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
-import type { Block, FunctionStatement, NamespaceStatement } from './Statement';
+import type { Block, NamespaceStatement } from './Statement';
 import type { Location } from 'vscode-languageserver';
 import util from '../util';
 import type { BrsTranspileState } from './BrsTranspileState';
@@ -10,7 +10,7 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallExpression, isCallableType, isCallfuncExpression, isComponentType, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isPrimitiveType, isReferenceType, isStringType, isTypecastExpression, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallExpression, isCallableType, isCallfuncExpression, isComponentType, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isPrimitiveType, isReferenceType, isStringType, isTemplateStringExpression, isTypecastExpression, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
@@ -146,7 +146,11 @@ export class CallExpression extends Expression {
 
         //transpile the name
         if (nameOverride) {
-            result.push(state.sourceNode(this.callee, nameOverride));
+            result.push(
+                //transpile leading comments since we're bypassing callee.transpile (which would normally do this)
+                ...state.transpileLeadingCommentsForAstNode(this),
+                state.sourceNode(this.callee, nameOverride)
+            );
         } else {
             result.push(...this.callee.transpile(state));
         }
@@ -250,11 +254,6 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         readonly rightParen?: Token;
         readonly as?: Token;
     };
-
-    /**
-     * If this function is part of a FunctionStatement, this will be set. Otherwise this will be undefined
-     */
-    public functionStatement?: FunctionStatement;
 
     public get leadingTrivia(): Token[] {
         return this.tokens.functionType?.leadingTrivia;
@@ -553,6 +552,7 @@ export class DottedGetExpression extends Expression {
         //if the callee starts with a namespace name, transpile the name
         if (state.file.calleeStartsWithNamespace(this)) {
             return [
+                ...state.transpileLeadingCommentsForAstNode(this),
                 state.sourceNode(this, this.getName(ParseMode.BrightScript))
             ];
         } else {
@@ -1182,15 +1182,16 @@ export class VariableExpression extends Expression {
         let result: TranspileResult = [];
         const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
         //if the callee is the name of a known namespace function
-        if (namespace && state.file.calleeIsKnownNamespaceFunction(this, namespace.getName(ParseMode.BrighterScript))) {
+        if (namespace && util.isCalleeMemberOfNamespace(this.tokens.name.text, this, namespace)) {
             result.push(
+                //transpile leading comments since the token isn't being transpiled directly
+                ...state.transpileLeadingCommentsForAstNode(this),
                 state.sourceNode(this, [
                     namespace.getName(ParseMode.BrightScript),
                     '_',
                     this.getName(ParseMode.BrightScript)
                 ])
             );
-
             //transpile  normally
         } else {
             result.push(
@@ -1273,9 +1274,11 @@ export class SourceLiteralExpression extends Expression {
             func = parentFunction;
         }
         //get the index of this function in its parent
-        nameParts.unshift(
-            func.functionStatement!.getName(parseMode)
-        );
+        if (isFunctionStatement(func.parent)) {
+            nameParts.unshift(
+                func.parent.getName(parseMode)
+            );
+        }
         return nameParts.join('$');
     }
 
@@ -1828,7 +1831,8 @@ export class AnnotationExpression extends Expression {
     }
 
     transpile(state: BrsTranspileState) {
-        return [];
+        //transpile only our leading comments
+        return state.transpileComments(this.leadingTrivia);
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -2139,6 +2143,12 @@ function expressionToValue(expr: Expression, strict: boolean): ExpressionValue {
             acc[e.tokens.key.text] = expressionToValue(e.value, strict);
             return acc;
         }, {});
+    }
+    //for annotations, we only support serializing pure string values
+    if (isTemplateStringExpression(expr)) {
+        if (expr.quasis?.length === 1 && expr.expressions.length === 0) {
+            return expr.quasis[0].expressions.map(x => x.tokens.value.text).join('');
+        }
     }
     return strict ? null : expr;
 }

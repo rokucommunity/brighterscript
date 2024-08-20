@@ -72,7 +72,7 @@ export class Body extends Statement implements TypedefProvider {
     }
 
     transpile(state: BrsTranspileState) {
-        let result = [] as TranspileResult;
+        let result: TranspileResult = state.transpileAnnotations(this);
         for (let i = 0; i < this.statements.length; i++) {
             let statement = this.statements[i];
             let previousStatement = this.statements[i - 1];
@@ -419,7 +419,10 @@ export class ExpressionStatement extends Statement {
     public readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState) {
-        return this.expression.transpile(state);
+        return [
+            state.transpileAnnotations(this),
+            this.expression.transpile(state)
+        ];
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -510,7 +513,6 @@ export class FunctionStatement extends Statement implements TypedefProvider {
         };
         this.func = options.func;
         this.func.symbolTable.name += `: '${this.tokens.name?.text}'`;
-        this.func.functionStatement = this;
 
         this.location = this.func.location;
     }
@@ -542,14 +544,17 @@ export class FunctionStatement extends Statement implements TypedefProvider {
         return this.func.leadingTrivia;
     }
 
-    transpile(state: BrsTranspileState) {
+    transpile(state: BrsTranspileState): TranspileResult {
         //create a fake token using the full transpiled name
         let nameToken = {
             ...this.tokens.name,
             text: this.getName(ParseMode.BrightScript)
         };
 
-        return this.func.transpile(state, nameToken);
+        return [
+            ...state.transpileAnnotations(this),
+            ...this.func.transpile(state, nameToken)
+        ];
     }
 
     getTypedef(state: BrsTranspileState) {
@@ -1686,6 +1691,7 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     transpile(state: BrsTranspileState) {
         //namespaces don't actually have any real content, so just transpile their bodies
         return [
+            state.transpileAnnotations(this),
             state.transpileLeadingComments(this.tokens.namespace),
             this.body.transpile(state),
             state.transpileLeadingComments(this.tokens.endNamespace)
@@ -2625,11 +2631,12 @@ export class ClassStatement extends Statement implements TypedefProvider {
      * This invokes the builder, gets an instance of the class, then invokes the "new" function on that class.
      */
     private getTranspiledClassFunction(state: BrsTranspileState) {
-        let result = [] as TranspileResult;
+        let result: TranspileResult = state.transpileAnnotations(this);
         const constructorFunction = this.getConstructorFunction();
         const constructorParams = constructorFunction ? constructorFunction.func.parameters : [];
 
         result.push(
+            state.transpileLeadingComments(this.tokens.class),
             state.sourceNode(this.tokens.class, 'function'),
             state.sourceNode(this.tokens.class, ' '),
             state.sourceNode(this.tokens.name, this.getName(ParseMode.BrightScript)),
@@ -3346,8 +3353,9 @@ export class EnumStatement extends Statement implements TypedefProvider {
     }
 
     transpile(state: BrsTranspileState) {
-        //enum declarations do not exist at runtime, so don't transpile anything...
+        //enum declarations don't exist at runtime, so just transpile comments and trivia
         return [
+            state.transpileAnnotations(this),
             state.transpileLeadingComments(this.tokens.enum)
         ];
     }
@@ -3551,8 +3559,11 @@ export class ConstStatement extends Statement implements TypedefProvider {
     }
 
     public transpile(state: BrsTranspileState): TranspileResult {
-        //const declarations don't exist at runtime, so just transpile empty
-        return [state.transpileLeadingComments(this.tokens.const)];
+        //const declarations don't exist at runtime, so just transpile comments and trivia
+        return [
+            state.transpileAnnotations(this),
+            state.transpileLeadingComments(this.tokens.const)
+        ];
     }
 
     getTypedef(state: BrsTranspileState): TranspileResult {

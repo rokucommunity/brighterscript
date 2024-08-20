@@ -2,7 +2,9 @@ import type { BsDiagnostic } from './interfaces';
 import * as path from 'path';
 import * as minimatch from 'minimatch';
 import type { BsConfig } from './BsConfig';
-import { standardizePath as s } from './util';
+import util, { standardizePath as s } from './util';
+import { URI } from 'vscode-uri';
+import type { Program } from './Program';
 
 interface DiagnosticWithSuppression {
     diagnostic: BsDiagnostic;
@@ -18,24 +20,24 @@ interface NormalizedFilter {
 
 export class DiagnosticFilterer {
     private byFile: Record<string, DiagnosticWithSuppression[]>;
-    private fileDestSrcMap: Record<string, string>;
+    private fileDestSrcUriMap: Record<string, string>;
     private filters: NormalizedFilter[] | undefined;
     private rootDir: string | undefined;
 
 
     constructor() {
         this.byFile = {};
-        this.fileDestSrcMap = {};
+        this.fileDestSrcUriMap = {};
     }
 
     /**
      * Filter a list of diagnostics based on the provided filters
      */
-    public filter(options: BsConfig, diagnostics: BsDiagnostic[]) {
+    public filter(options: BsConfig, diagnostics: BsDiagnostic[], program?: Program) {
         this.filters = this.getDiagnosticFilters(options);
         this.rootDir = options.rootDir;
 
-        this.groupByFile(diagnostics);
+        this.groupByFile(diagnostics, program);
 
         for (let filter of this.filters) {
             this.filterAllFiles(filter);
@@ -44,7 +46,7 @@ export class DiagnosticFilterer {
 
         //clean up
         this.byFile = {};
-        this.fileDestSrcMap = {};
+        this.fileDestSrcUriMap = {};
         delete this.rootDir;
         delete this.filters;
 
@@ -73,97 +75,89 @@ export class DiagnosticFilterer {
     /**
      * group the diagnostics by file
      */
-    private groupByFile(diagnostics: BsDiagnostic[]) {
+    private groupByFile(diagnostics: BsDiagnostic[], program?: Program) {
         this.byFile = {};
-        this.fileDestSrcMap = {};
+        this.fileDestSrcUriMap = {};
         for (let diagnostic of diagnostics) {
-            const srcPath = diagnostic?.file?.srcPath;
-
+            const fileUri = diagnostic?.location?.uri ?? 'invalid-uri';
             //skip diagnostics that have issues
-            if (!srcPath) {
+            if (!fileUri) {
                 continue;
             }
-            const lowerSrcPath = srcPath.toLowerCase();
+            const lowerFileUri = fileUri.toLowerCase();
             //make a new array for this file if one does not yet exist
-            if (!this.byFile[lowerSrcPath]) {
-                this.byFile[lowerSrcPath] = [];
+            if (!this.byFile[lowerFileUri]) {
+                this.byFile[lowerFileUri] = [];
             }
-            this.byFile[lowerSrcPath].push({
+            this.byFile[lowerFileUri].push({
                 diagnostic: diagnostic,
                 isSuppressed: false
             });
-        }
-        for (let diagnostic of diagnostics) {
-            const destPath = diagnostic?.file?.destPath;
-            const srcPath = diagnostic?.file?.srcPath;
 
-            //skip diagnostics that have issues
-            if (!destPath || !srcPath) {
-                continue;
+            if (program) {
+                const fileForDiagnostic = program.getFile(diagnostic.location?.uri);
+                if (fileForDiagnostic) {
+                    const lowerDestPath = fileForDiagnostic.destPath.toLowerCase();
+                    this.fileDestSrcUriMap[lowerDestPath] = diagnostic.location?.uri;
+                }
             }
-
-            const lowerDestPath = destPath.toLowerCase();
-            const lowerSrcPath = srcPath.toLowerCase();
-            this.fileDestSrcMap[lowerDestPath] = lowerSrcPath;
         }
     }
 
     private filterAllFiles(filter: NormalizedFilter) {
-        let matchedFilePaths: string[];
+        let matchedFileUris: string[];
 
         if (filter.src) {
             //if there's a src, match against all files
 
-            //prepend rootDir to src if the filter is a relative path
+            //prepend rootDir to src if the filter is not a relative path
             let src = s(
                 path.isAbsolute(filter.src) ? filter.src : `${this.rootDir}/${filter.src}`
             );
 
-            matchedFilePaths = minimatch.match(Object.keys(this.byFile), src, {
+            const byFileSrcs = Object.keys(this.byFile).map(uri => URI.parse(uri).fsPath);
+            matchedFileUris = minimatch.match(byFileSrcs, src, {
                 nocase: true
-            });
+            }).map(src => util.pathToUri(src).toLowerCase());
 
         } else if (filter.dest) {
             // applies to file dest location
 
-            //prepend rootDir to dest if the filter is a relative path
-            let dest = s(
-                path.isAbsolute(filter.dest) ? filter.dest : `${this.rootDir}/${filter.dest}`
-            );
             // search against the set of file destinations
-            const matchedDestFilePaths = minimatch.match(Object.keys(this.fileDestSrcMap), dest, {
+            const byFileDests = Object.keys(this.fileDestSrcUriMap);
+            matchedFileUris = minimatch.match(byFileDests, filter.dest, {
                 nocase: true
+            }).map((destPath) => {
+                return this.fileDestSrcUriMap[destPath]?.toLowerCase();
             });
-            // convert to file srcs
-            matchedFilePaths = matchedDestFilePaths.map(destPath => this.fileDestSrcMap[destPath]);
 
         } else {
-            //there is no src; this applies to all files
-            matchedFilePaths = Object.keys(this.byFile);
+            matchedFileUris = Object.keys(this.byFile);
         }
 
         //filter each matched file
-        for (let filePath of matchedFilePaths) {
-            this.filterFile(filter, filePath);
+        for (let fileUri of matchedFileUris) {
+            this.filterFile(filter, fileUri);
         }
     }
 
-    private filterFile(filter: NormalizedFilter, filePath: string) {
+    private filterFile(filter: NormalizedFilter, fileUri: string) {
+        if (!fileUri) {
+            return;
+        }
         //if the filter is negative, we're turning diagnostics on
         //if the filter is not negative we're turning diagnostics off
         const isSuppressing = !filter.isNegative;
-
-        // get correct diagnostics set
-        const fileDiagnostics = this.byFile[filePath];
-
+        const lowerFileUri = fileUri.toLowerCase();
         //if there is no code, set isSuppressed on every diagnostic in this file
         if (!filter.codes) {
-            fileDiagnostics.forEach(diagnostic => {
+            this.byFile[lowerFileUri].forEach(diagnostic => {
                 diagnostic.isSuppressed = isSuppressing;
             });
 
             //set isSuppressed for any diagnostics with matching codes
         } else {
+            let fileDiagnostics = this.byFile[lowerFileUri];
             for (const diagnostic of fileDiagnostics) {
                 if (filter.codes.includes(diagnostic.diagnostic.code!) ||
                     (diagnostic.diagnostic.legacyCode &&

@@ -456,7 +456,7 @@ export class LanguageServer {
      * anytime the program wants to load a file, check with our in-memory document cache first
      */
     private documentFileResolver(srcPath: string) {
-        let pathUri = URI.file(srcPath).toString();
+        let pathUri = util.pathToUri(srcPath);
         let document = this.documents.get(pathUri);
         if (document) {
             return document.getText();
@@ -468,7 +468,7 @@ export class LanguageServer {
         if (workspacePath.startsWith('file:')) {
             scopeUri = URI.parse(workspacePath).toString();
         } else {
-            scopeUri = URI.file(workspacePath).toString();
+            scopeUri = util.pathToUri(workspacePath);
         }
         let config = {
             configFile: undefined
@@ -1296,12 +1296,11 @@ export class LanguageServer {
             //Get only the changes to diagnostics since the last time we sent them to the client
             const patch = this.diagnosticCollection.getPatch(this.projects);
 
-            for (let filePath in patch) {
-                const uri = URI.file(filePath).toString();
-                const diagnostics = patch[filePath].map(d => util.toDiagnostic(d, uri));
+            for (let fileUri in patch) {
+                const diagnostics = patch[fileUri].map(d => util.toDiagnostic(d, fileUri));
 
                 await this.connection.sendDiagnostics({
-                    uri: uri,
+                    uri: fileUri,
                     diagnostics: diagnostics
                 });
             }

@@ -10,13 +10,16 @@ import type { BrsFile } from '../../files/BrsFile';
 import { FloatType, InterfaceType } from '../../types';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
+import undent from 'undent';
+import * as fsExtra from 'fs-extra';
+import { tempDir, rootDir } from '../../testHelpers.spec';
 
 describe('ScopeValidator', () => {
 
     let sinon = sinonImport.createSandbox();
-    let rootDir = process.cwd();
     let program: Program;
     beforeEach(() => {
+        fsExtra.emptyDirSync(tempDir);
         program = new Program({
             rootDir: rootDir
         });
@@ -1781,6 +1784,34 @@ describe('ScopeValidator', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        it('allows anything on m in an anonymous function', () => {
+            program.setFile('source/main.bs', `
+                function test()
+                    stub = function()
+                        m.something = true
+                    end function
+                    return stub
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows anything on m in an anonymous function in a class method', () => {
+            program.setFile('source/main.bs', `
+                class SomeKlass
+                    function test()
+                        stub = function()
+                            m.something = true
+                        end function
+                        return stub
+                    end function
+                end class
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('itemCannotBeUsedAsVariable', () => {
@@ -3190,4 +3221,74 @@ describe('ScopeValidator', () => {
             ]);
         });
     });
+
+
+    describe('preprocessor', () => {
+        it('should process class inheritance correctly', () => {
+            fsExtra.outputFileSync(`${rootDir}/manifest`, undent`
+                bs_const=DEBUG=true
+            `);
+            program.setFile('source/myClass.bs', `
+                namespace MyNamespace
+                    class MyClass1
+                        function new()
+                        end function
+                    end class
+                end namespace
+            `);
+
+            program.setFile('source/myClass2.bs', `
+                #if DEBUG
+                    namespace MyNamespace
+                        class MyClass2 extends MyClass1
+                            function new()
+                                super()
+                            end function
+                        end class
+                    end namespace
+                #end if
+            `);
+
+            program.setFile('source/main.bs', `
+                sub main()
+                    #if DEBUG
+                        m.test = new MyNamespace.MyClass2()
+                    #end if
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('should find types defined in condition compile blocks', () => {
+            fsExtra.outputFileSync(`${rootDir}/manifest`, undent`
+                bs_const=DEBUG=true
+            `);
+            program.setFile('source/debugInterfaces.bs', `
+                #if DEBUG
+                    interface DebugInfo
+                        name as string
+                    end interface
+                #end if
+            `);
+
+            program.setFile('source/main.bs', `
+                sub main()
+                     #if DEBUG
+                        info as DebugInfo = {name: "main.bs"}
+                        printDebugInfo(info)
+                     #end if
+                end sub
+
+                #if DEBUG
+                    sub printDebugInfo(info as DebugInfo)
+                        print info.name
+                    end sub
+                #end if
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+    });
+
 });

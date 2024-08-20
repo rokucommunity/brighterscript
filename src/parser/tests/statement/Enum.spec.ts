@@ -11,7 +11,6 @@ import type { BrsFile } from '../../../files/BrsFile';
 import { CancellationTokenSource } from 'vscode-languageserver-protocol';
 import { WalkMode } from '../../../astUtils/visitors';
 import { isEnumStatement } from '../../../astUtils/reflection';
-import { URI } from 'vscode-uri';
 import { rootDir } from '../../../testHelpers.spec';
 
 const sinon = createSandbox();
@@ -227,14 +226,14 @@ describe('EnumStatement', () => {
                 ...DiagnosticMessages.nameCollision('Enum', 'Enum', 'Direction'),
                 relatedInformation: [{
                     location: util.createLocationFromRange(
-                        URI.file(s`${rootDir}/source/main.bs`).toString(),
+                        util.pathToUri(s`${rootDir}/source/main.bs`),
                         util.createRange(5, 21, 5, 30)
                     ),
                     message: 'Enum declared here'
                 },
                 {
                     location: util.createLocationFromRange(
-                        URI.file(s`${rootDir}/source/main.bs`).toString(),
+                        util.pathToUri(s`${rootDir}/source/main.bs`),
                         util.createRange(1, 21, 1, 30)
                     ),
                     message: `In scope 'source'`
@@ -243,14 +242,14 @@ describe('EnumStatement', () => {
                 ...DiagnosticMessages.nameCollision('Enum', 'Enum', 'Direction'),
                 relatedInformation: [{
                     location: util.createLocationFromRange(
-                        URI.file(s`${rootDir}/source/main.bs`).toString(),
+                        util.pathToUri(s`${rootDir}/source/main.bs`),
                         util.createRange(1, 21, 1, 30)
                     ),
                     message: 'Enum declared here'
                 },
                 {
                     location: util.createLocationFromRange(
-                        URI.file(s`${rootDir}/source/main.bs`).toString(),
+                        util.pathToUri(s`${rootDir}/source/main.bs`),
                         util.createRange(5, 21, 5, 30)
                     ),
                     message: `In scope 'source'`
@@ -274,14 +273,14 @@ describe('EnumStatement', () => {
                 ...DiagnosticMessages.nameCollision('Enum', 'Enum', 'Direction'),
                 relatedInformation: [{
                     location: util.createLocationFromRange(
-                        URI.file(s`${rootDir}/source/lib.bs`).toString(),
+                        util.pathToUri(s`${rootDir}/source/lib.bs`),
                         util.createRange(1, 21, 1, 30)
                     ),
                     message: 'Enum declared here'
                 },
                 {
                     location: util.createLocationFromRange(
-                        URI.file(s`${rootDir}/source/main.bs`).toString(),
+                        util.pathToUri(s`${rootDir}/source/main.bs`),
                         util.createRange(1, 21, 1, 30)
                     ),
                     message: `In scope 'source'`
@@ -320,7 +319,7 @@ describe('EnumStatement', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.duplicateIdentifier('name'),
-                range: util.createRange(3, 20, 3, 24)
+                location: { range: util.createRange(3, 20, 3, 24) }
             }]);
         });
 
@@ -334,7 +333,7 @@ describe('EnumStatement', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.enumValueMustBeType('integer'),
-                range: util.createRange(3, 24, 3, 27)
+                location: { range: util.createRange(3, 24, 3, 27) }
             }]);
         });
 
@@ -348,7 +347,7 @@ describe('EnumStatement', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.enumValueMustBeType('string'),
-                range: util.createRange(3, 24, 3, 25)
+                location: { range: util.createRange(3, 24, 3, 25) }
             }]);
         });
 
@@ -362,7 +361,7 @@ describe('EnumStatement', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.enumValueIsRequired('string'),
-                range: util.createRange(3, 20, 3, 21)
+                location: { range: util.createRange(3, 20, 3, 21) }
             }]);
         });
 
@@ -397,7 +396,7 @@ describe('EnumStatement', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.enumValueMustBeType('integer'),
-                range: util.createRange(2, 33, 2, 35)
+                location: { range: util.createRange(2, 33, 2, 35) }
             }]);
         });
 
@@ -422,7 +421,7 @@ describe('EnumStatement', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.enumValueIsRequired('string'),
-                range: util.createRange(2, 20, 2, 21)
+                location: { range: util.createRange(2, 20, 2, 21) }
             }]);
         });
 
@@ -441,10 +440,10 @@ describe('EnumStatement', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.unknownEnumValue('DOWN', 'Direction'),
-                range: util.createRange(7, 36, 7, 40)
+                location: { range: util.createRange(7, 36, 7, 40) }
             }, {
                 ...DiagnosticMessages.unknownEnumValue('down', 'Direction'),
-                range: util.createRange(8, 36, 8, 40)
+                location: { range: util.createRange(8, 36, 8, 40) }
             }]);
         });
 
@@ -465,10 +464,10 @@ describe('EnumStatement', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.unknownEnumValue('DOWN', 'Enums.Direction'),
-                range: util.createRange(2, 42, 2, 46)
+                location: { range: util.createRange(2, 42, 2, 46) }
             }, {
                 ...DiagnosticMessages.unknownEnumValue('down', 'Enums.Direction'),
-                range: util.createRange(3, 42, 3, 46)
+                location: { range: util.createRange(3, 42, 3, 46) }
             }]);
         });
     });

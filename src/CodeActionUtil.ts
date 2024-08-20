@@ -1,6 +1,7 @@
 import type { Diagnostic, Position, Range, WorkspaceEdit } from 'vscode-languageserver';
 import { CodeActionKind, CodeAction, TextEdit } from 'vscode-languageserver';
-import { URI } from 'vscode-uri';
+import type { BsDiagnostic } from './interfaces';
+import util from './util';
 
 export class CodeActionUtil {
 
@@ -9,7 +10,7 @@ export class CodeActionUtil {
             changes: {}
         } as WorkspaceEdit;
         for (const change of obj.changes) {
-            const uri = URI.file(change.filePath).toString();
+            const uri = util.pathToUri(change.filePath);
 
             //create the edit changes array for this uri
             if (!edit.changes![uri]) {
@@ -31,9 +32,9 @@ export class CodeActionUtil {
         return action;
     }
 
-    public serializableDiagnostics(diagnostics: Diagnostic[] | undefined) {
-        return diagnostics?.map(({ range, severity, code, source, message, relatedInformation }) => ({
-            range: range,
+    public serializableDiagnostics(diagnostics: BsDiagnostic[] | undefined): Diagnostic[] {
+        return diagnostics?.map(({ location, severity, code, source, message, relatedInformation }) => ({
+            range: location?.range,
             severity: severity,
             source: source,
             code: code,
@@ -47,7 +48,7 @@ export { CodeActionKind };
 
 export interface CodeActionShorthand {
     title: string;
-    diagnostics?: Diagnostic[];
+    diagnostics?: BsDiagnostic[];
     kind?: CodeActionKind;
     isPreferred?: boolean;
     changes: Array<InsertChange | ReplaceChange>;

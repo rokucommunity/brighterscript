@@ -37,7 +37,7 @@ describe('parser', () => {
             let { diagnostics } = Parser.parse(tokens);
             expect(diagnostics).to.be.lengthOf(1);
             //specifically check for the error location, because the identifier location was wrong in the past
-            expect(diagnostics[0].range).to.deep.include(
+            expect(diagnostics[0].location.range).to.deep.include(
                 Range.create(1, 4, 1, 8)
             );
         });

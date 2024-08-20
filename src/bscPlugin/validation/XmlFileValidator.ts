@@ -25,8 +25,7 @@ export class XmlFileValidator {
             //not a SG component
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.xmlComponentMissingComponentDeclaration(),
-                range: rootElement.location?.range,
-                file: this.event.file
+                location: rootElement.location
             });
             return;
         }
@@ -35,15 +34,13 @@ export class XmlFileValidator {
         if (!componentElement.name) {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.xmlComponentMissingNameAttribute(),
-                range: componentElement.tokens.startTagName.location?.range,
-                file: this.event.file
+                location: componentElement.tokens.startTagName.location
             });
         }
         if (!componentElement.extends) {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.xmlComponentMissingExtendsAttribute(),
-                range: componentElement.tokens.startTagName.location?.range,
-                file: this.event.file
+                location: componentElement.tokens.startTagName.location
             });
         }
 
@@ -56,8 +53,7 @@ export class XmlFileValidator {
         if (explicitCodebehindScriptTag) {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.unnecessaryCodebehindScriptImport(),
-                file: this.event.file,
-                range: explicitCodebehindScriptTag.filePathRange
+                location: util.createLocationFromFileRange(this.event.file, explicitCodebehindScriptTag.filePathRange)
             });
         }
     }

@@ -1,7 +1,7 @@
 import type { BsDiagnostic } from './interfaces';
 import * as assert from 'assert';
 import chalk from 'chalk';
-import type { CodeDescription, CompletionItem, Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, Range } from 'vscode-languageserver';
+import type { CodeDescription, CompletionItem, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, Location } from 'vscode-languageserver';
 import { createSandbox } from 'sinon';
 import { expect } from './chai-config.spec';
 import type { CodeActionShorthand } from './CodeActionUtil';
@@ -21,7 +21,7 @@ export const stagingDir = s`${tempDir}/stagingDir`;
 
 export const trim = undent;
 
-type DiagnosticCollection = { getDiagnostics(): Array<Diagnostic> } | { diagnostics?: Diagnostic[] } | Diagnostic[];
+type DiagnosticCollection = { getDiagnostics(): Array<BsDiagnostic>; getFile?: (path: string, normalize: boolean) => BscFile } | { diagnostics?: BsDiagnostic[] } | BsDiagnostic[];
 
 function getDiagnostics(arg: DiagnosticCollection): BsDiagnostic[] {
     if (Array.isArray(arg)) {
@@ -39,10 +39,10 @@ function sortDiagnostics(diagnostics: BsDiagnostic[]) {
     return diagnostics.sort(
         firstBy<BsDiagnostic>('code')
             .thenBy<BsDiagnostic>('message')
-            .thenBy<BsDiagnostic>((a, b) => (a.range?.start?.line ?? 0) - (b.range?.start?.line ?? 0))
-            .thenBy<BsDiagnostic>((a, b) => (a.range?.start?.character ?? 0) - (b.range?.start?.character ?? 0))
-            .thenBy<BsDiagnostic>((a, b) => (a.range?.end?.line ?? 0) - (b.range?.end?.line ?? 0))
-            .thenBy<BsDiagnostic>((a, b) => (a.range?.end?.character ?? 0) - (b.range?.end?.character ?? 0))
+            .thenBy<BsDiagnostic>((a, b) => (a.location?.range?.start?.line ?? 0) - (b.location?.range?.start?.line ?? 0))
+            .thenBy<BsDiagnostic>((a, b) => (a.location?.range?.start?.character ?? 0) - (b.location?.range?.start?.character ?? 0))
+            .thenBy<BsDiagnostic>((a, b) => (a.location?.range?.end?.line ?? 0) - (b.location?.range?.end?.line ?? 0))
+            .thenBy<BsDiagnostic>((a, b) => (a.location?.range?.end?.character ?? 0) - (b.location?.range?.end?.character ?? 0))
     );
 }
 
@@ -60,7 +60,7 @@ function cloneObject<TOriginal, TTemplate>(original: TOriginal, template: TTempl
 }
 
 interface PartialDiagnostic {
-    range?: Range;
+    location?: Partial<Location>;
     severity?: DiagnosticSeverity;
     code?: number | string;
     codeDescription?: Partial<CodeDescription>;
@@ -80,8 +80,12 @@ function cloneDiagnostic(actualDiagnosticInput: BsDiagnostic, expectedDiagnostic
     const actualDiagnostic = cloneObject(
         actualDiagnosticInput,
         expectedDiagnostic,
-        ['message', 'code', 'range', 'severity', 'relatedInformation', 'legacyCode']
+        ['message', 'code', 'severity', 'relatedInformation', 'legacyCode']
     );
+    //clone Location if available
+    if (expectedDiagnostic.location) {
+        actualDiagnostic.location = cloneObject(actualDiagnosticInput.location, expectedDiagnostic.location, ['uri', 'range']) as any;
+    }
     //deep clone relatedInformation if available
     if (actualDiagnostic.relatedInformation) {
         for (let j = 0; j < actualDiagnostic.relatedInformation.length; j++) {
@@ -91,14 +95,6 @@ function cloneDiagnostic(actualDiagnosticInput: BsDiagnostic, expectedDiagnostic
                 ['location', 'message']
             ) as any;
         }
-    }
-    //deep clone file info if available
-    if (actualDiagnostic.file) {
-        actualDiagnostic.file = cloneObject(
-            actualDiagnostic.file,
-            expectedDiagnostic?.file,
-            ['srcPath', 'destPath', 'pkgPath']
-        ) as any;
     }
     return actualDiagnostic;
 }
@@ -189,9 +185,11 @@ export function expectZeroDiagnostics(arg: DiagnosticCollection) {
         for (const diagnostic of diagnostics) {
             //escape any newlines
             diagnostic.message = diagnostic.message.replace(/\r/g, '\\r').replace(/\n/g, '\\n');
-            message += `\n        • bs${diagnostic.code} "${diagnostic.message}" at ${diagnostic.file?.srcPath ?? ''}#(${diagnostic.range?.start.line}:${diagnostic.range?.start.character})-(${diagnostic.range?.end.line}:${diagnostic.range?.end.character})`;
+            message += `\n        • bs${diagnostic.code} "${diagnostic.message}" at ${diagnostic.location?.uri ?? ''}#(${diagnostic.location.range?.start.line}:${diagnostic.location.range?.start.character})-(${diagnostic.location.range?.end.line}:${diagnostic.location.range?.end.character})`;
             //print the line containing the error (if we can find it)srcPath
-            const line = (diagnostic.file as BrsFile)?.fileContents?.split(/\r?\n/g)?.[diagnostic.range?.start.line];
+            const file = (arg as any).getFile(diagnostic.location.uri);
+
+            const line = (file as BrsFile)?.fileContents?.split(/\r?\n/g)?.[diagnostic.location.range?.start.line];
             if (line) {
                 message += '\n' + getDiagnosticLine(diagnostic, line, chalk.red);
             }

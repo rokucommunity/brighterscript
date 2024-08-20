@@ -1033,4 +1033,4 @@ export interface DiagnosticInfo {
 export type DiagnosticMessageType<K extends keyof D, D extends Record<string, (...args: any) => any> = typeof DiagnosticMessages> =
     ReturnType<D[K]> &
     //include the missing properties from BsDiagnostic
-    Pick<BsDiagnostic, 'range' | 'file' | 'relatedInformation' | 'tags'>;
+    Pick<BsDiagnostic, 'code' | 'location' | 'relatedInformation' | 'tags'>;

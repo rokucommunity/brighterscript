@@ -1,7 +1,7 @@
 import { expect } from '../chai-config.spec';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { getTestTranspile, trim } from '../testHelpers.spec';
+import { expectDiagnostics, getTestTranspile, trim } from '../testHelpers.spec';
 import SGParser from './SGParser';
 import { createSandbox } from 'sinon';
 import { Program } from '../Program';
@@ -102,14 +102,13 @@ describe('SGParser', () => {
             </component>
         `);
         expect(parser.diagnostics).to.be.lengthOf(2);
-        expect(parser.diagnostics[0]).to.deep.include({
+        expectDiagnostics(parser, [{
             ...DiagnosticMessages.xmlUnexpectedTag('unexpected'),
-            range: Range.create(3, 9, 3, 19)
-        });
-        expect(parser.diagnostics[1]).to.deep.include({
+            location: { range: Range.create(3, 9, 3, 19) }
+        }, {
             ...DiagnosticMessages.xmlUnexpectedTag('unexpectedToo'),
-            range: Range.create(5, 5, 5, 18)
-        });
+            location: { range: Range.create(5, 5, 5, 18) }
+        }]);
     });
 
     it('Adds error when a leaf tag is found to have children', () => {
@@ -127,15 +126,13 @@ describe('SGParser', () => {
                 </script>
             </component>
         `);
-        expect(parser.diagnostics).to.be.lengthOf(2);
-        expect(parser.diagnostics[0]).to.deep.include({
+        expectDiagnostics(parser, [{
             ...DiagnosticMessages.xmlUnexpectedChildren('field'),
-            range: Range.create(3, 9, 3, 14)
-        });
-        expect(parser.diagnostics[1]).to.deep.include({
+            location: { range: Range.create(3, 9, 3, 14) }
+        }, {
             ...DiagnosticMessages.xmlUnexpectedChildren('script'),
-            range: Range.create(7, 5, 7, 11)
-        });
+            location: { range: Range.create(7, 5, 7, 11) }
+        }]);
     });
 
     it('Adds error when whitespace appears before the prolog', () => {
@@ -147,13 +144,12 @@ describe('SGParser', () => {
             </component>`
         );
         expect(parser.diagnostics).to.be.lengthOf(2);
-        expect(parser.diagnostics[0]).to.deep.include({ // expecting opening tag but got prolog
-            code: DiagnosticMessages.syntaxError('').code,
-            range: Range.create(1, 12, 1, 18)
-        });
-        expect(parser.diagnostics[1]).to.deep.include({
+        expectDiagnostics(parser, [{ // expecting opening tag but got prolog
+            code: DiagnosticMessages.syntaxError('Expecting token of type --> OPEN <-- but found --> \'<?xml \' <--').code,
+            location: { range: Range.create(1, 12, 1, 18) }
+        }, {
             ...DiagnosticMessages.syntaxError('Syntax error: whitespace found before the XML prolog'),
-            range: Range.create(0, 0, 1, 12)
-        });
+            location: { range: Range.create(0, 0, 1, 12) }
+        }]);
     });
 });

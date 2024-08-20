@@ -11,7 +11,7 @@ import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, TranspileResult, TypeChainEntry, TypeChainProcessResult, GetTypeOptions } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, TranspileResult, TypeChainEntry, TypeChainProcessResult, GetTypeOptions, ExtraSymbolData } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -26,7 +26,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { LogLevel, createLogger } from './logging';
 import { isToken, type Identifier, type Locatable, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLiteralString, isLongIntegerType, isNamespaceType, isNewExpression, isNumberType, isStatement, isStringType, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUnionType, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLiteralString, isLongIntegerType, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isReferenceType, isStatement, isStringType, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUnionType, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import * as requireRelative from 'require-relative';
@@ -46,7 +46,8 @@ import { BinaryOperatorReferenceType } from './types/ReferenceType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { ComponentType } from './types/ComponentType';
 import { FunctionType } from './types/FunctionType';
-import type { AssignmentStatement } from './parser/Statement';
+import type { AssignmentStatement, NamespaceStatement } from './parser/Statement';
+import type { BscFile } from './files/BscFile';
 
 export class Util {
     public clearConsole() {
@@ -204,10 +205,10 @@ export class Util {
                 let err = parseErrors[0];
                 let diagnostic = {
                     ...DiagnosticMessages.syntaxError(`Syntax errors in bsconfig.json: ${printParseErrorCode(parseErrors[0].error)}`),
-                    file: {
-                        srcPath: configFilePath
-                    },
-                    range: this.getRangeFromOffsetLength(projectFileContents, err.offset, err.length)
+                    location: {
+                        uri: this.pathToUri(configFilePath),
+                        range: this.getRangeFromOffsetLength(projectFileContents, err.offset, err.length)
+                    }
                 } as BsDiagnostic;
                 throw diagnostic; //eslint-disable-line @typescript-eslint/no-throw-literal
             }
@@ -519,6 +520,17 @@ export class Util {
         return path.join(...resultParts);
     }
 
+    public getImportPackagePath(srcPath: string, pkgTargetPath: string) {
+        const srcExt = this.getExtension(srcPath);
+        const lowerSrcExt = srcExt.toLowerCase();
+        const lowerTargetExt = this.getExtension(pkgTargetPath).toLowerCase();
+        if (lowerSrcExt === '.bs' && lowerTargetExt === '.brs') {
+            // if source is .bs, use that as the import extenstion
+            return pkgTargetPath.substring(0, pkgTargetPath.length - lowerTargetExt.length) + srcExt;
+        }
+        return pkgTargetPath;
+    }
+
     /**
      * Walks left in a DottedGetExpression and returns a VariableExpression if found, or undefined if not found
      */
@@ -744,7 +756,7 @@ export class Util {
     /**
      * Does the string appear to be a uri (i.e. does it start with `file:`)
      */
-    private isUriLike(filePath: string) {
+    public isUriLike(filePath: string) {
         return filePath?.indexOf('file:') === 0;// eslint-disable-line @typescript-eslint/prefer-string-starts-ends-with
     }
 
@@ -867,26 +879,6 @@ export class Util {
         }
     }
 
-    /**
-     * Determine whether this diagnostic should be supressed or not, based on brs comment-flags
-     */
-    public diagnosticIsSuppressed(diagnostic: BsDiagnostic) {
-        const diagnosticCode = typeof diagnostic.code === 'string' ? diagnostic.code.toLowerCase() : diagnostic.code?.toString() ?? undefined;
-        const diagnosticLegacyCode = typeof diagnostic.legacyCode === 'string' ? diagnostic.legacyCode.toLowerCase() : diagnostic.legacyCode;
-        for (let flag of diagnostic.file?.commentFlags ?? []) {
-            //this diagnostic is affected by this flag
-            if (diagnostic.range && this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
-                //if the flag acts upon this diagnostic's code
-                const diagCodeSuppressed = (diagnosticCode !== undefined && flag.codes?.includes(diagnosticCode)) ||
-                    (diagnosticLegacyCode !== undefined && flag.codes?.includes(diagnosticLegacyCode));
-                if (flag.codes === null || diagCodeSuppressed) {
-                    return true;
-                }
-
-            }
-        }
-        return false;
-    }
 
     /**
      * Walks up the chain to find the closest bsconfig.json file
@@ -1104,6 +1096,13 @@ export class Util {
             uri: util.pathToUri(uri),
             range: range
         };
+    }
+
+    /**
+     * Helper for creating `Location` objects from a file and range
+     */
+    public createLocationFromFileRange(file: BscFile, range: Range): Location {
+        return this.createLocationFromRange(this.pathToUri(file?.srcPath), range);
     }
 
     /**
@@ -1788,9 +1787,13 @@ export class Util {
                 location: util.createLocationFromRange('   ', util.createRange(0, 0, 0, 0))
             });
         }
+
+        const range = (diagnostic as BsDiagnostic).location?.range ??
+            (diagnostic as Diagnostic).range;
+
         let result = {
             severity: diagnostic.severity,
-            range: diagnostic.range,
+            range: range,
             message: diagnostic.message,
             relatedInformation: relatedInformation.map(x => {
 
@@ -1799,7 +1802,7 @@ export class Util {
                 if (!clone.location) {
                     // use the fallback location if available
                     if (relatedInformationFallbackLocation) {
-                        clone.location = util.createLocationFromRange(relatedInformationFallbackLocation, diagnostic.range);
+                        clone.location = util.createLocationFromRange(relatedInformationFallbackLocation, range);
                     } else {
                         //remove this related information so it doesn't bring crash the language server
                         return undefined;
@@ -2078,8 +2081,7 @@ export class Util {
         if (fileDepth >= 8) {
             file.program?.diagnostics.register({
                 ...DiagnosticMessages.detectedTooDeepFileSource(fileDepth),
-                file: file,
-                range: this.createRange(0, 0, 0, Number.MAX_VALUE)
+                location: util.createLocationFromFileRange(file, this.createRange(0, 0, 0, Number.MAX_VALUE))
             });
         }
     }
@@ -2343,6 +2345,64 @@ export class Util {
                 }
             }
         }
+    }
+
+    public symbolComesFromSameNode(symbolName: string, definingNode: AstNode, symbolTable: SymbolTable) {
+        let nsData: ExtraSymbolData = {};
+        symbolTable.getSymbolType(symbolName, { flags: SymbolTypeFlag.runtime, data: nsData });
+
+        if (definingNode === nsData?.definingNode) {
+            return true;
+        }
+        return false;
+    }
+
+    public isCalleeMemberOfNamespace(symbolName: string, nodeWhereUsed: AstNode, namespace?: NamespaceStatement) {
+        namespace = namespace ?? nodeWhereUsed.findAncestor<NamespaceStatement>(isNamespaceStatement);
+
+        if (!this.isVariableMemberOfNamespace(symbolName, nodeWhereUsed, namespace)) {
+            return false;
+        }
+        const exprType = nodeWhereUsed.getType({ flags: SymbolTypeFlag.runtime });
+
+        if (isCallableType(exprType) || isClassType(exprType)) {
+            return true;
+        }
+        return false;
+    }
+
+    public isVariableMemberOfNamespace(symbolName: string, nodeWhereUsed: AstNode, namespace?: NamespaceStatement) {
+        namespace = namespace ?? nodeWhereUsed.findAncestor<NamespaceStatement>(isNamespaceStatement);
+        if (!isNamespaceStatement(namespace)) {
+            return false;
+        }
+        let varData: ExtraSymbolData = {};
+        nodeWhereUsed.getType({ flags: SymbolTypeFlag.runtime, data: varData });
+        return this.symbolComesFromSameNode(symbolName, varData?.definingNode, namespace.getSymbolTable());
+    }
+
+    public isVariableShadowingSomething(symbolName: string, nodeWhereUsed: AstNode) {
+        let varData: ExtraSymbolData = {};
+        let exprType = nodeWhereUsed.getType({ flags: SymbolTypeFlag.runtime, data: varData });
+        if (isReferenceType(exprType)) {
+            exprType = (exprType as any).getTarget();
+        }
+        const namespace = nodeWhereUsed?.findAncestor<NamespaceStatement>(isNamespaceStatement);
+
+        if (isNamespaceStatement(namespace)) {
+            let namespaceHasSymbol = namespace.getSymbolTable().hasSymbol(symbolName, SymbolTypeFlag.runtime);
+            // check if the namespace has a symbol with the same name, but different definiton
+            if (namespaceHasSymbol && !this.symbolComesFromSameNode(symbolName, varData.definingNode, namespace.getSymbolTable())) {
+                return true;
+            }
+        }
+        const bodyTable = nodeWhereUsed.getRoot().getSymbolTable();
+        const hasSymbolAtFileLevel = bodyTable.hasSymbol(symbolName, SymbolTypeFlag.runtime);
+        if (hasSymbolAtFileLevel && !this.symbolComesFromSameNode(symbolName, varData.definingNode, bodyTable)) {
+            return true;
+        }
+
+        return false;
     }
 }
 

@@ -7,7 +7,6 @@ import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
-import { URI } from 'vscode-uri';
 import type { FunctionStatement, PrintStatement } from './parser/Statement';
 import { EmptyStatement } from './parser/Statement';
 import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
@@ -25,6 +24,7 @@ import { StringType, TypedFunctionType, DynamicType, FloatType, IntegerType, Int
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { ComponentType } from './types/ComponentType';
 import * as path from 'path';
+import undent from 'undent';
 
 const sinon = createSandbox();
 
@@ -63,9 +63,8 @@ describe('Program', () => {
     it('allows diagnostics to be set on AssetFile', () => {
         const file = program.setFile<AssetFile>('manifest', ``);
         program.diagnostics.register({
-            file: file,
             message: 'Manifest is totally bogus',
-            range: util.createRange(0, 0, 0, 10),
+            location: util.createLocationFromFileRange(file, util.createRange(0, 0, 0, 10)),
             code: 10
         });
         program.validate();
@@ -235,6 +234,28 @@ describe('Program', () => {
         });
     });
 
+    describe('getFile', () => {
+        it('can get a file from the srcPath', () => {
+            const file = program.setFile({
+                src: s`${rootDir}/source/main.brs`,
+                dest: s`${rootDir}/source/maindest.brs`
+            }, '');
+            expect(program.getFile(s`${rootDir}/source/main.brs`)).to.exist;
+            expect(program.getFile(s`${rootDir}\\source\\main.brs`)).to.exist;
+            expect(program.getFile(s`${rootDir}/SOURCE/MAIN.brs`, true)).to.exist;
+
+            expect(program.getFile(file.srcPath)).to.exist;
+        });
+
+        it('can get a file from the uri', () => {
+            const file = program.setFile({
+                src: s`${rootDir}/source/main.brs`,
+                dest: s`${rootDir}/source/maindest.brs`
+            }, '');
+            expect(program.getFile(util.pathToUri(file?.srcPath))).to.exist;
+        });
+    });
+
     describe('validate', () => {
         it('retains expressions after validate', () => {
             const file = program.setFile<BrsFile>('source/main.bs', `
@@ -260,22 +281,24 @@ describe('Program', () => {
                 </component>
             `);
             program.validate();
+            // the duplicate of component1.xml, which is in component2.xml is first
+            // the duplicate of component2.xml, which is in component1.xml is second
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.duplicateComponentName('Component1'),
-                range: Range.create(1, 17, 1, 27),
+                location: { range: Range.create(1, 17, 1, 27) },
                 relatedInformation: [{
                     location: util.createLocationFromRange(
-                        URI.file(s`${rootDir}/components/component1.xml`).toString(),
+                        util.pathToUri(s`${rootDir}/components/component2.xml`),
                         Range.create(1, 17, 1, 27)
                     ),
                     message: 'Also defined here'
                 }]
             }, {
                 ...DiagnosticMessages.duplicateComponentName('Component1'),
-                range: Range.create(1, 17, 1, 27),
+                location: { range: Range.create(1, 17, 1, 27) },
                 relatedInformation: [{
                     location: util.createLocationFromRange(
-                        URI.file(s`${rootDir}/components/component2.xml`).toString(),
+                        util.pathToUri(s`${rootDir}/components/component1.xml`),
                         Range.create(1, 17, 1, 27)
                     ),
                     message: 'Also defined here'
@@ -690,7 +713,7 @@ describe('Program', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.referencedFileDoesNotExist(),
-                range: Range.create(2, 42, 2, 72)
+                location: { range: Range.create(2, 42, 2, 72) }
             }]);
         });
 
@@ -2677,6 +2700,35 @@ describe('Program', () => {
             expect(
                 fsExtra.pathExistsSync(`${stagingDir}/source/bslib.brs`)
             ).to.be.true;
+        });
+
+        it('transpiles namespaces properly', async () => {
+            program.options.autoImportComponentScript = true;
+            program.setFile('manifest', '');
+            program.setFile('components/MainScene.xml', trim`
+                <component name="MainScene" extends="Scene">
+                </component>
+            `);
+            program.setFile('source/main.bs', `
+                namespace alpha
+                    sub test()
+                    end sub
+                end namespace
+                sub init()
+                    alpha.test()
+                end sub
+            `);
+            await program.build();
+            expect(
+                fsExtra.readFileSync(`${stagingDir}/source/main.brs`).toString()
+            ).to.eql(undent`
+                sub alpha_test()
+                end sub
+
+                sub init()
+                    alpha_test()
+                end sub
+            `);
         });
     });
 

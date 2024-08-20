@@ -7,7 +7,7 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { BsDiagnostic, FileReference } from '../interfaces';
 import { Program } from '../Program';
 import { XmlFile } from './XmlFile';
-import { standardizePath as s } from '../util';
+import util, { standardizePath as s } from '../util';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
 import { ProgramBuilder } from '../ProgramBuilder';
 import { LogLevel } from '../logging';
@@ -159,16 +159,13 @@ describe('XmlFile', () => {
                     <script type="text/brightscript" uri="ChildScene.brs" />
                 </component>`
             );
-            const diagnostics = program.getDiagnostics();
-            expect(diagnostics).to.be.lengthOf(2);
-            expect(diagnostics[0]).to.deep.include({ // expecting opening tag but got prolog
+            expectDiagnostics(program, [{ // expecting opening tag but got prolog
                 code: DiagnosticMessages.syntaxError('').code,
-                range: Range.create(1, 16, 1, 22)
-            });
-            expect(diagnostics[1]).to.deep.include({
+                location: { range: Range.create(1, 16, 1, 22) }
+            }, {
                 ...DiagnosticMessages.syntaxError('Syntax error: whitespace found before the XML prolog'),
-                range: Range.create(0, 0, 1, 16)
-            });
+                location: { range: Range.create(0, 0, 1, 16) }
+            }]);
         });
 
         it('Adds error when an unknown tag is found in xml', () => {
@@ -182,16 +179,13 @@ describe('XmlFile', () => {
                     <unexpectedToo />
                 </component>
             `);
-            const diagnostics = program.getDiagnostics();
-            expect(diagnostics).to.be.lengthOf(2);
-            expect(diagnostics[0]).to.deep.include({
+            expectDiagnostics(program, [{
                 ...DiagnosticMessages.xmlUnexpectedTag('unexpected'),
-                range: Range.create(3, 9, 3, 19)
-            });
-            expect(diagnostics[1]).to.deep.include({
+                location: { range: Range.create(3, 9, 3, 19) }
+            }, {
                 ...DiagnosticMessages.xmlUnexpectedTag('unexpectedToo'),
-                range: Range.create(5, 5, 5, 18)
-            });
+                location: { range: Range.create(5, 5, 5, 18) }
+            }]);
         });
 
         it('Adds error when no component is declared in xml', () => {
@@ -200,7 +194,7 @@ describe('XmlFile', () => {
             expectDiagnostics(program, [
                 {
                     ...DiagnosticMessages.xmlUnexpectedTag('script'),
-                    range: Range.create(0, 1, 0, 7)
+                    location: { range: Range.create(0, 1, 0, 7) }
                 },
                 DiagnosticMessages.xmlComponentMissingComponentDeclaration()
             ]);
@@ -216,7 +210,7 @@ describe('XmlFile', () => {
             program.validate();
             expectDiagnosticsIncludes(program, [{
                 message: DiagnosticMessages.xmlComponentMissingNameAttribute().message,
-                range: Range.create(1, 1, 1, 10)
+                location: { range: Range.create(1, 1, 1, 10) }
             }]);
         });
 
@@ -232,7 +226,7 @@ describe('XmlFile', () => {
             expect(diagnostics[0].code).to.equal(DiagnosticMessages.syntaxError('').code); //unexpected character '1'
             expect(diagnostics[1]).to.deep.include(<BsDiagnostic>{
                 code: DiagnosticMessages.xmlComponentMissingNameAttribute().code,
-                range: Range.create(1, 1, 1, 10)
+                location: util.createLocationFromFileRange(file, Range.create(1, 1, 1, 10))
             });
         });
 
@@ -1045,9 +1039,8 @@ describe('XmlFile', () => {
                 for (const file of event.files) {
                     if (isXmlFile(file)) {
                         program.diagnostics.register({
-                            file: file,
                             message: 'Test diagnostic',
-                            range: Range.create(0, 0, 0, 0),
+                            location: util.createLocationFromFileRange(file, Range.create(0, 0, 0, 0)),
                             code: 9999
                         });
                     }

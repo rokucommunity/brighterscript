@@ -1,7 +1,8 @@
 import { expect } from './chai-config.spec';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
 import type { BsDiagnostic } from './interfaces';
-import { standardizePath as s } from './util';
+import { Program } from './Program';
+import util, { standardizePath as s } from './util';
 import { createSandbox } from 'sinon';
 const sinon = createSandbox();
 let rootDir = s`${process.cwd()}/rootDir`;
@@ -256,6 +257,11 @@ describe('DiagnosticFilterer', () => {
 
     describe('filtering by dest', () => {
         it('will filter by a files destPath', () => {
+            const program = new Program({ rootDir: rootDir });
+            program.setFile('source/common.brs', '');
+            program.setFile({ src: `${rootDir}/source/utils.brs`, dest: `source/remove/utils.brs` }, '');
+            program.setFile({ src: `${rootDir}/components/utils.brs`, dest: `source/remove/utils2.brs` }, '');
+
             const resultDiagnostics = filterer.filter({
                 rootDir: rootDir,
                 diagnosticFilters: [
@@ -270,9 +276,9 @@ describe('DiagnosticFilterer', () => {
                 getDiagnostic('diagCode', `${rootDir}/source/common.brs`), //keep
                 getDiagnostic('diagCode', `${rootDir}/source/utils.brs`, `${rootDir}/source/remove/utils.brs`), //remove
                 getDiagnostic('diagCode', `${rootDir}/components/utils.brs`, `${rootDir}/source/remove/utils2.brs`) //remove
-            ]);
+            ], program);
             expect(resultDiagnostics.map(x => x.code)).to.eql(['diagCode']);
-            expect(resultDiagnostics.map(x => x.file.srcPath)).to.eql([s`${rootDir}/source/common.brs`]);
+            expect(resultDiagnostics.map(x => x.location.uri)).to.eql([util.pathToUri(s`${rootDir}/source/common.brs`)]);
         });
 
         it('respects order of ignores with negative globs', () => {
@@ -312,11 +318,11 @@ describe('DiagnosticFilterer', () => {
             return acc + 1;
         }, 0);
         expect(stub.callCount).to.eql(expectedCallCount * 2); // 2 times for 'codename', 2 times for { codes: [1, 2, 3, 'X4'] }
-        expect(stub.getCalls().map(x => x.args[1])).to.eql([
-            s`${rootDir.toLowerCase()}/source/common1.brs`,
-            s`${rootDir.toLowerCase()}/source/common2.brs`,
-            s`${rootDir.toLowerCase()}/source/common1.brs`,
-            s`${rootDir.toLowerCase()}/source/common2.brs`
+        expect(stub.getCalls().map(x => x.args[1].toLowerCase())).to.eql([
+            util.pathToUri(s`${rootDir.toLowerCase()}/source/common1.brs`).toLowerCase(),
+            util.pathToUri(s`${rootDir.toLowerCase()}/source/common2.brs`).toLowerCase(),
+            util.pathToUri(s`${rootDir.toLowerCase()}/source/common1.brs`).toLowerCase(),
+            util.pathToUri(s`${rootDir.toLowerCase()}/source/common2.brs`).toLowerCase()
         ]);
     });
 
@@ -325,9 +331,8 @@ describe('DiagnosticFilterer', () => {
 function getDiagnostic(code: number | string, srcPath: string, destPath?: string) {
     destPath = destPath ?? srcPath;
     return {
-        file: {
-            srcPath: s`${srcPath}`,
-            destPath: s`${destPath}`
+        location: {
+            uri: util.pathToUri(s`${srcPath}`)
         },
         code: code
     } as BsDiagnostic;
