@@ -1744,7 +1744,7 @@ export class Parser {
         }
         if (this.peek().kind !== TokenKind.EndTry) {
             this.diagnostics.push({
-                ...DiagnosticMessages.expectedEndTryToTerminateTryCatch(),
+                ...DiagnosticMessages.expectedTerminator('end try', 'try-catch'),
                 location: this.peek().location
             });
         } else {
@@ -1959,7 +1959,7 @@ export class Parser {
                 } else {
                     //missing endif
                     this.diagnostics.push({
-                        ...DiagnosticMessages.expectedEndIfToCloseIfStatement(ifToken.location?.range.start),
+                        ...DiagnosticMessages.expectedTerminator('end if', 'if'),
                         location: ifToken.location
                     });
                 }
@@ -1995,7 +1995,7 @@ export class Parser {
 
             //this whole if statement is bogus...add error to the if token and hard-fail
             this.diagnostics.push({
-                ...DiagnosticMessages.expectedEndIfElseIfOrElseToTerminateThenBlock(),
+                ...DiagnosticMessages.expectedTerminator(['end if', 'else if', 'else'], 'then', 'block'),
                 location: ifToken.location
             });
             throw this.lastDiagnosticAsError();
@@ -2068,7 +2068,7 @@ export class Parser {
             } else {
                 //missing #endif
                 this.diagnostics.push({
-                    ...DiagnosticMessages.expectedHashEndIfToCloseHashIf(hashIfToken.location?.range.start.line),
+                    ...DiagnosticMessages.expectedTerminator('#end if', '#if'),
                     location: hashIfToken.location
                 });
             }

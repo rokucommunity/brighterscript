@@ -2116,7 +2116,7 @@ describe('parser', () => {
                 end sub
             `, ParseMode.BrighterScript, { debug: true });
             expectDiagnostics(diagnostics, [
-                DiagnosticMessages.expectedEndIfToCloseIfStatement({ line: 3, character: 20 }).message,
+                DiagnosticMessages.expectedTerminator('end if', 'if').message,
                 DiagnosticMessages.unexpectedToken('end if').message
             ]);
         });

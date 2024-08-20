@@ -375,20 +375,25 @@ export let DiagnosticMessages = {
         legacyCode: 1057,
         severity: DiagnosticSeverity.Error
     }),
-    expectedEndIfElseIfOrElseToTerminateThenBlock: () => ({
+    expectedTerminator: (expectedTerminators: string[] | string, statementType: string, blockDescriptor: 'block' | 'statement' = 'statement') => ({
+        message: `Expected ${getPossibilitiesString(expectedTerminators)} to terminate '${statementType}' ${blockDescriptor}`,
+        severity: DiagnosticSeverity.Error,
+        code: 'expected-terminator'
+    }),
+    __unused14: () => ({
         message: `Expected 'end if', 'else if', or 'else' to terminate 'then' block`,
         legacyCode: 1058,
         severity: DiagnosticSeverity.Error,
         code: 'expected-terminator-on-then'
     }),
-    expectedEndTryToTerminateTryCatch: () => ({
+    __unused15: () => ({
         message: `Expected 'end try' to terminate 'try-catch' statement`,
         legacyCode: 1059,
         severity: DiagnosticSeverity.Error,
         code: 'expected-terminator-on-try-catch'
     }),
-    expectedEndIfToCloseIfStatement: (startingPosition: Position) => ({
-        message: `Expected 'end if' to close 'if' statement started at ${startingPosition?.line + 1}:${startingPosition?.character + 1}`,
+    __unused16: (startingPosition: Position) => ({
+        message: `Expected 'end if' to close 'if' statement started at ${startingPosition?.line + 1}:${startingPosition?.character + 1} `,
         legacyCode: 1060,
         severity: DiagnosticSeverity.Error,
         code: 'expected-terminator-on-if'
@@ -412,7 +417,7 @@ export let DiagnosticMessages = {
         code: 'unexpected-operator'
     }),
     __unused13: () => ({
-        message: `Increment/decrement operators are not allowed on function calls`,
+        message: `Increment / decrement operators are not allowed on function calls`,
         legacyCode: 1064,
         severity: DiagnosticSeverity.Error,
         code: 'increment-decrement-on-function-call'
@@ -425,7 +430,7 @@ export let DiagnosticMessages = {
     }),
     expectedStatementOrFunctionCallButReceivedExpression: () => ({
         message: `Expected statement or function call but instead found expression`,
-        legacylegacyCode: 1066,
+        legacyCode: 1066,
         severity: DiagnosticSeverity.Error,
         code: 'expected-statement-not-expression'
     }),
@@ -472,7 +477,7 @@ export let DiagnosticMessages = {
         code: 'expected-property-name'
     }),
     tooManyCallableArguments: (actual: number, max: number) => ({
-        message: `Cannot have more than ${max} arguments but found ${actual}`,
+        message: `Cannot have more than ${max} arguments but found ${actual} `,
         legacyCode: 1074,
         severity: DiagnosticSeverity.Error,
         code: 'too-many-arguments'
@@ -523,7 +528,7 @@ export let DiagnosticMessages = {
      * Used in the lexer anytime we encounter an unsupported character
      */
     unexpectedCharacter: (text: string) => ({
-        message: `Unexpected character '${text}' (char code ${text?.charCodeAt(0)})`,
+        message: `Unexpected character '${text}'(char code ${text?.charCodeAt(0)})`,
         legacyCode: 1082,
         severity: DiagnosticSeverity.Error,
         code: 'unexpected-character'
@@ -547,7 +552,7 @@ export let DiagnosticMessages = {
         code: 'fractional-hex-literal'
     }),
     unexpectedConditionalCompilationString: () => ({
-        message: `Unexpected conditional-compilation string`,
+        message: `Unexpected conditional - compilation string`,
         legacyCode: 1086,
         severity: DiagnosticSeverity.Error,
         code: 'unexpected-conditional-compilation'
@@ -583,7 +588,7 @@ export let DiagnosticMessages = {
         code: 'invalid-hash-if-value'
     }),
     hashError: (message: string) => ({
-        message: `#error ${message}`,
+        message: `#error ${message} `,
         legacyCode: 1092,
         severity: DiagnosticSeverity.Error,
         code: 'hash-error'
@@ -594,8 +599,8 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'expected-equal-after-const'
     }),
-    expectedHashEndIfToCloseHashIf: (startingLine: number) => ({
-        message: `Expected '#end if' to close '#if' conditional compilation statement starting on line ${startingLine}`,
+    __unused17: (startingLine: number) => ({
+        message: `Expected '#end if' to close '#if' conditional compilation statement starting on line ${startingLine} `,
         legacyCode: 1094,
         severity: DiagnosticSeverity.Error,
         code: 'expected-terminator-on-hash-if'
@@ -619,7 +624,7 @@ export let DiagnosticMessages = {
         code: 'expected-attribute-name'
     }),
     childFieldTypeNotAssignableToBaseProperty: (childTypeName: string, baseTypeName: string, fieldName: string, childFieldType: string, parentFieldType: string) => ({
-        message: `Field '${fieldName}' in class '${childTypeName}' is not assignable to the same field in base class '${baseTypeName}'. Type '${childFieldType}' is not assignable to type '${parentFieldType}'.`,
+        message: `Field '${fieldName}' in class '${childTypeName}' is not assignable to the same field in base class '${baseTypeName}'.Type '${childFieldType}' is not assignable to type '${parentFieldType}'.`,
         legacyCode: 1098,
         severity: DiagnosticSeverity.Error,
         code: 'child-field-type-not-assignable'
@@ -661,7 +666,7 @@ export let DiagnosticMessages = {
         code: 'local-var-shadowed-by-function'
     }),
     scopeFunctionShadowedByBuiltInFunction: () => ({
-        message: `Scope function will not be accessible because it has the same name as a built-in function`,
+        message: `Scope function will not be accessible because it has the same name as a built -in function`,
         legacyCode: 1105,
         severity: DiagnosticSeverity.Error,
         code: 'function-shadowed-by-built-in-function'
@@ -811,7 +816,7 @@ export let DiagnosticMessages = {
         };
     },
     deprecatedBrightScriptComponent: (componentName: string, deprecatedDescription?: string) => ({
-        message: `${componentName} has been deprecated${deprecatedDescription ? ': ' + deprecatedDescription : ''}`,
+        message: `${componentName} has been deprecated${deprecatedDescription ? ': ' + deprecatedDescription : ''} `,
         legacyCode: 1131,
         severity: DiagnosticSeverity.Error,
         code: 'deprecated-brightscript-component'
@@ -829,7 +834,7 @@ export let DiagnosticMessages = {
         code: 'unexpected-statement'
     }),
     detectedTooDeepFileSource: (numberOfParentDirectories: number) => ({
-        message: `Expected directory depth no larger than 7, but found ${numberOfParentDirectories}`,
+        message: `Expected directory depth no larger than 7, but found ${numberOfParentDirectories} `,
         legacyCode: 1134,
         severity: DiagnosticSeverity.Error,
         code: 'directory-depth'
@@ -853,13 +858,13 @@ export let DiagnosticMessages = {
         code: 'cannout-be-used-as-variable'
     }),
     callfuncHasToManyArgs: (numberOfArgs: number) => ({
-        message: `You can not have more than 5 arguments in a callFunc. ${numberOfArgs} found.`,
+        message: `You can not have more than 5 arguments in a callFunc.${numberOfArgs} found.`,
         legacyCode: 1138,
         severity: DiagnosticSeverity.Error,
         code: 'callfunc-has-too-many-arguments'
     }),
     noOptionalChainingInLeftHandSideOfAssignment: () => ({
-        message: `Optional chaining may not be used in the left-hand side of an assignment`,
+        message: `Optional chaining may not be used in the left - hand side of an assignment`,
         legacyCode: 1139,
         severity: DiagnosticSeverity.Error,
         code: 'otional-chaining-on-left-of-assignment'
@@ -872,7 +877,7 @@ export let DiagnosticMessages = {
      * @param typeDescriptor defaults to 'type' ... could also be 'namespace', etc.
      */
     cannotFindFunction: (name: string, fullName?: string, typeName?: string, typeDescriptor = 'type') => ({
-        message: `Cannot find function '${name}'${typeName ? ` for ${typeDescriptor} '${typeName}'` : ''}`,
+        message: `Cannot find function '${name}'${typeName ? ` for ${typeDescriptor} '${typeName}'` : ''} `,
         legacyCode: 1140,
         data: {
             name: name,
@@ -883,14 +888,14 @@ export let DiagnosticMessages = {
         code: 'cannot-find-function'
     }),
     argumentTypeMismatch: (actualTypeString: string, expectedTypeString: string, data?: TypeCompatibilityData) => ({
-        message: `Argument of type '${actualTypeString}' is not compatible with parameter of type '${expectedTypeString}'${typeCompatibilityMessage(actualTypeString, expectedTypeString, data)}`,
+        message: `Argument of type '${actualTypeString}' is not compatible with parameter of type '${expectedTypeString}'${typeCompatibilityMessage(actualTypeString, expectedTypeString, data)} `,
         data: data,
         legacyCode: 1141,
         severity: DiagnosticSeverity.Error,
         code: 'argument-type-mismatch'
     }),
     returnTypeMismatch: (actualTypeString: string, expectedTypeString: string, data?: TypeCompatibilityData) => ({
-        message: `Type '${actualTypeString}' is not compatible with declared return type '${expectedTypeString}'${typeCompatibilityMessage(actualTypeString, expectedTypeString, data)}'`,
+        message: `Type '${actualTypeString}' is not compatible with declared return type '${expectedTypeString}'${typeCompatibilityMessage(actualTypeString, expectedTypeString, data)} '`,
         data: data,
         legacyCode: 1142,
         severity: DiagnosticSeverity.Error,
@@ -1007,6 +1012,26 @@ function accessModifierAdditionalInfo(accessModifierFlag: SymbolTypeFlag, classN
         return ` and only accessible from within class '${className}' and its subclasses`;
     }
     return TokenKind.Public;
+}
+
+function getPossibilitiesString(possibilities: string[] | string) {
+    if (!Array.isArray(possibilities)) {
+        return `'${possibilities}'`;
+    }
+    if (possibilities.length === 1) {
+        return `'${possibilities}'`;
+
+    }
+    let result = '';
+    for (let i = 0; i < possibilities.length; i++) {
+        result += `'${possibilities[i]}'`;
+        if (i < possibilities.length - 2) {
+            result += ', ';
+        } else if (i < possibilities.length - 1) {
+            result += ' or ';
+        }
+    }
+    return result;
 }
 
 export const DiagnosticCodeMap = {} as Record<keyof (typeof DiagnosticMessages), string>;

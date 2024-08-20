@@ -39,4 +39,13 @@ describe('DiagnosticMessages', () => {
             }
         }
     });
+
+    it('properly formats expected terminator diagnostics', () => {
+        let diag = DiagnosticMessages.expectedTerminator(['end if', 'else if', 'else'], 'then', 'block');
+        expect(diag.message).to.equal(`Expected 'end if', 'else if' or 'else' to terminate 'then' block`);
+        diag = DiagnosticMessages.expectedTerminator('end try', 'try-catch');
+        expect(diag.message).to.equal(`Expected 'end try' to terminate 'try-catch' statement`);
+        diag = DiagnosticMessages.expectedTerminator(['one', 'two'], 'something');
+        expect(diag.message).to.equal(`Expected 'one' or 'two' to terminate 'something' statement`);
+    });
 });
