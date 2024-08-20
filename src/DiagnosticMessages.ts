@@ -409,7 +409,7 @@ export let DiagnosticMessages = {
         message: `Consecutive increment/decrement operators are not allowed`,
         legacyCode: 1063,
         severity: DiagnosticSeverity.Error,
-        code: 'consecutive-increment-decrement'
+        code: 'unexpected-operator'
     }),
     incrementDecrementOperatorsAreNotAllowedAsResultOfFunctionCall: () => ({
         message: `Increment/decrement operators are not allowed on function calls`,
