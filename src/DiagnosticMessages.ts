@@ -247,7 +247,7 @@ export let DiagnosticMessages = {
         message: `Cannot have more than ${max} parameters but found ${actual})`,
         legacyCode: 1036,
         severity: DiagnosticSeverity.Error,
-        code: 'too-many-parameters'
+        code: 'exceeds-max-parameter-count'
     }),
     __unused: (typeText: string) => ({
         message: `Function return type '${typeText}' is invalid`,
