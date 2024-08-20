@@ -356,7 +356,7 @@ export let DiagnosticMessages = {
         message: `Colon before 'if' statement is not allowed`,
         legacyCode: 1054,
         severity: DiagnosticSeverity.Error,
-        code: 'unexpected-colon-before-if'
+        code: 'unexpected-leading-colon'
     }),
     expectedStringLiteralAfterKeyword: (keyword: string) => ({
         message: `Missing string literal after '${keyword}' keyword`,
