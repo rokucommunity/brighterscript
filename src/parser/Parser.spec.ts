@@ -164,7 +164,7 @@ describe('parser', () => {
                 end functionasdf
             `).diagnostics;
             expect(diagnostics[0]?.message).to.exist.and.to.eql(
-                DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression().message
+                DiagnosticMessages.expectedStatement().message
             );
 
             expect(diagnostics[0]?.location.range).to.eql(
@@ -496,7 +496,7 @@ describe('parser', () => {
                     end namespace
                 `);
                 let { ast, diagnostics } = Parser.parse(tokens) as any;
-                expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression());
+                expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.expectedStatement());
                 let stmt = ast.statements[0].func.body.statements[0];
 
                 expect(isExpressionStatement(stmt)).to.be.true;
@@ -1368,7 +1368,7 @@ describe('parser', () => {
                     print param
                 end sub
             `, ParseMode.BrightScript);
-            expectDiagnosticsIncludes(parser.diagnostics, [DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()]);
+            expectDiagnosticsIncludes(parser.diagnostics, [DiagnosticMessages.expectedStatement()]);
         });
 
         it('allows union types in parameters', () => {

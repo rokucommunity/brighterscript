@@ -1862,7 +1862,7 @@ export class Parser {
 
             if (!thenBranch) {
                 this.diagnostics.push({
-                    ...DiagnosticMessages.expectedStatementToFollowConditionalCondition(ifToken.text),
+                    ...DiagnosticMessages.expectedStatement(ifToken.text, 'statement'),
                     location: this.peek().location
                 });
                 throw this.lastDiagnosticAsError();
@@ -1904,7 +1904,7 @@ export class Parser {
                 if (!elseBranch) {
                     //missing `else` branch
                     this.diagnostics.push({
-                        ...DiagnosticMessages.expectedStatementToFollowElse(),
+                        ...DiagnosticMessages.expectedStatement('else', 'statement'),
                         location: this.peek().location
                     });
                     throw this.lastDiagnosticAsError();
@@ -2352,7 +2352,7 @@ export class Parser {
 
         //at this point, it's probably an error. However, we recover a little more gracefully by creating an inclosing ExpressionStatement
         this.diagnostics.push({
-            ...DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression(),
+            ...DiagnosticMessages.expectedStatement(),
             location: expressionStart.location
         });
         return new ExpressionStatement({ expression: expr });

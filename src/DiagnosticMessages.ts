@@ -398,13 +398,27 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'expected-terminator-on-if'
     }),
-    expectedStatementToFollowConditionalCondition: (conditionType: string) => ({
+    expectedStatement: (conditionType?: string, extraDetail?: string) => {
+        let message = 'Expected statement';
+        if (conditionType) {
+            message += ` to follow '${conditionType?.toLowerCase()}'`;
+        }
+        if (extraDetail) {
+            message += ` ${extraDetail}`;
+        }
+        return {
+            message: message,
+            severity: DiagnosticSeverity.Error,
+            code: 'expected-statement'
+        };
+    },
+    __unused18: (conditionType: string) => ({
         message: `Expected a statement to follow '${conditionType?.toLowerCase()} ...condition... then'`,
         legacyCode: 1061,
         severity: DiagnosticSeverity.Error,
         code: 'expected-statement-after-conditional'
     }),
-    expectedStatementToFollowElse: () => ({
+    __unused19: () => ({
         message: `Expected a statement to follow 'else'`,
         legacyCode: 1062,
         severity: DiagnosticSeverity.Error,
@@ -428,7 +442,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'unexpected-tag'
     }),
-    expectedStatementOrFunctionCallButReceivedExpression: () => ({
+    __unused20: () => ({
         message: `Expected statement or function call but instead found expression`,
         legacyCode: 1066,
         severity: DiagnosticSeverity.Error,

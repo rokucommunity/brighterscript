@@ -8,6 +8,11 @@ describe('DiagnosticMessages', () => {
         for (let key in DiagnosticMessages) {
             let func = DiagnosticMessages[key];
             let obj = func('', '', '', '', '', '', '', '', '');
+            if (obj.legacyCode === undefined) {
+                // does not have a legacy code
+                continue;
+            }
+
             //if another message already has this code
             if (!codes[obj.legacyCode]) {
                 codes[obj.legacyCode] = key;
