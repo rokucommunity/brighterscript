@@ -1,7 +1,7 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
-import type { Block, FunctionStatement, NamespaceStatement } from './Statement';
+import type { Block, NamespaceStatement } from './Statement';
 import type { Location } from 'vscode-languageserver';
 import util from '../util';
 import type { BrsTranspileState } from './BrsTranspileState';
@@ -254,11 +254,6 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         readonly rightParen?: Token;
         readonly as?: Token;
     };
-
-    /**
-     * If this function is part of a FunctionStatement, this will be set. Otherwise this will be undefined
-     */
-    public functionStatement?: FunctionStatement;
 
     public get leadingTrivia(): Token[] {
         return this.tokens.functionType?.leadingTrivia;
@@ -1279,9 +1274,11 @@ export class SourceLiteralExpression extends Expression {
             func = parentFunction;
         }
         //get the index of this function in its parent
-        nameParts.unshift(
-            func.functionStatement!.getName(parseMode)
-        );
+        if (isFunctionStatement(func.parent)) {
+            nameParts.unshift(
+                func.parent.getName(parseMode)
+            );
+        }
         return nameParts.join('$');
     }
 
