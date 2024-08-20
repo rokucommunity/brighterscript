@@ -494,7 +494,7 @@ export let DiagnosticMessages = {
         message: `Cannot have more than ${max} arguments but found ${actual} `,
         legacyCode: 1074,
         severity: DiagnosticSeverity.Error,
-        code: 'too-many-arguments'
+        code: 'exceeds-max-argument-count'
     }),
     expectedRightParenAfterFunctionCallArguments: () => ({
         message: `Expected ')' after function call arguments`,
