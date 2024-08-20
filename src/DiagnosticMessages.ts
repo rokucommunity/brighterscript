@@ -488,7 +488,7 @@ export let DiagnosticMessages = {
         message: `Expected property name after '.'`,
         legacyCode: 1073,
         severity: DiagnosticSeverity.Error,
-        code: 'expected-property-name'
+        code: 'expected-identifier'
     }),
     tooManyCallableArguments: (actual: number, max: number) => ({
         message: `Cannot have more than ${max} arguments but found ${actual} `,
