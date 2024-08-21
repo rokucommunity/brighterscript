@@ -2991,7 +2991,7 @@ describe('BrsFile', () => {
                             eXiT fOr
                         end for
                         while true
-                            exit whILE
+                            exIt whILE
                         end while
                         while true
                             eXitWhile

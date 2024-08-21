@@ -1231,7 +1231,7 @@ export class Parser {
     }
 
     private exitStatement(): ExitStatement {
-        const exitToken = this.advance();
+        let exitToken = this.advance();
         if (exitToken.kind === TokenKind.ExitWhile) {
             // `exitwhile` is allowed in code, and means `exit while`
             // use an ExitStatement that is nicer to work with by breaking the `exit` and `while` tokens apart
@@ -1252,17 +1252,20 @@ export class Parser {
                 originalStart.line,
                 originalStart.character + exitToken.text.length);
 
-            return new ExitStatement({
-                exit: createToken(TokenKind.Exit, exitText, util.createLocationFromRange(exitToken.location.uri, exitRange)),
-                loopType: createToken(TokenKind.While, whileText, util.createLocationFromRange(exitToken.location.uri, whileRange))
-            });
+            exitToken = createToken(TokenKind.Exit, exitText, util.createLocationFromRange(exitToken.location.uri, exitRange));
+            this.tokens[this.current - 1] = exitToken;
+            const newLoopToken = createToken(TokenKind.While, whileText, util.createLocationFromRange(exitToken.location.uri, whileRange));
+            this.tokens.splice(this.current, 0, newLoopToken);
         }
+
+        const loopTypeToken = this.tryConsume(
+            DiagnosticMessages.expectedToken(TokenKind.While, TokenKind.For),
+            TokenKind.While, TokenKind.For
+        );
+
         return new ExitStatement({
             exit: exitToken,
-            loopType: this.tryConsume(
-                DiagnosticMessages.expectedToken(TokenKind.While, TokenKind.For),
-                TokenKind.While, TokenKind.For
-            )
+            loopType: loopTypeToken
         });
     }
 
