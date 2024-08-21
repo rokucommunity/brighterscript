@@ -1234,11 +1234,27 @@ export class Parser {
         const exitToken = this.advance();
         if (exitToken.kind === TokenKind.ExitWhile) {
             // `exitwhile` is allowed in code, and means `exit while`
-            // use an ExitStatement that is nicer to work with
+            // use an ExitStatement that is nicer to work with by breaking the `exit` and `while` tokens apart
+
+            const exitText = exitToken.text.substring(0, 4);
+            const whileText = exitToken.text.substring(4);
+            const originalRange = exitToken.location.range;
+            const originalStart = originalRange.start;
+
+            const exitRange = util.createRange(
+                originalStart.line,
+                originalStart.character,
+                originalStart.line,
+                originalStart.character + 4);
+            const whileRange = util.createRange(
+                originalStart.line,
+                originalStart.character + 4,
+                originalStart.line,
+                originalStart.character + exitToken.text.length);
 
             return new ExitStatement({
-                exit: createToken(TokenKind.Exit, 'exit', exitToken.location),
-                loopType: createToken(TokenKind.While, 'while', exitToken.location)
+                exit: createToken(TokenKind.Exit, exitText, util.createLocationFromRange(exitToken.location.uri, exitRange)),
+                loopType: createToken(TokenKind.While, whileText, util.createLocationFromRange(exitToken.location.uri, whileRange))
             });
         }
         return new ExitStatement({

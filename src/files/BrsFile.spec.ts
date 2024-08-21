@@ -2974,11 +2974,27 @@ describe('BrsFile', () => {
                 `);
             });
 
-            it('handles exitwhile (one word)', async () => {
+            it('handles exitWhile (one word)', async () => {
                 await testTranspile(`
                     sub main()
                         while true
-                            exitwhile
+                            exitWhile
+                        end while
+                    end sub
+                `);
+            });
+
+            it('transpiles case correctly', async () => {
+                await testTranspile(`
+                    sub main()
+                        for i = 1 to 10
+                            eXiT fOr
+                        end for
+                        while true
+                            exit whILE
+                        end while
+                        while true
+                            eXitWhile
                         end while
                     end sub
                 `);
