@@ -4,11 +4,11 @@ import { ReservedWords, TokenKind } from '../lexer/TokenKind';
 import type { AAMemberExpression, BinaryExpression, LiteralExpression, TypecastExpression, UnaryExpression } from './Expression';
 import { TernaryExpression, NewExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression, VariableExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
-import type { AliasStatement, AssignmentStatement, Block, ClassStatement, ConditionalCompileConstStatement, ConditionalCompileErrorStatement, ConditionalCompileStatement, InterfaceStatement, ReturnStatement, TypecastStatement } from './Statement';
+import type { AliasStatement, AssignmentStatement, Block, ClassStatement, ConditionalCompileConstStatement, ConditionalCompileErrorStatement, ConditionalCompileStatement, ExitStatement, ForStatement, InterfaceStatement, ReturnStatement, TypecastStatement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { isAliasStatement, isAssignmentStatement, isBinaryExpression, isBlock, isBody, isCallExpression, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isDottedGetExpression, isExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypecastExpression, isTypecastStatement, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAliasStatement, isAssignmentStatement, isBinaryExpression, isBlock, isBody, isCallExpression, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isDottedGetExpression, isExitStatement, isExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypecastExpression, isTypecastStatement, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, rootDir } from '../testHelpers.spec';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { Expression, Statement } from './AstNode';
@@ -2290,6 +2290,73 @@ describe('parser', () => {
             `, ParseMode.BrighterScript);
             expectZeroDiagnostics(diagnostics);
             expect(((ast.statements[0] as FunctionStatement).func.body.statements[0] as AssignmentStatement).tokens.name.text).to.eq('alias');
+        });
+    });
+
+    describe('jump statements', () => {
+        it('should recognize `exit for`', () => {
+            let { ast, diagnostics } = parse(`
+                sub main()
+                    for i = 1 to 10
+                        exit for
+                    end for
+                end sub
+            `);
+            expectZeroDiagnostics(diagnostics);
+            let loop = (ast.statements[0] as FunctionStatement).func.body.statements[0] as ForStatement;
+            let exitStmt = loop.body.statements[0] as ExitStatement;
+            expect(isExitStatement(exitStmt)).to.be.true;
+            expect(exitStmt.tokens.loopType.text).to.eq('for');
+        });
+
+        it('should recognize `exit while`', () => {
+            let { ast, diagnostics } = parse(`
+                sub main(i)
+                    while i < 10
+                        exit while
+                        i++
+                    end while
+                end sub
+            `);
+            expectZeroDiagnostics(diagnostics);
+            let loop = (ast.statements[0] as FunctionStatement).func.body.statements[0] as ForStatement;
+            let exitStmt = loop.body.statements[0] as ExitStatement;
+            expect(isExitStatement(exitStmt)).to.be.true;
+            expect(exitStmt.tokens.loopType.text).to.eq('while');
+        });
+
+        it('should recognize `exitwhile` (one word)', () => {
+            let { ast, diagnostics } = parse(`
+                sub main(i)
+                    while i < 10
+                        exitwhile
+                        i++
+                    end while
+                end sub
+            `);
+            expectZeroDiagnostics(diagnostics);
+            let loop = (ast.statements[0] as FunctionStatement).func.body.statements[0] as ForStatement;
+            let exitStmt = loop.body.statements[0] as ExitStatement;
+            expect(isExitStatement(exitStmt)).to.be.true;
+            expect(exitStmt.tokens.loopType.text).to.eq('while');
+        });
+
+        it('should allow identifiers named `exitfor` (one word)', () => {
+            let { ast, diagnostics } = parse(`
+                sub main()
+                    for i = 1 to 10
+                        exitfor = 1
+                        exit for
+                    end for
+                end sub
+            `);
+            expectZeroDiagnostics(diagnostics);
+            let loop = (ast.statements[0] as FunctionStatement).func.body.statements[0] as ForStatement;
+            let assignment = loop.body.statements[0] as AssignmentStatement;
+            expect(assignment.tokens.name.text).to.eq('exitfor');
+            let exitStmt = loop.body.statements[1] as ExitStatement;
+            expect(isExitStatement(exitStmt)).to.be.true;
+            expect(exitStmt.tokens.loopType.text).to.eq('for');
         });
     });
 });

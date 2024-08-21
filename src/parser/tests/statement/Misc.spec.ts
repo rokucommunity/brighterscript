@@ -118,7 +118,6 @@ describe('parser', () => {
             TokenKind.EndWhile,
             TokenKind.Eval,
             TokenKind.Exit,
-            TokenKind.ExitFor,
             TokenKind.ExitWhile,
             TokenKind.False,
             TokenKind.For,

@@ -1,6 +1,6 @@
 import { expect } from '../chai-config.spec';
 import { NamespaceStatement, ClassStatement } from './Statement';
-import { AssignmentStatement, Block, Body, CatchStatement, DottedSetStatement, EmptyStatement, EndStatement, ExitForStatement, ExitWhileStatement, ExpressionStatement, ForEachStatement, ForStatement, FunctionStatement, GotoStatement, IfStatement, ImportStatement, IncrementStatement, IndexedSetStatement, LabelStatement, LibraryStatement, PrintStatement, ReturnStatement, StopStatement, ThrowStatement, TryCatchStatement, WhileStatement } from './Statement';
+import { AssignmentStatement, Block, Body, CatchStatement, DottedSetStatement, EmptyStatement, EndStatement, ExitStatement, ExpressionStatement, ForEachStatement, ForStatement, FunctionStatement, GotoStatement, IfStatement, ImportStatement, IncrementStatement, IndexedSetStatement, LabelStatement, LibraryStatement, PrintStatement, ReturnStatement, StopStatement, ThrowStatement, TryCatchStatement, WhileStatement } from './Statement';
 import { ParseMode, Parser } from './Parser';
 import { WalkMode } from '../astUtils/visitors';
 import { isClassStatement, isNamespaceStatement } from '../astUtils/reflection';
@@ -128,8 +128,8 @@ describe('Statement', () => {
             const assignment = new AssignmentStatement({ equals: undefined, name: ident, value: expr });
             const block = new Block({ statements: [] });
             const expression = new ExpressionStatement({ expression: expr });
-            const exitFor = new ExitForStatement({ exitFor: token });
-            const exitWhile = new ExitWhileStatement({ exitWhile: token });
+            const exitFor = new ExitStatement({ exit: token, loopType: token });
+            const exitWhile = new ExitStatement({ exit: token, loopType: token });
             const funs = new FunctionStatement({
                 name: ident,
                 func: new FunctionExpression({

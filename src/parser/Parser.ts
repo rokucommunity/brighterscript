@@ -35,8 +35,7 @@ import {
     EndStatement,
     EnumMemberStatement,
     EnumStatement,
-    ExitForStatement,
-    ExitWhileStatement,
+    ExitStatement,
     ExpressionStatement,
     ForEachStatement,
     FieldStatement,
@@ -1108,8 +1107,8 @@ export class Parser {
             return this.whileStatement();
         }
 
-        if (this.check(TokenKind.ExitWhile)) {
-            return this.exitWhile();
+        if (this.checkAny(TokenKind.Exit, TokenKind.ExitWhile)) {
+            return this.exitStatement();
         }
 
         if (this.check(TokenKind.For)) {
@@ -1118,10 +1117,6 @@ export class Parser {
 
         if (this.check(TokenKind.ForEach)) {
             return this.forEachStatement();
-        }
-
-        if (this.check(TokenKind.ExitFor)) {
-            return this.exitFor();
         }
 
         if (this.check(TokenKind.End)) {
@@ -1235,10 +1230,43 @@ export class Parser {
         });
     }
 
-    private exitWhile(): ExitWhileStatement {
-        let keyword = this.advance();
+    private exitStatement(): ExitStatement {
+        let exitToken = this.advance();
+        if (exitToken.kind === TokenKind.ExitWhile) {
+            // `exitwhile` is allowed in code, and means `exit while`
+            // use an ExitStatement that is nicer to work with by breaking the `exit` and `while` tokens apart
 
-        return new ExitWhileStatement({ exitWhile: keyword });
+            const exitText = exitToken.text.substring(0, 4);
+            const whileText = exitToken.text.substring(4);
+            const originalRange = exitToken.location.range;
+            const originalStart = originalRange.start;
+
+            const exitRange = util.createRange(
+                originalStart.line,
+                originalStart.character,
+                originalStart.line,
+                originalStart.character + 4);
+            const whileRange = util.createRange(
+                originalStart.line,
+                originalStart.character + 4,
+                originalStart.line,
+                originalStart.character + exitToken.text.length);
+
+            exitToken = createToken(TokenKind.Exit, exitText, util.createLocationFromRange(exitToken.location.uri, exitRange));
+            this.tokens[this.current - 1] = exitToken;
+            const newLoopToken = createToken(TokenKind.While, whileText, util.createLocationFromRange(exitToken.location.uri, whileRange));
+            this.tokens.splice(this.current, 0, newLoopToken);
+        }
+
+        const loopTypeToken = this.tryConsume(
+            DiagnosticMessages.expectedToken(TokenKind.While, TokenKind.For),
+            TokenKind.While, TokenKind.For
+        );
+
+        return new ExitStatement({
+            exit: exitToken,
+            loopType: loopTypeToken
+        });
     }
 
     private forStatement(): ForStatement {
@@ -1335,12 +1363,6 @@ export class Parser {
             target: target,
             body: body
         });
-    }
-
-    private exitFor(): ExitForStatement {
-        let keyword = this.advance();
-
-        return new ExitForStatement({ exitFor: keyword });
     }
 
     private namespaceStatement(): NamespaceStatement | undefined {

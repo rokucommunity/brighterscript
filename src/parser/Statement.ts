@@ -436,28 +436,37 @@ export class ExpressionStatement extends Statement {
     }
 }
 
-
-export class ExitForStatement extends Statement {
+export class ExitStatement extends Statement {
     constructor(options?: {
-        exitFor?: Token;
+        exit?: Token;
+        loopType: Token;
     }) {
         super();
         this.tokens = {
-            exitFor: options?.exitFor
+            exit: options?.exit,
+            loopType: options.loopType
         };
-        this.location = this.tokens.exitFor?.location;
+        this.location = util.createBoundingLocation(
+            this.tokens.exit,
+            this.tokens.loopType
+        );
     }
 
     public readonly tokens: {
-        readonly exitFor?: Token;
+        readonly exit: Token;
+        readonly loopType?: Token;
     };
 
-    public readonly kind = AstNodeKind.ExitForStatement;
+    public readonly kind = AstNodeKind.ExitStatement;
 
     public readonly location?: Location;
 
     transpile(state: BrsTranspileState) {
-        return this.tokens.exitFor ? state.transpileToken(this.tokens.exitFor) : ['exit for'];
+        return [
+            state.transpileToken(this.tokens.exit, 'exit'),
+            this.tokens.loopType?.leadingWhitespace ?? ' ',
+            state.transpileToken(this.tokens.loopType)
+        ];
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -465,40 +474,7 @@ export class ExitForStatement extends Statement {
     }
 
     get leadingTrivia(): Token[] {
-        return this.tokens.exitFor?.leadingTrivia;
-    }
-
-}
-
-export class ExitWhileStatement extends Statement {
-    constructor(options?: {
-        exitWhile?: Token;
-    }) {
-        super();
-        this.tokens = {
-            exitWhile: options?.exitWhile
-        };
-        this.location = this.tokens.exitWhile?.location;
-    }
-
-    public readonly tokens: {
-        readonly exitWhile?: Token;
-    };
-
-    public readonly kind = AstNodeKind.ExitWhileStatement;
-
-    public readonly location?: Location;
-
-    transpile(state: BrsTranspileState) {
-        return this.tokens.exitWhile ? state.transpileToken(this.tokens.exitWhile) : ['exit while'];
-    }
-
-    walk(visitor: WalkVisitor, options: WalkOptions) {
-        //nothing to walk
-    }
-
-    get leadingTrivia(): Token[] {
-        return this.tokens.exitWhile?.leadingTrivia;
+        return this.tokens.exit?.leadingTrivia;
     }
 }
 
