@@ -182,6 +182,11 @@ export interface BsConfig {
      */
     sourceRoot?: string;
     /**
+     * Should the `sourceRoot` property be resolve to an absolute path (relative to the bsconfig it's defined in)
+     * @default false
+     */
+    resolveSourceRoot?: boolean;
+    /**
      * Enables generating sourcemap files, which allow debugging tools to show the original source code while running the emitted files.
      * @default true
      */
