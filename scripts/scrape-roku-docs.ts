@@ -1,3 +1,4 @@
+/* eslint-disable import/no-extraneous-dependencies */
 /* eslint-disable @typescript-eslint/dot-notation */
 /* eslint-disable @typescript-eslint/no-var-requires */
 /* eslint-disable @typescript-eslint/no-require-imports */
@@ -298,7 +299,7 @@ class Runner {
                                 const arg = call.args[i];
                                 let paramName = `param${i}`;
                                 if (isVariableExpression(arg)) {
-                                    paramName = arg.getName(ParseMode.BrightScript)
+                                    paramName = arg.getName(ParseMode.BrightScript);
                                 }
                                 signature.params.push({
                                     name: paramName,
@@ -311,7 +312,7 @@ class Runner {
                             component.constructors.push(signature);
                         }
                     } else if (match[1]) {
-                        const signature = this.getConstructorSignature(name, match[1])
+                        const signature = this.getConstructorSignature(name, match[1]);
 
                         if (signature) {
                             component.constructors.push(signature);
@@ -329,10 +330,30 @@ class Runner {
 
             this.result.components[component?.name?.toLowerCase()] = component;
         }
+        if (!this.result.components['rointrinsicdouble']) {
+            this.result.components['rointrinsicdouble'] = {
+                availableSince: undefined,
+                constructors: [],
+                description: 'roIntrinsicDouble is the object equivalent for type \'Double\'.\n\nIt is a legacy object name, corresponding to the intrinsic Double object. Applications should use Double literal values and/or Double-typed variables directly.',
+                events: [],
+                interfaces: [
+                    {
+                        name: 'ifDouble',
+                        url: 'https://developer.roku.com/docs/references/brightscript/interfaces/ifdouble.md'
+                    },
+                    {
+                        name: 'ifToStr',
+                        url: 'https://developer.roku.com/docs/references/brightscript/interfaces/iftostr.md'
+                    }
+                ],
+                name: 'roIntrinsicDouble',
+                url: 'https://developer.roku.com/docs/references/brightscript/components/rodouble.md'
+            };
+        }
     }
 
     private getConstructorSignature(componentName: string, sourceCode: string) {
-        const foundParamTexts = this.findParamTexts(sourceCode)
+        const foundParamTexts = this.findParamTexts(sourceCode);
 
         if (foundParamTexts && foundParamTexts[0].toLowerCase() === componentName.toLowerCase()) {
             const signature = {
@@ -797,6 +818,7 @@ function deepSearch<T = any>(object, key, predicate): T {
         return object;
     }
 
+    // eslint-disable-next-line @typescript-eslint/prefer-for-of
     for (let i = 0; i < Object.keys(object).length; i++) {
         let value = object[Object.keys(object)[i]];
         if (typeof value === 'object' && value) {
@@ -1235,4 +1257,3 @@ interface ElementFilter {
 
 //run the builder
 new Runner().run().catch((e) => console.error(e));
-
