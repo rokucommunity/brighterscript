@@ -30,6 +30,7 @@ export class BrightScriptDocParser {
         for (let line of lines) {
             line = line.trim();
             while (line.startsWith('\'')) {
+                // remove leading apostrophes
                 line = line.substring(1).trim();
             }
             if (!line.startsWith('@')) {
