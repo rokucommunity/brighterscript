@@ -452,6 +452,23 @@ describe('lexer', () => {
     // template string literals
 
     describe('template string literals', () => {
+        it.only('handles nested curly braces', () => {
+            let tokens = Lexer.scan('thing = `${{}}`').tokens;
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.LeftCurlyBrace,
+                TokenKind.RightCurlyBrace,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
+
         it('supports escaped chars', () => {
             let { tokens } = Lexer.scan('`\\n\\`\\r\\n`');
             expect(tokens.map(t => t.kind)).to.deep.equal([
