@@ -29,6 +29,9 @@ export class BrightScriptDocParser {
         }
         for (let line of lines) {
             line = line.trim();
+            while (line.startsWith('\'')) {
+                line = line.substring(1).trim();
+            }
             if (!line.startsWith('@')) {
                 if (lastTag) {
 

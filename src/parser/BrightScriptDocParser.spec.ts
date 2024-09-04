@@ -22,6 +22,18 @@ describe('BrightScriptDocParser', () => {
         expect(doc.getTag('sometag').detail).to.equal('here is the rest');
     });
 
+    it('ignores leading apostrophes ', () => {
+        const doc = parser.parse(`
+            ' this is a comment
+            ' @sometag here is the rest
+        `);
+        expect(doc.description).to.equal('this is a comment');
+        expect(doc.tags.length).to.equal(1);
+        expect(doc.tags[0].tagName).to.equal('sometag');
+        expect(doc.tags[0].detail).to.equal('here is the rest');
+        expect(doc.getTag('sometag').detail).to.equal('here is the rest');
+    });
+
     it('should get a multiline comment', () => {
         const doc = parser.parse(`
             this is a comment
