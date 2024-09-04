@@ -1,3 +1,5 @@
+import util from '../util';
+import type { AstNode } from './AstNode';
 
 
 const tagRegex = /@(\w+)(?:\s+(.*))?/;
@@ -6,6 +8,11 @@ const returnRegex = /(?:{([^}]*)})?\s*(.*)/;
 const typeTagRegex = /(?:{([^}]*)})?/;
 
 export class BrightScriptDocParser {
+
+
+    public parseNode(node: AstNode) {
+        return this.parse(util.getNodeDocumentation(node, false));
+    }
 
     public parse(documentation: string) {
         const lines = documentation.split('\n');

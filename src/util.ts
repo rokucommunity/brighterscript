@@ -644,8 +644,10 @@ export class Util {
 
     /**
      * Combine all the documentation for a node - uses the AstNode's leadingTrivia property
+     * @param node the node to get the documentation for
+     * @param prettyPrint if true, will format the comment text for markdown
      */
-    public getNodeDocumentation(node: AstNode) {
+    public getNodeDocumentation(node: AstNode, prettyPrint = true) {
         if (!node) {
             return '';
         }
@@ -694,7 +696,7 @@ export class Util {
                             line = line.slice(1).trim();
                         }
                     }
-                    if (line.startsWith('@')) {
+                    if (prettyPrint && line.startsWith('@')) {
                         // Handle jsdoc/brightscriptdoc tags specially
                         // make sure they are on their own markdown line, and add italics
                         const firstSpaceIndex = line.indexOf(' ');
