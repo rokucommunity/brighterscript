@@ -11,7 +11,6 @@ const typeTagRegex = /(?:{([^}]*)})?/;
 
 export class BrightScriptDocParser {
 
-
     public parseNode(node: AstNode) {
         return this.parse(util.getNodeDocumentation(node, false));
     }
@@ -90,7 +89,6 @@ export class BrightScriptDocParser {
             detail: detail
         };
     }
-
 
     private parseParam(detail: string): BrsDocParamTag {
         let type = '';
@@ -230,6 +228,7 @@ class BrightScriptDoc {
     }
 
     private getTypeFromContext(typeName: string, nodeContext: AstNode, options: GetSymbolTypeOptions) {
+        // TODO: Add support for union types here
         const topSymbolTable = nodeContext?.getSymbolTable();
         if (!topSymbolTable || !typeName) {
             return undefined;

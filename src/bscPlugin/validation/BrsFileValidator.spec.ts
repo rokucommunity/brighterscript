@@ -1151,7 +1151,7 @@ describe('BrsFileValidator', () => {
 
             it('treats variable as type given in @type', () => {
                 const file = program.setFile<BrsFile>('source/main.brs', `
-                    function getPie()
+                    function getModelName()
                         ' @type {roDeviceInfo}
                         info = getData()
                         return info.getModel()
