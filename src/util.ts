@@ -2406,6 +2406,25 @@ export class Util {
 
         return false;
     }
+
+    public chooseTypeFromCodeOrDocComment(codeType: BscType, docType: BscType, options: GetTypeOptions) {
+        let returnType: BscType;
+        if (options.preferDocType && docType) {
+            returnType = docType;
+            if (options.data) {
+                options.data.isFromDocComment = true;
+            }
+        } else {
+            returnType = codeType;
+            if (!returnType && docType) {
+                returnType = docType;
+                if (options.data) {
+                    options.data.isFromDocComment = true;
+                }
+            }
+        }
+        return returnType;
+    }
 }
 
 /**

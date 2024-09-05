@@ -5,7 +5,7 @@ import type { AssignmentStatement, ClassStatement, FunctionStatement, NamespaceS
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics } from '../../testHelpers.spec';
 import { Program } from '../../Program';
-import { isClassStatement, isFunctionExpression, isNamespaceStatement } from '../../astUtils/reflection';
+import { isAssignmentStatement, isClassStatement, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isNamespaceStatement, isPrintStatement, isReturnStatement } from '../../astUtils/reflection';
 import util from '../../util';
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
@@ -14,7 +14,7 @@ import { FloatType } from '../../types/FloatType';
 import { IntegerType } from '../../types/IntegerType';
 import { InterfaceType } from '../../types/InterfaceType';
 import { StringType } from '../../types/StringType';
-import { TypedFunctionType } from '../../types';
+import { DynamicType, TypedFunctionType } from '../../types';
 import { ParseMode } from '../../parser/Parser';
 import type { ExtraSymbolData } from '../../interfaces';
 
@@ -851,4 +851,326 @@ describe('BrsFileValidator', () => {
         });
     });
 
+    describe('types in comments', () => {
+
+        describe('@param', () => {
+            it('uses @param type in brs file', () => {
+                const file = program.setFile<BrsFile>('source/main.brs', `
+                    ' @param {string} name
+                    function sayHello(name)
+                        print "Hello " + name
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                let data = {} as ExtraSymbolData;
+                expectTypeToBe(
+                    file.ast.findChild(isFunctionParameterExpression).getType({
+                        flags: SymbolTypeFlag.runtime, data: data
+                    }),
+                    StringType
+                );
+                data = {};
+                const printSymbolTable = file.ast.findChild(isPrintStatement).getSymbolTable();
+                expectTypeToBe(
+                    printSymbolTable.getSymbolType('name', {
+                        flags: SymbolTypeFlag.runtime, data: data
+                    }),
+                    StringType
+                );
+                expect(data.isFromDocComment).to.be.true;
+            });
+
+            it('handles no type in @param tag', () => {
+                const file = program.setFile<BrsFile>('source/main.brs', `
+                    ' @param  name
+                    function sayHello(name)
+                        print "Hello " + name
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                let data = {} as ExtraSymbolData;
+                expectTypeToBe(
+                    file.ast.findChild(isFunctionParameterExpression).getType({
+                        flags: SymbolTypeFlag.runtime, data: data
+                    }),
+                    DynamicType
+                );
+                data = {};
+                const printSymbolTable = file.ast.findChild(isPrintStatement).getSymbolTable();
+                expectTypeToBe(
+                    printSymbolTable.getSymbolType('name', {
+                        flags: SymbolTypeFlag.runtime, data: data
+                    }),
+                    DynamicType
+                );
+            });
+
+            it('uses @param type in brs file that can refer to a custom type', () => {
+                const file = program.setFile<BrsFile>('source/main.brs', `
+                    ' @param {Klass} myClass
+                    function sayHello(myClass)
+                        print "Hello " + myClass.name
+                    end function
+                `);
+                program.setFile<BrsFile>('source/klass.bs', `
+                    class Klass
+                        name as string
+                    end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const data = {} as ExtraSymbolData;
+                expectTypeToBe(
+                    file.ast.findChild(isFunctionParameterExpression).getType({
+                        flags: SymbolTypeFlag.runtime, data: data
+                    }),
+                    ClassType
+                );
+                const myClassType = file.ast.findChild(isPrintStatement).getSymbolTable().getSymbolType('myClass', {
+                    flags: SymbolTypeFlag.runtime, data: data
+                });
+                expectTypeToBe(myClassType, ClassType);
+                expectTypeToBe(myClassType.getMemberType('name', { flags: SymbolTypeFlag.runtime }), StringType);
+                expect(data.isFromDocComment).to.be.true;
+            });
+
+            it('uses @param type in brs file that can refer to a built in type', () => {
+                const file = program.setFile<BrsFile>('source/main.brs', `
+                    ' @param {roDeviceInfo} info
+                    function sayHello(info)
+                        print "Hello " + info.getModel()
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const data = {} as ExtraSymbolData;
+                expectTypeToBe(
+                    file.ast.findChild(isFunctionParameterExpression).getType({
+                        flags: SymbolTypeFlag.runtime, data: data
+                    }),
+                    InterfaceType
+                );
+                const infoType = file.ast.findChild(isPrintStatement).getSymbolTable().getSymbolType('info', {
+                    flags: SymbolTypeFlag.runtime, data: data
+                });
+                expectTypeToBe(infoType, InterfaceType);
+                expectTypeToBe(infoType.getMemberType('getModel', { flags: SymbolTypeFlag.runtime }), TypedFunctionType);
+                expect(data.isFromDocComment).to.be.true;
+            });
+
+            it('allows jsdoc comment style /** prefix', () => {
+                const file = program.setFile<BrsFile>('source/main.brs', `
+                    ' /**
+                    ' * @param {string} info
+                    ' */
+                    function sayHello(info)
+                        print "Hello " + info
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const data = {} as ExtraSymbolData;
+                expectTypeToBe(
+                    file.ast.findChild(isFunctionParameterExpression).getType({
+                        flags: SymbolTypeFlag.runtime, data: data
+                    }),
+                    StringType
+                );
+                const infoType = file.ast.findChild(isPrintStatement).getSymbolTable().getSymbolType('info', {
+                    flags: SymbolTypeFlag.runtime, data: data
+                });
+                expectTypeToBe(infoType, StringType);
+                expect(data.isFromDocComment).to.be.true;
+            });
+
+            it('ignores types it cannot find', () => {
+                const file = program.setFile<BrsFile>('source/main.brs', `
+                    ' @param {TypeNotThere} info
+                    function sayHello(info)
+                        print "Hello " + info.prop
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const data = {} as ExtraSymbolData;
+                expectTypeToBe(
+                    file.ast.findChild(isFunctionParameterExpression).getType({
+                        flags: SymbolTypeFlag.runtime, data: data
+                    }),
+                    DynamicType
+                );
+                const infoType = file.ast.findChild(isPrintStatement).getSymbolTable().getSymbolType('info', {
+                    flags: SymbolTypeFlag.runtime, data: data
+                });
+                expectTypeToBe(infoType, DynamicType);
+                expect(data.isFromDocComment).to.be.true;
+            });
+        });
+
+        describe('@return', () => {
+            it('uses @return type in brs file', () => {
+                const file = program.setFile<BrsFile>('source/main.brs', `
+                    ' @return {string}
+                    function getPie()
+                        return "pumpkin"
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const data = {} as ExtraSymbolData;
+                const funcStmt = file.ast.findChild(isFunctionStatement);
+                const funcType = funcStmt.getType({ flags: SymbolTypeFlag.runtime, data: data });
+                expectTypeToBe(funcType, TypedFunctionType);
+                const returnType = (funcType as TypedFunctionType).returnType;
+                expectTypeToBe(returnType, StringType);
+            });
+
+            it('allows unknown type when using @return tag', () => {
+                const file = program.setFile<BrsFile>('source/main.brs', `
+                    ' @return {TypeNotThere}
+                    function getPie()
+                        return "pumpkin"
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const data = {} as ExtraSymbolData;
+                const funcStmt = file.ast.findChild(isFunctionStatement);
+                const funcType = funcStmt.getType({ flags: SymbolTypeFlag.runtime, data: data });
+                expectTypeToBe(funcType, TypedFunctionType);
+                const returnType = (funcType as TypedFunctionType).returnType;
+                expectTypeToBe(returnType, DynamicType);
+            });
+
+            it('validates return statements against @return tag with valid type', () => {
+                const file = program.setFile<BrsFile>('source/main.brs', `
+                    ' @return {integer}
+                    function getPie()
+                        return "pumpkin"
+                    end function
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.returnTypeMismatch('string', 'integer').message
+                ]);
+                const data = {} as ExtraSymbolData;
+                const funcStmt = file.ast.findChild(isFunctionStatement);
+                const funcType = funcStmt.getType({ flags: SymbolTypeFlag.runtime, data: data });
+                expectTypeToBe(funcType, TypedFunctionType);
+                const returnType = (funcType as TypedFunctionType).returnType;
+                expectTypeToBe(returnType, IntegerType);
+            });
+
+            it('checks return statements against @return tag with valid custom type', () => {
+                const file = program.setFile<BrsFile>('source/main.brs', `
+                    ' @return {alpha.Klass}
+                    function getPie()
+                        return alpha_Klass()
+                    end function
+                `);
+                program.setFile<BrsFile>('source/klass.bs', `
+                    namespace alpha
+                        class Klass
+                            name as string
+                        end class
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const data = {} as ExtraSymbolData;
+                const funcStmt = file.ast.findChild(isFunctionStatement);
+                const funcType = funcStmt.getType({ flags: SymbolTypeFlag.runtime, data: data });
+                expectTypeToBe(funcType, TypedFunctionType);
+                const returnType = (funcType as TypedFunctionType).returnType;
+                expectTypeToBe(returnType, ClassType);
+            });
+
+            it('validates return statements against @return tag with valid custom type', () => {
+                program.setFile<BrsFile>('source/main.brs', `
+                    ' @return {alpha.Klass}
+                    function getPie()
+                        return "foo"
+                    end function
+                `);
+                program.setFile<BrsFile>('source/klass.bs', `
+                    namespace alpha
+                        class Klass
+                            name as string
+                        end class
+                    end namespace
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.returnTypeMismatch('string', 'alpha.Klass').message
+                ]);
+            });
+        });
+
+        describe('@type', () => {
+            it('uses @type type in brs file', () => {
+                const file = program.setFile<BrsFile>('source/main.brs', `
+                    function getPie() as string
+                        ' @type {string}
+                        pieType = getFruit()
+                        return pieType
+                    end function
+
+                    function getFruit()
+                        return "apple"
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const data = {} as ExtraSymbolData;
+                const funcStmt = file.ast.findChild(isFunctionStatement);
+                const returnStmt = funcStmt.findChild(isReturnStatement);
+                const varType = returnStmt.getSymbolTable().getSymbolType('pieType', { flags: SymbolTypeFlag.runtime, data: data });
+                expectTypeToBe(varType, StringType);
+            });
+
+            it('allows unknown type when using @type tag', () => {
+                const file = program.setFile<BrsFile>('source/main.brs', `
+
+                    function getValue()
+                        ' @type {unknown}
+                        something = {}
+                        return something
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const data = {} as ExtraSymbolData;
+                const funcStmt = file.ast.findChild(isFunctionStatement);
+                const funcType = funcStmt.getType({ flags: SymbolTypeFlag.runtime, data: data });
+                expectTypeToBe(funcType, TypedFunctionType);
+                const returnType = (funcType as TypedFunctionType).returnType;
+                expectTypeToBe(returnType, DynamicType);
+            });
+
+            it('treats variable as type given in @type', () => {
+                const file = program.setFile<BrsFile>('source/main.brs', `
+                    function getPie()
+                        ' @type {roDeviceInfo}
+                        info = getData()
+                        return info.getModel()
+                    end function
+
+                    function getData()
+                        return {}
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const data = {} as ExtraSymbolData;
+                const assignStmt = file.ast.findChild(isAssignmentStatement);
+                const infoType = assignStmt.getSymbolTable().getSymbolType('info', { flags: SymbolTypeFlag.runtime, data: data });
+                expectTypeToBe(infoType, InterfaceType);
+                expect(infoType.toString()).to.eq('roDeviceInfo');
+                expect(data.isFromDocComment).to.be.true;
+            });
+
+        });
+    });
 });

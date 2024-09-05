@@ -1,18 +1,17 @@
 import { expect } from 'chai';
-import { BrightScriptDocParser } from './BrightScriptDocParser';
+import { brsDocParser } from './BrightScriptDocParser';
 import { Parser } from './Parser';
 
-describe('BrightScriptDocParser', () => {
+describe('BrightScriptbrsDocParser', () => {
 
-    const docParser = new BrightScriptDocParser();
 
     it('should get a comment', () => {
-        const doc = docParser.parse('this is a comment');
+        const doc = brsDocParser.parse('this is a comment');
         expect(doc.description).to.equal('this is a comment');
     });
 
     it('should get a tag', () => {
-        const doc = docParser.parse(`
+        const doc = brsDocParser.parse(`
             this is a comment
             @sometag here is the rest
         `);
@@ -24,7 +23,7 @@ describe('BrightScriptDocParser', () => {
     });
 
     it('ignores leading apostrophes ', () => {
-        const doc = docParser.parse(`
+        const doc = brsDocParser.parse(`
             ' this is a comment
             ' @sometag here is the rest
         `);
@@ -36,7 +35,7 @@ describe('BrightScriptDocParser', () => {
     });
 
     it('should get a multiline comment', () => {
-        const doc = docParser.parse(`
+        const doc = brsDocParser.parse(`
             this is a comment
             this is some more of a comment
         `);
@@ -46,7 +45,7 @@ describe('BrightScriptDocParser', () => {
     describe('parseParam', () => {
 
         it('should find @param tags of various types', () => {
-            const doc = docParser.parse(`
+            const doc = brsDocParser.parse(`
                 this is a comment
                 @param p1
                 @param p2 description of p2
@@ -92,7 +91,7 @@ describe('BrightScriptDocParser', () => {
     });
 
     it('includes the @description tag in the description', () => {
-        const doc = docParser.parse(`
+        const doc = brsDocParser.parse(`
             this is a comment
             @description this is a description
         `);
@@ -100,7 +99,7 @@ describe('BrightScriptDocParser', () => {
     });
 
     it('includes the @description tag in the description when multiline', () => {
-        const doc = docParser.parse(`
+        const doc = brsDocParser.parse(`
             this is a comment
 
             above space intentionally blank
@@ -115,7 +114,7 @@ describe('BrightScriptDocParser', () => {
     });
 
     it('includes the @return tag', () => {
-        const doc = docParser.parse(`
+        const doc = brsDocParser.parse(`
             this is a comment
             @return this is a return
         `);
@@ -123,7 +122,7 @@ describe('BrightScriptDocParser', () => {
     });
 
     it('includes the @return tag when it has a type', () => {
-        const doc = docParser.parse(`
+        const doc = brsDocParser.parse(`
             this is a comment
             @return {some.thing.here} this is a return
         `);
@@ -131,8 +130,17 @@ describe('BrightScriptDocParser', () => {
         expect(doc.getReturn().type).to.equal('some.thing.here');
     });
 
+    it('includes the @return tag when it only has a type', () => {
+        const doc = brsDocParser.parse(`
+            this is a comment
+            @return {some.thing.here}
+        `);
+        expect(doc.getReturn().description).to.equal('');
+        expect(doc.getReturn().type).to.equal('some.thing.here');
+    });
+
     it('allows the @returns (with an s)', () => {
-        const doc = docParser.parse(`
+        const doc = brsDocParser.parse(`
             this is a comment
             @returns {some.thing.here} this is a returns
         `);
@@ -142,7 +150,7 @@ describe('BrightScriptDocParser', () => {
 
 
     it('finds the type tag', () => {
-        const doc = docParser.parse(`
+        const doc = brsDocParser.parse(`
             @type {integer}
         `);
         expect(doc.getTypeTag().type).to.equal('integer');
@@ -158,7 +166,7 @@ describe('BrightScriptDocParser', () => {
                 end sub
             `);
 
-            const doc = docParser.parseNode(ast.statements[0]);
+            const doc = brsDocParser.parseNode(ast.statements[0]);
             expect(doc.description).to.equal('this is a comment');
         });
 
@@ -174,7 +182,7 @@ describe('BrightScriptDocParser', () => {
                 end function
             `);
 
-            const doc = docParser.parseNode(ast.statements[0]);
+            const doc = brsDocParser.parseNode(ast.statements[0]);
             expect(doc.description).to.equal('My description\nof this function');
             expect(doc.getAllTags('param').length).to.equal(2);
             expect(doc.getParam('p1').description).to.equal('this is p1');

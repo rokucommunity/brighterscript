@@ -1,3 +1,5 @@
+import type { GetSymbolTypeOptions } from '../SymbolTable';
+import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import util from '../util';
 import type { AstNode } from './AstNode';
 
@@ -15,8 +17,11 @@ export class BrightScriptDocParser {
     }
 
     public parse(documentation: string) {
-        const lines = documentation.split('\n');
         const brsDoc = new BrightScriptDoc(documentation);
+        if (!documentation) {
+            return brsDoc;
+        }
+        const lines = documentation.split('\n');
         const blockLines = [] as string[];
         const descriptionLines = [] as string[];
         let lastTag: BrsDocTag;
@@ -119,12 +124,8 @@ export class BrightScriptDocParser {
         let type = '';
         let description = '';
         if (match) {
-            if (match[2]) {
-                type = match[1] ?? '';
-                description = match[2] ?? '';
-            } else if (match[1]) {
-                description = match[1] ?? '';
-            }
+            type = match[1] ?? '';
+            description = match[2] ?? '';
         }
         return {
             tagName: 'return',
@@ -210,7 +211,43 @@ class BrightScriptDoc {
         });
     }
 
+    getParamBscType(name: string, nodeContext: AstNode, options: GetSymbolTypeOptions) {
+        const param = this.getParam(name);
 
+        return this.getTypeFromContext(param?.type, nodeContext, options);
+    }
+
+    getReturnBscType(nodeContext: AstNode, options: GetSymbolTypeOptions) {
+        const retTag = this.getReturn();
+
+        return this.getTypeFromContext(retTag?.type, nodeContext, options);
+    }
+
+
+    getTypeTagBscType(nodeContext: AstNode, options: GetSymbolTypeOptions) {
+        const retTag = this.getTypeTag();
+        return this.getTypeFromContext(retTag?.type, nodeContext, options);
+    }
+
+    private getTypeFromContext(typeName: string, nodeContext: AstNode, options: GetSymbolTypeOptions) {
+        const topSymbolTable = nodeContext?.getSymbolTable();
+        if (!topSymbolTable || !typeName) {
+            return undefined;
+        }
+        const fullName = typeName;
+        const parts = typeName.split('.');
+        const optionsToUse = {
+            ...options,
+            flags: SymbolTypeFlag.typetime,
+            fullName: fullName,
+            typeChain: undefined
+        };
+        let result = topSymbolTable.getSymbolType(parts.shift(), optionsToUse);
+        while (result && parts.length > 0) {
+            result = result.getMemberType(parts.shift(), optionsToUse);
+        }
+        return result;
+    }
 }
 
 interface BrsDocTag {
@@ -229,3 +266,7 @@ interface BrsDocParamTag extends BrsDocWithDescription {
     name: string;
     optional?: boolean;
 }
+
+
+export let brsDocParser = new BrightScriptDocParser();
+export default brsDocParser;

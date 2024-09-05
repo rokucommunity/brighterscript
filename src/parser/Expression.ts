@@ -32,6 +32,7 @@ import { TypedFunctionType } from '../types';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { FunctionType } from '../types/FunctionType';
 import type { BaseFunctionType } from '../types/BaseFunctionType';
+import { brsDocParser } from './BrightScriptDocParser';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -385,7 +386,17 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 
     public getType(options: GetTypeOptions): TypedFunctionType {
         //if there's a defined return type, use that
-        let returnType = this.returnTypeExpression?.getType({ ...options, typeChain: undefined });
+        let returnType: BscType;
+
+
+        const docs = brsDocParser.parseNode(this.findAncestor(isFunctionStatement));
+
+        returnType = util.chooseTypeFromCodeOrDocComment(
+            this.returnTypeExpression?.getType({ ...options, typeChain: undefined }),
+            docs.getReturnBscType(this, { ...options, tableProvider: () => this.getSymbolTable() }),
+            options
+        );
+
         const isSub = this.tokens.functionType?.kind === TokenKind.Sub;
         //if we don't have a return type and this is a sub, set the return type to `void`. else use `dynamic`
         if (!returnType) {
@@ -446,10 +457,15 @@ export class FunctionParameterExpression extends Expression {
     public readonly typeExpression?: TypeExpression;
 
     public getType(options: GetTypeOptions) {
-        const paramType = this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime, typeChain: undefined }) ??
-            this.defaultValue?.getType({ ...options, flags: SymbolTypeFlag.runtime, typeChain: undefined }) ??
-            DynamicType.instance;
-        options.typeChain?.push(new TypeChainEntry({ name: this.tokens.name.text, type: paramType, data: options.data, astNode: this }));
+        const docs = brsDocParser.parseNode(this.findAncestor(isFunctionStatement));
+        const paramName = this.tokens.name.text;
+
+        const paramTypeFromCode = this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime, typeChain: undefined }) ??
+            this.defaultValue?.getType({ ...options, flags: SymbolTypeFlag.runtime, typeChain: undefined });
+        const paramTypeFromDoc = docs.getParamBscType(paramName, this, { ...options, fullName: paramName, tableProvider: () => this.getSymbolTable() });
+
+        let paramType = util.chooseTypeFromCodeOrDocComment(paramTypeFromCode, paramTypeFromDoc, options) ?? DynamicType.instance;
+        options.typeChain?.push(new TypeChainEntry({ name: paramName, type: paramType, data: options.data, astNode: this }));
         return paramType;
     }
 

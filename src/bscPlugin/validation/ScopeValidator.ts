@@ -404,13 +404,14 @@ export class ScopeValidator {
      * Detect return statements with incompatible types vs. declared return type
      */
     private validateReturnStatement(file: BrsFile, returnStmt: ReturnStatement) {
-        const getTypeOptions = { flags: SymbolTypeFlag.runtime };
+        const data: ExtraSymbolData = {};
+        const getTypeOptions = { flags: SymbolTypeFlag.runtime, data: data };
         let funcType = returnStmt.findAncestor(isFunctionExpression).getType({ flags: SymbolTypeFlag.typetime });
         if (isTypedFunctionType(funcType)) {
             const actualReturnType = this.getNodeTypeWrapper(file, returnStmt?.value, getTypeOptions);
             const compatibilityData: TypeCompatibilityData = {};
 
-            if (actualReturnType && !funcType.returnType.isTypeCompatible(actualReturnType, compatibilityData)) {
+            if (funcType.returnType.isResolvable() && actualReturnType && !funcType.returnType.isTypeCompatible(actualReturnType, compatibilityData)) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.returnTypeMismatch(actualReturnType.toString(), funcType.returnType.toString(), compatibilityData),
                     location: returnStmt.value.location
@@ -695,7 +696,8 @@ export class ScopeValidator {
                     }
                 }
 
-            } else {
+            } else if (!typeData?.isFromDocComment) {
+                // only show "cannot find... " errors if the type is not defined from a doc comment
                 const typeChainScan = util.processTypeChain(typeChain);
                 if (isCallExpression(typeChainScan.astNode.parent) && typeChainScan.astNode.parent.callee === expression) {
                     this.addMultiScopeDiagnostic({

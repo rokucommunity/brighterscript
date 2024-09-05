@@ -26,6 +26,7 @@ import { VoidType } from '../types/VoidType';
 import { TypedFunctionType } from '../types/TypedFunctionType';
 import { ArrayType } from '../types/ArrayType';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
+import brsDocParser from './BrightScriptDocParser';
 
 export class EmptyStatement extends Statement {
     constructor(options?: { range?: Location }
@@ -176,7 +177,10 @@ export class AssignmentStatement extends Statement {
     }
 
     getType(options: GetTypeOptions) {
-        const variableType = this.typeExpression?.getType({ ...options, typeChain: undefined }) ?? this.value.getType({ ...options, typeChain: undefined });
+        const variableTypeFromCode = this.typeExpression?.getType({ ...options, typeChain: undefined });
+        const docs = brsDocParser.parseNode(this);
+        const variableTypeFromDocs = docs?.getTypeTagBscType(this, options);
+        const variableType = util.chooseTypeFromCodeOrDocComment(variableTypeFromCode, variableTypeFromDocs, options) ?? this.value.getType({ ...options, typeChain: undefined });
 
         // Note: compound assignments (eg. +=) are internally dealt with via the RHS being a BinaryExpression
         // so this.value will be a BinaryExpression, and BinaryExpressions can figure out their own types

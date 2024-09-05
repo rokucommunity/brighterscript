@@ -89,11 +89,25 @@ export class BrsFileValidator {
                 node.getSymbolTable().addSymbol('m', { definingNode: node, isInstance: true }, nodeType, SymbolTypeFlag.runtime);
                 // eslint-disable-next-line no-bitwise
                 node.parent.getSymbolTable()?.addSymbol(node.tokens.name?.text, { definingNode: node }, nodeType, SymbolTypeFlag.typetime | SymbolTypeFlag.runtime);
+
+                if (node.findAncestor(isNamespaceStatement)) {
+                    //add the transpiled name for namespaced constructors to the root symbol table
+                    const transpiledClassConstructor = node.getName(ParseMode.BrightScript);
+
+                    this.event.file.parser.ast.symbolTable.addSymbol(
+                        transpiledClassConstructor,
+                        { definingNode: node },
+                        node.getConstructorType(),
+                        // eslint-disable-next-line no-bitwise
+                        SymbolTypeFlag.runtime | SymbolTypeFlag.postTranspile
+                    );
+                }
             },
             AssignmentStatement: (node) => {
+                const data: ExtraSymbolData = {};
                 //register this variable
-                const nodeType = node.getType({ flags: SymbolTypeFlag.runtime });
-                node.parent.getSymbolTable()?.addSymbol(node.tokens.name.text, { definingNode: node, isInstance: true }, nodeType, SymbolTypeFlag.runtime);
+                const nodeType = node.getType({ flags: SymbolTypeFlag.runtime, data: data });
+                node.parent.getSymbolTable()?.addSymbol(node.tokens.name.text, { definingNode: node, isInstance: true, isFromDocComment: data.isFromDocComment }, nodeType, SymbolTypeFlag.runtime);
             },
             DottedSetStatement: (node) => {
                 this.validateNoOptionalChainingInVarSet(node, [node.obj]);
@@ -160,14 +174,15 @@ export class BrsFileValidator {
             },
             FunctionParameterExpression: (node) => {
                 const paramName = node.tokens.name?.text;
-                const nodeType = node.getType({ flags: SymbolTypeFlag.typetime });
+                const data: ExtraSymbolData = {};
+                const nodeType = node.getType({ flags: SymbolTypeFlag.typetime, data: data });
                 // add param symbol at expression level, so it can be used as default value in other params
                 const funcExpr = node.findAncestor<FunctionExpression>(isFunctionExpression);
                 const funcSymbolTable = funcExpr?.getSymbolTable();
-                funcSymbolTable?.addSymbol(paramName, { definingNode: node, isInstance: true }, nodeType, SymbolTypeFlag.runtime);
+                funcSymbolTable?.addSymbol(paramName, { definingNode: node, isInstance: true, isFromDocComment: data.isFromDocComment }, nodeType, SymbolTypeFlag.runtime);
 
                 //also add param symbol at block level, as it may be redefined, and if so, should show a union
-                funcExpr.body.getSymbolTable()?.addSymbol(paramName, { definingNode: node, isInstance: true }, nodeType, SymbolTypeFlag.runtime);
+                funcExpr.body.getSymbolTable()?.addSymbol(paramName, { definingNode: node, isInstance: true, isFromDocComment: data.isFromDocComment }, nodeType, SymbolTypeFlag.runtime);
             },
             InterfaceStatement: (node) => {
                 this.validateDeclarationLocations(node, 'interface', () => util.createBoundingRange(node.tokens.interface, node.tokens.name));
