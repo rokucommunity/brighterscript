@@ -645,12 +645,14 @@ export class Util {
     /**
      * Combine all the documentation for a node - uses the AstNode's leadingTrivia property
      * @param node the node to get the documentation for
-     * @param prettyPrint if true, will format the comment text for markdown
+     * @param options prettyPrint- if true, will format the comment text for markdown, matchingLocations: out Array of locations that match the comment lines
      */
-    public getNodeDocumentation(node: AstNode, prettyPrint = true) {
+    public getNodeDocumentation(node: AstNode, options: { prettyPrint?: boolean; matchingLocations?: Location[] } = { prettyPrint: true }) {
         if (!node) {
             return '';
         }
+        options = options ?? { prettyPrint: true };
+        options.matchingLocations = options.matchingLocations ?? [];
         const nodeTrivia = node.leadingTrivia ?? [];
         const leadingTrivia = isStatement(node)
             ? [...(node.annotations?.map(anno => anno.leadingTrivia ?? []).flat() ?? []), ...nodeTrivia]
@@ -680,36 +682,39 @@ export class Util {
         }
         const jsDocCommentBlockLine = /(\/\*{2,}|\*{1,}\/)/i;
         let usesjsDocCommentBlock = false;
-        if (comments.length > 0) {
-            return comments.reverse()
-                .map(x => x.text.replace(/^('|rem)/i, '').trim())
-                .filter(line => {
-                    if (jsDocCommentBlockLine.exec(line)) {
-                        usesjsDocCommentBlock = true;
-                        return false;
-                    }
-                    return true;
-                }).map(line => {
-                    if (usesjsDocCommentBlock) {
-                        if (line.startsWith('*')) {
-                            //remove jsDoc leading '*'
-                            line = line.slice(1).trim();
-                        }
-                    }
-                    if (prettyPrint && line.startsWith('@')) {
-                        // Handle jsdoc/brightscriptdoc tags specially
-                        // make sure they are on their own markdown line, and add italics
-                        const firstSpaceIndex = line.indexOf(' ');
-                        if (firstSpaceIndex === -1) {
-                            return `\n_${line}_`;
-                        }
-                        const firstWord = line.substring(0, firstSpaceIndex);
-                        return `\n_${firstWord}_ ${line.substring(firstSpaceIndex + 1)}`;
-                    }
-                    return line;
-                }).join('\n');
+        if (comments.length === 0) {
+            return '';
         }
-        return '';
+        return comments.reverse()
+            .map(x => ({ line: x.text.replace(/^('|rem)/i, '').trim(), location: x.location }))
+            .filter(({ line }) => {
+                if (jsDocCommentBlockLine.exec(line)) {
+                    usesjsDocCommentBlock = true;
+                    return false;
+                }
+                return true;
+            }).map(({ line, location }) => {
+                if (usesjsDocCommentBlock) {
+                    if (line.startsWith('*')) {
+                        //remove jsDoc leading '*'
+                        line = line.slice(1).trim();
+                    }
+                }
+                if (options.prettyPrint && line.startsWith('@')) {
+                    // Handle jsdoc/brightscriptdoc tags specially
+                    // make sure they are on their own markdown line, and add italics
+                    const firstSpaceIndex = line.indexOf(' ');
+                    if (firstSpaceIndex === -1) {
+                        return `\n_${line}_`;
+                    }
+                    const firstWord = line.substring(0, firstSpaceIndex);
+                    return `\n_${firstWord}_ ${line.substring(firstSpaceIndex + 1)}`;
+                }
+                if (options.matchingLocations) {
+                    options.matchingLocations.push(location);
+                }
+                return line;
+            }).join('\n');
     }
 
     /**

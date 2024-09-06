@@ -28,6 +28,8 @@ import type { XmlFile } from '../../files/XmlFile';
 import { SGFieldTypes } from '../../parser/SGTypes';
 import { DynamicType } from '../../types';
 import { BscTypeKind } from '../../types/BscTypeKind';
+import type { BrsDocWithType } from '../../parser/BrightScriptDocParser';
+import brsDocParser from '../../parser/BrightScriptDocParser';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -179,6 +181,15 @@ export class ScopeValidator {
                             type: this.getNodeTypeWrapper(file, funcParam, { flags: SymbolTypeFlag.runtime }),
                             nameRange: funcParam.tokens.name.location?.range
                         });
+                    },
+                    AstNode: (node) => {
+                        //check for doc comments
+                        if (!node.leadingTrivia || node.leadingTrivia.filter(triviaToken => triviaToken.kind === TokenKind.Comment).length === 0) {
+                            return;
+                        }
+
+                        this.validateDocComments(node);
+
                     }
                 });
                 // validate only what's needed in the file
@@ -1153,6 +1164,23 @@ export class ScopeValidator {
                         location: field.getAttribute('onchange')?.tokens.value.location
                     }, ScopeValidatorDiagnosticTag.XMLInterface);
                 }
+            }
+        }
+    }
+
+    private validateDocComments(node: AstNode) {
+        const doc = brsDocParser.parseNode(node);
+        for (const docTag of doc.tags) {
+            const docTypeTag = docTag as BrsDocWithType;
+            if (!docTypeTag.type || !docTypeTag.location) {
+                continue;
+            }
+            const foundType = doc.getTypeFromContext(docTypeTag.type, node, { flags: SymbolTypeFlag.typetime });
+            if (!foundType?.isResolvable()) {
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.cannotFindTypeInCommentDoc(docTypeTag.type),
+                    location: docTypeTag.location
+                });
             }
         }
     }

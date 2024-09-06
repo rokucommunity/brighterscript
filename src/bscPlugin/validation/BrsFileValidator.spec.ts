@@ -993,7 +993,9 @@ describe('BrsFileValidator', () => {
                     end function
                 `);
                 program.validate();
-                expectZeroDiagnostics(program);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindTypeInCommentDoc('TypeNotThere').message
+                ]);
                 const data = {} as ExtraSymbolData;
                 expectTypeToBe(
                     file.ast.findChild(isFunctionParameterExpression).getType({
@@ -1035,7 +1037,9 @@ describe('BrsFileValidator', () => {
                     end function
                 `);
                 program.validate();
-                expectZeroDiagnostics(program);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindTypeInCommentDoc('TypeNotThere').message
+                ]);
                 const data = {} as ExtraSymbolData;
                 const funcStmt = file.ast.findChild(isFunctionStatement);
                 const funcType = funcStmt.getType({ flags: SymbolTypeFlag.runtime, data: data });
@@ -1140,7 +1144,9 @@ describe('BrsFileValidator', () => {
                     end function
                 `);
                 program.validate();
-                expectZeroDiagnostics(program);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindTypeInCommentDoc('unknown').message
+                ]);
                 const data = {} as ExtraSymbolData;
                 const funcStmt = file.ast.findChild(isFunctionStatement);
                 const funcType = funcStmt.getType({ flags: SymbolTypeFlag.runtime, data: data });

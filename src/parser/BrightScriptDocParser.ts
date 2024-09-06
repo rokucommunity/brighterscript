@@ -2,7 +2,7 @@ import type { GetSymbolTypeOptions } from '../SymbolTable';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import util from '../util';
 import type { AstNode } from './AstNode';
-
+import type { Location } from 'vscode-languageserver';
 
 const tagRegex = /@(\w+)(?:\s+(.*))?/;
 const paramRegex = /(?:{([^}]*)}\s+)?(?:(\[?\w+\]?))\s*(.*)/;
@@ -21,33 +21,48 @@ export enum BrsDocTagKind {
 export class BrightScriptDocParser {
 
     public parseNode(node: AstNode) {
-        return this.parse(util.getNodeDocumentation(node, false));
+        const matchingLocations: Location[] = [];
+        return this.parse(
+            util.getNodeDocumentation(node, {
+                prettyPrint: false,
+                matchingLocations: matchingLocations
+            }),
+            matchingLocations);
     }
 
-    public parse(documentation: string) {
+    public parse(documentation: string, matchingLocations: Location[] = []) {
         const brsDoc = new BrightScriptDoc(documentation);
         if (!documentation) {
             return brsDoc;
         }
         const lines = documentation.split('\n');
-        const blockLines = [] as string[];
-        const descriptionLines = [] as string[];
+        const blockLines = [] as { line: string; location?: Location }[];
+        const descriptionLines = [] as { line: string; location?: Location }[];
         let lastTag: BrsDocTag;
+        let haveMatchingLocations = false;
+        if (lines.length === matchingLocations.length) {
+            // We locations for each line, so we can add Locations
+            haveMatchingLocations = true;
+        }
         function augmentLastTagWithBlockLines() {
             if (blockLines.length > 0 && lastTag) {
                 // add to the description or details to previous tag
                 if (typeof (lastTag as BrsDocWithDescription).description !== 'undefined') {
-                    (lastTag as BrsDocWithDescription).description += '\n' + blockLines.join('\n');
+                    (lastTag as BrsDocWithDescription).description += '\n' + blockLines.map(obj => obj.line).join('\n');
                     (lastTag as BrsDocWithDescription).description = (lastTag as BrsDocWithDescription).description.trim();
                 }
                 if (typeof lastTag.detail !== 'undefined') {
-                    lastTag.detail += '\n' + blockLines.join('\n');
+                    lastTag.detail += '\n' + blockLines.map(obj => obj.line).join('\n');
                     lastTag.detail = lastTag.detail.trim();
+                }
+                if (haveMatchingLocations) {
+                    lastTag.location = util.createBoundingLocation(lastTag.location, blockLines[blockLines.length - 1].location);
                 }
             }
             blockLines.length = 0;
         }
         for (let line of lines) {
+            let location = haveMatchingLocations ? matchingLocations.shift() : undefined;
             line = line.trim();
             while (line.startsWith('\'')) {
                 // remove leading apostrophes
@@ -56,14 +71,14 @@ export class BrightScriptDocParser {
             if (!line.startsWith('@')) {
                 if (lastTag) {
 
-                    blockLines.push(line);
+                    blockLines.push({ line: line, location: location });
                 } else if (descriptionLines.length > 0 || line) {
                     // add a line to the list if it's not empty
-                    descriptionLines.push(line);
+                    descriptionLines.push({ line: line, location: location });
                 }
             } else {
                 augmentLastTagWithBlockLines();
-                const newTag = this.parseLine(line);
+                const newTag = this.parseLine(line, location);
                 lastTag = newTag;
                 if (newTag) {
                     brsDoc.tags.push(newTag);
@@ -71,11 +86,11 @@ export class BrightScriptDocParser {
             }
         }
         augmentLastTagWithBlockLines();
-        brsDoc.description = descriptionLines.join('\n').trim();
+        brsDoc.description = descriptionLines.map(obj => obj.line).join('\n').trim();
         return brsDoc;
     }
 
-    private parseLine(line: string) {
+    private parseLine(line: string, location?: Location) {
         line = line.trim();
         const match = tagRegex.exec(line);
         if (!match) {
@@ -86,18 +101,19 @@ export class BrightScriptDocParser {
 
         switch (tagName) {
             case BrsDocTagKind.Param:
-                return this.parseParam(detail);
+                return { ...this.parseParam(detail), location: location };
             case BrsDocTagKind.Return:
             case 'returns':
-                return this.parseReturn(detail);
+                return { ...this.parseReturn(detail), location: location };
             case BrsDocTagKind.Type:
-                return this.parseType(detail);
+                return { ...this.parseType(detail), location: location };
             case BrsDocTagKind.Var:
-                return { ...this.parseParam(detail), tagName: BrsDocTagKind.Var };
+                return { ...this.parseParam(detail), tagName: BrsDocTagKind.Var, location: location };
         }
         return {
             tagName: tagName,
-            detail: detail
+            detail: detail,
+            location: location
         };
     }
 
@@ -229,13 +245,11 @@ export class BrightScriptDoc {
 
     getParamBscType(name: string, nodeContext: AstNode, options: GetSymbolTypeOptions) {
         const param = this.getParam(name);
-
         return this.getTypeFromContext(param?.type, nodeContext, options);
     }
 
     getVarBscType(name: string, nodeContext: AstNode, options: GetSymbolTypeOptions) {
         const param = this.getVar(name);
-
         return this.getTypeFromContext(param?.type, nodeContext, options);
     }
 
@@ -276,6 +290,7 @@ export class BrightScriptDoc {
 export interface BrsDocTag {
     tagName: string;
     detail?: string;
+    location?: Location;
 }
 export interface BrsDocWithType extends BrsDocTag {
     type?: string;
