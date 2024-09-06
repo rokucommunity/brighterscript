@@ -645,7 +645,9 @@ export class Util {
     /**
      * Combine all the documentation for a node - uses the AstNode's leadingTrivia property
      * @param node the node to get the documentation for
-     * @param options prettyPrint- if true, will format the comment text for markdown, matchingLocations: out Array of locations that match the comment lines
+     * @param options extra options
+     * @param options.prettyPrint if true, will format the comment text for markdown
+     * @param options.matchingLocations out Array of locations that match the comment lines
      */
     public getNodeDocumentation(node: AstNode, options: { prettyPrint?: boolean; matchingLocations?: Location[] } = { prettyPrint: true }) {
         if (!node) {

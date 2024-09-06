@@ -388,12 +388,11 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         //if there's a defined return type, use that
         let returnType: BscType;
 
-
         const docs = brsDocParser.parseNode(this.findAncestor(isFunctionStatement));
 
         returnType = util.chooseTypeFromCodeOrDocComment(
             this.returnTypeExpression?.getType({ ...options, typeChain: undefined }),
-            docs.getReturnBscType(this, { ...options, tableProvider: () => this.getSymbolTable() }),
+            docs.getReturnBscType({ ...options, tableProvider: () => this.getSymbolTable() }),
             options
         );
 
@@ -462,7 +461,7 @@ export class FunctionParameterExpression extends Expression {
 
         const paramTypeFromCode = this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime, typeChain: undefined }) ??
             this.defaultValue?.getType({ ...options, flags: SymbolTypeFlag.runtime, typeChain: undefined });
-        const paramTypeFromDoc = docs.getParamBscType(paramName, this, { ...options, fullName: paramName, tableProvider: () => this.getSymbolTable() });
+        const paramTypeFromDoc = docs.getParamBscType(paramName, { ...options, fullName: paramName, tableProvider: () => this.getSymbolTable() });
 
         let paramType = util.chooseTypeFromCodeOrDocComment(paramTypeFromCode, paramTypeFromDoc, options) ?? DynamicType.instance;
         options.typeChain?.push(new TypeChainEntry({ name: paramName, type: paramType, data: options.data, astNode: this }));

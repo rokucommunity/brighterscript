@@ -14,7 +14,8 @@ import {
     TokenKind,
     BlockTerminators,
     ReservedWords,
-    CompoundAssignmentOperators
+    CompoundAssignmentOperators,
+    BinaryExpressionOperatorTokens
 } from '../lexer/TokenKind';
 import type {
     PrintSeparatorSpace,
@@ -2372,6 +2373,10 @@ export class Parser {
             return new ExpressionStatement({ expression: expr });
         }
 
+        if (this.checkAny(...BinaryExpressionOperatorTokens)) {
+            expr = new BinaryExpression({ left: expr, operator: this.advance(), right: this.expression() });
+        }
+
         //at this point, it's probably an error. However, we recover a little more gracefully by creating an inclosing ExpressionStatement
         this.diagnostics.push({
             ...DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression(),
@@ -3509,6 +3514,8 @@ export interface ParseOptions {
      *
      */
     bsConsts?: Map<string, boolean>;
+
+    astRootFunction?: string;
 }
 
 

@@ -179,7 +179,7 @@ export class AssignmentStatement extends Statement {
     getType(options: GetTypeOptions) {
         const variableTypeFromCode = this.typeExpression?.getType({ ...options, typeChain: undefined });
         const docs = brsDocParser.parseNode(this);
-        const variableTypeFromDocs = docs?.getTypeTagBscType(this, options);
+        const variableTypeFromDocs = docs?.getTypeTagBscType(options);
         const variableType = util.chooseTypeFromCodeOrDocComment(variableTypeFromCode, variableTypeFromDocs, options) ?? this.value.getType({ ...options, typeChain: undefined });
 
         // Note: compound assignments (eg. +=) are internally dealt with via the RHS being a BinaryExpression

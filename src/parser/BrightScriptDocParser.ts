@@ -1,8 +1,11 @@
 import type { GetSymbolTypeOptions } from '../SymbolTable';
-import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import util from '../util';
-import type { AstNode } from './AstNode';
+import type { AstNode, Expression } from './AstNode';
 import type { Location } from 'vscode-languageserver';
+import { Parser } from './Parser';
+import type { ExpressionStatement } from './Statement';
+import { isExpressionStatement } from '../astUtils/reflection';
+import { SymbolTypeFlag } from '../SymbolTypeFlag';
 
 const tagRegex = /@(\w+)(?:\s+(.*))?/;
 const paramRegex = /(?:{([^}]*)}\s+)?(?:(\[?\w+\]?))\s*(.*)/;
@@ -13,21 +16,25 @@ export enum BrsDocTagKind {
     Description = 'description',
     Param = 'param',
     Return = 'return',
-    Type = 'type',
-    Var = 'var'
+    Type = 'type'
 }
-
 
 export class BrightScriptDocParser {
 
     public parseNode(node: AstNode) {
         const matchingLocations: Location[] = [];
-        return this.parse(
+        const result = this.parse(
             util.getNodeDocumentation(node, {
                 prettyPrint: false,
                 matchingLocations: matchingLocations
             }),
             matchingLocations);
+        for (const tag of result.tags) {
+            if ((tag as BrsDocWithType).typeExpression) {
+                (tag as BrsDocWithType).typeExpression.symbolTable = node.getSymbolTable();
+            }
+        }
+        return result;
     }
 
     public parse(documentation: string, matchingLocations: Location[] = []) {
@@ -107,8 +114,6 @@ export class BrightScriptDocParser {
                 return { ...this.parseReturn(detail), location: location };
             case BrsDocTagKind.Type:
                 return { ...this.parseType(detail), location: location };
-            case BrsDocTagKind.Var:
-                return { ...this.parseParam(detail), tagName: BrsDocTagKind.Var, location: location };
         }
         return {
             tagName: tagName,
@@ -137,7 +142,8 @@ export class BrightScriptDocParser {
         return {
             tagName: BrsDocTagKind.Param,
             name: paramName,
-            type: type,
+            typeString: type,
+            typeExpression: this.getTypeExpressionFromTypeString(type),
             description: description,
             optional: optional,
             detail: detail
@@ -154,7 +160,8 @@ export class BrightScriptDocParser {
         }
         return {
             tagName: BrsDocTagKind.Return,
-            type: type,
+            typeString: type,
+            typeExpression: this.getTypeExpressionFromTypeString(type),
             description: description,
             detail: detail
         };
@@ -170,9 +177,26 @@ export class BrightScriptDocParser {
         }
         return {
             tagName: BrsDocTagKind.Type,
-            type: type,
+            typeString: type,
+            typeExpression: this.getTypeExpressionFromTypeString(type),
             detail: detail
         };
+    }
+
+    private getTypeExpressionFromTypeString(typeString: string) {
+        if (!typeString) {
+            return undefined;
+        }
+        let result: Expression;
+        try {
+            let { ast } = Parser.parse(typeString);
+            if (isExpressionStatement(ast?.statements?.[0])) {
+                result = (ast.statements[0] as ExpressionStatement).expression;
+            }
+        } catch (e) {
+            //ignore
+        }
+        return result;
     }
 }
 
@@ -211,14 +235,6 @@ export class BrightScriptDoc {
         }) as BrsDocParamTag;
     }
 
-    getVar(name: string) {
-        const lowerName = name.toLowerCase();
-        return this.tags.find((tag) => {
-            return tag.tagName === BrsDocTagKind.Var && (tag as BrsDocParamTag).name.toLowerCase() === lowerName;
-        }) as BrsDocParamTag;
-    }
-
-
     getReturn() {
         return this.tags.find((tag) => {
             return tag.tagName === BrsDocTagKind.Return || tag.tagName === 'returns';
@@ -228,6 +244,13 @@ export class BrightScriptDoc {
     getTypeTag() {
         return this.tags.find((tag) => {
             return tag.tagName === BrsDocTagKind.Type;
+        }) as BrsDocWithType;
+    }
+
+    getTypeTagByName(name: string) {
+        const lowerName = name.toLowerCase();
+        return this.tags.find((tag) => {
+            return tag.tagName === BrsDocTagKind.Type && (tag as BrsDocParamTag).name.toLowerCase() === lowerName;
         }) as BrsDocWithType;
     }
 
@@ -243,47 +266,19 @@ export class BrightScriptDoc {
         });
     }
 
-    getParamBscType(name: string, nodeContext: AstNode, options: GetSymbolTypeOptions) {
+    getParamBscType(name: string, options: GetSymbolTypeOptions = { flags: SymbolTypeFlag.typetime }) {
         const param = this.getParam(name);
-        return this.getTypeFromContext(param?.type, nodeContext, options);
+        return param?.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime });
     }
 
-    getVarBscType(name: string, nodeContext: AstNode, options: GetSymbolTypeOptions) {
-        const param = this.getVar(name);
-        return this.getTypeFromContext(param?.type, nodeContext, options);
-    }
-
-    getReturnBscType(nodeContext: AstNode, options: GetSymbolTypeOptions) {
+    getReturnBscType(options: GetSymbolTypeOptions = { flags: SymbolTypeFlag.typetime }) {
         const retTag = this.getReturn();
-
-        return this.getTypeFromContext(retTag?.type, nodeContext, options);
+        return retTag?.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime });
     }
 
-
-    getTypeTagBscType(nodeContext: AstNode, options: GetSymbolTypeOptions) {
-        const retTag = this.getTypeTag();
-        return this.getTypeFromContext(retTag?.type, nodeContext, options);
-    }
-
-    getTypeFromContext(typeName: string, nodeContext: AstNode, options: GetSymbolTypeOptions) {
-        // TODO: Add support for union types here
-        const topSymbolTable = nodeContext?.getSymbolTable();
-        if (!topSymbolTable || !typeName) {
-            return undefined;
-        }
-        const fullName = typeName;
-        const parts = typeName.split('.');
-        const optionsToUse = {
-            ...options,
-            flags: SymbolTypeFlag.typetime,
-            fullName: fullName,
-            typeChain: undefined
-        };
-        let result = topSymbolTable.getSymbolType(parts.shift(), optionsToUse);
-        while (result && parts.length > 0) {
-            result = result.getMemberType(parts.shift(), optionsToUse);
-        }
-        return result;
+    getTypeTagBscType(options: GetSymbolTypeOptions = { flags: SymbolTypeFlag.typetime }) {
+        const typeTag = this.getTypeTag();
+        return typeTag?.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime });
     }
 }
 
@@ -293,7 +288,8 @@ export interface BrsDocTag {
     location?: Location;
 }
 export interface BrsDocWithType extends BrsDocTag {
-    type?: string;
+    typeString?: string;
+    typeExpression?: Expression;
 }
 
 export interface BrsDocWithDescription extends BrsDocWithType {
@@ -304,7 +300,6 @@ export interface BrsDocParamTag extends BrsDocWithDescription {
     name: string;
     optional?: boolean;
 }
-
 
 export let brsDocParser = new BrightScriptDocParser();
 export default brsDocParser;

@@ -1172,13 +1172,13 @@ export class ScopeValidator {
         const doc = brsDocParser.parseNode(node);
         for (const docTag of doc.tags) {
             const docTypeTag = docTag as BrsDocWithType;
-            if (!docTypeTag.type || !docTypeTag.location) {
+            if (!docTypeTag.typeExpression || !docTypeTag.location) {
                 continue;
             }
-            const foundType = doc.getTypeFromContext(docTypeTag.type, node, { flags: SymbolTypeFlag.typetime });
+            const foundType = docTypeTag.typeExpression?.getType({ flags: SymbolTypeFlag.typetime });
             if (!foundType?.isResolvable()) {
                 this.addMultiScopeDiagnostic({
-                    ...DiagnosticMessages.cannotFindTypeInCommentDoc(docTypeTag.type),
+                    ...DiagnosticMessages.cannotFindTypeInCommentDoc(docTypeTag.typeString),
                     location: docTypeTag.location
                 });
             }

@@ -922,9 +922,10 @@ describe('BrsFileValidator', () => {
                 program.validate();
                 expectZeroDiagnostics(program);
                 const data = {} as ExtraSymbolData;
+                const funcParamExpr = file.ast.findChild(isFunctionParameterExpression);
                 expectTypeToBe(
-                    file.ast.findChild(isFunctionParameterExpression).getType({
-                        flags: SymbolTypeFlag.runtime, data: data
+                    funcParamExpr.getType({
+                        flags: SymbolTypeFlag.typetime, data: data
                     }),
                     ClassType
                 );
@@ -948,7 +949,7 @@ describe('BrsFileValidator', () => {
                 const data = {} as ExtraSymbolData;
                 expectTypeToBe(
                     file.ast.findChild(isFunctionParameterExpression).getType({
-                        flags: SymbolTypeFlag.runtime, data: data
+                        flags: SymbolTypeFlag.typetime, data: data
                     }),
                     InterfaceType
                 );
@@ -1085,7 +1086,7 @@ describe('BrsFileValidator', () => {
                 expectZeroDiagnostics(program);
                 const data = {} as ExtraSymbolData;
                 const funcStmt = file.ast.findChild(isFunctionStatement);
-                const funcType = funcStmt.getType({ flags: SymbolTypeFlag.runtime, data: data });
+                const funcType = funcStmt.getType({ flags: SymbolTypeFlag.typetime, data: data });
                 expectTypeToBe(funcType, TypedFunctionType);
                 const returnType = (funcType as TypedFunctionType).returnType;
                 expectTypeToBe(returnType, ClassType);
