@@ -3514,8 +3514,6 @@ export interface ParseOptions {
      *
      */
     bsConsts?: Map<string, boolean>;
-
-    astRootFunction?: string;
 }
 
 

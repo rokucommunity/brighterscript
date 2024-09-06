@@ -37,7 +37,7 @@ You can override the type of a variable in brs files by starting a comment with 
 runtime = getRuntimeFromServer()
 ```
 
-## Function-level variable type
+## TODO: Function-level variable type 
 Sometimes you need to declare a variable at more than one location in your code. In this situation, you can declare the variable type in the body of the function before the variable usage, and that variable will then be treated as that type.
 
 ```brighterscript
