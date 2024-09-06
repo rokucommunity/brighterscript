@@ -1172,5 +1172,39 @@ describe('BrsFileValidator', () => {
             });
 
         });
+
+        // Skipped until we can figure out how to handle @var tags
+        describe.skip('@var', () => {
+            it('uses @var type in brs file to define types of variables', () => {
+                const file = program.setFile<BrsFile>('source/main.brs', `
+                    function getPie() as string
+                        ' @var {string} someDate
+                        if m.top.isTrue
+                            someDate = getDate()
+                        else
+                            someDate = m.date2
+                        end if
+
+                        if m.someProp
+                            someDate = m.someProp.date
+                        end if
+
+                        return someDate
+                    end function
+
+                    function getDate()
+                        return "Dec 25"
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const data = {} as ExtraSymbolData;
+                const funcStmt = file.ast.findChild(isFunctionStatement);
+                const returnStmt = funcStmt.findChild(isReturnStatement);
+                const varType = returnStmt.getSymbolTable().getSymbolType('someDate', { flags: SymbolTypeFlag.runtime, data: data });
+                expectTypeToBe(varType, StringType);
+            });
+
+        });
     });
 });

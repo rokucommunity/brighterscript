@@ -9,6 +9,15 @@ const paramRegex = /(?:{([^}]*)}\s+)?(?:(\[?\w+\]?))\s*(.*)/;
 const returnRegex = /(?:{([^}]*)})?\s*(.*)/;
 const typeTagRegex = /(?:{([^}]*)})?/;
 
+export enum BrsDocTagKind {
+    Description = 'description',
+    Param = 'param',
+    Return = 'return',
+    Type = 'type',
+    Var = 'var'
+}
+
+
 export class BrightScriptDocParser {
 
     public parseNode(node: AstNode) {
@@ -72,17 +81,19 @@ export class BrightScriptDocParser {
         if (!match) {
             return;
         }
-        const tagName = match[1].toLowerCase();
+        const tagName = match[1];
         const detail = match[2] ?? '';
 
         switch (tagName) {
-            case 'param':
+            case BrsDocTagKind.Param:
                 return this.parseParam(detail);
-            case 'return':
+            case BrsDocTagKind.Return:
             case 'returns':
                 return this.parseReturn(detail);
-            case 'type':
+            case BrsDocTagKind.Type:
                 return this.parseType(detail);
+            case BrsDocTagKind.Var:
+                return { ...this.parseParam(detail), tagName: BrsDocTagKind.Var };
         }
         return {
             tagName: tagName,
@@ -108,7 +119,7 @@ export class BrightScriptDocParser {
             paramName = paramName.replace(/\[|\]/g, '').trim();
         }
         return {
-            tagName: 'param',
+            tagName: BrsDocTagKind.Param,
             name: paramName,
             type: type,
             description: description,
@@ -126,7 +137,7 @@ export class BrightScriptDocParser {
             description = match[2] ?? '';
         }
         return {
-            tagName: 'return',
+            tagName: BrsDocTagKind.Return,
             type: type,
             description: description,
             detail: detail
@@ -142,14 +153,14 @@ export class BrightScriptDocParser {
             }
         }
         return {
-            tagName: 'type',
+            tagName: BrsDocTagKind.Type,
             type: type,
             detail: detail
         };
     }
 }
 
-class BrightScriptDoc {
+export class BrightScriptDoc {
 
     protected _description: string;
 
@@ -166,7 +177,7 @@ class BrightScriptDoc {
 
     get description() {
         const descTag = this.tags.find((tag) => {
-            return tag.tagName === 'description';
+            return tag.tagName === BrsDocTagKind.Description;
         });
 
         let result = this._description ?? '';
@@ -178,39 +189,52 @@ class BrightScriptDoc {
     }
 
     getParam(name: string) {
+        const lowerName = name.toLowerCase();
         return this.tags.find((tag) => {
-            return tag.tagName === 'param' && (tag as BrsDocParamTag).name === name;
+            return tag.tagName === BrsDocTagKind.Param && (tag as BrsDocParamTag).name.toLowerCase() === lowerName;
         }) as BrsDocParamTag;
     }
 
+    getVar(name: string) {
+        const lowerName = name.toLowerCase();
+        return this.tags.find((tag) => {
+            return tag.tagName === BrsDocTagKind.Var && (tag as BrsDocParamTag).name.toLowerCase() === lowerName;
+        }) as BrsDocParamTag;
+    }
+
+
     getReturn() {
         return this.tags.find((tag) => {
-            return tag.tagName === 'return' || tag.tagName === 'returns';
+            return tag.tagName === BrsDocTagKind.Return || tag.tagName === 'returns';
         }) as BrsDocWithDescription;
     }
 
     getTypeTag() {
         return this.tags.find((tag) => {
-            return tag.tagName === 'type';
+            return tag.tagName === BrsDocTagKind.Type;
         }) as BrsDocWithType;
     }
 
     getTag(tagName: string) {
-        const lowerTagName = tagName.toLowerCase();
         return this.tags.find((tag) => {
-            return tag.tagName === lowerTagName;
+            return tag.tagName === tagName;
         });
     }
 
     getAllTags(tagName: string) {
-        const lowerTagName = tagName.toLowerCase();
         return this.tags.filter((tag) => {
-            return tag.tagName === lowerTagName;
+            return tag.tagName === tagName;
         });
     }
 
     getParamBscType(name: string, nodeContext: AstNode, options: GetSymbolTypeOptions) {
         const param = this.getParam(name);
+
+        return this.getTypeFromContext(param?.type, nodeContext, options);
+    }
+
+    getVarBscType(name: string, nodeContext: AstNode, options: GetSymbolTypeOptions) {
+        const param = this.getVar(name);
 
         return this.getTypeFromContext(param?.type, nodeContext, options);
     }
@@ -227,7 +251,7 @@ class BrightScriptDoc {
         return this.getTypeFromContext(retTag?.type, nodeContext, options);
     }
 
-    private getTypeFromContext(typeName: string, nodeContext: AstNode, options: GetSymbolTypeOptions) {
+    getTypeFromContext(typeName: string, nodeContext: AstNode, options: GetSymbolTypeOptions) {
         // TODO: Add support for union types here
         const topSymbolTable = nodeContext?.getSymbolTable();
         if (!topSymbolTable || !typeName) {
@@ -249,19 +273,19 @@ class BrightScriptDoc {
     }
 }
 
-interface BrsDocTag {
+export interface BrsDocTag {
     tagName: string;
     detail?: string;
 }
-interface BrsDocWithType extends BrsDocTag {
+export interface BrsDocWithType extends BrsDocTag {
     type?: string;
 }
 
-interface BrsDocWithDescription extends BrsDocWithType {
+export interface BrsDocWithDescription extends BrsDocWithType {
     description?: string;
 }
 
-interface BrsDocParamTag extends BrsDocWithDescription {
+export interface BrsDocParamTag extends BrsDocWithDescription {
     name: string;
     optional?: boolean;
 }
