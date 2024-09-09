@@ -1,6 +1,6 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
-import { TokenKind } from '../lexer/TokenKind';
+import { PrintSeparatorTokens, TokenKind } from '../lexer/TokenKind';
 import type { DottedGetExpression, FunctionExpression, FunctionParameterExpression, LiteralExpression, TypeExpression, TypecastExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
@@ -9,7 +9,7 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
-import { isCallExpression, isCatchStatement, isConditionalCompileStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTryCatchStatement, isTypedefProvider, isUnaryExpression, isVoidType, isWhileStatement } from '../astUtils/reflection';
+import { isCallExpression, isCatchStatement, isConditionalCompileStatement, isEnumMemberStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTryCatchStatement, isTypedefProvider, isUnaryExpression, isVoidType, isWhileStatement } from '../astUtils/reflection';
 import { TypeChainEntry, type GetTypeOptions, type TranspileResult, type TypedefProvider } from '../interfaces';
 import { createInvalidLiteral, createMethodStatement, createToken } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
@@ -771,11 +771,11 @@ export class PrintStatement extends Statement {
      * Creates a new internal representation of a BrightScript `print` statement.
      * @param options the options for this statement
      * @param options.print a print token
-     * @param options.expressions an array of expressions or `PrintSeparator`s to be evaluated and printed.
+     * @param options.expressions an array of expressions to be evaluated and printed. Wrap `PrintSeparator`s (`;` or `,`) in LiteralExpression
      */
     constructor(options: {
         print: Token;
-        expressions: Array<Expression | PrintSeparatorTab | PrintSeparatorSpace>;
+        expressions: Array<Expression>;
     }) {
         super();
         this.tokens = {
@@ -790,7 +790,7 @@ export class PrintStatement extends Statement {
     public readonly tokens: {
         readonly print: Token;
     };
-    public readonly expressions: Array<Expression | PrintSeparatorTab | PrintSeparatorSpace>;
+    public readonly expressions: Array<Expression>;
     public readonly kind = AstNodeKind.PrintStatement;
 
     public readonly location: Location | undefined;
@@ -809,8 +809,10 @@ export class PrintStatement extends Statement {
                     state.tokenToSourceNode(expressionOrSeparator)
                 );
             }
-            //if there's an expression after us, add a space
-            if ((this.expressions[i + 1] as any)?.transpile) {
+            //if there isn't a print separator, add a space
+            const nextExpression = this.expressions[i + 1];
+            const isSeparator = isLiteralExpression(nextExpression) && PrintSeparatorTokens.includes(nextExpression.tokens.value.kind);
+            if (nextExpression && !isSeparator) {
                 result.push(' ');
             }
         }
@@ -819,8 +821,7 @@ export class PrintStatement extends Statement {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
-            //sometimes we have semicolon Tokens in the expressions list (should probably fix that...), so only walk the actual expressions
-            walkArray(this.expressions, visitor, options, this, (item) => isExpression(item as any));
+            walkArray(this.expressions, visitor, options, this);
         }
     }
 

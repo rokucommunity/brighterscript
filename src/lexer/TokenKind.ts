@@ -699,3 +699,12 @@ export const AllowedTriviaTokens: ReadonlyArray<TokenKind> = [
     TokenKind.Comment,
     TokenKind.Colon
 ];
+
+
+/**
+ * The tokens that are used as print separators
+ */
+export const PrintSeparatorTokens: ReadonlyArray<TokenKind> = [
+    TokenKind.Comma,
+    TokenKind.Semicolon
+];

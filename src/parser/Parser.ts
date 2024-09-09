@@ -2428,16 +2428,13 @@ export class Parser {
     private printStatement(): PrintStatement {
         let printKeyword = this.advance();
 
-        let values: (
-            | Expression
-            | PrintSeparatorTab
-            | PrintSeparatorSpace)[] = [];
+        let values: Expression[] = [];
 
         while (!this.checkEndOfStatement()) {
             if (this.check(TokenKind.Semicolon)) {
-                values.push(this.advance() as PrintSeparatorSpace);
+                values.push(new LiteralExpression({ value: this.advance() as PrintSeparatorSpace }));
             } else if (this.check(TokenKind.Comma)) {
-                values.push(this.advance() as PrintSeparatorTab);
+                values.push(new LiteralExpression({ value: this.advance() as PrintSeparatorTab }));
             } else if (this.check(TokenKind.Else)) {
                 break; // inline branch
             } else {
