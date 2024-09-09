@@ -1179,7 +1179,7 @@ export class ScopeValidator {
             if (!foundType?.isResolvable()) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.cannotFindTypeInCommentDoc(docTypeTag.typeString),
-                    location: docTypeTag.location
+                    location: brsDocParser.getTypeLocationFromToken(docTypeTag.token) ?? docTypeTag.location
                 });
             }
         }

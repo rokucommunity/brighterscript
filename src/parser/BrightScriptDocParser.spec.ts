@@ -6,6 +6,9 @@ import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { IntegerType } from '../types/IntegerType';
 import { UnionType } from '../types/UnionType';
 import { isReferenceType } from '../astUtils/reflection';
+import { createToken } from '../astUtils/creators';
+import { TokenKind } from '../lexer/TokenKind';
+import util from '../util';
 
 describe('BrightScriptDocParser', () => {
 
@@ -324,5 +327,32 @@ describe('BrightScriptDocParser', () => {
             expect(doc.getReturn().typeString).to.equal('integer');
         });
 
+    });
+
+    describe('getTypeExpressionFromTypeString', () => {
+        it('should get the location of the type', () => {
+            const text = '\' @param {integer} test';
+            const commentToken = createToken(TokenKind.Comment, text, util.createLocation(1, 0, 1, text.length));
+            const typeLoc = brsDocParser.getTypeLocationFromToken(commentToken);
+            expect(typeLoc.range.start.character).to.equal(10);
+            expect(typeLoc.range.end.character).to.equal(17);
+        });
+
+        it('should return undefined if no type found', () => {
+            const texts = [
+                '\' @param test',
+                '\' @type oijp oisjoisj oi',
+                '\' @param {start curly brace',
+                '\' @param integer}',
+                '\' @param }integer{',
+                '\' @param }integer{ }}'
+            ];
+            for (const text of texts) {
+                const commentToken = createToken(TokenKind.Comment, text, util.createLocation(1, 0, 1, text.length));
+                const typeLoc = brsDocParser.getTypeLocationFromToken(commentToken);
+                expect(typeLoc).to.be.undefined;
+            }
+
+        });
     });
 });

@@ -6,6 +6,7 @@ import { Parser } from './Parser';
 import type { ExpressionStatement } from './Statement';
 import { isExpressionStatement } from '../astUtils/reflection';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
+import type { Token } from '../lexer/Token';
 
 const tagRegex = /@(\w+)(?:\s+(.*))?/;
 const paramRegex = /(?:{([^}]*)}\s+)?(?:(\[?\w+\]?))\s*(.*)/;
@@ -22,13 +23,13 @@ export enum BrsDocTagKind {
 export class BrightScriptDocParser {
 
     public parseNode(node: AstNode) {
-        const matchingLocations: Location[] = [];
+        const commentTokens: Token[] = [];
         const result = this.parse(
             util.getNodeDocumentation(node, {
                 prettyPrint: false,
-                matchingLocations: matchingLocations
+                commentTokens: commentTokens
             }),
-            matchingLocations);
+            commentTokens);
         for (const tag of result.tags) {
             if ((tag as BrsDocWithType).typeExpression) {
                 (tag as BrsDocWithType).typeExpression.symbolTable = node.getSymbolTable();
@@ -37,19 +38,19 @@ export class BrightScriptDocParser {
         return result;
     }
 
-    public parse(documentation: string, matchingLocations: Location[] = []) {
+    public parse(documentation: string, matchingTokens: Token[] = []) {
         const brsDoc = new BrightScriptDoc(documentation);
         if (!documentation) {
             return brsDoc;
         }
         const lines = documentation.split('\n');
-        const blockLines = [] as { line: string; location?: Location }[];
-        const descriptionLines = [] as { line: string; location?: Location }[];
+        const blockLines = [] as { line: string; token?: Token }[];
+        const descriptionLines = [] as { line: string; token?: Token }[];
         let lastTag: BrsDocTag;
-        let haveMatchingLocations = false;
-        if (lines.length === matchingLocations.length) {
+        let haveMatchingTokens = false;
+        if (lines.length === matchingTokens.length) {
             // We locations for each line, so we can add Locations
-            haveMatchingLocations = true;
+            haveMatchingTokens = true;
         }
         function augmentLastTagWithBlockLines() {
             if (blockLines.length > 0 && lastTag) {
@@ -62,14 +63,14 @@ export class BrightScriptDocParser {
                     lastTag.detail += '\n' + blockLines.map(obj => obj.line).join('\n');
                     lastTag.detail = lastTag.detail.trim();
                 }
-                if (haveMatchingLocations) {
-                    lastTag.location = util.createBoundingLocation(lastTag.location, blockLines[blockLines.length - 1].location);
+                if (haveMatchingTokens) {
+                    lastTag.location = util.createBoundingLocation(lastTag.location, blockLines[blockLines.length - 1].token.location);
                 }
             }
             blockLines.length = 0;
         }
         for (let line of lines) {
-            let location = haveMatchingLocations ? matchingLocations.shift() : undefined;
+            let token = haveMatchingTokens ? matchingTokens.shift() : undefined;
             line = line.trim();
             while (line.startsWith('\'')) {
                 // remove leading apostrophes
@@ -78,14 +79,14 @@ export class BrightScriptDocParser {
             if (!line.startsWith('@')) {
                 if (lastTag) {
 
-                    blockLines.push({ line: line, location: location });
+                    blockLines.push({ line: line, token: token });
                 } else if (descriptionLines.length > 0 || line) {
                     // add a line to the list if it's not empty
-                    descriptionLines.push({ line: line, location: location });
+                    descriptionLines.push({ line: line, token: token });
                 }
             } else {
                 augmentLastTagWithBlockLines();
-                const newTag = this.parseLine(line, location);
+                const newTag = this.parseLine(line, token);
                 lastTag = newTag;
                 if (newTag) {
                     brsDoc.tags.push(newTag);
@@ -97,7 +98,31 @@ export class BrightScriptDocParser {
         return brsDoc;
     }
 
-    private parseLine(line: string, location?: Location) {
+    public getTypeLocationFromToken(token: Token): Location {
+        if (!token?.location) {
+            return undefined;
+        }
+        const startCurly = token.text.indexOf('{');
+        const endCurly = token.text.indexOf('}');
+        if (startCurly === -1 || endCurly === -1 || endCurly <= startCurly) {
+            return undefined;
+        }
+        return {
+            uri: token.location.uri,
+            range: {
+                start: {
+                    line: token.location.range.start.line,
+                    character: token.location.range.start.character + startCurly + 1
+                },
+                end: {
+                    line: token.location.range.start.line,
+                    character: token.location.range.start.character + endCurly
+                }
+            }
+        };
+    }
+
+    private parseLine(line: string, token?: Token) {
         line = line.trim();
         const match = tagRegex.exec(line);
         if (!match) {
@@ -106,19 +131,27 @@ export class BrightScriptDocParser {
         const tagName = match[1];
         const detail = match[2] ?? '';
 
+        let result: BrsDocTag = {
+            tagName: tagName,
+            detail: detail
+        };
+
         switch (tagName) {
             case BrsDocTagKind.Param:
-                return { ...this.parseParam(detail), location: location };
+                result = this.parseParam(detail);
+                break;
             case BrsDocTagKind.Return:
             case 'returns':
-                return { ...this.parseReturn(detail), location: location };
+                result = this.parseReturn(detail);
+                break;
             case BrsDocTagKind.Type:
-                return { ...this.parseType(detail), location: location };
+                result = this.parseType(detail);
+                break;
         }
         return {
-            tagName: tagName,
-            detail: detail,
-            location: location
+            ...result,
+            token: token,
+            location: token?.location
         };
     }
 
@@ -286,6 +319,7 @@ export interface BrsDocTag {
     tagName: string;
     detail?: string;
     location?: Location;
+    token?: Token;
 }
 export interface BrsDocWithType extends BrsDocTag {
     typeString?: string;

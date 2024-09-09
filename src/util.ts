@@ -647,14 +647,14 @@ export class Util {
      * @param node the node to get the documentation for
      * @param options extra options
      * @param options.prettyPrint if true, will format the comment text for markdown
-     * @param options.matchingLocations out Array of locations that match the comment lines
+     * @param options.commentTokens out Array of tokens that match the comment lines
      */
-    public getNodeDocumentation(node: AstNode, options: { prettyPrint?: boolean; matchingLocations?: Location[] } = { prettyPrint: true }) {
+    public getNodeDocumentation(node: AstNode, options: { prettyPrint?: boolean; commentTokens?: Token[] } = { prettyPrint: true }) {
         if (!node) {
             return '';
         }
         options = options ?? { prettyPrint: true };
-        options.matchingLocations = options.matchingLocations ?? [];
+        options.commentTokens = options.commentTokens ?? [];
         const nodeTrivia = node.leadingTrivia ?? [];
         const leadingTrivia = isStatement(node)
             ? [...(node.annotations?.map(anno => anno.leadingTrivia ?? []).flat() ?? []), ...nodeTrivia]
@@ -688,14 +688,14 @@ export class Util {
             return '';
         }
         return comments.reverse()
-            .map(x => ({ line: x.text.replace(/^('|rem)/i, '').trim(), location: x.location }))
+            .map(x => ({ line: x.text.replace(/^('|rem)/i, '').trim(), token: x }))
             .filter(({ line }) => {
                 if (jsDocCommentBlockLine.exec(line)) {
                     usesjsDocCommentBlock = true;
                     return false;
                 }
                 return true;
-            }).map(({ line, location }) => {
+            }).map(({ line, token }) => {
                 if (usesjsDocCommentBlock) {
                     if (line.startsWith('*')) {
                         //remove jsDoc leading '*'
@@ -712,8 +712,8 @@ export class Util {
                     const firstWord = line.substring(0, firstSpaceIndex);
                     return `\n_${firstWord}_ ${line.substring(firstSpaceIndex + 1)}`;
                 }
-                if (options.matchingLocations) {
-                    options.matchingLocations.push(location);
+                if (options.commentTokens) {
+                    options.commentTokens.push(token);
                 }
                 return line;
             }).join('\n');
