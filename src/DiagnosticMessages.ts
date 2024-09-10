@@ -809,6 +809,11 @@ export let DiagnosticMessages = {
         message: `Unsafe unmatched terminator '${terminator}' in conditional compilation block`,
         code: 1153,
         severity: DiagnosticSeverity.Error
+    }),
+    expectedReturnStatement: () => ({
+        message: `Expected return statement in function`,
+        code: 1154,
+        severity: DiagnosticSeverity.Error
     })
 };
 export const defaultMaximumTruncationLength = 160;

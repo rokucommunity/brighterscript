@@ -82,7 +82,7 @@ function cloneDiagnostic(actualDiagnosticInput: BsDiagnostic, expectedDiagnostic
         ['message', 'code', 'severity', 'relatedInformation']
     );
     //clone Location if available
-    if (expectedDiagnostic.location) {
+    if (expectedDiagnostic?.location) {
         actualDiagnostic.location = cloneObject(actualDiagnosticInput.location, expectedDiagnostic.location, ['uri', 'range']) as any;
     }
     //deep clone relatedInformation if available

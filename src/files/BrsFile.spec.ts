@@ -2099,27 +2099,30 @@ describe('BrsFile', () => {
         });
 
         it('retains casing of return types', async () => {
-            async function test(type: string) {
+            async function test(type: string, result: string) {
                 await testTranspile(`
                     sub one() as ${type}
+                        return ${result}
                     end sub
 
                     sub two() as ${type.toLowerCase()}
+                        return ${result}
                     end sub
 
                     sub three() as ${type.toUpperCase()}
+                        return ${result}
                     end sub
                 `);
             }
-            await test('Boolean');
-            await test('Double');
-            await test('Dynamic');
-            await test('Float');
-            await test('Integer');
-            await test('LongInteger');
-            await test('Object');
-            await test('String');
-            await test('Void');
+            await test('Boolean', 'true');
+            await test('Double', '1.23');
+            await test('Dynamic', 'invalid');
+            await test('Float', '1.23');
+            await test('Integer', '123');
+            await test('LongInteger', '123');
+            await test('Object', '{}');
+            await test('String', '"test"');
+            await test('Void', '');
         });
 
         it('retains casing of literal types', async () => {
@@ -2508,6 +2511,7 @@ describe('BrsFile', () => {
         it('keeps function parameter types in proper order', async () => {
             await testTranspile(`
                 function CreateTestStatistic(name as string, result = "Success" as string, time = 0 as integer, errorCode = 0 as integer, errorMessage = "" as string) as object
+                    return {}
                 end function
             `);
         });
