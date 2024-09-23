@@ -941,6 +941,28 @@ describe('Program', () => {
                 program.getCodeActions('not/real/file', util.createRange(1, 2, 3, 4));
             });
         });
+
+        it('does not crash when a diagnostic is missing a URI', () => {
+            const file = program.setFile('source/main.brs', '');
+            const diagnostic = {
+                message: 'crash',
+                location: { uri: util.pathToUri(file.srcPath), range: util.createRange(1, 2, 3, 4) }
+            };
+            program.diagnostics.register(diagnostic);
+            //delete the uri
+            diagnostic.location.uri = undefined;
+
+            doesNotThrow(() => {
+                program.getCodeActions('source/main.brs', util.createRange(1, 2, 3, 4));
+            });
+
+            //delete the entire location
+            diagnostic.location = undefined;
+
+            doesNotThrow(() => {
+                program.getCodeActions('source/main.brs', util.createRange(1, 2, 3, 4));
+            });
+        });
     });
 
     describe('xml inheritance', () => {
