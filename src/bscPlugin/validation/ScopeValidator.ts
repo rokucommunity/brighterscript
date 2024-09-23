@@ -405,7 +405,7 @@ export class ScopeValidator {
      */
     private validateReturnStatement(file: BrsFile, returnStmt: ReturnStatement) {
         const getTypeOptions = { flags: SymbolTypeFlag.runtime };
-        let funcType = returnStmt.findAncestor(isFunctionExpression).getType({ flags: SymbolTypeFlag.typetime });
+        let funcType = returnStmt.findAncestor(isFunctionExpression)?.getType({ flags: SymbolTypeFlag.typetime });
         if (isTypedFunctionType(funcType)) {
             const actualReturnType = this.getNodeTypeWrapper(file, returnStmt?.value, getTypeOptions);
             const compatibilityData: TypeCompatibilityData = {};
@@ -415,7 +415,6 @@ export class ScopeValidator {
                     ...DiagnosticMessages.returnTypeMismatch(actualReturnType.toString(), funcType.returnType.toString(), compatibilityData),
                     location: returnStmt.value.location
                 });
-
             }
         }
     }

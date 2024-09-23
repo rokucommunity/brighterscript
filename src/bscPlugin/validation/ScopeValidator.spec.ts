@@ -13,11 +13,15 @@ import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import undent from 'undent';
 import * as fsExtra from 'fs-extra';
 import { tempDir, rootDir } from '../../testHelpers.spec';
+import { isReturnStatement } from '../../astUtils/reflection';
+import { ScopeValidator } from './ScopeValidator';
+import type { ReturnStatement } from '../../parser/Statement';
 
 describe('ScopeValidator', () => {
 
     let sinon = sinonImport.createSandbox();
     let program: Program;
+
     beforeEach(() => {
         fsExtra.emptyDirSync(tempDir);
         program = new Program({
@@ -25,9 +29,32 @@ describe('ScopeValidator', () => {
         });
         program.createSourceScope();
     });
+
     afterEach(() => {
         sinon.restore();
         program.dispose();
+    });
+
+    it('validateReturnStatement does not crash', () => {
+        program.options.autoImportComponentScript = true;
+        program.setFile('components/Component.xml', trim`
+            <component name="Test" extends="Group">
+            </component>
+        `);
+        const file = program.setFile<BrsFile>('components/Component.bs', trim`
+            function test()
+                return {
+                    method: function()
+                        return true
+                    end function
+                }
+            end function
+        `);
+        const returnStatement = file.ast.findChild<ReturnStatement>(isReturnStatement);
+        delete returnStatement.parent;
+        const validator = new ScopeValidator();
+        //should not crash
+        validator['validateReturnStatement'](file, returnStatement);
     });
 
     describe('mismatchArgumentCount', () => {
