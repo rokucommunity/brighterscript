@@ -2813,6 +2813,27 @@ describe('Scope', () => {
                 expectZeroDiagnostics(program);
             });
 
+            it('should allow access to underscored version of namespaced class constructor in different file', () => {
+                program.setFile('source/main.bs', `
+                    sub printPi()
+                        print alpha_util_SomeKlass().value
+                    end sub
+                `);
+                program.setFile('source/util.bs', `
+                    namespace alpha.util
+                       class SomeKlass
+                            value as float
+
+                            sub new()
+                                value = 3.14
+                            end sub
+                       end class
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
             it('resolves deep namespaces defined in different locations', () => {
                 program.setFile(`source/main.bs`, `
                 sub main()

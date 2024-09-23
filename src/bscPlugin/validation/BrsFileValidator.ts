@@ -15,6 +15,8 @@ import { DynamicType } from '../../types/DynamicType';
 import util from '../../util';
 import type { Range } from 'vscode-languageserver';
 import type { Token } from '../../lexer/Token';
+import type { BrightScriptDoc } from '../../parser/BrightScriptDocParser';
+import brsDocParser from '../../parser/BrightScriptDocParser';
 
 export class BrsFileValidator {
     constructor(
@@ -89,11 +91,25 @@ export class BrsFileValidator {
                 node.getSymbolTable().addSymbol('m', { definingNode: node, isInstance: true }, nodeType, SymbolTypeFlag.runtime);
                 // eslint-disable-next-line no-bitwise
                 node.parent.getSymbolTable()?.addSymbol(node.tokens.name?.text, { definingNode: node }, nodeType, SymbolTypeFlag.typetime | SymbolTypeFlag.runtime);
+
+                if (node.findAncestor(isNamespaceStatement)) {
+                    //add the transpiled name for namespaced constructors to the root symbol table
+                    const transpiledClassConstructor = node.getName(ParseMode.BrightScript);
+
+                    this.event.file.parser.ast.symbolTable.addSymbol(
+                        transpiledClassConstructor,
+                        { definingNode: node },
+                        node.getConstructorType(),
+                        // eslint-disable-next-line no-bitwise
+                        SymbolTypeFlag.runtime | SymbolTypeFlag.postTranspile
+                    );
+                }
             },
             AssignmentStatement: (node) => {
+                const data: ExtraSymbolData = {};
                 //register this variable
-                const nodeType = node.getType({ flags: SymbolTypeFlag.runtime });
-                node.parent.getSymbolTable()?.addSymbol(node.tokens.name.text, { definingNode: node, isInstance: true }, nodeType, SymbolTypeFlag.runtime);
+                const nodeType = node.getType({ flags: SymbolTypeFlag.runtime, data: data });
+                node.parent.getSymbolTable()?.addSymbol(node.tokens.name.text, { definingNode: node, isInstance: true, isFromDocComment: data.isFromDocComment }, nodeType, SymbolTypeFlag.runtime);
             },
             DottedSetStatement: (node) => {
                 this.validateNoOptionalChainingInVarSet(node, [node.obj]);
@@ -160,14 +176,15 @@ export class BrsFileValidator {
             },
             FunctionParameterExpression: (node) => {
                 const paramName = node.tokens.name?.text;
-                const nodeType = node.getType({ flags: SymbolTypeFlag.typetime });
+                const data: ExtraSymbolData = {};
+                const nodeType = node.getType({ flags: SymbolTypeFlag.typetime, data: data });
                 // add param symbol at expression level, so it can be used as default value in other params
                 const funcExpr = node.findAncestor<FunctionExpression>(isFunctionExpression);
                 const funcSymbolTable = funcExpr?.getSymbolTable();
-                funcSymbolTable?.addSymbol(paramName, { definingNode: node, isInstance: true }, nodeType, SymbolTypeFlag.runtime);
+                funcSymbolTable?.addSymbol(paramName, { definingNode: node, isInstance: true, isFromDocComment: data.isFromDocComment }, nodeType, SymbolTypeFlag.runtime);
 
                 //also add param symbol at block level, as it may be redefined, and if so, should show a union
-                funcExpr.body.getSymbolTable()?.addSymbol(paramName, { definingNode: node, isInstance: true }, nodeType, SymbolTypeFlag.runtime);
+                funcExpr.body.getSymbolTable()?.addSymbol(paramName, { definingNode: node, isInstance: true, isFromDocComment: data.isFromDocComment }, nodeType, SymbolTypeFlag.runtime);
             },
             InterfaceStatement: (node) => {
                 this.validateDeclarationLocations(node, 'interface', () => util.createBoundingRange(node.tokens.interface, node.tokens.name));
@@ -223,6 +240,25 @@ export class BrsFileValidator {
                 // eslint-disable-next-line no-bitwise
                 node.parent.getSymbolTable().addSymbol(node.tokens.name.text, { definingNode: node, doNotMerge: true, isAlias: true }, targetType, SymbolTypeFlag.runtime | SymbolTypeFlag.typetime);
 
+            },
+            AstNode: (node) => {
+                //check for doc comments
+                if (!node.leadingTrivia || node.leadingTrivia.length === 0) {
+                    return;
+                }
+                const doc = brsDocParser.parseNode(node);
+                if (doc.tags.length === 0) {
+                    return;
+                }
+
+                let funcExpr = node.findAncestor<FunctionExpression>(isFunctionExpression);
+                if (funcExpr) {
+                    // handle comment tags inside a function expression
+                    this.processDocTagsInFunction(doc, node, funcExpr);
+                } else {
+                    //handle comment tags outside of a function expression
+                    this.processDocTagsAtTopLevel(doc, node);
+                }
             }
         });
 
@@ -231,6 +267,33 @@ export class BrsFileValidator {
         }, {
             walkMode: WalkMode.visitAllRecursive
         });
+    }
+
+    private processDocTagsInFunction(doc: BrightScriptDoc, node: AstNode, funcExpr: FunctionExpression) {
+        //TODO: Handle doc tags that influence the function they're in
+
+        // For example, declaring variable types:
+        // const symbolTable = funcExpr.body.getSymbolTable();
+
+        // for (const varTag of doc.getAllTags(BrsDocTagKind.Var)) {
+        //     const varName = (varTag as BrsDocParamTag).name;
+        //     const varTypeStr = (varTag as BrsDocParamTag).type;
+        //     const data: ExtraSymbolData = {};
+        //     const type = doc.getTypeFromContext(varTypeStr, node, { flags: SymbolTypeFlag.typetime, fullName: varTypeStr, data: data, tableProvider: () => symbolTable });
+        //     if (type) {
+        //         symbolTable.addSymbol(varName, { ...data, isFromDocComment: true }, type, SymbolTypeFlag.runtime);
+        //     }
+        // }
+    }
+
+    private processDocTagsAtTopLevel(doc: BrightScriptDoc, node: AstNode) {
+        //TODO:
+        // - handle import statements?
+        // - handle library statements?
+        // - handle typecast statements?
+        // - handle alias statements?
+        // - handle const statements?
+        // - allow interface definitions?
     }
 
     /**

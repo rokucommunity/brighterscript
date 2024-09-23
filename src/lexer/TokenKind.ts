@@ -699,3 +699,27 @@ export const AllowedTriviaTokens: ReadonlyArray<TokenKind> = [
     TokenKind.Comment,
     TokenKind.Colon
 ];
+
+
+/**
+ * The tokens that may be in a binary expression
+ */
+export const BinaryExpressionOperatorTokens: ReadonlyArray<TokenKind> = [
+    TokenKind.Equal,
+    TokenKind.LessGreater,
+    TokenKind.Greater,
+    TokenKind.GreaterEqual,
+    TokenKind.Less,
+    TokenKind.LessEqual,
+    TokenKind.And,
+    TokenKind.Or,
+    TokenKind.Plus,
+    TokenKind.Minus,
+    TokenKind.Star,
+    TokenKind.RightShift,
+    TokenKind.LeftShift,
+    TokenKind.Forwardslash,
+    TokenKind.Mod,
+    TokenKind.Backslash,
+    TokenKind.Caret
+];
