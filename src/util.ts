@@ -254,6 +254,9 @@ export class Util {
             if (result.stagingDir) {
                 result.stagingDir = path.resolve(projectFileCwd, result.stagingDir);
             }
+            if (result.sourceRoot && result.resolveSourceRoot) {
+                result.sourceRoot = path.resolve(projectFileCwd, result.sourceRoot);
+            }
             return result;
         }
     }
@@ -384,6 +387,7 @@ export class Util {
             autoImportComponentScript: config.autoImportComponentScript === true ? true : false,
             showDiagnosticsInConsole: config.showDiagnosticsInConsole === false ? false : true,
             sourceRoot: config.sourceRoot ? standardizePath(config.sourceRoot) : undefined,
+            resolveSourceRoot: config.resolveSourceRoot === true ? true: false,
             allowBrighterScriptInBrightScript: config.allowBrighterScriptInBrightScript === true ? true : false,
             emitDefinitions: config.emitDefinitions === true ? true : false,
             removeParameterTypes: config.removeParameterTypes === true ? true : false,
