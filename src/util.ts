@@ -644,11 +644,17 @@ export class Util {
 
     /**
      * Combine all the documentation for a node - uses the AstNode's leadingTrivia property
+     * @param node the node to get the documentation for
+     * @param options extra options
+     * @param options.prettyPrint if true, will format the comment text for markdown
+     * @param options.commentTokens out Array of tokens that match the comment lines
      */
-    public getNodeDocumentation(node: AstNode) {
+    public getNodeDocumentation(node: AstNode, options: { prettyPrint?: boolean; commentTokens?: Token[] } = { prettyPrint: true }) {
         if (!node) {
             return '';
         }
+        options = options ?? { prettyPrint: true };
+        options.commentTokens = options.commentTokens ?? [];
         const nodeTrivia = node.leadingTrivia ?? [];
         const leadingTrivia = isStatement(node)
             ? [...(node.annotations?.map(anno => anno.leadingTrivia ?? []).flat() ?? []), ...nodeTrivia]
@@ -678,36 +684,39 @@ export class Util {
         }
         const jsDocCommentBlockLine = /(\/\*{2,}|\*{1,}\/)/i;
         let usesjsDocCommentBlock = false;
-        if (comments.length > 0) {
-            return comments.reverse()
-                .map(x => x.text.replace(/^('|rem)/i, '').trim())
-                .filter(line => {
-                    if (jsDocCommentBlockLine.exec(line)) {
-                        usesjsDocCommentBlock = true;
-                        return false;
-                    }
-                    return true;
-                }).map(line => {
-                    if (usesjsDocCommentBlock) {
-                        if (line.startsWith('*')) {
-                            //remove jsDoc leading '*'
-                            line = line.slice(1).trim();
-                        }
-                    }
-                    if (line.startsWith('@')) {
-                        // Handle jsdoc/brightscriptdoc tags specially
-                        // make sure they are on their own markdown line, and add italics
-                        const firstSpaceIndex = line.indexOf(' ');
-                        if (firstSpaceIndex === -1) {
-                            return `\n_${line}_`;
-                        }
-                        const firstWord = line.substring(0, firstSpaceIndex);
-                        return `\n_${firstWord}_ ${line.substring(firstSpaceIndex + 1)}`;
-                    }
-                    return line;
-                }).join('\n');
+        if (comments.length === 0) {
+            return '';
         }
-        return '';
+        return comments.reverse()
+            .map(x => ({ line: x.text.replace(/^('|rem)/i, '').trim(), token: x }))
+            .filter(({ line }) => {
+                if (jsDocCommentBlockLine.exec(line)) {
+                    usesjsDocCommentBlock = true;
+                    return false;
+                }
+                return true;
+            }).map(({ line, token }) => {
+                if (usesjsDocCommentBlock) {
+                    if (line.startsWith('*')) {
+                        //remove jsDoc leading '*'
+                        line = line.slice(1).trim();
+                    }
+                }
+                if (options.prettyPrint && line.startsWith('@')) {
+                    // Handle jsdoc/brightscriptdoc tags specially
+                    // make sure they are on their own markdown line, and add italics
+                    const firstSpaceIndex = line.indexOf(' ');
+                    if (firstSpaceIndex === -1) {
+                        return `\n_${line}_`;
+                    }
+                    const firstWord = line.substring(0, firstSpaceIndex);
+                    return `\n_${firstWord}_ ${line.substring(firstSpaceIndex + 1)}`;
+                }
+                if (options.commentTokens) {
+                    options.commentTokens.push(token);
+                }
+                return line;
+            }).join('\n');
     }
 
     /**
@@ -2403,6 +2412,25 @@ export class Util {
         }
 
         return false;
+    }
+
+    public chooseTypeFromCodeOrDocComment(codeType: BscType, docType: BscType, options: GetTypeOptions) {
+        let returnType: BscType;
+        if (options.preferDocType && docType) {
+            returnType = docType;
+            if (options.data) {
+                options.data.isFromDocComment = true;
+            }
+        } else {
+            returnType = codeType;
+            if (!returnType && docType) {
+                returnType = docType;
+                if (options.data) {
+                    options.data.isFromDocComment = true;
+                }
+            }
+        }
+        return returnType;
     }
 }
 

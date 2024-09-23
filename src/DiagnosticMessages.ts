@@ -809,6 +809,14 @@ export let DiagnosticMessages = {
         message: `Unsafe unmatched terminator '${terminator}' in conditional compilation block`,
         code: 1153,
         severity: DiagnosticSeverity.Error
+    }),
+    cannotFindTypeInCommentDoc: (name: string) => ({
+        message: `Cannot find type '${name}' in doc comment`,
+        code: 1154,
+        data: {
+            name: name
+        },
+        severity: DiagnosticSeverity.Error
     })
 };
 export const defaultMaximumTruncationLength = 160;

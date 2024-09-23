@@ -567,6 +567,23 @@ describe('parser', () => {
                 expect(parser.diagnostics[0]?.message).to.exist;
                 expect(parser.ast.statements[0]).to.be.instanceof(FunctionStatement);
             });
+
+            it('adds binary expressions to the ast', () => {
+                let { tokens } = Lexer.scan(`
+                    function a(x, y)
+                        1 or 2
+                        x * y
+                        x + y
+                        x - y
+                    end function
+                `);
+                let { ast, diagnostics } = Parser.parse(tokens) as any;
+                expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression());
+                for (const stmt of ast.statements[0].func.body.statements) {
+                    expect(isExpressionStatement(stmt)).to.be.true;
+                    expect(isBinaryExpression((stmt).expression)).to.be.true;
+                }
+            });
         });
 
         describe('comments', () => {

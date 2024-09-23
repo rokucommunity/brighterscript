@@ -2999,6 +2999,48 @@ describe('ScopeValidator', () => {
 
     });
 
+    describe('cannotFindTypeInDocComment', () => {
+        it('validates types it cannot find in @param', () => {
+            program.setFile<BrsFile>('source/main.brs', `
+                    ' @param {TypeNotThere} info
+                    function sayHello(info)
+                        print "Hello " + info.prop
+                    end function
+                `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindTypeInCommentDoc('TypeNotThere').message
+            ]);
+        });
+
+        it('validates types it cannot find in @return', () => {
+            program.setFile<BrsFile>('source/main.brs', `
+                    ' @return {TypeNotThere} info
+                    function sayHello(info)
+                        return {data: info.prop}
+                    end function
+                `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindTypeInCommentDoc('TypeNotThere').message
+            ]);
+        });
+
+        it('validates types it cannot find in @type', () => {
+            program.setFile<BrsFile>('source/main.brs', `
+                    function sayHello(info)
+                        ' @type {TypeNotThere}
+                        value = info.prop
+                    end function
+                `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindTypeInCommentDoc('TypeNotThere').message
+            ]);
+        });
+
+    });
+
     describe('revalidation', () => {
 
         it('revalidates when a enum defined in a different namespace changes', () => {
