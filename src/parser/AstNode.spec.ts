@@ -6,11 +6,13 @@ import { expect } from '../chai-config.spec';
 import type { DottedGetExpression } from './Expression';
 import { expectZeroDiagnostics } from '../testHelpers.spec';
 import { tempDir, rootDir, stagingDir } from '../testHelpers.spec';
-import { isAssignmentStatement, isBlock, isBody, isCatchStatement, isClassStatement, isCommentStatement, isConstStatement, isDottedGetExpression, isEnumMemberStatement, isEnumStatement, isExpressionStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isIncrementStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInterfaceStatement, isMethodStatement, isPrintStatement, isThrowStatement } from '../astUtils/reflection';
-import type { ClassStatement, FunctionStatement, InterfaceFieldStatement, InterfaceMethodStatement, MethodStatement, InterfaceStatement, TryCatchStatement, CatchStatement, ThrowStatement, EnumStatement, EnumMemberStatement, ConstStatement, Body, Block, CommentStatement, ExpressionStatement, IfStatement, IncrementStatement, PrintStatement } from './Statement';
+import { isAssignmentStatement, isBlock, isCatchStatement, isClassStatement, isCommentStatement, isConstStatement, isDimStatement, isDottedGetExpression, isDottedSetStatement, isEnumMemberStatement, isEnumStatement, isExpressionStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isIncrementStatement, isIndexedSetStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInterfaceStatement, isLibraryStatement, isMethodStatement, isNamespaceStatement, isPrintStatement, isReturnStatement, isThrowStatement, isTryCatchStatement, isWhileStatement } from '../astUtils/reflection';
+import type { ClassStatement, FunctionStatement, InterfaceFieldStatement, InterfaceMethodStatement, MethodStatement, InterfaceStatement, CatchStatement, ThrowStatement, EnumStatement, EnumMemberStatement, ConstStatement, Block, CommentStatement, PrintStatement, DimStatement, ForStatement, WhileStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, TryCatchStatement, DottedSetStatement } from './Statement';
 import { AssignmentStatement, EmptyStatement } from './Statement';
 import { ParseMode, Parser } from './Parser';
 import type { AstNode } from './AstNode';
+
+type DeepWriteable<T> = { -readonly [P in keyof T]: DeepWriteable<T[P]> };
 
 describe('AstNode', () => {
     let program: Program;
@@ -187,7 +189,7 @@ describe('AstNode', () => {
         });
     });
 
-    describe.only('clone', () => {
+    describe('clone', () => {
         function testClone(code: string | AstNode) {
             let original: AstNode;
             if (typeof code === 'string') {
@@ -215,8 +217,8 @@ describe('AstNode', () => {
                     //skip these properties
                     if (
                         ['parent', 'symbolTable', 'range'].includes(key) ||
-                        //this is a circular reference property, skip it (it's redundant anyway)
-                        (isFunctionExpression(original) && key === 'functionStatement')
+                        //this is a circular reference property or the `returnType` prop, skip it
+                        (isFunctionExpression(original) && (key === 'functionStatement' || key === 'returnType'))
                     ) {
                         continue;
                     }
@@ -546,12 +548,155 @@ describe('AstNode', () => {
             testClone(original);
         });
 
+        it('clones DimStatement', () => {
+            testClone(`
+                sub main()
+                    dim alpha[1,2]
+                end sub
+            `);
+        });
+
+        it('clones DimStatement with undefined dimensions', () => {
+            const original = Parser.parse(`
+                sub main()
+                    dim alpha[1,2]
+                end sub
+            `).ast;
+            original.findChild<DimStatement>(isDimStatement).dimensions = undefined;
+            testClone(original);
+        });
+
+        it('clones DimStatement with undefined as item in dimensions', () => {
+            const original = Parser.parse(`
+                sub main()
+                    dim alpha[1,2]
+                end sub
+            `).ast;
+            original.findChild<DimStatement>(isDimStatement).dimensions.push(undefined);
+            testClone(original);
+        });
+
+        it('clones Goto statement', () => {
+            testClone(`
+                sub main()
+                    label1:
+                    for i = 0 to 10
+                        goto label1
+                    end for
+                end sub
+            `);
+        });
+
+        it('clones return statement', () => {
+            testClone(`
+                sub main()
+                    return
+                end sub
+            `);
+        });
+
+        it('clones return statement with value', () => {
+            testClone(`
+                function test()
+                    return true
+                end function
+            `);
+        });
+
+        it('clones return statement with undefined value expression', () => {
+            const original = Parser.parse(`
+                function test()
+                    return true
+                end function
+            `).ast;
+            original.findChild<any>(isReturnStatement).value = undefined;
+            testClone(original);
+        });
+
+        it('clones stop statement', () => {
+            testClone(`
+                sub main()
+                    stop
+                end sub
+            `);
+        });
+
+        it('clones ForStatement', () => {
+            testClone(`
+                function test()
+                    for i = 0 to 10 step 2
+                    end for
+                end function
+            `);
+        });
+
+        it('clones ForStatement with undefined items', () => {
+            const original = Parser.parse(`
+                function test()
+                    for i = 0 to 10 step 2
+                    end for
+                end function
+            `).ast;
+            original.findChild<ForStatement>(isForStatement).counterDeclaration = undefined;
+            original.findChild<ForStatement>(isForStatement).finalValue = undefined;
+            original.findChild<ForStatement>(isForStatement).body = undefined;
+            original.findChild<ForStatement>(isForStatement).increment = undefined;
+            testClone(original);
+        });
+
+        it('clones ForEachStatement', () => {
+            testClone(`
+                function test()
+                    for each item in [1, 2, 3]
+                    end for
+                end function
+            `);
+        });
+
+        it('clones ForEachStatement with undefined props', () => {
+            const original = Parser.parse(`
+                function test()
+                    for each item in [1, 2, 3]
+                    end for
+                end function
+            `).ast;
+            original.findChild<any>(isForEachStatement).target = undefined;
+            original.findChild<any>(isForEachStatement).body = undefined;
+            testClone(original);
+        });
+
+        it('clones EndStatement', () => {
+            testClone(`
+                function test()
+                    end
+                end function
+            `);
+        });
+
         it('clones ExitFor statement', () => {
             testClone(`
                 sub main()
                     for i = 0 to 10
                         exit for
                     end for
+                end sub
+            `);
+        });
+
+        it('clones While statement', () => {
+            testClone(`
+                sub main()
+                    while true
+                    end while
+                end sub
+            `);
+        });
+
+        it('clones While statement', () => {
+            testClone(`
+                sub main()
+                    while true
+                    end while
                 end sub
             `);
         });
@@ -574,6 +719,21 @@ describe('AstNode', () => {
                     end try
                 end sub
             `);
+        });
+
+        it('clones tryCatch statement when missing branches', () => {
+            const original = Parser.parse(`
+               sub main()
+                    try
+                        print 1
+                    catch e
+                        print 2
+                    end try
+                end sub
+            `).ast;
+            original.findChild<TryCatchStatement>(isTryCatchStatement).tryBranch = undefined;
+            original.findChild<TryCatchStatement>(isTryCatchStatement).catchStatement = undefined;
+            testClone(original);
         });
 
         it('clones tryCatch statement when missing catch branch', () => {
@@ -692,5 +852,142 @@ describe('AstNode', () => {
             `);
         });
 
+        it('clones WhileStatement', () => {
+            const original = Parser.parse(`
+                sub main()
+                    while true
+                        print hello
+                    end while
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<WhileStatement>>(isWhileStatement).condition = undefined;
+            original.findChild<DeepWriteable<WhileStatement>>(isWhileStatement).body = undefined;
+
+            testClone(original);
+        });
+
+        it('clones DottedSetStatement', () => {
+            const original = Parser.parse(`
+                sub main()
+                    m.value = true
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones DottedSetStatement with missing properties', () => {
+            const original = Parser.parse(`
+                sub main()
+                    m.value = true
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<DottedSetStatement>>(isDottedSetStatement).obj = undefined;
+            original.findChild<DeepWriteable<DottedSetStatement>>(isDottedSetStatement).value = undefined;
+
+            testClone(original);
+        });
+
+        it('clones IndexedSetStatement with missing props', () => {
+            const original = Parser.parse(`
+                sub main()
+                    m["value"] = true
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<IndexedSetStatement>>(isIndexedSetStatement).obj = undefined;
+            original.findChild<DeepWriteable<IndexedSetStatement>>(isIndexedSetStatement).value = undefined;
+
+            testClone(original);
+        });
+
+        it('clones IndexedSetStatement', () => {
+            const original = Parser.parse(`
+                sub main()
+                    m["value"] = true
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+
+        it('clones IndexedSetStatement', () => {
+            const original = Parser.parse(`
+                sub main()
+                    m["value"][2] = true
+                    m["value", 2] = true
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones IndexedSetStatement with undefined additional index', () => {
+            const original = Parser.parse(`
+                sub main()
+                    m["value", 2] = true
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<IndexedSetStatement>>(isIndexedSetStatement).additionalIndexes[0] = undefined;
+
+            testClone(original);
+        });
+
+        it('clones IndexedSetStatement with missing props', () => {
+            const original = Parser.parse(`
+                sub main()
+                    m["value"] = true
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<IndexedSetStatement>>(isIndexedSetStatement).index = undefined;
+            original.findChild<DeepWriteable<IndexedSetStatement>>(isIndexedSetStatement).additionalIndexes = undefined;
+
+            testClone(original);
+        });
+
+        it('clones LibraryStatement', () => {
+            const original = Parser.parse(`
+                Library "v30/bslCore.brs"
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones LibraryStatement with missing tokens', () => {
+            const original = Parser.parse(`
+                Library "v30/bslCore.brs"
+            `).ast;
+            original.findChild<DeepWriteable<LibraryStatement>>(isLibraryStatement).tokens = undefined;
+
+            testClone(original);
+        });
+
+        it('clones NamespaceStatement', () => {
+            const original = Parser.parse(`
+                namespace Alpha
+                end namespace
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones NamespaceStatement with missing items', () => {
+            const original = Parser.parse(`
+                namespace Alpha
+                end namespace
+            `).ast;
+            original.findChild<DeepWriteable<NamespaceStatement>>(isNamespaceStatement).nameExpression = undefined;
+            original.findChild<DeepWriteable<NamespaceStatement>>(isNamespaceStatement).body = undefined;
+
+            testClone(original);
+        });
+
+        it('clones ImportStatement', () => {
+            const original = Parser.parse(`
+                import "Something.brs"
+            `).ast;
+
+            testClone(original);
+        });
     });
 });

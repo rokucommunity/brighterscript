@@ -124,9 +124,4 @@ describe('Statement', () => {
             });
         });
     });
-
-    describe('clone', () => {
-
-    });
-
 });

@@ -1380,7 +1380,10 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
 
     public getName(parseMode: ParseMode) {
         const parentNamespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
-        let name = this.nameExpression.getName(parseMode);
+        let name = this.nameExpression?.getName?.(parseMode);
+        if (!name) {
+            return name;
+        }
 
         if (parentNamespace) {
             const sep = parseMode === ParseMode.BrighterScript ? '.' : '_';

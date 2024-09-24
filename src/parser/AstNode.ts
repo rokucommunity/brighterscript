@@ -83,7 +83,7 @@ export abstract class AstNode {
      * Find the first child where the matcher evaluates to true.
      * @param matcher a function called for each node. If you return true, this function returns the specified node. If you return a node, that node is returned. all other return values continue the loop
      */
-    public findChild<TNode extends AstNode = AstNode>(matcher: (node: AstNode, cancellationSource) => boolean | AstNode | undefined | void, options?: WalkOptions): TNode | undefined {
+    public findChild<TNode = AstNode>(matcher: (node: AstNode, cancellationSource) => boolean | AstNode | undefined | void, options?: WalkOptions): TNode | undefined {
         const cancel = new CancellationTokenSource();
         let result: AstNode | undefined;
         this.walk((node) => {
