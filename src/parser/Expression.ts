@@ -81,7 +81,7 @@ export class CallExpression extends Expression {
         unused?: any
     ) {
         super();
-        this.range = util.createBoundingRange(this.callee, this.openingParen, ...args, this.closingParen);
+        this.range = util.createBoundingRange(this.callee, this.openingParen, ...args ?? [], this.closingParen);
     }
 
     public readonly range: Range | undefined;
@@ -222,7 +222,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
     public get range() {
         return util.createBoundingRange(
             this.functionType, this.leftParen,
-            ...this.parameters,
+            ...this.parameters ?? [],
             this.rightParen,
             this.asToken,
             this.returnTypeToken,
@@ -444,7 +444,7 @@ export class NamespacedVariableNameExpression extends Expression {
         readonly expression: DottedGetExpression | VariableExpression
     ) {
         super();
-        this.range = expression.range;
+        this.range = expression?.range;
     }
     range: Range | undefined;
 
@@ -771,7 +771,7 @@ export class ArrayLiteralExpression extends Expression {
         readonly hasSpread = false
     ) {
         super();
-        this.range = util.createBoundingRange(this.open, ...this.elements, this.close);
+        this.range = util.createBoundingRange(this.open, ...this.elements ?? [], this.close);
     }
 
     public readonly range: Range | undefined;
@@ -880,7 +880,7 @@ export class AALiteralExpression extends Expression {
         readonly close: Token
     ) {
         super();
-        this.range = util.createBoundingRange(this.open, ...this.elements, this.close);
+        this.range = util.createBoundingRange(this.open, ...this.elements ?? [], this.close);
     }
 
     public readonly range: Range | undefined;
@@ -1220,7 +1220,7 @@ export class CallfuncExpression extends Expression {
             operator,
             methodName,
             openingParen,
-            ...args,
+            ...args ?? [],
             closingParen
         );
     }
@@ -1294,7 +1294,7 @@ export class TemplateStringQuasiExpression extends Expression {
     ) {
         super();
         this.range = util.createBoundingRange(
-            ...expressions
+            ...expressions ?? []
         );
     }
     readonly range: Range | undefined;
@@ -1340,8 +1340,8 @@ export class TemplateStringExpression extends Expression {
         super();
         this.range = util.createBoundingRange(
             openingBacktick,
-            quasis[0],
-            quasis[quasis.length - 1],
+            quasis?.[0],
+            quasis?.[quasis?.length - 1],
             closingBacktick
         );
     }
@@ -1437,8 +1437,8 @@ export class TaggedTemplateStringExpression extends Expression {
         this.range = util.createBoundingRange(
             tagName,
             openingBacktick,
-            quasis[0],
-            quasis[quasis.length - 1],
+            quasis?.[0],
+            quasis?.[quasis?.length - 1],
             closingBacktick
         );
     }

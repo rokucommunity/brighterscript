@@ -3,10 +3,10 @@ import * as fsExtra from 'fs-extra';
 import { Program } from '../Program';
 import type { BrsFile } from '../files/BrsFile';
 import { expect } from '../chai-config.spec';
-import type { DottedGetExpression } from './Expression';
+import type { AALiteralExpression, AAMemberExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionExpression, FunctionParameterExpression, GroupingExpression, IndexedGetExpression, NamespacedVariableNameExpression, NewExpression, NullCoalescingExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, TernaryExpression, TypeCastExpression, UnaryExpression, XmlAttributeGetExpression } from './Expression';
 import { expectZeroDiagnostics } from '../testHelpers.spec';
 import { tempDir, rootDir, stagingDir } from '../testHelpers.spec';
-import { isAssignmentStatement, isBlock, isCatchStatement, isClassStatement, isCommentStatement, isConstStatement, isDimStatement, isDottedGetExpression, isDottedSetStatement, isEnumMemberStatement, isEnumStatement, isExpressionStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isIncrementStatement, isIndexedSetStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInterfaceStatement, isLibraryStatement, isMethodStatement, isNamespaceStatement, isPrintStatement, isReturnStatement, isThrowStatement, isTryCatchStatement, isWhileStatement } from '../astUtils/reflection';
+import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isCallfuncExpression, isCatchStatement, isClassStatement, isCommentStatement, isConstStatement, isDimStatement, isDottedGetExpression, isDottedSetStatement, isEnumMemberStatement, isEnumStatement, isExpressionStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isGroupingExpression, isIfStatement, isIncrementStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInterfaceStatement, isLibraryStatement, isMethodStatement, isNamespacedVariableNameExpression, isNamespaceStatement, isNewExpression, isNullCoalescingExpression, isPrintStatement, isReturnStatement, isTaggedTemplateStringExpression, isTemplateStringExpression, isTemplateStringQuasiExpression, isTernaryExpression, isThrowStatement, isTryCatchStatement, isTypeCastExpression, isUnaryExpression, isWhileStatement, isXmlAttributeGetExpression } from '../astUtils/reflection';
 import type { ClassStatement, FunctionStatement, InterfaceFieldStatement, InterfaceMethodStatement, MethodStatement, InterfaceStatement, CatchStatement, ThrowStatement, EnumStatement, EnumMemberStatement, ConstStatement, Block, CommentStatement, PrintStatement, DimStatement, ForStatement, WhileStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, TryCatchStatement, DottedSetStatement } from './Statement';
 import { AssignmentStatement, EmptyStatement } from './Statement';
 import { ParseMode, Parser } from './Parser';
@@ -989,5 +989,642 @@ describe('AstNode', () => {
 
             testClone(original);
         });
+
+        it('clones BinaryExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print 1 + 2
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones BinaryExpression with missing props', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print 1 + 2
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<BinaryExpression>>(isBinaryExpression).left = undefined;
+            original.findChild<DeepWriteable<BinaryExpression>>(isBinaryExpression).right = undefined;
+
+            testClone(original);
+        });
+
+        it('clones CallExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    test()
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones CallExpression with args', () => {
+            const original = Parser.parse(`
+                sub test()
+                    test(1,2,3)
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones CallExpression with missing props', () => {
+            const original = Parser.parse(`
+                sub test()
+                    test(1,2,3)
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<CallExpression>>(isCallExpression).callee = undefined;
+            original.findChild<DeepWriteable<CallExpression>>(isCallExpression).args = undefined;
+
+            testClone(original);
+        });
+
+        it('clones CallExpression with args containing undefined', () => {
+            const original = Parser.parse(`
+                sub test()
+                    test(1,2,3)
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<CallExpression>>(isCallExpression).args[0] = undefined;
+
+            testClone(original);
+        });
+
+        it('clones FunctionExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones FunctionExpression with undefined props', () => {
+            const original = Parser.parse(`
+                sub test()
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<FunctionExpression>>(isFunctionExpression).parameters = undefined;
+            original.findChild<DeepWriteable<FunctionExpression>>(isFunctionExpression).body = undefined;
+
+            testClone(original);
+        });
+
+        it('clones FunctionExpression with a parameter that is undefined', () => {
+            const original = Parser.parse(`
+                sub test(p1)
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<FunctionExpression>>(isFunctionExpression).parameters[0] = undefined;
+
+            testClone(original);
+        });
+
+        it('clones FunctionParameterExpression', () => {
+            const original = Parser.parse(`
+                sub test(p1)
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones FunctionParameterExpression with default value', () => {
+            const original = Parser.parse(`
+                sub test(p1 = true)
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+
+        it('clones FunctionParameterExpression with undefined default value', () => {
+            const original = Parser.parse(`
+                sub test(p1 = true)
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<FunctionExpression>>(isFunctionExpression).parameters[0].defaultValue = undefined;
+
+            testClone(original);
+        });
+
+        it('clones NamespacedVariableNameExpression', () => {
+            const original = Parser.parse(`
+                sub test(p1 as Alpha.Beta)
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones NamespacedVariableNameExpression with undefined expression', () => {
+            const original = Parser.parse(`
+                class Person extends Alpha.Humanoid
+                end class
+            `).ast;
+            original.findChild<DeepWriteable<ClassStatement>>(isClassStatement).parentClassName.expression = undefined;
+
+            testClone(original);
+        });
+
+        it('clones DottedGetExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print alpha.beta.charlie
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones DottedGetExpression with undefined expression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print alpha.beta.charlie
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<DottedGetExpression>>(isDottedGetExpression).obj = undefined;
+
+            testClone(original);
+        });
+
+        it('clones XmlAttributeGetExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print xml@name
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones XmlAttributeGetExpression with undefined expression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print xml@name
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<XmlAttributeGetExpression>>(isXmlAttributeGetExpression).obj = undefined;
+
+            testClone(original);
+        });
+
+        it('clones IndexedGetExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print m.stuff[0]
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones IndexedGetExpression with undefined expression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print m.stuff[0]
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<IndexedGetExpression>>(isIndexedGetExpression).obj = undefined;
+            original.findChild<DeepWriteable<IndexedGetExpression>>(isIndexedGetExpression).index = undefined;
+            original.findChild<DeepWriteable<IndexedGetExpression>>(isIndexedGetExpression).additionalIndexes = undefined;
+
+            testClone(original);
+        });
+
+        it('clones IndexedGetExpression with additionalIndexes', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print m.stuff[0, 1]
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones IndexedGetExpression with additionalIndexes having undefined', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print m.stuff[0, 1]
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<IndexedGetExpression>>(isIndexedGetExpression).additionalIndexes[0] = undefined;
+
+            testClone(original);
+        });
+
+        it('clones GroupingExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print (1 + 2)
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones GroupingExpression with undefined expression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print (1 + 2)
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<GroupingExpression>>(isGroupingExpression).expression = undefined;
+
+            testClone(original);
+        });
+
+        it('clones LiteralExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print true
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones ExcapedCharCodeLiteralExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print \`\n\`
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones ArrayLiteralExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print []
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones ArrayLiteralExpression with undefined items', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print []
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<ArrayLiteralExpression>>(isArrayLiteralExpression).elements = undefined;
+
+            testClone(original);
+        });
+
+        it('clones ArrayLiteralExpression with with elements having an undefined', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print [1,2,3]
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<ArrayLiteralExpression>>(isArrayLiteralExpression).elements[0] = undefined;
+
+            testClone(original);
+        });
+
+        it('clones AAMemberExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    movie = {
+                        duration: 20
+                    }
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones AAMemberExpression with undefined expression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    movie = {
+                        duration: 20
+                    }
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<AAMemberExpression>>(isAAMemberExpression).value = undefined;
+
+            testClone(original);
+        });
+
+        it('clones AALiteralExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    movie = {
+                        duration: 20
+                    }
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones AALiteralExpression with undefined items', () => {
+            const original = Parser.parse(`
+                sub test()
+                    movie = {
+                        duration: 20
+                    }
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<AALiteralExpression>>(isAALiteralExpression).elements = undefined;
+
+            testClone(original);
+        });
+
+        it('clones AALiteralExpression with undefined items', () => {
+            const original = Parser.parse(`
+                sub test()
+                    movie = {
+                        duration: 20
+                    }
+                end sub
+            `).ast;
+            original.findChild<AALiteralExpression>(isAALiteralExpression).elements.push(undefined);
+
+            testClone(original);
+        });
+
+        it('clones UnaryExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print not true
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones UnaryExpression with undefined expression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print not true
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<UnaryExpression>>(isUnaryExpression).right = undefined;
+
+            testClone(original);
+        });
+
+        it('clones SourceLiteralExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print LINE_NUM
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones NewExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print new Person()
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones NewExpression with undefined expression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print new Person()
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<NewExpression>>(isNewExpression).call = undefined;
+
+            testClone(original);
+        });
+
+        it('clones CallfuncExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print node@.run(1)
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones CallfuncExpression with undefined expression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print node@.run()
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<CallfuncExpression>>(isCallfuncExpression).callee = undefined;
+            original.findChild<DeepWriteable<CallfuncExpression>>(isCallfuncExpression).args = undefined;
+
+            testClone(original);
+        });
+
+        it('clones CallfuncExpression with undefined args', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print node@.run()
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<CallfuncExpression>>(isCallfuncExpression).args[0] = undefined;
+
+            testClone(original);
+        });
+
+        it('clones TemplateStringQuasiExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print \`hello \${name}\`
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones TemplateStringQuasiExpression with undefined expressions', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print \`hello \${name}\`
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<TemplateStringQuasiExpression>>(isTemplateStringQuasiExpression).expressions = undefined;
+
+            testClone(original);
+        });
+
+        it('clones TemplateStringQuasiExpression with undefined expressions', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print \`hello \${name}\`
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<TemplateStringQuasiExpression>>(isTemplateStringQuasiExpression).expressions[0] = undefined;
+
+            testClone(original);
+        });
+
+        it('clones TemplateStringExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print \`hello \${name} \\n\`
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones TemplateStringExpression with undefined expressions', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print \`hello \${name}\`
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<TemplateStringExpression>>(isTemplateStringExpression).quasis = undefined;
+            original.findChild<DeepWriteable<TemplateStringExpression>>(isTemplateStringExpression).expressions = undefined;
+
+            testClone(original);
+        });
+
+        it('clones TemplateStringExpression with undefined expressions', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print \`hello \${name}\`
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<TemplateStringExpression>>(isTemplateStringExpression).quasis.push(undefined);
+            original.findChild<DeepWriteable<TemplateStringExpression>>(isTemplateStringExpression).expressions.push(undefined);
+
+            testClone(original);
+        });
+
+        it('clones TemplateStringExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print tag\`hello \${name} \\n\`
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones TemplateStringExpression with undefined expressions', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print tag\`hello \${name}\`
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<TaggedTemplateStringExpression>>(isTaggedTemplateStringExpression).quasis = undefined;
+            original.findChild<DeepWriteable<TaggedTemplateStringExpression>>(isTaggedTemplateStringExpression).expressions = undefined;
+
+            testClone(original);
+        });
+
+        it('clones TemplateStringExpression with undefined expressions', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print tag\`hello \${name}\`
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<TaggedTemplateStringExpression>>(isTaggedTemplateStringExpression).quasis.push(undefined);
+            original.findChild<DeepWriteable<TaggedTemplateStringExpression>>(isTaggedTemplateStringExpression).expressions.push(undefined);
+
+            testClone(original);
+        });
+
+        it('clones AnnotationExpression', () => {
+            const original = Parser.parse(`
+                @test
+                sub main()
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones TernaryExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print true ? 1 : 2
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones TernaryExpression with undefined expressions', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print true ? 1 : 2
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<TernaryExpression>>(isTernaryExpression).test = undefined;
+            original.findChild<DeepWriteable<TernaryExpression>>(isTernaryExpression).consequent = undefined;
+            original.findChild<DeepWriteable<TernaryExpression>>(isTernaryExpression).alternate = undefined;
+
+            testClone(original);
+        });
+
+        it('clones NullCoalescingExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print a ?? b
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones NullCoalescingExpression with undefined expressions', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print a ?? b
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<NullCoalescingExpression>>(isNullCoalescingExpression).consequent = undefined;
+            original.findChild<DeepWriteable<NullCoalescingExpression>>(isNullCoalescingExpression).alternate = undefined;
+
+            testClone(original);
+        });
+
+        it('clones RegexLiteralExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print /test/gi
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones TypeCastExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print name as string
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones TypeCastExpression with undefined expression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print name as string
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<TypeCastExpression>>(isTypeCastExpression).obj = undefined;
+
+            testClone(original);
+        });
+
     });
 });
