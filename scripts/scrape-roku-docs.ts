@@ -341,6 +341,26 @@ class Runner {
 
             this.result.components[component?.name?.toLowerCase()] = component;
         }
+        if (!this.result.components['rointrinsicdouble']) {
+            this.result.components['rointrinsicdouble'] = {
+                availableSince: undefined,
+                constructors: [],
+                description: 'roIntrinsicDouble is the object equivalent for type \'Double\'.\n\nIt is a legacy object name, corresponding to the intrinsic Double object. Applications should use Double literal values and/or Double-typed variables directly.',
+                events: [],
+                interfaces: [
+                    {
+                        name: 'ifDouble',
+                        url: 'https://developer.roku.com/docs/references/brightscript/interfaces/ifdouble.md'
+                    },
+                    {
+                        name: 'ifToStr',
+                        url: 'https://developer.roku.com/docs/references/brightscript/interfaces/iftostr.md'
+                    }
+                ],
+                name: 'roIntrinsicDouble',
+                url: 'https://developer.roku.com/docs/references/brightscript/components/rodouble.md'
+            };
+        }
     }
 
     private getConstructorSignature(componentName: string, sourceCode: string) {

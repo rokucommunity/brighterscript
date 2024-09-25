@@ -732,6 +732,16 @@ describe('Scope', () => {
                 expectZeroDiagnostics(program);
             });
 
+            it('recognizes roIntrinsicDouble', () => {
+                program.setFile(`source/file.brs`, `
+                    sub main()
+                        intrinsicDouble = CreateObject("roIntrinsicDouble")
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
             it('catches invalid BrightScript components', () => {
                 program.setFile(`source/file.brs`, `
                     sub main()
