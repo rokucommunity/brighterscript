@@ -3,10 +3,10 @@ import * as fsExtra from 'fs-extra';
 import { Program } from '../Program';
 import type { BrsFile } from '../files/BrsFile';
 import { expect } from '../chai-config.spec';
-import type { AALiteralExpression, AAMemberExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionExpression, FunctionParameterExpression, GroupingExpression, IndexedGetExpression, NamespacedVariableNameExpression, NewExpression, NullCoalescingExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, TernaryExpression, TypeCastExpression, UnaryExpression, XmlAttributeGetExpression } from './Expression';
+import { AALiteralExpression, AAMemberExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionExpression, FunctionParameterExpression, GroupingExpression, IndexedGetExpression, NamespacedVariableNameExpression, NewExpression, NullCoalescingExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, TernaryExpression, TypeCastExpression, UnaryExpression, XmlAttributeGetExpression } from './Expression';
 import { expectZeroDiagnostics } from '../testHelpers.spec';
 import { tempDir, rootDir, stagingDir } from '../testHelpers.spec';
-import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isCallfuncExpression, isCatchStatement, isClassStatement, isCommentStatement, isConstStatement, isDimStatement, isDottedGetExpression, isDottedSetStatement, isEnumMemberStatement, isEnumStatement, isExpressionStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isGroupingExpression, isIfStatement, isIncrementStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInterfaceStatement, isLibraryStatement, isMethodStatement, isNamespacedVariableNameExpression, isNamespaceStatement, isNewExpression, isNullCoalescingExpression, isPrintStatement, isReturnStatement, isTaggedTemplateStringExpression, isTemplateStringExpression, isTemplateStringQuasiExpression, isTernaryExpression, isThrowStatement, isTryCatchStatement, isTypeCastExpression, isUnaryExpression, isWhileStatement, isXmlAttributeGetExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isAAMemberExpression, isAnnotationExpression, isArrayLiteralExpression, isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isCallfuncExpression, isCatchStatement, isClassStatement, isCommentStatement, isConstStatement, isDimStatement, isDottedGetExpression, isDottedSetStatement, isEnumMemberStatement, isEnumStatement, isExpressionStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isGroupingExpression, isIfStatement, isIncrementStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInterfaceStatement, isLibraryStatement, isMethodStatement, isNamespacedVariableNameExpression, isNamespaceStatement, isNewExpression, isNullCoalescingExpression, isPrintStatement, isReturnStatement, isTaggedTemplateStringExpression, isTemplateStringExpression, isTemplateStringQuasiExpression, isTernaryExpression, isThrowStatement, isTryCatchStatement, isTypeCastExpression, isUnaryExpression, isWhileStatement, isXmlAttributeGetExpression } from '../astUtils/reflection';
 import type { ClassStatement, FunctionStatement, InterfaceFieldStatement, InterfaceMethodStatement, MethodStatement, InterfaceStatement, CatchStatement, ThrowStatement, EnumStatement, EnumMemberStatement, ConstStatement, Block, CommentStatement, PrintStatement, DimStatement, ForStatement, WhileStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, TryCatchStatement, DottedSetStatement } from './Statement';
 import { AssignmentStatement, EmptyStatement } from './Statement';
 import { ParseMode, Parser } from './Parser';
@@ -189,23 +189,23 @@ describe('AstNode', () => {
         });
     });
 
-    describe('clone', () => {
+    describe.only('clone', () => {
         function testClone(code: string | AstNode) {
-            let original: AstNode;
+            let originalOuter: AstNode;
             if (typeof code === 'string') {
                 const parser = Parser.parse(code, { mode: ParseMode.BrighterScript });
-                original = parser.ast;
+                originalOuter = parser.ast;
                 expectZeroDiagnostics(parser);
             } else {
-                original = code;
+                originalOuter = code;
             }
 
-            const clone = original.clone();
+            const cloneOuter = originalOuter.clone();
             //ensure the clone is identical to the original
 
             //compare them both ways to ensure no extra properties exist
-            ensureIdentical(original, clone);
-            ensureIdentical(clone, original);
+            ensureIdentical(originalOuter, cloneOuter);
+            ensureIdentical(cloneOuter, originalOuter);
 
             function ensureIdentical(original: AstNode, clone: AstNode, ancestors = [], seenNodes = new Map<AstNode, number>()) {
                 for (let key in original) {
@@ -218,11 +218,14 @@ describe('AstNode', () => {
                     if (
                         ['parent', 'symbolTable', 'range'].includes(key) ||
                         //this is a circular reference property or the `returnType` prop, skip it
-                        (isFunctionExpression(original) && (key === 'functionStatement' || key === 'returnType'))
+                        (isFunctionExpression(original) && (key === 'functionStatement' || key === 'returnType')) ||
+                        //circular reference property for annotations
+                        (isAnnotationExpression(original) && key === 'call')
                     ) {
                         continue;
                     }
 
+                    //if this is an object, recurse
                     if (typeOfValue === 'object' && originalValue !== null) {
                         //skip circular references (but give some tollerance)
                         if (seenNodes.get(originalValue) > 2) {
@@ -236,9 +239,29 @@ describe('AstNode', () => {
                         }
                         //compare child object values
                         ensureIdentical(originalValue, cloneValue, [...ancestors, key], seenNodes);
-                    } else if ([''].includes(typeOfValue)) {
-                        //primitive values should be identical
-                        expect(cloneValue).to.equal(originalValue, `${fullKey} should be equal`);
+
+                        //for these tests, empty arrays can be the same as undefined so skip
+                    } else if (
+                        (Array.isArray(originalValue) && originalValue.length === 0 && cloneValue === undefined) ||
+                        (Array.isArray(cloneValue) && cloneValue.length === 0 && originalValue === undefined)) {
+                        continue;
+
+                        //these values must be identical
+                    } else {
+                        // eslint-disable-next-line no-useless-catch
+                        try {
+                            expect(cloneValue).to.equal(originalValue, `'${fullKey}' should be identical`);
+                        } catch (e) {
+                            //build a full list of ancestors for orig and clone
+                            let originalChain = [originalOuter];
+                            let cloneChain = [cloneOuter];
+                            for (let key of fullKey.split('.')) {
+                                originalChain.push(originalChain[originalChain.length - 1]?.[key]);
+                                cloneChain.push(cloneChain[cloneChain.length - 1]?.[key]);
+                            }
+                            console.error((e as Error)?.message, fullKey, originalChain, cloneChain);
+                            throw e;
+                        }
                     }
                 }
             }
@@ -474,6 +497,7 @@ describe('AstNode', () => {
                 end sub
             `).ast;
             original.findChild<any>(isExpressionStatement).expression = undefined;
+            original.findChild<FunctionExpression>(isFunctionExpression).callExpressions = [];
             testClone(original);
         });
 
@@ -909,7 +933,6 @@ describe('AstNode', () => {
 
             testClone(original);
         });
-
 
         it('clones IndexedSetStatement', () => {
             const original = Parser.parse(`
@@ -1540,16 +1563,6 @@ describe('AstNode', () => {
             testClone(original);
         });
 
-        it('clones AnnotationExpression', () => {
-            const original = Parser.parse(`
-                @test
-                sub main()
-                end sub
-            `).ast;
-
-            testClone(original);
-        });
-
         it('clones TernaryExpression', () => {
             const original = Parser.parse(`
                 sub test()
@@ -1626,5 +1639,29 @@ describe('AstNode', () => {
             testClone(original);
         });
 
+        it('clones AnnotationExpressions above every statement type', () => {
+            const original = Parser.parse(`
+                @annotation()
+                sub test()
+                end sub
+
+                @annotation()
+                class Person
+                end class
+
+                @annotation()
+                enum Direction
+                end enum
+
+                @annotation()
+                namespace alpha
+                end namespace
+
+                @annotation()
+                const thing = 1
+            `).ast;
+
+            testClone(original);
+        });
     });
 });

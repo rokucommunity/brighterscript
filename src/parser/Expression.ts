@@ -10,7 +10,7 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isStringType, isTemplateStringExpression, isTypeCastExpression, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isStringType, isTemplateStringExpression, isTypeCastExpression, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
@@ -20,6 +20,7 @@ import type { AstNode } from './AstNode';
 import { Expression } from './AstNode';
 import { SymbolTable } from '../SymbolTable';
 import { SourceNode } from 'source-map';
+import { createStackedVisitor } from '../astUtils/stackedVisitor';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -341,7 +342,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
     }
 
     public clone() {
-        return new FunctionExpression(
+        const clone = new FunctionExpression(
             this.parameters?.map(e => e?.clone()),
             this.body?.clone(),
             util.cloneToken(this.functionType),
@@ -351,6 +352,14 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             util.cloneToken(this.asToken),
             util.cloneToken(this.returnTypeToken)
         );
+
+        //rebuild the .callExpressions list in the clone
+        clone.body?.walk?.((node) => {
+            if (isCallExpression(node) && !isNewExpression(node.parent)) {
+                clone.callExpressions.push(node);
+            }
+        }, { walkMode: WalkMode.visitExpressions });
+        return clone;
     }
 }
 
@@ -1404,7 +1413,7 @@ export class TemplateStringExpression extends Expression {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             //walk the quasis and expressions in left-to-right order
-            for (let i = 0; i < this.quasis.length; i++) {
+            for (let i = 0; i < this.quasis?.length; i++) {
                 walk(this.quasis, i, visitor, options, this);
 
                 //this skips the final loop iteration since we'll always have one more quasi than expression
@@ -1490,7 +1499,7 @@ export class TaggedTemplateStringExpression extends Expression {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             //walk the quasis and expressions in left-to-right order
-            for (let i = 0; i < this.quasis.length; i++) {
+            for (let i = 0; i < this.quasis?.length; i++) {
                 walk(this.quasis, i, visitor, options, this);
 
                 //this skips the final loop iteration since we'll always have one more quasi than expression

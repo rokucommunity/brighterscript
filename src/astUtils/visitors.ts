@@ -78,7 +78,7 @@ export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: W
  * @param filter a function used to filter items from the array. return true if that item should be walked
  */
 export function walkArray<T = AstNode>(array: Array<T>, visitor: WalkVisitor, options: WalkOptions, parent?: AstNode, filter?: <T>(element: T) => boolean) {
-    for (let i = 0; i < array.length; i++) {
+    for (let i = 0; i < array?.length; i++) {
         if (!filter || filter(array[i])) {
             const startLength = array.length;
             walk(array, i, visitor, options, parent);

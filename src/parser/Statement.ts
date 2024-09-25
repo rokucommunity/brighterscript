@@ -37,8 +37,10 @@ export class EmptyStatement extends Statement {
     }
 
     public clone() {
-        return new EmptyStatement(
-            util.cloneRange(this.range)
+        return this.cloneAnnotations(
+            new EmptyStatement(
+                util.cloneRange(this.range)
+            )
         );
     }
 }
@@ -117,8 +119,10 @@ export class Body extends Statement implements TypedefProvider {
     }
 
     public clone() {
-        return new Body(
-            this.statements?.map(s => s?.clone())
+        return this.cloneAnnotations(
+            new Body(
+                this.statements?.map(s => s?.clone())
+            )
         );
     }
 }
@@ -165,10 +169,12 @@ export class AssignmentStatement extends Statement {
     }
 
     public clone() {
-        return new AssignmentStatement(
-            util.cloneToken(this.equals),
-            util.cloneToken(this.name),
-            this.value?.clone()
+        return this.cloneAnnotations(
+            new AssignmentStatement(
+                util.cloneToken(this.equals),
+                util.cloneToken(this.name),
+                this.value?.clone()
+            )
         );
     }
 }
@@ -227,9 +233,11 @@ export class Block extends Statement {
     }
 
     public clone() {
-        return new Block(
-            this.statements?.map(s => s?.clone()),
-            util.cloneRange(this.startingRange)
+        return this.cloneAnnotations(
+            new Block(
+                this.statements?.map(s => s?.clone()),
+                util.cloneRange(this.startingRange)
+            )
         );
     }
 }
@@ -255,8 +263,10 @@ export class ExpressionStatement extends Statement {
     }
 
     public clone() {
-        return new ExpressionStatement(
-            this.expression?.clone()
+        return this.cloneAnnotations(
+            new ExpressionStatement(
+                this.expression?.clone()
+            )
         );
     }
 }
@@ -307,8 +317,10 @@ export class CommentStatement extends Statement implements Expression, TypedefPr
     }
 
     public clone() {
-        return new CommentStatement(
-            this.comments?.map(x => util.cloneToken(x))
+        return this.cloneAnnotations(
+            new CommentStatement(
+                this.comments?.map(x => util.cloneToken(x))
+            )
         );
     }
 }
@@ -336,9 +348,11 @@ export class ExitForStatement extends Statement {
     }
 
     public clone() {
-        return new ExitForStatement({
-            exitFor: util.cloneToken(this.tokens.exitFor)
-        });
+        return this.cloneAnnotations(
+            new ExitForStatement({
+                exitFor: util.cloneToken(this.tokens.exitFor)
+            })
+        );
     }
 }
 
@@ -365,9 +379,11 @@ export class ExitWhileStatement extends Statement {
     }
 
     public clone() {
-        return new ExitWhileStatement({
-            exitWhile: util.cloneToken(this.tokens.exitWhile)
-        });
+        return this.cloneAnnotations(
+            new ExitWhileStatement({
+                exitWhile: util.cloneToken(this.tokens.exitWhile)
+            })
+        );
     }
 }
 
@@ -437,9 +453,11 @@ export class FunctionStatement extends Statement implements TypedefProvider {
     }
 
     public clone() {
-        return new FunctionStatement(
-            util.cloneToken(this.name),
-            this.func?.clone()
+        return this.cloneAnnotations(
+            new FunctionStatement(
+                util.cloneToken(this.name),
+                this.func?.clone()
+            )
         );
     }
 }
@@ -559,17 +577,19 @@ export class IfStatement extends Statement {
     }
 
     public clone() {
-        return new IfStatement(
-            {
-                if: util.cloneToken(this.tokens.if),
-                else: util.cloneToken(this.tokens.else),
-                endIf: util.cloneToken(this.tokens.endIf),
-                then: util.cloneToken(this.tokens.then)
-            },
-            this.condition?.clone(),
-            this.thenBranch?.clone(),
-            this.elseBranch?.clone(),
-            this.isInline
+        return this.cloneAnnotations(
+            new IfStatement(
+                {
+                    if: util.cloneToken(this.tokens.if),
+                    else: util.cloneToken(this.tokens.else),
+                    endIf: util.cloneToken(this.tokens.endIf),
+                    then: util.cloneToken(this.tokens.then)
+                },
+                this.condition?.clone(),
+                this.thenBranch?.clone(),
+                this.elseBranch?.clone(),
+                this.isInline
+            )
         );
     }
 }
@@ -602,9 +622,11 @@ export class IncrementStatement extends Statement {
     }
 
     public clone() {
-        return new IncrementStatement(
-            this.value?.clone(),
-            util.cloneToken(this.operator)
+        return this.cloneAnnotations(
+            new IncrementStatement(
+                this.value?.clone(),
+                util.cloneToken(this.operator)
+            )
         );
     }
 }
@@ -674,17 +696,19 @@ export class PrintStatement extends Statement {
     }
 
     public clone() {
-        return new PrintStatement(
-            {
-                print: util.cloneToken(this.tokens.print)
-            },
-            this.expressions?.map(e => {
-                if (isExpression(e as any)) {
-                    return (e as Expression).clone();
-                } else {
-                    return util.cloneToken(e as Token);
-                }
-            })
+        return this.cloneAnnotations(
+            new PrintStatement(
+                {
+                    print: util.cloneToken(this.tokens.print)
+                },
+                this.expressions?.map(e => {
+                    if (isExpression(e as any)) {
+                        return (e as Expression).clone();
+                    } else {
+                        return util.cloneToken(e as Token);
+                    }
+                })
+            )
         );
     }
 }
@@ -735,12 +759,14 @@ export class DimStatement extends Statement {
     }
 
     public clone() {
-        return new DimStatement(
-            util.cloneToken(this.dimToken),
-            util.cloneToken(this.identifier),
-            util.cloneToken(this.openingSquare),
-            this.dimensions?.map(e => e?.clone()),
-            util.cloneToken(this.closingSquare)
+        return this.cloneAnnotations(
+            new DimStatement(
+                util.cloneToken(this.dimToken),
+                util.cloneToken(this.identifier),
+                util.cloneToken(this.openingSquare),
+                this.dimensions?.map(e => e?.clone()),
+                util.cloneToken(this.closingSquare)
+            )
         );
     }
 }
@@ -774,10 +800,12 @@ export class GotoStatement extends Statement {
     }
 
     public clone() {
-        return new GotoStatement({
-            goto: util.cloneToken(this.tokens.goto),
-            label: util.cloneToken(this.tokens.label)
-        });
+        return this.cloneAnnotations(
+            new GotoStatement({
+                goto: util.cloneToken(this.tokens.goto),
+                label: util.cloneToken(this.tokens.label)
+            })
+        );
     }
 }
 
@@ -810,10 +838,12 @@ export class LabelStatement extends Statement {
     }
 
     public clone() {
-        return new LabelStatement({
-            identifier: util.cloneToken(this.tokens.identifier),
-            colon: util.cloneToken(this.tokens.colon)
-        });
+        return this.cloneAnnotations(
+            new LabelStatement({
+                identifier: util.cloneToken(this.tokens.identifier),
+                colon: util.cloneToken(this.tokens.colon)
+            })
+        );
     }
 }
 
@@ -852,11 +882,13 @@ export class ReturnStatement extends Statement {
     }
 
     public clone() {
-        return new ReturnStatement(
-            {
-                return: util.cloneToken(this.tokens.return)
-            },
-            this.value?.clone()
+        return this.cloneAnnotations(
+            new ReturnStatement(
+                {
+                    return: util.cloneToken(this.tokens.return)
+                },
+                this.value?.clone()
+            )
         );
     }
 }
@@ -884,9 +916,11 @@ export class EndStatement extends Statement {
     }
 
     public clone() {
-        return new EndStatement({
-            end: util.cloneToken(this.tokens.end)
-        });
+        return this.cloneAnnotations(
+            new EndStatement({
+                end: util.cloneToken(this.tokens.end)
+            })
+        );
     }
 }
 
@@ -913,9 +947,11 @@ export class StopStatement extends Statement {
     }
 
     public clone() {
-        return new StopStatement({
-            stop: util.cloneToken(this.tokens.stop)
-        });
+        return this.cloneAnnotations(
+            new StopStatement({
+                stop: util.cloneToken(this.tokens.stop)
+            })
+        );
     }
 }
 
@@ -1004,15 +1040,17 @@ export class ForStatement extends Statement {
     }
 
     public clone() {
-        return new ForStatement(
-            util.cloneToken(this.forToken),
-            this.counterDeclaration?.clone(),
-            util.cloneToken(this.toToken),
-            this.finalValue?.clone(),
-            this.body?.clone(),
-            util.cloneToken(this.endForToken),
-            util.cloneToken(this.stepToken),
-            this.increment?.clone()
+        return this.cloneAnnotations(
+            new ForStatement(
+                util.cloneToken(this.forToken),
+                this.counterDeclaration?.clone(),
+                util.cloneToken(this.toToken),
+                this.finalValue?.clone(),
+                this.body?.clone(),
+                util.cloneToken(this.endForToken),
+                util.cloneToken(this.stepToken),
+                this.increment?.clone()
+            )
         );
     }
 }
@@ -1086,15 +1124,17 @@ export class ForEachStatement extends Statement {
     }
 
     public clone() {
-        return new ForEachStatement(
-            {
-                forEach: util.cloneToken(this.tokens.forEach),
-                in: util.cloneToken(this.tokens.in),
-                endFor: util.cloneToken(this.tokens.endFor)
-            },
-            util.cloneToken(this.item),
-            this.target?.clone(),
-            this.body?.clone()
+        return this.cloneAnnotations(
+            new ForEachStatement(
+                {
+                    forEach: util.cloneToken(this.tokens.forEach),
+                    in: util.cloneToken(this.tokens.in),
+                    endFor: util.cloneToken(this.tokens.endFor)
+                },
+                util.cloneToken(this.item),
+                this.target?.clone(),
+                this.body?.clone()
+            )
         );
     }
 }
@@ -1157,13 +1197,15 @@ export class WhileStatement extends Statement {
     }
 
     public clone() {
-        return new WhileStatement(
-            {
-                while: util.cloneToken(this.tokens.while),
-                endWhile: util.cloneToken(this.tokens.endWhile)
-            },
-            this.condition?.clone(),
-            this.body?.clone()
+        return this.cloneAnnotations(
+            new WhileStatement(
+                {
+                    while: util.cloneToken(this.tokens.while),
+                    endWhile: util.cloneToken(this.tokens.endWhile)
+                },
+                this.condition?.clone(),
+                this.body?.clone()
+            )
         );
     }
 }
@@ -1212,11 +1254,13 @@ export class DottedSetStatement extends Statement {
     }
 
     public clone() {
-        return new DottedSetStatement(
-            this.obj?.clone(),
-            util.cloneToken(this.name),
-            this.value?.clone(),
-            util.cloneToken(this.dot)
+        return this.cloneAnnotations(
+            new DottedSetStatement(
+                this.obj?.clone(),
+                util.cloneToken(this.name),
+                this.value?.clone(),
+                util.cloneToken(this.dot)
+            )
         );
     }
 }
@@ -1285,13 +1329,15 @@ export class IndexedSetStatement extends Statement {
     }
 
     public clone() {
-        return new IndexedSetStatement(
-            this.obj?.clone(),
-            this.index?.clone(),
-            this.value?.clone(),
-            util.cloneToken(this.openingSquare),
-            util.cloneToken(this.closingSquare),
-            this.additionalIndexes?.map(e => e?.clone())
+        return this.cloneAnnotations(
+            new IndexedSetStatement(
+                this.obj?.clone(),
+                this.index?.clone(),
+                this.value?.clone(),
+                util.cloneToken(this.openingSquare),
+                util.cloneToken(this.closingSquare),
+                this.additionalIndexes?.map(e => e?.clone())
+            )
         );
     }
 }
@@ -1336,10 +1382,12 @@ export class LibraryStatement extends Statement implements TypedefProvider {
     }
 
     public clone() {
-        return new LibraryStatement({
-            library: util.cloneToken(this.tokens?.library),
-            filePath: util.cloneToken(this.tokens?.filePath)
-        });
+        return this.cloneAnnotations(
+            new LibraryStatement({
+                library: util.cloneToken(this.tokens?.library),
+                filePath: util.cloneToken(this.tokens?.filePath)
+            })
+        );
     }
 }
 
@@ -1428,11 +1476,13 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     }
 
     public clone() {
-        return new NamespaceStatement(
-            util.cloneToken(this.keyword),
-            this.nameExpression?.clone(),
-            this.body?.clone(),
-            util.cloneToken(this.endKeyword)
+        return this.cloneAnnotations(
+            new NamespaceStatement(
+                util.cloneToken(this.keyword),
+                this.nameExpression?.clone(),
+                this.body?.clone(),
+                util.cloneToken(this.endKeyword)
+            )
         );
     }
 }
@@ -1492,9 +1542,11 @@ export class ImportStatement extends Statement implements TypedefProvider {
     }
 
     public clone() {
-        return new ImportStatement(
-            util.cloneToken(this.importToken),
-            util.cloneToken(this.filePathToken)
+        return this.cloneAnnotations(
+            new ImportStatement(
+                util.cloneToken(this.importToken),
+                util.cloneToken(this.filePathToken)
+            )
         );
     }
 }
@@ -1655,13 +1707,15 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
     }
 
     public clone() {
-        return new InterfaceStatement(
-            util.cloneToken(this.tokens.interface),
-            util.cloneToken(this.tokens.name),
-            util.cloneToken(this.tokens.extends),
-            this.parentInterfaceName?.clone(),
-            this.body?.map(x => x?.clone()),
-            util.cloneToken(this.tokens.endInterface)
+        return this.cloneAnnotations(
+            new InterfaceStatement(
+                util.cloneToken(this.tokens.interface),
+                util.cloneToken(this.tokens.name),
+                util.cloneToken(this.tokens.extends),
+                this.parentInterfaceName?.clone(),
+                this.body?.map(x => x?.clone()),
+                util.cloneToken(this.tokens.endInterface)
+            )
         );
     }
 }
@@ -1739,12 +1793,14 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
     }
 
     public clone() {
-        return new InterfaceFieldStatement(
-            util.cloneToken(this.tokens.name),
-            util.cloneToken(this.tokens.as),
-            util.cloneToken(this.tokens.type),
-            this.type?.clone(),
-            util.cloneToken(this.tokens.optional)
+        return this.cloneAnnotations(
+            new InterfaceFieldStatement(
+                util.cloneToken(this.tokens.name),
+                util.cloneToken(this.tokens.as),
+                util.cloneToken(this.tokens.type),
+                this.type?.clone(),
+                util.cloneToken(this.tokens.optional)
+            )
         );
     }
 
@@ -1858,16 +1914,18 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
     }
 
     public clone() {
-        return new InterfaceMethodStatement(
-            util.cloneToken(this.tokens.functionType),
-            util.cloneToken(this.tokens.name),
-            util.cloneToken(this.tokens.leftParen),
-            this.params?.map(p => p?.clone()),
-            util.cloneToken(this.tokens.rightParen),
-            util.cloneToken(this.tokens.as),
-            util.cloneToken(this.tokens.returnType),
-            this.returnType?.clone(),
-            util.cloneToken(this.tokens.optional)
+        return this.cloneAnnotations(
+            new InterfaceMethodStatement(
+                util.cloneToken(this.tokens.functionType),
+                util.cloneToken(this.tokens.name),
+                util.cloneToken(this.tokens.leftParen),
+                this.params?.map(p => p?.clone()),
+                util.cloneToken(this.tokens.rightParen),
+                util.cloneToken(this.tokens.as),
+                util.cloneToken(this.tokens.returnType),
+                this.returnType?.clone(),
+                util.cloneToken(this.tokens.optional)
+            )
         );
     }
 }
@@ -2262,13 +2320,15 @@ export class ClassStatement extends Statement implements TypedefProvider {
     }
 
     public clone() {
-        return new ClassStatement(
-            util.cloneToken(this.classKeyword),
-            util.cloneToken(this.name),
-            this.body?.map(x => x?.clone()),
-            util.cloneToken(this.end),
-            util.cloneToken(this.extendsKeyword),
-            this.parentClassName?.clone()
+        return this.cloneAnnotations(
+            new ClassStatement(
+                util.cloneToken(this.classKeyword),
+                util.cloneToken(this.name),
+                this.body?.map(x => x?.clone()),
+                util.cloneToken(this.end),
+                util.cloneToken(this.extendsKeyword),
+                this.parentClassName?.clone()
+            )
         );
     }
 }
@@ -2463,11 +2523,13 @@ export class MethodStatement extends FunctionStatement {
     }
 
     public clone() {
-        return new MethodStatement(
-            this.modifiers?.map(m => util.cloneToken(m)),
-            util.cloneToken(this.name),
-            this.func?.clone(),
-            util.cloneToken(this.override)
+        return this.cloneAnnotations(
+            new MethodStatement(
+                this.modifiers?.map(m => util.cloneToken(m)),
+                util.cloneToken(this.name),
+                this.func?.clone(),
+                util.cloneToken(this.override)
+            )
         );
     }
 }
@@ -2560,14 +2622,16 @@ export class FieldStatement extends Statement implements TypedefProvider {
     }
 
     public clone() {
-        return new FieldStatement(
-            util.cloneToken(this.accessModifier),
-            util.cloneToken(this.name),
-            util.cloneToken(this.as),
-            util.cloneToken(this.type),
-            util.cloneToken(this.equal),
-            this.initialValue?.clone(),
-            util.cloneToken(this.optional)
+        return this.cloneAnnotations(
+            new FieldStatement(
+                util.cloneToken(this.accessModifier),
+                util.cloneToken(this.name),
+                util.cloneToken(this.as),
+                util.cloneToken(this.type),
+                util.cloneToken(this.equal),
+                this.initialValue?.clone(),
+                util.cloneToken(this.optional)
+            )
         );
     }
 }
@@ -2625,13 +2689,15 @@ export class TryCatchStatement extends Statement {
     }
 
     public clone() {
-        return new TryCatchStatement(
-            {
-                try: util.cloneToken(this.tokens.try),
-                endTry: util.cloneToken(this.tokens.endTry)
-            },
-            this.tryBranch?.clone(),
-            this.catchStatement?.clone()
+        return this.cloneAnnotations(
+            new TryCatchStatement(
+                {
+                    try: util.cloneToken(this.tokens.try),
+                    endTry: util.cloneToken(this.tokens.endTry)
+                },
+                this.tryBranch?.clone(),
+                this.catchStatement?.clone()
+            )
         );
     }
 }
@@ -2670,12 +2736,14 @@ export class CatchStatement extends Statement {
     }
 
     public clone() {
-        return new CatchStatement(
-            {
-                catch: util.cloneToken(this.tokens.catch)
-            },
-            util.cloneToken(this.exceptionVariable),
-            this.catchBranch?.clone()
+        return this.cloneAnnotations(
+            new CatchStatement(
+                {
+                    catch: util.cloneToken(this.tokens.catch)
+                },
+                util.cloneToken(this.exceptionVariable),
+                this.catchBranch?.clone()
+            )
         );
     }
 }
@@ -2719,9 +2787,11 @@ export class ThrowStatement extends Statement {
     }
 
     public clone() {
-        return new ThrowStatement(
-            util.cloneToken(this.throwToken),
-            this.expression?.clone()
+        return this.cloneAnnotations(
+            new ThrowStatement(
+                util.cloneToken(this.throwToken),
+                this.expression?.clone()
+            )
         );
     }
 }
@@ -2881,13 +2951,15 @@ export class EnumStatement extends Statement implements TypedefProvider {
     }
 
     public clone() {
-        return new EnumStatement(
-            {
-                enum: util.cloneToken(this.tokens.enum),
-                name: util.cloneToken(this.tokens.name),
-                endEnum: util.cloneToken(this.tokens.endEnum)
-            },
-            this.body?.map(x => x?.clone())
+        return this.cloneAnnotations(
+            new EnumStatement(
+                {
+                    enum: util.cloneToken(this.tokens.enum),
+                    name: util.cloneToken(this.tokens.name),
+                    endEnum: util.cloneToken(this.tokens.endEnum)
+                },
+                this.body?.map(x => x?.clone())
+            )
         );
     }
 }
@@ -2952,12 +3024,14 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
     }
 
     public clone() {
-        return new EnumMemberStatement(
-            {
-                name: util.cloneToken(this.tokens.name),
-                equal: util.cloneToken(this.tokens.equal)
-            },
-            this.value?.clone()
+        return this.cloneAnnotations(
+            new EnumMemberStatement(
+                {
+                    name: util.cloneToken(this.tokens.name),
+                    equal: util.cloneToken(this.tokens.equal)
+                },
+                this.value?.clone()
+            )
         );
     }
 }
@@ -3025,13 +3099,15 @@ export class ConstStatement extends Statement implements TypedefProvider {
     }
 
     public clone() {
-        return new ConstStatement(
-            {
-                const: util.cloneToken(this.tokens.const),
-                name: util.cloneToken(this.tokens.name),
-                equals: util.cloneToken(this.tokens.equals)
-            },
-            this.value?.clone()
+        return this.cloneAnnotations(
+            new ConstStatement(
+                {
+                    const: util.cloneToken(this.tokens.const),
+                    name: util.cloneToken(this.tokens.name),
+                    equals: util.cloneToken(this.tokens.equals)
+                },
+                this.value?.clone()
+            )
         );
     }
 }
@@ -3065,9 +3141,11 @@ export class ContinueStatement extends Statement {
     }
 
     public clone() {
-        return new ContinueStatement({
-            continue: util.cloneToken(this.tokens.continue),
-            loopType: util.cloneToken(this.tokens.loopType)
-        });
+        return this.cloneAnnotations(
+            new ContinueStatement({
+                continue: util.cloneToken(this.tokens.continue),
+                loopType: util.cloneToken(this.tokens.loopType)
+            })
+        );
     }
 }

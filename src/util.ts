@@ -1010,13 +1010,18 @@ export class Util {
      */
     public cloneToken<T extends Token>(token: T) {
         if (token) {
-            return {
+            const result = {
                 kind: token.kind,
                 range: this.cloneRange(token.range),
                 text: token.text,
                 isReserved: token.isReserved,
                 leadingWhitespace: token.leadingWhitespace
             } as T;
+            //handle those tokens that have charCode
+            if ('charCode' in token) {
+                (result as any).charCode = token.charCode;
+            }
+            return result;
         } else {
             return token;
         }

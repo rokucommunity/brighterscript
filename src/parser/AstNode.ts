@@ -127,6 +127,7 @@ export abstract class AstNode {
      * All tokens, statements, expressions, range, and location are cloned.
      */
     public abstract clone();
+
 }
 
 export abstract class Statement extends AstNode {
@@ -138,6 +139,16 @@ export abstract class Statement extends AstNode {
      * Annotations for this statement
      */
     public annotations: AnnotationExpression[] | undefined;
+
+    /**
+     * Helper function that clones the current annotations and places them onto the incoming statement
+     * @param node the already cloned node that needs the annotations attached
+     * @returns the already cloned node with the newly cloned annotations attached
+     */
+    protected cloneAnnotations<T extends Statement>(node: T) {
+        node.annotations = this.annotations?.map(x => x.clone());
+        return node;
+    }
 }
 
 
