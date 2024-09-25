@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.37](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.36...v1.0.0-alpha.37) - 2024-09-25
+### Added
+ - Support for types declared in comments ([#1293](https://github.com/rokucommunity/brighterscript/pull/1293))
+### Changed
+ - Eliminate `FunctionExpression.functionStatement` ([#1287](https://github.com/rokucommunity/brighterscript/pull/1287))
+ - Merges `ExitForStatement` and `ExitWhileStatement` ([#1289](https://github.com/rokucommunity/brighterscript/pull/1289))
+### Fixed
+ - Include missing transpiled comments ([#1278](https://github.com/rokucommunity/brighterscript/pull/1278))
+ - Tests and issues around transpiling variables that shadow stuff ([#1282](https://github.com/rokucommunity/brighterscript/pull/1282))
+ - Handles diagnostic with invalid location, and semantic tokens for unscoped file ([#1286](https://github.com/rokucommunity/brighterscript/pull/1286))
+ - Fix some null crashes ([#1304](https://github.com/rokucommunity/brighterscript/pull/1304))
+
+
+
 ## [1.0.0-alpha.36](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.35...v1.0.0-alpha.36) - 2024-08-09
 ### Fixed
  - `m` should be typed as roAssociativeArray for all inline functions ([#1272](https://github.com/rokucommunity/brighterscript/pull/1272))
