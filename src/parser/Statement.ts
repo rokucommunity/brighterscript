@@ -37,7 +37,7 @@ export class EmptyStatement extends Statement {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new EmptyStatement(
                 util.cloneRange(this.range)
             )
@@ -119,10 +119,11 @@ export class Body extends Statement implements TypedefProvider {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new Body(
                 this.statements?.map(s => s?.clone())
-            )
+            ),
+            ['statements']
         );
     }
 }
@@ -169,12 +170,13 @@ export class AssignmentStatement extends Statement {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new AssignmentStatement(
                 util.cloneToken(this.equals),
                 util.cloneToken(this.name),
                 this.value?.clone()
-            )
+            ),
+            ['value']
         );
     }
 }
@@ -233,11 +235,12 @@ export class Block extends Statement {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new Block(
                 this.statements?.map(s => s?.clone()),
                 util.cloneRange(this.startingRange)
-            )
+            ),
+            ['statements']
         );
     }
 }
@@ -263,10 +266,11 @@ export class ExpressionStatement extends Statement {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new ExpressionStatement(
                 this.expression?.clone()
-            )
+            ),
+            ['expression']
         );
     }
 }
@@ -317,10 +321,11 @@ export class CommentStatement extends Statement implements Expression, TypedefPr
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new CommentStatement(
                 this.comments?.map(x => util.cloneToken(x))
-            )
+            ),
+            ['comments' as any]
         );
     }
 }
@@ -348,7 +353,7 @@ export class ExitForStatement extends Statement {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new ExitForStatement({
                 exitFor: util.cloneToken(this.tokens.exitFor)
             })
@@ -379,7 +384,7 @@ export class ExitWhileStatement extends Statement {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new ExitWhileStatement({
                 exitWhile: util.cloneToken(this.tokens.exitWhile)
             })
@@ -453,11 +458,12 @@ export class FunctionStatement extends Statement implements TypedefProvider {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new FunctionStatement(
                 util.cloneToken(this.name),
                 this.func?.clone()
-            )
+            ),
+            ['func']
         );
     }
 }
@@ -577,7 +583,7 @@ export class IfStatement extends Statement {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new IfStatement(
                 {
                     if: util.cloneToken(this.tokens.if),
@@ -589,7 +595,8 @@ export class IfStatement extends Statement {
                 this.thenBranch?.clone(),
                 this.elseBranch?.clone(),
                 this.isInline
-            )
+            ),
+            ['condition', 'thenBranch', 'elseBranch']
         );
     }
 }
@@ -622,11 +629,12 @@ export class IncrementStatement extends Statement {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new IncrementStatement(
                 this.value?.clone(),
                 util.cloneToken(this.operator)
-            )
+            ),
+            ['value']
         );
     }
 }
@@ -696,7 +704,7 @@ export class PrintStatement extends Statement {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new PrintStatement(
                 {
                     print: util.cloneToken(this.tokens.print)
@@ -708,7 +716,8 @@ export class PrintStatement extends Statement {
                         return util.cloneToken(e as Token);
                     }
                 })
-            )
+            ),
+            ['expressions' as any]
         );
     }
 }
@@ -759,14 +768,15 @@ export class DimStatement extends Statement {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new DimStatement(
                 util.cloneToken(this.dimToken),
                 util.cloneToken(this.identifier),
                 util.cloneToken(this.openingSquare),
                 this.dimensions?.map(e => e?.clone()),
                 util.cloneToken(this.closingSquare)
-            )
+            ),
+            ['dimensions']
         );
     }
 }
@@ -800,7 +810,7 @@ export class GotoStatement extends Statement {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new GotoStatement({
                 goto: util.cloneToken(this.tokens.goto),
                 label: util.cloneToken(this.tokens.label)
@@ -838,7 +848,7 @@ export class LabelStatement extends Statement {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new LabelStatement({
                 identifier: util.cloneToken(this.tokens.identifier),
                 colon: util.cloneToken(this.tokens.colon)
@@ -882,13 +892,14 @@ export class ReturnStatement extends Statement {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new ReturnStatement(
                 {
                     return: util.cloneToken(this.tokens.return)
                 },
                 this.value?.clone()
-            )
+            ),
+            ['value']
         );
     }
 }
@@ -916,7 +927,7 @@ export class EndStatement extends Statement {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new EndStatement({
                 end: util.cloneToken(this.tokens.end)
             })
@@ -947,7 +958,7 @@ export class StopStatement extends Statement {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new StopStatement({
                 stop: util.cloneToken(this.tokens.stop)
             })
@@ -1040,7 +1051,7 @@ export class ForStatement extends Statement {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new ForStatement(
                 util.cloneToken(this.forToken),
                 this.counterDeclaration?.clone(),
@@ -1050,7 +1061,8 @@ export class ForStatement extends Statement {
                 util.cloneToken(this.endForToken),
                 util.cloneToken(this.stepToken),
                 this.increment?.clone()
-            )
+            ),
+            ['counterDeclaration', 'finalValue', 'body', 'increment']
         );
     }
 }
@@ -1124,7 +1136,7 @@ export class ForEachStatement extends Statement {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new ForEachStatement(
                 {
                     forEach: util.cloneToken(this.tokens.forEach),
@@ -1134,7 +1146,8 @@ export class ForEachStatement extends Statement {
                 util.cloneToken(this.item),
                 this.target?.clone(),
                 this.body?.clone()
-            )
+            ),
+            ['target', 'body']
         );
     }
 }
@@ -1197,7 +1210,7 @@ export class WhileStatement extends Statement {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new WhileStatement(
                 {
                     while: util.cloneToken(this.tokens.while),
@@ -1205,7 +1218,8 @@ export class WhileStatement extends Statement {
                 },
                 this.condition?.clone(),
                 this.body?.clone()
-            )
+            ),
+            ['condition', 'body']
         );
     }
 }
@@ -1254,13 +1268,14 @@ export class DottedSetStatement extends Statement {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new DottedSetStatement(
                 this.obj?.clone(),
                 util.cloneToken(this.name),
                 this.value?.clone(),
                 util.cloneToken(this.dot)
-            )
+            ),
+            ['obj', 'value']
         );
     }
 }
@@ -1329,7 +1344,7 @@ export class IndexedSetStatement extends Statement {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new IndexedSetStatement(
                 this.obj?.clone(),
                 this.index?.clone(),
@@ -1337,7 +1352,8 @@ export class IndexedSetStatement extends Statement {
                 util.cloneToken(this.openingSquare),
                 util.cloneToken(this.closingSquare),
                 this.additionalIndexes?.map(e => e?.clone())
-            )
+            ),
+            ['obj', 'index', 'value', 'additionalIndexes']
         );
     }
 }
@@ -1351,8 +1367,8 @@ export class LibraryStatement extends Statement implements TypedefProvider {
     ) {
         super();
         this.range = util.createBoundingRange(
-            this.tokens.library,
-            this.tokens.filePath
+            this.tokens?.library,
+            this.tokens?.filePath
         );
     }
 
@@ -1382,11 +1398,13 @@ export class LibraryStatement extends Statement implements TypedefProvider {
     }
 
     public clone() {
-        return this.cloneAnnotations(
-            new LibraryStatement({
-                library: util.cloneToken(this.tokens?.library),
-                filePath: util.cloneToken(this.tokens?.filePath)
-            })
+        return this.finalizeClone(
+            new LibraryStatement(
+                this.tokens === undefined ? undefined : {
+                    library: util.cloneToken(this.tokens?.library),
+                    filePath: util.cloneToken(this.tokens?.filePath)
+                }
+            )
         );
     }
 }
@@ -1400,14 +1418,15 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         public endKeyword: Token
     ) {
         super();
-        this.name = this.getName(ParseMode.BrighterScript);
         this.symbolTable = new SymbolTable(`NamespaceStatement: '${this.name}'`, () => this.parent?.getSymbolTable());
     }
 
     /**
      * The string name for this namespace
      */
-    public name: string;
+    public get name(): string {
+        return this.getName(ParseMode.BrighterScript);
+    }
 
     public get range() {
         return this.cacheRange();
@@ -1476,14 +1495,17 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        const clone = this.finalizeClone(
             new NamespaceStatement(
                 util.cloneToken(this.keyword),
                 this.nameExpression?.clone(),
                 this.body?.clone(),
                 util.cloneToken(this.endKeyword)
-            )
+            ),
+            ['nameExpression', 'body']
         );
+        clone.cacheRange();
+        return clone;
     }
 }
 
@@ -1542,7 +1564,7 @@ export class ImportStatement extends Statement implements TypedefProvider {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new ImportStatement(
                 util.cloneToken(this.importToken),
                 util.cloneToken(this.filePathToken)
@@ -1707,7 +1729,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new InterfaceStatement(
                 util.cloneToken(this.tokens.interface),
                 util.cloneToken(this.tokens.name),
@@ -1715,7 +1737,8 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
                 this.parentInterfaceName?.clone(),
                 this.body?.map(x => x?.clone()),
                 util.cloneToken(this.tokens.endInterface)
-            )
+            ),
+            ['parentInterfaceName', 'body']
         );
     }
 }
@@ -1793,7 +1816,7 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new InterfaceFieldStatement(
                 util.cloneToken(this.tokens.name),
                 util.cloneToken(this.tokens.as),
@@ -1914,7 +1937,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new InterfaceMethodStatement(
                 util.cloneToken(this.tokens.functionType),
                 util.cloneToken(this.tokens.name),
@@ -1925,7 +1948,8 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
                 util.cloneToken(this.tokens.returnType),
                 this.returnType?.clone(),
                 util.cloneToken(this.tokens.optional)
-            )
+            ),
+            ['params']
         );
     }
 }
@@ -2320,7 +2344,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new ClassStatement(
                 util.cloneToken(this.classKeyword),
                 util.cloneToken(this.name),
@@ -2328,7 +2352,8 @@ export class ClassStatement extends Statement implements TypedefProvider {
                 util.cloneToken(this.end),
                 util.cloneToken(this.extendsKeyword),
                 this.parentClassName?.clone()
-            )
+            ),
+            ['body', 'parentClassName']
         );
     }
 }
@@ -2523,13 +2548,14 @@ export class MethodStatement extends FunctionStatement {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new MethodStatement(
                 this.modifiers?.map(m => util.cloneToken(m)),
                 util.cloneToken(this.name),
                 this.func?.clone(),
                 util.cloneToken(this.override)
-            )
+            ),
+            ['func']
         );
     }
 }
@@ -2622,7 +2648,7 @@ export class FieldStatement extends Statement implements TypedefProvider {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new FieldStatement(
                 util.cloneToken(this.accessModifier),
                 util.cloneToken(this.name),
@@ -2631,7 +2657,8 @@ export class FieldStatement extends Statement implements TypedefProvider {
                 util.cloneToken(this.equal),
                 this.initialValue?.clone(),
                 util.cloneToken(this.optional)
-            )
+            ),
+            ['initialValue']
         );
     }
 }
@@ -2689,7 +2716,7 @@ export class TryCatchStatement extends Statement {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new TryCatchStatement(
                 {
                     try: util.cloneToken(this.tokens.try),
@@ -2697,7 +2724,8 @@ export class TryCatchStatement extends Statement {
                 },
                 this.tryBranch?.clone(),
                 this.catchStatement?.clone()
-            )
+            ),
+            ['tryBranch', 'catchStatement']
         );
     }
 }
@@ -2736,14 +2764,15 @@ export class CatchStatement extends Statement {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new CatchStatement(
                 {
                     catch: util.cloneToken(this.tokens.catch)
                 },
                 util.cloneToken(this.exceptionVariable),
                 this.catchBranch?.clone()
-            )
+            ),
+            ['catchBranch']
         );
     }
 }
@@ -2787,11 +2816,12 @@ export class ThrowStatement extends Statement {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new ThrowStatement(
                 util.cloneToken(this.throwToken),
                 this.expression?.clone()
-            )
+            ),
+            ['expression']
         );
     }
 }
@@ -2951,7 +2981,7 @@ export class EnumStatement extends Statement implements TypedefProvider {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new EnumStatement(
                 {
                     enum: util.cloneToken(this.tokens.enum),
@@ -2959,7 +2989,8 @@ export class EnumStatement extends Statement implements TypedefProvider {
                     endEnum: util.cloneToken(this.tokens.endEnum)
                 },
                 this.body?.map(x => x?.clone())
-            )
+            ),
+            ['body']
         );
     }
 }
@@ -3024,14 +3055,15 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new EnumMemberStatement(
                 {
                     name: util.cloneToken(this.tokens.name),
                     equal: util.cloneToken(this.tokens.equal)
                 },
                 this.value?.clone()
-            )
+            ),
+            ['value']
         );
     }
 }
@@ -3099,7 +3131,7 @@ export class ConstStatement extends Statement implements TypedefProvider {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new ConstStatement(
                 {
                     const: util.cloneToken(this.tokens.const),
@@ -3107,7 +3139,8 @@ export class ConstStatement extends Statement implements TypedefProvider {
                     equals: util.cloneToken(this.tokens.equals)
                 },
                 this.value?.clone()
-            )
+            ),
+            ['value']
         );
     }
 }
@@ -3141,7 +3174,7 @@ export class ContinueStatement extends Statement {
     }
 
     public clone() {
-        return this.cloneAnnotations(
+        return this.finalizeClone(
             new ContinueStatement({
                 continue: util.cloneToken(this.tokens.continue),
                 loopType: util.cloneToken(this.tokens.loopType)

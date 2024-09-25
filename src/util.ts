@@ -1019,7 +1019,7 @@ export class Util {
             } as T;
             //handle those tokens that have charCode
             if ('charCode' in token) {
-                (result as any).charCode = token.charCode;
+                (result as any).charCode = (token as any).charCode;
             }
             return result;
         } else {

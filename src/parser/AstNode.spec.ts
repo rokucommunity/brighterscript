@@ -3,10 +3,10 @@ import * as fsExtra from 'fs-extra';
 import { Program } from '../Program';
 import type { BrsFile } from '../files/BrsFile';
 import { expect } from '../chai-config.spec';
-import { AALiteralExpression, AAMemberExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionExpression, FunctionParameterExpression, GroupingExpression, IndexedGetExpression, NamespacedVariableNameExpression, NewExpression, NullCoalescingExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, TernaryExpression, TypeCastExpression, UnaryExpression, XmlAttributeGetExpression } from './Expression';
+import type { AALiteralExpression, AAMemberExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionExpression, GroupingExpression, IndexedGetExpression, NewExpression, NullCoalescingExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, TernaryExpression, TypeCastExpression, UnaryExpression, XmlAttributeGetExpression } from './Expression';
 import { expectZeroDiagnostics } from '../testHelpers.spec';
 import { tempDir, rootDir, stagingDir } from '../testHelpers.spec';
-import { isAALiteralExpression, isAAMemberExpression, isAnnotationExpression, isArrayLiteralExpression, isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isCallfuncExpression, isCatchStatement, isClassStatement, isCommentStatement, isConstStatement, isDimStatement, isDottedGetExpression, isDottedSetStatement, isEnumMemberStatement, isEnumStatement, isExpressionStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isGroupingExpression, isIfStatement, isIncrementStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInterfaceStatement, isLibraryStatement, isMethodStatement, isNamespacedVariableNameExpression, isNamespaceStatement, isNewExpression, isNullCoalescingExpression, isPrintStatement, isReturnStatement, isTaggedTemplateStringExpression, isTemplateStringExpression, isTemplateStringQuasiExpression, isTernaryExpression, isThrowStatement, isTryCatchStatement, isTypeCastExpression, isUnaryExpression, isWhileStatement, isXmlAttributeGetExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isAAMemberExpression, isAnnotationExpression, isArrayLiteralExpression, isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isCallfuncExpression, isCatchStatement, isClassStatement, isCommentStatement, isConstStatement, isDimStatement, isDottedGetExpression, isDottedSetStatement, isEnumMemberStatement, isEnumStatement, isExpressionStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isGroupingExpression, isIfStatement, isIncrementStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInterfaceStatement, isLibraryStatement, isMethodStatement, isNamespaceStatement, isNewExpression, isNullCoalescingExpression, isPrintStatement, isReturnStatement, isTaggedTemplateStringExpression, isTemplateStringExpression, isTemplateStringQuasiExpression, isTernaryExpression, isThrowStatement, isTryCatchStatement, isTypeCastExpression, isUnaryExpression, isWhileStatement, isXmlAttributeGetExpression } from '../astUtils/reflection';
 import type { ClassStatement, FunctionStatement, InterfaceFieldStatement, InterfaceMethodStatement, MethodStatement, InterfaceStatement, CatchStatement, ThrowStatement, EnumStatement, EnumMemberStatement, ConstStatement, Block, CommentStatement, PrintStatement, DimStatement, ForStatement, WhileStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, TryCatchStatement, DottedSetStatement } from './Statement';
 import { AssignmentStatement, EmptyStatement } from './Statement';
 import { ParseMode, Parser } from './Parser';
@@ -189,7 +189,7 @@ describe('AstNode', () => {
         });
     });
 
-    describe.only('clone', () => {
+    describe('clone', () => {
         function testClone(code: string | AstNode) {
             let originalOuter: AstNode;
             if (typeof code === 'string') {
@@ -1643,6 +1643,12 @@ describe('AstNode', () => {
             const original = Parser.parse(`
                 @annotation()
                 sub test()
+                    @annotation()
+                    statement = true
+                    @annotation()
+                    call()
+                    @annotation()
+                    'comment
                 end sub
 
                 @annotation()

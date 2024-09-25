@@ -97,7 +97,7 @@ export abstract class AstNode {
             ...options ?? {},
             cancel: cancel.token
         });
-        return result as TNode;
+        return result as unknown as TNode;
     }
 
     /**
@@ -128,6 +128,29 @@ export abstract class AstNode {
      */
     public abstract clone();
 
+    /**
+     * Helper function for creating a clone. This will clone any attached annotations, as well as reparent the cloned node's children to the clone
+     */
+    protected finalizeClone<T extends AstNode>(
+        clone: T,
+        propsToReparent?: Array<{ [K in keyof T]: T[K] extends AstNode | AstNode[] ? K : never }[keyof T]>
+    ) {
+        //clone the annotations if they exist
+        if (Array.isArray((this as unknown as Statement).annotations)) {
+            (clone as unknown as Statement).annotations = (this as unknown as Statement).annotations?.map(x => x.clone());
+        }
+        //reparent all of the supplied props
+        for (let key of propsToReparent ?? []) {
+            const children = (Array.isArray(clone?.[key]) ? clone[key] : [clone?.[key]]) as any[];
+            for (let child of children ?? []) {
+                if (child) {
+                    (clone[key as any] as AstNode).parent = clone;
+                }
+            }
+        }
+        return clone;
+    }
+
 }
 
 export abstract class Statement extends AstNode {
@@ -139,16 +162,6 @@ export abstract class Statement extends AstNode {
      * Annotations for this statement
      */
     public annotations: AnnotationExpression[] | undefined;
-
-    /**
-     * Helper function that clones the current annotations and places them onto the incoming statement
-     * @param node the already cloned node that needs the annotations attached
-     * @returns the already cloned node with the newly cloned annotations attached
-     */
-    protected cloneAnnotations<T extends Statement>(node: T) {
-        node.annotations = this.annotations?.map(x => x.clone());
-        return node;
-    }
 }
 
 
