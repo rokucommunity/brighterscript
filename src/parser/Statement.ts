@@ -397,7 +397,7 @@ export class Block extends Statement {
         } else if (isCatchStatement(this.parent) && isTryCatchStatement(this.parent?.parent)) {
             lastBitBefore = util.createBoundingLocation(
                 this.parent.tokens.catch,
-                this.parent.tokens.exceptionVariable
+                this.parent.exceptionVariableExpression
             );
             firstBitAfter = this.parent.parent.tokens.endTry?.location;
         }
@@ -3499,26 +3499,27 @@ export class TryCatchStatement extends Statement {
 export class CatchStatement extends Statement {
     constructor(options?: {
         catch?: Token;
-        exceptionVariable?: Identifier;
+        exceptionVariableExpression?: Expression;
         catchBranch?: Block;
     }) {
         super();
         this.tokens = {
-            catch: options?.catch,
-            exceptionVariable: options?.exceptionVariable
+            catch: options?.catch
         };
+        this.exceptionVariableExpression = options?.exceptionVariableExpression;
         this.catchBranch = options?.catchBranch;
         this.location = util.createBoundingLocation(
             this.tokens.catch,
-            this.tokens.exceptionVariable,
+            this.exceptionVariableExpression,
             this.catchBranch
         );
     }
 
     public readonly tokens: {
         readonly catch?: Token;
-        readonly exceptionVariable?: Identifier;
     };
+
+    public readonly exceptionVariableExpression?: Expression;
 
     public readonly catchBranch?: Block;
 
@@ -3530,7 +3531,12 @@ export class CatchStatement extends Statement {
         return [
             state.transpileToken(this.tokens.catch, 'catch'),
             ' ',
-            this.tokens.exceptionVariable?.text ?? 'e',
+            this.exceptionVariableExpression?.transpile(state) ?? [
+                //use the variable named `e` if it doesn't exist in this function body. otherwise use '__bsc_error' just to make sure we're out of the way
+                this.getSymbolTable()?.hasSymbol('e', SymbolTypeFlag.runtime)
+                    ? '__bsc_error'
+                    : 'e'
+            ],
             ...(this.catchBranch?.transpile(state) ?? [])
         ];
     }
@@ -3549,7 +3555,7 @@ export class CatchStatement extends Statement {
         return this.finalizeClone(
             new CatchStatement({
                 catch: util.cloneToken(this.tokens.catch),
-                exceptionVariable: util.cloneToken(this.tokens.exceptionVariable),
+                exceptionVariableExpression: this.exceptionVariableExpression?.clone(),
                 catchBranch: this.catchBranch?.clone()
             }),
             ['catchBranch']
