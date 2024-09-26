@@ -3141,7 +3141,12 @@ export class CatchStatement extends Statement {
         return [
             state.transpileToken(this.tokens.catch, 'catch'),
             ' ',
-            this.exceptionVariableExpression?.transpile(state) ?? ['e'],
+            this.exceptionVariableExpression?.transpile(state) ?? [
+                //use the variable named `e` if it doesn't exist in this function body. otherwise use '__bsc_error' just to make sure we're out of the way
+                this.getSymbolTable()?.hasSymbol('e', SymbolTypeFlag.runtime)
+                    ? '__bsc_error'
+                    : 'e'
+            ],
             ...(this.catchBranch?.transpile(state) ?? [])
         ];
     }

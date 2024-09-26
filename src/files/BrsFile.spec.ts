@@ -2213,6 +2213,28 @@ describe('BrsFile', () => {
                     end sub
                 `, undefined, 'source/main.bs');
             });
+
+            it('uses alternate name when `e` is already a local var', async () => {
+                await testTranspile(`
+                    sub new()
+                        e = "ello love"
+                        try
+                            print "hello"
+                        catch
+                            print "error"
+                        end try
+                    end sub
+                `, `
+                    sub new()
+                        e = "ello love"
+                        try
+                            print "hello"
+                        catch __bsc_error
+                            print "error"
+                        end try
+                    end sub
+                `, undefined, 'source/main.bs');
+            });
         });
 
         describe('namespaces', () => {
