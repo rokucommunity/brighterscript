@@ -379,7 +379,7 @@ export class Util {
             autoImportComponentScript: config.autoImportComponentScript === true ? true : false,
             showDiagnosticsInConsole: config.showDiagnosticsInConsole === false ? false : true,
             sourceRoot: config.sourceRoot ? standardizePath(config.sourceRoot) : undefined,
-            resolveSourceRoot: config.resolveSourceRoot === true ? true: false,
+            resolveSourceRoot: config.resolveSourceRoot === true ? true : false,
             allowBrighterScriptInBrightScript: config.allowBrighterScriptInBrightScript === true ? true : false,
             emitDefinitions: config.emitDefinitions === true ? true : false,
             removeParameterTypes: config.removeParameterTypes === true ? true : false,
@@ -1163,6 +1163,52 @@ export class Util {
             return undefined;
         }
         return this.createRange(startPosition.line, startPosition.character, endPosition.line, endPosition.character);
+    }
+
+    /**
+     * Clone a range
+     */
+    public cloneLocation(location: Location) {
+        if (location) {
+            return {
+                uri: location.uri,
+                range: {
+                    start: {
+                        line: location.range.start.line,
+                        character: location.range.start.character
+                    },
+                    end: {
+                        line: location.range.end.line,
+                        character: location.range.end.character
+                    }
+                }
+            };
+        } else {
+            return location;
+        }
+    }
+
+    /**
+     * Clone every token
+     */
+    public cloneToken<T extends Token>(token: T): T {
+        if (token) {
+            const result = {
+                kind: token.kind,
+                location: this.cloneLocation(token.location),
+                text: token.text,
+                isReserved: token.isReserved,
+                leadingWhitespace: token.leadingWhitespace,
+                leadingTrivia: token.leadingTrivia.map(x => this.cloneToken(x))
+            } as Token;
+            //handle those tokens that have charCode
+            if ('charCode' in token) {
+                (result as any).charCode = (token as any).charCode;
+            }
+            return result as T;
+        } else {
+            return token;
+        }
     }
 
     /**

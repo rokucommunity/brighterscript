@@ -115,7 +115,6 @@ describe('Statement', () => {
         });
     });
 
-
     describe('all Statements', () => {
 
         let allStatements: AstNode[] = [];

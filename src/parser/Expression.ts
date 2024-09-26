@@ -100,6 +100,17 @@ export class BinaryExpression extends Expression {
     get leadingTrivia(): Token[] {
         return this.left.leadingTrivia;
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new BinaryExpression({
+                left: this.left?.clone(),
+                operator: util.cloneToken(this.tokens.operator),
+                right: this.right?.clone()
+            }),
+            ['left', 'right']
+        );
+    }
 }
 
 
@@ -125,7 +136,7 @@ export class CallExpression extends Expression {
         };
         this.callee = options.callee;
         this.args = options.args ?? [];
-        this.location = util.createBoundingLocation(this.callee, this.tokens.openingParen, ...this.args, this.tokens.closingParen);
+        this.location = util.createBoundingLocation(this.callee, this.tokens.openingParen, ...this.args ?? [], this.tokens.closingParen);
     }
 
     readonly callee: Expression;
@@ -206,6 +217,18 @@ export class CallExpression extends Expression {
     get leadingTrivia(): Token[] {
         return this.callee.leadingTrivia;
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new CallExpression({
+                callee: this.callee?.clone(),
+                openingParen: util.cloneToken(this.tokens.openingParen),
+                closingParen: util.cloneToken(this.tokens.closingParen),
+                args: this.args?.map(e => e?.clone())
+            }),
+            ['callee', 'args']
+        );
+    }
 }
 
 export class FunctionExpression extends Expression implements TypedefProvider {
@@ -272,7 +295,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         return util.createBoundingLocation(
             this.tokens.functionType,
             this.tokens.leftParen,
-            ...this.parameters,
+            ...this.parameters ?? [],
             this.tokens.rightParen,
             this.tokens.as,
             this.returnTypeExpression,
@@ -424,6 +447,22 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         options.typeChain?.push(new TypeChainEntry({ name: funcName, type: resultType, data: options.data, astNode: this }));
         return resultType;
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new FunctionExpression({
+                parameters: this.parameters?.map(e => e?.clone()),
+                body: this.body?.clone(),
+                functionType: util.cloneToken(this.tokens.functionType),
+                endFunctionType: util.cloneToken(this.tokens.endFunctionType),
+                leftParen: util.cloneToken(this.tokens.leftParen),
+                rightParen: util.cloneToken(this.tokens.rightParen),
+                as: util.cloneToken(this.tokens.as),
+                returnTypeExpression: this.returnTypeExpression?.clone()
+            }),
+            ['body', 'returnTypeExpression']
+        );
+    }
 }
 
 export class FunctionParameterExpression extends Expression {
@@ -532,6 +571,19 @@ export class FunctionParameterExpression extends Expression {
     get leadingTrivia(): Token[] {
         return this.tokens.name.leadingTrivia;
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new FunctionParameterExpression({
+                name: util.cloneToken(this.tokens.name),
+                as: util.cloneToken(this.tokens.as),
+                typeExpression: this.typeExpression?.clone(),
+                equals: util.cloneToken(this.tokens.equals),
+                defaultValue: this.defaultValue?.clone()
+            }),
+            ['typeExpression', 'defaultValue']
+        );
+    }
 }
 
 export class DottedGetExpression extends Expression {
@@ -619,6 +671,16 @@ export class DottedGetExpression extends Expression {
         return this.obj.leadingTrivia;
     }
 
+    public clone() {
+        return this.finalizeClone(
+            new DottedGetExpression({
+                obj: this.obj?.clone(),
+                dot: util.cloneToken(this.tokens.dot),
+                name: util.cloneToken(this.tokens.name)
+            }),
+            ['obj']
+        );
+    }
 }
 
 export class XmlAttributeGetExpression extends Expression {
@@ -664,6 +726,17 @@ export class XmlAttributeGetExpression extends Expression {
     get leadingTrivia(): Token[] {
         return this.obj.leadingTrivia;
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new XmlAttributeGetExpression({
+                obj: this.obj?.clone(),
+                at: util.cloneToken(this.tokens.at),
+                name: util.cloneToken(this.tokens.name)
+            }),
+            ['obj']
+        );
+    }
 }
 
 export class IndexedGetExpression extends Expression {
@@ -685,7 +758,14 @@ export class IndexedGetExpression extends Expression {
         };
         this.obj = options.obj;
         this.indexes = options.indexes;
-        this.location = util.createBoundingLocation(this.obj, this.tokens.openingSquare, this.tokens.questionDot, this.tokens.openingSquare, ...this.indexes, this.tokens.closingSquare);
+        this.location = util.createBoundingLocation(
+            this.obj,
+            this.tokens.openingSquare,
+            this.tokens.questionDot,
+            this.tokens.openingSquare,
+            ...this.indexes ?? [],
+            this.tokens.closingSquare
+        );
     }
 
     public readonly kind = AstNodeKind.IndexedGetExpression;
@@ -746,6 +826,19 @@ export class IndexedGetExpression extends Expression {
     get leadingTrivia(): Token[] {
         return this.obj.leadingTrivia;
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new IndexedGetExpression({
+                obj: this.obj?.clone(),
+                questionDot: util.cloneToken(this.tokens.questionDot),
+                openingSquare: util.cloneToken(this.tokens.openingSquare),
+                indexes: this.indexes?.map(x => x?.clone()),
+                closingSquare: util.cloneToken(this.tokens.closingSquare)
+            }),
+            ['obj', 'indexes']
+        );
+    }
 }
 
 export class GroupingExpression extends Expression {
@@ -796,6 +889,17 @@ export class GroupingExpression extends Expression {
 
     get leadingTrivia(): Token[] {
         return this.tokens.leftParen?.leadingTrivia;
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new GroupingExpression({
+                leftParen: util.cloneToken(this.tokens.leftParen),
+                expression: this.expression?.clone(),
+                rightParen: util.cloneToken(this.tokens.rightParen)
+            }),
+            ['expression']
+        );
     }
 }
 
@@ -851,6 +955,14 @@ export class LiteralExpression extends Expression {
     get leadingTrivia(): Token[] {
         return this.tokens.value.leadingTrivia;
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new LiteralExpression({
+                value: util.cloneToken(this.tokens.value)
+            })
+        );
+    }
 }
 
 /**
@@ -863,7 +975,7 @@ export class EscapedCharCodeLiteralExpression extends Expression {
     }) {
         super();
         this.tokens = { value: options.value };
-        this.location = this.tokens.value.location;
+        this.location = util.cloneLocation(this.tokens.value.location);
     }
 
     public readonly kind = AstNodeKind.EscapedCharCodeLiteralExpression;
@@ -883,6 +995,14 @@ export class EscapedCharCodeLiteralExpression extends Expression {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new EscapedCharCodeLiteralExpression({
+                value: util.cloneToken(this.tokens.value)
+            })
+        );
+    }
 }
 
 export class ArrayLiteralExpression extends Expression {
@@ -897,7 +1017,7 @@ export class ArrayLiteralExpression extends Expression {
             close: options.close
         };
         this.elements = options.elements;
-        this.location = util.createBoundingLocation(this.tokens.open, ...this.elements, this.tokens.close);
+        this.location = util.createBoundingLocation(this.tokens.open, ...this.elements ?? [], this.tokens.close);
     }
 
     public readonly elements: Array<Expression>;
@@ -960,6 +1080,17 @@ export class ArrayLiteralExpression extends Expression {
     get endTrivia(): Token[] {
         return this.tokens.close?.leadingTrivia;
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new ArrayLiteralExpression({
+                elements: this.elements?.map(e => e?.clone()),
+                open: util.cloneToken(this.tokens.open),
+                close: util.cloneToken(this.tokens.close)
+            }),
+            ['elements']
+        );
+    }
 }
 
 export class AAMemberExpression extends Expression {
@@ -1010,6 +1141,16 @@ export class AAMemberExpression extends Expression {
         return this.tokens.key.leadingTrivia;
     }
 
+    public clone() {
+        return this.finalizeClone(
+            new AAMemberExpression({
+                key: util.cloneToken(this.tokens.key),
+                colon: util.cloneToken(this.tokens.colon),
+                value: this.value?.clone()
+            }),
+            ['value']
+        );
+    }
 }
 
 export class AALiteralExpression extends Expression {
@@ -1024,7 +1165,7 @@ export class AALiteralExpression extends Expression {
             close: options.close
         };
         this.elements = options.elements;
-        this.location = util.createBoundingLocation(this.tokens.open, ...this.elements, this.tokens.close);
+        this.location = util.createBoundingLocation(this.tokens.open, ...this.elements ?? [], this.tokens.close);
     }
 
     public readonly elements: Array<AAMemberExpression>;
@@ -1114,6 +1255,16 @@ export class AALiteralExpression extends Expression {
         return this.tokens.close?.leadingTrivia;
     }
 
+    public clone() {
+        return this.finalizeClone(
+            new AALiteralExpression({
+                elements: this.elements?.map(e => e?.clone()),
+                open: util.cloneToken(this.tokens.open),
+                close: util.cloneToken(this.tokens.close)
+            }),
+            ['elements']
+        );
+    }
 }
 
 export class UnaryExpression extends Expression {
@@ -1168,6 +1319,16 @@ export class UnaryExpression extends Expression {
     public get leadingTrivia(): Token[] {
         return this.tokens.operator.leadingTrivia;
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new UnaryExpression({
+                operator: util.cloneToken(this.tokens.operator),
+                right: this.right?.clone()
+            }),
+            ['right']
+        );
+    }
 }
 
 export class VariableExpression extends Expression {
@@ -1178,7 +1339,7 @@ export class VariableExpression extends Expression {
         this.tokens = {
             name: options.name
         };
-        this.location = this.tokens.name?.location;
+        this.location = util.cloneLocation(this.tokens.name?.location);
     }
 
     public readonly tokens: {
@@ -1240,6 +1401,14 @@ export class VariableExpression extends Expression {
     get leadingTrivia(): Token[] {
         return this.tokens.name.leadingTrivia;
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new VariableExpression({
+                name: util.cloneToken(this.tokens.name)
+            })
+        );
+    }
 }
 
 export class SourceLiteralExpression extends Expression {
@@ -1250,7 +1419,7 @@ export class SourceLiteralExpression extends Expression {
         this.tokens = {
             value: options.value
         };
-        this.location = this.tokens.value?.location;
+        this.location = util.cloneLocation(this.tokens.value?.location);
     }
 
     public readonly location: Location;
@@ -1358,6 +1527,14 @@ export class SourceLiteralExpression extends Expression {
     get leadingTrivia(): Token[] {
         return this.tokens.value.leadingTrivia;
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new SourceLiteralExpression({
+                value: util.cloneToken(this.tokens.value)
+            })
+        );
+    }
 }
 
 /**
@@ -1428,6 +1605,16 @@ export class NewExpression extends Expression {
     get leadingTrivia(): Token[] {
         return this.tokens.new.leadingTrivia;
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new NewExpression({
+                new: util.cloneToken(this.tokens.new),
+                call: this.call?.clone()
+            }),
+            ['call']
+        );
+    }
 }
 
 export class CallfuncExpression extends Expression {
@@ -1454,7 +1641,7 @@ export class CallfuncExpression extends Expression {
             this.tokens.operator,
             this.tokens.methodName,
             this.tokens.openingParen,
-            ...this.args,
+            ...this.args ?? [],
             this.tokens.closingParen
         );
     }
@@ -1548,6 +1735,20 @@ export class CallfuncExpression extends Expression {
     get leadingTrivia(): Token[] {
         return this.callee.leadingTrivia;
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new CallfuncExpression({
+                callee: this.callee?.clone(),
+                operator: util.cloneToken(this.tokens.operator),
+                methodName: util.cloneToken(this.tokens.methodName),
+                openingParen: util.cloneToken(this.tokens.openingParen),
+                args: this.args?.map(e => e?.clone()),
+                closingParen: util.cloneToken(this.tokens.closingParen)
+            }),
+            ['callee', 'args']
+        );
+    }
 }
 
 /**
@@ -1561,7 +1762,7 @@ export class TemplateStringQuasiExpression extends Expression {
         super();
         this.expressions = options.expressions;
         this.location = util.createBoundingLocation(
-            ...this.expressions
+            ...this.expressions ?? []
         );
     }
 
@@ -1593,6 +1794,15 @@ export class TemplateStringQuasiExpression extends Expression {
             walkArray(this.expressions, visitor, options, this);
         }
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new TemplateStringQuasiExpression({
+                expressions: this.expressions?.map(e => e?.clone())
+            }),
+            ['expressions']
+        );
+    }
 }
 
 export class TemplateStringExpression extends Expression {
@@ -1611,8 +1821,8 @@ export class TemplateStringExpression extends Expression {
         this.expressions = options.expressions;
         this.location = util.createBoundingLocation(
             this.tokens.openingBacktick,
-            this.quasis[0],
-            this.quasis[this.quasis.length - 1],
+            this.quasis?.[0],
+            this.quasis?.[this.quasis?.length - 1],
             this.tokens.closingBacktick
         );
     }
@@ -1688,7 +1898,7 @@ export class TemplateStringExpression extends Expression {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             //walk the quasis and expressions in left-to-right order
-            for (let i = 0; i < this.quasis.length; i++) {
+            for (let i = 0; i < this.quasis?.length; i++) {
                 walk(this.quasis, i, visitor, options, this);
 
                 //this skips the final loop iteration since we'll always have one more quasi than expression
@@ -1697,6 +1907,18 @@ export class TemplateStringExpression extends Expression {
                 }
             }
         }
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new TemplateStringExpression({
+                openingBacktick: util.cloneToken(this.tokens.openingBacktick),
+                quasis: this.quasis?.map(e => e?.clone()),
+                expressions: this.expressions?.map(e => e?.clone()),
+                closingBacktick: util.cloneToken(this.tokens.closingBacktick)
+            }),
+            ['quasis', 'expressions']
+        );
     }
 }
 
@@ -1720,8 +1942,8 @@ export class TaggedTemplateStringExpression extends Expression {
         this.location = util.createBoundingLocation(
             this.tokens.tagName,
             this.tokens.openingBacktick,
-            this.quasis[0],
-            this.quasis[this.quasis.length - 1],
+            this.quasis?.[0],
+            this.quasis?.[this.quasis?.length - 1],
             this.tokens.closingBacktick
         );
     }
@@ -1784,7 +2006,7 @@ export class TaggedTemplateStringExpression extends Expression {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             //walk the quasis and expressions in left-to-right order
-            for (let i = 0; i < this.quasis.length; i++) {
+            for (let i = 0; i < this.quasis?.length; i++) {
                 walk(this.quasis, i, visitor, options, this);
 
                 //this skips the final loop iteration since we'll always have one more quasi than expression
@@ -1793,6 +2015,19 @@ export class TaggedTemplateStringExpression extends Expression {
                 }
             }
         }
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new TaggedTemplateStringExpression({
+                tagName: util.cloneToken(this.tokens.tagName),
+                openingBacktick: util.cloneToken(this.tokens.openingBacktick),
+                quasis: this.quasis?.map(e => e?.clone()),
+                expressions: this.expressions?.map(e => e?.clone()),
+                closingBacktick: util.cloneToken(this.tokens.closingBacktick)
+            }),
+            ['quasis', 'expressions']
+        );
     }
 }
 
@@ -1859,6 +2094,16 @@ export class AnnotationExpression extends Expression {
             this.name,
             ...(this.call?.transpile(state) ?? [])
         ];
+    }
+
+    public clone() {
+        const clone = this.finalizeClone(
+            new AnnotationExpression({
+                at: util.cloneToken(this.tokens.at),
+                name: util.cloneToken(this.tokens.name)
+            })
+        );
+        return clone;
     }
 }
 
@@ -1971,6 +2216,19 @@ export class TernaryExpression extends Expression {
     get leadingTrivia(): Token[] {
         return this.test.leadingTrivia;
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new TernaryExpression({
+                test: this.test?.clone(),
+                questionMark: util.cloneToken(this.tokens.questionMark),
+                consequent: this.consequent?.clone(),
+                colon: util.cloneToken(this.tokens.colon),
+                alternate: this.alternate?.clone()
+            }),
+            ['test', 'consequent', 'alternate']
+        );
+    }
 }
 
 export class NullCoalescingExpression extends Expression {
@@ -2073,6 +2331,17 @@ export class NullCoalescingExpression extends Expression {
     get leadingTrivia(): Token[] {
         return this.consequent.leadingTrivia;
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new NullCoalescingExpression({
+                consequent: this.consequent?.clone(),
+                questionQuestion: util.cloneToken(this.tokens.questionQuestion),
+                alternate: this.alternate?.clone()
+            }),
+            ['consequent', 'alternate']
+        );
+    }
 }
 
 export class RegexLiteralExpression extends Expression {
@@ -2121,6 +2390,14 @@ export class RegexLiteralExpression extends Expression {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new RegexLiteralExpression({
+                regexLiteral: util.cloneToken(this.tokens.regexLiteral)
+            })
+        );
     }
 
     get leadingTrivia(): Token[] {
@@ -2185,7 +2462,7 @@ export class TypeExpression extends Expression implements TypedefProvider {
     }) {
         super();
         this.expression = options.expression;
-        this.location = this.expression?.location;
+        this.location = util.cloneLocation(this.expression?.location);
     }
 
     public readonly kind = AstNodeKind.TypeExpression;
@@ -2223,6 +2500,15 @@ export class TypeExpression extends Expression implements TypedefProvider {
     getNameParts(): string[] {
         //TODO: really, this code is only used to get Namespaces. It could be more clear.
         return util.getAllDottedGetParts(this.expression).map(x => x.text);
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new TypeExpression({
+                expression: this.expression?.clone()
+            }),
+            ['expression']
+        );
     }
 }
 
@@ -2278,6 +2564,17 @@ export class TypecastExpression extends Expression {
         }
         return result;
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new TypecastExpression({
+                obj: this.obj?.clone(),
+                as: util.cloneToken(this.tokens.as),
+                typeExpression: this.typeExpression?.clone()
+            }),
+            ['obj', 'typeExpression']
+        );
+    }
 }
 
 export class TypedArrayExpression extends Expression {
@@ -2322,5 +2619,16 @@ export class TypedArrayExpression extends Expression {
 
     public getType(options: GetTypeOptions): BscType {
         return new ArrayType(this.innerType.getType(options));
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new TypedArrayExpression({
+                innerType: this.innerType?.clone(),
+                leftBracket: util.cloneToken(this.tokens.leftBracket),
+                rightBracket: util.cloneToken(this.tokens.rightBracket)
+            }),
+            ['innerType']
+        );
     }
 }

@@ -327,6 +327,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.66.0-alpha.0](https://github.com/rokucommunity/brighterscript/compare/v0.65.1...v0.66.0-alpha.0) - 2023-06-09
 ### Changed
  - all the type tracking stuff!
+## [0.67.7](https://github.com/rokucommunity/brighterscript/compare/v0.67.6...v0.67.7) - 2024-09-25
+### Changed
+ - Ast node clone ([#1281](https://github.com/rokucommunity/brighterscript/pull/1281))
+
+
+
 ## [0.67.6](https://github.com/rokucommunity/brighterscript/compare/v0.67.5...v0.67.6) - 2024-09-05
 ### Added
  - support for `roIntrinsicDouble` ([#1291](https://github.com/rokucommunity/brighterscript/pull/1291))
