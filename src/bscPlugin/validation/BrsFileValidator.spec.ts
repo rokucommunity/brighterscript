@@ -1211,7 +1211,47 @@ describe('BrsFileValidator', () => {
                 const varType = returnStmt.getSymbolTable().getSymbolType('someDate', { flags: SymbolTypeFlag.runtime, data: data });
                 expectTypeToBe(varType, StringType);
             });
+        });
+    });
 
+    describe('try/catch', () => {
+        it('allows omitting the exception variable in standard brightscript mode', () => {
+            program.setFile('source/main.brs', `
+                sub new()
+                    try
+                        print "hello"
+                    catch
+                        print "error"
+                    end try
+                end sub
+            `);
+            expectZeroDiagnostics(program);
+        });
+
+        it('shows diagnostic when omitting the exception variable in standard brightscript mode', () => {
+            program.setFile('source/main.brs', `
+                sub new()
+                    try
+                        print "hello"
+                    catch
+                        print "error"
+                    end try
+                end sub
+            `);
+            expectDiagnostics(program, []);
+        });
+
+        it('shows diagnostics when using  when omitting the exception variable in standard brightscript mode', () => {
+            program.setFile('source/main.brs', `
+                sub new()
+                    try
+                        print "hello"
+                    catch
+                        print "error"
+                    end try
+                end sub
+            `);
+            expectDiagnostics(program, []);
         });
     });
 });

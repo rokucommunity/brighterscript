@@ -2175,10 +2175,43 @@ describe('BrsFile', () => {
                         try
                             print m.b.c
                         catch e
-                            print e
+                            print "crash"
                         end try
                     end sub
                 `);
+            });
+
+            it('recognizes the exception variable', async () => {
+                await testTranspile(`
+                    sub main()
+                        try
+                            print m.b.c
+                        catch e
+                            message = e.message
+                            print message
+                        end try
+                    end sub
+                `);
+            });
+
+            it('supports omitting the exception variable in brighterscript mode (we auto-add it at transpile time)', async () => {
+                await testTranspile(`
+                    sub new()
+                        try
+                            print "hello"
+                        catch
+                            print "error"
+                        end try
+                    end sub
+                `, `
+                    sub new()
+                        try
+                            print "hello"
+                        catch e
+                            print "error"
+                        end try
+                    end sub
+                `, undefined, 'source/main.bs');
             });
         });
 

@@ -1,4 +1,4 @@
-import { isAliasStatement, isArrayType, isBlock, isBody, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypecastStatement, isUnaryExpression, isVariableExpression, isWhileStatement } from '../../astUtils/reflection';
+import { isAliasStatement, isArrayType, isBlock, isBody, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypecastExpression, isTypecastStatement, isUnaryExpression, isVariableExpression, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -54,7 +54,7 @@ export class BrsFileValidator {
      * Walk the full AST
      */
     private walk() {
-
+        const isBrighterscript = this.event.file.parser.options.mode === ParseMode.BrighterScript;
 
         const visitor = createVisitor({
             MethodStatement: (node) => {
@@ -199,7 +199,35 @@ export class BrsFileValidator {
                 node.parent.getSymbolTable().addSymbol(node.tokens.name.text, { definingNode: node, isInstance: true }, nodeType, SymbolTypeFlag.runtime);
             },
             CatchStatement: (node) => {
-                node.parent.getSymbolTable().addSymbol(node.tokens.exceptionVariable.text, { definingNode: node, isInstance: true }, DynamicType.instance, SymbolTypeFlag.runtime);
+                //brs and bs both support variableExpression for the exception variable
+                if (isVariableExpression(node.exceptionVariableExpression)) {
+                    node.parent.getSymbolTable().addSymbol(
+                        node.exceptionVariableExpression.getName(),
+                        { definingNode: node, isInstance: true },
+                        //TODO I think we can produce a slightly more specific type here (like an AA but with the known exception properties)
+                        DynamicType.instance,
+                        SymbolTypeFlag.runtime
+                    );
+                    //brighterscript allows catch without an exception variable
+                } else if (isBrighterscript && !node.exceptionVariableExpression) {
+                    //this is fine
+
+                    //brighterscript allows a typecast expression here
+                } else if (isBrighterscript && isTypecastExpression(node.exceptionVariableExpression) && isVariableExpression(node.exceptionVariableExpression.obj)) {
+                    node.parent.getSymbolTable().addSymbol(
+                        node.exceptionVariableExpression.obj.getName(),
+                        { definingNode: node, isInstance: true },
+                        node.exceptionVariableExpression.getType({ flags: SymbolTypeFlag.runtime }),
+                        SymbolTypeFlag.runtime
+                    );
+
+                    //no other expressions are allowed here
+                } else {
+                    this.event.program.diagnostics.register({
+                        ...DiagnosticMessages.expectedExceptionVarToFollowCatch(),
+                        location: node.exceptionVariableExpression?.location ?? node.tokens.catch?.location
+                    });
+                }
             },
             DimStatement: (node) => {
                 if (node.tokens.name) {
