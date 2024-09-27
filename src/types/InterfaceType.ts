@@ -68,4 +68,14 @@ export class InterfaceType implements BscType {
         }
         return false;
     }
+
+    public clone() {
+        let members = new Map<string, BscType>();
+        for (const [key, member] of this.members) {
+            members.set(key, member?.clone());
+        }
+        const result = new InterfaceType(members);
+        result.name = this.name;
+        return result;
+    }
 }

@@ -39,6 +39,13 @@ builder.addPlugin(myPlugin);
 builder.run(/*...*/);
 ```
 
+## Creating a plugin
+### Naming conventions
+While there are no restrictions on plugin names, it helps others to find your plugin on npm when you follow these naming conventions:
+
+- **Unscoped**: If your npm package name won’t be scoped (doesn’t begin with `@`), then the plugin name should begin with `bsc-plugin-`, such as `bsc-plugin-auto-findnode`.
+- **Scoped**: If your npm package name will be scoped, then the plugin name should be in the format of `@<scope>/bsc-plugin-<plugin-name>` such as `@rokucommunity/bsc-plugin-auto-findnode` or even `@<scope>/bsc-plugin` such as `@maestro/bsc-plugin`.
+
 ## Compiler events
 
 Full compiler lifecycle:
