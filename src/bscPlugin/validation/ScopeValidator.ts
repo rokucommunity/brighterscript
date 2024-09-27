@@ -269,7 +269,7 @@ export class ScopeValidator {
     protected validateCreateObjectCalls(file: BrsFile) {
         const diagnostics: BsDiagnostic[] = [];
 
-        for (const call of file.functionCalls) {
+        for (const call of file?.functionCalls ?? []) {
             //skip non CreateObject function calls
             if (call.name?.toLowerCase() !== 'createobject' || !isLiteralExpression(call?.args[0]?.expression)) {
                 continue;
