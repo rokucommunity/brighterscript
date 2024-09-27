@@ -37,4 +37,8 @@ export class LongIntegerType implements BscType {
     public toTypeString(): string {
         return this.toString();
     }
+
+    public clone() {
+        return new LongIntegerType(this.typeText);
+    }
 }

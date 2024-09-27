@@ -1016,6 +1016,39 @@ export class Util {
     }
 
     /**
+     * Clone a range
+     */
+    public cloneRange(range: Range) {
+        if (range) {
+            return this.createRange(range.start.line, range.start.character, range.end.line, range.end.character);
+        } else {
+            return range;
+        }
+    }
+
+    /**
+     * Clone every token
+     */
+    public cloneToken<T extends Token>(token: T) {
+        if (token) {
+            const result = {
+                kind: token.kind,
+                range: this.cloneRange(token.range),
+                text: token.text,
+                isReserved: token.isReserved,
+                leadingWhitespace: token.leadingWhitespace
+            } as T;
+            //handle those tokens that have charCode
+            if ('charCode' in token) {
+                (result as any).charCode = (token as any).charCode;
+            }
+            return result;
+        } else {
+            return token;
+        }
+    }
+
+    /**
      * Given a list of ranges, create a range that starts with the first non-null lefthand range, and ends with the first non-null
      * righthand range. Returns undefined if none of the items have a range.
      */

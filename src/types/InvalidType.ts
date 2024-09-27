@@ -24,4 +24,8 @@ export class InvalidType implements BscType {
     public toTypeString(): string {
         return this.toString();
     }
+
+    public clone() {
+        return new InvalidType(this.typeText);
+    }
 }

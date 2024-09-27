@@ -24,4 +24,8 @@ export class BooleanType implements BscType {
     public toTypeString(): string {
         return this.toString();
     }
+
+    public clone() {
+        return new BooleanType(this.typeText);
+    }
 }

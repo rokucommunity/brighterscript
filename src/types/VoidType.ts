@@ -24,4 +24,8 @@ export class VoidType implements BscType {
     public toTypeString(): string {
         return this.toString();
     }
+
+    public clone() {
+        return new VoidType(this.typeText);
+    }
 }
