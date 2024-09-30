@@ -503,6 +503,36 @@ describe('BrsFileSemanticTokensProcessor', () => {
         ], false);
     });
 
+    it('does not color variable of type roSGNode as a type', () => {
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            sub main()
+                node = CreateObject("roSGNode", "ContentNode")
+                node.id = "content"
+            end sub
+        `);
+        program.validate();
+        expectSemanticTokensIncludes(file, [
+            // |node|.id = "content"
+            [SemanticTokenTypes.variable, 3, 16, 3, 20]
+        ], false);
+    });
+
+    it('does not color variable when it is an instance of an interface', () => {
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            sub main(video as Movie)
+                video.url = "http://example.com"
+            end sub
+            interface Movie
+                url as string
+            end interface
+        `);
+        program.validate();
+        expectSemanticTokensIncludes(file, [
+            // |video|.url = "http://example.com"
+            [SemanticTokenTypes.variable, 2, 16, 2, 21]
+        ], false);
+    });
+
     it('works for `new` statement', () => {
         const file = program.setFile<BrsFile>('source/main.bs', `
             class Person
