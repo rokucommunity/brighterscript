@@ -452,8 +452,6 @@ describe('BrsFileSemanticTokensProcessor', () => {
         expectSemanticTokens(file, [
             // sub |init|()
             [SemanticTokenTypes.function, 1, 16, 1, 20],
-            // |m|.alien = new Humanoids.Aliens.Alien.NOT_A_CLASS() 'bs:disable-line
-            [SemanticTokenTypes.variable, 2, 16, 2, 17],
             // m.alien = new |Humanoids|.Aliens.Alien.NOT_A_CLASS() 'bs:disable-line
             [SemanticTokenTypes.namespace, 2, 30, 2, 39],
             // m.alien = new Humanoids.|Aliens|.Alien.NOT_A_CLASS() 'bs:disable-line

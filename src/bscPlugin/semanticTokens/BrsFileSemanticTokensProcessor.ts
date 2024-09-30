@@ -1,6 +1,6 @@
 import { SemanticTokenModifiers } from 'vscode-languageserver-protocol';
 import { SemanticTokenTypes } from 'vscode-languageserver-protocol';
-import { isCallableType, isClassType, isComponentType, isConstStatement, isDottedGetExpression, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionStatement, isInterfaceType, isNamespaceType, isTypeExpression, isVariableExpression } from '../../astUtils/reflection';
+import { isCallableType, isClassType, isComponentType, isConstStatement, isDottedGetExpression, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionStatement, isInterfaceType, isNamespaceType, isVariableExpression } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ExtraSymbolData, OnGetSemanticTokensEvent, SemanticToken, TypeChainEntry } from '../../interfaces';
 import type { Locatable, Token } from '../../lexer/Token';
