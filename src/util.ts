@@ -2378,8 +2378,8 @@ export class Util {
         if ((options?.flags ?? 0) & SymbolTypeFlag.runtime &&
             isClassType(potentialClassType) &&
             !options.isExistenceTest &&
-            potentialClassType.name.toLowerCase() === this.getAllDottedGetPartsAsString(expression).toLowerCase() &&
-            !expression.findAncestor(isNewExpression)) {
+            potentialClassType.name?.toLowerCase() === this.getAllDottedGetPartsAsString(expression)?.toLowerCase() &&
+            !expression?.findAncestor(isNewExpression)) {
             return true;
         }
         return false;

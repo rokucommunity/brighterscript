@@ -1256,4 +1256,10 @@ describe('util', () => {
             );
         });
     });
+
+    describe('isClassUsedAsFunction', () => {
+        it('does not crash when class type has no name', () => {
+            util.isClassUsedAsFunction(new ClassType(undefined), undefined, { flags: SymbolTypeFlag.runtime });
+        });
+    });
 });
