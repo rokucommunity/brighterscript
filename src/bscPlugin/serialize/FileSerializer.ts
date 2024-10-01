@@ -16,6 +16,7 @@ export class FileSerializer {
         if (this.event.result.has(this.event.file)) {
             return;
         }
+        this.event.scope?.linkSymbolTable();
         if (isBrsFile(this.event.file)) {
             this.serializeBrsFile(this.event.file);
         } else if (isXmlFile(this.event.file)) {
@@ -23,6 +24,7 @@ export class FileSerializer {
         } else if (isAssetFile(this.event.file)) {
             this.serializeAssetFile(this.event.file);
         }
+        this.event.scope?.unlinkSymbolTable();
     }
 
     private serializeBrsFile(file: BrsFile) {

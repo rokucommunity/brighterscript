@@ -48,6 +48,7 @@ import { ComponentType } from './types/ComponentType';
 import { FunctionType } from './types/FunctionType';
 import type { AssignmentStatement, NamespaceStatement } from './parser/Statement';
 import type { BscFile } from './files/BscFile';
+import type { NamespaceType } from './types/NamespaceType';
 
 export class Util {
     public clearConsole() {
@@ -2408,9 +2409,8 @@ export class Util {
 
     public symbolComesFromSameNode(symbolName: string, definingNode: AstNode, symbolTable: SymbolTable) {
         let nsData: ExtraSymbolData = {};
-        symbolTable.getSymbolType(symbolName, { flags: SymbolTypeFlag.runtime, data: nsData });
-
-        if (definingNode === nsData?.definingNode) {
+        let foundType = symbolTable?.getSymbolType(symbolName, { flags: SymbolTypeFlag.runtime, data: nsData });
+        if (foundType && definingNode === nsData?.definingNode) {
             return true;
         }
         return false;
@@ -2435,9 +2435,22 @@ export class Util {
         if (!isNamespaceStatement(namespace)) {
             return false;
         }
+        const namespaceParts = namespace.getNameParts();
+        let namespaceType: NamespaceType;
+        let symbolTable: SymbolTable = namespace.getSymbolTable();
+        for (const part of namespaceParts) {
+            namespaceType = symbolTable.getSymbolType(part.text, { flags: SymbolTypeFlag.runtime }) as NamespaceType;
+            if (namespaceType) {
+                symbolTable = namespaceType.getMemberTable();
+            } else {
+                return false;
+            }
+        }
+
         let varData: ExtraSymbolData = {};
         nodeWhereUsed.getType({ flags: SymbolTypeFlag.runtime, data: varData });
-        return this.symbolComesFromSameNode(symbolName, varData?.definingNode, namespace.getSymbolTable());
+        const isFromSameNodeInMemberTable = this.symbolComesFromSameNode(symbolName, varData?.definingNode, namespaceType?.getMemberTable());
+        return isFromSameNodeInMemberTable;
     }
 
     public isVariableShadowingSomething(symbolName: string, nodeWhereUsed: AstNode) {
