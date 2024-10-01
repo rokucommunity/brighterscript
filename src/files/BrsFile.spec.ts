@@ -2282,6 +2282,68 @@ describe('BrsFile', () => {
                 `);
             });
 
+            it('does not prefix global function names', async () => {
+                await testTranspile(`
+                    namespace is
+                        function valid(thing) as boolean
+                            return invalid <> thing
+                        end function
+
+                        function node(thing) as boolean
+                            return valid(thing) and valid(getInterface(thing, "ifSgNodeChildren"))
+                        end function
+                    end namespace`, `
+                    function is_valid(thing) as boolean
+                        return invalid <> thing
+                    end function
+
+                    function is_node(thing) as boolean
+                        return is_valid(thing) and is_valid(getInterface(thing, "ifSgNodeChildren"))
+                    end function`
+                );
+            });
+
+            it('does not prefix unnamespaced function names', async () => {
+                await testTranspile(`
+                    function valid(thing) as boolean
+                        return invalid <> thing
+                    end function
+
+                    namespace is
+                          function node(thing) as boolean
+                            return valid(thing) and valid(getInterface(thing, "ifSgNodeChildren"))
+                        end function
+                    end namespace`, `
+                    function valid(thing) as boolean
+                        return invalid <> thing
+                    end function
+                    function is_node(thing) as boolean
+                        return valid(thing) and valid(getInterface(thing, "ifSgNodeChildren"))
+                    end function`
+                );
+            });
+
+            it('does not prefix unnamespaced function names in deep namespace', async () => {
+                await testTranspile(`
+                     namespace is.a.deep.namespace
+                        function valid(thing) as boolean
+                            return invalid <> thing
+                        end function
+
+                        function node(thing) as boolean
+                            return valid(thing) and valid(getInterface(thing, "ifSgNodeChildren"))
+                        end function
+                    end namespace`, `
+                    function is_a_deep_namespace_valid(thing) as boolean
+                        return invalid <> thing
+                    end function
+
+                    function is_a_deep_namespace_node(thing) as boolean
+                        return is_a_deep_namespace_valid(thing) and is_a_deep_namespace_valid(getInterface(thing, "ifSgNodeChildren"))
+                    end function`
+                );
+            });
+
         });
 
         describe('shadowing', () => {
