@@ -75,18 +75,17 @@ export class SignatureHelpUtil {
             return undefined;
         }
         const func = statement.func;
-        const funcStartPosition = func.range.start;
+        const funcStartPosition = func.location?.range.start;
 
         // Get function comments in reverse order
-        let currentToken = file.getTokenAt(funcStartPosition);
+        const trivia = util.concatAnnotationLeadingTrivia(func).reverse();
         let functionComments = [] as string[];
-        while (currentToken) {
-            currentToken = file.getPreviousToken(currentToken);
 
+        for (const currentToken of trivia) {
             if (!currentToken) {
                 break;
             }
-            if (currentToken.range.start.line + 1 < funcStartPosition.line) {
+            if (currentToken.location?.range.start.line + 1 < funcStartPosition.line) {
                 if (functionComments.length === 0) {
                     break;
                 }
@@ -106,6 +105,7 @@ export class SignatureHelpUtil {
                     break;
                 }
                 functionComments.unshift(currentToken.text);
+            } else if (kind === TokenKind.Whitespace) {
             } else {
                 break;
             }
@@ -114,14 +114,14 @@ export class SignatureHelpUtil {
         const documentation = functionComments.join('').trim();
 
         const lines = util.splitIntoLines(file.fileContents);
-        let key = statement.name.text + documentation;
+        let key = statement.tokens.name.text + documentation;
         const params = [] as ParameterInformation[];
         for (const param of func.parameters) {
-            params.push(ParameterInformation.create(param.name.text));
-            key += param.name.text;
+            params.push(ParameterInformation.create(param.tokens.name.text));
+            key += param.tokens.name.text;
         }
 
-        let label = util.getTextForRange(lines, util.createRangeFromPositions(func.functionType.range.start, func.body.range.start)).trim();
+        let label = util.getTextForRange(lines, util.createRangeFromPositions(func.tokens.functionType?.location?.range.start, func.body.location?.range.start)).trim();
         if (namespaceName) {
             label = label.replace(/^(sub | function )/gim, `$1${namespaceName}.`);
         }
@@ -149,7 +149,4 @@ export class SignatureHelpUtil {
         }
         return sigHelp;
     }
-
-
 }
-

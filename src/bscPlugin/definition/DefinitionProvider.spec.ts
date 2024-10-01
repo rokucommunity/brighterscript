@@ -4,7 +4,6 @@ import { standardizePath as s, util } from '../../util';
 let rootDir = s`${process.cwd()}/rootDir`;
 import { createSandbox } from 'sinon';
 import { DefinitionProvider } from './DefinitionProvider';
-import { URI } from 'vscode-uri';
 const sinon = createSandbox();
 
 describe('DefinitionProvider', () => {
@@ -49,14 +48,14 @@ describe('DefinitionProvider', () => {
                 m.customButton@.clickCustomButton()
             end sub
         `);
-        //   m.customButton@.click|CustomButon()
         expect(
+            //   m.customButton@.click|CustomButon()
             program.getDefinition(brsFile.srcPath, util.createPosition(2, 37))
         ).to.eql([{
-            uri: URI.file(customButtonXml.srcPath).toString(),
-            range: util.createRange(4, 21, 4, 57)
+            uri: util.pathToUri(customButtonXml.srcPath),
+            range: util.createRange(4, 36, 4, 53)
         }, {
-            uri: URI.file(customButtonBrs.srcPath).toString(),
+            uri: util.pathToUri(customButtonBrs.srcPath),
             range: util.createRange(1, 21, 1, 38)
         }]);
     });
@@ -90,7 +89,7 @@ describe('DefinitionProvider', () => {
         expect(
             program.getDefinition(main.srcPath, util.createPosition(4, 24))
         ).to.eql([{
-            uri: URI.file(main.srcPath).toString(),
+            uri: util.pathToUri(main.srcPath),
             range: util.createRange(2, 16, 2, 22)
         }]);
     });

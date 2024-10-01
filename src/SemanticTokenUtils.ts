@@ -59,6 +59,10 @@ export function encodeSemanticTokens(tokens: SemanticToken[]) {
     util.sortByRange(tokens);
     const builder = new SemanticTokensBuilder();
     for (const token of tokens) {
+        //skip tokens that have no range
+        if (!token?.range) {
+            continue;
+        }
         builder.push(
             token.range.start.line,
             token.range.start.character,
