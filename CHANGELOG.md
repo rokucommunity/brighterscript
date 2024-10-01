@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.38](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.37...v1.0.0-alpha.38) - 2024-10-01
+### Added
+ - ability to omit the exception variable in bs files and convert exception var to an `Expression` ([#1305](https://github.com/rokucommunity/brighterscript/pull/1305))
+### Fixed
+ - transpile issue with global functions ([#1314](https://github.com/rokucommunity/brighterscript/pull/1314))
+ - semantic tokens for components and interfaces and `m` ([#1313](https://github.com/rokucommunity/brighterscript/pull/1313))
+ - prevent a crash when `ClassType.name` is `undefined` ([#1312](https://github.com/rokucommunity/brighterscript/pull/1312))
+
+
+
 ## [1.0.0-alpha.37](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.36...v1.0.0-alpha.37) - 2024-09-25
 ### Added
  - Support for types declared in comments ([#1293](https://github.com/rokucommunity/brighterscript/pull/1293))
