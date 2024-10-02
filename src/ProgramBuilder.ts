@@ -95,7 +95,9 @@ export class ProgramBuilder {
     }
 
     public async run(options: BsConfig) {
-        this.logger.logLevel = options.logLevel;
+        if (options?.logLevel) {
+            this.logger.logLevel = options.logLevel;
+        }
 
         if (this.isRunning) {
             throw new Error('Server is already running');

@@ -131,6 +131,11 @@ describe('ProgramBuilder', () => {
     });
 
     describe('run', () => {
+        it('does not crash when options is undefined', async () => {
+            sinon.stub(builder as any, 'runOnce').callsFake(() => { });
+            await builder.run(undefined as any);
+        });
+
         it('uses default options when the config file fails to parse', async () => {
             //supress the console log statements for the bsconfig parse errors
             sinon.stub(console, 'log').returns(undefined);
