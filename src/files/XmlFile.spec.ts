@@ -160,10 +160,10 @@ describe('XmlFile', () => {
                 </component>`
             );
             expectDiagnostics(program, [{ // expecting opening tag but got prolog
-                code: DiagnosticMessages.xmlGenericParseError('').code,
+                code: DiagnosticMessages.syntaxError('').code,
                 location: { range: Range.create(1, 16, 1, 22) }
             }, {
-                ...DiagnosticMessages.xmlGenericParseError('Syntax error: whitespace found before the XML prolog'),
+                ...DiagnosticMessages.syntaxError('Syntax error: whitespace found before the XML prolog'),
                 location: { range: Range.create(0, 0, 1, 16) }
             }]);
         });
@@ -223,7 +223,7 @@ describe('XmlFile', () => {
             program.validate();
             const diagnostics = program.getDiagnostics();
             expect(diagnostics).to.be.lengthOf(2);
-            expect(diagnostics[0].code).to.equal(DiagnosticMessages.xmlGenericParseError('').code); //unexpected character '1'
+            expect(diagnostics[0].code).to.equal(DiagnosticMessages.syntaxError('').code); //unexpected character '1'
             expect(diagnostics[1]).to.deep.include(<BsDiagnostic>{
                 code: DiagnosticMessages.xmlComponentMissingNameAttribute().code,
                 location: util.createLocationFromFileRange(file, Range.create(1, 1, 1, 10))

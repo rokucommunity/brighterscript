@@ -164,7 +164,7 @@ describe('parser', () => {
                 end functionasdf
             `).diagnostics;
             expect(diagnostics[0]?.message).to.exist.and.to.eql(
-                DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression().message
+                DiagnosticMessages.expectedStatement().message
             );
 
             expect(diagnostics[0]?.location.range).to.eql(
@@ -469,7 +469,7 @@ describe('parser', () => {
             let { tokens } = Lexer.scan(`print a.`);
             let { ast, diagnostics } = Parser.parse(tokens);
             let printStatement = ast.statements[0] as PrintStatement;
-            expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.expectedPropertyNameAfterPeriod());
+            expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.expectedIdentifier());
             expect(printStatement).to.be.instanceof(PrintStatement);
             expect(printStatement.expressions[0]).to.be.instanceof(VariableExpression);
         });
@@ -478,7 +478,7 @@ describe('parser', () => {
             let { tokens } = Lexer.scan(`print a.b.`);
             let { ast, diagnostics } = Parser.parse(tokens);
             let printStatement = ast.statements[0] as PrintStatement;
-            expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.expectedPropertyNameAfterPeriod());
+            expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.expectedIdentifier());
             expect(printStatement).to.be.instanceof(PrintStatement);
             expect(printStatement.expressions[0]).to.be.instanceof(DottedGetExpression);
         });
@@ -496,7 +496,7 @@ describe('parser', () => {
                     end namespace
                 `);
                 let { ast, diagnostics } = Parser.parse(tokens) as any;
-                expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression());
+                expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.expectedStatement());
                 let stmt = ast.statements[0].func.body.statements[0];
 
                 expect(isExpressionStatement(stmt)).to.be.true;
@@ -578,7 +578,7 @@ describe('parser', () => {
                     end function
                 `);
                 let { ast, diagnostics } = Parser.parse(tokens) as any;
-                expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression());
+                expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.expectedStatement());
                 for (const stmt of ast.statements[0].func.body.statements) {
                     expect(isExpressionStatement(stmt)).to.be.true;
                     expect(isBinaryExpression((stmt).expression)).to.be.true;
@@ -1385,7 +1385,7 @@ describe('parser', () => {
                     print param
                 end sub
             `, ParseMode.BrightScript);
-            expectDiagnosticsIncludes(parser.diagnostics, [DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()]);
+            expectDiagnosticsIncludes(parser.diagnostics, [DiagnosticMessages.expectedStatement()]);
         });
 
         it('allows union types in parameters', () => {
@@ -2133,7 +2133,7 @@ describe('parser', () => {
                 end sub
             `, ParseMode.BrighterScript, { debug: true });
             expectDiagnostics(diagnostics, [
-                DiagnosticMessages.expectedEndIfToCloseIfStatement({ line: 3, character: 20 }).message,
+                DiagnosticMessages.expectedTerminator('end if', 'if').message,
                 DiagnosticMessages.unexpectedToken('end if').message
             ]);
         });

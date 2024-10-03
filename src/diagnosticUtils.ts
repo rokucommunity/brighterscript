@@ -72,6 +72,8 @@ export function printDiagnostic(
     let severityText = severityTextMap[severity];
 
     console.log('');
+    const printableDiagnosticCode = diagnostic.code ? diagnostic.code.toString() : 'BS' + ((diagnostic as BsDiagnostic).legacyCode ?? '');
+
     console.log(
         chalk.cyan(filePath ?? '<unknown file>') +
         ':' +
@@ -83,7 +85,7 @@ export function printDiagnostic(
         ' - ' +
         typeColor[severity](severityText) +
         ' ' +
-        chalk.grey('BS' + diagnostic.code) +
+        chalk.grey(printableDiagnosticCode) +
         ': ' +
         chalk.white(diagnostic.message)
     );

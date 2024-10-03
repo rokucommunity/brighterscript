@@ -1011,11 +1011,14 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.nameCollision('Function', 'Global Function', 'Str').message,
                     {
+                        message: DiagnosticMessages.nameCollision('Function', 'Global Function', 'Str').message,
+                        location: { range: Range.create(4, 29, 4, 32) }
+                    }, {
                         message: DiagnosticMessages.scopeFunctionShadowedByBuiltInFunction().message,
                         location: { range: Range.create(4, 29, 4, 32) }
-                    }]);
+                    }
+                ]);
             });
         });
 

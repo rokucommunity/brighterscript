@@ -1771,7 +1771,7 @@ export class Parser {
         }
         if (this.peek().kind !== TokenKind.EndTry) {
             this.diagnostics.push({
-                ...DiagnosticMessages.expectedEndTryToTerminateTryCatch(),
+                ...DiagnosticMessages.expectedTerminator('end try', 'try-catch'),
                 location: this.peek().location
             });
         } else {
@@ -1889,7 +1889,7 @@ export class Parser {
 
             if (!thenBranch) {
                 this.diagnostics.push({
-                    ...DiagnosticMessages.expectedStatementToFollowConditionalCondition(ifToken.text),
+                    ...DiagnosticMessages.expectedStatement(ifToken.text, 'statement'),
                     location: this.peek().location
                 });
                 throw this.lastDiagnosticAsError();
@@ -1931,7 +1931,7 @@ export class Parser {
                 if (!elseBranch) {
                     //missing `else` branch
                     this.diagnostics.push({
-                        ...DiagnosticMessages.expectedStatementToFollowElse(),
+                        ...DiagnosticMessages.expectedStatement('else', 'statement'),
                         location: this.peek().location
                     });
                     throw this.lastDiagnosticAsError();
@@ -1986,7 +1986,7 @@ export class Parser {
                 } else {
                     //missing endif
                     this.diagnostics.push({
-                        ...DiagnosticMessages.expectedEndIfToCloseIfStatement(ifToken.location?.range.start),
+                        ...DiagnosticMessages.expectedTerminator('end if', 'if'),
                         location: ifToken.location
                     });
                 }
@@ -2022,7 +2022,7 @@ export class Parser {
 
             //this whole if statement is bogus...add error to the if token and hard-fail
             this.diagnostics.push({
-                ...DiagnosticMessages.expectedEndIfElseIfOrElseToTerminateThenBlock(),
+                ...DiagnosticMessages.expectedTerminator(['end if', 'else if', 'else'], 'then', 'block'),
                 location: ifToken.location
             });
             throw this.lastDiagnosticAsError();
@@ -2095,7 +2095,7 @@ export class Parser {
             } else {
                 //missing #endif
                 this.diagnostics.push({
-                    ...DiagnosticMessages.expectedHashEndIfToCloseHashIf(hashIfToken.location?.range.start.line),
+                    ...DiagnosticMessages.expectedTerminator('#end if', '#if'),
                     location: hashIfToken.location
                 });
             }
@@ -2129,7 +2129,7 @@ export class Parser {
 
             //this whole if statement is bogus...add error to the if token and hard-fail
             this.diagnostics.push({
-                ...DiagnosticMessages.expectedTerminatorOnConditionalCompileBlock(),
+                ...DiagnosticMessages.expectedTerminator(['#end if', '#else if', '#else'], 'conditional compilation', 'block'),
                 location: hashIfToken.location
             });
             throw this.lastDiagnosticAsError();
@@ -2357,13 +2357,13 @@ export class Parser {
 
             if (this.checkAny(TokenKind.PlusPlus, TokenKind.MinusMinus)) {
                 this.diagnostics.push({
-                    ...DiagnosticMessages.consecutiveIncrementDecrementOperatorsAreNotAllowed(),
+                    ...DiagnosticMessages.unexpectedOperator(),
                     location: this.peek().location
                 });
                 throw this.lastDiagnosticAsError();
             } else if (isCallExpression(expr)) {
                 this.diagnostics.push({
-                    ...DiagnosticMessages.incrementDecrementOperatorsAreNotAllowedAsResultOfFunctionCall(),
+                    ...DiagnosticMessages.unexpectedOperator(),
                     location: expressionStart.location
                 });
                 throw this.lastDiagnosticAsError();
@@ -2383,7 +2383,7 @@ export class Parser {
 
         //at this point, it's probably an error. However, we recover a little more gracefully by creating an inclosing ExpressionStatement
         this.diagnostics.push({
-            ...DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression(),
+            ...DiagnosticMessages.expectedStatement(),
             location: expressionStart.location
         });
         return new ExpressionStatement({ expression: expr });
@@ -2893,7 +2893,7 @@ export class Parser {
                 } else {
                     let dot = this.previous();
                     let name = this.tryConsume(
-                        DiagnosticMessages.expectedPropertyNameAfterPeriod(),
+                        DiagnosticMessages.expectedIdentifier(),
                         TokenKind.Identifier,
                         ...AllowedProperties
                     );

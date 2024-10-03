@@ -89,10 +89,10 @@ describe('parser call expressions', () => {
 
         expect(diagnostics).to.be.lengthOf(4);
         expectDiagnostics(diagnostics, [
-            DiagnosticMessages.expectedPropertyNameAfterPeriod(),
-            DiagnosticMessages.expectedPropertyNameAfterPeriod(),
-            DiagnosticMessages.expectedPropertyNameAfterPeriod(),
-            DiagnosticMessages.expectedPropertyNameAfterPeriod()
+            DiagnosticMessages.expectedIdentifier(),
+            DiagnosticMessages.expectedIdentifier(),
+            DiagnosticMessages.expectedIdentifier(),
+            DiagnosticMessages.expectedIdentifier()
         ]);
         expect(ast.statements).to.be.lengthOf(1);
         const bodyStatements = (ast.statements[0] as FunctionStatement).func.body.statements;

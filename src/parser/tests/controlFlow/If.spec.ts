@@ -361,7 +361,7 @@ describe('parser if statements', () => {
                     if x print 1 else if y : print 2
                 `);
                 expectDiagnosticsIncludes(diagnostics, [
-                    DiagnosticMessages.expectedEndIfElseIfOrElseToTerminateThenBlock().message
+                    DiagnosticMessages.expectedTerminator(['end if', 'else if', 'else'], 'then', 'block').message
                 ]);
             });
 

@@ -205,7 +205,7 @@ export class Util {
             if (parseErrors.length > 0) {
                 let err = parseErrors[0];
                 let diagnostic = {
-                    ...DiagnosticMessages.bsConfigJsonHasSyntaxErrors(printParseErrorCode(parseErrors[0].error)),
+                    ...DiagnosticMessages.syntaxError(`Syntax errors in bsconfig.json: ${printParseErrorCode(parseErrors[0].error)}`),
                     location: {
                         uri: this.pathToUri(configFilePath),
                         range: this.getRangeFromOffsetLength(projectFileContents, err.offset, err.length)
@@ -1871,7 +1871,7 @@ export class Util {
                 return clone;
                 //filter out null relatedInformation items
             }).filter((x): x is DiagnosticRelatedInformation => Boolean(x)),
-            code: diagnostic.code,
+            code: diagnostic.code ? diagnostic.code : (diagnostic as BsDiagnostic).legacyCode,
             source: 'brs'
         } as Diagnostic;
         if (diagnostic?.tags?.length > 0) {
