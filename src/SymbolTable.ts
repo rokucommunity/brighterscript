@@ -232,6 +232,7 @@ export class SymbolTable implements SymbolTypeGetter {
             options.data.doNotMerge = data?.doNotMerge;
             options.data.isAlias = data?.isAlias;
             options.data.isInstance = data?.isInstance;
+            options.data.isFromDocComment = data?.isFromDocComment;
         }
         return resolvedType;
     }

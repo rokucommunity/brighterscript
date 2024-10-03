@@ -41,7 +41,6 @@ export class DoubleType extends BscType {
     public isEqual(targetType: BscType): boolean {
         return isDoubleType(targetType);
     }
-
 }
 
 BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('double', DoubleType.instance);

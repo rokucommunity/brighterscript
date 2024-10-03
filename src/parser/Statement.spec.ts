@@ -1,6 +1,6 @@
 import { expect } from '../chai-config.spec';
 import { NamespaceStatement, ClassStatement } from './Statement';
-import { AssignmentStatement, Block, Body, CatchStatement, DottedSetStatement, EmptyStatement, EndStatement, ExitForStatement, ExitWhileStatement, ExpressionStatement, ForEachStatement, ForStatement, FunctionStatement, GotoStatement, IfStatement, ImportStatement, IncrementStatement, IndexedSetStatement, LabelStatement, LibraryStatement, PrintStatement, ReturnStatement, StopStatement, ThrowStatement, TryCatchStatement, WhileStatement } from './Statement';
+import { AssignmentStatement, Block, Body, CatchStatement, DottedSetStatement, EmptyStatement, EndStatement, ExitStatement, ExpressionStatement, ForEachStatement, ForStatement, FunctionStatement, GotoStatement, IfStatement, ImportStatement, IncrementStatement, IndexedSetStatement, LabelStatement, LibraryStatement, PrintStatement, ReturnStatement, StopStatement, ThrowStatement, TryCatchStatement, WhileStatement } from './Statement';
 import { ParseMode, Parser } from './Parser';
 import { WalkMode } from '../astUtils/visitors';
 import { isClassStatement, isNamespaceStatement } from '../astUtils/reflection';
@@ -115,7 +115,6 @@ describe('Statement', () => {
         });
     });
 
-
     describe('all Statements', () => {
 
         let allStatements: AstNode[] = [];
@@ -128,8 +127,8 @@ describe('Statement', () => {
             const assignment = new AssignmentStatement({ equals: undefined, name: ident, value: expr });
             const block = new Block({ statements: [] });
             const expression = new ExpressionStatement({ expression: expr });
-            const exitFor = new ExitForStatement({ exitFor: token });
-            const exitWhile = new ExitWhileStatement({ exitWhile: token });
+            const exitFor = new ExitStatement({ exit: token, loopType: token });
+            const exitWhile = new ExitStatement({ exit: token, loopType: token });
             const funs = new FunctionStatement({
                 name: ident,
                 func: new FunctionExpression({
@@ -158,7 +157,7 @@ describe('Statement', () => {
             const namespace = new NamespaceStatement({ namespace: token, nameExpression: createVariableExpression('a'), body: body, endNamespace: token });
             const cls = new ClassStatement({ class: token, name: ident, body: [], endClass: token });
             const imports = new ImportStatement({ import: token, path: token });
-            const catchStmt = new CatchStatement({ catch: token, exceptionVariable: ident, catchBranch: block });
+            const catchStmt = new CatchStatement({ catch: token, exceptionVariableExpression: createVariableExpression('e'), catchBranch: block });
             const tryCatch = new TryCatchStatement({ try: token, tryBranch: block, catchStatement: catchStmt });
             const throwSt = new ThrowStatement({ throw: createToken(TokenKind.Throw) });
 

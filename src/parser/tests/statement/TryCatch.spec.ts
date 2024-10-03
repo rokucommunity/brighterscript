@@ -2,7 +2,7 @@ import { expect } from '../../../chai-config.spec';
 import { Parser } from '../../Parser';
 import { TryCatchStatement } from '../../Statement';
 import { isFunctionExpression } from '../../../astUtils/reflection';
-import type { FunctionExpression } from '../../Expression';
+import type { FunctionExpression, VariableExpression } from '../../Expression';
 import { expectDiagnosticsIncludes } from '../../../testHelpers.spec';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 
@@ -27,7 +27,7 @@ describe('parser try/catch', () => {
         expect(stmt.catchStatement).to.exist;
         const cstmt = stmt.catchStatement;
         expect(cstmt!.tokens.catch?.text).to.eql('catch');
-        expect(cstmt!.tokens.exceptionVariable!.text).to.eql('e');
+        expect((cstmt!.exceptionVariableExpression as VariableExpression).getName()).to.eql('e');
         expect(cstmt!.catchBranch).to.exist.and.ownProperty('statements').to.be.lengthOf(1);
         expect(stmt.tokens.endTry?.text).to.eql('end try');
     });

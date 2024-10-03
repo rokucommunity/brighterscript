@@ -932,7 +932,7 @@ describe('lexer', () => {
         it('matches single-word keywords', () => {
             // test just a sample of single-word reserved words for now.
             // if we find any that we've missed
-            let { tokens } = Lexer.scan('and then or if else endif return true false line_num');
+            let { tokens } = Lexer.scan('and then or if else endif return true false line_num exitwhile');
             expect(tokens.map(w => w.kind)).to.deep.equal([
                 TokenKind.And,
                 TokenKind.Then,
@@ -944,6 +944,7 @@ describe('lexer', () => {
                 TokenKind.True,
                 TokenKind.False,
                 TokenKind.LineNumLiteral,
+                TokenKind.ExitWhile,
                 TokenKind.Eof
             ]);
         });
@@ -955,7 +956,8 @@ describe('lexer', () => {
                 TokenKind.EndWhile,
                 TokenKind.EndSub,
                 TokenKind.EndFunction,
-                TokenKind.ExitWhile,
+                TokenKind.Exit,
+                TokenKind.While,
                 TokenKind.Eof
             ]);
         });
@@ -963,7 +965,8 @@ describe('lexer', () => {
         it('accepts \'exit for\' but not \'exitfor\'', () => {
             let { tokens } = Lexer.scan('exit for exitfor');
             expect(tokens.map(w => w.kind)).to.deep.equal([
-                TokenKind.ExitFor,
+                TokenKind.Exit,
+                TokenKind.For,
                 TokenKind.Identifier,
                 TokenKind.Eof
             ]);

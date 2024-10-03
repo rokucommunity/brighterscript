@@ -28,6 +28,8 @@ import type { XmlFile } from '../../files/XmlFile';
 import { SGFieldTypes } from '../../parser/SGTypes';
 import { DynamicType } from '../../types';
 import { BscTypeKind } from '../../types/BscTypeKind';
+import type { BrsDocWithType } from '../../parser/BrightScriptDocParser';
+import brsDocParser from '../../parser/BrightScriptDocParser';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -179,6 +181,15 @@ export class ScopeValidator {
                             type: this.getNodeTypeWrapper(file, funcParam, { flags: SymbolTypeFlag.runtime }),
                             nameRange: funcParam.tokens.name.location?.range
                         });
+                    },
+                    AstNode: (node) => {
+                        //check for doc comments
+                        if (!node.leadingTrivia || node.leadingTrivia.filter(triviaToken => triviaToken.kind === TokenKind.Comment).length === 0) {
+                            return;
+                        }
+
+                        this.validateDocComments(node);
+
                     }
                 });
                 // validate only what's needed in the file
@@ -404,18 +415,18 @@ export class ScopeValidator {
      * Detect return statements with incompatible types vs. declared return type
      */
     private validateReturnStatement(file: BrsFile, returnStmt: ReturnStatement) {
-        const getTypeOptions = { flags: SymbolTypeFlag.runtime };
-        let funcType = returnStmt.findAncestor(isFunctionExpression).getType({ flags: SymbolTypeFlag.typetime });
+        const data: ExtraSymbolData = {};
+        const getTypeOptions = { flags: SymbolTypeFlag.runtime, data: data };
+        let funcType = returnStmt.findAncestor(isFunctionExpression)?.getType({ flags: SymbolTypeFlag.typetime });
         if (isTypedFunctionType(funcType)) {
             const actualReturnType = this.getNodeTypeWrapper(file, returnStmt?.value, getTypeOptions);
             const compatibilityData: TypeCompatibilityData = {};
 
-            if (actualReturnType && !funcType.returnType.isTypeCompatible(actualReturnType, compatibilityData)) {
+            if (funcType.returnType.isResolvable() && actualReturnType && !funcType.returnType.isTypeCompatible(actualReturnType, compatibilityData)) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.returnTypeMismatch(actualReturnType.toString(), funcType.returnType.toString(), compatibilityData),
                     location: returnStmt.value.location
                 });
-
             }
         }
     }
@@ -695,7 +706,8 @@ export class ScopeValidator {
                     }
                 }
 
-            } else {
+            } else if (!typeData?.isFromDocComment) {
+                // only show "cannot find... " errors if the type is not defined from a doc comment
                 const typeChainScan = util.processTypeChain(typeChain);
                 if (isCallExpression(typeChainScan.astNode.parent) && typeChainScan.astNode.parent.callee === expression) {
                     this.addMultiScopeDiagnostic({
@@ -1151,6 +1163,23 @@ export class ScopeValidator {
                         location: field.getAttribute('onchange')?.tokens.value.location
                     }, ScopeValidatorDiagnosticTag.XMLInterface);
                 }
+            }
+        }
+    }
+
+    private validateDocComments(node: AstNode) {
+        const doc = brsDocParser.parseNode(node);
+        for (const docTag of doc.tags) {
+            const docTypeTag = docTag as BrsDocWithType;
+            if (!docTypeTag.typeExpression || !docTypeTag.location) {
+                continue;
+            }
+            const foundType = docTypeTag.typeExpression?.getType({ flags: SymbolTypeFlag.typetime });
+            if (!foundType?.isResolvable()) {
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.cannotFindTypeInCommentDoc(docTypeTag.typeString),
+                    location: brsDocParser.getTypeLocationFromToken(docTypeTag.token) ?? docTypeTag.location
+                });
             }
         }
     }

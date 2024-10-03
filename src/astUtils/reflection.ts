@@ -1,5 +1,5 @@
-import type { Body, AssignmentStatement, Block, ExpressionStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, InterfaceFieldStatement, InterfaceMethodStatement, InterfaceStatement, EnumStatement, EnumMemberStatement, TryCatchStatement, CatchStatement, ThrowStatement, MethodStatement, FieldStatement, ConstStatement, ContinueStatement, TypecastStatement, AliasStatement, ConditionalCompileStatement, ConditionalCompileConstStatement, ConditionalCompileErrorStatement, AugmentedAssignmentStatement } from '../parser/Statement';
-import type { LiteralExpression, BinaryExpression, CallExpression, FunctionExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression, TypecastExpression, TypeExpression, TypedArrayExpression } from '../parser/Expression';
+import type { Body, AssignmentStatement, Block, ExpressionStatement, ExitStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, InterfaceFieldStatement, InterfaceMethodStatement, InterfaceStatement, EnumStatement, EnumMemberStatement, TryCatchStatement, CatchStatement, ThrowStatement, MethodStatement, FieldStatement, ConstStatement, ContinueStatement, TypecastStatement, AliasStatement, ConditionalCompileStatement, ConditionalCompileConstStatement, ConditionalCompileErrorStatement, AugmentedAssignmentStatement, DimStatement } from '../parser/Statement';
+import type { LiteralExpression, BinaryExpression, CallExpression, FunctionExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression, TypecastExpression, TypeExpression, TypedArrayExpression, TernaryExpression, NullCoalescingExpression } from '../parser/Expression';
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
 import type { BsDiagnostic, TypedefProvider } from '../interfaces';
@@ -85,11 +85,8 @@ export function isBlock(element: AstNode | undefined): element is Block {
 export function isExpressionStatement(element: AstNode | undefined): element is ExpressionStatement {
     return element?.kind === AstNodeKind.ExpressionStatement;
 }
-export function isExitForStatement(element: AstNode | undefined): element is ExitForStatement {
-    return element?.kind === AstNodeKind.ExitForStatement;
-}
-export function isExitWhileStatement(element: AstNode | undefined): element is ExitWhileStatement {
-    return element?.kind === AstNodeKind.ExitWhileStatement;
+export function isExitStatement(element: AstNode | undefined): element is ExitStatement {
+    return element?.kind === AstNodeKind.ExitStatement;
 }
 export function isFunctionStatement(element: AstNode | undefined): element is FunctionStatement {
     return element?.kind === AstNodeKind.FunctionStatement;
@@ -112,6 +109,12 @@ export function isLabelStatement(element: AstNode | undefined): element is Label
 export function isReturnStatement(element: AstNode | undefined): element is ReturnStatement {
     return element?.kind === AstNodeKind.ReturnStatement;
 }
+export function isTernaryExpression(element: AstNode | undefined): element is TernaryExpression {
+    return element?.constructor?.name === 'TernaryExpression';
+}
+export function isNullCoalescingExpression(element: AstNode | undefined): element is NullCoalescingExpression {
+    return element?.constructor?.name === 'NullCoalescingExpression';
+}
 export function isEndStatement(element: AstNode | undefined): element is EndStatement {
     return element?.kind === AstNodeKind.EndStatement;
 }
@@ -126,6 +129,9 @@ export function isForEachStatement(element: AstNode | undefined): element is For
 }
 export function isWhileStatement(element: AstNode | undefined): element is WhileStatement {
     return element?.kind === AstNodeKind.WhileStatement;
+}
+export function isDimStatement(element: AstNode | undefined): element is DimStatement {
+    return element?.constructor?.name === 'DimStatement';
 }
 export function isDottedSetStatement(element: AstNode | undefined): element is DottedSetStatement {
     return element?.kind === AstNodeKind.DottedSetStatement;

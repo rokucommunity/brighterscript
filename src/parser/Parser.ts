@@ -14,7 +14,8 @@ import {
     TokenKind,
     BlockTerminators,
     ReservedWords,
-    CompoundAssignmentOperators
+    CompoundAssignmentOperators,
+    BinaryExpressionOperatorTokens
 } from '../lexer/TokenKind';
 import type {
     PrintSeparatorSpace,
@@ -35,8 +36,7 @@ import {
     EndStatement,
     EnumMemberStatement,
     EnumStatement,
-    ExitForStatement,
-    ExitWhileStatement,
+    ExitStatement,
     ExpressionStatement,
     ForEachStatement,
     FieldStatement,
@@ -1108,8 +1108,8 @@ export class Parser {
             return this.whileStatement();
         }
 
-        if (this.check(TokenKind.ExitWhile)) {
-            return this.exitWhile();
+        if (this.checkAny(TokenKind.Exit, TokenKind.ExitWhile)) {
+            return this.exitStatement();
         }
 
         if (this.check(TokenKind.For)) {
@@ -1118,10 +1118,6 @@ export class Parser {
 
         if (this.check(TokenKind.ForEach)) {
             return this.forEachStatement();
-        }
-
-        if (this.check(TokenKind.ExitFor)) {
-            return this.exitFor();
         }
 
         if (this.check(TokenKind.End)) {
@@ -1235,10 +1231,43 @@ export class Parser {
         });
     }
 
-    private exitWhile(): ExitWhileStatement {
-        let keyword = this.advance();
+    private exitStatement(): ExitStatement {
+        let exitToken = this.advance();
+        if (exitToken.kind === TokenKind.ExitWhile) {
+            // `exitwhile` is allowed in code, and means `exit while`
+            // use an ExitStatement that is nicer to work with by breaking the `exit` and `while` tokens apart
 
-        return new ExitWhileStatement({ exitWhile: keyword });
+            const exitText = exitToken.text.substring(0, 4);
+            const whileText = exitToken.text.substring(4);
+            const originalRange = exitToken.location.range;
+            const originalStart = originalRange.start;
+
+            const exitRange = util.createRange(
+                originalStart.line,
+                originalStart.character,
+                originalStart.line,
+                originalStart.character + 4);
+            const whileRange = util.createRange(
+                originalStart.line,
+                originalStart.character + 4,
+                originalStart.line,
+                originalStart.character + exitToken.text.length);
+
+            exitToken = createToken(TokenKind.Exit, exitText, util.createLocationFromRange(exitToken.location.uri, exitRange));
+            this.tokens[this.current - 1] = exitToken;
+            const newLoopToken = createToken(TokenKind.While, whileText, util.createLocationFromRange(exitToken.location.uri, whileRange));
+            this.tokens.splice(this.current, 0, newLoopToken);
+        }
+
+        const loopTypeToken = this.tryConsume(
+            DiagnosticMessages.expectedToken(TokenKind.While, TokenKind.For),
+            TokenKind.While, TokenKind.For
+        );
+
+        return new ExitStatement({
+            exit: exitToken,
+            loopType: loopTypeToken
+        });
     }
 
     private forStatement(): ForStatement {
@@ -1335,12 +1364,6 @@ export class Parser {
             target: target,
             body: body
         });
-    }
-
-    private exitFor(): ExitForStatement {
-        let keyword = this.advance();
-
-        return new ExitForStatement({ exitFor: keyword });
     }
 
     private namespaceStatement(): NamespaceStatement | undefined {
@@ -1728,17 +1751,21 @@ export class Parser {
             });
         } else {
             const catchToken = this.advance();
-            const exceptionVarToken = this.tryConsume(DiagnosticMessages.missingExceptionVarToFollowCatch(), TokenKind.Identifier, ...this.allowedLocalIdentifiers) as Identifier;
-            if (exceptionVarToken) {
-                // force it into an identifier so the AST makes some sense
-                exceptionVarToken.kind = TokenKind.Identifier;
+
+            //get the exception variable as an expression
+            let exceptionVariableExpression: Expression;
+            //if we consumed any statement separators, that means we don't have an exception variable
+            if (this.consumeStatementSeparators(true)) {
+                //no exception variable. That's fine in BrighterScript but not in brightscript. But that'll get caught by the validator later...
+            } else {
+                exceptionVariableExpression = this.expression(true);
+                this.consumeStatementSeparators();
             }
-            //ensure statement sepatator
-            this.consumeStatementSeparators();
+
             const catchBranch = this.block(TokenKind.EndTry);
             catchStmt = new CatchStatement({
                 catch: catchToken,
-                exceptionVariable: exceptionVarToken,
+                exceptionVariableExpression: exceptionVariableExpression,
                 catchBranch: catchBranch
             });
         }
@@ -2102,7 +2129,7 @@ export class Parser {
 
             //this whole if statement is bogus...add error to the if token and hard-fail
             this.diagnostics.push({
-                ...DiagnosticMessages.expectedTerminatorOnConditionalCompileBlock(),
+                ...DiagnosticMessages.expectedTerminator(['#end if', '#else if', '#else'], 'conditional compilation', 'block'),
                 location: hashIfToken.location
             });
             throw this.lastDiagnosticAsError();
@@ -2348,6 +2375,10 @@ export class Parser {
 
         if (isCallExpression(expr) || isCallfuncExpression(expr)) {
             return new ExpressionStatement({ expression: expr });
+        }
+
+        if (this.checkAny(...BinaryExpressionOperatorTokens)) {
+            expr = new BinaryExpression({ left: expr, operator: this.advance(), right: this.expression() });
         }
 
         //at this point, it's probably an error. However, we recover a little more gracefully by creating an inclosing ExpressionStatement

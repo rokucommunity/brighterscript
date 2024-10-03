@@ -1324,7 +1324,7 @@ export class Program {
                 //get all current diagnostics (filtered by diagnostic filters)
                 .getDiagnostics()
                 //only keep diagnostics related to this file
-                .filter(x => x.location.uri === fileUri)
+                .filter(x => x.location?.uri === fileUri)
                 //only keep diagnostics that touch this range
                 .filter(x => util.rangesIntersectOrTouch(x.location.range, range));
 

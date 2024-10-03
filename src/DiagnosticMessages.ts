@@ -744,8 +744,8 @@ export let DiagnosticMessages = {
         legacyCode: 1116,
         severity: DiagnosticSeverity.Error
     }),
-    missingExceptionVarToFollowCatch: () => ({
-        message: `Missing exception variable after 'catch' keyword`,
+    expectedExceptionVarToFollowCatch: () => ({
+        message: `Expected exception variable after 'catch' keyword`,
         legacyCode: 1117,
         severity: DiagnosticSeverity.Error,
         code: 'missing-exception-variable'
@@ -964,7 +964,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'expected-newline-in-conditional-compile'
     }),
-    expectedTerminatorOnConditionalCompileBlock: () => ({
+    __unused22: () => ({
         message: `Expected '#end if', '#else if', or '#else' to terminate conditional compilation block`,
         legacyCode: 1152,
         severity: DiagnosticSeverity.Error,
@@ -975,6 +975,15 @@ export let DiagnosticMessages = {
         legacyCode: 1153,
         severity: DiagnosticSeverity.Error,
         code: 'unmatched-terminator-on-conditional-compile'
+    }),
+    cannotFindTypeInCommentDoc: (name: string) => ({
+        message: `Cannot find type '${name}' in doc comment`,
+        legacyCode: 1154,
+        data: {
+            name: name
+        },
+        severity: DiagnosticSeverity.Error,
+        code: 'missing-type-in-doc-comment'
     })
 };
 export const defaultMaximumTruncationLength = 160;
