@@ -4,6 +4,9 @@ import { Program } from '../../Program';
 import { standardizePath as s } from '../../util';
 import { tempDir, rootDir } from '../../testHelpers.spec';
 import { expect } from 'chai';
+import { Parser } from '../../parser/Parser';
+import { isFunctionStatement } from '../../astUtils/reflection';
+import type { FunctionStatement } from '../../parser/Statement';
 const sinon = createSandbox();
 
 describe('BrsFileTranspileProcessor', () => {
@@ -41,5 +44,49 @@ describe('BrsFileTranspileProcessor', () => {
         expect(
             fsExtra.readFileSync(`${program.options.stagingDir}/source/bslib.brs`).toString()
         ).to.include('bslib_toString');
+    });
+
+    it('properly prefixes functions from bslib when found in roku_modules as `bslib`', async () => {
+        program.options.stagingDir = s`${tempDir}/staging`;
+        program.setFile('source/main.bs', `
+            sub main()
+                print true ? true : false
+            end sub
+        `);
+        program.setFile('source/roku_modules/bslib/bslib.brs', `
+            function bslib_toString()
+            end function
+        `);
+        program.validate();
+        await program.build();
+
+        const parser = Parser.parse(
+            fsExtra.readFileSync(s`${program.options.stagingDir}/source/roku_modules/bslib/bslib.brs`).toString()
+        );
+        expect(
+            parser.ast.findChildren<FunctionStatement>(isFunctionStatement).map(x => x.tokens.name.text)
+        ).to.include('bslib_toString');
+    });
+
+    it('properly prefixes functions from bslib when found in roku_modules as `rokucommunity_bslib`', async () => {
+        program.options.stagingDir = s`${tempDir}/staging`;
+        program.setFile('source/main.bs', `
+            sub main()
+                print true ? true : false
+            end sub
+        `);
+        program.setFile('source/roku_modules/rokucommunity_bslib/bslib.brs', `
+            function rokucommunity_bslib_toString()
+            end function
+        `);
+        program.validate();
+        await program.build();
+
+        const parser = Parser.parse(
+            fsExtra.readFileSync(s`${program.options.stagingDir}/source/roku_modules/rokucommunity_bslib/bslib.brs`).toString()
+        );
+        expect(
+            parser.ast.findChildren<FunctionStatement>(isFunctionStatement).map(x => x.tokens.name.text)
+        ).to.include('rokucommunity_bslib_toString');
     });
 });

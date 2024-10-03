@@ -3,6 +3,8 @@ import { standardizePath as s } from '../../util';
 import { source as bslibSource } from '@rokucommunity/bslib';
 import { Cache } from '../../Cache';
 import { BrsFile } from '../../files/BrsFile';
+import type { FunctionStatement } from '../../parser/Statement';
+import type { Editor } from '../../astUtils/Editor';
 const bslibSrcPath = s`${require.resolve('@rokucommunity/bslib')}/dist/source/bslib.brs`;
 export class BslibManager {
 
@@ -28,10 +30,17 @@ export class BslibManager {
         }
     }
 
+    public static applyPrefixIfMissing(statement: FunctionStatement, editor: Editor, prefix: string) {
+        //add the bslib prefix if the function does not start with bslib_ or rokucommunity_bslib_
+        if (!/^(rokucommunity_)?bslib_/i.test(statement.tokens.name.text)) {
+            editor.setProperty(statement.tokens.name, 'text', `${prefix}_${statement.tokens.name.text}`);
+        }
+    }
+
     /**
      * Is the pkgPath a support path to bslib?
      */
     public static isBslibPkgPath(pkgPath: string) {
-        return /(source[\\\/]bslib.brs)|(source[\\\/]roku_modules[\\\/]bslib[\\\/]bslib.brs)$/i.test(pkgPath);
+        return /(source[\\\/]bslib.brs)|(source[\\\/]roku_modules[\\\/](rokucommunity_)?bslib)[\\\/]bslib.brs$/i.test(pkgPath);
     }
 }
