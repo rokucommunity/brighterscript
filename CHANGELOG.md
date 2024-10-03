@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.39](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.38...v1.0.0-alpha.39) - 2024-10-03
+### Fixed
+ - bslib prefix transpile bug  ([#1317](https://github.com/rokucommunity/brighterscript/pull/1317))
+
+
+
 ## [1.0.0-alpha.38](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.37...v1.0.0-alpha.38) - 2024-10-01
 ### Added
  - ability to omit the exception variable in bs files and convert exception var to an `Expression` ([#1305](https://github.com/rokucommunity/brighterscript/pull/1305))
