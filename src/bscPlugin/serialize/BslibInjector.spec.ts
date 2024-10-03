@@ -9,12 +9,10 @@ const sinon = createSandbox();
 describe('BslibInjector', () => {
 
     let program: Program;
-    let manager: BslibManager;
 
     beforeEach(() => {
         fsExtra.emptyDirSync(tempDir);
         program = new Program({ rootDir: rootDir, sourceMap: true });
-        manager = new BslibManager();
     });
     afterEach(() => {
         sinon.restore();
