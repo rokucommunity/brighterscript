@@ -227,6 +227,30 @@ describe('ScopeValidator', () => {
             //should have an error
             expectZeroDiagnostics(program);
         });
+
+        it('validates against scope-defined func in inner namespace, when outer namespace has same named func', () => {
+            program.setFile('source/main.bs', `
+                namespace alpha
+                    sub foo()
+                    end sub
+
+                    namespace beta
+                        sub bar()
+                            foo()
+                        end sub
+                    end namespace
+                end namespace
+
+                function foo(x as integer) as integer
+                    return x
+                end function
+            `);
+
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.mismatchArgumentCount(1, 0).message
+            ]);
+        });
     });
 
     describe('argumentTypeMismatch', () => {
@@ -1872,6 +1896,28 @@ describe('ScopeValidator', () => {
                         end sub
                     end namespace
                 end namespace
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows referencing scope-defined func in inner namespace, when outer namespace has same named func', () => {
+            program.setFile('source/main.bs', `
+                namespace alpha
+                    sub foo()
+                    end sub
+
+                    namespace beta
+                        sub bar()
+                            foo(1)
+                        end sub
+                    end namespace
+                end namespace
+
+                function foo(x as integer) as integer
+                    return x
+                end function
             `);
 
             program.validate();
