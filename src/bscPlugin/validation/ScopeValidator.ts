@@ -26,7 +26,8 @@ import { globalCallableMap } from '../../globalCallables';
 import type { XmlScope } from '../../XmlScope';
 import type { XmlFile } from '../../files/XmlFile';
 import { SGFieldTypes } from '../../parser/SGTypes';
-import { DynamicType } from '../../types';
+import { DynamicType } from '../../types/DynamicType';
+import { VoidType } from '../../types/VoidType';
 import { BscTypeKind } from '../../types/BscTypeKind';
 import type { BrsDocWithType } from '../../parser/BrightScriptDocParser';
 import brsDocParser from '../../parser/BrightScriptDocParser';
@@ -420,13 +421,15 @@ export class ScopeValidator {
         const getTypeOptions = { flags: SymbolTypeFlag.runtime, data: data };
         let funcType = returnStmt.findAncestor(isFunctionExpression)?.getType({ flags: SymbolTypeFlag.typetime });
         if (isTypedFunctionType(funcType)) {
-            const actualReturnType = this.getNodeTypeWrapper(file, returnStmt?.value, getTypeOptions);
+            const actualReturnType = returnStmt?.value
+                ? this.getNodeTypeWrapper(file, returnStmt?.value, getTypeOptions)
+                : VoidType.instance;
             const compatibilityData: TypeCompatibilityData = {};
 
             if (funcType.returnType.isResolvable() && actualReturnType && !funcType.returnType.isTypeCompatible(actualReturnType, compatibilityData)) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.returnTypeMismatch(actualReturnType.toString(), funcType.returnType.toString(), compatibilityData),
-                    location: returnStmt.value.location
+                    location: returnStmt.value?.location ?? returnStmt.location
                 });
             }
         }
