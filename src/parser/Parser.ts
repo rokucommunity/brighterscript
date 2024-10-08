@@ -14,7 +14,8 @@ import {
     TokenKind,
     BlockTerminators,
     ReservedWords,
-    CompoundAssignmentOperators
+    CompoundAssignmentOperators,
+    BinaryExpressionOperatorTokens
 } from '../lexer/TokenKind';
 import type {
     PrintSeparatorSpace,
@@ -1750,17 +1751,21 @@ export class Parser {
             });
         } else {
             const catchToken = this.advance();
-            const exceptionVarToken = this.tryConsume(DiagnosticMessages.missingExceptionVarToFollowCatch(), TokenKind.Identifier, ...this.allowedLocalIdentifiers) as Identifier;
-            if (exceptionVarToken) {
-                // force it into an identifier so the AST makes some sense
-                exceptionVarToken.kind = TokenKind.Identifier;
+
+            //get the exception variable as an expression
+            let exceptionVariableExpression: Expression;
+            //if we consumed any statement separators, that means we don't have an exception variable
+            if (this.consumeStatementSeparators(true)) {
+                //no exception variable. That's fine in BrighterScript but not in brightscript. But that'll get caught by the validator later...
+            } else {
+                exceptionVariableExpression = this.expression(true);
+                this.consumeStatementSeparators();
             }
-            //ensure statement sepatator
-            this.consumeStatementSeparators();
+
             const catchBranch = this.block(TokenKind.EndTry);
             catchStmt = new CatchStatement({
                 catch: catchToken,
-                exceptionVariable: exceptionVarToken,
+                exceptionVariableExpression: exceptionVariableExpression,
                 catchBranch: catchBranch
             });
         }
@@ -2370,6 +2375,10 @@ export class Parser {
 
         if (isCallExpression(expr) || isCallfuncExpression(expr)) {
             return new ExpressionStatement({ expression: expr });
+        }
+
+        if (this.checkAny(...BinaryExpressionOperatorTokens)) {
+            expr = new BinaryExpression({ left: expr, operator: this.advance(), right: this.expression() });
         }
 
         //at this point, it's probably an error. However, we recover a little more gracefully by creating an inclosing ExpressionStatement

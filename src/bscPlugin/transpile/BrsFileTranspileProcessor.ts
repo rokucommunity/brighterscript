@@ -24,17 +24,14 @@ export class BrsFilePreTranspileProcessor {
         this.iterateExpressions();
         //apply prefixes to bslib
         if (BslibManager.isBslibPkgPath(this.event.file.pkgPath)) {
-            this.applyPrefixesIfMissing(this.event.file, this.event.editor);
+            this.applyBslibPrefixesIfMissing(this.event.file, this.event.editor);
         }
     }
 
-    public applyPrefixesIfMissing(file: BrsFile, editor: Editor) {
+    public applyBslibPrefixesIfMissing(file: BrsFile, editor: Editor) {
         file.ast.walk(createVisitor({
             FunctionStatement: (statement) => {
-                //add the bslib prefix
-                if (!statement.tokens.name.text.startsWith('bslib_')) {
-                    editor.setProperty(statement.tokens.name, 'text', `bslib_${statement.tokens.name.text}`);
-                }
+                BslibManager.applyPrefixIfMissing(statement, editor, this.event.program.bslibPrefix);
             }
         }), {
             walkMode: WalkMode.visitAllRecursive

@@ -6,6 +6,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.39](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.38...v1.0.0-alpha.39) - 2024-10-03
+### Fixed
+ - bslib prefix transpile bug  ([#1317](https://github.com/rokucommunity/brighterscript/pull/1317))
+
+
+
+## [1.0.0-alpha.38](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.37...v1.0.0-alpha.38) - 2024-10-01
+### Added
+ - ability to omit the exception variable in bs files and convert exception var to an `Expression` ([#1305](https://github.com/rokucommunity/brighterscript/pull/1305))
+### Fixed
+ - transpile issue with global functions ([#1314](https://github.com/rokucommunity/brighterscript/pull/1314))
+ - semantic tokens for components and interfaces and `m` ([#1313](https://github.com/rokucommunity/brighterscript/pull/1313))
+ - prevent a crash when `ClassType.name` is `undefined` ([#1312](https://github.com/rokucommunity/brighterscript/pull/1312))
+
+
+
+## [1.0.0-alpha.37](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.36...v1.0.0-alpha.37) - 2024-09-25
+### Added
+ - Support for types declared in comments ([#1293](https://github.com/rokucommunity/brighterscript/pull/1293))
+### Changed
+ - Eliminate `FunctionExpression.functionStatement` ([#1287](https://github.com/rokucommunity/brighterscript/pull/1287))
+ - Merges `ExitForStatement` and `ExitWhileStatement` ([#1289](https://github.com/rokucommunity/brighterscript/pull/1289))
+### Fixed
+ - Include missing transpiled comments ([#1278](https://github.com/rokucommunity/brighterscript/pull/1278))
+ - Tests and issues around transpiling variables that shadow stuff ([#1282](https://github.com/rokucommunity/brighterscript/pull/1282))
+ - Handles diagnostic with invalid location, and semantic tokens for unscoped file ([#1286](https://github.com/rokucommunity/brighterscript/pull/1286))
+ - Fix some null crashes ([#1304](https://github.com/rokucommunity/brighterscript/pull/1304))
+
+
+
 ## [1.0.0-alpha.36](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.35...v1.0.0-alpha.36) - 2024-08-09
 ### Fixed
  - `m` should be typed as roAssociativeArray for all inline functions ([#1272](https://github.com/rokucommunity/brighterscript/pull/1272))
@@ -313,6 +343,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.66.0-alpha.0](https://github.com/rokucommunity/brighterscript/compare/v0.65.1...v0.66.0-alpha.0) - 2023-06-09
 ### Changed
  - all the type tracking stuff!
+## [0.67.7](https://github.com/rokucommunity/brighterscript/compare/v0.67.6...v0.67.7) - 2024-09-25
+### Changed
+ - Ast node clone ([#1281](https://github.com/rokucommunity/brighterscript/pull/1281))
+
+
+
+## [0.67.6](https://github.com/rokucommunity/brighterscript/compare/v0.67.5...v0.67.6) - 2024-09-05
+### Added
+ - support for `roIntrinsicDouble` ([#1291](https://github.com/rokucommunity/brighterscript/pull/1291))
+ - support for resolving `sourceRoot` at time of config load ([#1290](https://github.com/rokucommunity/brighterscript/pull/1290))
+### Changed
+ - document plugin naming convention ([#1284](https://github.com/rokucommunity/brighterscript/pull/1284))
+
+
+
 ## [0.67.5](https://github.com/rokucommunity/brighterscript/compare/v0.67.4...v0.67.5) - 2024-07-31
 ### Fixed
  - templatestring support for `annotation.getArguments()` ([#1264](https://github.com/rokucommunity/brighterscript/pull/1264))

@@ -115,7 +115,6 @@ describe('Statement', () => {
         });
     });
 
-
     describe('all Statements', () => {
 
         let allStatements: AstNode[] = [];
@@ -158,7 +157,7 @@ describe('Statement', () => {
             const namespace = new NamespaceStatement({ namespace: token, nameExpression: createVariableExpression('a'), body: body, endNamespace: token });
             const cls = new ClassStatement({ class: token, name: ident, body: [], endClass: token });
             const imports = new ImportStatement({ import: token, path: token });
-            const catchStmt = new CatchStatement({ catch: token, exceptionVariable: ident, catchBranch: block });
+            const catchStmt = new CatchStatement({ catch: token, exceptionVariableExpression: createVariableExpression('e'), catchBranch: block });
             const tryCatch = new TryCatchStatement({ try: token, tryBranch: block, catchStatement: catchStmt });
             const throwSt = new ThrowStatement({ throw: createToken(TokenKind.Throw) });
 

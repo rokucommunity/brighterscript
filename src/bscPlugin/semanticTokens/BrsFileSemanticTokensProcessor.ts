@@ -132,9 +132,9 @@ export class BrsFileSemanticTokensProcessor {
             } else {
                 return { type: SemanticTokenTypes.method };
             }
-        } else if (isInterfaceType(type)) {
+        } else if (isInterfaceType(type) && extraData.isInstance !== true) {
             return { type: SemanticTokenTypes.interface };
-        } else if (isComponentType(type)) {
+        } else if (isComponentType(type) && extraData.isInstance !== true) {
             return { type: SemanticTokenTypes.class };
         } else if (isEnumType(type)) {
             return { type: SemanticTokenTypes.enum };
@@ -146,7 +146,11 @@ export class BrsFileSemanticTokensProcessor {
         } else if (isConstStatement(node)) {
             return { type: SemanticTokenTypes.variable, modifiers: [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static] };
         } else if (isVariableExpression(node)) {
-            return { type: SemanticTokenTypes.variable };
+            if (/m/i.test(node.tokens?.name?.text)) {
+                //don't color `m` variables
+            } else {
+                return { type: SemanticTokenTypes.variable };
+            }
         } else {
             //we don't know what it is...return undefined to prevent creating a semantic token
         }

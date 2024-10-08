@@ -452,8 +452,6 @@ describe('BrsFileSemanticTokensProcessor', () => {
         expectSemanticTokens(file, [
             // sub |init|()
             [SemanticTokenTypes.function, 1, 16, 1, 20],
-            // |m|.alien = new Humanoids.Aliens.Alien.NOT_A_CLASS() 'bs:disable-line
-            [SemanticTokenTypes.variable, 2, 16, 2, 17],
             // m.alien = new |Humanoids|.Aliens.Alien.NOT_A_CLASS() 'bs:disable-line
             [SemanticTokenTypes.namespace, 2, 30, 2, 39],
             // m.alien = new Humanoids.|Aliens|.Alien.NOT_A_CLASS() 'bs:disable-line
@@ -500,6 +498,36 @@ describe('BrsFileSemanticTokensProcessor', () => {
         expectSemanticTokensIncludes(file, [
             // url.|setPort|(80)
             [SemanticTokenTypes.method, 3, 20, 3, 27, [SemanticTokenModifiers.deprecated]]
+        ], false);
+    });
+
+    it('does not color variable of type roSGNode as a type', () => {
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            sub main()
+                node = CreateObject("roSGNode", "ContentNode")
+                node.id = "content"
+            end sub
+        `);
+        program.validate();
+        expectSemanticTokensIncludes(file, [
+            // |node|.id = "content"
+            [SemanticTokenTypes.variable, 3, 16, 3, 20]
+        ], false);
+    });
+
+    it('does not color variable when it is an instance of an interface', () => {
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            sub main(video as Movie)
+                video.url = "http://example.com"
+            end sub
+            interface Movie
+                url as string
+            end interface
+        `);
+        program.validate();
+        expectSemanticTokensIncludes(file, [
+            // |video|.url = "http://example.com"
+            [SemanticTokenTypes.variable, 2, 16, 2, 21]
         ], false);
     });
 

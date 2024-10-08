@@ -2178,10 +2178,65 @@ describe('BrsFile', () => {
                         try
                             print m.b.c
                         catch e
-                            print e
+                            print "crash"
                         end try
                     end sub
                 `);
+            });
+
+            it('recognizes the exception variable', async () => {
+                await testTranspile(`
+                    sub main()
+                        try
+                            print m.b.c
+                        catch e
+                            message = e.message
+                            print message
+                        end try
+                    end sub
+                `);
+            });
+
+            it('supports omitting the exception variable in brighterscript mode (we auto-add it at transpile time)', async () => {
+                await testTranspile(`
+                    sub new()
+                        try
+                            print "hello"
+                        catch
+                            print "error"
+                        end try
+                    end sub
+                `, `
+                    sub new()
+                        try
+                            print "hello"
+                        catch e
+                            print "error"
+                        end try
+                    end sub
+                `, undefined, 'source/main.bs');
+            });
+
+            it('uses alternate name when `e` is already a local var', async () => {
+                await testTranspile(`
+                    sub new()
+                        e = "ello love"
+                        try
+                            print "hello"
+                        catch
+                            print "error"
+                        end try
+                    end sub
+                `, `
+                    sub new()
+                        e = "ello love"
+                        try
+                            print "hello"
+                        catch __bsc_error
+                            print "error"
+                        end try
+                    end sub
+                `, undefined, 'source/main.bs');
             });
         });
 
@@ -2228,6 +2283,68 @@ describe('BrsFile', () => {
                         sayHello()
                     end sub
                 `);
+            });
+
+            it('does not prefix global function names', async () => {
+                await testTranspile(`
+                    namespace is
+                        function valid(thing) as boolean
+                            return invalid <> thing
+                        end function
+
+                        function node(thing) as boolean
+                            return valid(thing) and valid(getInterface(thing, "ifSgNodeChildren"))
+                        end function
+                    end namespace`, `
+                    function is_valid(thing) as boolean
+                        return invalid <> thing
+                    end function
+
+                    function is_node(thing) as boolean
+                        return is_valid(thing) and is_valid(getInterface(thing, "ifSgNodeChildren"))
+                    end function`
+                );
+            });
+
+            it('does not prefix unnamespaced function names', async () => {
+                await testTranspile(`
+                    function valid(thing) as boolean
+                        return invalid <> thing
+                    end function
+
+                    namespace is
+                          function node(thing) as boolean
+                            return valid(thing) and valid(getInterface(thing, "ifSgNodeChildren"))
+                        end function
+                    end namespace`, `
+                    function valid(thing) as boolean
+                        return invalid <> thing
+                    end function
+                    function is_node(thing) as boolean
+                        return valid(thing) and valid(getInterface(thing, "ifSgNodeChildren"))
+                    end function`
+                );
+            });
+
+            it('does not prefix unnamespaced function names in deep namespace', async () => {
+                await testTranspile(`
+                     namespace is.a.deep.namespace
+                        function valid(thing) as boolean
+                            return invalid <> thing
+                        end function
+
+                        function node(thing) as boolean
+                            return valid(thing) and valid(getInterface(thing, "ifSgNodeChildren"))
+                        end function
+                    end namespace`, `
+                    function is_a_deep_namespace_valid(thing) as boolean
+                        return invalid <> thing
+                    end function
+
+                    function is_a_deep_namespace_node(thing) as boolean
+                        return is_a_deep_namespace_valid(thing) and is_a_deep_namespace_valid(getInterface(thing, "ifSgNodeChildren"))
+                    end function`
+                );
             });
 
         });

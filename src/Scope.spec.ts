@@ -732,6 +732,16 @@ describe('Scope', () => {
                 expectZeroDiagnostics(program);
             });
 
+            it('recognizes roIntrinsicDouble', () => {
+                program.setFile(`source/file.brs`, `
+                    sub main()
+                        intrinsicDouble = CreateObject("roIntrinsicDouble")
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
             it('catches invalid BrightScript components', () => {
                 program.setFile(`source/file.brs`, `
                     sub main()
@@ -2809,6 +2819,27 @@ describe('Scope', () => {
                         function getPi() as float
                             return 3.14
                         end function
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('should allow access to underscored version of namespaced class constructor in different file', () => {
+                program.setFile('source/main.bs', `
+                    sub printPi()
+                        print alpha_util_SomeKlass().value
+                    end sub
+                `);
+                program.setFile('source/util.bs', `
+                    namespace alpha.util
+                       class SomeKlass
+                            value as float
+
+                            sub new()
+                                value = 3.14
+                            end sub
+                       end class
                     end namespace
                 `);
                 program.validate();

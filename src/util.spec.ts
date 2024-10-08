@@ -100,6 +100,26 @@ describe('util', () => {
             ]);
         });
 
+        it('resolves sourceRoot relative to the bsconfig file', () => {
+            fsExtra.outputJsonSync(s`${rootDir}/folder1/parent.json`, { sourceRoot: './alpha/beta', resolveSourceRoot: true });
+            fsExtra.outputJsonSync(s`${rootDir}/child.json`, { extends: 'folder1/parent.json' });
+            expect(
+                util.loadConfigFile(s`${rootDir}/child.json`).sourceRoot
+            ).to.eql(
+                s`${rootDir}/folder1/alpha/beta`
+            );
+        });
+
+        it('leaves sourceRoot relative when defaulted to', () => {
+            fsExtra.outputJsonSync(s`${rootDir}/folder1/parent.json`, { sourceRoot: './alpha/beta' });
+            fsExtra.outputJsonSync(s`${rootDir}/child.json`, { extends: 'folder1/parent.json' });
+            expect(
+                util.loadConfigFile(s`${rootDir}/child.json`).sourceRoot
+            ).to.eql(
+                `./alpha/beta`
+            );
+        });
+
         it('returns empty ancestors list for non-extends files', () => {
             fsExtra.outputFileSync(s`${rootDir}/child.json`, `{}`);
             let config = util.loadConfigFile(s`${rootDir}/child.json`);
@@ -1234,6 +1254,12 @@ describe('util', () => {
             ).to.eql(
                 'We have numbers: one, two, three, ...and 17 more!'
             );
+        });
+    });
+
+    describe('isClassUsedAsFunction', () => {
+        it('does not crash when class type has no name', () => {
+            util.isClassUsedAsFunction(new ClassType(undefined), undefined, { flags: SymbolTypeFlag.runtime });
         });
     });
 });
