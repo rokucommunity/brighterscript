@@ -1879,7 +1879,7 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         };
         this.nameExpression = options.nameExpression;
         this.body = options.body;
-        this.symbolTable = new SymbolTable(`NamespaceStatement: '${this.name}'`, () => this.parent?.getSymbolTable());
+        this.symbolTable = new SymbolTable(`NamespaceStatement: '${this.name}'`, () => this.getRoot()?.getSymbolTable());
     }
 
     public readonly tokens: {

@@ -1839,6 +1839,44 @@ describe('ScopeValidator', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        it('has error when referencing something in outer namespace directly', () => {
+            program.setFile('source/main.bs', `
+                namespace alpha
+                    sub foo()
+                    end sub
+
+                    namespace beta
+                        sub bar()
+                            foo()
+                        end sub
+                    end namespace
+                end namespace
+            `);
+
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindFunction('foo').message
+            ]);
+        });
+
+        it('allows referencing something in outer namespace with namespace in front', () => {
+            program.setFile('source/main.bs', `
+                namespace alpha
+                    sub foo()
+                    end sub
+
+                    namespace beta
+                        sub bar()
+                            alpha.foo()
+                        end sub
+                    end namespace
+                end namespace
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('itemCannotBeUsedAsVariable', () => {
