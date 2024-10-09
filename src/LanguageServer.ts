@@ -353,12 +353,17 @@ export class LanguageServer {
      */
     @AddStackToErrorMessage
     public async onDidChangeWatchedFiles(params: DidChangeWatchedFilesParams) {
-        const changes = params.changes.map(x => ({
-            srcPath: util.uriToPath(x.uri),
-            type: x.type,
-            //if this is an open document, allow this file to be loaded in a standalone project (if applicable)
-            allowStandaloneProject: this.documents.get(x.uri) !== undefined
-        }));
+        const workspacePaths = (await this.connection.workspace.getWorkspaceFolders()).map(x => util.uriToPath(x.uri));
+
+        let changes = params.changes
+            .map(x => ({
+                srcPath: util.uriToPath(x.uri),
+                type: x.type,
+                //if this is an open document, allow this file to be loaded in a standalone project (if applicable)
+                allowStandaloneProject: this.documents.get(x.uri) !== undefined
+            }))
+            //exclude all explicit top-level workspace folder paths (to fix a weird macos fs watcher bug that emits events for the workspace folder itself)
+            .filter(x => !workspacePaths.includes(x.srcPath));
 
         this.logger.debug('onDidChangeWatchedFiles', changes);
 

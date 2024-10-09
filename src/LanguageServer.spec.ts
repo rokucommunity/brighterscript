@@ -1,7 +1,7 @@
 import { expect } from './chai-config.spec';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { DidChangeWatchedFilesParams, Location, PublishDiagnosticsParams } from 'vscode-languageserver';
+import type { DidChangeWatchedFilesParams, Location, PublishDiagnosticsParams, WorkspaceFolder } from 'vscode-languageserver';
 import { FileChangeType } from 'vscode-languageserver';
 import { Deferred } from './deferred';
 import { CustomCommands, LanguageServer } from './LanguageServer';
@@ -524,6 +524,28 @@ describe('LanguageServer', () => {
             await test(s`${rootDir}/sub/dir/.two/.gitignore`);
 
             await test(s`${rootDir}/source/main.brs`, false);
+        });
+
+        it.only('excludes explicit workspaceFolder paths', async () => {
+            (server as any).connection = connection;
+            sinon.stub(server['connection'].workspace, 'getWorkspaceFolders').returns(Promise.resolve([{
+                name: 'workspace1',
+                uri: util.pathToUri(s`${tempDir}/project1`)
+            } as WorkspaceFolder]));
+
+            const stub = sinon.stub(server['projectManager'], 'handleFileChanges').callsFake(() => Promise.resolve());
+
+            await server['onDidChangeWatchedFiles']({
+                changes: [{
+                    type: FileChangeType.Created,
+                    uri: util.pathToUri(s`${tempDir}/project1`)
+                }]
+            } as DidChangeWatchedFilesParams);
+
+            //it did not send along the workspace folder itself
+            expect(
+                stub.getCalls()[0].args[0]
+            ).to.eql([]);
         });
     });
 

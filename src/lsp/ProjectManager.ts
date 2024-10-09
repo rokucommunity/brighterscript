@@ -312,11 +312,10 @@ export class ProjectManager {
     });
 
     public handleFileChanges(changes: FileChange[]) {
-        this.logger.log('handleFileChanges', changes.map(x => x.srcPath));
+        this.logger.debug('handleFileChanges', changes.map(x => `${FileChangeType[x.type]}: ${x.srcPath}`));
 
         //this function should NOT be marked as async, because typescript wraps the body in an async call sometimes. These need to be registered synchronously
         return this.fileChangesQueue.run(async (changes) => {
-            this.logger.log('handleFileChanges -> run', changes.map(x => x.srcPath));
             //wait for any pending syncs to finish
             await this.onInitialized();
 
@@ -331,6 +330,8 @@ export class ProjectManager {
     public async _handleFileChanges(changes: FileChange[]) {
         //filter any changes that are not allowed by the path filterer
         changes = this.pathFilterer.filter(changes, x => x.srcPath);
+
+        this.logger.debug('handleFileChanges -> filtered', changes.map(x => `${FileChangeType[x.type]}: ${x.srcPath}`));
 
         //process all file changes in parallel
         await Promise.all(changes.map(async (change) => {
