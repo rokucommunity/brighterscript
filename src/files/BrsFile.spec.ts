@@ -2344,6 +2344,47 @@ describe('BrsFile', () => {
                 );
             });
 
+            it('transpiles namespaced functions when used as variables', async () => {
+                await testTranspile(`
+                    namespace Vertibrates.Birds
+                        function GetAllBirds()
+                            return [
+                                GetDuck(),
+                                GetGoose()
+                            ]
+                        end function
+
+                        function GetDuck()
+                        end function
+
+                        function GetGoose()
+                        end function
+
+                        function Test()
+                            duckGetter = Vertibrates.Birds.GetDuck
+                            gooseGetter = GetGoose
+                        end function
+                    end namespace`, `
+                    function Vertibrates_Birds_GetAllBirds()
+                        return [
+                            Vertibrates_Birds_GetDuck()
+                            Vertibrates_Birds_GetGoose()
+                        ]
+                    end function
+
+                    function Vertibrates_Birds_GetDuck()
+                    end function
+
+                    function Vertibrates_Birds_GetGoose()
+                    end function
+
+                    function Vertibrates_Birds_Test()
+                        duckGetter = Vertibrates_Birds_GetDuck
+                        gooseGetter = Vertibrates_Birds_GetGoose
+                    end function
+               `);
+            });
+
         });
 
         describe('shadowing', () => {
