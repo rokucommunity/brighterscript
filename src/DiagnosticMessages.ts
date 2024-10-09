@@ -817,6 +817,11 @@ export let DiagnosticMessages = {
             name: name
         },
         severity: DiagnosticSeverity.Error
+    }),
+    expectedReturnStatement: () => ({
+        message: `Expected return statement in function`,
+        code: 1155,
+        severity: DiagnosticSeverity.Error
     })
 };
 export const defaultMaximumTruncationLength = 160;

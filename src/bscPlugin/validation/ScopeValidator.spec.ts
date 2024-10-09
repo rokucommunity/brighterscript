@@ -2348,6 +2348,162 @@ describe('ScopeValidator', () => {
                 }).message
             ]);
         });
+
+        it('allows function with no return types with void return value', () => {
+            program.setFile('source/util.bs', `
+                function doSomething()
+                    return
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows function with dynamic return types with void return value ', () => {
+            program.setFile('source/util.bs', `
+                function doSomething() as dynamic
+                    return
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+
+        it('validates for sub with return types with no return value', () => {
+            program.setFile('source/util.bs', `
+                sub doSomething() as integer
+                    return
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.returnTypeMismatch('void', 'integer').message
+            ]);
+        });
+
+        it('validates for function with void return types with non-void return value', () => {
+            program.setFile('source/util.bs', `
+                function doSomething() as void
+                    return 123
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.returnTypeMismatch('integer', 'void').message
+            ]);
+        });
+    });
+
+    describe('expectedReturnStatement', () => {
+        it('allows functions, subs, and "function as void/dynamic" to not have return statements', () => {
+            program.setFile('source/util.bs', `
+                function noTypeSpecified()
+                end function
+
+                function voidTypeSpecified() as void
+                end function
+
+                sub subVoidTypeSpecified()
+                end sub
+
+                function dynamicTypeSpecified() as dynamic
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+
+        it('detects when a function does not have a return statement', () => {
+            program.setFile('source/util.bs', `
+                function doSomething() as integer
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.expectedReturnStatement().message
+            ]);
+        });
+
+        it('detects when a namespaced function does not have a return statement', () => {
+            program.setFile('source/util.bs', `
+                namespace alpha
+                    function doSomething() as integer
+                    end function
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.expectedReturnStatement().message
+            ]);
+        });
+
+        it('detects when an inline function does not have a return statement', () => {
+            program.setFile('source/util.bs', `
+                function outer() as integer
+                    inner = function() as integer
+                        print "no return!"
+                    end function
+                    return inner()
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.expectedReturnStatement().message
+            ]);
+        });
+
+        it('detects when an outer function does not have a return statement', () => {
+            program.setFile('source/util.bs', `
+                function outer() as integer
+                    inner = function() as integer
+                        return 1
+                    end function
+                    print inner()
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.expectedReturnStatement().message
+            ]);
+        });
+
+        it('detects when a outer function has a return statement in a branch', () => {
+            program.setFile('source/util.bs', `
+                function hasBranch(x) as integer
+                    if x = 1
+                        return 1
+                    else
+                        return 2
+                    end if
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('works for sub with return types with missing return', () => {
+            program.setFile('source/util.bs', `
+                sub doSomething() as integer
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.expectedReturnStatement().message
+            ]);
+        });
+
+
+        it('works for sub with return types', () => {
+            program.setFile('source/util.bs', `
+                sub doSomething() as integer
+                    return 1
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('assignmentTypeMismatch', () => {
@@ -3353,6 +3509,7 @@ describe('ScopeValidator', () => {
                 import "playerInterfaces.bs"
                 function test1(media as MediaObject) as boolean
                     print media.missingBool2
+                    return true
                 end function
             `;
 
