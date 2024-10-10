@@ -526,7 +526,7 @@ describe('LanguageServer', () => {
             await test(s`${rootDir}/source/main.brs`, false);
         });
 
-        it.only('excludes explicit workspaceFolder paths', async () => {
+        it('excludes explicit workspaceFolder paths', async () => {
             (server as any).connection = connection;
             sinon.stub(server['connection'].workspace, 'getWorkspaceFolders').returns(Promise.resolve([{
                 name: 'workspace1',
