@@ -579,7 +579,7 @@ describe('LanguageServer', () => {
         });
     });
 
-    describe.only('rebuildPathFilterer', () => {
+    describe('rebuildPathFilterer', () => {
         let workspaceConfigs: WorkspaceConfigWithExtras[] = [];
         beforeEach(() => {
             workspaceConfigs = [

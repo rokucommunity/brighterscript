@@ -161,7 +161,7 @@ describe('PathFilterer', () => {
         ).to.eql([]);
     });
 
-    describe.only('registerExcludeMatcher', () => {
+    describe('registerExcludeMatcher', () => {
         it('calls the callback function on every path', () => {
             const spy = sinon.spy();
             filterer.registerExcludeMatcher(spy);
