@@ -2650,6 +2650,38 @@ describe('BrsFile', () => {
                 `);
             });
 
+            it('transpiles namespace calls from within an array', () => {
+                testTranspile(`
+                    namespace Vertibrates.Birds
+                        function GetAllBirds()
+                            return [
+                                GetDuck(),
+                                GetGoose()
+                            ]
+                        end function
+
+                        function GetDuck()
+                        end function
+
+                        function GetGoose()
+                        end function
+                    end namespace
+                    `, `
+                        function Vertibrates_Birds_GetAllBirds()
+                            return [
+                                Vertibrates_Birds_GetDuck()
+                                Vertibrates_Birds_GetGoose()
+                            ]
+                        end function
+
+                        function Vertibrates_Birds_GetDuck()
+                        end function
+
+                        function Vertibrates_Birds_GetGoose()
+                        end function
+                `, undefined, 'components/NobodyImportsMe.bs', false);
+            });
+
             it('properly transpiles inferred namespace function for assignment', () => {
                 testTranspile(`
                     namespace NameA.NameB

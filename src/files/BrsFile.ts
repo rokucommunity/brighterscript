@@ -5,7 +5,7 @@ import { CancellationTokenSource } from 'vscode-languageserver';
 import { CompletionItemKind, TextEdit } from 'vscode-languageserver';
 import chalk from 'chalk';
 import * as path from 'path';
-import type { Scope } from '../Scope';
+import { Scope } from '../Scope';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
 import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference, FileLink, BscFile } from '../interfaces';
@@ -1241,7 +1241,15 @@ export class BrsFile {
             let lowerCalleeName = callee?.name?.text?.toLowerCase();
             if (lowerCalleeName) {
                 let scope = this.program.getFirstScopeForFile(this);
-                let namespace = scope?.namespaceLookup.get(namespaceName.toLowerCase());
+
+                //if this file does not belong to any scopes, make a temporary one to answer the question
+                if (!scope) {
+                    scope = new Scope(`temporary-for-${this.pkgPath}`, this.program);
+                    scope.getAllFiles = () => [this];
+                    scope.getOwnFiles = scope.getAllFiles;
+                }
+
+                let namespace = scope.namespaceLookup.get(namespaceName.toLowerCase());
                 if (namespace?.functionStatements[lowerCalleeName]) {
                     return true;
                 }

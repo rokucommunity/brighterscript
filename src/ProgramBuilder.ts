@@ -107,7 +107,9 @@ export class ProgramBuilder {
     }
 
     public async run(options: BsConfig & { skipInitialValidation?: boolean }) {
-        this.logger.logLevel = options.logLevel;
+        if (options?.logLevel) {
+            this.logger.logLevel = options.logLevel;
+        }
 
         if (this.isRunning) {
             throw new Error('Server is already running');
@@ -154,12 +156,12 @@ export class ProgramBuilder {
         if (this.options.watch) {
             this.logger.log('Starting compilation in watch mode...');
             await this.runOnce({
-                skipValidation: options.skipInitialValidation
+                skipValidation: options?.skipInitialValidation
             });
             this.enableWatchMode();
         } else {
             await this.runOnce({
-                skipValidation: options.skipInitialValidation
+                skipValidation: options?.skipInitialValidation
             });
         }
     }
