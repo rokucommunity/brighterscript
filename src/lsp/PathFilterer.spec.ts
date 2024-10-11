@@ -2,12 +2,18 @@ import { PathCollection, PathFilterer } from './PathFilterer';
 import { cwd, rootDir } from '../testHelpers.spec';
 import { expect } from 'chai';
 import { standardizePath as s } from '../util';
+import { createSandbox } from 'sinon';
+const sinon = createSandbox();
 
 describe('PathFilterer', () => {
     let filterer: PathFilterer;
 
     beforeEach(() => {
         filterer = new PathFilterer();
+        sinon.restore();
+    });
+    afterEach(() => {
+        sinon.restore();
     });
 
     it('allows all files through when no filters exist', () => {
@@ -155,4 +161,20 @@ describe('PathFilterer', () => {
         ).to.eql([]);
     });
 
+    describe.only('registerExcludeMatcher', () => {
+        it('calls the callback function on every path', () => {
+            const spy = sinon.spy();
+            filterer.registerExcludeMatcher(spy);
+            filterer.filter([
+                s`${rootDir}/a.brs`,
+                s`${rootDir}/b.txt`,
+                s`${rootDir}/c.brs`
+            ]);
+            expect(spy.getCalls().map(x => s`${x.args[0]}`)).to.eql([
+                s`${rootDir}/a.brs`,
+                s`${rootDir}/b.txt`,
+                s`${rootDir}/c.brs`
+            ]);
+        });
+    });
 });

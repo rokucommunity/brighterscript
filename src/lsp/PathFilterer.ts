@@ -135,6 +135,7 @@ export class PathFilterer {
         const collection = new PathCollection({
             matcher: matcher
         });
+        this.excludeCollections.push(collection);
         return () => {
             this.removeCollection(collection);
         };
