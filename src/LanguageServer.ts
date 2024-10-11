@@ -594,9 +594,9 @@ export class LanguageServer {
      */
     private async rebuildPathFilterer() {
         this.pathFilterer.clear();
-        const workspaceFolders = await this.connection.workspace.getWorkspaceFolders();
-        await Promise.all(workspaceFolders.map(async (workspaceFolder) => {
-            const rootDir = util.uriToPath(workspaceFolder.uri);
+        const workspaceConfigs = await this.getWorkspaceConfigs();
+        await Promise.all(workspaceConfigs.map(async (workspaceConfig) => {
+            const rootDir = util.uriToPath(workspaceConfig.workspaceFolder);
 
             //always exclude everything from these common folders
             this.pathFilterer.registerExcludeList(rootDir, [
@@ -606,17 +606,22 @@ export class LanguageServer {
                 '**/.roku-deploy-staging/**/*'
             ]);
             //get any `files.exclude` patterns from the client from this workspace
-            const workspaceExcludeGlobs = await this.getWorkspaceExcludeGlobs(rootDir);
-            this.pathFilterer.registerExcludeList(rootDir, workspaceExcludeGlobs);
+            this.pathFilterer.registerExcludeList(rootDir, workspaceConfig.excludePatterns);
 
             //get any .gitignore patterns from the client from this workspace
             const gitignorePath = path.resolve(rootDir, '.gitignore');
             if (await fsExtra.pathExists(gitignorePath)) {
-                const matcher = ignore().add(
+                const matcher = ignore({ ignoreCase: true }).add(
                     fsExtra.readFileSync(gitignorePath).toString()
                 );
-                this.pathFilterer.registerExcludeMatcher((path: string) => {
-                    return matcher.test(path).ignored;
+                this.pathFilterer.registerExcludeMatcher((p: string) => {
+                    const relPath = path.relative(rootDir, p);
+                    if (ignore.isPathValid(relPath)) {
+                        return matcher.test(relPath).ignored;
+                    } else {
+                        //we do not have a valid relative path, so we cannot determine if it is ignored...thus it is NOT ignored
+                        return false;
+                    }
                 });
             }
         }));

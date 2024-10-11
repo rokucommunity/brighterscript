@@ -22,6 +22,7 @@ import type { Project } from './lsp/Project';
 import { LogLevel, Logger, createLogger } from './logging';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { standardizePath } from 'roku-deploy';
+import undent from 'undent';
 
 const sinon = createSandbox();
 
@@ -575,6 +576,133 @@ describe('LanguageServer', () => {
             await server['syncLogLevel']();
 
             expect(server.logger.logLevel).to.eql(LogLevel.info);
+        });
+    });
+
+    describe('rebuildPathFilterer', () => {
+        let workspaceConfigs: WorkspaceConfigWithExtras[] = [];
+        beforeEach(() => {
+            workspaceConfigs = [
+                {
+                    bsconfigPath: undefined,
+                    languageServer: {
+                        enableThreading: true,
+                        logLevel: 'info'
+                    },
+                    workspaceFolder: workspacePath,
+                    excludePatterns: []
+                } as WorkspaceConfigWithExtras
+            ];
+            server['connection'] = connection as any;
+            sinon.stub(server as any, 'getWorkspaceConfigs').callsFake(() => Promise.resolve(workspaceConfigs));
+        });
+
+        it('allows files from dist by default', async () => {
+            const filterer = await server['rebuildPathFilterer']();
+            //certain files are allowed through by default
+            expect(
+                filterer.filter([
+                    s`${rootDir}/manifest`,
+                    s`${rootDir}/dist/file.brs`,
+                    s`${rootDir}/source/file.brs`
+                ])
+            ).to.eql([
+                s`${rootDir}/manifest`,
+                s`${rootDir}/dist/file.brs`,
+                s`${rootDir}/source/file.brs`
+            ]);
+        });
+
+        it('filters out some standard locations by default', async () => {
+            const filterer = await server['rebuildPathFilterer']();
+
+            expect(
+                filterer.filter([
+                    s`${workspacePath}/node_modules/file.brs`,
+                    s`${workspacePath}/.git/file.brs`,
+                    s`${workspacePath}/out/file.brs`,
+                    s`${workspacePath}/.roku-deploy-staging/file.brs`
+                ])
+            ).to.eql([]);
+        });
+
+        it('properly handles a .gitignore list', async () => {
+            fsExtra.outputFileSync(s`${workspacePath}/.gitignore`, undent`
+                dist/
+            `);
+
+            const filterer = await server['rebuildPathFilterer']();
+
+            //filters files that appear in a .gitignore list
+            expect(
+                filterer.filter([
+                    s`${workspacePath}/src/source/file.brs`,
+                    s`${workspacePath}/dist/source/file.brs`
+                ])
+            ).to.eql([
+                s`${workspacePath}/src/source/file.brs`
+            ]);
+        });
+
+        it('does not crash for path outside of workspaceFolder', async () => {
+            fsExtra.outputFileSync(s`${workspacePath}/.gitignore`, undent`
+                dist/
+            `);
+
+            const filterer = await server['rebuildPathFilterer']();
+
+            //filters files that appear in a .gitignore list
+            expect(
+                filterer.filter([
+                    s`${workspacePath}/../flavor1/src/source/file.brs`
+                ])
+            ).to.eql([
+                //since the path is outside the workspace, it does not match the .gitignore patter, and thus is not excluded
+                s`${workspacePath}/../flavor1/src/source/file.brs`
+            ]);
+        });
+
+        it('a gitignore file from any workspace will apply to all workspaces', async () => {
+            workspaceConfigs = [{
+                bsconfigPath: undefined,
+                languageServer: {
+                    enableThreading: true,
+                    logLevel: 'info'
+                },
+                workspaceFolder: s`${tempDir}/flavor1`,
+                excludePatterns: []
+            }, {
+                bsconfigPath: undefined,
+                languageServer: {
+                    enableThreading: true,
+                    logLevel: 'info'
+                },
+                workspaceFolder: s`${tempDir}/flavor2`,
+                excludePatterns: []
+            }] as WorkspaceConfigWithExtras[];
+            fsExtra.outputFileSync(s`${workspaceConfigs[0].workspaceFolder}/.gitignore`, undent`
+                dist/
+            `);
+            fsExtra.outputFileSync(s`${workspaceConfigs[1].workspaceFolder}/.gitignore`, undent`
+                out/
+            `);
+
+            const filterer = await server['rebuildPathFilterer']();
+
+            //filters files that appear in a .gitignore list
+            expect(
+                filterer.filter([
+                    //included files
+                    s`${workspaceConfigs[0].workspaceFolder}/src/source/file.brs`,
+                    s`${workspaceConfigs[1].workspaceFolder}/src/source/file.brs`,
+                    //excluded files
+                    s`${workspaceConfigs[0].workspaceFolder}/dist/source/file.brs`,
+                    s`${workspaceConfigs[1].workspaceFolder}/out/source/file.brs`
+                ])
+            ).to.eql([
+                s`${workspaceConfigs[0].workspaceFolder}/src/source/file.brs`,
+                s`${workspaceConfigs[1].workspaceFolder}/src/source/file.brs`
+            ]);
         });
     });
 
