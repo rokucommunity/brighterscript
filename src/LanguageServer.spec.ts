@@ -17,7 +17,7 @@ import { createVisitor, WalkMode } from './astUtils/visitors';
 import { tempDir, rootDir } from './testHelpers.spec';
 import { URI } from 'vscode-uri';
 import { BusyStatusTracker } from './BusyStatusTracker';
-import type { BscFile } from '.';
+import type { BscFile, WorkspaceConfigWithExtras } from '.';
 import type { Project } from './lsp/Project';
 import { LogLevel, Logger, createLogger } from './logging';
 import { DiagnosticMessages } from './DiagnosticMessages';
@@ -121,6 +121,113 @@ describe('LanguageServer', () => {
             return document;
         }
     }
+
+    describe('onDidChangeConfiguration', () => {
+        async function doTest(startingConfigs: WorkspaceConfigWithExtras[], endingConfigs: WorkspaceConfigWithExtras[]) {
+            (server as any)['connection'] = connection;
+            server['workspaceConfigsCache'] = new Map(startingConfigs.map(x => [x.workspaceFolder, x]));
+
+            const stub = sinon.stub(server as any, 'getWorkspaceConfigs').returns(Promise.resolve(endingConfigs));
+
+            await server.onDidChangeConfiguration({ settings: {} });
+            stub.restore();
+        }
+
+        it('does not reload project when: no projects are present before and after', async () => {
+            const stub = sinon.stub(server as any, 'syncProjects').callsFake(() => Promise.resolve());
+            await doTest([], []);
+            expect(stub.called).to.be.false;
+        });
+
+        it('does not reload project when: 1 project is unchanged', async () => {
+            const stub = sinon.stub(server as any, 'syncProjects').callsFake(() => Promise.resolve());
+            await doTest([{
+                bsconfigPath: undefined,
+                languageServer: {
+                    enableThreading: true,
+                    logLevel: 'info'
+                },
+                workspaceFolder: workspacePath,
+                excludePatterns: []
+            }], [{
+                bsconfigPath: undefined,
+                languageServer: {
+                    enableThreading: true,
+                    logLevel: 'info'
+                },
+                workspaceFolder: workspacePath,
+                excludePatterns: []
+            }]);
+            expect(stub.called).to.be.false;
+        });
+
+        it('reloads project when adding new project', async () => {
+            const stub = sinon.stub(server as any, 'syncProjects').callsFake(() => Promise.resolve());
+            await doTest([], [{
+                bsconfigPath: undefined,
+                languageServer: {
+                    enableThreading: true,
+                    logLevel: 'info'
+                },
+                workspaceFolder: workspacePath,
+                excludePatterns: []
+            }]);
+            expect(stub.called).to.be.true;
+        });
+
+        it('reloads project when deleting a project', async () => {
+            const stub = sinon.stub(server as any, 'syncProjects').callsFake(() => Promise.resolve());
+            await doTest([{
+                bsconfigPath: undefined,
+                languageServer: {
+                    enableThreading: true,
+                    logLevel: 'info'
+                },
+                workspaceFolder: workspacePath,
+                excludePatterns: []
+            }, {
+                bsconfigPath: undefined,
+                languageServer: {
+                    enableThreading: true,
+                    logLevel: 'info'
+                },
+                workspaceFolder: s`${tempDir}/project2`,
+                excludePatterns: []
+            }], [{
+                bsconfigPath: undefined,
+                languageServer: {
+                    enableThreading: true,
+                    logLevel: 'info'
+                },
+                workspaceFolder: workspacePath,
+                excludePatterns: []
+            }]);
+            expect(stub.called).to.be.true;
+        });
+
+        it('reloads project when changing specific settings', async () => {
+            const stub = sinon.stub(server as any, 'syncProjects').callsFake(() => Promise.resolve());
+            await doTest([{
+                bsconfigPath: undefined,
+                languageServer: {
+                    enableThreading: true,
+                    logLevel: 'trace'
+                },
+                workspaceFolder: workspacePath,
+                excludePatterns: []
+            }], [{
+                bsconfigPath: undefined,
+                languageServer: {
+                    enableThreading: true,
+                    logLevel: 'info'
+                },
+                workspaceFolder: workspacePath,
+                excludePatterns: []
+            }]);
+            expect(stub.called).to.be.true;
+        });
+
+    });
 
     describe('sendDiagnostics', () => {
         it('dedupes diagnostics found at same location from multiple projects', async () => {
@@ -497,7 +604,7 @@ describe('LanguageServer', () => {
         it('rebuilds the path filterer when certain files are changed', async () => {
 
             sinon.stub(server['projectManager'], 'handleFileChanges').callsFake(() => Promise.resolve());
-
+            (server as any)['connection'] = connection;
             async function test(filePath: string, expected = true) {
                 const stub = sinon.stub(server as any, 'rebuildPathFilterer');
 

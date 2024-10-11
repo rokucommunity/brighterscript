@@ -53,6 +53,8 @@ import { ProjectManager } from './lsp/ProjectManager';
 import * as fsExtra from 'fs-extra';
 import type { MaybePromise } from './interfaces';
 import { workerPool } from './lsp/worker/WorkerThreadProject';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import isEqual = require('lodash.isequal');
 
 export class LanguageServer {
     /**
@@ -230,6 +232,11 @@ export class LanguageServer {
     public async onInitialized() {
         this.logger.log('onInitialized');
 
+        //cache a copy of all workspace configurations to use for comparison later
+        this.workspaceConfigsCache = new Map(
+            (await this.getWorkspaceConfigs()).map(x => [x.workspaceFolder, x])
+        );
+
         //set our logger to the most verbose logLevel found across any project
         await this.syncLogLevel();
 
@@ -309,15 +316,12 @@ export class LanguageServer {
             }
         };
 
-        let workspaceResult = await getLogLevel(
-            await this.connection.workspace.getWorkspaceFolders(),
-            async (workspace) => {
-                const config = (await this.getClientConfiguration<BrightScriptClientConfiguration>(workspace.uri, 'brightscript'));
-                return config?.languageServer?.logLevel;
-            }
-        );
+        const workspaces = await this.getWorkspaceConfigs();
+
+        let workspaceResult = await getLogLevel(workspaces, workspace => workspace?.languageServer?.logLevel);
+
         if (workspaceResult) {
-            this.logger.info(`Setting global logLevel to '${workspaceResult.logLevelText}' based on configuration from workspace '${workspaceResult?.item?.uri}'`);
+            this.logger.info(`Setting global logLevel to '${workspaceResult.logLevelText}' based on configuration from workspace '${workspaceResult?.item?.workspaceFolder}'`);
             this.logger.logLevel = workspaceResult.logLevel;
             return;
         }
@@ -409,16 +413,54 @@ export class LanguageServer {
         return completions;
     }
 
+    /**
+     * Get a list of workspaces, and their configurations.
+     * Get only the settings for the workspace that are relevant to the language server. We do this so we can cache this object for use in change detection in the future.
+     */
+    private async getWorkspaceConfigs(): Promise<WorkspaceConfigWithExtras[]> {
+        //get all workspace folders (we'll use these to get settings)
+        let workspaces = await Promise.all(
+            (await this.connection.workspace.getWorkspaceFolders() ?? []).map(async (x) => {
+                const workspaceFolder = util.uriToPath(x.uri);
+                const brightscriptConfig = await this.getClientConfiguration<BrightScriptClientConfiguration>(x.uri, 'brightscript');
+                return {
+                    workspaceFolder: workspaceFolder,
+                    excludePatterns: await this.getWorkspaceExcludeGlobs(workspaceFolder),
+                    bsconfigPath: brightscriptConfig.configFile,
+                    languageServer: {
+                        enableThreading: brightscriptConfig.languageServer?.enableThreading ?? LanguageServer.enableThreadingDefault,
+                        logLevel: brightscriptConfig?.languageServer?.logLevel
+                    }
+
+                } as WorkspaceConfigWithExtras;
+            })
+        );
+        return workspaces;
+    }
+
+    private workspaceConfigsCache = new Map<string, WorkspaceConfigWithExtras>();
+
     @AddStackToErrorMessage
     public async onDidChangeConfiguration(args: DidChangeConfigurationParams) {
         this.logger.log('onDidChangeConfiguration', 'Reloading all projects');
 
-        //if configuration changed, rebuild the path filterer
-        await this.rebuildPathFilterer();
+        const configs = new Map(
+            (await this.getWorkspaceConfigs()).map(x => [x.workspaceFolder, x])
+        );
+        //find any changed configs. This includes newly created workspaces, deleted workspaces, etc.
+        //TODO: enhance this to only reload specific projects, depending on the change
+        if (!isEqual(configs, this.workspaceConfigsCache)) {
+            //now that we've processed any config diffs, update the cached copy of them
+            this.workspaceConfigsCache = configs;
 
-        //if the user changes any user/workspace config settings, just mass-reload all projects
-        await this.syncProjects(true);
+            //if configuration changed, rebuild the path filterer
+            await this.rebuildPathFilterer();
+
+            //if the user changes any user/workspace config settings, just mass-reload all projects
+            await this.syncProjects(true);
+        }
     }
+
 
     @AddStackToErrorMessage
     public async onHover(params: TextDocumentPositionParams) {
@@ -608,20 +650,7 @@ export class LanguageServer {
      * @param forceReload if true, all projects are discarded and recreated from scratch
      */
     private async syncProjects(forceReload = false) {
-        // get all workspace paths from the client
-        let workspaces = await Promise.all(
-            (await this.connection.workspace.getWorkspaceFolders() ?? []).map(async (x) => {
-                const workspaceFolder = util.uriToPath(x.uri);
-                const config = await this.getClientConfiguration<BrightScriptClientConfiguration>(x.uri, 'brightscript');
-                return {
-                    workspaceFolder: workspaceFolder,
-                    excludePatterns: await this.getWorkspaceExcludeGlobs(workspaceFolder),
-                    bsconfigPath: config.configFile,
-                    enableThreading: config.languageServer?.enableThreading ?? LanguageServer.enableThreadingDefault
-
-                } as WorkspaceConfig;
-            })
-        );
+        const workspaces = await this.getWorkspaceConfigs();
 
         await this.projectManager.syncProjects(workspaces, forceReload);
 
@@ -635,12 +664,7 @@ export class LanguageServer {
      * @param workspaceFolder the folder for the workspace in the client
      */
     private async getClientConfiguration<T extends Record<string, any>>(workspaceFolder: string, section: string): Promise<T> {
-        let scopeUri: string;
-        if (workspaceFolder.startsWith('file:')) {
-            scopeUri = URI.parse(workspaceFolder).toString();
-        } else {
-            scopeUri = URI.file(workspaceFolder).toString();
-        }
+        const scopeUri = util.pathToUri(workspaceFolder);
         let config = {};
 
         //if the client supports configuration, look for config group called "brightscript"
@@ -746,3 +770,11 @@ function logAndIgnoreError(error: Error) {
     }
     console.error(error);
 }
+
+export type WorkspaceConfigWithExtras = WorkspaceConfig & {
+    bsconfigPath: string;
+    languageServer: {
+        enableThreading: boolean;
+        logLevel: LogLevel | string | undefined;
+    };
+};
