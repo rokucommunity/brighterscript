@@ -973,6 +973,10 @@ export interface ExtraSymbolData {
      * so check for `=== true` or `!== true`
      */
     isInstance?: boolean;
+    /**
+     * Is this type as defined in a doc comment?
+     */
+    isFromDocComment?: boolean;
 }
 
 export interface GetTypeOptions {
@@ -983,6 +987,7 @@ export interface GetTypeOptions {
     onlyCacheResolvedTypes?: boolean;
     ignoreCacheForRetrieval?: boolean;
     isExistenceTest?: boolean;
+    preferDocType?: boolean;
 }
 
 export class TypeChainEntry {

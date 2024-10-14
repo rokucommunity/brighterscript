@@ -2099,27 +2099,30 @@ describe('BrsFile', () => {
         });
 
         it('retains casing of return types', async () => {
-            async function test(type: string) {
+            async function test(type: string, result: string) {
                 await testTranspile(`
                     sub one() as ${type}
+                        return ${result}
                     end sub
 
                     sub two() as ${type.toLowerCase()}
+                        return ${result}
                     end sub
 
                     sub three() as ${type.toUpperCase()}
+                        return ${result}
                     end sub
                 `);
             }
-            await test('Boolean');
-            await test('Double');
-            await test('Dynamic');
-            await test('Float');
-            await test('Integer');
-            await test('LongInteger');
-            await test('Object');
-            await test('String');
-            await test('Void');
+            await test('Boolean', 'true');
+            await test('Double', '1.23');
+            await test('Dynamic', 'invalid');
+            await test('Float', '1.23');
+            await test('Integer', '123');
+            await test('LongInteger', '123');
+            await test('Object', '{}');
+            await test('String', '"test"');
+            await test('Void', '');
         });
 
         it('retains casing of literal types', async () => {
@@ -2175,10 +2178,65 @@ describe('BrsFile', () => {
                         try
                             print m.b.c
                         catch e
-                            print e
+                            print "crash"
                         end try
                     end sub
                 `);
+            });
+
+            it('recognizes the exception variable', async () => {
+                await testTranspile(`
+                    sub main()
+                        try
+                            print m.b.c
+                        catch e
+                            message = e.message
+                            print message
+                        end try
+                    end sub
+                `);
+            });
+
+            it('supports omitting the exception variable in brighterscript mode (we auto-add it at transpile time)', async () => {
+                await testTranspile(`
+                    sub new()
+                        try
+                            print "hello"
+                        catch
+                            print "error"
+                        end try
+                    end sub
+                `, `
+                    sub new()
+                        try
+                            print "hello"
+                        catch e
+                            print "error"
+                        end try
+                    end sub
+                `, undefined, 'source/main.bs');
+            });
+
+            it('uses alternate name when `e` is already a local var', async () => {
+                await testTranspile(`
+                    sub new()
+                        e = "ello love"
+                        try
+                            print "hello"
+                        catch
+                            print "error"
+                        end try
+                    end sub
+                `, `
+                    sub new()
+                        e = "ello love"
+                        try
+                            print "hello"
+                        catch __bsc_error
+                            print "error"
+                        end try
+                    end sub
+                `, undefined, 'source/main.bs');
             });
         });
 
@@ -2225,6 +2283,109 @@ describe('BrsFile', () => {
                         sayHello()
                     end sub
                 `);
+            });
+
+            it('does not prefix global function names', async () => {
+                await testTranspile(`
+                    namespace is
+                        function valid(thing) as boolean
+                            return invalid <> thing
+                        end function
+
+                        function node(thing) as boolean
+                            return valid(thing) and valid(getInterface(thing, "ifSgNodeChildren"))
+                        end function
+                    end namespace`, `
+                    function is_valid(thing) as boolean
+                        return invalid <> thing
+                    end function
+
+                    function is_node(thing) as boolean
+                        return is_valid(thing) and is_valid(getInterface(thing, "ifSgNodeChildren"))
+                    end function`
+                );
+            });
+
+            it('does not prefix unnamespaced function names', async () => {
+                await testTranspile(`
+                    function valid(thing) as boolean
+                        return invalid <> thing
+                    end function
+
+                    namespace is
+                          function node(thing) as boolean
+                            return valid(thing) and valid(getInterface(thing, "ifSgNodeChildren"))
+                        end function
+                    end namespace`, `
+                    function valid(thing) as boolean
+                        return invalid <> thing
+                    end function
+                    function is_node(thing) as boolean
+                        return valid(thing) and valid(getInterface(thing, "ifSgNodeChildren"))
+                    end function`
+                );
+            });
+
+            it('does not prefix unnamespaced function names in deep namespace', async () => {
+                await testTranspile(`
+                     namespace is.a.deep.namespace
+                        function valid(thing) as boolean
+                            return invalid <> thing
+                        end function
+
+                        function node(thing) as boolean
+                            return valid(thing) and valid(getInterface(thing, "ifSgNodeChildren"))
+                        end function
+                    end namespace`, `
+                    function is_a_deep_namespace_valid(thing) as boolean
+                        return invalid <> thing
+                    end function
+
+                    function is_a_deep_namespace_node(thing) as boolean
+                        return is_a_deep_namespace_valid(thing) and is_a_deep_namespace_valid(getInterface(thing, "ifSgNodeChildren"))
+                    end function`
+                );
+            });
+
+            it('transpiles namespaced functions when used as variables', async () => {
+                await testTranspile(`
+                    namespace Vertibrates.Birds
+                        function GetAllBirds()
+                            return [
+                                GetDuck(),
+                                GetGoose()
+                            ]
+                        end function
+
+                        function GetDuck()
+                        end function
+
+                        function GetGoose()
+                        end function
+
+                        function Test()
+                            duckGetter = Vertibrates.Birds.GetDuck
+                            gooseGetter = GetGoose
+                        end function
+                    end namespace`, `
+                    function Vertibrates_Birds_GetAllBirds()
+                        return [
+                            Vertibrates_Birds_GetDuck()
+                            Vertibrates_Birds_GetGoose()
+                        ]
+                    end function
+
+                    function Vertibrates_Birds_GetDuck()
+                    end function
+
+                    function Vertibrates_Birds_GetGoose()
+                    end function
+
+                    function Vertibrates_Birds_Test()
+                        duckGetter = Vertibrates_Birds_GetDuck
+                        gooseGetter = Vertibrates_Birds_GetGoose
+                    end function
+               `);
             });
 
         });
@@ -2508,6 +2669,7 @@ describe('BrsFile', () => {
         it('keeps function parameter types in proper order', async () => {
             await testTranspile(`
                 function CreateTestStatistic(name as string, result = "Success" as string, time = 0 as integer, errorCode = 0 as integer, errorMessage = "" as string) as object
+                    return {}
                 end function
             `);
         });

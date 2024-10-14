@@ -92,7 +92,7 @@ export abstract class AstNode {
      * Find the first child where the matcher evaluates to true.
      * @param matcher a function called for each node. If you return true, this function returns the specified node. If you return a node, that node is returned. all other return values continue the loop
      */
-    public findChild<TNode extends AstNode = AstNode>(matcher: (node: AstNode, cancellationSource) => boolean | AstNode | undefined | void, options?: WalkOptions): TNode | undefined {
+    public findChild<TNode = AstNode>(matcher: (node: AstNode, cancellationSource) => boolean | AstNode | undefined | void, options?: WalkOptions): TNode | undefined {
         const cancel = new CancellationTokenSource();
         let result: AstNode | undefined;
         this.walk((node) => {
@@ -106,7 +106,7 @@ export abstract class AstNode {
             ...options ?? {},
             cancel: cancel.token
         });
-        return result as TNode;
+        return result as unknown as TNode;
     }
 
     /**
@@ -193,6 +193,40 @@ export abstract class AstNode {
 
     public getBsConsts() {
         return this.bsConsts ?? this.parent?.getBsConsts();
+    }
+
+    /**
+     * Clone this node and all of its children. This creates a completely detached and identical copy of the AST.
+     * All tokens, statements, expressions, range, and location are cloned.
+     */
+    public abstract clone();
+
+    /**
+     * Helper function for creating a clone. This will clone any attached annotations, as well as reparent the cloned node's children to the clone
+     */
+    protected finalizeClone<T extends AstNode>(
+        clone: T,
+        propsToReparent?: Array<{ [K in keyof T]: T[K] extends AstNode | AstNode[] ? K : never }[keyof T]>
+    ) {
+        //clone the annotations if they exist
+        if (Array.isArray((this as unknown as Statement).annotations)) {
+            (clone as unknown as Statement).annotations = (this as unknown as Statement).annotations?.map(x => x.clone());
+        }
+        //reparent all of the supplied props
+        for (let key of propsToReparent ?? []) {
+            const children = (Array.isArray(clone?.[key]) ? clone[key] : [clone?.[key]]) as any[];
+            for (let child of children ?? []) {
+                if (child) {
+                    (clone[key as any] as AstNode).parent = clone;
+                }
+            }
+        }
+
+        //reapply the location if we have one but the clone doesn't
+        if (!clone.location && this.location) {
+            clone.location = util.cloneLocation(this.location);
+        }
+        return clone;
     }
 }
 

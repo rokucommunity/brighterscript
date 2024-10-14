@@ -710,9 +710,33 @@ export const PrintSeparatorTokens: ReadonlyArray<TokenKind> = [
     TokenKind.Comma,
     TokenKind.Semicolon
 ];
+
 /**
  * Tokens that can be used between expressions in a print statement
  */
 export type PrintSeparatorToken = Token & {
     kind: TokenKind.Comma | TokenKind.Semicolon;
 };
+
+/**
+ * The tokens that may be in a binary expression
+ */
+export const BinaryExpressionOperatorTokens: ReadonlyArray<TokenKind> = [
+    TokenKind.Equal,
+    TokenKind.LessGreater,
+    TokenKind.Greater,
+    TokenKind.GreaterEqual,
+    TokenKind.Less,
+    TokenKind.LessEqual,
+    TokenKind.And,
+    TokenKind.Or,
+    TokenKind.Plus,
+    TokenKind.Minus,
+    TokenKind.Star,
+    TokenKind.RightShift,
+    TokenKind.LeftShift,
+    TokenKind.Forwardslash,
+    TokenKind.Mod,
+    TokenKind.Backslash,
+    TokenKind.Caret
+];

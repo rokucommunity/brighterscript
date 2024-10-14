@@ -48,6 +48,7 @@ import { ComponentType } from './types/ComponentType';
 import { FunctionType } from './types/FunctionType';
 import type { AssignmentStatement, NamespaceStatement } from './parser/Statement';
 import type { BscFile } from './files/BscFile';
+import type { NamespaceType } from './types/NamespaceType';
 
 export class Util {
     public clearConsole() {
@@ -247,6 +248,9 @@ export class Util {
             if (result.stagingDir) {
                 result.stagingDir = path.resolve(projectFileCwd, result.stagingDir);
             }
+            if (result.sourceRoot && result.resolveSourceRoot) {
+                result.sourceRoot = path.resolve(projectFileCwd, result.sourceRoot);
+            }
             return result;
         }
     }
@@ -376,6 +380,7 @@ export class Util {
             autoImportComponentScript: config.autoImportComponentScript === true ? true : false,
             showDiagnosticsInConsole: config.showDiagnosticsInConsole === false ? false : true,
             sourceRoot: config.sourceRoot ? standardizePath(config.sourceRoot) : undefined,
+            resolveSourceRoot: config.resolveSourceRoot === true ? true : false,
             allowBrighterScriptInBrightScript: config.allowBrighterScriptInBrightScript === true ? true : false,
             emitDefinitions: config.emitDefinitions === true ? true : false,
             removeParameterTypes: config.removeParameterTypes === true ? true : false,
@@ -644,11 +649,17 @@ export class Util {
 
     /**
      * Combine all the documentation for a node - uses the AstNode's leadingTrivia property
+     * @param node the node to get the documentation for
+     * @param options extra options
+     * @param options.prettyPrint if true, will format the comment text for markdown
+     * @param options.commentTokens out Array of tokens that match the comment lines
      */
-    public getNodeDocumentation(node: AstNode) {
+    public getNodeDocumentation(node: AstNode, options: { prettyPrint?: boolean; commentTokens?: Token[] } = { prettyPrint: true }) {
         if (!node) {
             return '';
         }
+        options = options ?? { prettyPrint: true };
+        options.commentTokens = options.commentTokens ?? [];
         const nodeTrivia = node.leadingTrivia ?? [];
         const leadingTrivia = isStatement(node)
             ? [...(node.annotations?.map(anno => anno.leadingTrivia ?? []).flat() ?? []), ...nodeTrivia]
@@ -678,36 +689,39 @@ export class Util {
         }
         const jsDocCommentBlockLine = /(\/\*{2,}|\*{1,}\/)/i;
         let usesjsDocCommentBlock = false;
-        if (comments.length > 0) {
-            return comments.reverse()
-                .map(x => x.text.replace(/^('|rem)/i, '').trim())
-                .filter(line => {
-                    if (jsDocCommentBlockLine.exec(line)) {
-                        usesjsDocCommentBlock = true;
-                        return false;
-                    }
-                    return true;
-                }).map(line => {
-                    if (usesjsDocCommentBlock) {
-                        if (line.startsWith('*')) {
-                            //remove jsDoc leading '*'
-                            line = line.slice(1).trim();
-                        }
-                    }
-                    if (line.startsWith('@')) {
-                        // Handle jsdoc/brightscriptdoc tags specially
-                        // make sure they are on their own markdown line, and add italics
-                        const firstSpaceIndex = line.indexOf(' ');
-                        if (firstSpaceIndex === -1) {
-                            return `\n_${line}_`;
-                        }
-                        const firstWord = line.substring(0, firstSpaceIndex);
-                        return `\n_${firstWord}_ ${line.substring(firstSpaceIndex + 1)}`;
-                    }
-                    return line;
-                }).join('\n');
+        if (comments.length === 0) {
+            return '';
         }
-        return '';
+        return comments.reverse()
+            .map(x => ({ line: x.text.replace(/^('|rem)/i, '').trim(), token: x }))
+            .filter(({ line }) => {
+                if (jsDocCommentBlockLine.exec(line)) {
+                    usesjsDocCommentBlock = true;
+                    return false;
+                }
+                return true;
+            }).map(({ line, token }) => {
+                if (usesjsDocCommentBlock) {
+                    if (line.startsWith('*')) {
+                        //remove jsDoc leading '*'
+                        line = line.slice(1).trim();
+                    }
+                }
+                if (options.prettyPrint && line.startsWith('@')) {
+                    // Handle jsdoc/brightscriptdoc tags specially
+                    // make sure they are on their own markdown line, and add italics
+                    const firstSpaceIndex = line.indexOf(' ');
+                    if (firstSpaceIndex === -1) {
+                        return `\n_${line}_`;
+                    }
+                    const firstWord = line.substring(0, firstSpaceIndex);
+                    return `\n_${firstWord}_ ${line.substring(firstSpaceIndex + 1)}`;
+                }
+                if (options.commentTokens) {
+                    options.commentTokens.push(token);
+                }
+                return line;
+            }).join('\n');
     }
 
     /**
@@ -1150,6 +1164,52 @@ export class Util {
             return undefined;
         }
         return this.createRange(startPosition.line, startPosition.character, endPosition.line, endPosition.character);
+    }
+
+    /**
+     * Clone a range
+     */
+    public cloneLocation(location: Location) {
+        if (location) {
+            return {
+                uri: location.uri,
+                range: {
+                    start: {
+                        line: location.range.start.line,
+                        character: location.range.start.character
+                    },
+                    end: {
+                        line: location.range.end.line,
+                        character: location.range.end.character
+                    }
+                }
+            };
+        } else {
+            return location;
+        }
+    }
+
+    /**
+     * Clone every token
+     */
+    public cloneToken<T extends Token>(token: T): T {
+        if (token) {
+            const result = {
+                kind: token.kind,
+                location: this.cloneLocation(token.location),
+                text: token.text,
+                isReserved: token.isReserved,
+                leadingWhitespace: token.leadingWhitespace,
+                leadingTrivia: token.leadingTrivia.map(x => this.cloneToken(x))
+            } as Token;
+            //handle those tokens that have charCode
+            if ('charCode' in token) {
+                (result as any).charCode = (token as any).charCode;
+            }
+            return result as T;
+        } else {
+            return token;
+        }
     }
 
     /**
@@ -2319,8 +2379,8 @@ export class Util {
         if ((options?.flags ?? 0) & SymbolTypeFlag.runtime &&
             isClassType(potentialClassType) &&
             !options.isExistenceTest &&
-            potentialClassType.name.toLowerCase() === this.getAllDottedGetPartsAsString(expression).toLowerCase() &&
-            !expression.findAncestor(isNewExpression)) {
+            potentialClassType.name?.toLowerCase() === this.getAllDottedGetPartsAsString(expression)?.toLowerCase() &&
+            !expression?.findAncestor(isNewExpression)) {
             return true;
         }
         return false;
@@ -2349,9 +2409,8 @@ export class Util {
 
     public symbolComesFromSameNode(symbolName: string, definingNode: AstNode, symbolTable: SymbolTable) {
         let nsData: ExtraSymbolData = {};
-        symbolTable.getSymbolType(symbolName, { flags: SymbolTypeFlag.runtime, data: nsData });
-
-        if (definingNode === nsData?.definingNode) {
+        let foundType = symbolTable?.getSymbolType(symbolName, { flags: SymbolTypeFlag.runtime, data: nsData });
+        if (foundType && definingNode === nsData?.definingNode) {
             return true;
         }
         return false;
@@ -2376,9 +2435,22 @@ export class Util {
         if (!isNamespaceStatement(namespace)) {
             return false;
         }
+        const namespaceParts = namespace.getNameParts();
+        let namespaceType: NamespaceType;
+        let symbolTable: SymbolTable = namespace.getSymbolTable();
+        for (const part of namespaceParts) {
+            namespaceType = symbolTable.getSymbolType(part.text, { flags: SymbolTypeFlag.runtime }) as NamespaceType;
+            if (namespaceType) {
+                symbolTable = namespaceType.getMemberTable();
+            } else {
+                return false;
+            }
+        }
+
         let varData: ExtraSymbolData = {};
         nodeWhereUsed.getType({ flags: SymbolTypeFlag.runtime, data: varData });
-        return this.symbolComesFromSameNode(symbolName, varData?.definingNode, namespace.getSymbolTable());
+        const isFromSameNodeInMemberTable = this.symbolComesFromSameNode(symbolName, varData?.definingNode, namespaceType?.getMemberTable());
+        return isFromSameNodeInMemberTable;
     }
 
     public isVariableShadowingSomething(symbolName: string, nodeWhereUsed: AstNode) {
@@ -2403,6 +2475,25 @@ export class Util {
         }
 
         return false;
+    }
+
+    public chooseTypeFromCodeOrDocComment(codeType: BscType, docType: BscType, options: GetTypeOptions) {
+        let returnType: BscType;
+        if (options.preferDocType && docType) {
+            returnType = docType;
+            if (options.data) {
+                options.data.isFromDocComment = true;
+            }
+        } else {
+            returnType = codeType;
+            if (!returnType && docType) {
+                returnType = docType;
+                if (options.data) {
+                    options.data.isFromDocComment = true;
+                }
+            }
+        }
+        return returnType;
     }
 }
 

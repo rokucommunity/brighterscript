@@ -97,4 +97,3 @@ export class ArrayType extends BscType {
         this.hasAddedBuiltInInterfaces = true;
     }
 }
-

@@ -612,8 +612,8 @@ export let DiagnosticMessages = {
         code: 1116,
         severity: DiagnosticSeverity.Error
     }),
-    missingExceptionVarToFollowCatch: () => ({
-        message: `Missing exception variable after 'catch' keyword`,
+    expectedExceptionVarToFollowCatch: () => ({
+        message: `Expected exception variable after 'catch' keyword`,
         code: 1117,
         severity: DiagnosticSeverity.Error
     }),
@@ -808,6 +808,19 @@ export let DiagnosticMessages = {
     unsafeUnmatchedTerminatorInConditionalCompileBlock: (terminator: string) => ({
         message: `Unsafe unmatched terminator '${terminator}' in conditional compilation block`,
         code: 1153,
+        severity: DiagnosticSeverity.Error
+    }),
+    cannotFindTypeInCommentDoc: (name: string) => ({
+        message: `Cannot find type '${name}' in doc comment`,
+        code: 1154,
+        data: {
+            name: name
+        },
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedReturnStatement: () => ({
+        message: `Expected return statement in function`,
+        code: 1155,
         severity: DiagnosticSeverity.Error
     })
 };

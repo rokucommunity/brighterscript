@@ -15,6 +15,7 @@ export * from './parser/Parser';
 export * from './parser/AstNode';
 export * from './parser/Expression';
 export * from './parser/Statement';
+export * from './parser/BrightScriptDocParser';
 export * from './BsConfig';
 export * from './deferred';
 // convenience re-export from vscode

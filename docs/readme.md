@@ -50,6 +50,15 @@ enum RemoteButton
 end enum
 ```
 
+## [Exceptions](exceptions.md)
+```brighterscript
+try
+    somethingDangerous()
+catch 'look, no exception variable!
+    print "Living on the edge!"
+end try
+```
+
 ## [Namespaces](namespaces.md)
 ```brighterscript
 namespace util

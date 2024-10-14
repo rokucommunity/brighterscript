@@ -1,5 +1,5 @@
 import { DiagnosticTag, type Range } from 'vscode-languageserver';
-import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isComponentType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isStringType, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
+import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isComponentType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringType, isTypedFunctionType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -13,9 +13,9 @@ import type { Token } from '../../lexer/Token';
 import { AstNodeKind } from '../../parser/AstNode';
 import type { AstNode } from '../../parser/AstNode';
 import type { Expression } from '../../parser/AstNode';
-import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression, LiteralExpression } from '../../parser/Expression';
+import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression, LiteralExpression, FunctionExpression } from '../../parser/Expression';
 import { CallExpression } from '../../parser/Expression';
-import { createVisitor } from '../../astUtils/visitors';
+import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BscType } from '../../types/BscType';
 import type { BscFile } from '../../files/BscFile';
 import { InsideSegmentWalkMode } from '../../AstValidationSegmenter';
@@ -26,8 +26,11 @@ import { globalCallableMap } from '../../globalCallables';
 import type { XmlScope } from '../../XmlScope';
 import type { XmlFile } from '../../files/XmlFile';
 import { SGFieldTypes } from '../../parser/SGTypes';
-import { DynamicType } from '../../types';
+import { DynamicType } from '../../types/DynamicType';
+import { VoidType } from '../../types/VoidType';
 import { BscTypeKind } from '../../types/BscTypeKind';
+import type { BrsDocWithType } from '../../parser/BrightScriptDocParser';
+import brsDocParser from '../../parser/BrightScriptDocParser';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -179,6 +182,16 @@ export class ScopeValidator {
                             type: this.getNodeTypeWrapper(file, funcParam, { flags: SymbolTypeFlag.runtime }),
                             nameRange: funcParam.tokens.name.location?.range
                         });
+                    },
+                    FunctionExpression: (func) => {
+                        this.validateFunctionExpressionForReturn(func);
+                    },
+                    AstNode: (node) => {
+                        //check for doc comments
+                        if (!node.leadingTrivia || node.leadingTrivia.filter(triviaToken => triviaToken.kind === TokenKind.Comment).length === 0) {
+                            return;
+                        }
+                        this.validateDocComments(node);
                     }
                 });
                 // validate only what's needed in the file
@@ -404,18 +417,20 @@ export class ScopeValidator {
      * Detect return statements with incompatible types vs. declared return type
      */
     private validateReturnStatement(file: BrsFile, returnStmt: ReturnStatement) {
-        const getTypeOptions = { flags: SymbolTypeFlag.runtime };
-        let funcType = returnStmt.findAncestor(isFunctionExpression).getType({ flags: SymbolTypeFlag.typetime });
+        const data: ExtraSymbolData = {};
+        const getTypeOptions = { flags: SymbolTypeFlag.runtime, data: data };
+        let funcType = returnStmt.findAncestor(isFunctionExpression)?.getType({ flags: SymbolTypeFlag.typetime });
         if (isTypedFunctionType(funcType)) {
-            const actualReturnType = this.getNodeTypeWrapper(file, returnStmt?.value, getTypeOptions);
+            const actualReturnType = returnStmt?.value
+                ? this.getNodeTypeWrapper(file, returnStmt?.value, getTypeOptions)
+                : VoidType.instance;
             const compatibilityData: TypeCompatibilityData = {};
 
-            if (actualReturnType && !funcType.returnType.isTypeCompatible(actualReturnType, compatibilityData)) {
+            if (funcType.returnType.isResolvable() && actualReturnType && !funcType.returnType.isTypeCompatible(actualReturnType, compatibilityData)) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.returnTypeMismatch(actualReturnType.toString(), funcType.returnType.toString(), compatibilityData),
-                    location: returnStmt.value.location
+                    location: returnStmt.value?.location ?? returnStmt.location
                 });
-
             }
         }
     }
@@ -695,7 +710,8 @@ export class ScopeValidator {
                     }
                 }
 
-            } else {
+            } else if (!typeData?.isFromDocComment) {
+                // only show "cannot find... " errors if the type is not defined from a doc comment
                 const typeChainScan = util.processTypeChain(typeChain);
                 if (isCallExpression(typeChainScan.astNode.parent) && typeChainScan.astNode.parent.callee === expression) {
                     this.addMultiScopeDiagnostic({
@@ -870,6 +886,21 @@ export class ScopeValidator {
                 location: newExpression.className.location
             });
 
+        }
+    }
+
+    private validateFunctionExpressionForReturn(func: FunctionExpression) {
+        const returnType = func?.returnTypeExpression?.getType({ flags: SymbolTypeFlag.typetime });
+
+        if (!returnType || !returnType.isResolvable() || isVoidType(returnType) || isDynamicType(returnType)) {
+            return;
+        }
+        const returns = func.body?.findChild<ReturnStatement>(isReturnStatement, { walkMode: WalkMode.visitAll });
+        if (!returns) {
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.expectedReturnStatement(),
+                location: func.location
+            });
         }
     }
 
@@ -1151,6 +1182,23 @@ export class ScopeValidator {
                         location: field.getAttribute('onchange')?.tokens.value.location
                     }, ScopeValidatorDiagnosticTag.XMLInterface);
                 }
+            }
+        }
+    }
+
+    private validateDocComments(node: AstNode) {
+        const doc = brsDocParser.parseNode(node);
+        for (const docTag of doc.tags) {
+            const docTypeTag = docTag as BrsDocWithType;
+            if (!docTypeTag.typeExpression || !docTypeTag.location) {
+                continue;
+            }
+            const foundType = docTypeTag.typeExpression?.getType({ flags: SymbolTypeFlag.typetime });
+            if (!foundType?.isResolvable()) {
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.cannotFindTypeInCommentDoc(docTypeTag.typeString),
+                    location: brsDocParser.getTypeLocationFromToken(docTypeTag.token) ?? docTypeTag.location
+                });
             }
         }
     }

@@ -26,6 +26,7 @@ import { VoidType } from '../types/VoidType';
 import { TypedFunctionType } from '../types/TypedFunctionType';
 import { ArrayType } from '../types/ArrayType';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
+import brsDocParser from './BrightScriptDocParser';
 
 export class EmptyStatement extends Statement {
     constructor(options?: { range?: Location }
@@ -46,6 +47,14 @@ export class EmptyStatement extends Statement {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new EmptyStatement({
+                range: util.cloneLocation(this.location)
+            })
+        );
+    }
 }
 
 /**
@@ -65,11 +74,18 @@ export class Body extends Statement implements TypedefProvider {
     public readonly symbolTable = new SymbolTable('Body', () => this.parent?.getSymbolTable());
 
     public get location() {
-        //this needs to be a getter because the body has its statements pushed to it after being constructed
-        return util.createBoundingLocation(
-            ...(this.statements ?? [])
-        );
+        if (!this._location) {
+            //this needs to be a getter because the body has its statements pushed to it after being constructed
+            this._location = util.createBoundingLocation(
+                ...(this.statements ?? [])
+            );
+        }
+        return this._location;
     }
+    public set location(value) {
+        this._location = value;
+    }
+    private _location: Location;
 
     transpile(state: BrsTranspileState) {
         let result: TranspileResult = state.transpileAnnotations(this);
@@ -122,6 +138,15 @@ export class Body extends Statement implements TypedefProvider {
         if (options.walkMode & InternalWalkMode.walkStatements) {
             walkArray(this.statements, visitor, options, this);
         }
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new Body({
+                statements: this.statements?.map(s => s?.clone())
+            }),
+            ['statements']
+        );
     }
 }
 
@@ -176,7 +201,10 @@ export class AssignmentStatement extends Statement {
     }
 
     getType(options: GetTypeOptions) {
-        const variableType = this.typeExpression?.getType({ ...options, typeChain: undefined }) ?? this.value.getType({ ...options, typeChain: undefined });
+        const variableTypeFromCode = this.typeExpression?.getType({ ...options, typeChain: undefined });
+        const docs = brsDocParser.parseNode(this);
+        const variableTypeFromDocs = docs?.getTypeTagBscType(options);
+        const variableType = util.chooseTypeFromCodeOrDocComment(variableTypeFromCode, variableTypeFromDocs, options) ?? this.value.getType({ ...options, typeChain: undefined });
 
         // Note: compound assignments (eg. +=) are internally dealt with via the RHS being a BinaryExpression
         // so this.value will be a BinaryExpression, and BinaryExpressions can figure out their own types
@@ -186,6 +214,19 @@ export class AssignmentStatement extends Statement {
 
     get leadingTrivia(): Token[] {
         return this.tokens.name.leadingTrivia;
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new AssignmentStatement({
+                name: util.cloneToken(this.tokens.name),
+                value: this.value?.clone(),
+                as: util.cloneToken(this.tokens.as),
+                equals: util.cloneToken(this.tokens.equals),
+                typeExpression: this.typeExpression?.clone()
+            }),
+            ['value', 'typeExpression']
+        );
     }
 }
 
@@ -248,6 +289,17 @@ export class AugmentedAssignmentStatement extends Statement {
     get leadingTrivia(): Token[] {
         return this.item.leadingTrivia;
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new AugmentedAssignmentStatement({
+                item: this.item?.clone(),
+                operator: util.cloneToken(this.tokens.operator),
+                value: this.value?.clone()
+            }),
+            ['item', 'value']
+        );
+    }
 }
 
 export class Block extends Statement {
@@ -262,9 +314,9 @@ export class Block extends Statement {
 
     public readonly kind = AstNodeKind.Block;
 
-    get location(): Location {
-        if (this.statements.length > 0) {
-            return util.createBoundingLocation(...this.statements);
+    private buildLocation(): Location {
+        if (this.statements?.length > 0) {
+            return util.createBoundingLocation(...this.statements ?? []);
         }
         let lastBitBefore: Location;
         let firstBitAfter: Location;
@@ -345,7 +397,7 @@ export class Block extends Statement {
         } else if (isCatchStatement(this.parent) && isTryCatchStatement(this.parent?.parent)) {
             lastBitBefore = util.createBoundingLocation(
                 this.parent.tokens.catch,
-                this.parent.tokens.exceptionVariable
+                this.parent.exceptionVariableExpression
             );
             firstBitAfter = this.parent.parent.tokens.endTry?.location;
         }
@@ -359,6 +411,18 @@ export class Block extends Statement {
             );
         }
     }
+
+    public get location() {
+        if (!this._location) {
+            //this needs to be a getter because the body has its statements pushed to it after being constructed
+            this._location = this.buildLocation();
+        }
+        return this._location;
+    }
+    public set location(value) {
+        this._location = value;
+    }
+    private _location: Location;
 
     transpile(state: BrsTranspileState) {
         state.blockDepth++;
@@ -403,6 +467,14 @@ export class Block extends Statement {
         }
     }
 
+    public clone() {
+        return this.finalizeClone(
+            new Block({
+                statements: this.statements?.map(s => s?.clone())
+            }),
+            ['statements']
+        );
+    }
 }
 
 export class ExpressionStatement extends Statement {
@@ -411,7 +483,7 @@ export class ExpressionStatement extends Statement {
     }) {
         super();
         this.expression = options.expression;
-        this.location = this.expression.location;
+        this.location = this.expression?.location;
     }
     public readonly expression: Expression;
     public readonly kind = AstNodeKind.ExpressionStatement;
@@ -433,6 +505,15 @@ export class ExpressionStatement extends Statement {
 
     get leadingTrivia(): Token[] {
         return this.expression.leadingTrivia;
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new ExpressionStatement({
+                expression: this.expression?.clone()
+            }),
+            ['expression']
+        );
     }
 }
 
@@ -476,6 +557,15 @@ export class ExitStatement extends Statement {
     get leadingTrivia(): Token[] {
         return this.tokens.exit?.leadingTrivia;
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new ExitStatement({
+                loopType: util.cloneToken(this.tokens.loopType),
+                exit: util.cloneToken(this.tokens.exit)
+            })
+        );
+    }
 }
 
 export class FunctionStatement extends Statement implements TypedefProvider {
@@ -488,9 +578,11 @@ export class FunctionStatement extends Statement implements TypedefProvider {
             name: options.name
         };
         this.func = options.func;
-        this.func.symbolTable.name += `: '${this.tokens.name?.text}'`;
+        if (this.func) {
+            this.func.symbolTable.name += `: '${this.tokens.name?.text}'`;
+        }
 
-        this.location = this.func.location;
+        this.location = this.func?.location;
     }
 
     public readonly tokens: {
@@ -566,6 +658,16 @@ export class FunctionStatement extends Statement implements TypedefProvider {
         const funcExprType = this.func.getType(options);
         funcExprType.setName(this.getName(ParseMode.BrighterScript));
         return funcExprType;
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new FunctionStatement({
+                func: this.func?.clone(),
+                name: util.cloneToken(this.tokens.name)
+            }),
+            ['func']
+        );
     }
 }
 
@@ -708,6 +810,20 @@ export class IfStatement extends Statement {
         return this.tokens.endIf?.leadingTrivia ?? [];
     }
 
+    public clone() {
+        return this.finalizeClone(
+            new IfStatement({
+                if: util.cloneToken(this.tokens.if),
+                else: util.cloneToken(this.tokens.else),
+                endIf: util.cloneToken(this.tokens.endIf),
+                then: util.cloneToken(this.tokens.then),
+                condition: this.condition?.clone(),
+                thenBranch: this.thenBranch?.clone(),
+                elseBranch: this.elseBranch?.clone()
+            }),
+            ['condition', 'thenBranch', 'elseBranch']
+        );
+    }
 }
 
 export class IncrementStatement extends Statement {
@@ -750,6 +866,16 @@ export class IncrementStatement extends Statement {
 
     get leadingTrivia(): Token[] {
         return this.value?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new IncrementStatement({
+                value: this.value?.clone(),
+                operator: util.cloneToken(this.tokens.operator)
+            }),
+            ['value']
+        );
     }
 }
 
@@ -824,6 +950,16 @@ export class PrintStatement extends Statement {
 
     get leadingTrivia(): Token[] {
         return this.tokens.print?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new PrintStatement({
+                print: util.cloneToken(this.tokens.print),
+                expressions: this.expressions?.map(e => e?.clone())
+            }),
+            ['expressions' as any]
+        );
     }
 }
 
@@ -902,6 +1038,19 @@ export class DimStatement extends Statement {
     get leadingTrivia(): Token[] {
         return this.tokens.dim?.leadingTrivia ?? [];
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new DimStatement({
+                dim: util.cloneToken(this.tokens.dim),
+                name: util.cloneToken(this.tokens.name),
+                openingSquare: util.cloneToken(this.tokens.openingSquare),
+                dimensions: this.dimensions?.map(e => e?.clone()),
+                closingSquare: util.cloneToken(this.tokens.closingSquare)
+            }),
+            ['dimensions']
+        );
+    }
 }
 
 export class GotoStatement extends Statement {
@@ -944,6 +1093,15 @@ export class GotoStatement extends Statement {
     get leadingTrivia(): Token[] {
         return this.tokens.goto?.leadingTrivia ?? [];
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new GotoStatement({
+                goto: util.cloneToken(this.tokens.goto),
+                label: util.cloneToken(this.tokens.label)
+            })
+        );
+    }
 }
 
 export class LabelStatement extends Statement {
@@ -983,6 +1141,15 @@ export class LabelStatement extends Statement {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new LabelStatement({
+                name: util.cloneToken(this.tokens.name),
+                colon: util.cloneToken(this.tokens.colon)
+            })
+        );
     }
 }
 
@@ -1031,6 +1198,16 @@ export class ReturnStatement extends Statement {
     get leadingTrivia(): Token[] {
         return this.tokens.return?.leadingTrivia ?? [];
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new ReturnStatement({
+                return: util.cloneToken(this.tokens.return),
+                value: this.value?.clone()
+            }),
+            ['value']
+        );
+    }
 }
 
 export class EndStatement extends Statement {
@@ -1063,6 +1240,14 @@ export class EndStatement extends Statement {
     get leadingTrivia(): Token[] {
         return this.tokens.end?.leadingTrivia ?? [];
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new EndStatement({
+                end: util.cloneToken(this.tokens.end)
+            })
+        );
+    }
 }
 
 export class StopStatement extends Statement {
@@ -1093,6 +1278,14 @@ export class StopStatement extends Statement {
 
     get leadingTrivia(): Token[] {
         return this.tokens.stop?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new StopStatement({
+                stop: util.cloneToken(this.tokens.stop)
+            })
+        );
     }
 }
 
@@ -1206,6 +1399,22 @@ export class ForStatement extends Statement {
     public get endTrivia(): Token[] {
         return this.tokens.endFor?.leadingTrivia ?? [];
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new ForStatement({
+                for: util.cloneToken(this.tokens.for),
+                counterDeclaration: this.counterDeclaration?.clone(),
+                to: util.cloneToken(this.tokens.to),
+                finalValue: this.finalValue?.clone(),
+                body: this.body?.clone(),
+                endFor: util.cloneToken(this.tokens.endFor),
+                step: util.cloneToken(this.tokens.step),
+                increment: this.increment?.clone()
+            }),
+            ['counterDeclaration', 'finalValue', 'body', 'increment']
+        );
+    }
 }
 
 export class ForEachStatement extends Statement {
@@ -1300,6 +1509,20 @@ export class ForEachStatement extends Statement {
     public get endTrivia(): Token[] {
         return this.tokens.endFor?.leadingTrivia ?? [];
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new ForEachStatement({
+                forEach: util.cloneToken(this.tokens.forEach),
+                in: util.cloneToken(this.tokens.in),
+                endFor: util.cloneToken(this.tokens.endFor),
+                item: util.cloneToken(this.tokens.item),
+                target: this.target?.clone(),
+                body: this.body?.clone()
+            }),
+            ['target', 'body']
+        );
+    }
 }
 
 export class WhileStatement extends Statement {
@@ -1372,6 +1595,18 @@ export class WhileStatement extends Statement {
 
     public get endTrivia(): Token[] {
         return this.tokens.endWhile?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new WhileStatement({
+                while: util.cloneToken(this.tokens.while),
+                endWhile: util.cloneToken(this.tokens.endWhile),
+                condition: this.condition?.clone(),
+                body: this.body?.clone()
+            }),
+            ['condition', 'body']
+        );
     }
 }
 
@@ -1450,6 +1685,19 @@ export class DottedSetStatement extends Statement {
     get leadingTrivia(): Token[] {
         return this.obj.leadingTrivia;
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new DottedSetStatement({
+                obj: this.obj?.clone(),
+                dot: util.cloneToken(this.tokens.dot),
+                name: util.cloneToken(this.tokens.name),
+                equals: util.cloneToken(this.tokens.equals),
+                value: this.value?.clone()
+            }),
+            ['obj', 'value']
+        );
+    }
 }
 
 export class IndexedSetStatement extends Statement {
@@ -1473,7 +1721,7 @@ export class IndexedSetStatement extends Statement {
         this.location = util.createBoundingLocation(
             this.obj,
             this.tokens.openingSquare,
-            ...this.indexes,
+            ...this.indexes ?? [],
             this.tokens.closingSquare,
             this.value
         );
@@ -1532,6 +1780,20 @@ export class IndexedSetStatement extends Statement {
     get leadingTrivia(): Token[] {
         return this.obj.leadingTrivia;
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new IndexedSetStatement({
+                obj: this.obj?.clone(),
+                openingSquare: util.cloneToken(this.tokens.openingSquare),
+                indexes: this.indexes?.map(x => x?.clone()),
+                equals: util.cloneToken(this.tokens.equals),
+                value: this.value?.clone(),
+                closingSquare: util.cloneToken(this.tokens.closingSquare)
+            }),
+            ['obj', 'indexes', 'value']
+        );
+    }
 }
 
 export class LibraryStatement extends Statement implements TypedefProvider {
@@ -1541,8 +1803,8 @@ export class LibraryStatement extends Statement implements TypedefProvider {
     }) {
         super();
         this.tokens = {
-            library: options.library,
-            filePath: options.filePath
+            library: options?.library,
+            filePath: options?.filePath
         };
         this.location = util.createBoundingLocation(
             this.tokens.library,
@@ -1584,6 +1846,15 @@ export class LibraryStatement extends Statement implements TypedefProvider {
     get leadingTrivia(): Token[] {
         return this.tokens.library?.leadingTrivia ?? [];
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new LibraryStatement({
+                library: util.cloneToken(this.tokens?.library),
+                filePath: util.cloneToken(this.tokens?.filePath)
+            })
+        );
+    }
 }
 
 export class NamespaceStatement extends Statement implements TypedefProvider {
@@ -1600,8 +1871,7 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         };
         this.nameExpression = options.nameExpression;
         this.body = options.body;
-        this.name = this.getName(ParseMode.BrighterScript);
-        this.symbolTable = new SymbolTable(`NamespaceStatement: '${this.name}'`, () => this.parent?.getSymbolTable());
+        this.symbolTable = new SymbolTable(`NamespaceStatement: '${this.name}'`, () => this.getRoot()?.getSymbolTable());
     }
 
     public readonly tokens: {
@@ -1617,7 +1887,9 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     /**
      * The string name for this namespace
      */
-    public name: string;
+    public get name(): string {
+        return this.getName(ParseMode.BrighterScript);
+    }
 
     public get location() {
         return this.cacheLocation();
@@ -1714,6 +1986,19 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         return resultType;
     }
 
+    public clone() {
+        const clone = this.finalizeClone(
+            new NamespaceStatement({
+                namespace: util.cloneToken(this.tokens.namespace),
+                nameExpression: this.nameExpression?.clone(),
+                body: this.body?.clone(),
+                endNamespace: util.cloneToken(this.tokens.endNamespace)
+            }),
+            ['nameExpression', 'body']
+        );
+        clone.cacheLocation();
+        return clone;
+    }
 }
 
 export class ImportStatement extends Statement implements TypedefProvider {
@@ -1786,6 +2071,15 @@ export class ImportStatement extends Statement implements TypedefProvider {
     get leadingTrivia(): Token[] {
         return this.tokens.import?.leadingTrivia ?? [];
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new ImportStatement({
+                import: util.cloneToken(this.tokens.import),
+                path: util.cloneToken(this.tokens.path)
+            })
+        );
+    }
 }
 
 export class InterfaceStatement extends Statement implements TypedefProvider {
@@ -1811,7 +2105,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
             this.tokens.name,
             this.tokens.extends,
             this.parentInterfaceName,
-            ...this.body,
+            ...this.body ?? [],
             this.tokens.endInterface
         );
     }
@@ -1988,6 +2282,20 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         }));
         return resultType;
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new InterfaceStatement({
+                interface: util.cloneToken(this.tokens.interface),
+                name: util.cloneToken(this.tokens.name),
+                extends: util.cloneToken(this.tokens.extends),
+                parentInterfaceName: this.parentInterfaceName?.clone(),
+                body: this.body?.map(x => x?.clone()),
+                endInterface: util.cloneToken(this.tokens.endInterface)
+            }),
+            ['parentInterfaceName', 'body']
+        );
+    }
 }
 
 export class InterfaceFieldStatement extends Statement implements TypedefProvider {
@@ -2082,6 +2390,17 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
 
     public getType(options: GetTypeOptions): BscType {
         return this.typeExpression?.getType(options) ?? DynamicType.instance;
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new InterfaceFieldStatement({
+                name: util.cloneToken(this.tokens.name),
+                as: util.cloneToken(this.tokens.as),
+                typeExpression: this.typeExpression?.clone(),
+                optional: util.cloneToken(this.tokens.optional)
+            })
+        );
     }
 
 }
@@ -2238,6 +2557,22 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         resultType.setName(funcName);
         options.typeChain?.push(new TypeChainEntry({ name: resultType.name, type: resultType, data: options.data, astNode: this }));
         return resultType;
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new InterfaceMethodStatement({
+                optional: util.cloneToken(this.tokens.optional),
+                functionType: util.cloneToken(this.tokens.functionType),
+                name: util.cloneToken(this.tokens.name),
+                leftParen: util.cloneToken(this.tokens.leftParen),
+                params: this.params?.map(p => p?.clone()),
+                rightParen: util.cloneToken(this.tokens.rightParen),
+                as: util.cloneToken(this.tokens.as),
+                returnTypeExpression: this.returnTypeExpression?.clone()
+            }),
+            ['params']
+        );
     }
 }
 
@@ -2705,6 +3040,20 @@ export class ClassStatement extends Statement implements TypedefProvider {
         options.typeChain?.push(new TypeChainEntry({ name: resultType.name, type: resultType, data: options.data, astNode: this }));
         return resultType;
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new ClassStatement({
+                class: util.cloneToken(this.tokens.class),
+                name: util.cloneToken(this.tokens.name),
+                body: this.body?.map(x => x?.clone()),
+                endClass: util.cloneToken(this.tokens.endClass),
+                extends: util.cloneToken(this.tokens.extends),
+                parentClassName: this.parentClassName?.clone()
+            }),
+            ['body', 'parentClassName']
+        );
+    }
 }
 
 const accessModifiers = [
@@ -2923,6 +3272,18 @@ export class MethodStatement extends FunctionStatement {
             walk(this, 'func', visitor, options);
         }
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new MethodStatement({
+                modifiers: this.modifiers?.map(m => util.cloneToken(m)),
+                name: util.cloneToken(this.tokens.name),
+                func: this.func?.clone(),
+                override: util.cloneToken(this.tokens.override)
+            }),
+            ['func']
+        );
+    }
 }
 
 export class FieldStatement extends Statement implements TypedefProvider {
@@ -3033,6 +3394,21 @@ export class FieldStatement extends Statement implements TypedefProvider {
             walk(this, 'initialValue', visitor, options);
         }
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new FieldStatement({
+                accessModifier: util.cloneToken(this.tokens.accessModifier),
+                name: util.cloneToken(this.tokens.name),
+                as: util.cloneToken(this.tokens.as),
+                typeExpression: this.typeExpression?.clone(),
+                equals: util.cloneToken(this.tokens.equals),
+                initialValue: this.initialValue?.clone(),
+                optional: util.cloneToken(this.tokens.optional)
+            }),
+            ['initialValue']
+        );
+    }
 }
 
 export type MemberStatement = FieldStatement | MethodStatement;
@@ -3098,31 +3474,44 @@ export class TryCatchStatement extends Statement {
     public get endTrivia(): Token[] {
         return this.tokens.endTry?.leadingTrivia ?? [];
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new TryCatchStatement({
+                try: util.cloneToken(this.tokens.try),
+                endTry: util.cloneToken(this.tokens.endTry),
+                tryBranch: this.tryBranch?.clone(),
+                catchStatement: this.catchStatement?.clone()
+            }),
+            ['tryBranch', 'catchStatement']
+        );
+    }
 }
 
 export class CatchStatement extends Statement {
     constructor(options?: {
         catch?: Token;
-        exceptionVariable?: Identifier;
+        exceptionVariableExpression?: Expression;
         catchBranch?: Block;
     }) {
         super();
         this.tokens = {
-            catch: options?.catch,
-            exceptionVariable: options?.exceptionVariable
+            catch: options?.catch
         };
+        this.exceptionVariableExpression = options?.exceptionVariableExpression;
         this.catchBranch = options?.catchBranch;
         this.location = util.createBoundingLocation(
             this.tokens.catch,
-            this.tokens.exceptionVariable,
+            this.exceptionVariableExpression,
             this.catchBranch
         );
     }
 
     public readonly tokens: {
         readonly catch?: Token;
-        readonly exceptionVariable?: Identifier;
     };
+
+    public readonly exceptionVariableExpression?: Expression;
 
     public readonly catchBranch?: Block;
 
@@ -3134,7 +3523,12 @@ export class CatchStatement extends Statement {
         return [
             state.transpileToken(this.tokens.catch, 'catch'),
             ' ',
-            this.tokens.exceptionVariable?.text ?? 'e',
+            this.exceptionVariableExpression?.transpile(state) ?? [
+                //use the variable named `e` if it doesn't exist in this function body. otherwise use '__bsc_error' just to make sure we're out of the way
+                this.getSymbolTable()?.hasSymbol('e', SymbolTypeFlag.runtime)
+                    ? '__bsc_error'
+                    : 'e'
+            ],
             ...(this.catchBranch?.transpile(state) ?? [])
         ];
     }
@@ -3147,6 +3541,17 @@ export class CatchStatement extends Statement {
 
     public get leadingTrivia(): Token[] {
         return this.tokens.catch?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new CatchStatement({
+                catch: util.cloneToken(this.tokens.catch),
+                exceptionVariableExpression: this.exceptionVariableExpression?.clone(),
+                catchBranch: this.catchBranch?.clone()
+            }),
+            ['catchBranch']
+        );
     }
 }
 
@@ -3202,6 +3607,16 @@ export class ThrowStatement extends Statement {
 
     public get leadingTrivia(): Token[] {
         return this.tokens.throw?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new ThrowStatement({
+                throw: util.cloneToken(this.tokens.throw),
+                expression: this.expression?.clone()
+            }),
+            ['expression']
+        );
     }
 }
 
@@ -3394,6 +3809,18 @@ export class EnumStatement extends Statement implements TypedefProvider {
         }
         return resultType;
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new EnumStatement({
+                enum: util.cloneToken(this.tokens.enum),
+                name: util.cloneToken(this.tokens.name),
+                endEnum: util.cloneToken(this.tokens.endEnum),
+                body: this.body?.map(x => x?.clone())
+            }),
+            ['body']
+        );
+    }
 }
 
 export class EnumMemberStatement extends Statement implements TypedefProvider {
@@ -3473,6 +3900,17 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
             (this.parent as EnumStatement)?.fullName,
             this.tokens?.name?.text,
             this.value?.getType(options)
+        );
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new EnumMemberStatement({
+                name: util.cloneToken(this.tokens.name),
+                equals: util.cloneToken(this.tokens.equals),
+                value: this.value?.clone()
+            }),
+            ['value']
         );
     }
 }
@@ -3570,6 +4008,18 @@ export class ConstStatement extends Statement implements TypedefProvider {
     getType(options: GetTypeOptions) {
         return this.value.getType(options);
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new ConstStatement({
+                const: util.cloneToken(this.tokens.const),
+                name: util.cloneToken(this.tokens.name),
+                equals: util.cloneToken(this.tokens.equals),
+                value: this.value?.clone()
+            }),
+            ['value']
+        );
+    }
 }
 
 export class ContinueStatement extends Statement {
@@ -3605,6 +4055,7 @@ export class ContinueStatement extends Statement {
             state.sourceNode(this.tokens.continue, this.tokens.loopType?.text)
         ];
     }
+
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
     }
@@ -3612,8 +4063,16 @@ export class ContinueStatement extends Statement {
     public get leadingTrivia(): Token[] {
         return this.tokens.continue?.leadingTrivia ?? [];
     }
-}
 
+    public clone() {
+        return this.finalizeClone(
+            new ContinueStatement({
+                continue: util.cloneToken(this.tokens.continue),
+                loopType: util.cloneToken(this.tokens.loopType)
+            })
+        );
+    }
+}
 
 export class TypecastStatement extends Statement {
     constructor(options: {
@@ -3668,6 +4127,16 @@ export class TypecastStatement extends Statement {
     getType(options: GetTypeOptions): BscType {
         return this.typecastExpression.getType(options);
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new TypecastStatement({
+                typecast: util.cloneToken(this.tokens.typecast),
+                typecastExpression: this.typecastExpression?.clone()
+            }),
+            ['typecastExpression']
+        );
+    }
 }
 
 export class ConditionalCompileErrorStatement extends Statement {
@@ -3708,6 +4177,15 @@ export class ConditionalCompileErrorStatement extends Statement {
 
     get leadingTrivia(): Token[] {
         return this.tokens.hashError.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new ConditionalCompileErrorStatement({
+                hashError: util.cloneToken(this.tokens.hashError),
+                message: util.cloneToken(this.tokens.message)
+            })
+        );
     }
 }
 
@@ -3771,6 +4249,18 @@ export class AliasStatement extends Statement {
 
     getType(options: GetTypeOptions): BscType {
         return this.value.getType(options);
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new AliasStatement({
+                alias: util.cloneToken(this.tokens.alias),
+                name: util.cloneToken(this.tokens.name),
+                equals: util.cloneToken(this.tokens.equals),
+                value: this.value?.clone()
+            }),
+            ['value']
+        );
     }
 }
 
@@ -3909,6 +4399,21 @@ export class ConditionalCompileStatement extends Statement {
     get leadingTrivia(): Token[] {
         return this.tokens.hashIf?.leadingTrivia ?? [];
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new ConditionalCompileStatement({
+                hashIf: util.cloneToken(this.tokens.hashIf),
+                not: util.cloneToken(this.tokens.not),
+                condition: util.cloneToken(this.tokens.condition),
+                hashElse: util.cloneToken(this.tokens.hashElse),
+                hashEndIf: util.cloneToken(this.tokens.hashEndIf),
+                thenBranch: this.thenBranch?.clone(),
+                elseBranch: this.elseBranch?.clone()
+            }),
+            ['thenBranch', 'elseBranch']
+        );
+    }
 }
 
 
@@ -3955,5 +4460,15 @@ export class ConditionalCompileConstStatement extends Statement {
 
     get leadingTrivia(): Token[] {
         return this.tokens.hashConst.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new ConditionalCompileConstStatement({
+                hashConst: util.cloneToken(this.tokens.hashConst),
+                assignment: this.assignment?.clone()
+            }),
+            ['assignment']
+        );
     }
 }
