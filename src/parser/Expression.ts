@@ -839,6 +839,46 @@ export class LiteralExpression extends Expression {
 }
 
 /**
+ * The print statement can have a mix of expressions and separators. These separators represent actual output to the screen,
+ * so this AstNode represents those separators (comma, semicolon, and whitespace)
+ */
+export class PrintSeparatorExpression extends Expression {
+    constructor(options: {
+        separator: Token;
+    }) {
+        super();
+        this.tokens = {
+            separator: options.separator
+        };
+        this.location = this.tokens.separator.location;
+    }
+
+    public readonly tokens: {
+        readonly separator: Token;
+    };
+
+    public readonly kind = AstNodeKind.PrintSeparatorExpression;
+
+    public location: Location;
+
+    transpile(state: BrsTranspileState) {
+        return [
+            ...this.tokens.separator.leadingWhitespace ?? [],
+            ...state.transpileToken(this.tokens.separator)
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.separator.leadingTrivia;
+    }
+}
+
+
+/**
  * This is a special expression only used within template strings. It exists so we can prevent producing lots of empty strings
  * during template string transpile by identifying these expressions explicitly and skipping the bslib_toString around them
  */

@@ -1,6 +1,6 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
-import { PrintSeparatorTokens, TokenKind } from '../lexer/TokenKind';
+import { TokenKind } from '../lexer/TokenKind';
 import type { DottedGetExpression, FunctionExpression, FunctionParameterExpression, LiteralExpression, TypeExpression, TypecastExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
@@ -9,7 +9,7 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
-import { isCallExpression, isCatchStatement, isConditionalCompileStatement, isEnumMemberStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTryCatchStatement, isTypedefProvider, isUnaryExpression, isVoidType, isWhileStatement } from '../astUtils/reflection';
+import { isCallExpression, isCatchStatement, isConditionalCompileStatement, isEnumMemberStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isTryCatchStatement, isTypedefProvider, isUnaryExpression, isVoidType, isWhileStatement } from '../astUtils/reflection';
 import { TypeChainEntry, type GetTypeOptions, type TranspileResult, type TypedefProvider } from '../interfaces';
 import { createInvalidLiteral, createMethodStatement, createToken } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
@@ -753,16 +753,6 @@ export class IncrementStatement extends Statement {
     }
 }
 
-/** Used to indent the current `print` position to the next 16-character-width output zone. */
-export interface PrintSeparatorTab extends Token {
-    kind: TokenKind.Comma;
-}
-
-/** Used to insert a single whitespace character at the current `print` position. */
-export interface PrintSeparatorSpace extends Token {
-    kind: TokenKind.Semicolon;
-}
-
 /**
  * Represents a `print` statement within BrightScript.
  */
@@ -771,7 +761,7 @@ export class PrintStatement extends Statement {
      * Creates a new internal representation of a BrightScript `print` statement.
      * @param options the options for this statement
      * @param options.print a print token
-     * @param options.expressions an array of expressions to be evaluated and printed. Wrap `PrintSeparator`s (`;` or `,`) in LiteralExpression
+     * @param options.expressions an array of expressions to be evaluated and printed. Wrap PrintSeparator tokens (`;` or `,`) in `PrintSeparatorExpression`
      */
     constructor(options: {
         print: Token;
@@ -787,34 +777,41 @@ export class PrintStatement extends Statement {
             ...(this.expressions ?? [])
         );
     }
+
     public readonly tokens: {
         readonly print: Token;
     };
+
     public readonly expressions: Array<Expression>;
+
     public readonly kind = AstNodeKind.PrintStatement;
 
     public readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState) {
         let result = [
-            state.transpileToken(this.tokens.print),
-            ' '
+            state.transpileToken(this.tokens.print)
         ] as TranspileResult;
+
+        //if the first expression has no leading whitespace, add a single space between the `print` and the expression
+        if (this.expressions.length > 0 && !this.expressions[0].leadingTrivia.find(t => t.kind === TokenKind.Whitespace)) {
+            result.push(' ');
+        }
+
+        // eslint-disable-next-line @typescript-eslint/prefer-for-of
         for (let i = 0; i < this.expressions.length; i++) {
-            const expressionOrSeparator: any = this.expressions[i];
-            if (expressionOrSeparator.transpile) {
-                result.push(...(expressionOrSeparator as ExpressionStatement).transpile(state));
-            } else {
-                result.push(
-                    state.tokenToSourceNode(expressionOrSeparator)
-                );
-            }
-            //if there isn't a print separator, add a space
-            const nextExpression = this.expressions[i + 1];
-            const isSeparator = isLiteralExpression(nextExpression) && PrintSeparatorTokens.includes(nextExpression.tokens.value.kind);
-            if (nextExpression && !isSeparator) {
+            const expression = this.expressions[i];
+            let leadingWhitespace = expression.leadingTrivia.find(t => t.kind === TokenKind.Whitespace)?.text;
+            if (leadingWhitespace) {
+                result.push(leadingWhitespace);
+                //if the previous expression was NOT a separator, and this one is not also, add a space between them
+            } else if (i > 0 && !isPrintSeparatorExpression(this.expressions[i - 1]) && !isPrintSeparatorExpression(expression) && !leadingWhitespace) {
                 result.push(' ');
             }
+
+            result.push(
+                ...expression.transpile(state)
+            );
         }
         return result;
     }

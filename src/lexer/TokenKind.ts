@@ -1,3 +1,5 @@
+import type { Token } from './Token';
+
 export enum TokenKind {
     // parens (and friends)
     LeftParen = 'LeftParen', // (
@@ -708,3 +710,9 @@ export const PrintSeparatorTokens: ReadonlyArray<TokenKind> = [
     TokenKind.Comma,
     TokenKind.Semicolon
 ];
+/**
+ * Tokens that can be used between expressions in a print statement
+ */
+export type PrintSeparatorToken = Token & {
+    kind: TokenKind.Comma | TokenKind.Semicolon;
+};

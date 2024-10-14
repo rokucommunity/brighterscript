@@ -339,7 +339,7 @@ describe('astUtils visitors', () => {
             program.setFile('source/main.brs', EXPRESSIONS_SRC);
             expect(actual).to.deep.equal([
                 'PrintStatement:1:LiteralExpression',             // print <"msg">; 3
-                'PrintStatement:1:LiteralExpression',             // print "msg"<;> 3
+                'PrintStatement:1:PrintSeparatorExpression',             // print "msg"<;> 3
                 'PrintStatement:1:LiteralExpression',             // print "msg"; <3>
                 'PrintStatement:1:TemplateStringExpression',      // print <`expand ${var}`>
                 'PrintStatement:1:TemplateStringQuasiExpression', // print `<expand >${var}`
