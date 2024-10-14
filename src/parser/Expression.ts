@@ -1,5 +1,6 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
+import type { PrintSeparatorToken } from '../lexer/TokenKind';
 import { TokenKind } from '../lexer/TokenKind';
 import type { Block, NamespaceStatement } from './Statement';
 import type { Location } from 'vscode-languageserver';
@@ -971,7 +972,7 @@ export class LiteralExpression extends Expression {
  */
 export class PrintSeparatorExpression extends Expression {
     constructor(options: {
-        separator: Token;
+        separator: PrintSeparatorToken;
     }) {
         super();
         this.tokens = {
@@ -981,7 +982,7 @@ export class PrintSeparatorExpression extends Expression {
     }
 
     public readonly tokens: {
-        readonly separator: Token;
+        readonly separator: PrintSeparatorToken;
     };
 
     public readonly kind = AstNodeKind.PrintSeparatorExpression;
