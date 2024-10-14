@@ -189,8 +189,8 @@ describe('parser print statements', () => {
                     x = 5
                     print 25; " is equal to"; x ^ 2
                     a$ = "string"
-                    print a$; a$, a$; " "; a$
-                    print "zone 1", "zone 2", "zone 3", "zone 4"
+                    print a$;a$,a$;" ";a$
+                    print "zone 1","zone 2","zone 3","zone 4"
                     print "print statement #1 "
                     print "print statement #2"
                     print "this is a five " 5 "!!"
@@ -202,7 +202,7 @@ describe('parser print statements', () => {
                     print [
                         5
                     ]
-                    print tab(5) "tabbed 5"; tab(25) "tabbed 25"
+                    print tab(5) "tabbed 5";tab(25) "tabbed 25"
                     print tab(40) pos(0) 'prints 40 at position 40
                     print "these" tab(pos(0) + 5) "words" tab(pos(0) + 5) "are"
                     print tab(pos(0) + 5) "evenly" tab(pos(0) + 5) "spaced"

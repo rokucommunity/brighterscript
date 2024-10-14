@@ -1,3 +1,5 @@
+import type { Token } from './Token';
+
 export enum TokenKind {
     // parens (and friends)
     LeftParen = 'LeftParen', // (
@@ -700,6 +702,21 @@ export const AllowedTriviaTokens: ReadonlyArray<TokenKind> = [
     TokenKind.Colon
 ];
 
+
+/**
+ * The tokens that are used as print separators
+ */
+export const PrintSeparatorTokens: ReadonlyArray<TokenKind> = [
+    TokenKind.Comma,
+    TokenKind.Semicolon
+];
+
+/**
+ * Tokens that can be used between expressions in a print statement
+ */
+export type PrintSeparatorToken = Token & {
+    kind: TokenKind.Comma | TokenKind.Semicolon;
+};
 
 /**
  * The tokens that may be in a binary expression
