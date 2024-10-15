@@ -9,7 +9,7 @@ import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, TranspileResult } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, TranspileResult, MaybePromise, DisposableLike } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -79,7 +79,24 @@ export class Util {
      * Determine if this path is a directory
      */
     public isDirectorySync(dirPath: string | undefined) {
-        return dirPath !== undefined && fs.existsSync(dirPath) && fs.lstatSync(dirPath).isDirectory();
+        try {
+            return dirPath !== undefined && fs.existsSync(dirPath) && fs.lstatSync(dirPath).isDirectory();
+        } catch (e) {
+            return false;
+        }
+    }
+
+    /**
+     * Read a file from disk. If a failure occurrs, simply return undefined
+     * @param filePath path to the file
+     * @returns the string contents, or undefined if the file doesn't exist
+     */
+    public readFileSync(filePath: string): Buffer | undefined {
+        try {
+            return fsExtra.readFileSync(filePath);
+        } catch (e) {
+            return undefined;
+        }
     }
 
     /**
@@ -370,7 +387,7 @@ export class Util {
             autoImportComponentScript: config.autoImportComponentScript === true ? true : false,
             showDiagnosticsInConsole: config.showDiagnosticsInConsole === false ? false : true,
             sourceRoot: config.sourceRoot ? standardizePath(config.sourceRoot) : undefined,
-            resolveSourceRoot: config.resolveSourceRoot === true ? true: false,
+            resolveSourceRoot: config.resolveSourceRoot === true ? true : false,
             allowBrighterScriptInBrightScript: config.allowBrighterScriptInBrightScript === true ? true : false,
             emitDefinitions: config.emitDefinitions === true ? true : false,
             removeParameterTypes: config.removeParameterTypes === true ? true : false,
@@ -644,22 +661,6 @@ export class Util {
     }
 
     /**
-     * Given a URI, convert that to a regular fs path
-     */
-    public uriToPath(uri: string) {
-        let parsedPath = URI.parse(uri).fsPath;
-
-        //Uri annoyingly coverts all drive letters to lower case...so this will bring back whatever case it came in as
-        let match = /\/\/\/([a-z]:)/i.exec(uri);
-        if (match) {
-            let originalDriveCasing = match[1];
-            parsedPath = originalDriveCasing + parsedPath.substring(2);
-        }
-        const normalizedPath = path.normalize(parsedPath);
-        return normalizedPath;
-    }
-
-    /**
      * Force the drive letter to lower case
      */
     public driveLetterToLower(fullPath: string) {
@@ -705,13 +706,46 @@ export class Util {
         }
         return true;
     }
+    /**
+     * Does the string appear to be a uri (i.e. does it start with `file:`)
+     */
+    public isUriLike(filePath: string) {
+        return filePath?.indexOf('file:') === 0;// eslint-disable-line @typescript-eslint/prefer-string-starts-ends-with
+    }
 
     /**
      * Given a file path, convert it to a URI string
      */
     public pathToUri(filePath: string) {
-        return URI.file(filePath).toString();
+        if (!filePath) {
+            return filePath;
+        } else if (this.isUriLike(filePath)) {
+            return filePath;
+        } else {
+            return URI.file(filePath).toString();
+        }
     }
+
+    /**
+     * Given a URI, convert that to a regular fs path
+     */
+    public uriToPath(uri: string) {
+        //if this doesn't look like a URI, then assume it's already a path
+        if (this.isUriLike(uri) === false) {
+            return uri;
+        }
+        let parsedPath = URI.parse(uri).fsPath;
+
+        //Uri annoyingly converts all drive letters to lower case...so this will bring back whatever case it came in as
+        let match = /\/\/\/([a-z]:)/i.exec(uri);
+        if (match) {
+            let originalDriveCasing = match[1];
+            parsedPath = originalDriveCasing + parsedPath.substring(2);
+        }
+        const normalizedPath = path.normalize(parsedPath);
+        return normalizedPath;
+    }
+
 
     /**
      * Get the outDir from options, taking into account cwd and absolute outFile paths
@@ -1365,7 +1399,7 @@ export class Util {
                 //filter out null relatedInformation items
             }).filter((x): x is DiagnosticRelatedInformation => Boolean(x)),
             code: diagnostic.code,
-            source: 'brs'
+            source: diagnostic.source ?? 'brs'
         };
     }
 
@@ -1387,7 +1421,7 @@ export class Util {
      */
     public sortByRange<T extends Locatable>(locatables: T[]) {
         //sort the tokens by range
-        return locatables.sort((a, b) => {
+        return locatables?.sort((a, b) => {
             //start line
             if (a.range.start.line < b.range.start.line) {
                 return -1;
@@ -1581,6 +1615,75 @@ export class Util {
                 range: this.createRange(0, 0, 0, Number.MAX_VALUE)
             }]);
         }
+    }
+
+    /**
+     * Execute dispose for a series of disposable items
+     * @param disposables a list of functions or disposables
+     */
+    public applyDispose(disposables: DisposableLike[]) {
+        for (const disposable of disposables ?? []) {
+            if (typeof disposable === 'function') {
+                disposable();
+            } else {
+                disposable?.dispose?.();
+            }
+        }
+    }
+
+    /**
+     * Race a series of promises, and return the first one that resolves AND matches the matcher function.
+     * If all of the promises reject, then this will emit an AggregatreError with all of the errors.
+     * If at least one promise resolves, then this will log all of the errors to the console
+     * If at least one promise resolves but none of them match the matcher, then this will return undefined.
+     * @param promises all of the promises to race
+     * @param matcher a function that should return true if this value should be kept. Returning any value other than true means `false`
+     * @returns the first resolved value that matches the matcher, or undefined if none of them match
+     */
+    public async promiseRaceMatch<T>(promises: MaybePromise<T>[], matcher: (value: T) => boolean) {
+        const workingPromises = [
+            ...promises
+        ];
+
+        const results: Array<{ value: T; index: number } | { error: Error; index: number }> = [];
+        let returnValue: T;
+
+        while (workingPromises.length > 0) {
+            //race the promises. If any of them resolve, evaluate it against the matcher. If that passes, return the value. otherwise, eliminate this promise and try again
+            const result = await Promise.race(
+                workingPromises.map((promise, i) => {
+                    return Promise.resolve(promise)
+                        .then(value => ({ value: value, index: i }))
+                        .catch(error => ({ error: error, index: i }));
+                })
+            );
+            results.push(result);
+            //if we got a value and it matches the matcher, return it
+            if ('value' in result && matcher?.(result.value) === true) {
+                returnValue = result.value;
+                break;
+            }
+
+            //remove this non-matched (or errored) promise from the list and try again
+            workingPromises.splice(result.index, 1);
+        }
+
+        const errors = (results as Array<{ error: Error }>)
+            .filter(x => 'error' in x)
+            .map(x => x.error);
+
+        //if all of them crashed, then reject
+        if (promises.length > 0 && errors.length === promises.length) {
+            throw new AggregateError(errors, 'All requests failed. First error message: ' + errors[0].message);
+        } else {
+            //log all of the errors
+            for (const error of errors) {
+                console.error(error);
+            }
+        }
+
+        //return the matched value, or undefined if there wasn't one
+        return returnValue;
     }
 
     /**

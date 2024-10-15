@@ -59,7 +59,7 @@ export class HoverProcessor {
         }
 
         const expression = file.getClosestExpression(this.event.position);
-        if (expression) {
+        if (expression?.range) {
             let containingNamespace = file.getNamespaceStatementForPosition(expression.range.start)?.getName(ParseMode.BrighterScript);
             const fullName = util.getAllDottedGetParts(expression)?.map(x => x.text).join('.');
 
