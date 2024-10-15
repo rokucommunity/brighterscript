@@ -588,25 +588,35 @@ export class LanguageServer {
     }
     private busyStatusIndex = -1;
 
+    private pathFiltererDisposables: Array<() => void> = [];
+
     /**
      * Populate the path filterer with the client's include/exclude lists and the projects include lists
      * @returns the instance of the path filterer
      */
     private async rebuildPathFilterer() {
-        this.pathFilterer.clear();
+        //dispose of any previous pathFilterer disposables
+        this.pathFiltererDisposables?.forEach(dispose => dispose());
+        //keep track of all the pathFilterer disposables so we can dispose them later
+        this.pathFiltererDisposables = [];
+
         const workspaceConfigs = await this.getWorkspaceConfigs();
         await Promise.all(workspaceConfigs.map(async (workspaceConfig) => {
             const rootDir = util.uriToPath(workspaceConfig.workspaceFolder);
 
             //always exclude everything from these common folders
-            this.pathFilterer.registerExcludeList(rootDir, [
-                '**/node_modules/**/*',
-                '**/.git/**/*',
-                'out/**/*',
-                '**/.roku-deploy-staging/**/*'
-            ]);
+            this.pathFiltererDisposables.push(
+                this.pathFilterer.registerExcludeList(rootDir, [
+                    '**/node_modules/**/*',
+                    '**/.git/**/*',
+                    'out/**/*',
+                    '**/.roku-deploy-staging/**/*'
+                ])
+            );
             //get any `files.exclude` patterns from the client from this workspace
-            this.pathFilterer.registerExcludeList(rootDir, workspaceConfig.excludePatterns);
+            this.pathFiltererDisposables.push(
+                this.pathFilterer.registerExcludeList(rootDir, workspaceConfig.excludePatterns)
+            );
 
             //get any .gitignore patterns from the client from this workspace
             const gitignorePath = path.resolve(rootDir, '.gitignore');
@@ -614,15 +624,17 @@ export class LanguageServer {
                 const matcher = ignore({ ignoreCase: true }).add(
                     fsExtra.readFileSync(gitignorePath).toString()
                 );
-                this.pathFilterer.registerExcludeMatcher((p: string) => {
-                    const relPath = path.relative(rootDir, p);
-                    if (ignore.isPathValid(relPath)) {
-                        return matcher.test(relPath).ignored;
-                    } else {
-                        //we do not have a valid relative path, so we cannot determine if it is ignored...thus it is NOT ignored
-                        return false;
-                    }
-                });
+                this.pathFiltererDisposables.push(
+                    this.pathFilterer.registerExcludeMatcher((p: string) => {
+                        const relPath = path.relative(rootDir, p);
+                        if (ignore.isPathValid(relPath)) {
+                            return matcher.test(relPath).ignored;
+                        } else {
+                            //we do not have a valid relative path, so we cannot determine if it is ignored...thus it is NOT ignored
+                            return false;
+                        }
+                    })
+                );
             }
         }));
         this.logger.log('pathFilterer successfully reconstructed');
