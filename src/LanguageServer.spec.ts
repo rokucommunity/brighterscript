@@ -704,6 +704,38 @@ describe('LanguageServer', () => {
                 s`${workspaceConfigs[1].workspaceFolder}/src/source/file.brs`
             ]);
         });
+
+        it('does not erase project-specific filters', async () => {
+            let filterer = await server['rebuildPathFilterer']();
+            const files = [
+                s`${rootDir}/node_modules/one/file.xml`,
+                s`${rootDir}/node_modules/two.bs`,
+                s`${rootDir}/node_modules/three/dist/lib.bs`
+            ];
+
+            //all node_modules files are filtered out by default, unless included in an includeList
+            expect(filterer.filter(files)).to.eql([]);
+
+            //register two specific node_module folders to include
+            filterer.registerIncludeList(rootDir, ['node_modules/one/**/*', 'node_modules/two.bs']);
+
+            //unless included in an includeList
+            expect(filterer.filter(files)).to.eql([
+                s`${rootDir}/node_modules/one/file.xml`,
+                s`${rootDir}/node_modules/two.bs`
+                //three should still be excluded
+            ]);
+
+            //rebuild the path filterer, make sure the project's includeList is still retained
+            filterer = await server['rebuildPathFilterer']();
+
+            expect(filterer.filter(files)).to.eql([
+                //one and two should still make it through the filter unscathed
+                s`${rootDir}/node_modules/one/file.xml`,
+                s`${rootDir}/node_modules/two.bs`
+                //three should still be excluded
+            ]);
+        });
     });
 
     describe('onDidChangeWatchedFiles', () => {
