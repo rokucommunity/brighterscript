@@ -736,6 +736,38 @@ describe('LanguageServer', () => {
                 //three should still be excluded
             ]);
         });
+
+        it('a removed project includeList gets unregistered', async () => {
+            let filterer = await server['rebuildPathFilterer']();
+            const files = [
+                s`${rootDir}/project1/node_modules/one/file.xml`,
+                s`${rootDir}/project1/node_modules/two.bs`,
+                s`${rootDir}/project1/node_modules/three/dist/lib.bs`
+            ];
+
+            //all node_modules files are filtered out by default, unless included in an includeList
+            expect(filterer.filter(files)).to.eql([]);
+
+            //register a new project that references a file from node_modules
+            fsExtra.outputFileSync(s`${rootDir}/project1/bsconfig.json`, JSON.stringify({
+                files: ['node_modules/one/file.xml']
+            }));
+
+            await server['syncProjects']();
+
+            //one should be included because the project references it
+            expect(filterer.filter(files)).to.eql([
+                s`${rootDir}/project1/node_modules/one/file.xml`
+            ]);
+
+            //delete the project's bsconfig.json and sync again (thus destroying the project)
+            fsExtra.removeSync(s`${rootDir}/project1/bsconfig.json`);
+
+            await server['syncProjects']();
+
+            //the project's pathFilterer pattern has been unregistered
+            expect(filterer.filter(files)).to.eql([]);
+        });
     });
 
     describe('onDidChangeWatchedFiles', () => {
