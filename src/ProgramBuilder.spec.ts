@@ -57,7 +57,7 @@ describe('ProgramBuilder', () => {
         });
         const newData = fsExtra.readFileSync(s`${stagingDir}/assets/image.png`);
         expect(
-            data.compare(newData)
+            data.compare(newData as any)
         ).to.eql(0);
     });
 
@@ -151,6 +151,11 @@ describe('ProgramBuilder', () => {
     });
 
     describe('run', () => {
+        it('does not crash when options is undefined', async () => {
+            sinon.stub(builder as any, 'runOnce').callsFake(() => { });
+            await builder.run(undefined as any);
+        });
+
         afterEach(() => {
             try {
                 fsExtra.removeSync(`${rootDir}/testProject`);

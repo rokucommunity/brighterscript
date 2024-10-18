@@ -343,6 +343,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.66.0-alpha.0](https://github.com/rokucommunity/brighterscript/compare/v0.65.1...v0.66.0-alpha.0) - 2023-06-09
 ### Changed
  - all the type tracking stuff!
+## [0.67.8](https://github.com/rokucommunity/brighterscript/compare/v0.67.7...v0.67.8) - 2024-10-18
+### Changed
+ - upgrade to [roku-deploy@3.12.2](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3122---2024-10-18). Notable changes since 3.12.1:
+     - fixes #175 - updated regex to find a signed package on `/plugin_package` page ([roku-deploy#176](https://github.com/rokucommunity/roku-deploy/pull/176))
+### Fixed
+ - namespace-relative transpile bug for standalone file ([#1324](https://github.com/rokucommunity/brighterscript/pull/1324))
+ - Prevent crash when `ProgramBuilder.run` called with no options ([#1316](https://github.com/rokucommunity/brighterscript/pull/1316))
+
+
+
 ## [0.67.7](https://github.com/rokucommunity/brighterscript/compare/v0.67.6...v0.67.7) - 2024-09-25
 ### Changed
  - Ast node clone ([#1281](https://github.com/rokucommunity/brighterscript/pull/1281))

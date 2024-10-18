@@ -5,6 +5,7 @@ import { CancellationTokenSource } from 'vscode-languageserver';
 import { CompletionItemKind } from 'vscode-languageserver';
 import chalk from 'chalk';
 import * as path from 'path';
+import { Scope } from '../Scope';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
 import type { Callable, CallableParam, CommentFlag, BsDiagnostic, FileReference, FileLink, SerializedCodeFile, NamespaceContainer } from '../interfaces';
@@ -756,6 +757,15 @@ export class BrsFile implements BscFile {
                 let lowerName = left.tokens.name.text.toLowerCase();
                 //find the first scope that contains this namespace
                 let scopes = this.program.getScopesForFile(this);
+
+                //if this file does not belong to any scopes, make a temporary one to answer the question
+                if (scopes.length === 0) {
+                    const scope = new Scope(`temporary-for-${this.pkgPath}`, this.program);
+                    scope.getAllFiles = () => [this];
+                    scope.getOwnFiles = scope.getAllFiles;
+                    scopes.push(scope);
+                }
+
                 for (let scope of scopes) {
                     if (scope.namespaceLookup.has(lowerName)) {
                         return true;
