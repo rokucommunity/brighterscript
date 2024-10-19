@@ -1,5 +1,5 @@
 import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
-import { isAnyReferenceType, isInheritableType, isReferenceType } from '../astUtils/reflection';
+import { isInheritableType, isReferenceType } from '../astUtils/reflection';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { BscType } from './BscType';
 import type { ReferenceType } from './ReferenceType';
