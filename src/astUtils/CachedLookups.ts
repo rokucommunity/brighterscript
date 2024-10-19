@@ -1,9 +1,9 @@
-import type { AALiteralExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionExpression, VariableExpression } from '../parser/Expression';
+import type { AALiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionExpression, VariableExpression } from '../parser/Expression';
 import type { AliasStatement, AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, ConstStatement, EnumStatement, FunctionStatement, ImportStatement, InterfaceStatement, LibraryStatement, NamespaceStatement, TypecastStatement } from '../parser/Statement';
 import { Cache } from '../Cache';
-import { WalkMode, createVisitor } from './visitors';
+import { InternalWalkMode, WalkMode, createVisitor } from './visitors';
 import type { Expression } from '../parser/AstNode';
-import { isAAMemberExpression, isBinaryExpression, isCallExpression, isDottedGetExpression, isFunctionExpression, isIndexedGetExpression, isLiteralExpression, isMethodStatement, isNamespaceStatement, isNewExpression, isVariableExpression } from './reflection';
+import { isAAMemberExpression, isBinaryExpression, isCallExpression, isDottedGetExpression, isFunctionExpression, isGroupingExpression, isIndexedGetExpression, isLiteralExpression, isMethodStatement, isNamespaceStatement, isNewExpression, isVariableExpression } from './reflection';
 import type { Parser } from '../parser/Parser';
 import { ParseMode } from '../parser/Parser';
 import type { Token } from '../lexer/Token';
@@ -196,6 +196,20 @@ export class CachedLookups {
         };
 
         const excludedExpressions = new Set<Expression>();
+
+        const visitBinaryExpression = (e: BinaryExpression) => {
+            //walk the chain of binary expressions and add each one to the list of expressions
+            const expressionsParts: Expression[] = [e];
+            let expression: Expression;
+            while ((expression = expressionsParts.pop())) {
+                if (isBinaryExpression(expression)) {
+                    expressionsParts.push(expression.left, expression.right);
+                } else {
+                    expressions.add(expression);
+                }
+            }
+        };
+
         const visitCallExpression = (e: CallExpression | CallfuncExpression) => {
             for (const p of e.args) {
                 expressions.add(p);
@@ -217,14 +231,13 @@ export class CachedLookups {
                         break;
 
                         //when we hit a variable expression, we're definitely at the leftmost expression so stop
-                    } else if (isVariableExpression(node) || isLiteralExpression(node)) {
+                    } else if (isVariableExpression(node) || isLiteralExpression(node) || isGroupingExpression(node)) {
                         break;
-
                     } else if (isDottedGetExpression(node) || isIndexedGetExpression(node)) {
                         node = node.obj;
                     } else {
                         //some expression we don't understand. log it and quit the loop
-                        this.file.program.logger.info('Encountered unknown expression while calculating function expression chain', node);
+                        this.file.program.logger.debug('Encountered unknown expression while calculating function expression chain', node.kind, node.location);
                         break;
                     }
                 }
@@ -300,16 +313,7 @@ export class CachedLookups {
                 }
             },
             BinaryExpression: (e, parent) => {
-                //walk the chain of binary expressions and add each one to the list of expressions
-                const expressionsParts: Expression[] = [e];
-                let expression: Expression;
-                while ((expression = expressionsParts.pop())) {
-                    if (isBinaryExpression(expression)) {
-                        expressionsParts.push(expression.left, expression.right);
-                    } else {
-                        expressions.add(expression);
-                    }
-                }
+                visitBinaryExpression(e);
             },
             ArrayLiteralExpression: e => {
                 for (const element of e.elements) {
@@ -343,7 +347,8 @@ export class CachedLookups {
                 augmentedAssignmentStatements.push(e);
             }
         }), {
-            walkMode: WalkMode.visitAllRecursive
+            // eslint-disable-next-line no-bitwise
+            walkMode: WalkMode.visitAllRecursive | InternalWalkMode.visitFalseConditionalCompilationBlocks
         });
 
         this.cache.set('expressions', expressions);
