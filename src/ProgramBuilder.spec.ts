@@ -14,7 +14,7 @@ import type { BsConfig } from './BsConfig';
 import type { BscFile } from './files/BscFile';
 import { tempDir, rootDir, stagingDir } from './testHelpers.spec';
 import { Deferred } from './deferred';
-import type { BsDiagnostic } from './interfaces';
+import type { AfterProgramCreateEvent, BsDiagnostic } from './interfaces';
 
 describe('ProgramBuilder', () => {
 
@@ -74,6 +74,26 @@ describe('ProgramBuilder', () => {
         expect(
             await deferred.promise
         ).to.exist;
+    });
+
+
+    it('can edit files array in afterProgramCreate event', async () => {
+        builder = new ProgramBuilder();
+        const deferred = new Deferred<Program>();
+        builder.plugins.add({
+            name: 'test',
+            afterProgramCreate: (event: AfterProgramCreateEvent) => {
+                event.program.options.files.push('other/**/*.*');
+                deferred.resolve(builder.program);
+
+            }
+        });
+        builder['createProgram']();
+        expect(
+            await deferred.promise
+        ).to.exist;
+
+        expect(builder.options.files.length).to.equal(5);
     });
 
     describe('loadFiles', () => {
