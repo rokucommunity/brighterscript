@@ -1,5 +1,5 @@
 import { DiagnosticTag, type Range } from 'vscode-languageserver';
-import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isComponentType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringType, isTypedFunctionType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
+import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isComponentType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isInterfaceType, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringType, isTypedFunctionType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -1239,6 +1239,8 @@ export class ScopeValidator {
      * In particular, since BrightScript does not support Unions, and there's no way to cast them to something else
      * if the result of .getType() is a union, and we're in a .brs (brightScript) file, treat the result as Dynamic
      *
+     * Also, for BrightScript parse-mode, if .getType() returns a node type, do not validate unknown members.
+     *
      * In most cases, this returns the result of node.getType()
      *
      * @param file the current file being processed
@@ -1264,6 +1266,11 @@ export class ScopeValidator {
             if (isUnionType(type)) {
                 //this is a union
                 return DynamicType.instance;
+            }
+
+            if (isComponentType(type)) {
+                // modify type to allow any member access for Node types
+                type.changeUnknownMemberToDynamic = true;
             }
         }
 
