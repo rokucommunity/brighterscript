@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.40](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.39...v1.0.0-alpha.40) - 2024-10-19
+### Added
+ - diagnostic if no return statement found in function ([#1299)](https://github.com/rokucommunity/brighterscript/pull/1299))
+### Fixed
+ - hide annoying log messages ([#1332](https://github.com/rokucommunity/brighterscript/pull/1332))
+ - flag using outer namespaced function indirectly ([#1319)](https://github.com/rokucommunity/brighterscript/pull/1319))
+
+
+
 ## [1.0.0-alpha.39](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.38...v1.0.0-alpha.39) - 2024-10-03
 ### Fixed
  - bslib prefix transpile bug  ([#1317](https://github.com/rokucommunity/brighterscript/pull/1317))
