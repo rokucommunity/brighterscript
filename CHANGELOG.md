@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.41](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.40...v1.0.0-alpha.41) - 2024-10-20
+### Fixed
+ - allow any node members in brs files ([#1299)](https://github.com/rokucommunity/brighterscript/pull/1333))
+
+
+
 ## [1.0.0-alpha.40](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.39...v1.0.0-alpha.40) - 2024-10-19
 ### Added
  - diagnostic if no return statement found in function ([#1299)](https://github.com/rokucommunity/brighterscript/pull/1299))
