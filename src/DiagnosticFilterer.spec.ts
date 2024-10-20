@@ -1,7 +1,7 @@
 import { expect } from './chai-config.spec';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
 import type { BsDiagnostic } from './interfaces';
-import { standardizePath as s } from './util';
+import util, { standardizePath as s } from './util';
 import { createSandbox } from 'sinon';
 const sinon = createSandbox();
 let rootDir = s`${process.cwd()}/rootDir`;
@@ -260,9 +260,9 @@ describe('DiagnosticFilterer', () => {
             getDiagnostic(4, s`${rootDir}/source/Common2.brs`)
         ]);
         expect(stub.callCount).to.eql(2);
-        expect(stub.getCalls().map(x => x.args[1])).to.eql([
-            s`${rootDir.toLowerCase()}/source/common1.brs`,
-            s`${rootDir.toLowerCase()}/source/common2.brs`
+        expect(stub.getCalls().map(x => x.args[1].toLowerCase())).to.eql([
+            util.pathToUri(s`${rootDir.toLowerCase()}/source/common1.brs`).toLowerCase(),
+            util.pathToUri(s`${rootDir.toLowerCase()}/source/common2.brs`).toLowerCase()
         ]);
     });
 
@@ -270,8 +270,8 @@ describe('DiagnosticFilterer', () => {
 
 function getDiagnostic(code: number | string, srcPath: string) {
     return {
-        file: {
-            srcPath: s`${srcPath}`
+        location: {
+            uri: util.pathToUri(s`${srcPath}`)
         },
         code: code
     } as BsDiagnostic;
