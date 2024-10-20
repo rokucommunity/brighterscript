@@ -1836,6 +1836,43 @@ describe('ScopeValidator', () => {
             expectZeroDiagnostics(program);
         });
 
+        it('does not have diagnostic when accessing unknown member of node in Brightscript mode', () => {
+            program.setFile('source/main.brs', `
+                ' @param {roSGNode} node
+                function testNodeMember(node)
+                    x = node.whatever
+                    return x
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not have diagnostic when accessing unknown member of contentnode in Brightscript mode', () => {
+            program.setFile('source/main.brs', `
+                ' @param {roSgNodeCOntentNode} node
+                function testNodeMember(node)
+                    x = node.whatever
+                    return x
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not have diagnostic when accessing unknown member of created node  in Brightscript mode', () => {
+            program.setFile('source/main.brs', `
+                ' @param {string} nodeSubtype
+                function testNodeMember(nodeSubtype)
+                    x = createObject("roSgNode",nodeSubtype)
+                    x.whatever = true
+                    return x
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
         it('allows anything on m in an anonymous function', () => {
             program.setFile('source/main.bs', `
                 function test()
