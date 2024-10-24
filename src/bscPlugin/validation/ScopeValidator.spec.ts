@@ -190,7 +190,7 @@ describe('ScopeValidator', () => {
                     print input
                 end sub
             `);
-            program.setFile('source/util.brs', `
+            program.setFile('source/util.bs', `
                 sub useCallFunc(input as roSGNodeWidget)
                     input.callFunc()
                 end sub
@@ -217,7 +217,7 @@ describe('ScopeValidator', () => {
                     print input
                 end sub
             `);
-            program.setFile('source/util.brs', `
+            program.setFile('source/util.bs', `
                 sub useCallFunc(input as roSGNodeWidget)
                     input.callFunc("someFunc", 1, 2, 3, {})
                 end sub

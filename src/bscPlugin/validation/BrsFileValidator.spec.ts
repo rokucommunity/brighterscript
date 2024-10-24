@@ -1010,6 +1010,32 @@ describe('BrsFileValidator', () => {
                 expectTypeToBe(infoType, DynamicType);
                 expect(data.isFromDocComment).to.be.true;
             });
+
+            it('allows built-in type in @param in Brightscript mode', () => {
+                const file = program.setFile<BrsFile>('source/main.brs', `
+                    ' @param {roAssociativeArray} thing
+                    function sayHello(thing)
+                        print "Hello " + thing.name
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                let data = {} as ExtraSymbolData;
+                expectTypeToBe(
+                    file.ast.findChild(isFunctionParameterExpression).getType({
+                        flags: SymbolTypeFlag.runtime, data: data
+                    }),
+                    InterfaceType
+                );
+                data = {};
+                const printSymbolTable = file.ast.findChild(isPrintStatement).getSymbolTable();
+                const thingType = printSymbolTable.getSymbolType('thing', {
+                    flags: SymbolTypeFlag.runtime, data: data
+                });
+                expectTypeToBe(thingType, InterfaceType);
+                expect(thingType.toString()).to.eql('roAssociativeArray');
+                expect(data.isFromDocComment).to.be.true;
+            });
         });
 
         describe('@return', () => {

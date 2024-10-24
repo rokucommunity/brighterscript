@@ -306,7 +306,7 @@ describe('XmlScope', () => {
                     print input
                 end sub
             `);
-            program.setFile('source/util.brs', `
+            program.setFile('source/util.bs', `
                 sub useCallFunc(input as roSGNodeWidget)
                     input.callFunc("someFunc", {hello: "world"})
                 end sub

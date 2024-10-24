@@ -4266,9 +4266,11 @@ describe('BrsFile', () => {
     });
 
     describe('getTypedef', () => {
-        function testTypedef(original: string, expected: string) {
-            let file = program.setFile<BrsFile>('source/main.brs', original);
+        function testTypedef(original: string, expected: string, mode: ParseMode = ParseMode.BrighterScript) {
+            const ext = mode === ParseMode.BrighterScript ? 'bs' : 'brs';
+            let file = program.setFile<BrsFile>(`source/main.${ext}`, original);
             program.validate();
+            expectZeroDiagnostics(program);
             expect(file.getTypedef().trimEnd()).to.eql(expected);
         }
 
@@ -4345,6 +4347,7 @@ describe('BrsFile', () => {
         });
 
         it('includes import statements', () => {
+            program.setFile('source/lib.brs', ``);
             testTypedef(`
                import "pkg:/source/lib.brs"
             `, trim`
@@ -4445,6 +4448,7 @@ describe('BrsFile', () => {
         it('includes class inheritance', () => {
             testTypedef(`
                 class Human
+                    name
                     sub new(name as string)
                         m.name = name
                     end sub
@@ -4456,6 +4460,7 @@ describe('BrsFile', () => {
                 end class
             `, trim`
                 class Human
+                    public name as dynamic
                     sub new(name as string)
                     end sub
                 end class
@@ -4531,6 +4536,7 @@ describe('BrsFile', () => {
             testTypedef(`
                 namespace NameA
                     class Human
+                        name
                         sub new(name as string)
                             m.name = name
                         end sub
@@ -4546,6 +4552,7 @@ describe('BrsFile', () => {
             `, trim`
                 namespace NameA
                     class Human
+                        public name as dynamic
                         sub new(name as string)
                         end sub
                     end class

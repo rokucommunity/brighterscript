@@ -106,6 +106,9 @@ import { createStringLiteral, createToken } from '../astUtils/creators';
 import type { Expression, Statement } from './AstNode';
 import type { BsDiagnostic, DeepWriteable } from '../interfaces';
 
+
+const declarableTypesLower = DeclarableTypes.map(tokenKind => tokenKind.toLowerCase());
+
 export class Parser {
     /**
      * The array of tokens passed to `parse()`
@@ -3015,10 +3018,17 @@ export class Parser {
      */
     private getTypeExpressionPart(changedTokens: { token: Token; oldKind: TokenKind }[]) {
         let expr: VariableExpression | DottedGetExpression | TypedArrayExpression;
+
         if (this.checkAny(...DeclarableTypes)) {
             // if this is just a type, just use directly
             expr = new VariableExpression({ name: this.advance() as Identifier });
         } else {
+            if (this.options.mode === ParseMode.BrightScript && !declarableTypesLower.includes(this.peek()?.text?.toLowerCase())) {
+                // custom types arrays not allowed in Brightscript
+                this.warnIfNotBrighterScriptMode('custom types');
+                return expr;
+            }
+
             if (this.checkAny(...AllowedTypeIdentifiers)) {
                 // Since the next token is allowed as a type identifier, change the kind
                 let nextToken = this.peek();
