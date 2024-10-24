@@ -3,11 +3,11 @@ import * as fsExtra from 'fs-extra';
 import { Program } from '../Program';
 import type { BrsFile } from '../files/BrsFile';
 import { expect } from '../chai-config.spec';
-import type { AALiteralExpression, AAMemberExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionExpression, GroupingExpression, IndexedGetExpression, NewExpression, NullCoalescingExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, TernaryExpression, TypeCastExpression, UnaryExpression, XmlAttributeGetExpression } from './Expression';
+import type { AALiteralExpression, AAMemberExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionExpression, GroupingExpression, IndexedGetExpression, NewExpression, NullCoalescingExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, TernaryExpression, TypecastExpression, UnaryExpression, XmlAttributeGetExpression } from './Expression';
 import { expectZeroDiagnostics } from '../testHelpers.spec';
 import { tempDir, rootDir, stagingDir } from '../testHelpers.spec';
-import { isAALiteralExpression, isAAMemberExpression, isAnnotationExpression, isArrayLiteralExpression, isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isCallfuncExpression, isCatchStatement, isClassStatement, isCommentStatement, isConstStatement, isDimStatement, isDottedGetExpression, isDottedSetStatement, isEnumMemberStatement, isEnumStatement, isExpressionStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isGroupingExpression, isIfStatement, isIncrementStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInterfaceStatement, isLibraryStatement, isMethodStatement, isNamespaceStatement, isNewExpression, isNullCoalescingExpression, isPrintStatement, isReturnStatement, isTaggedTemplateStringExpression, isTemplateStringExpression, isTemplateStringQuasiExpression, isTernaryExpression, isThrowStatement, isTryCatchStatement, isTypeCastExpression, isUnaryExpression, isWhileStatement, isXmlAttributeGetExpression } from '../astUtils/reflection';
-import type { ClassStatement, FunctionStatement, InterfaceFieldStatement, InterfaceMethodStatement, MethodStatement, InterfaceStatement, CatchStatement, ThrowStatement, EnumStatement, EnumMemberStatement, ConstStatement, Block, CommentStatement, PrintStatement, DimStatement, ForStatement, WhileStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, TryCatchStatement, DottedSetStatement } from './Statement';
+import { isAALiteralExpression, isAAMemberExpression, isAnnotationExpression, isArrayLiteralExpression, isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isCallfuncExpression, isCatchStatement, isClassStatement, isConstStatement, isDimStatement, isDottedGetExpression, isDottedSetStatement, isEnumMemberStatement, isEnumStatement, isExpressionStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isGroupingExpression, isIfStatement, isIncrementStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInterfaceStatement, isMethodStatement, isNamespaceStatement, isNewExpression, isNullCoalescingExpression, isPrintStatement, isReturnStatement, isTaggedTemplateStringExpression, isTemplateStringExpression, isTemplateStringQuasiExpression, isTernaryExpression, isThrowStatement, isTryCatchStatement, isTypecastExpression, isUnaryExpression, isWhileStatement, isXmlAttributeGetExpression } from '../astUtils/reflection';
+import type { ClassStatement, FunctionStatement, InterfaceFieldStatement, InterfaceMethodStatement, MethodStatement, InterfaceStatement, CatchStatement, ThrowStatement, EnumStatement, EnumMemberStatement, ConstStatement, Block, PrintStatement, DimStatement, ForStatement, WhileStatement, IndexedSetStatement, NamespaceStatement, TryCatchStatement, DottedSetStatement, ExpressionStatement } from './Statement';
 import { AssignmentStatement, EmptyStatement } from './Statement';
 import { ParseMode, Parser } from './Parser';
 import type { AstNode } from './AstNode';
@@ -41,10 +41,10 @@ describe('AstNode', () => {
             program.validate();
             expectZeroDiagnostics(program);
             const delta = file.ast.findChildAtPosition<DottedGetExpression>(util.createPosition(3, 52))!;
-            expect(delta.name.text).to.eql('delta');
+            expect(delta.tokens.name.text).to.eql('delta');
 
             const foxtrot = file.ast.findChildAtPosition<DottedGetExpression>(util.createPosition(3, 71))!;
-            expect(foxtrot.name.text).to.eql('foxtrot');
+            expect(foxtrot.tokens.name.text).to.eql('foxtrot');
         });
     });
 
@@ -58,7 +58,7 @@ describe('AstNode', () => {
             `);
             expect(
                 file.ast.findChild((node) => {
-                    return isAssignmentStatement(node) && node.name.text === 'alpha';
+                    return isAssignmentStatement(node) && node.tokens.name.text === 'alpha';
                 })
             ).instanceof(AssignmentStatement);
         });
@@ -134,7 +134,7 @@ describe('AstNode', () => {
             `);
             const secondStatement = (file.ast.statements[0] as FunctionStatement).func.body.statements[1];
             const foxtrot = file.ast.findChild((node) => {
-                return isDottedGetExpression(node) && node.name?.text === 'foxtrot';
+                return isDottedGetExpression(node) && node.tokens.name?.text === 'foxtrot';
             })!;
             expect(
                 foxtrot.findAncestor(isPrintStatement)
@@ -149,7 +149,7 @@ describe('AstNode', () => {
                 end sub
             `);
             const foxtrot = file.ast.findChild((node) => {
-                return isDottedGetExpression(node) && node.name?.text === 'foxtrot';
+                return isDottedGetExpression(node) && node.tokens.name?.text === 'foxtrot';
             })!;
             expect(
                 foxtrot.findAncestor(isClassStatement)
@@ -165,7 +165,7 @@ describe('AstNode', () => {
             `);
             const firstStatement = (file.ast.statements[0] as FunctionStatement).func.body.statements[0];
             const foxtrot = file.ast.findChild((node) => {
-                return isDottedGetExpression(node) && node.name?.text === 'foxtrot';
+                return isDottedGetExpression(node) && node.tokens.name?.text === 'foxtrot';
             })!;
             expect(
                 foxtrot.findAncestor(node => firstStatement)
@@ -268,9 +268,9 @@ describe('AstNode', () => {
         }
 
         it('clones EmptyStatement', () => {
-            testClone(new EmptyStatement(
-                util.createRange(1, 2, 3, 4)
-            ));
+            testClone(new EmptyStatement({
+                range: util.createLocation(1, 2, 3, 4)
+            }));
         });
 
         it('clones body with undefined statements array', () => {
@@ -278,7 +278,7 @@ describe('AstNode', () => {
                 sub main()
                 end sub
             `).ast;
-            original.statements = undefined;
+            (original.statements as any) = undefined;
             testClone(original);
         });
 
@@ -312,7 +312,7 @@ describe('AstNode', () => {
                 interface Empty
                 end interface
             `).ast;
-            original.findChild<InterfaceStatement>(isInterfaceStatement).body = undefined;
+            original.findChild<DeepWriteable<InterfaceStatement>>(isInterfaceStatement).body = undefined;
             testClone(original);
         });
 
@@ -331,7 +331,7 @@ describe('AstNode', () => {
                     name as string
                 end interface
             `).ast;
-            original.findChild<InterfaceFieldStatement>(isInterfaceFieldStatement).type = undefined;
+            original.findChild<DeepWriteable<InterfaceFieldStatement>>(isInterfaceFieldStatement).typeExpression = undefined;
             testClone(original);
         });
 
@@ -341,8 +341,8 @@ describe('AstNode', () => {
                     function test() as dynamic
                 end interface
             `).ast;
-            original.findChild<InterfaceMethodStatement>(isInterfaceMethodStatement).params.push(undefined);
-            original.findChild<InterfaceMethodStatement>(isInterfaceMethodStatement).returnType = undefined;
+            original.findChild<DeepWriteable<InterfaceMethodStatement>>(isInterfaceMethodStatement).params.push(undefined);
+            original.findChild<DeepWriteable<InterfaceMethodStatement>>(isInterfaceMethodStatement).returnTypeExpression = undefined;
             testClone(original);
         });
 
@@ -352,7 +352,7 @@ describe('AstNode', () => {
                     function test(a) as dynamic
                 end interface
             `).ast;
-            original.findChild<InterfaceMethodStatement>(isInterfaceMethodStatement).params = undefined;
+            original.findChild<DeepWriteable<InterfaceMethodStatement>>(isInterfaceMethodStatement).params = undefined;
             testClone(original);
         });
 
@@ -368,7 +368,7 @@ describe('AstNode', () => {
                 class Movie
                 end class
             `).ast;
-            original.findChild<ClassStatement>(isClassStatement).body = undefined;
+            original.findChild<DeepWriteable<ClassStatement>>(isClassStatement).body = undefined;
             testClone(original);
         });
 
@@ -452,14 +452,6 @@ describe('AstNode', () => {
             testClone(original);
         });
 
-        it('clones comment statement with undefined comments array', () => {
-            const original = Parser.parse(`
-                'hello world
-            `).ast;
-            original.findChild<CommentStatement>(isCommentStatement).comments = undefined;
-            testClone(original);
-        });
-
         it('clones class with undefined method modifiers array', () => {
             const original = Parser.parse(`
                 class Movie
@@ -467,7 +459,7 @@ describe('AstNode', () => {
                     end sub
                 end class
             `).ast;
-            original.findChild<MethodStatement>(isMethodStatement).modifiers = undefined;
+            original.findChild<DeepWriteable<MethodStatement>>(isMethodStatement).modifiers = undefined;
             testClone(original);
         });
 
@@ -478,7 +470,7 @@ describe('AstNode', () => {
                     end sub
                 end class
             `).ast;
-            original.findChild<MethodStatement>(isMethodStatement).func = undefined;
+            original.findChild<DeepWriteable<MethodStatement>>(isMethodStatement).func = undefined;
             testClone(original);
         });
 
@@ -496,8 +488,7 @@ describe('AstNode', () => {
                     test()
                 end sub
             `).ast;
-            original.findChild<any>(isExpressionStatement).expression = undefined;
-            original.findChild<FunctionExpression>(isFunctionExpression).callExpressions = [];
+            original.findChild<DeepWriteable<ExpressionStatement>>(isExpressionStatement).expression = undefined;
             testClone(original);
         });
 
@@ -586,7 +577,7 @@ describe('AstNode', () => {
                     dim alpha[1,2]
                 end sub
             `).ast;
-            original.findChild<DimStatement>(isDimStatement).dimensions = undefined;
+            original.findChild<DeepWriteable<DimStatement>>(isDimStatement).dimensions = undefined;
             testClone(original);
         });
 
@@ -661,10 +652,10 @@ describe('AstNode', () => {
                     end for
                 end function
             `).ast;
-            original.findChild<ForStatement>(isForStatement).counterDeclaration = undefined;
-            original.findChild<ForStatement>(isForStatement).finalValue = undefined;
-            original.findChild<ForStatement>(isForStatement).body = undefined;
-            original.findChild<ForStatement>(isForStatement).increment = undefined;
+            original.findChild<DeepWriteable<ForStatement>>(isForStatement).counterDeclaration = undefined;
+            original.findChild<DeepWriteable<ForStatement>>(isForStatement).finalValue = undefined;
+            original.findChild<DeepWriteable<ForStatement>>(isForStatement).body = undefined;
+            original.findChild<DeepWriteable<ForStatement>>(isForStatement).increment = undefined;
             testClone(original);
         });
 
@@ -755,8 +746,8 @@ describe('AstNode', () => {
                     end try
                 end sub
             `).ast;
-            original.findChild<TryCatchStatement>(isTryCatchStatement).tryBranch = undefined;
-            original.findChild<TryCatchStatement>(isTryCatchStatement).catchStatement = undefined;
+            original.findChild<DeepWriteable<TryCatchStatement>>(isTryCatchStatement).tryBranch = undefined;
+            original.findChild<DeepWriteable<TryCatchStatement>>(isTryCatchStatement).catchStatement = undefined;
             testClone(original);
         });
 
@@ -770,7 +761,7 @@ describe('AstNode', () => {
                     end try
                 end sub
             `).ast;
-            original.findChild<CatchStatement>(isCatchStatement).catchBranch = undefined;
+            original.findChild<DeepWriteable<CatchStatement>>(isCatchStatement).catchBranch = undefined;
             testClone(original);
         });
 
@@ -788,7 +779,7 @@ describe('AstNode', () => {
                     throw "Crash"
                 end sub
             `).ast;
-            original.findChild<ThrowStatement>(isThrowStatement).expression = undefined;
+            original.findChild<DeepWriteable<ThrowStatement>>(isThrowStatement).expression = undefined;
             testClone(original);
         });
 
@@ -797,7 +788,7 @@ describe('AstNode', () => {
                sub main()
                 end sub
             `).ast;
-            original.findChild<FunctionStatement>(isFunctionStatement).func = undefined;
+            original.findChild<DeepWriteable<FunctionStatement>>(isFunctionStatement).func = undefined;
             testClone(original);
         });
 
@@ -824,7 +815,7 @@ describe('AstNode', () => {
                     up = "up"
                 end enum
             `).ast;
-            original.findChild<EnumStatement>(isEnumStatement).body = undefined;
+            original.findChild<DeepWriteable<EnumStatement>>(isEnumStatement).body = undefined;
             testClone(original);
         });
 
@@ -845,7 +836,7 @@ describe('AstNode', () => {
                     up = "up"
                 end enum
             `).ast;
-            original.findChild<EnumMemberStatement>(isEnumMemberStatement).value = undefined;
+            original.findChild<DeepWriteable<EnumMemberStatement>>(isEnumMemberStatement).value = undefined;
             testClone(original);
         });
 
@@ -861,7 +852,7 @@ describe('AstNode', () => {
             const original = Parser.parse(`
                 const key = "KEY"
             `).ast;
-            original.findChild<ConstStatement>(isConstStatement).value = undefined;
+            original.findChild<DeepWriteable<ConstStatement>>(isConstStatement).value = undefined;
 
             testClone(original);
         });
@@ -945,13 +936,13 @@ describe('AstNode', () => {
             testClone(original);
         });
 
-        it('clones IndexedSetStatement with undefined additional index', () => {
+        it('clones IndexedSetStatement with undefined index entry', () => {
             const original = Parser.parse(`
                 sub main()
                     m["value", 2] = true
                 end sub
             `).ast;
-            original.findChild<DeepWriteable<IndexedSetStatement>>(isIndexedSetStatement).additionalIndexes[0] = undefined;
+            original.findChild<DeepWriteable<IndexedSetStatement>>(isIndexedSetStatement).indexes[0] = undefined;
 
             testClone(original);
         });
@@ -962,8 +953,7 @@ describe('AstNode', () => {
                     m["value"] = true
                 end sub
             `).ast;
-            original.findChild<DeepWriteable<IndexedSetStatement>>(isIndexedSetStatement).index = undefined;
-            original.findChild<DeepWriteable<IndexedSetStatement>>(isIndexedSetStatement).additionalIndexes = undefined;
+            original.findChild<DeepWriteable<IndexedSetStatement>>(isIndexedSetStatement).indexes = undefined;
 
             testClone(original);
         });
@@ -972,15 +962,6 @@ describe('AstNode', () => {
             const original = Parser.parse(`
                 Library "v30/bslCore.brs"
             `).ast;
-
-            testClone(original);
-        });
-
-        it('clones LibraryStatement with missing tokens', () => {
-            const original = Parser.parse(`
-                Library "v30/bslCore.brs"
-            `).ast;
-            original.findChild<DeepWriteable<LibraryStatement>>(isLibraryStatement).tokens = undefined;
 
             testClone(original);
         });
@@ -1151,7 +1132,7 @@ describe('AstNode', () => {
                 class Person extends Alpha.Humanoid
                 end class
             `).ast;
-            original.findChild<DeepWriteable<ClassStatement>>(isClassStatement).parentClassName.expression = undefined;
+            original.findChild<DeepWriteable<ClassStatement>>(isClassStatement).parentClassName = undefined;
 
             testClone(original);
         });
@@ -1215,13 +1196,12 @@ describe('AstNode', () => {
                 end sub
             `).ast;
             original.findChild<DeepWriteable<IndexedGetExpression>>(isIndexedGetExpression).obj = undefined;
-            original.findChild<DeepWriteable<IndexedGetExpression>>(isIndexedGetExpression).index = undefined;
-            original.findChild<DeepWriteable<IndexedGetExpression>>(isIndexedGetExpression).additionalIndexes = undefined;
+            original.findChild<DeepWriteable<IndexedGetExpression>>(isIndexedGetExpression).indexes = undefined;
 
             testClone(original);
         });
 
-        it('clones IndexedGetExpression with additionalIndexes', () => {
+        it('clones IndexedGetExpression', () => {
             const original = Parser.parse(`
                 sub test()
                     print m.stuff[0, 1]
@@ -1231,13 +1211,13 @@ describe('AstNode', () => {
             testClone(original);
         });
 
-        it('clones IndexedGetExpression with additionalIndexes having undefined', () => {
+        it('clones IndexedGetExpression with indexes having undefined props', () => {
             const original = Parser.parse(`
                 sub test()
                     print m.stuff[0, 1]
                 end sub
             `).ast;
-            original.findChild<DeepWriteable<IndexedGetExpression>>(isIndexedGetExpression).additionalIndexes[0] = undefined;
+            original.findChild<DeepWriteable<IndexedGetExpression>>(isIndexedGetExpression).indexes[0] = undefined;
 
             testClone(original);
         });
@@ -1634,7 +1614,54 @@ describe('AstNode', () => {
                     print name as string
                 end sub
             `).ast;
-            original.findChild<DeepWriteable<TypeCastExpression>>(isTypeCastExpression).obj = undefined;
+            original.findChild<DeepWriteable<TypecastExpression>>(isTypecastExpression).obj = undefined;
+
+            testClone(original);
+        });
+
+        it('clones AugmentedAssignmentStatement', () => {
+            const original = Parser.parse(`
+                sub test()
+                    a += 1
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones TypecastStatement', () => {
+            const original = Parser.parse(`
+                sub test()
+                    typecast m as dynamic
+                    a += 1
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones ConditionalCompile statements', () => {
+            const original = Parser.parse(`
+                sub test()
+                    #const one = true
+                    #if true
+                        print "true"
+                    #else
+                        print "false
+                        #error "Custom error"
+                    #endif
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones AliasStatement', () => {
+            const original = Parser.parse(`
+                alias test2 = test
+                sub test()
+                end sub
+            `).ast;
 
             testClone(original);
         });

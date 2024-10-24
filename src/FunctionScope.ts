@@ -13,7 +13,7 @@ export class FunctionScope {
      * and ends after the final `n` in `end function` or `b` in end sub.
      */
     public get range() {
-        return this.func?.range;
+        return this.func?.location?.range;
     }
     /**
      * The scopes that are children of this scope
@@ -51,4 +51,7 @@ export class FunctionScope {
         }
     }
 
+    get symbolTable() {
+        return this.func.body.getSymbolTable();
+    }
 }

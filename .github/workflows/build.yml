@@ -15,10 +15,10 @@ jobs:
       COVERALLS_REPO_TOKEN: "kVPcGJfehOArEQnHb8BT3KS72xbUQCoxI"
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [macos-latest, ubuntu-latest, windows-latest]
     steps:
-      - uses: actions/checkout@master
-      - uses: actions/setup-node@master
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "14.18.1"
           architecture: 'x64' # fix for macos-latest
@@ -27,7 +27,8 @@ jobs:
       - run: npm run lint
       - run: npm run test
       - run: npm run publish-coverage
-      - run: npm run test-related-projects
+      # disable this task until we have v1-suported versions of the projects to test
+      # - run: npm run test-related-projects
   npm-release:
     #only run this task if a tag starting with 'v' was used to trigger this (i.e. a tagged release)
     if: startsWith(github.ref, 'refs/tags/v')
@@ -36,8 +37,8 @@ jobs:
     env:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
-      - uses: actions/checkout@master
-      - uses: actions/setup-node@master
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "14.18.1"
           architecture: 'x64' # fix for macos-latest
