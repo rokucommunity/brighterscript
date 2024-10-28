@@ -37,10 +37,10 @@ export class ProjectManager {
         });
 
         this.on('validate-begin', (event) => {
-            this.busyStatusTracker.beginScopedRun(event.project, `validate-project-${event.project.projectNumber}`);
+            this.busyStatusTracker.beginScopedRun(event.project, `validate-project`);
         });
         this.on('validate-end', (event) => {
-            void this.busyStatusTracker.endScopedRun(event.project, `validate-project-${event.project.projectNumber}`);
+            void this.busyStatusTracker.endScopedRun(event.project, `validate-project`);
         });
     }
 
@@ -62,7 +62,7 @@ export class ProjectManager {
     private documentManager: DocumentManager;
     public static documentManagerDelay = 150;
 
-    public busyStatusTracker = new BusyStatusTracker();
+    public busyStatusTracker = new BusyStatusTracker<LspProject>();
 
     /**
      * Apply all of the queued document changes. This should only be called as a result of the documentManager flushing changes, and never called manually
@@ -718,13 +718,16 @@ export class ProjectManager {
         }
 
         config.projectNumber = this.getProjectNumber(config);
+        const projectIdentifier = `prj${config.projectNumber}`;
 
         let project: LspProject = config.enableThreading
             ? new WorkerThreadProject({
-                logger: this.logger.createLogger()
+                logger: this.logger.createLogger(),
+                projectIdentifier: projectIdentifier
             })
             : new Project({
-                logger: this.logger.createLogger()
+                logger: this.logger.createLogger(),
+                projectIdentifier: projectIdentifier
             });
 
         this.logger.log(`Created project #${config.projectNumber} for: "${config.projectPath}" (${config.enableThreading ? 'worker thread' : 'main thread'})`);
