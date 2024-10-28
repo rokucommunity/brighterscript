@@ -95,11 +95,11 @@ export class BusyStatusTracker<T = any> {
             if (isFinalized === false) {
                 isFinalized = true;
 
+                this.emit('active-runs-change', { activeRuns: [...this.activeRuns] });
 
                 let idx = this.activeRuns.indexOf(runInfo);
                 if (idx > -1) {
                     this.activeRuns.splice(idx, 1);
-                    this.emit('active-runs-change', { activeRuns: [...this.activeRuns] });
                 }
                 if (this.activeRuns.length <= 0) {
                     this.emit('change', BusyStatus.idle);
