@@ -125,7 +125,7 @@ export class LanguageServer {
             //resend all open document changes
             const documents = [...this.documents.all()];
             if (documents.length > 0) {
-                this.logger.log(`Project ${event.project?.projectNumber} loaded or changed. Resending all open document changes.`, documents.map(x => x.uri));
+                this.logger.log(`[${event.project?.projectIdentifier}] loaded or changed. Resending all open document changes.`, documents.map(x => x.uri));
                 for (const document of this.documents.all()) {
                     this.onTextDocumentDidChangeContent({
                         document: document
@@ -134,7 +134,8 @@ export class LanguageServer {
             }
         });
 
-        this.projectManager.busyStatusTracker.on('change', (event) => {
+        this.projectManager.busyStatusTracker.on('active-runs-change', (event) => {
+            console.log(event);
             this.sendBusyStatus();
         });
     }
@@ -583,7 +584,14 @@ export class LanguageServer {
             status: this.projectManager.busyStatusTracker.status,
             timestamp: Date.now(),
             index: this.busyStatusIndex,
-            activeRuns: [...this.projectManager.busyStatusTracker.activeRuns]
+            activeRuns: [
+                //extract only specific information from the active run so we know what's going on
+                ...this.projectManager.busyStatusTracker.activeRuns.map(x => ({
+                    scope: x.scope?.projectIdentifier,
+                    label: x.label,
+                    startTime: x.startTime.getTime()
+                }))
+            ]
         })?.catch(logAndIgnoreError);
     }
     private busyStatusIndex = -1;

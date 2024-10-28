@@ -40,9 +40,11 @@ export class WorkerThreadProject implements LspProject {
     public constructor(
         options?: {
             logger?: Logger;
+            projectIdentifier?: string;
         }
     ) {
         this.logger = options?.logger ?? createLogger();
+        this.projectIdentifier = options?.projectIdentifier ?? '';
     }
 
     public async activate(options: ProjectConfig) {
@@ -112,6 +114,11 @@ export class WorkerThreadProject implements LspProject {
      * A unique number for this project, generated during this current language server session. Mostly used so we can identify which project is doing logging
      */
     public projectNumber: number;
+
+    /**
+     * A unique name for this project used in logs to help keep track of everything
+     */
+    public projectIdentifier: string;
 
     /**
      * The path to the workspace where this project resides. A workspace can have multiple projects (by adding a bsconfig.json to each folder).

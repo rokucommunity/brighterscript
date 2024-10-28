@@ -22,12 +22,14 @@ export class Project implements LspProject {
     public constructor(
         options?: {
             logger?: Logger;
+            projectIdentifier?: string;
         }
     ) {
         this.logger = options?.logger ?? createLogger({
             //when running inside a worker thread, we don't want to use colors
             enableColor: false
         });
+        this.projectIdentifier = options?.projectIdentifier ?? '';
     }
 
     /**
@@ -47,7 +49,7 @@ export class Project implements LspProject {
             logger: this.logger
         });
 
-        this.builder.logger.prefix = `[prj${this.projectNumber}]`;
+        this.builder.logger.prefix = `[${this.projectIdentifier}]`;
         this.disposables.push(this.builder);
 
         let cwd: string;
@@ -451,6 +453,11 @@ export class Project implements LspProject {
      * A unique number for this project, generated during this current language server session. Mostly used so we can identify which project is doing logging
      */
     public projectNumber: number;
+
+    /**
+     * A unique name for this project used in logs to help keep track of everything
+     */
+    public projectIdentifier: string;
 
     /**
      * The path to the workspace where this project resides. A workspace can have multiple projects (by adding a bsconfig.json to each folder).

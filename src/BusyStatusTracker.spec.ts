@@ -190,5 +190,35 @@ describe('BusyStatusTracker', () => {
                 await onChange
             ).to.eql(BusyStatus.idle);
         });
+
+        it('emits an active-runs-change event when any run changes', async () => {
+            let count = 0;
+            tracker.on('active-runs-change', () => {
+                count++;
+            });
+            tracker.run(() => { }, 'run1');
+            tracker.run(() => { }, 'run2');
+            await tracker.run(() => Promise.resolve(true), 'run3');
+
+            tracker.beginScopedRun(this, 'run4');
+            tracker.beginScopedRun(this, 'run4');
+            await tracker.endScopedRun(this, 'run4');
+            await tracker.endScopedRun(this, 'run4');
+
+            //we should have 10 total events (5 starts, 5 ends)
+            expect(count).to.eql(10);
+        });
+
+        it('removes the entry for the scope when the last run is cleared', async () => {
+            expect(tracker['activeRuns']).to.be.empty;
+
+            tracker.beginScopedRun(scope1, 'run1');
+
+            expect(tracker['activeRuns'].find(x => x.scope === scope1 && x.label === 'run1')).to.exist;
+
+            await tracker.endScopedRun(scope1, 'run1');
+
+            expect(tracker['activeRuns']).to.be.empty;
+        });
     });
 });

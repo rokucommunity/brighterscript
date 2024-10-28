@@ -35,6 +35,11 @@ export interface LspProject {
     projectNumber: number;
 
     /**
+     * A unique name for this project used in logs to help keep track of everything
+     */
+    projectIdentifier: string;
+
+    /**
      * The root directory of the project.
      * Only available after `.activate()` has completed
      */
