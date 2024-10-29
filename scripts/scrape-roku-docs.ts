@@ -347,6 +347,7 @@ class Runner {
                 constructors: [],
                 description: 'roIntrinsicDouble is the object equivalent for type \'Double\'.\n\nIt is a legacy object name, corresponding to the intrinsic Double object. Applications should use Double literal values and/or Double-typed variables directly.',
                 events: [],
+                methods: [],
                 interfaces: [
                     {
                         name: 'ifDouble',
@@ -815,7 +816,13 @@ class Runner {
 
 
     private fixFunctionParams(text: string): string {
-        return text.replace(/to as /ig, 'toValue as ');
+        return text.replace(/to as /ig, 'toValue as ')
+            .replace(/as\s+int\s*$/ig, 'as integer')
+            .replace(/as\s+int\s*,/ig, 'as integer,')
+            .replace(/as\s+int\s*\)\s*/ig, 'as integer)')
+            .replace(/as\s+bool\s*$/ig, 'as boolean')
+            .replace(/as\s+bool\s*,/ig, 'as boolean,')
+            .replace(/as\s+bool\s*\)/ig, 'as boolean)');
     }
 
     private getMethod(text: string) {
@@ -829,12 +836,18 @@ class Runner {
 
         const { ast } = Parser.parse(functionSignatureToParse);
         const statements = ast.statements;
+        let returnTypeString = 'Void';
+        const lastParenIndex = functionSignatureToParse.lastIndexOf(')');
+        const lastAsIndex = functionSignatureToParse.indexOf('as', lastParenIndex);
+        if (lastAsIndex >= 0) {
+            returnTypeString = functionSignatureToParse.substring(lastAsIndex + 2)?.split('\n')?.[0]?.trim();
+        }
         if (statements.length > 0) {
             const func = statements[0] as FunctionStatement;
             const signature = {
                 name: func.tokens.name?.text,
                 params: [],
-                returnType: func.func.returnTypeExpression?.getType({ flags: SymbolTypeFlag.typetime })?.toTypeString() ?? 'Void'
+                returnType: func.func.returnTypeExpression?.getType({ flags: SymbolTypeFlag.typetime })?.toTypeString() ?? returnTypeString ?? 'Void'
             } as Func;
 
             if (variadicMatch) {
@@ -1199,7 +1212,6 @@ class Runner {
                             name: 'trackImageUri',
                             type: 'uri'
                         },
-
                         {
                             accessPermission: 'READ_WRITE',
                             default: 'not sepcified',
@@ -1335,6 +1347,8 @@ class Runner {
             }
         });
 
+        fixFieldByName(this.result.nodes.vector2dfieldinterpolator, 'keyValue', { type: 'array of vector2d' });
+
         // fix all overloaded methods in interfaces
         for (const ifaceKey in this.result.interfaces) {
             const iface = this.result.interfaces[ifaceKey];
@@ -1358,6 +1372,15 @@ class Runner {
         //fix roSGNodeContentNode overloads
         fixOverloadedField(this.result.nodes.contentnode, 'actors');
         fixOverloadedField(this.result.nodes.contentnode, 'categories');
+    }
+}
+
+function fixFieldByName(component: SceneGraphNode, fieldName: string, override: Partial<SceneGraphNodeField>) {
+    let fieldToChangeIndex = component.fields.findIndex((field) => {
+        return field.name.toLowerCase() === fieldName.toLowerCase();
+    });
+    if (fieldToChangeIndex >= 0) {
+        component.fields[fieldToChangeIndex] = deepmerge(component.fields[fieldToChangeIndex], override);
     }
 }
 

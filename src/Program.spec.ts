@@ -2990,6 +2990,14 @@ describe('Program', () => {
             expect(socketAsyncType.name).to.eq('ifSocketAsync');
             expectTypeToBe(socketAsyncType.getMemberType('setMessagePort', opts), TypedFunctionType);
             expectTypeToBe(streamSocketType.getMemberType('setMessagePort', opts), TypedFunctionType);
+
+            const vector2dInterp = table.getSymbolType('roSGNodeVector2DFieldInterpolator', { flags: SymbolTypeFlag.typetime });
+            expectTypeToBe(vector2dInterp, ComponentType);
+
+            const vector2dKeyValueType = vector2dInterp.getMemberType('keyValue', opts) as ArrayType;
+            expectTypeToBe(vector2dKeyValueType, ArrayType);
+            expectTypeToBe(vector2dKeyValueType.defaultType, ArrayType);
+            expectTypeToBe((vector2dKeyValueType.defaultType as ArrayType).defaultType, FloatType);
         });
 
     });
