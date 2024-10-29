@@ -817,12 +817,12 @@ class Runner {
 
     private fixFunctionParams(text: string): string {
         return text.replace(/to as /ig, 'toValue as ')
-            .replace(/as int$/ig, 'as integer')
-            .replace(/as int,/ig, 'as integer,')
-            .replace(/as int\)/ig, 'as integer)')
-            .replace(/as bool$/ig, 'as boolean')
-            .replace(/as bool,/ig, 'as boolean,')
-            .replace(/as bool\)/ig, 'as boolean)');
+            .replace(/as\s+int\s*$/ig, 'as integer')
+            .replace(/as\s+int\s*,/ig, 'as integer,')
+            .replace(/as\s+int\s*\)\s*/ig, 'as integer)')
+            .replace(/as\s+bool\s*$/ig, 'as boolean')
+            .replace(/as\s+bool\s*,/ig, 'as boolean,')
+            .replace(/as\s+bool\s*\)/ig, 'as boolean)');
     }
 
     private getMethod(text: string) {
