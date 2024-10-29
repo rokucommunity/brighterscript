@@ -1217,14 +1217,6 @@ class Runner {
                     interfaces: [],
                     name: 'ProgressBar',
                     url: 'https://developer.roku.com/en-ca/docs/references/scenegraph/media-playback-nodes/video.md#ui-fields'
-                },
-                vector2dfieldinterpolator: {
-                    fields: [
-                        {
-                            name: 'keyValue',
-                            type: 'array of array of floats'
-                        }
-                    ]
                 }
             },
             components: {
