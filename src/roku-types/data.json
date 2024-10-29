@@ -1,5 +1,5 @@
 {
-    "generatedDate": "2024-08-23T13:39:25.188Z",
+    "generatedDate": "2024-10-29T12:35:44.358Z",
     "nodes": {
         "animation": {
             "description": "Extends [**AnimationBase**](https://developer.roku.com/docs/references/scenegraph/abstract-nodes/animationbase.md\n\nThe Animation node class provides animations of renderable nodes, by applying interpolator functions to the values in specified renderable node fields. For an animation to take effect, an Animation node definition must include a child field interpolator node ([FloatFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/floatfieldinterpolator.md\"FloatFieldInterpolator\"), [Vector2DFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/vector2dfieldinterpolator.md\"Vector2DFieldInterpolator\"), [ColorFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/colorfieldinterpolator.md\"ColorFieldInterpolator\")) definition for each renderable node field that is animated.\n\nThe Animation node class provides a simple linear interpolator function, where the animation takes place smoothly and simply from beginning to end. The Animation node class also provides several more complex interpolator functions to allow custom animation effects. For example, you can move a graphic image around the screen at differing speeds and curved trajectories at different times in the animation by specifying the appropriate function in the easeFunction field (quadratic and exponential are two examples of functions that can be specified). The interpolator functions are divided into two parts: the beginning of the animation (ease-in), and the end of the animation (ease-out). You can apply a specified interpolator function to either or both ease-in and ease-out, or specify no function for either or both (which is the linear function). You can also change the portion of the animation that is ease-in and ease-out to arbitrary fractional values for a quadratic interpolator function applied to both ease-in and ease-out.",
@@ -40,7 +40,7 @@
                 {
                     "accessPermission": "READ_WRITE",
                     "default": "false",
-                    "description": "Set to true to skip animations on lower performing Roku devices (Paolo, Giga, Jackson, Tyler, and Sugarland). See \\[Roku Devices\\](/docs/specs/hardware.md#current-models \"Roku Devices\") for model numbers and code names. When an Animation has optional set to true, setting the control field to start will cause the state field to change to running and immediately change again to finished. These state changes allow any logic tied to state field observers that run at the start and end of the Animation to be properly called",
+                    "description": "Set to true to skip animations on lower performing Roku devices. See \\[Roku Devices\\](/docs/specs/hardware.md#current-models \"Roku Devices\") for model numbers and code names. When an Animation has optional set to true, setting the control field to start will cause the state field to change to running and immediately change again to finished. These state changes allow any logic tied to state field observers that run at the start and end of the Animation to be properly called",
                     "name": "optional",
                     "type": "boolean"
                 },
@@ -935,7 +935,7 @@
                 {
                     "accessPermission": "READ_WRITE",
                     "default": "",
-                    "description": "Specifies the command to be executed: \\* \\[getUserData\\](#getuserdata) \\* \\[getUserRegionData\\](#getuserregiondata) () \\* \\[getCatalog\\](#getcatalog) and \\[getStoreCatalog\\](#getstorecatalog) \\* \\[doOrder\\](#doorder) \\* \\[getPurchases\\](#getpurchases) and \\[getAllPurchases\\](#getallpurchases) \\* \\[storeChannelCredData\\](#storechannelcreddata) \\* \\[getChannelCred\\](#getchannelcred) \\* \\[getDeviceAttestationToken\\](#getdeviceattestationtoken) (\\_Available since Roku OS 11.5\\_) \\* \\[requestPartnerOrder\\](#requestpartnerorder) \\* \\[confirmPartnerOrder\\](#confirmpartnerorder)",
+                    "description": "Specifies the command to be executed: \\* \\[getUserData\\](#getuserdata) \\* \\[getUserRegionData\\](#getuserregiondata) () \\* \\[getCatalog\\](#getcatalog) and \\[getStoreCatalog\\](#getstorecatalog) \\* \\[doOrder\\](#doorder) \\* \\[getPurchases\\](#getpurchases) and \\[getAllPurchases\\](#getallpurchases) \\* \\[storeChannelCredData\\](#storechannelcreddata) \\* \\[getChannelCred\\](#getchannelcred) \\* \\[getDeviceAttestationToken\\](#getdeviceattestationtoken) \\* \\[requestPartnerOrder\\](#requestpartnerorder) \\* \\[confirmPartnerOrder\\](#confirmpartnerorder)",
                     "name": "command",
                     "type": "string"
                 },
@@ -991,14 +991,14 @@
                 {
                     "accessPermission": "READ_WRITE",
                     "default": "all",
-                    "description": "Specifies the Roku customer account fields to be retrieved when the \\[\\*\\*getUserData\\*\\*\\](#getuserdata) command is executed. The default value is \"all\", which causes a ContentNode object to be returned from \\*\\*getUserData\\*\\* that includes all of the available Roku customer account information. To request specific Roku customer account information items (for example, an email address, first name, and last name) set this field to a string containing a comma-separated list of values (for example, \"email, firstname, lastname\"). The available values are as follows: \\* email \\* phone \\* firstname \\* lastname \\* street \\* city \\* state \\* zip \\* country \\* birth (\\_available since Roku OS 10.0\\_) \\* gender (\\_available since Roku OS 10.0\\_) In this case, the ContentNode object returned from the \\*\\*getUserData\\*\\* command includes the specified customer account information.",
+                    "description": "Specifies the Roku customer account fields to be retrieved when the \\[\\*\\*getUserData\\*\\*\\](#getuserdata) command is executed. The default value is \"all\", which causes a ContentNode object to be returned from \\*\\*getUserData\\*\\* that includes all of the available Roku customer account information. To request specific Roku customer account information items (for example, an email address, first name, and last name) set this field to a string containing a comma-separated list of values (for example, \"email, firstname, lastname\"). The available values are as follows: \\* email \\* phone \\* firstname \\* lastname \\* street \\* city \\* state \\* zip \\* country \\* birth \\* gender In this case, the ContentNode object returned from the \\*\\*getUserData\\*\\* command includes the specified customer account information.",
                     "name": "requestedUserData",
                     "type": "string"
                 },
                 {
                     "accessPermission": "READ_WRITE",
                     "default": "invalid",
-                    "description": "Specifies whether the RFI screen is used for customer sign-ups or sign-ins. This may be one of the following values:\n\n| Field | Type | Default | Description |\n| --- | --- | --- | --- |\n| context | string | \"signup\" | Specifies the context of the RFI screen, which may be one of the following values:    *   \"signup\": The RFI screen displays a \"Let's create your account\" title and lists the customer information specified in the [**requestedUserData** field](#requesteduserdata). The RFI screen uses the \"signup\" context by default. See [Sign-up requirements and best practices](/docs/developer-program/roku-pay/signup-best-practices.md) for more information on implementing the channel sign-up UI. *   \"signin: \"The RFI screen displays a \"Sign in\" title and lists only email or phone attributes, if specified in the [**requestedUserData** field](#requesteduserdata). Other attributes are ignored, even if specified. See the [Sign-in example](#sign-in-example) for how to use this field. See [Sign-in requirements and best practices](/docs/developer-program/roku-pay/signin-best-practices.md) for more information on implementing the channel sign-in UI.   |\n| forceShowData   (_Available since Roku OS 11.0_) | Boolean | false | If true, the RFI signup screen displays the values of the requested customer information to be shared with the channel (for example, Jone Doe, jon.doe@emailaddress.com).      By default, this flag is set to false, which means that the default RFI screen for the region is used. For example, in the US, the RFI screen displays the type of customer information being requested (email address, name, and so on).      This flag has no effect if the context field is set to \"signin\" (the RFI sign-in screen always displays the customer information values).      **Example**:    ``` store = CreateObject(\"roSGNode\", \"ChannelStore\")  ' Doesn't show user data in dialog unless necessary in the user's region. store.requestedUserData = \"email,firstname,lastname,gender,birth\" store.command = \"getUserData\"  ' Shows user data in dialog. info = CreateObject(\"roSGNode\", \"ContentNode\") info.addFields({forceShowData: true}) store.requestedUserDataInfo = info store.requestedUserData = \"email\" store.command = \"getUserData\"  ```   |",
+                    "description": "Specifies whether the RFI screen is used for customer sign-ups or sign-ins. This may be one of the following values:\n\n| Field | Type | Default | Description |\n| --- | --- | --- | --- |\n| context | string | \"signup\" | Specifies the context of the RFI screen, which may be one of the following values:    *   \"signup\": The RFI screen displays a \"Let's create your account\" title and lists the customer information specified in the [**requestedUserData** field](#requesteduserdata). The RFI screen uses the \"signup\" context by default. See [Sign-up requirements and best practices](/docs/developer-program/roku-pay/signup-best-practices.md) for more information on implementing the channel sign-up UI. *   \"signin: \"The RFI screen displays a \"Sign in\" title and lists only email or phone attributes, if specified in the [**requestedUserData** field](#requesteduserdata). Other attributes are ignored, even if specified. See the [Sign-in example](#sign-in-example) for how to use this field. See [Sign-in requirements and best practices](/docs/developer-program/roku-pay/signin-best-practices.md) for more information on implementing the channel sign-in UI.   |\n| forceShowData | Boolean | false | If true, the RFI signup screen displays the values of the requested customer information to be shared with the channel (for example, Jone Doe, jon.doe@emailaddress.com).      By default, this flag is set to false, which means that the default RFI screen for the region is used. For example, in the US, the RFI screen displays the type of customer information being requested (email address, name, and so on).      This flag has no effect if the context field is set to \"signin\" (the RFI sign-in screen always displays the customer information values).      **Example**:    ``` store = CreateObject(\"roSGNode\", \"ChannelStore\")  ' Doesn't show user data in dialog unless necessary in the user's region. store.requestedUserData = \"email,firstname,lastname,gender,birth\" store.command = \"getUserData\"  ' Shows user data in dialog. info = CreateObject(\"roSGNode\", \"ContentNode\") info.addFields({forceShowData: true}) store.requestedUserDataInfo = info store.requestedUserData = \"email\" store.command = \"getUserData\"  ```   |",
                     "name": "requestedUserDataInfo",
                     "type": "ContentNode"
                 },
@@ -1554,7 +1554,7 @@
                 {
                     "accessPermission": "READ_WRITE",
                     "default": "not specified",
-                    "description": "Specifies the audio codec that should be used during playback. The Media Player will select and report to the channel only those audio renditions that are encoded with the specified codec. Renditions that are encoded with a different codec are ignored. Possible values of this attribute are \"aac\", \"ac3\" and \"eac3\". (Available since Roku OS 9.0)",
+                    "description": "Specifies the audio codec that should be used during playback. The Media Player will select and report to the channel only those audio renditions that are encoded with the specified codec. Renditions that are encoded with a different codec are ignored. Possible values of this attribute are \"aac\", \"ac3\" and \"eac3\".",
                     "name": "PreferredAudioCodec",
                     "type": "String"
                 },
@@ -2509,8 +2509,7 @@
             "url": "https://developer.roku.com/docs/references/scenegraph/layout-group-nodes/group.md"
         },
         "infopane": {
-            "availableSince": "10.5",
-            "description": "_Available since Roku OS 10.5_\n\nThe **InfoPane** node class is used to display an opaque, white-bordered, rounded rectangular label with text providing help for a specific setting. This component can be used to help customers successfully configure settings related to their account profile, closed captioning, parental controls, and so on.\n\n![roku815px - info-pane](https://image.roku.com/ZHZscHItMTc2/infopane.jpg \"info-pane\")",
+            "description": "The **InfoPane** node class is used to display an opaque, white-bordered, rounded rectangular label with text providing help for a specific setting. This component can be used to help customers successfully configure settings related to their account profile, closed captioning, parental controls, and so on.\n\n![roku815px - info-pane](https://image.roku.com/ZHZscHItMTc2/infopane.jpg \"info-pane\")",
             "events": [],
             "fields": [],
             "interfaces": [],
@@ -2649,8 +2648,7 @@
             "url": "https://developer.roku.com/docs/references/scenegraph/label-nodes/label.md"
         },
         "labelbase": {
-            "availableSince": "10.5",
-            "description": "_Available since Roku OS 10.5_\n\nExtends [**Group**](https://developer.roku.com/docs/references/scenegraph/layout-group-nodes/group.md\n\nThe LabelBase node is an abstract base class for the [**Label**](https://developer.roku.com/docs/references/scenegraph/label-nodes/label.md and [**MultiStyleLabel**](https://developer.roku.com/docs/references/scenegraph/label-nodes/multi-style-label.md nodes. The Label node is used to display a string of text with a single style; the MultiStyleLabel node is used display a string of text with mixed styles (for example, plain and bold text, different fonts, and/or multiple colors). The LabelBase node provides the dimensions, text alignment, wrapping, auto-truncating, and other common functionality for its child nodes.\n\n> The LabelBase node was introduced in Roku OS 10.5 to provide a single base class for the Label node and the new MultiStyleLabel node, which was added as part of the Roku OS 10.5 release. The Label node now inherits most of its functionality from LabelBase node class. Developers, however, do not need to update their channel application code to account for this refactoring.",
+            "description": "Extends [**Group**](https://developer.roku.com/docs/references/scenegraph/layout-group-nodes/group.md\n\nThe LabelBase node is an abstract base class for the [**Label**](https://developer.roku.com/docs/references/scenegraph/label-nodes/label.md and [**MultiStyleLabel**](https://developer.roku.com/docs/references/scenegraph/label-nodes/multi-style-label.md nodes. The Label node is used to display a string of text with a single style; the MultiStyleLabel node is used display a string of text with mixed styles (for example, plain and bold text, different fonts, and/or multiple colors). The LabelBase node provides the dimensions, text alignment, wrapping, auto-truncating, and other common functionality for its child nodes.\n\n> The LabelBase node was introduced in Roku OS 10.5 to provide a single base class for the Label node and the new MultiStyleLabel node, which was added as part of the Roku OS 10.5 release. The Label node now inherits most of its functionality from LabelBase node class. Developers, however, do not need to update their channel application code to account for this refactoring.",
             "events": [],
             "extends": {
                 "name": "Group",
@@ -2719,6 +2717,13 @@
                     "description": "If the height and numLines field values are both zero, specifies the maximum number of lines of text to be displayed. See \\[Vertical Alignment\\](https://developer.roku.com/docs/references/scenegraph/typographic-nodes/scrollinglabel.mdalignment \"Vertical Alignment\") and \\[Wrapping\\](https://developer.roku.com/docs/references/scenegraph/label-nodes/label-base.mdwrapping-text \"Wrapping\") for more details.",
                     "name": "maxLines",
                     "type": "integer"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "false",
+                    "description": "Renders numeric values using tabular (fixed-width) fonts.",
+                    "name": "monospacedDigits",
+                    "type": "Boolean"
                 },
                 {
                     "accessPermission": "READ_WRITE",
@@ -3649,9 +3654,17 @@
             "name": "MiniKeyboard",
             "url": "https://developer.roku.com/docs/references/scenegraph/widget-nodes/minikeyboard.md"
         },
+        "monsospacelabel": {
+            "availableSince": "14.0",
+            "description": "_Available since Roku OS 14.0_\n\nThe **MonospaceLabel** node is used to draw a single line of text with all characters spaced at a fixed distance from each other. It transforms proportional fonts into monospaced fonts. It is a substitute for using a monospace font with the **Label** node.\n\n**Fields**\n\n| **Field** | **Type** | **Default** | **Access Permission** | **Description** |\n| --- | --- | --- | --- | --- |\n| text | string |  | READ\\_WRITE | Specifies the text to be displayed |\n| color | color | 0xddddddff | READ\\_WRITE | Specifies the text color |\n| font | Font | system default | READ\\_WRITE | Specifies the Font node to be used |\n| horizAlign | string | left | READ\\_WRITE | See [Horizontal Alignment](https://developer.roku.com/docs/references/scenegraph/typographic-nodes/scrollinglabel.mdalignment) |\n| vertAlign | string | top | READ\\_WRITE | See [Vertical Alignment](https://developer.roku.com/docs/references/scenegraph/label-nodes/label-base.mdwrapping-text) |\n| width | float | 0 | READ\\_WRITE | Specifies the width of the label. If set to zero, the width of the label will be set automatically |\n| height | float | 0 | READ\\_WRITE | Specifies the height of the label. If set to zero, the height of the label will be set automatically |\n| characterWidth | float | 0 | READ\\_WRITE | Specifies the width of the label characters. If set to zero, width of font’s character 'M' will be used |\n| ellipsizeOnBoundary | Boolean | false | READ\\_WRITE | If the width field value is greater than zero, controls whether or not the last line of text displayed should be ellipsized if it extends beyond the specified width. It is ignored if the truncateOnDelimiter field value is set to a non-empty stringWhen set to true, text will be ellipsized by whole words. Example: \"This is the last line of...\"When set to false, text will be ellipsized by characters. Example: \"This is the last line of tex...\" |\n| firstCharTrueLeftAlign | Boolean | false | READ\\_WRITE | Forces the first character to left align completely instead of rendering centered in the character box. Subsequent characters are centered in their character box. If enabled monospace text strings with different first characters will shift around. This is primarily used for single characters strings |\n| wordBreakChars | string |  | READ\\_WRITE | By default, space and hyphen characters are used to determine where lines can be divided. In addition, this field can specify additional characters to be used to determine where the text can be broken into lines |\n| isTextEllipsized | Boolean | false | READ | Tells whether or not currently displayed text is clipped. |",
+            "events": [],
+            "fields": [],
+            "interfaces": [],
+            "name": "MonsospaceLabel",
+            "url": "https://developer.roku.com/docs/references/scenegraph/label-nodes/monospace-label.md"
+        },
         "multistylelabel": {
-            "availableSince": "10.5",
-            "description": "_Available since Roku OS 10.5_\n\nExtends [**LabelBase**](https://developer.roku.com/docs/references/scenegraph/label-nodes/label-base.md\n\nThe MultiStyleLabel node class is used to create labels with mixed styles. For example, this node can be used to create a single label with plain and bold text, different fonts, and/or multiple colors.\n\n![roku815px - img](https://image.roku.com/ZHZscHItMTc2/emoji-multistylelabel.jpg)",
+            "description": "Extends [**LabelBase**](https://developer.roku.com/docs/references/scenegraph/label-nodes/label-base.md\n\nThe MultiStyleLabel node class is used to create labels with mixed styles. For example, this node can be used to create a single label with plain and bold text, different fonts, and/or multiple colors.\n\n![roku815px - img](https://image.roku.com/ZHZscHItMTc2/emoji-multistylelabel.jpg)",
             "events": [],
             "extends": {
                 "name": "LabelBase",
@@ -5398,8 +5411,7 @@
             "url": "https://developer.roku.com/docs/references/scenegraph/media-playback-nodes/soundeffect.md"
         },
         "standarddialog": {
-            "availableSince": "10.0",
-            "description": "_Available since Roku OS 10.0_\n\nExtends [Group](https://developer.roku.com/docs/references/scenegraph/layout-group-nodes/group.md\"**Group**\")\n\nThe **StandardDialog** node is the base for Roku's pre-built standard message, keyboard, pinpad, and progress dialogs. It can also be used directly with a custom dialog structure built with the **StdDialogItem** nodes.",
+            "description": "Extends [Group](https://developer.roku.com/docs/references/scenegraph/layout-group-nodes/group.md\"**Group**\")\n\nThe **StandardDialog** node is the base for Roku's pre-built standard message, keyboard, pinpad, and progress dialogs. It can also be used directly with a custom dialog structure built with the **StdDialogItem** nodes.",
             "events": [],
             "extends": {
                 "name": "Group",
@@ -5461,8 +5473,7 @@
             "url": "https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/standard-dialog.md"
         },
         "standardkeyboarddialog": {
-            "availableSince": "10.0",
-            "description": "_Available since Roku OS 10.0_\n\nExtends [StandardDialog](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/standard-dialog.md\"**Standard Dialog**\")\n\nThe **StandardKeyboardDialog** node enables text and voice entry of strings consisting of alphanumeric characters as well as many commonly used symbols. It is similar to the legacy [KeyboardDialog](https://developer.roku.com/docs/references/scenegraph/dialog-nodes/keyboarddialog.md node, but includes voice entry functionality, which is provided through its internal **DynamicKeyboard** node.\n\n![roku815px - keyboard-dialog](https://image.roku.com/ZHZscHItMTc2/keyboard-dialog.jpg)",
+            "description": "Extends [StandardDialog](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/standard-dialog.md\"**Standard Dialog**\")\n\nThe **StandardKeyboardDialog** node enables text and voice entry of strings consisting of alphanumeric characters as well as many commonly used symbols. It is similar to the legacy [KeyboardDialog](https://developer.roku.com/docs/references/scenegraph/dialog-nodes/keyboarddialog.md node, but includes voice entry functionality, which is provided through its internal **DynamicKeyboard** node.\n\n![roku815px - keyboard-dialog](https://image.roku.com/ZHZscHItMTc2/keyboard-dialog.jpg)",
             "events": [],
             "extends": {
                 "name": "StandardDialog",
@@ -5517,8 +5528,7 @@
             "url": "https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/standard-keyboard-dialog.md"
         },
         "standardmessagedialog": {
-            "availableSince": "10.0",
-            "description": "_Available since Roku OS 10.0_\n\nExtends [StandardDialog](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/standard-dialog.md\"**Standard Dialog**\")\n\nThe **StandardMessageDialog** node is used to displays a message to the user. It is similar to the legacy [Dialog](https://developer.roku.com/docs/references/scenegraph/dialog-nodes/dialog.md node. It may contain the following items (from top to bottom):\n\n*   One or more blocks of text at the top.\n*   One bulleted / numbered list.\n*   One or more blocks of text at the bottom.\n\n![roku815px - standard-message-dialog](https://image.roku.com/ZHZscHItMTc2/standard-message-dialog.jpg)",
+            "description": "Extends [StandardDialog](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/standard-dialog.md\"**Standard Dialog**\")\n\nThe **StandardMessageDialog** node is used to displays a message to the user. It is similar to the legacy [Dialog](https://developer.roku.com/docs/references/scenegraph/dialog-nodes/dialog.md node. It may contain the following items (from top to bottom):\n\n*   One or more blocks of text at the top.\n*   One bulleted / numbered list.\n*   One or more blocks of text at the bottom.\n\n![roku815px - standard-message-dialog](https://image.roku.com/ZHZscHItMTc2/standard-message-dialog.jpg)",
             "events": [],
             "extends": {
                 "name": "StandardDialog",
@@ -5573,8 +5583,7 @@
             "url": "https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/standard-message-dialog.md"
         },
         "standardpinpaddialog": {
-            "availableSince": "10.0",
-            "description": "_Available since Roku OS 10.0_\n\nExtends [StandardDialog](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/standard-dialog.md\"**Standard Dialog**\")\n\nThe **StandardPinPadDialog** node enables text and voice entry of numeric characters—typically, short numeric PIN codes. It is similar to the legacy [PinDialog](https://developer.roku.com/docs/references/scenegraph/dialog-nodes/pindialog.md node, but includes additional voice entry of the numeric digits. This additional functionality is provided through the node's internal DynamicPinPad and VoiceTextEditBox nodes.\n\n![roku815px - pin-pad-dialog](https://image.roku.com/ZHZscHItMTc2/pin-pad-dialog.jpg)",
+            "description": "Extends [StandardDialog](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/standard-dialog.md\"**Standard Dialog**\")\n\nThe **StandardPinPadDialog** node enables text and voice entry of numeric characters—typically, short numeric PIN codes. It is similar to the legacy [PinDialog](https://developer.roku.com/docs/references/scenegraph/dialog-nodes/pindialog.md node, but includes additional voice entry of the numeric digits. This additional functionality is provided through the node's internal DynamicPinPad and VoiceTextEditBox nodes.\n\n![roku815px - pin-pad-dialog](https://image.roku.com/ZHZscHItMTc2/pin-pad-dialog.jpg)",
             "events": [],
             "extends": {
                 "name": "StandardDialog",
@@ -5622,8 +5631,7 @@
             "url": "https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/standard-pinpad-dialog.md"
         },
         "standardprogressdialog": {
-            "availableSince": "10.0",
-            "description": "_Available since Roku OS 10.0_\n\nExtends [StandardDialog](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/standard-dialog.md\"**Standard Dialog**\")\n\nThe StandardProgressDialog node displays a spinning progress indicator that includes a short progress message to the user. It is similar to the legacy [ProgressDialog](https://developer.roku.com/docs/references/scenegraph/dialog-nodes/progressdialog.md node.\n\n![roku815px - progress-dialog-title](https://image.roku.com/ZHZscHItMTc2/progress-dialog-title-v2.jpg)",
+            "description": "Extends [StandardDialog](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/standard-dialog.md\"**Standard Dialog**\")\n\nThe StandardProgressDialog node displays a spinning progress indicator that includes a short progress message to the user. It is similar to the legacy [ProgressDialog](https://developer.roku.com/docs/references/scenegraph/dialog-nodes/progressdialog.md node.\n\n![roku815px - progress-dialog-title](https://image.roku.com/ZHZscHItMTc2/progress-dialog-title-v2.jpg)",
             "events": [],
             "extends": {
                 "name": "StandardDialog",
@@ -5650,8 +5658,7 @@
             "url": "https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/standard-progress-dialog.md"
         },
         "stddlgactioncarditem": {
-            "availableSince": "11.0",
-            "description": "_Available since Roku OS 11.0_\n\nExtends [StdDlgItemBase](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md",
+            "description": "Extends [StdDlgItemBase](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md",
             "events": [],
             "extends": {
                 "name": "StdDlgItemBase",
@@ -5678,8 +5685,7 @@
             "url": "https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-action-card-item.md"
         },
         "stddlgareabase": {
-            "availableSince": "10.0",
-            "description": "_Available since Roku OS 10.0_\n\nExtends [Group](https://developer.roku.com/docs/references/scenegraph/layout-group-nodes/group.md\n\nThe **StdDlgAreaBase** node is the base class and provides the common functionality for the three StandardDialog area nodes: [**StdDlgTitleArea**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-title-area.md, [**StdDlgContentArea**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-content-area.md and [**StdDlgButtonArea**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-button-area.md.",
+            "description": "Extends [Group](https://developer.roku.com/docs/references/scenegraph/layout-group-nodes/group.md\n\nThe **StdDlgAreaBase** node is the base class and provides the common functionality for the three StandardDialog area nodes: [**StdDlgTitleArea**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-title-area.md, [**StdDlgContentArea**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-content-area.md and [**StdDlgButtonArea**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-button-area.md.",
             "events": [],
             "extends": {
                 "name": "Group",
@@ -5691,8 +5697,7 @@
             "url": "https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-area-base.md"
         },
         "stddlgbullettextitem": {
-            "availableSince": "10.0",
-            "description": "_Available since Roku OS 10.0_\n\nExtends [StdDlgItemBase](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md\"**StdDlgItemBase**\")\n\nThe **StdDlgBulletTextItem** node is used to display a bulleted list of text in the dialog's content area. It should only be used as a child of a [**StdDlgContentArea**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-content-area.md node.\n\n![roku815px - StdDlgBulletTextItem](https://image.roku.com/ZHZscHItMTc2/StdDlgBulletTextItem-v2.jpg)",
+            "description": "Extends [StdDlgItemBase](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md\"**StdDlgItemBase**\")\n\nThe **StdDlgBulletTextItem** node is used to display a bulleted list of text in the dialog's content area. It should only be used as a child of a [**StdDlgContentArea**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-content-area.md node.\n\n![roku815px - StdDlgBulletTextItem](https://image.roku.com/ZHZscHItMTc2/StdDlgBulletTextItem-v2.jpg)",
             "events": [],
             "extends": {
                 "name": "StdDlgItemBase",
@@ -5719,8 +5724,7 @@
             "url": "https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-bullet-text-item.md"
         },
         "stddlgbutton": {
-            "availableSince": "10.0",
-            "description": "_Available since Roku OS 10.0_\n\nExtends [Group](https://developer.roku.com/docs/references/scenegraph/layout-group-nodes/group.md\"**Group**\")\n\n**StdDlgButton** is the class used for each button in the [button area](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/standard-dialog-framework-overview.mdstructure). The buttons are displayed in the order in which they are listed as children of the [**StdDlgButtonArea** node](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-button-area.md. The size and layout of each button are controlled by the StandardDialog layout algorithm. **StdDlgButton** nodes should only be used as children of a **StdDlgButtonArea** node.\n\n![roku815px - std-dlg-button](https://image.roku.com/ZHZscHItMTc2/std-dlg-button-3.jpg)",
+            "description": "Extends [Group](https://developer.roku.com/docs/references/scenegraph/layout-group-nodes/group.md\"**Group**\")\n\n**StdDlgButton** is the class used for each button in the [button area](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/standard-dialog-framework-overview.mdstructure). The buttons are displayed in the order in which they are listed as children of the [**StdDlgButtonArea** node](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-button-area.md. The size and layout of each button are controlled by the StandardDialog layout algorithm. **StdDlgButton** nodes should only be used as children of a **StdDlgButtonArea** node.\n\n![roku815px - std-dlg-button](https://image.roku.com/ZHZscHItMTc2/std-dlg-button-3.jpg)",
             "events": [],
             "extends": {
                 "name": "Group",
@@ -5747,8 +5751,7 @@
             "url": "https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-button.md"
         },
         "stddlgbuttonarea": {
-            "availableSince": "10.0",
-            "description": "_Available since Roku OS 10.0_\n\nExtends [StdDlgAreaBase](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-area-base.md\"**StdDlgAreaBase**\")\n\nThe **StdDlgButtonArea** node is always positioned at the bottom of the [StandardDialog](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/standard-dialog.md. It contains zero or more child nodes of type [**StdDlgButton**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-button.md or a type that extends **StdDlgButton**. Each of the **StdDlgButton** nodes provides an option to perform some task related to the purpose of the dialog. For example, dialogs often have \"Continue\" and \"Cancel\" buttons in the bottom area. The buttons are positioned and sized so that they are arranged vertically in the order in which their **StdDlgButton** child nodes are listed.\n\nA dialog may only have a single button area, and the button area is optional.\n\n![roku815px - std-dlg-button-area](https://image.roku.com/ZHZscHItMTc2/std-dlg-button-area.jpg)",
+            "description": "Extends [StdDlgAreaBase](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-area-base.md\"**StdDlgAreaBase**\")\n\nThe **StdDlgButtonArea** node is always positioned at the bottom of the [StandardDialog](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/standard-dialog.md. It contains zero or more child nodes of type [**StdDlgButton**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-button.md or a type that extends **StdDlgButton**. Each of the **StdDlgButton** nodes provides an option to perform some task related to the purpose of the dialog. For example, dialogs often have \"Continue\" and \"Cancel\" buttons in the bottom area. The buttons are positioned and sized so that they are arranged vertically in the order in which their **StdDlgButton** child nodes are listed.\n\nA dialog may only have a single button area, and the button area is optional.\n\n![roku815px - std-dlg-button-area](https://image.roku.com/ZHZscHItMTc2/std-dlg-button-area.jpg)",
             "events": [],
             "extends": {
                 "name": "StdDlgAreaBase",
@@ -5760,8 +5763,7 @@
             "url": "https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-button-area.md"
         },
         "stddlgcontentarea": {
-            "availableSince": "10.0",
-            "description": "_Available since Roku OS 10.0_\n\nExtends [StdDlgAreaBase](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-area-base.md\"**StdDlgAreaBase**\")\n\nThe **StdDlgContentArea** node contains the main body of the dialog. It is positioned between the title area and the button area.\n\nIt contains zero or more child nodes that extend [**StdDlgItemBase**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md (for example, [**StdDlgTextItem**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-text-item.md, [**StdDlgProgressItem**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-progress-item.md, [**StdDlgGraphicItem**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-graphic-item.md, and other dialog building blocks). The layout and position of the [**StdDlgItemBase** nodes](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md are based on the dialog's width; the nodes are arranged vertically from top to bottom in the content area based on the order in which they are listed. The content area should contain only [**StdDlgItemBase** nodes](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md; otherwise, its layout and rendering are undefined.\n\n![roku815px - content-area](https://image.roku.com/ZHZscHItMTc2/content-area.jpg)",
+            "description": "Extends [StdDlgAreaBase](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-area-base.md\"**StdDlgAreaBase**\")\n\nThe **StdDlgContentArea** node contains the main body of the dialog. It is positioned between the title area and the button area.\n\nIt contains zero or more child nodes that extend [**StdDlgItemBase**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md (for example, [**StdDlgTextItem**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-text-item.md, [**StdDlgProgressItem**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-progress-item.md, [**StdDlgGraphicItem**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-graphic-item.md, and other dialog building blocks). The layout and position of the [**StdDlgItemBase** nodes](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md are based on the dialog's width; the nodes are arranged vertically from top to bottom in the content area based on the order in which they are listed. The content area should contain only [**StdDlgItemBase** nodes](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md; otherwise, its layout and rendering are undefined.\n\n![roku815px - content-area](https://image.roku.com/ZHZscHItMTc2/content-area.jpg)",
             "events": [],
             "extends": {
                 "name": "StdDlgAreaBase",
@@ -5773,8 +5775,7 @@
             "url": "https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-content-area.md"
         },
         "stddlgcustomitem": {
-            "availableSince": "10.5",
-            "description": "_Available since Roku OS 10.5_\n\nExtends [StdDlgItemBase](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md\"**StdDlgItemBase**\")\n\nThe **StdDlgCustomItem** node is used to display free-form dialog items in the content area that require a custom layout.\n\n![roku400px -  - custom-item](https://image.roku.com/ZHZscHItMTc2/std-dlg-custom-item-multi-column.jpeg)",
+            "description": "Extends [StdDlgItemBase](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md\"**StdDlgItemBase**\")\n\nThe **StdDlgCustomItem** node is used to display free-form dialog items in the content area that require a custom layout.\n\n![roku400px -  - custom-item](https://image.roku.com/ZHZscHItMTc2/std-dlg-custom-item-multi-column.jpeg)",
             "events": [],
             "extends": {
                 "name": "StdDlgItemBase",
@@ -5801,8 +5802,7 @@
             "url": "https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-custom-item.md"
         },
         "stddlgdeterminateprogressitem": {
-            "availableSince": "10.0",
-            "description": "_Available since Roku OS 10.0_\n\nExtends [StdDlgItemBase](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md\"**StdDlgItemBase**\")\n\nThe **StdDlgDeterminateProgressItem** node is used to display a progress indicator in the dialog's content area. It provides the percentage of progress that has been completed for a task that takes a limited amount of time. It should only be used as a child of a [**StdDlgContentArea**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-content-area.md node.\n\n![roku815px - std-dlg-determinate-progress-item](https://image.roku.com/ZHZscHItMTc2/std-dlg-determinate-progress-item-2.jpg)",
+            "description": "Extends [StdDlgItemBase](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md\"**StdDlgItemBase**\")\n\nThe **StdDlgDeterminateProgressItem** node is used to display a progress indicator in the dialog's content area. It provides the percentage of progress that has been completed for a task that takes a limited amount of time. It should only be used as a child of a [**StdDlgContentArea**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-content-area.md node.\n\n![roku815px - std-dlg-determinate-progress-item](https://image.roku.com/ZHZscHItMTc2/std-dlg-determinate-progress-item-2.jpg)",
             "events": [],
             "extends": {
                 "name": "StdDlgItemBase",
@@ -5829,8 +5829,7 @@
             "url": "https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-determinate-progress-item.md"
         },
         "stddlggraphicitem": {
-            "availableSince": "10.0",
-            "description": "_Available since Roku OS 10.0_\n\nExtends [StdDlgItemBase](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md\"**StdDlgItemBase**\")\n\nThe **StdDlgGraphicItem** node is used to display an image in the dialog's content area with an optional text label displayed to the left, right, above, or below the image. It should only be used as a child of a [**StdDlgContentArea**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-content-area.md node.\n\n![roku815px - std-dlg-graphic-item](https://image.roku.com/ZHZscHItMTc2/std-dlg-graphic-item.jpg)",
+            "description": "Extends [StdDlgItemBase](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md\"**StdDlgItemBase**\")\n\nThe **StdDlgGraphicItem** node is used to display an image in the dialog's content area with an optional text label displayed to the left, right, above, or below the image. It should only be used as a child of a [**StdDlgContentArea**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-content-area.md node.\n\n![roku815px - std-dlg-graphic-item](https://image.roku.com/ZHZscHItMTc2/std-dlg-graphic-item.jpg)",
             "events": [],
             "extends": {
                 "name": "StdDlgItemBase",
@@ -5878,8 +5877,7 @@
             "url": "https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-graphic-item.md"
         },
         "stddlgitembase": {
-            "availableSince": "10.0",
-            "description": "_Available since Roku OS 10.0_\n\nExtends [Group](https://developer.roku.com/docs/references/scenegraph/layout-group-nodes/group.md\n\n**StdDlgItemBase** is the base class for all the content area items. It provides the common functionality for all StdDlg\\[_x_\\]Item nodes (for example, [**StdDlgBulletTextItem**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-bullet-text-item.md, [**StdDlgTextItem**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-text-item.md, [**StdDlgKeyboardItem**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-keyboard-item.md, [**StdDlgProgressItem**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-progress-item.md, [**StdDlgGraphicItem**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-graphic-item.md, and the other dialog building block nodes).",
+            "description": "Extends [Group](https://developer.roku.com/docs/references/scenegraph/layout-group-nodes/group.md\n\n**StdDlgItemBase** is the base class for all the content area items. It provides the common functionality for all StdDlg\\[_x_\\]Item nodes (for example, [**StdDlgBulletTextItem**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-bullet-text-item.md, [**StdDlgTextItem**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-text-item.md, [**StdDlgKeyboardItem**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-keyboard-item.md, [**StdDlgProgressItem**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-progress-item.md, [**StdDlgGraphicItem**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-graphic-item.md, and the other dialog building block nodes).",
             "events": [],
             "extends": {
                 "name": "Group",
@@ -5899,8 +5897,7 @@
             "url": "https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md"
         },
         "stddlgitemgroup": {
-            "availableSince": "11.0",
-            "description": "_Available since Roku OS 11.0_\n\nExtends [StdDlgItemBase](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md\n\nThe **StdDlgItemGroup** node is used to visually group a set of StdDlgAreaBase child nodes in a custom dialog. Developers can use this node to reduce the vertical spacing between the StdDlgItemBase child nodes. For [**StdDlgActionCardItem**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-action-card-item.md nodes, the **StdDlgItemGroup** node enforces the rule that when multiple items **StdDlgActionCardItem** nodes have their **iconType** field set to \"radiobutton\", only one may have its **selected** status be set to \"true\".\n\nThe **StdDlgItemGroup** node may contain one or more [**StdDlgItemBase**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md child nodes (for example, StdDlgTextItem, StdDlgGraphicItem, and so on) as its children. It will visually group those child **StdDlgItemBase** nodes by reducing the amount of vertical space between them. However, the primary benefit of the StdDlgItemGroup node is managing **StdDlgActionCardItem** child nodes that have their **iconType** field set to \"radiobutton\".\n\n![roku815px - actionCards-radio-checkbox-items](https://image.roku.com/ZHZscHItMTc2/actionCards-radio-checkbox-items.jpg)\n\n> See the [**stdDlgActionCardItem** documentation](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-action-card-item.mdradiobutton-icontype) for code demonstarting how to use the **StdDlgItemGroup** node in a custom dialog.",
+            "description": "Extends [StdDlgItemBase](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md\n\nThe **StdDlgItemGroup** node is used to visually group a set of StdDlgAreaBase child nodes in a custom dialog. Developers can use this node to reduce the vertical spacing between the StdDlgItemBase child nodes. For [**StdDlgActionCardItem**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-action-card-item.md nodes, the **StdDlgItemGroup** node enforces the rule that when multiple items **StdDlgActionCardItem** nodes have their **iconType** field set to \"radiobutton\", only one may have its **selected** status be set to \"true\".\n\nThe **StdDlgItemGroup** node may contain one or more [**StdDlgItemBase**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md child nodes (for example, StdDlgTextItem, StdDlgGraphicItem, and so on) as its children. It will visually group those child **StdDlgItemBase** nodes by reducing the amount of vertical space between them. However, the primary benefit of the StdDlgItemGroup node is managing **StdDlgActionCardItem** child nodes that have their **iconType** field set to \"radiobutton\".\n\n![roku815px - actionCards-radio-checkbox-items](https://image.roku.com/ZHZscHItMTc2/actionCards-radio-checkbox-items.jpg)\n\n> See the [**stdDlgActionCardItem** documentation](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-action-card-item.mdradiobutton-icontype) for code demonstarting how to use the **StdDlgItemGroup** node in a custom dialog.",
             "events": [],
             "extends": {
                 "name": "StdDlgItemBase",
@@ -5920,8 +5917,7 @@
             "url": "https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-group.md"
         },
         "stddlgkeyboarditem": {
-            "availableSince": "10.0",
-            "description": "_Available since Roku OS 10.0_\n\nExtends [StdDlgItemBase](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md\"**StdDlgItemBase**\")\n\nThe **StdDlgKeyboardItem** node is used to display a keyboard or PINpad in the dialog's content area. It provides text and voice entry of strings containing alphanumeric characters and symbols or numeric digits. It should only be used as a child of a [**StdDlgContentArea**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-content-area.md node.\n\n![roku815px - std-dlg-keyboard-item](https://image.roku.com/ZHZscHItMTc2/std-dlg-keyboard-item.jpg)",
+            "description": "Extends [StdDlgItemBase](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md\"**StdDlgItemBase**\")\n\nThe **StdDlgKeyboardItem** node is used to display a keyboard or PINpad in the dialog's content area. It provides text and voice entry of strings containing alphanumeric characters and symbols or numeric digits. It should only be used as a child of a [**StdDlgContentArea**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-content-area.md node.\n\n![roku815px - std-dlg-keyboard-item](https://image.roku.com/ZHZscHItMTc2/std-dlg-keyboard-item.jpg)",
             "events": [],
             "extends": {
                 "name": "StdDlgItemBase",
@@ -5955,8 +5951,7 @@
             "url": "https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-keyboard-item.md"
         },
         "stddlgmultistyletextitem": {
-            "availableSince": "11.0",
-            "description": "_Available since Roku OS 11.0_\n\nExtends [StdDlgItemBase](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md",
+            "description": "Extends [StdDlgItemBase](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md",
             "events": [],
             "extends": {
                 "name": "StdDlgItemBase",
@@ -5990,8 +5985,7 @@
             "url": "https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-multi-style-text-item.md"
         },
         "stddlgprogressitem": {
-            "availableSince": "10.0",
-            "description": "_Available since Roku OS 10.0_\n\nExtends [StdDlgItemBase](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md\"**StdDlgItemBase**\")\n\nThe **StdDlgProgressItem** node is used to display a spinning progress indicator in the dialog's content area. It provides the status of a task that takes an indeterminate amount of time. It should only be used as a child of a [**StdDlgContentArea**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-content-area.md node.\n\n![roku815px - std-dlg-progress-item](https://image.roku.com/ZHZscHItMTc2/std-dlg-progress-item.jpg)",
+            "description": "Extends [StdDlgItemBase](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md\"**StdDlgItemBase**\")\n\nThe **StdDlgProgressItem** node is used to display a spinning progress indicator in the dialog's content area. It provides the status of a task that takes an indeterminate amount of time. It should only be used as a child of a [**StdDlgContentArea**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-content-area.md node.\n\n![roku815px - std-dlg-progress-item](https://image.roku.com/ZHZscHItMTc2/std-dlg-progress-item.jpg)",
             "events": [],
             "extends": {
                 "name": "StdDlgItemBase",
@@ -6011,8 +6005,7 @@
             "url": "https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-progress-item.md"
         },
         "stddlgsidecardarea": {
-            "availableSince": "11.0",
-            "description": "_Available since Roku OS 11.0_\n\nExtends [StdDlgAreaBase](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-area-base.md",
+            "description": "Extends [StdDlgAreaBase](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-area-base.md",
             "events": [],
             "extends": {
                 "name": "StdDlgAreaBase",
@@ -6053,8 +6046,7 @@
             "url": "https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-side-card-area.md"
         },
         "stddlgtextitem": {
-            "availableSince": "10.0",
-            "description": "_Available since Roku OS 10.0_\n\nExtends [StdDlgItemBase](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md\"**StdDlgItemBase**\")\n\nThe **StdDlgTextItem** node is used to display a block of text. It should only be used as a child of a [**StdDlgContentArea**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-content-area.md node.\n\n![roku815px - StdDlgTextItem](https://image.roku.com/ZHZscHItMTc2/std-dlg-text-item.jpg)\n\n> To separate lines of text, use multiple **StdDlgTextItem** nodes. Do not use newline characters.",
+            "description": "Extends [StdDlgItemBase](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md\"**StdDlgItemBase**\")\n\nThe **StdDlgTextItem** node is used to display a block of text. It should only be used as a child of a [**StdDlgContentArea**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-content-area.md node.\n\n![roku815px - StdDlgTextItem](https://image.roku.com/ZHZscHItMTc2/std-dlg-text-item.jpg)\n\n> To separate lines of text, use multiple **StdDlgTextItem** nodes. Do not use newline characters.",
             "events": [],
             "extends": {
                 "name": "StdDlgItemBase",
@@ -6088,8 +6080,7 @@
             "url": "https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-text-item.md"
         },
         "stddlgtitlearea": {
-            "availableSince": "10.0",
-            "description": "_Available since Roku OS 10.0_\n\nExtends [StdDlgAreaBase](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-area-base.md\"**StdDlgAreaBase**\")\n\nThe **StdDlgTitleArea** node contains the dialog's title information, which is always displayed at the top of the dialog. The title area may also include optional icons that appear left or right justified. The **StdDlgTitleArea** should only be used as a child node of a [**StandardDialog**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/standard-dialog.md.\n\nA dialog may contain a single title area, and the title area is optional (but is typically used in nearly all cases)\n\n![roku815px - title-area-icon](https://image.roku.com/ZHZscHItMTc2/title-area-icon.jpg)",
+            "description": "Extends [StdDlgAreaBase](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-area-base.md\"**StdDlgAreaBase**\")\n\nThe **StdDlgTitleArea** node contains the dialog's title information, which is always displayed at the top of the dialog. The title area may also include optional icons that appear left or right justified. The **StdDlgTitleArea** should only be used as a child node of a [**StandardDialog**](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/standard-dialog.md.\n\nA dialog may contain a single title area, and the title area is optional (but is typically used in nearly all cases)\n\n![roku815px - title-area-icon](https://image.roku.com/ZHZscHItMTc2/title-area-icon.jpg)",
             "events": [],
             "extends": {
                 "name": "StdDlgAreaBase",
@@ -6633,7 +6624,11 @@
                     "default": "[ ]",
                     "description": "Specifies the key values or the interpolator's keyframes. Each value in the keyValue array corresponds to a value in the key field's array. The interpolator's behavior is undefined if the number of values in the key field does not match the number of values in the keyValue field",
                     "name": "keyValue",
-                    "type": "array of float's"
+                    "type": "array of vector2d"
+                },
+                {
+                    "name": "keyValue",
+                    "type": "array of array of floats"
                 },
                 {
                     "accessPermission": "READ_WRITE",
@@ -6658,7 +6653,7 @@
                 {
                     "accessPermission": "WRITE",
                     "default": "false",
-                    "description": "Indicates whether the \"STOP\" command is executed asynchronously (true) or synchronously (false). By default, the STOP command is executed synchronously, which blocks the UI thread. Enabling this field makes the STOP command non-blocking, which enables the video to be switched faster. When this field is enabled, the \\`state\\` field is set to \"stopping\" when the asynnchronous stop begins. The \\`state\\` field then changes to \"stopped\" once the stop has been completed. Any other media player component calls on the UI thread that require the Video node to be re-instantiated should be blocked until the asynnchronous stop has been completed (for example, updating the \\`control\\` field to \"Play\" or \"Prebuffer\", updating the \\`seek\\` field, or updating the \\`seekClip\\` field). This is because a video node in the \"stopping\" state is still using the underlying media player, which is not available at that time. As a result, performing these types of operations on a different video while in the \"stopping\" state may result in a playback failure.",
+                    "description": "Indicates whether the \"STOP\" command is executed asynchronously (true) or synchronously (false). By default, the STOP command is executed synchronously, which blocks the UI thread. Enabling this field makes the STOP command non-blocking, which enables the video to be switched faster. When this field is enabled, the \\`state\\` field is set to \"stopping\" when the asynnchronous stop begins. The \\`state\\` field then changes to \"stopped\" once the stop has been completed. Any other media player component calls on the UI thread that require the Video node to be re-instantiated should be blocked until the asynnchronous stop has been completed (for example, updating the \\`control\\` field to \"Play\" or \"Prebuffer\" or updating the \\`seek\\` field). This is because a video node in the \"stopping\" state is still using the underlying media player, which is not available at that time. As a result, performing these types of operations on a different video while in the \"stopping\" state may result in a playback failure.",
                     "name": "asyncStopSemantics",
                     "type": "boolean"
                 },
@@ -6721,7 +6716,7 @@
                 {
                     "accessPermission": "READ_ONLY",
                     "default": "invalid",
-                    "description": "Contains information about stream buffering progress and status. This field is valid only while buffering is in progress, both at stream startup or when re-buffering is required. Observers will be notified when any element of the array changes, and also when buffering is complete and the field itself becomes invalid. The array contains the following name - value pairs.\n\n| Value | Meaning |\n| --- | --- |\n| percentage | Percent buffering complete as an integer. |\n| isUnderrun | Boolean value indicating if a stream underrun occurred. |\n| prebufferDone      (_Available since Roku OS 10.0_) | A boolean value that indicates whether the player has buffered enough data to allow the player to begin playing immediately should \"control\" be set to \"play.\" |\n| actualStart      (_Available since Roku OS 10.0_) | A time value that is automatically set when prebufferDone becomes true, specifying the actual time from which playback will resume. This may vary from the time requested in the content node's playStart field, depending on the capabilities of the player and the seekMode setting. |\n\n\\> While it is possible to use the Video node seek field to specify the seek time, it is recommended that channels do the following: > > 1. Set the content node field playStart in seek-to-pause scenarios. > 2. In the video node, set \"control\" to \"prebuffer\". > 3. Wait for \"prebufferDone\" to become \"true\". > 4. Check \"actualStart\" (if desired). > 5. Set \"control\" to \"play\".",
+                    "description": "Contains information about stream buffering progress and status. This field is valid only while buffering is in progress, both at stream startup or when re-buffering is required. Observers will be notified when any element of the array changes, and also when buffering is complete and the field itself becomes invalid. The array contains the following name - value pairs.\n\n| Value | Meaning |\n| --- | --- |\n| percentage | Percent buffering complete as an integer. |\n| isUnderrun | Boolean value indicating if a stream underrun occurred. |\n| prebufferDone | A boolean value that indicates whether the player has buffered enough data to allow the player to begin playing immediately should \"control\" be set to \"play.\" |\n| actualStart | A time value that is automatically set when prebufferDone becomes true, specifying the actual time from which playback will resume. This may vary from the time requested in the content node's playStart field, depending on the capabilities of the player and the seekMode setting. |\n\n\\> While it is possible to use the Video node seek field to specify the seek time, it is recommended that channels do the following: > > 1. Set the content node field playStart in seek-to-pause scenarios. > 2. In the video node, set \"control\" to \"prebuffer\". > 3. Wait for \"prebufferDone\" to become \"true\". > 4. Check \"actualStart\" (if desired). > 5. Set \"control\" to \"play\".",
                     "name": "bufferingStatus",
                     "type": "associative array"
                 },
@@ -6889,7 +6884,7 @@
                 {
                     "accessPermission": "READ_ONLY",
                     "default": "",
-                    "description": "A diagnostic message to help resolve the video play error set in the \\`state\\` field. The roAssociativeArray contains the following fields:\n\n| Field | Type | Description |\n| --- | --- | --- |\n| clipId | integer | The unique ID for the clip |\n| ignored | integer | Indicates whether the error generated an exception (0) or was ignored resulting in the next item in the content list being played (1). |\n| source | string | The module that generated the error. |\n| category | String | The type of error, which includes: \"http\", \"drm\", \"mediaerror\", or \"mediaplayer\". |\n| errcode | integer | The internal Roku code associated with the error. Use the **dbgmsg** field for debugging. |\n| dbgmsg | string | A verbose debug message that can help identify the root cause of the error. |\n| drmerrcode   _Available since Roku OS 10.5_ | integer | The error code returned by the DRM system, if any, when a video player error occurs |",
+                    "description": "A diagnostic message to help resolve the video play error set in the \\`state\\` field. The roAssociativeArray contains the following fields:\n\n| Field | Type | Description |\n| --- | --- | --- |\n| clipId | integer | The unique ID for the clip |\n| ignored | integer | Indicates whether the error generated an exception (0) or was ignored resulting in the next item in the content list being played (1). |\n| source | string | The module that generated the error. |\n| category | String | The type of error, which includes: \"http\", \"drm\", \"mediaerror\", or \"mediaplayer\". |\n| errcode | integer | The internal Roku code associated with the error. Use the **dbgmsg** field for debugging. |\n| dbgmsg | string | A verbose debug message that can help identify the root cause of the error. |\n| drmerrcode | integer | The error code returned by the DRM system, if any, when a video player error occurs |",
                     "name": "errorInfo",
                     "type": "roAssociativeArray"
                 },
@@ -7057,7 +7052,7 @@
                 {
                     "accessPermission": "READ_ONLY",
                     "default": "",
-                    "description": "Provides timing measurements related to the start of video playback. All measurements are in seconds. The roAssociativeArray contains the following fields:\n\n| Field | Type | Access Permission | Description |\n| --- | --- | --- | --- |\n| total\\_dur | float | READ\\_ONLY | Total video start duration. |\n| manifest\\_dur | float | READ\\_ONLY | Manifest download and parsing. |\n| drm\\_load\\_dur | float | READ\\_ONLY | DRM system initialization. |\n| drm\\_lic\\_acq\\_dur | float | READ\\_ONLY | License acquisition. This typically includes interactions with the license server. |\n| prebuf\\_dur | float | READ\\_ONLY | Prebuffer content. |\n| manifest\\_start      (_Available since Roku OS 10.0_) | Float | READ\\_ONLY | Point at which manifest download and parsing begins. |\n| drm\\_load\\_start      (_Available since Roku OS 10.0_) | Float | READ\\_ONLY | Point at which DRM system initialization begins. |\n| drm\\_lic\\_acq\\_start      (_Available since Roku OS 10.0_) | Float | READ\\_ONLY | Point at which license acquisition begins. |\n| prebuf\\_start      (_Available since Roku OS 10.0_) | Float | READ\\_ONLY | Point at which content pre-buffering begins. |\n\n\\> The \\\\\\_start fields correspond to the similarly named \\\\\\_dur (duration) fields in this structure. In each case, the \\\\\\_start point is the number of milliseconds elapsed from the initialization of the media player (t=0.000). If required, ending points for each interval can be derived from its associated starting-point and duration.",
+                    "description": "Provides timing measurements related to the start of video playback. All measurements are in seconds. The roAssociativeArray contains the following fields:\n\n| Field | Type | Access Permission | Description |\n| --- | --- | --- | --- |\n| total\\_dur | float | READ\\_ONLY | Total video start duration. |\n| manifest\\_dur | float | READ\\_ONLY | Manifest download and parsing. |\n| drm\\_load\\_dur | float | READ\\_ONLY | DRM system initialization. |\n| drm\\_lic\\_acq\\_dur | float | READ\\_ONLY | License acquisition. This typically includes interactions with the license server. |\n| prebuf\\_dur | float | READ\\_ONLY | Prebuffer content. |\n| manifest\\_start | Float | READ\\_ONLY | Point at which manifest download and parsing begins. |\n| drm\\_load\\_start | Float | READ\\_ONLY | Point at which DRM system initialization begins. |\n| drm\\_lic\\_acq\\_start | Float | READ\\_ONLY | Point at which license acquisition begins. |\n| prebuf\\_start | Float | READ\\_ONLY | Point at which content pre-buffering begins. |\n\n\\> The \\\\\\_start fields correspond to the similarly named \\\\\\_dur (duration) fields in this structure. In each case, the \\\\\\_start point is the number of milliseconds elapsed from the initialization of the media player (t=0.000). If required, ending points for each interval can be derived from its associated starting-point and duration.",
                     "name": "playStartInfo",
                     "type": "roAssociativeArray"
                 },
@@ -7162,7 +7157,7 @@
                 {
                     "accessPermission": "READ_WRITE",
                     "default": "[]",
-                    "description": "Contains the information about HLS and DASH standard thumbnail tiles as they are discovered within the manifest for streams which contain them. This field was first introduced (for VOD only) starting in Roku OS 9.1. Starting with Roku OS 11.0, the channel can enable this field for HLS and DASH live streams containing standard thumbnails by setting enableThumbnailTilesDuringLive to true. > For Roku OS releases before 9.4, the \\*\\*thumbnailTiles\\*\\* associative array has the following structure: {tile\\\\\\_id: tile\\\\\\_set} (string to associative array) > > For Roku OS 9.4 and later, the \\*\\*thumbnailTiles\\*\\* associative array has the following structure: {tile\\\\\\_id: \\\\\\[tile\\\\\\_set, tile\\\\\\_set, tile\\\\\\_set,...\\\\\\]}(string to array of associative arrays). This format allows discontinuous tile\\\\\\_sets of the same resolution to be grouped together as a \"choice\" for display. The \\*\\*tile\\\\\\_id\\*\\* field is a unique string identifier for the \\*\\*tile\\\\\\_set\\*\\*, which is an associative array containing the attributes of the tile set as well as information about the thumbnails. The \\*\\*tile\\\\\\_set\\*\\* field contains the following fields:\n\n| Field | Type | Default | Description |\n| --- | --- | --- | --- |\n| htiles | integer | 0 | Horizontal number of thumbnails in a tile (columns.) |\n| vtiles | integer | 0 | Vertical number of thumbnails in a tile (rows.) |\n| width | integer | 0 | Number of horizontal pixels in a thumbnail (this is not the tile as the one in the DASH spec). |\n| height | integer | 0 | Number of vertical pixels in a thumbnail (this is not the same tile as the one in the DASH spec). |\n| bandwidth | integer | 0 | Max tile size in bits / duration. |\n| duration | float | 0.0 | Duration of one tile in seconds (assuming a full tile). |\n| initial\\_time   _Available since Roku OS 10.0_ | float | 0.0 | Presentation start time of current **tile\\_set** in seconds. Thumbnails in tiles beginning before this time should be skipped, and the first relevant thumbnail duration should be updated accordingly. |\n| final\\_time | float | 0.0 | End time of current tile\\_set in seconds. |\n| tiles | roArray | \\[\\] | Contains information about each tile in the **tile\\_set**. This contains the following fields:    *   url (index 0). A string with the URL of the tile. *   start\\_time (index 1). A float with the start time of the tile in seconds.<br/ *   format (index 2). Typically, an empty string, but it may contain the tile format \"jpeg\", \"png\", and so on.   |",
+                    "description": "Contains the information about HLS and DASH standard thumbnail tiles as they are discovered within the manifest for streams which contain them. This field was first introduced (for VOD only) starting in Roku OS 9.1. Starting with Roku OS 11.0, the channel can enable this field for HLS and DASH live streams containing standard thumbnails by setting enableThumbnailTilesDuringLive to true. > For Roku OS releases before 9.4, the \\*\\*thumbnailTiles\\*\\* associative array has the following structure: {tile\\\\\\_id: tile\\\\\\_set} (string to associative array) > > For Roku OS 9.4 and later, the \\*\\*thumbnailTiles\\*\\* associative array has the following structure: {tile\\\\\\_id: \\\\\\[tile\\\\\\_set, tile\\\\\\_set, tile\\\\\\_set,...\\\\\\]}(string to array of associative arrays). This format allows discontinuous tile\\\\\\_sets of the same resolution to be grouped together as a \"choice\" for display. The \\*\\*tile\\\\\\_id\\*\\* field is a unique string identifier for the \\*\\*tile\\\\\\_set\\*\\*, which is an associative array containing the attributes of the tile set as well as information about the thumbnails. The \\*\\*tile\\\\\\_set\\*\\* field contains the following fields:\n\n| Field | Type | Default | Description |\n| --- | --- | --- | --- |\n| htiles | integer | 0 | Horizontal number of thumbnails in a tile (columns.) |\n| vtiles | integer | 0 | Vertical number of thumbnails in a tile (rows.) |\n| width | integer | 0 | Number of horizontal pixels in a thumbnail (this is not the tile as the one in the DASH spec). |\n| height | integer | 0 | Number of vertical pixels in a thumbnail (this is not the same tile as the one in the DASH spec). |\n| bandwidth | integer | 0 | Max tile size in bits / duration. |\n| duration | float | 0.0 | Duration of one tile in seconds (assuming a full tile). |\n| initial\\_time    | float | 0.0 | Presentation start time of current **tile\\_set** in seconds. Thumbnails in tiles beginning before this time should be skipped, and the first relevant thumbnail duration should be updated accordingly. |\n| final\\_time | float | 0.0 | End time of current tile\\_set in seconds. |\n| tiles | roArray | \\[\\] | Contains information about each tile in the **tile\\_set**. This contains the following fields:    *   url (index 0). A string with the URL of the tile. *   start\\_time (index 1). A float with the start time of the tile in seconds.<br/ *   format (index 2). Typically, an empty string, but it may contain the tile format \"jpeg\", \"png\", and so on.   |",
                     "name": "thumbnailTiles",
                     "type": "roAssociativeArray"
                 },
@@ -7204,7 +7199,7 @@
                 {
                     "accessPermission": "READ_WRITE",
                     "default": "internal instance default",
-                    "description": "The visible TrickPlayBar node. The fields of this internal node are as follows:\n\n| Field | Type | Default | Use |\n| --- | --- | --- | --- |\n| currentTimeMarkerBlendColor | color | 0xFFFFFFFF | This is blended with the marker for the current playback position. This is typically a small vertical bar displayed in the TrickPlayBar node when the user is fast-forwarding or rewinding through the video. |\n| textColor | color | system default | Sets the color of the text next to the trickPlayBar node indicating the time elapsed/remaining. |\n| thumbBlendColor | color | 0xFFFFFFFF | Sets the blend color of the square image in the trickPlayBar node that shows the current position, with the current direction arrows or pause icon on top. The blending is performed by multiplying this value with each pixel in the image. If not changed from the default value, no blending will take place. |\n| filledBarBlendColor | color | 0xFFFFFFFF | This color will be blended with the graphical image specified in the `filledBarImageUri` field. The blending is performed by multiplying this value with each pixel in the image. If not changed from the default value, no blending will take place. |\n| liveFilledBarBlendColor      (_Available since Roku OS 11.0_) | Color | 0xFFFFFFFF | The color of the trickplay progress bar to be blended with the **filledBarImageUri** for live linear streams. |\n| filledBarImageUri | uri | \"\" | A 9-patch or ordinary PNG of the bar that represents the completed portion of the work represented by this ProgressBar node. This is typically displayed on the left side of the track. This will be blended with the color specified by the `filledBarBlendColor` field, if set to a non-default value. |\n| trackBlendColor | color | 0xFFFFFFFF | This color is blended with the graphical image specified by `trackImageUri` field. The blending is performed by multiplying this value with each pixel in the image. If not changed from the default value, no blending will take place. |\n| trackImageUri | uri | \"\" | A 9-patch or ordinary PNG of the track of the progress bar, which surrounds the filled and empty bars. This will be blended with the color specified by the `trackBlendColor` field, if set to a non-default value. |",
+                    "description": "The visible TrickPlayBar node. The fields of this internal node are as follows:\n\n| Field | Type | Default | Use |\n| --- | --- | --- | --- |\n| currentTimeMarkerBlendColor | color | 0xFFFFFFFF | This is blended with the marker for the current playback position. This is typically a small vertical bar displayed in the TrickPlayBar node when the user is fast-forwarding or rewinding through the video. |\n| textColor | color | system default | Sets the color of the text next to the trickPlayBar node indicating the time elapsed/remaining. |\n| thumbBlendColor | color | 0xFFFFFFFF | Sets the blend color of the square image in the trickPlayBar node that shows the current position, with the current direction arrows or pause icon on top. The blending is performed by multiplying this value with each pixel in the image. If not changed from the default value, no blending will take place. |\n| filledBarBlendColor | color | 0xFFFFFFFF | This color will be blended with the graphical image specified in the `filledBarImageUri` field. The blending is performed by multiplying this value with each pixel in the image. If not changed from the default value, no blending will take place. |\n| liveFilledBarBlendColor | Color | 0xFFFFFFFF | The color of the trickplay progress bar to be blended with the **filledBarImageUri** for live linear streams. |\n| filledBarImageUri | uri | \"\" | A 9-patch or ordinary PNG of the bar that represents the completed portion of the work represented by this ProgressBar node. This is typically displayed on the left side of the track. This will be blended with the color specified by the `filledBarBlendColor` field, if set to a non-default value. |\n| trackBlendColor | color | 0xFFFFFFFF | This color is blended with the graphical image specified by `trackImageUri` field. The blending is performed by multiplying this value with each pixel in the image. If not changed from the default value, no blending will take place. |\n| trackImageUri | uri | \"\" | A 9-patch or ordinary PNG of the track of the progress bar, which surrounds the filled and empty bars. This will be blended with the color specified by the `trackBlendColor` field, if set to a non-default value. |",
                     "name": "trickPlayBar",
                     "type": "TrickPlayBar node"
                 },
@@ -7317,9 +7312,8 @@
             "url": "https://developer.roku.com/docs/references/brightscript/components/roappmanager.md"
         },
         "roappmemorymonitor": {
-            "availableSince": "10.5",
             "constructors": [],
-            "description": "_Available since Roku OS 10.5_\n\nThe **roAppMemoryMonitor** component is used to subscribe channels to low-memory notifications. When a channel is subscribed, it receives a [roAppMemoryMonitorEvent](https://developer.roku.com/docs/references/brightscript/events/roappmemorymonitorevent.md when it reaches a specific percentage of the per-channel memory limit (80%).\n\n> The roAppMemoryMonitor functions are supported on all [current and updatable device models](/docs/specs/hardware.md), except for Liberty, Austin, Mustang and Littlefield.",
+            "description": "The **roAppMemoryMonitor** component is used to subscribe channels to low-memory notifications. When a channel is subscribed, it receives a [roAppMemoryMonitorEvent](https://developer.roku.com/docs/references/brightscript/events/roappmemorymonitorevent.md when it reaches a specific percentage of the per-channel memory limit (80%).\n\n> The roAppMemoryMonitor functions are supported on all [current and updatable device models](/docs/specs/hardware.md), except for Liberty, Austin, Mustang and Littlefield.",
             "events": [
                 {
                     "name": "roAppMemoryMonitorEvent",
@@ -7598,6 +7592,10 @@
                     "url": "https://developer.roku.com/docs/references/brightscript/interfaces/ifarrayset.md"
                 },
                 {
+                    "name": "ifArraySlice",
+                    "url": "https://developer.roku.com/docs/references/brightscript/interfaces/ifarrayslice.md"
+                },
+                {
                     "name": "ifByteArray",
                     "url": "https://developer.roku.com/docs/references/brightscript/interfaces/ifbytearray.md"
                 },
@@ -7804,9 +7802,8 @@
             "url": "https://developer.roku.com/docs/references/brightscript/components/rodouble.md"
         },
         "rodsa": {
-            "availableSince": "10.5",
             "constructors": [],
-            "description": "_Available since Roku OS 10.5_\n\nThe DSA component provides support for the ECDSA and EdDSA (with Ed25519 form) digital signature algorithms. It is used to provide cryptographically signed evidence that an ad request originated from an actual Roku device.",
+            "description": "The DSA component provides support for the ECDSA and EdDSA (with Ed25519 form) digital signature algorithms. It is used to provide cryptographically signed evidence that an ad request originated from an actual Roku device.",
             "events": [],
             "interfaces": [
                 {
@@ -8078,6 +8075,7 @@
                     "url": "https://developer.roku.com/docs/references/brightscript/interfaces/iftostr.md"
                 }
             ],
+            "methods": [],
             "name": "roIntrinsicDouble",
             "url": "https://developer.roku.com/docs/references/brightscript/components/rodouble.md"
         },
@@ -9154,7 +9152,7 @@
                     "name": "GetChannelAvailableMemory",
                     "params": [],
                     "returnDescription": "An integer indicating the estimated available memory remaining for the channel or the available memory for the device, whichever is lower.",
-                    "returnType": "dynamic"
+                    "returnType": "integer"
                 },
                 {
                     "description": "Returns the amount of foreground and background memory the app may use and the maximum amount of memory that the RokuOS may allocate on behalf of the app (the memory that shows up in the channel's heap memory statistics). This helps developers debug memory issues and find out the maximum available memory for scenarios such as when their app has been suspended and is in the background, is playing a video, and so on.",
@@ -9167,7 +9165,7 @@
                     "name": "GetMemoryLimitPercent",
                     "params": [],
                     "returnDescription": "The usage percentage of memory limit for the channel.",
-                    "returnType": "dynamic"
+                    "returnType": "integer"
                 }
             ],
             "name": "ifAppMemoryMonitor",
@@ -9424,6 +9422,11 @@
                     "description": "An array stores an indexed collection of BrightScript objects. Each entry of an array can be a different type, or they may all of the same type.",
                     "name": "roArray",
                     "url": "https://developer.roku.com/docs/references/brightscript/components/roarray.md"
+                },
+                {
+                    "description": "The byte array component is used to contain and manipulate an arbitrary array of bytes",
+                    "name": "roByteArray",
+                    "url": "https://developer.roku.com/docs/references/brightscript/interfaces/ifbytearray.md"
                 }
             ],
             "methods": [
@@ -10299,7 +10302,7 @@
                         }
                     ],
                     "returnDescription": "If the order is successful, an roAssociativeArray is returned that contains the following keys with string values:",
-                    "returnType": "Object"
+                    "returnType": "Void"
                 },
                 {
                     "description": "Applies a change in quantity to one item in the current Order (shopping cart).",
@@ -10397,7 +10400,7 @@
                     "params": [
                         {
                             "default": null,
-                            "description": "A comma-separated list of the attribute names to be returned. For example, to return only the email address and first name of the user's account, you would call GetPartialUserData(\"email, firstname\"). The full set of user account properties that can be queried with the function is:    *   firstname *   lastname *   email *   street *   city *   state *   zip *   country *   phone *   birth (_Available since Roku OS 10.0_) *   gender (_Available since Roku OS 10.0_)",
+                            "description": "A comma-separated list of the attribute names to be returned. For example, to return only the email address and first name of the user's account, you would call GetPartialUserData(\"email, firstname\"). The full set of user account properties that can be queried with the function is:    *   firstname *   lastname *   email *   street *   city *   state *   zip *   country *   phone *   birth *   gender",
                             "isRequired": true,
                             "name": "properties",
                             "type": "String"
@@ -10457,7 +10460,7 @@
                         }
                     ],
                     "returnDescription": "If the order is successful, an roAssociativeArray is returned that contains the following keys with string values:",
-                    "returnType": "Object"
+                    "returnType": "Void"
                 },
                 {
                     "description": "Sets the current Order (shopping cart) to the elements specified in the parameter, which must be an roList of roAssociativeArray items.Passing an empty roList clears the Order, like calling ClearOrder().",
@@ -10887,7 +10890,7 @@
                         }
                     ],
                     "returnDescription": "An roByteArray containing the decrypted data.",
-                    "returnType": "dynamic"
+                    "returnType": "Void"
                 },
                 {
                     "description": "Encrypts data on a device that is unique per device, channel, or model.",
@@ -10909,7 +10912,7 @@
                         }
                     ],
                     "returnDescription": "An roByteArray containing the encrypted data.",
-                    "returnType": "dynamic"
+                    "returnType": "Void"
                 }
             ],
             "name": "ifDeviceCrypto",
@@ -10931,7 +10934,7 @@
                     "params": [
                         {
                             "default": null,
-                            "description": "An associative array with the audio format to be checked. The general format of the associative arrays for CanDecodeAudio() is similar to the parameter and return associative arrays used in [CanDecodeVideo()](https://developer.roku.com/docs/references/brightscript/interfaces/ifdeviceinfo.mdcandecodevideovideo_format-as-object-as-object):  \n| Key        | Type    | Value                                                                                                                                                                                                                                                                                                                                                                                                                   | Requirement |\n| ---------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |\n| Codec      | string  | Specifies the audio codec: “aac”, “ac3”, “eac3”, \"alac\", \"flac\", “mp2”, “mp3”, “vorbis”, “wma” (sunset as of Roku OS 12.5), “wma pro” (sunset as of Roku OS 12.5), “dts”, \"ac4\"                                                                                                                                                                                                                                         | Required    |\n| Profile    | string  | Specifies the codec profile:CodecProfile\"h.265/h.265\"\"main\", \"high\", \"main 10\"\"vp9\"\"profile 0\", \"profile 2\"\"AAC codec profiles\"\"mp2 lc\", \"mp4 he\"                                                                                                                                                                                                                                                                       | Optional    |\n| Level      | String  | Specifies the codec level:CodecLevel\"h.265/h.265\"4.1, 4.2, 5.0, 5.1\"vp9\"3.0, 3.1, 4.0, 4.1, 5.0, 5.1                                                                                                                                                                                                                                                                                                                    | Optional    |\n| ChCnt      | integer | Specifies the required number of audio channels                                                                                                                                                                                                                                                                                                                                                                         | Optional    |\n| PassThru   | integer | Specifies whether the bitstream needs to be decoded on the device. By default, this reports the codec properties of both the Roku device and the attached HDMI device.You can filter the values returned by including one of the following options:**0** \\- Reports only codecs that are supported on the Roku device itself.**1** \\- Reports only codecs of the attached HDMI device (for example, an audio receiver). | Optional    |\n| Atmos      | Integer | Specifies whether atmos is required. Include 'atmos=1' if it is.                                                                                                                                                                                                                                                                                                                                                        | Optional    |\n| SampleRate | integer | Specifies the sample rate                                                                                                                                                                                                                                                                                                                                                                                               | Optional    |\n| BitRate    | integer | Specifies the bit rate in Kbit/sec                                                                                                                                                                                                                                                                                                                                                                                      | Optional    |\n| Container  | string  | Specifies the container format                                                                                                                                                                                                                                                                                                                                                                                          | Optional    |\n",
+                            "description": "An associative array with the audio format to be checked. The general format of the associative arrays for CanDecodeAudio() is similar to the parameter and return associative arrays used in [CanDecodeVideo()](#candecodevideovideo_format-as-object-as-object).      As of Roku OS 14.1, the keys in the associative array are fully case-insensitive. For older OS versions, use lower-case letters for the keys when specified within double quotes (\"\").       \n| Key        | Type    | Value                                                                                                                                                                                                                                                                                                                                                                                                                   | Requirement |\n| ---------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |\n| Codec      | string  | Specifies the audio codec: “aac”, “ac3”, “eac3”, \"alac\", \"flac\", “mp2”, “mp3”, “vorbis”, “wma” (sunset as of Roku OS 12.5), “wma pro” (sunset as of Roku OS 12.5), “dts”, \"ac4\"                                                                                                                                                                                                                                         | Required    |\n| Profile    | string  | Specifies the codec profile:CodecProfile\"h.265/h.265\"\"main\", \"high\", \"main 10\"\"vp9\"\"profile 0\", \"profile 2\"\"AAC codec profiles\"\"mp2 lc\", \"mp4 he\"                                                                                                                                                                                                                                                                       | Optional    |\n| Level      | String  | Specifies the codec level:CodecLevel\"h.265/h.265\"4.1, 4.2, 5.0, 5.1\"vp9\"3.0, 3.1, 4.0, 4.1, 5.0, 5.1                                                                                                                                                                                                                                                                                                                    | Optional    |\n| ChCnt      | integer | Specifies the required number of audio channels                                                                                                                                                                                                                                                                                                                                                                         | Optional    |\n| PassThru   | integer | Specifies whether the bitstream needs to be decoded on the device. By default, this reports the codec properties of both the Roku device and the attached HDMI device.You can filter the values returned by including one of the following options:**0** \\- Reports only codecs that are supported on the Roku device itself.**1** \\- Reports only codecs of the attached HDMI device (for example, an audio receiver). | Optional    |\n| Atmos      | Integer | Specifies whether Atmos presence is to be validated. Include 'atmos=1' to check for the presence of Atmos. Starting with Roku OS 14.1,'atmos=0' can be used to specifically check for the absence of Atmos.                                                                                                                                                                                                             | Optional    |\n| SampleRate | integer | Specifies the sample rate                                                                                                                                                                                                                                                                                                                                                                                               | Optional    |\n| BitRate    | integer | Specifies the bit rate in Kbit/sec                                                                                                                                                                                                                                                                                                                                                                                      | Optional    |\n| Container  | string  | Specifies the container format                                                                                                                                                                                                                                                                                                                                                                                          | Optional    |\n",
                             "isRequired": true,
                             "name": "audio_format",
                             "type": "Object"
@@ -10946,7 +10949,7 @@
                     "params": [
                         {
                             "default": null,
-                            "description": "An associative array with the following key/value pairs specifying the video format to be checked:  \n| Key       | Type   | Value                                                                                                                                                                                                    | Requirement |\n| --------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |\n| Codec     | string | Specifies the video codec:CodecProfileLevel\"mpeg2\"n/a\"main\", \"high\"\"mpeg4 avc\" 1\"main\", \"high\"\"4.1\", \"4.2\"\"hevc\" 1\"main\", \"main 10\"\"4.1\", \"5.0\", \"5.1\"\"vp9\" 1\"profile 0\", \"profile 2\"\"4.1\", \"5.0\", \"5.1\" | Required    |\n| Profile   | string | Specifies the profile                                                                                                                                                                                    | Optional    |\n| Level     | string | Specifies the level                                                                                                                                                                                      | Optional    |\n| Container | string | Specifies the container format: “mp4”, “hls”, “mkv”, “ism”, “dash”, “ts”                                                                                                                                 | Optional    |\n",
+                            "description": "An associative array with the following key/value pairs specifying the video format to be checked.      As of Roku OS 14.1, the keys in the associative array are fully case-insensitive. For older OS versions, use lower-case letters for the keys when specified within double quotes (\"\").       \n| Key       | Type   | Value                                                                                                                                                                                                    | Requirement |\n| --------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |\n| Codec     | string | Specifies the video codec:CodecProfileLevel\"mpeg2\"n/a\"main\", \"high\"\"mpeg4 avc\" 1\"main\", \"high\"\"4.1\", \"4.2\"\"hevc\" 1\"main\", \"main 10\"\"4.1\", \"5.0\", \"5.1\"\"vp9\" 1\"profile 0\", \"profile 2\"\"4.1\", \"5.0\", \"5.1\" | Required    |\n| Profile   | string | Specifies the profile                                                                                                                                                                                    | Optional    |\n| Level     | string | Specifies the level                                                                                                                                                                                      | Optional    |\n| Container | string | Specifies the container format: “mp4”, “hls”, “mkv”, “ism”, “dash”, “ts”                                                                                                                                 | Optional    |\n",
                             "isRequired": true,
                             "name": "video_format",
                             "type": "Object"
@@ -11117,7 +11120,7 @@
                     "description": "Returns a unique identifier for the device. The ID is persistent and cannot be reset. This value can be used to manage or identify devices linked to the channel’s content services.",
                     "name": "GetChannelClientId",
                     "params": [],
-                    "returnDescription": "A unique device identifier. This identifier is different across channels so each channel will get a different identifier when calling this function",
+                    "returnDescription": "A unique identifier. This identifier is different across channels so each channel will get a different identifier when calling this function",
                     "returnType": "String"
                 },
                 {
@@ -11126,7 +11129,7 @@
                     "isDeprecated": true,
                     "name": "GetClientTrackingId",
                     "params": [],
-                    "returnDescription": "A unique device identifier. This identifier is different across channels so each channel will get a different identifier when calling this function",
+                    "returnDescription": "A unique identifier. This identifier is different across channels so each channel will get a different identifier when calling this function",
                     "returnType": "String"
                 },
                 {
@@ -11198,7 +11201,7 @@
                     "description": "Checks the display size of a screen.",
                     "name": "GetDisplaySize",
                     "params": [],
-                    "returnDescription": "An associative array with the screen width and height. Specifically, the keys \"w\" and \"h\" contain the values for the screen width and height respectively, either 720 and 480, or 1280 and 720",
+                    "returnDescription": "An associative array with the screen width and height. Specifically, the keys \"w\" and \"h\" contain the values for the screen width and height respectively. This may be one of the following:",
                     "returnType": "Object"
                 },
                 {
@@ -11394,7 +11397,7 @@
                     "params": [
                         {
                             "default": null,
-                            "description": "The feature to be checked, which may be one of the following values:  *   \"5.1\\_surround\\_sound\" *   \"can\\_output\\_5.1\\_surround\\_sound\" *   \"sd\\_only\\_hardware\" *   \"usb\\_hardware\" *   \"sdcard\\_hardware\" *   \"ethernet\\_hardware\" *   \"gaming\\_hardware\" *   \"energy\\_star\\_compliant\" *   \"soundbar\\_hardware\". Check whether the device has soundbar hardware (for example, speakers). *   \"voice\\_remote\" (_Available since Roku OS 10.5_). Checks whether a Roku device is paired with a Roku voice remote. This enables developers to tailor the in-channel user experience for viewers with Roku voice remote controls. *   \"handsfree\\_voice\" (_Available since Roku OS 10.5_). Checks whether a Roku device is paired with a hands-free Roku remote control such as the Roku Voice Remote Pro. This enables developers to tailor the in-channel user experience for viewers with hands-free Roku remote controls (for example, displaying voice tips and tricks in the UI).",
+                            "description": "The feature to be checked, which may be one of the following values:  *   \"5.1\\_surround\\_sound\" *   \"can\\_output\\_5.1\\_surround\\_sound\" *   \"sd\\_only\\_hardware\" *   \"usb\\_hardware\" *   \"sdcard\\_hardware\" *   \"ethernet\\_hardware\" *   \"gaming\\_hardware\" *   \"energy\\_star\\_compliant\" *   \"soundbar\\_hardware\". Check whether the device has soundbar hardware (for example, speakers). *   \"voice\\_remote\" (). Checks whether a Roku device is paired with a Roku voice remote. This enables developers to tailor the in-channel user experience for viewers with Roku voice remote controls. *   \"handsfree\\_voice\" (). Checks whether a Roku device is paired with a hands-free Roku remote control such as the Roku Voice Remote Pro. This enables developers to tailor the in-channel user experience for viewers with hands-free Roku remote controls (for example, displaying voice tips and tricks in the UI).",
                             "isRequired": true,
                             "name": "feature",
                             "type": "String"
@@ -11432,6 +11435,12 @@
                     "name": "IsHDMIConnected",
                     "params": [],
                     "returnDescription": "A flag indicating whether an HDMI connection to a TV has been detected.",
+                    "returnType": "Boolean"
+                },
+                {
+                    "description": "GetUIResolution() as Object",
+                    "name": "IsPassthruCodecActive",
+                    "params": [],
                     "returnType": "Boolean"
                 },
                 {
@@ -11694,7 +11703,7 @@
                     "returnType": "Void"
                 },
                 {
-                    "description": "Draws the source object, where src is an [roBitmap](https://developer.roku.com/docs/references/brightscript/components/robitmap.md\"roBitmap\") or an [roRegion](https://developer.roku.com/docs/references/brightscript/components/roregion.md\"roRegion\") object, at position x,y rotated by angle theta degrees.",
+                    "description": "**OVERLOADED METHOD**\n\nDraws the source object, where src is an [roBitmap](https://developer.roku.com/docs/references/brightscript/components/robitmap.md\"roBitmap\") or an [roRegion](https://developer.roku.com/docs/references/brightscript/components/roregion.md\"roRegion\") object, at position x,y rotated by angle theta degrees.\n\n or \n\nDraws and rotates the source object, where src is an [roBitmap](https://developer.roku.com/docs/references/brightscript/components/robitmap.md\"roBitmap\") or an [roRegion](https://developer.roku.com/docs/references/brightscript/components/roregion.md\"roRegion\") object at position x,y, rotated by angle theta degrees.",
                     "name": "DrawRotatedObject",
                     "params": [
                         {
@@ -11724,6 +11733,13 @@
                             "isRequired": true,
                             "name": "src",
                             "type": "Object"
+                        },
+                        {
+                            "default": null,
+                            "description": "The RGBA color of the source object.",
+                            "isRequired": false,
+                            "name": "rgba",
+                            "type": "Integer"
                         }
                     ],
                     "returnDescription": "A flag indicating whether the object was successfully drawn.",
@@ -11817,6 +11833,63 @@
                             "isRequired": true,
                             "name": "font",
                             "type": "Object"
+                        }
+                    ],
+                    "returnDescription": "A flag indicating whether the object was successfully drawn.",
+                    "returnType": "Boolean"
+                },
+                {
+                    "description": "**OVERLOADED METHOD**\n\nDraws and then scales and rotates the source object, where src is an [roBitmap](https://developer.roku.com/docs/references/brightscript/components/robitmap.md\"roBitmap\") or an [roRegion](https://developer.roku.com/docs/references/brightscript/components/roregion.md\"roRegion\") object; at position x,y; scaled in the x direction by scaleX and in the y direction by scaleY; and rotated by angle theta degrees.",
+                    "name": "DrawTransformedObject",
+                    "params": [
+                        {
+                            "default": null,
+                            "description": "The x-coordinate of the source object.",
+                            "isRequired": true,
+                            "name": "x",
+                            "type": "Integer"
+                        },
+                        {
+                            "default": null,
+                            "description": "The y-coordinate of the source object.",
+                            "isRequired": true,
+                            "name": "y",
+                            "type": "Integer"
+                        },
+                        {
+                            "default": null,
+                            "description": "The position which to rotate the source object. This may be 0, 90, 180, and 270 degrees.",
+                            "isRequired": true,
+                            "name": "theta",
+                            "type": "Float"
+                        },
+                        {
+                            "default": null,
+                            "description": "The x direction in which the source object is to be scaled.",
+                            "isRequired": true,
+                            "name": "scaleX",
+                            "type": "Float"
+                        },
+                        {
+                            "default": null,
+                            "description": "The y direction in which the source object is to be scaled.",
+                            "isRequired": true,
+                            "name": "scaleY",
+                            "type": "Float"
+                        },
+                        {
+                            "default": null,
+                            "description": "The [roBitmap](https://developer.roku.com/docs/references/brightscript/components/robitmap.md\"roBitmap\") or an [roRegion](https://developer.roku.com/docs/references/brightscript/components/roregion.md\"roRegion\") object to be drawn.",
+                            "isRequired": true,
+                            "name": "src",
+                            "type": "Object"
+                        },
+                        {
+                            "default": null,
+                            "description": "The RGBA color of the source object.",
+                            "isRequired": false,
+                            "name": "rgba",
+                            "type": "Integer"
                         }
                     ],
                     "returnDescription": "A flag indicating whether the object was successfully drawn.",
@@ -11941,8 +12014,6 @@
             "url": "https://developer.roku.com/docs/references/brightscript/interfaces/ifdraw2d.md"
         },
         "ifdsa": {
-            "availableSince": "10.5",
-            "description": "_Available since Roku OS 10.5_",
             "implementers": [
                 {
                     "description": "The **roDSA** component provides support for the ECDSA and EdDSA (with Ed25519 form) digital signature algorithms. It is used to provide cryptographically signed evidence that an ad request originated from an actual Roku device.",
@@ -13754,7 +13825,7 @@
                         }
                     ],
                     "returnDescription": "An roArray of programs falling within the given time range (returns invalid if the given channel is unknown). Each entry in the array contains an roAssociativeArray containing the following details of a program:",
-                    "returnType": "Object"
+                    "returnType": "Void"
                 },
                 {
                     "description": "Returns an integer which is incremented each time the underlying data in the guide changes.",
@@ -14592,7 +14663,7 @@
                         }
                     ],
                     "returnDescription": "An associative array with the bounding rectangle and all of its children in the Scene's root coordinate system.",
-                    "returnType": "Dynamic"
+                    "returnType": "Void"
                 },
                 {
                     "description": "Returns the bounding rectangle of this node's subpart into the specified ancestor' s coordinate system. If the subpart does not exist or if the node is not an ancestor of the specified node, this will return the node's bounding rectangle",
@@ -14614,7 +14685,7 @@
                         }
                     ],
                     "returnDescription": "An associative array with the bounding rectangle.",
-                    "returnType": "Object"
+                    "returnType": "Void"
                 },
                 {
                     "description": "Returns the node bounding rectangle. The bounding rectangle of a node is the axis-aligned rectangle computed by transforming the local bounding rectangle of the node by the node transformation matrix. The resulting rectangle corresponds to the node local bounding rectangle transformed into its parent node local coordinate system.",
@@ -14710,7 +14781,7 @@
                         }
                     ],
                     "returnDescription": "A flag indicating whether the child node was successfully appended.",
-                    "returnType": "Boolean"
+                    "returnType": "Void"
                 },
                 {
                     "description": "Appends an array of children nodes to the subject node.",
@@ -14827,7 +14898,7 @@
                     "name": "getParent",
                     "params": [],
                     "returnDescription": "The parent node; otherwise, \"invalid\".",
-                    "returnType": "dynamic"
+                    "returnType": "Void"
                 },
                 {
                     "description": "Returns an array with every existing node without a parent created by the currently running channel.",
@@ -14847,7 +14918,7 @@
                     "name": "getScene",
                     "params": [],
                     "returnDescription": "The node's root Scene.",
-                    "returnType": "dynamic"
+                    "returnType": "Void"
                 },
                 {
                     "description": "Inserts a previously-created child node at the position index in the subject node list of children, so that this is the position that the new child node is traversed during render.",
@@ -14869,7 +14940,7 @@
                         }
                     ],
                     "returnDescription": "A flag indicating whether the child node that was successfully inserted.",
-                    "returnType": "Boolean"
+                    "returnType": "Void"
                 },
                 {
                     "description": "Inserts an array of child nodes to the subject node, starting at a specific position.",
@@ -14906,7 +14977,7 @@
                         }
                     ],
                     "returnDescription": "A flag indicating whether the child node that was successfully removed.",
-                    "returnType": "Boolean"
+                    "returnType": "Void"
                 },
                 {
                     "description": "If the subject node has a child node in the index position, removes that child node from the subject node list of children.",
@@ -14980,7 +15051,7 @@
                         }
                     ],
                     "returnDescription": "A flag indicating whether the node that was successfully moved to another parent node.",
-                    "returnType": "Boolean"
+                    "returnType": "Void"
                 },
                 {
                     "description": "If the subject node has a child node in the index position, replace that child node with the newChild node in the subject node list of children, otherwise do nothing.",
@@ -15002,7 +15073,7 @@
                         }
                     ],
                     "returnDescription": "A flag indicating whether the child node that was successfully replaced.",
-                    "returnType": "Boolean"
+                    "returnType": "Void"
                 },
                 {
                     "description": "Replaces the child nodes in the subject node, starting at the position specified by index, with new child nodes specified by child\\_nodes",
@@ -15587,21 +15658,21 @@
                     "name": "getGlobalNode",
                     "params": [],
                     "returnDescription": "A global reference object.",
-                    "returnType": "dynamic"
+                    "returnType": "Void"
                 },
                 {
                     "description": "Returns the roMessagePort object for the SceneGraph scene.",
                     "name": "GetMessagePort",
                     "params": [],
                     "returnDescription": "The roMessagePort object.",
-                    "returnType": "dynamic"
+                    "returnType": "Void"
                 },
                 {
                     "description": "The roSGScene object associated with the screen.",
                     "name": "GetScene",
                     "params": [],
                     "returnDescription": "Typically, the scene created in main.brs by a roSGScreen.CreateScene() call.",
-                    "returnType": "dynamic"
+                    "returnType": "Void"
                 },
                 {
                     "description": "Specifies the roMessagePort object for the roSGScreen object",
@@ -18937,6 +19008,12 @@
                 }
             ],
             "methods": [
+                {
+                    "description": "Enables an event to be sent when the system clock becomes valid.",
+                    "name": "EnableValidClockEvent",
+                    "params": [],
+                    "returnType": "Void"
+                },
                 {
                     "description": "Indicates whether the user has changed the closed caption mode or track. This method returns true if the caption mode changed; otherwise, it returns false.",
                     "name": "isCaptionModeChanged",

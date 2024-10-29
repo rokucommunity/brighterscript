@@ -347,6 +347,7 @@ class Runner {
                 constructors: [],
                 description: 'roIntrinsicDouble is the object equivalent for type \'Double\'.\n\nIt is a legacy object name, corresponding to the intrinsic Double object. Applications should use Double literal values and/or Double-typed variables directly.',
                 events: [],
+                methods: [],
                 interfaces: [
                     {
                         name: 'ifDouble',
@@ -815,7 +816,10 @@ class Runner {
 
 
     private fixFunctionParams(text: string): string {
-        return text.replace(/to as /ig, 'toValue as ');
+        return text.replace(/to as /ig, 'toValue as ')
+            .replace(/as int$/ig, 'as integer')
+            .replace(/as int,/ig, 'as integer,')
+            .replace(/as int\)/ig, 'as integer)');
     }
 
     private getMethod(text: string) {
@@ -1199,7 +1203,6 @@ class Runner {
                             name: 'trackImageUri',
                             type: 'uri'
                         },
-
                         {
                             accessPermission: 'READ_WRITE',
                             default: 'not sepcified',
@@ -1211,6 +1214,14 @@ class Runner {
                     interfaces: [],
                     name: 'ProgressBar',
                     url: 'https://developer.roku.com/en-ca/docs/references/scenegraph/media-playback-nodes/video.md#ui-fields'
+                },
+                vector2dfieldinterpolator: {
+                    fields: [
+                        {
+                            name: 'keyValue',
+                            type: 'array of array of floats'
+                        }
+                    ]
                 }
             },
             components: {
@@ -1335,6 +1346,8 @@ class Runner {
             }
         });
 
+        fixFieldByName(this.result.nodes.vector2dfieldinterpolator, 'keyValue', { type: 'array of vector2d' });
+
         // fix all overloaded methods in interfaces
         for (const ifaceKey in this.result.interfaces) {
             const iface = this.result.interfaces[ifaceKey];
@@ -1358,6 +1371,15 @@ class Runner {
         //fix roSGNodeContentNode overloads
         fixOverloadedField(this.result.nodes.contentnode, 'actors');
         fixOverloadedField(this.result.nodes.contentnode, 'categories');
+    }
+}
+
+function fixFieldByName(component: SceneGraphNode, fieldName: string, override: Partial<SceneGraphNodeField>) {
+    let fieldToChangeIndex = component.fields.findIndex((field) => {
+        return field.name.toLowerCase() === fieldName.toLowerCase();
+    });
+    if (fieldToChangeIndex >= 0) {
+        component.fields[fieldToChangeIndex] = deepmerge(component.fields[fieldToChangeIndex], override);
     }
 }
 
