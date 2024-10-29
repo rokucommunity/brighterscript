@@ -1,5 +1,5 @@
 {
-    "generatedDate": "2024-10-29T13:07:06.987Z",
+    "generatedDate": "2024-10-29T13:24:30.290Z",
     "nodes": {
         "animation": {
             "description": "Extends [**AnimationBase**](https://developer.roku.com/docs/references/scenegraph/abstract-nodes/animationbase.md\n\nThe Animation node class provides animations of renderable nodes, by applying interpolator functions to the values in specified renderable node fields. For an animation to take effect, an Animation node definition must include a child field interpolator node ([FloatFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/floatfieldinterpolator.md\"FloatFieldInterpolator\"), [Vector2DFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/vector2dfieldinterpolator.md\"Vector2DFieldInterpolator\"), [ColorFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/colorfieldinterpolator.md\"ColorFieldInterpolator\")) definition for each renderable node field that is animated.\n\nThe Animation node class provides a simple linear interpolator function, where the animation takes place smoothly and simply from beginning to end. The Animation node class also provides several more complex interpolator functions to allow custom animation effects. For example, you can move a graphic image around the screen at differing speeds and curved trajectories at different times in the animation by specifying the appropriate function in the easeFunction field (quadratic and exponential are two examples of functions that can be specified). The interpolator functions are divided into two parts: the beginning of the animation (ease-in), and the end of the animation (ease-out). You can apply a specified interpolator function to either or both ease-in and ease-out, or specify no function for either or both (which is the linear function). You can also change the portion of the animation that is ease-in and ease-out to arbitrary fractional values for a quadratic interpolator function applied to both ease-in and ease-out.",
@@ -10298,7 +10298,7 @@
                         }
                     ],
                     "returnDescription": "If the order is successful, an roAssociativeArray is returned that contains the following keys with string values:",
-                    "returnType": "Void"
+                    "returnType": "Object"
                 },
                 {
                     "description": "Applies a change in quantity to one item in the current Order (shopping cart).",
@@ -10456,7 +10456,7 @@
                         }
                     ],
                     "returnDescription": "If the order is successful, an roAssociativeArray is returned that contains the following keys with string values:",
-                    "returnType": "Void"
+                    "returnType": "Object"
                 },
                 {
                     "description": "Sets the current Order (shopping cart) to the elements specified in the parameter, which must be an roList of roAssociativeArray items.Passing an empty roList clears the Order, like calling ClearOrder().",
@@ -10886,7 +10886,7 @@
                         }
                     ],
                     "returnDescription": "An roByteArray containing the decrypted data.",
-                    "returnType": "Void"
+                    "returnType": "roByteArray"
                 },
                 {
                     "description": "Encrypts data on a device that is unique per device, channel, or model.",
@@ -10908,7 +10908,7 @@
                         }
                     ],
                     "returnDescription": "An roByteArray containing the encrypted data.",
-                    "returnType": "Void"
+                    "returnType": "roByteArray"
                 }
             ],
             "name": "ifDeviceCrypto",
@@ -13284,7 +13284,7 @@
                         }
                     ],
                     "returnDescription": "A flag indicating whether the event response operation was successful.",
-                    "returnType": "Void"
+                    "returnType": "Boolean"
                 },
                 {
                     "description": "Returns the message port (if any) currently associated with the object.",
@@ -13821,7 +13821,7 @@
                         }
                     ],
                     "returnDescription": "An roArray of programs falling within the given time range (returns invalid if the given channel is unknown). Each entry in the array contains an roAssociativeArray containing the following details of a program:",
-                    "returnType": "Void"
+                    "returnType": "Object"
                 },
                 {
                     "description": "Returns an integer which is incremented each time the underlying data in the guide changes.",
@@ -14659,7 +14659,7 @@
                         }
                     ],
                     "returnDescription": "An associative array with the bounding rectangle and all of its children in the Scene's root coordinate system.",
-                    "returnType": "Void"
+                    "returnType": "Dynamic"
                 },
                 {
                     "description": "Returns the bounding rectangle of this node's subpart into the specified ancestor' s coordinate system. If the subpart does not exist or if the node is not an ancestor of the specified node, this will return the node's bounding rectangle",
@@ -14681,7 +14681,7 @@
                         }
                     ],
                     "returnDescription": "An associative array with the bounding rectangle.",
-                    "returnType": "Void"
+                    "returnType": "Object"
                 },
                 {
                     "description": "Returns the node bounding rectangle. The bounding rectangle of a node is the axis-aligned rectangle computed by transforming the local bounding rectangle of the node by the node transformation matrix. The resulting rectangle corresponds to the node local bounding rectangle transformed into its parent node local coordinate system.",
@@ -14777,7 +14777,7 @@
                         }
                     ],
                     "returnDescription": "A flag indicating whether the child node was successfully appended.",
-                    "returnType": "Void"
+                    "returnType": "Boolean"
                 },
                 {
                     "description": "Appends an array of children nodes to the subject node.",
@@ -14894,7 +14894,7 @@
                     "name": "getParent",
                     "params": [],
                     "returnDescription": "The parent node; otherwise, \"invalid\".",
-                    "returnType": "Void"
+                    "returnType": "roSGNode"
                 },
                 {
                     "description": "Returns an array with every existing node without a parent created by the currently running channel.",
@@ -14914,7 +14914,7 @@
                     "name": "getScene",
                     "params": [],
                     "returnDescription": "The node's root Scene.",
-                    "returnType": "Void"
+                    "returnType": "roSGNode"
                 },
                 {
                     "description": "Inserts a previously-created child node at the position index in the subject node list of children, so that this is the position that the new child node is traversed during render.",
@@ -14936,7 +14936,7 @@
                         }
                     ],
                     "returnDescription": "A flag indicating whether the child node that was successfully inserted.",
-                    "returnType": "Void"
+                    "returnType": "Boolean"
                 },
                 {
                     "description": "Inserts an array of child nodes to the subject node, starting at a specific position.",
@@ -14973,7 +14973,7 @@
                         }
                     ],
                     "returnDescription": "A flag indicating whether the child node that was successfully removed.",
-                    "returnType": "Void"
+                    "returnType": "Boolean"
                 },
                 {
                     "description": "If the subject node has a child node in the index position, removes that child node from the subject node list of children.",
@@ -15047,7 +15047,7 @@
                         }
                     ],
                     "returnDescription": "A flag indicating whether the node that was successfully moved to another parent node.",
-                    "returnType": "Void"
+                    "returnType": "Boolean"
                 },
                 {
                     "description": "If the subject node has a child node in the index position, replace that child node with the newChild node in the subject node list of children, otherwise do nothing.",
@@ -15069,7 +15069,7 @@
                         }
                     ],
                     "returnDescription": "A flag indicating whether the child node that was successfully replaced.",
-                    "returnType": "Void"
+                    "returnType": "Boolean"
                 },
                 {
                     "description": "Replaces the child nodes in the subject node, starting at the position specified by index, with new child nodes specified by child\\_nodes",
@@ -15654,21 +15654,21 @@
                     "name": "getGlobalNode",
                     "params": [],
                     "returnDescription": "A global reference object.",
-                    "returnType": "Void"
+                    "returnType": "roSGNode"
                 },
                 {
                     "description": "Returns the roMessagePort object for the SceneGraph scene.",
                     "name": "GetMessagePort",
                     "params": [],
                     "returnDescription": "The roMessagePort object.",
-                    "returnType": "Void"
+                    "returnType": "roMessagePort"
                 },
                 {
                     "description": "The roSGScene object associated with the screen.",
                     "name": "GetScene",
                     "params": [],
                     "returnDescription": "Typically, the scene created in main.brs by a roSGScreen.CreateScene() call.",
-                    "returnType": "Void"
+                    "returnType": "roSGNode"
                 },
                 {
                     "description": "Specifies the roMessagePort object for the roSGScreen object",

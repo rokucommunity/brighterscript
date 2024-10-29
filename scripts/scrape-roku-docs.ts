@@ -836,12 +836,18 @@ class Runner {
 
         const { ast } = Parser.parse(functionSignatureToParse);
         const statements = ast.statements;
+        let returnTypeString = 'Void';
+        const lastParenIndex = functionSignatureToParse.lastIndexOf(')');
+        const lastAsIndex = functionSignatureToParse.indexOf('as', lastParenIndex);
+        if (lastAsIndex >= 0) {
+            returnTypeString = functionSignatureToParse.substring(lastAsIndex + 2)?.split('\n')?.[0]?.trim();
+        }
         if (statements.length > 0) {
             const func = statements[0] as FunctionStatement;
             const signature = {
                 name: func.tokens.name?.text,
                 params: [],
-                returnType: func.func.returnTypeExpression?.getType({ flags: SymbolTypeFlag.typetime })?.toTypeString() ?? 'Void'
+                returnType: func.func.returnTypeExpression?.getType({ flags: SymbolTypeFlag.typetime })?.toTypeString() ?? returnTypeString ?? 'Void'
             } as Func;
 
             if (variadicMatch) {
