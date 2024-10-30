@@ -14,9 +14,9 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import util, { standardizePath as s } from '../util';
 import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
 import { ParseMode, Parser } from '../parser/Parser';
-import type { FunctionStatement } from '../parser/Statement';
-import { ImportStatement } from '../parser/Statement';
-import { createToken } from '../astUtils/creators';
+import { Block, FunctionStatement } from '../parser/Statement';
+import { ImportStatement, PrintStatement } from '../parser/Statement';
+import { createIdentifier, createStringLiteral, createToken } from '../astUtils/creators';
 import * as fsExtra from 'fs-extra';
 import undent from 'undent';
 import { tempDir, rootDir } from '../testHelpers.spec';
@@ -24,8 +24,9 @@ import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { ClassType, EnumType, FloatType, InterfaceType } from '../types';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import * as fileUrl from 'file-url';
-import { isAALiteralExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isBlock } from '../astUtils/reflection';
 import type { AALiteralExpression } from '../parser/Expression';
+import { CallExpression, FunctionExpression, LiteralExpression } from '../parser/Expression';
 
 let sinon = sinonImport.createSandbox();
 
@@ -1970,6 +1971,59 @@ describe('BrsFile', () => {
                     undent(expected)
                 );
             }
+
+            it('transpiles call expression when paren tokens are missing', async () => {
+                const file = program.setFile<BrsFile>('source/main.bs', `
+                    sub main()
+                    end sub
+                `);
+                const body = file.ast.findChild<Block>(isBlock);
+                body.statements.push(new CallExpression({
+                    callee: new LiteralExpression({ value: createIdentifier('lcase') }),
+                    args: [createStringLiteral('HELLO')]
+                }));
+
+                await testTranspile(file, `
+                    sub main()
+                        lcase("HELLO")
+                    end sub
+                `, undefined, undefined, false);
+            });
+
+            it('transpiles print expression when print token is missing', async () => {
+                const file = program.setFile<BrsFile>('source/main.bs', `
+                    sub main()
+                    end sub
+                `);
+                const body = file.ast.findChild<Block>(isBlock);
+                body.statements.push(new PrintStatement({
+                    expressions: [createStringLiteral('HELLO')]
+                }));
+
+                await testTranspile(file, `
+                    sub main()
+                        print "HELLO"
+                    end sub
+                `, undefined, undefined, false);
+            });
+
+
+            it('transpiles function expression when paren tokens are missing', async () => {
+                const file = program.setFile<BrsFile>('source/main.bs', `
+                `);
+                file.ast.statements.push(new FunctionStatement({
+                    func: new FunctionExpression({
+                        body: new Block({ statements: [] })
+                    }),
+                    name: createIdentifier('main')
+                }));
+
+                await testTranspile(file, `
+                    function main()
+                    end function
+                `, undefined, undefined, false);
+            });
+
         });
 
         it('transpilies libpkg:/ paths when encountered', async () => {

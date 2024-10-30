@@ -187,7 +187,7 @@ export class AssignmentStatement extends Statement {
         return [
             state.transpileToken(this.tokens.name),
             ' ',
-            state.transpileToken(this.tokens.equals ?? createToken(TokenKind.Equal)),
+            state.transpileToken(this.tokens.equals ?? createToken(TokenKind.Equal), '='),
             ' ',
             ...this.value.transpile(state)
         ];
@@ -739,7 +739,7 @@ export class IfStatement extends Statement {
         if (this.tokens.then) {
             results.push(' ');
             results.push(
-                state.transpileToken(this.tokens.then)
+                state.transpileToken(this.tokens.then, 'then')
             );
         }
         state.lineage.unshift(this);
@@ -900,7 +900,7 @@ export class PrintStatement extends Statement {
      * @param options.expressions an array of expressions or `PrintSeparator`s to be evaluated and printed.
      */
     constructor(options: {
-        print: Token;
+        print?: Token;
         expressions: Array<Expression | PrintSeparatorTab | PrintSeparatorSpace>;
     }) {
         super();
@@ -914,7 +914,7 @@ export class PrintStatement extends Statement {
         );
     }
     public readonly tokens: {
-        readonly print: Token;
+        readonly print?: Token;
     };
     public readonly expressions: Array<Expression | PrintSeparatorTab | PrintSeparatorSpace>;
     public readonly kind = AstNodeKind.PrintStatement;
@@ -923,7 +923,7 @@ export class PrintStatement extends Statement {
 
     transpile(state: BrsTranspileState) {
         let result = [
-            state.transpileToken(this.tokens.print),
+            state.transpileToken(this.tokens.print, 'print'),
             ' '
         ] as TranspileResult;
         for (let i = 0; i < this.expressions.length; i++) {
