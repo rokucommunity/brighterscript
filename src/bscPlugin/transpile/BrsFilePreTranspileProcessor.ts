@@ -1,9 +1,10 @@
-import { createToken } from '../../astUtils/creators';
-import { isBrsFile, isDottedGetExpression, isLiteralExpression, isUnaryExpression, isVariableExpression } from '../../astUtils/reflection';
+import { createAssignmentStatement, createBlock, createIfStatement, createToken } from '../../astUtils/creators';
+import { isAssignmentStatement, isBlock, isBrsFile, isDottedGetExpression, isGroupingExpression, isLiteralExpression, isTernaryExpression, isUnaryExpression, isVariableExpression } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BeforeFileTranspileEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
-import type { Expression } from '../../parser/AstNode';
+import type { Expression, Statement } from '../../parser/AstNode';
+import type { TernaryExpression } from '../../parser/Expression';
 import { LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import type { Scope } from '../../Scope';
@@ -30,6 +31,54 @@ export class BrsFilePreTranspileProcessor {
                 } else {
                     this.processExpression(expression, scope);
                 }
+
+                if (isTernaryExpression(expression)) {
+                    this.processTernaryExpression(expression, scope);
+                }
+            }
+        }
+    }
+
+    private processTernaryExpression(ternaryExpression: TernaryExpression, scope: Scope) {
+        function getOwnerAndKey(statement: Statement) {
+            const parent = statement.parent;
+            if (isBlock(parent)) {
+                let idx = parent.statements.indexOf(statement);
+                if (idx > -1) {
+                    return { owner: parent.statements, key: idx };
+                }
+            }
+        }
+
+        //if the ternary expression is part of a simple assignment, rewrite it as an `IfStatement`
+        let parent = ternaryExpression.findAncestor(x => !isGroupingExpression(x));
+        if (isAssignmentStatement(parent)) {
+            const ifStatement = createIfStatement({
+                if: createToken(TokenKind.If, 'if', ternaryExpression.questionMarkToken.range),
+                condition: ternaryExpression.test,
+                then: createToken(TokenKind.Then, 'then', ternaryExpression.questionMarkToken.range),
+                thenBranch: createBlock({
+                    statements: [
+                        createAssignmentStatement({
+                            name: parent.name,
+                            value: ternaryExpression.consequent
+                        })
+                    ]
+                }),
+                else: createToken(TokenKind.Else, 'else', ternaryExpression.questionMarkToken.range),
+                elseBranch: createBlock({
+                    statements: [
+                        createAssignmentStatement({
+                            name: parent.name,
+                            value: ternaryExpression.alternate
+                        })
+                    ]
+                }),
+                endIf: createToken(TokenKind.EndIf, 'end if', ternaryExpression.questionMarkToken.range)
+            });
+            let { owner, key } = getOwnerAndKey(parent) ?? {};
+            if (owner && key !== undefined) {
+                this.event.editor.setProperty(owner, key, ifStatement);
             }
         }
     }
@@ -65,10 +114,10 @@ export class BrsFilePreTranspileProcessor {
 
     }
 
-    private processExpression(expression: Expression, scope: Scope | undefined) {
-        let containingNamespace = this.event.file.getNamespaceStatementForPosition(expression.range.start)?.getName(ParseMode.BrighterScript);
+    private processExpression(ternaryExpression: Expression, scope: Scope | undefined) {
+        let containingNamespace = this.event.file.getNamespaceStatementForPosition(ternaryExpression.range.start)?.getName(ParseMode.BrighterScript);
 
-        const parts = util.splitExpression(expression);
+        const parts = util.splitExpression(ternaryExpression);
 
         const processedNames: string[] = [];
         for (let part of parts) {

@@ -1,10 +1,10 @@
 import type { Range } from 'vscode-languageserver';
 import type { Identifier, Token } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
-import type { Expression } from '../parser/AstNode';
+import type { Expression, Statement } from '../parser/AstNode';
 import { LiteralExpression, CallExpression, DottedGetExpression, VariableExpression, FunctionExpression } from '../parser/Expression';
 import type { SGAttribute } from '../parser/SGTypes';
-import { Block, MethodStatement } from '../parser/Statement';
+import { AssignmentStatement, Block, IfStatement, MethodStatement } from '../parser/Statement';
 
 /**
  * A range that points to the beginning of the file. Used to give non-null ranges to programmatically-added source code.
@@ -186,4 +186,42 @@ export function createSGAttribute(keyName: string, value: string) {
             text: value
         }
     } as SGAttribute;
+}
+
+export function createIfStatement(options: {
+    if?: Token;
+    condition: Expression;
+    then?: Token;
+    thenBranch: Block;
+    else?: Token;
+    elseBranch?: IfStatement | Block;
+    endIf?: Token;
+}) {
+    return new IfStatement(
+        {
+            if: options.if ?? createToken(TokenKind.If),
+            then: options.then ?? createToken(TokenKind.Then),
+            else: options.else ?? createToken(TokenKind.Else),
+            endIf: options.endIf ?? createToken(TokenKind.EndIf)
+        },
+        options.condition,
+        options.thenBranch,
+        options.elseBranch
+    );
+}
+
+export function createBlock(options: { statements: Statement[] }) {
+    return new Block(options.statements);
+}
+
+export function createAssignmentStatement(options: {
+    name: Identifier | string;
+    equals?: Token;
+    value: Expression;
+}) {
+    return new AssignmentStatement(
+        options.equals ?? createToken(TokenKind.Equal),
+        typeof options.name === 'string' ? createIdentifier(options.name) : options.name,
+        options.value
+    );
 }

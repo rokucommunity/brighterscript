@@ -253,7 +253,7 @@ describe('ternary expressions', () => {
         });
     });
 
-    describe('transpilation', () => {
+    describe('transpile', () => {
         let rootDir = process.cwd();
         let program: Program;
         let testTranspile = getTestTranspile(() => [program, rootDir]);
@@ -265,17 +265,37 @@ describe('ternary expressions', () => {
             program.dispose();
         });
 
+        it('transpiles ternary in RHS of AssignmentStatement to IfStatement', () => {
+            testTranspile(`
+                sub main()
+                    a = true ? 1 : 2
+                end sub
+            `, `
+                sub main()
+                    if true then
+                        a = 1
+                    else
+                        a = 2
+                    end if
+                end sub
+            `);
+        });
+
         it('uses the proper prefix when aliased package is installed', () => {
             program.setFile('source/roku_modules/rokucommunity_bslib/bslib.brs', '');
             testTranspile(`
                 sub main()
                     user = {}
-                    a = user = invalid ? "no user" : "logged in"
+                    result = [
+                        user = invalid ? "no user" : "logged in"
+                    ]
                 end sub
             `, `
                 sub main()
                     user = {}
-                    a = rokucommunity_bslib_ternary(user = invalid, "no user", "logged in")
+                    result = [
+                        rokucommunity_bslib_ternary(user = invalid, "no user", "logged in")
+                    ]
                 end sub
             `);
         });
@@ -289,7 +309,11 @@ describe('ternary expressions', () => {
             `, `
                 sub main()
                     user = {}
-                    a = bslib_ternary(user = invalid, "no user", "logged in")
+                    if user = invalid then
+                        a = "no user"
+                    else
+                        a = "logged in"
+                    end if
                 end sub
             `);
 
@@ -301,7 +325,11 @@ describe('ternary expressions', () => {
             `, `
                 sub main()
                     user = {}
-                    a = bslib_ternary(user = invalid, 1, "logged in")
+                    if user = invalid then
+                        a = 1
+                    else
+                        a = "logged in"
+                    end if
                 end sub
             `);
 
@@ -313,7 +341,11 @@ describe('ternary expressions', () => {
             `, `
                 sub main()
                     user = {}
-                    a = bslib_ternary(user = invalid, 1.2, "logged in")
+                    if user = invalid then
+                        a = 1.2
+                    else
+                        a = "logged in"
+                    end if
                 end sub
             `);
 
@@ -325,7 +357,11 @@ describe('ternary expressions', () => {
             `, `
                 sub main()
                     user = {}
-                    a = bslib_ternary(user = invalid, {}, "logged in")
+                    if user = invalid then
+                        a = {}
+                    else
+                        a = "logged in"
+                    end if
                 end sub
             `);
 
@@ -337,7 +373,11 @@ describe('ternary expressions', () => {
             `, `
                 sub main()
                     user = {}
-                    a = bslib_ternary(user = invalid, [], "logged in")
+                    if user = invalid then
+                        a = []
+                    else
+                        a = "logged in"
+                    end if
                 end sub
             `);
         });
@@ -351,7 +391,11 @@ describe('ternary expressions', () => {
             `, `
                 sub main()
                     user = {}
-                    a = bslib_ternary(user = invalid, "logged in", "no user")
+                    if user = invalid then
+                        a = "logged in"
+                    else
+                        a = "no user"
+                    end if
                 end sub
             `);
 
@@ -363,7 +407,11 @@ describe('ternary expressions', () => {
             `, `
                 sub main()
                     user = {}
-                    a = bslib_ternary(user = invalid, "logged in", 1)
+                    if user = invalid then
+                        a = "logged in"
+                    else
+                        a = 1
+                    end if
                 end sub
             `);
 
@@ -375,7 +423,11 @@ describe('ternary expressions', () => {
             `, `
                 sub main()
                     user = {}
-                    a = bslib_ternary(user = invalid, "logged in", 1.2)
+                    if user = invalid then
+                        a = "logged in"
+                    else
+                        a = 1.2
+                    end if
                 end sub
             `);
 
@@ -387,7 +439,11 @@ describe('ternary expressions', () => {
             `, `
                 sub main()
                     user = {}
-                    a = bslib_ternary(user = invalid, "logged in", [])
+                    if user = invalid then
+                        a = "logged in"
+                    else
+                        a = []
+                    end if
                 end sub
             `);
 
@@ -399,7 +455,11 @@ describe('ternary expressions', () => {
             `, `
                 sub main()
                     user = {}
-                    a = bslib_ternary(user = invalid, "logged in", {})
+                    if user = invalid then
+                        a = "logged in"
+                    else
+                        a = {}
+                    end if
                 end sub
             `);
         });
@@ -411,7 +471,11 @@ describe('ternary expressions', () => {
                 end sub
             `, `
                 sub main()
-                    a = bslib_ternary(str("true") = "true", true, false)
+                    if str("true") = "true" then
+                        a = true
+                    else
+                        a = false
+                    end if
                 end sub
             `);
 
@@ -421,7 +485,11 @@ describe('ternary expressions', () => {
                 end sub
             `, `
                 sub main()
-                    a = bslib_ternary(m.top.service.IsTrue(), true, false)
+                    if m.top.service.IsTrue() then
+                        a = true
+                    else
+                        a = false
+                    end if
                 end sub
             `);
 
@@ -437,7 +505,11 @@ describe('ternary expressions', () => {
                 end sub
 
                 sub main()
-                    a = bslib_ternary(test(test(test(test(m.fifth()[123].truthy(1))))), true, false)
+                    if test(test(test(test(m.fifth()[123].truthy(1))))) then
+                        a = true
+                    else
+                        a = false
+                    end if
                 end sub
             `);
         });
@@ -446,18 +518,22 @@ describe('ternary expressions', () => {
             testTranspile(`
                 sub main()
                     zombie = {}
-                    name = zombie.getName() <> invalid ? zombie.GetName() : "zombie"
+                    result = [
+                        zombie.getName() <> invalid ? zombie.GetName() : "zombie"
+                    ]
                 end sub
             `, `
                 sub main()
                     zombie = {}
-                    name = (function(__bsCondition, zombie)
-                            if __bsCondition then
-                                return zombie.GetName()
-                            else
-                                return "zombie"
-                            end if
-                        end function)(zombie.getName() <> invalid, zombie)
+                    result = [
+                        (function(__bsCondition, zombie)
+                                if __bsCondition then
+                                    return zombie.GetName()
+                                else
+                                    return "zombie"
+                                end if
+                            end function)(zombie.getName() <> invalid, zombie)
+                    ]
                 end sub
             `);
         });
@@ -466,18 +542,22 @@ describe('ternary expressions', () => {
             testTranspile(`
                 sub main()
                     zombie = {}
-                    name = zombie.getName() = invalid ? "zombie" :  zombie.GetName()
+                    result = [
+                        zombie.getName() = invalid ? "zombie" :  zombie.GetName()
+                    ]
                 end sub
             `, `
                 sub main()
                     zombie = {}
-                    name = (function(__bsCondition, zombie)
-                            if __bsCondition then
-                                return "zombie"
-                            else
-                                return zombie.GetName()
-                            end if
-                        end function)(zombie.getName() = invalid, zombie)
+                    result = [
+                        (function(__bsCondition, zombie)
+                                if __bsCondition then
+                                    return "zombie"
+                                else
+                                    return zombie.GetName()
+                                end if
+                            end function)(zombie.getName() = invalid, zombie)
+                    ]
                 end sub
             `);
         });
@@ -486,23 +566,27 @@ describe('ternary expressions', () => {
             testTranspile(`
                 sub main()
                     settings = {}
-                    name = {} ? m.defaults.getAccount(settings.name) : "no"
+                    result = [
+                        {} ? m.defaults.getAccount(settings.name) : "no"
+                    ]
                 end sub
             `, `
                 sub main()
                     settings = {}
-                    name = (function(__bsCondition, m, settings)
-                            if __bsCondition then
-                                return m.defaults.getAccount(settings.name)
-                            else
-                                return "no"
-                            end if
-                        end function)({}, m, settings)
+                    result = [
+                        (function(__bsCondition, m, settings)
+                                if __bsCondition then
+                                    return m.defaults.getAccount(settings.name)
+                                else
+                                    return "no"
+                                end if
+                            end function)({}, m, settings)
+                    ]
                 end sub
             `);
         });
 
-        it('ignores enum variable names', () => {
+        it('ignores enum variable names for scope capturing', () => {
             testTranspile(`
                 enum Direction
                     up = "up"
@@ -510,23 +594,27 @@ describe('ternary expressions', () => {
                 end enum
                 sub main()
                     d = Direction.up
-                    theDir = d = Direction.up ? Direction.up : false
+                    result = [
+                        d = Direction.up ? Direction.up : false
+                    ]
                 end sub
             `, `
                 sub main()
                     d = "up"
-                    theDir = (function(__bsCondition)
-                            if __bsCondition then
-                                return "up"
-                            else
-                                return false
-                            end if
-                        end function)(d = "up")
+                    result = [
+                        (function(__bsCondition)
+                                if __bsCondition then
+                                    return "up"
+                                else
+                                    return false
+                                end if
+                            end function)(d = "up")
+                    ]
                 end sub
             `);
         });
 
-        it('ignores const variable names', () => {
+        it('ignores const variable names for scope capturing', () => {
             testTranspile(`
                 enum Direction
                     up = "up"
@@ -535,18 +623,22 @@ describe('ternary expressions', () => {
                 const UP = "up"
                 sub main()
                     d = Direction.up
-                    theDir = d = Direction.up ? UP : Direction.down
+                    result = [
+                        d = Direction.up ? UP : Direction.down
+                    ]
                 end sub
             `, `
                 sub main()
                     d = "up"
-                    theDir = (function(__bsCondition)
-                            if __bsCondition then
-                                return "up"
-                            else
-                                return "down"
-                            end if
-                        end function)(d = "up")
+                    result = [
+                        (function(__bsCondition)
+                                if __bsCondition then
+                                    return "up"
+                                else
+                                    return "down"
+                                end if
+                            end function)(d = "up")
+                    ]
                 end sub
             `);
         });
@@ -557,20 +649,24 @@ describe('ternary expressions', () => {
                     sub main()
                         zombie = {}
                         human = {}
-                        name = zombie <> invalid ? zombie.Attack(human <> invalid ? human: zombie) : "zombie"
+                        result = [
+                            zombie <> invalid ? zombie.Attack(human <> invalid ? human: zombie) : "zombie"
+                        ]
                     end sub
                 `,
                 `
                     sub main()
                         zombie = {}
                         human = {}
-                        name = (function(__bsCondition, human, zombie)
-                                if __bsCondition then
-                                    return zombie.Attack(bslib_ternary(human <> invalid, human, zombie))
-                                else
-                                    return "zombie"
-                                end if
-                            end function)(zombie <> invalid, human, zombie)
+                        result = [
+                            (function(__bsCondition, human, zombie)
+                                    if __bsCondition then
+                                        return zombie.Attack(bslib_ternary(human <> invalid, human, zombie))
+                                    else
+                                        return "zombie"
+                                    end if
+                                end function)(zombie <> invalid, human, zombie)
+                        ]
                     end sub
                 `
             );
@@ -581,19 +677,23 @@ describe('ternary expressions', () => {
                 `
                     sub main()
                         person = {}
-                        name = person <> invalid ? person.name : "John Doe"
+                        result = [
+                            person <> invalid ? person.name : "John Doe"
+                        ]
                     end sub
                     `,
                 `
                     sub main()
                         person = {}
-                        name = (function(__bsCondition, person)
-                                if __bsCondition then
-                                    return person.name
-                                else
-                                    return "John Doe"
-                                end if
-                            end function)(person <> invalid, person)
+                        result = [
+                            (function(__bsCondition, person)
+                                    if __bsCondition then
+                                        return person.name
+                                    else
+                                        return "John Doe"
+                                    end if
+                                end function)(person <> invalid, person)
+                        ]
                     end sub
                 `
             );
@@ -619,7 +719,6 @@ describe('ternary expressions', () => {
                 `print bslib_ternary(name = "bob", invalid, invalid)`
                 , 'none', undefined, false);
         });
-
     });
 });
 
