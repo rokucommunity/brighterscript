@@ -1,5 +1,5 @@
 import { createAssignmentStatement, createBlock, createDottedSetStatement, createIfStatement, createIndexedSetStatement, createToken } from '../../astUtils/creators';
-import { isAssignmentStatement, isBinaryExpression, isBlock, isBrsFile, isDottedGetExpression, isDottedSetStatement, isGroupingExpression, isIndexedGetExpression, isIndexedSetStatement, isLiteralExpression, isTernaryExpression, isUnaryExpression, isVariableExpression } from '../../astUtils/reflection';
+import { isAssignmentStatement, isBinaryExpression, isBlock, isBrsFile, isDottedGetExpression, isDottedSetStatement, isGroupingExpression, isIndexedGetExpression, isIndexedSetStatement, isLiteralExpression, isUnaryExpression, isVariableExpression } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BeforeFileTranspileEvent } from '../../interfaces';
@@ -37,15 +37,16 @@ export class BrsFilePreTranspileProcessor {
                 }
             }
         }
-
-        this.event.file.ast.walk(createVisitor({
+        const walkMode = WalkMode.visitExpressionsRecursive;
+        const visitor = createVisitor({
             TernaryExpression: (ternaryExpression) => {
-                this.processTernaryExpression(ternaryExpression, scope);
+                this.processTernaryExpression(ternaryExpression, visitor, walkMode);
             }
-        }), { walkMode: WalkMode.visitExpressionsRecursive });
+        });
+        this.event.file.ast.walk(visitor, { walkMode: walkMode });
     }
 
-    private processTernaryExpression(ternaryExpression: TernaryExpression, scope: Scope) {
+    private processTernaryExpression(ternaryExpression: TernaryExpression, visitor: ReturnType<typeof createVisitor>, walkMode: WalkMode) {
         function getOwnerAndKey(statement: Statement) {
             const parent = statement.parent;
             if (isBlock(parent)) {
@@ -171,6 +172,8 @@ export class BrsFilePreTranspileProcessor {
             if (owner && key !== undefined) {
                 this.event.editor.setProperty(owner, key, ifStatement);
             }
+            //we've injected an ifStatement, so now we need to trigger a walk to handle any nested ternary expressions
+            ifStatement.walk(visitor, { walkMode: walkMode });
         }
     }
 
