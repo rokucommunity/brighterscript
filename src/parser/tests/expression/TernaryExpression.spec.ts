@@ -281,6 +281,86 @@ describe('ternary expressions', () => {
             `);
         });
 
+        it('transpiles ternary in RHS of incrementor AssignmentStatement to IfStatement', () => {
+            testTranspile(`
+                sub main()
+                    a += true ? 1 : 2
+                end sub
+            `, `
+                sub main()
+                    if true then
+                        a += 1
+                    else
+                        a += 2
+                    end if
+                end sub
+            `);
+        });
+
+        it('transpiles ternary in RHS of DottedSetStatement to IfStatement', () => {
+            testTranspile(`
+                sub main()
+                    m.a = true ? 1 : 2
+                end sub
+            `, `
+                sub main()
+                    if true then
+                        m.a = 1
+                    else
+                        m.a = 2
+                    end if
+                end sub
+            `);
+        });
+
+        it('transpiles ternary in RHS of incrementor DottedSetStatement to IfStatement', () => {
+            testTranspile(`
+                sub main()
+                    m.a += true ? 1 : 2
+                end sub
+            `, `
+                sub main()
+                    if true then
+                        m.a += 1
+                    else
+                        m.a += 2
+                    end if
+                end sub
+            `);
+        });
+
+        it('transpiles ternary in RHS of IndexedSetStatement to IfStatement', () => {
+            testTranspile(`
+                sub main()
+                    m["a"] = true ? 1 : 2
+                end sub
+            `, `
+                sub main()
+                    if true then
+                        m["a"] = 1
+                    else
+                        m["a"] = 2
+                    end if
+                end sub
+            `);
+        });
+
+        it('transpiles ternary in RHS of incrementor IndexedSetStatement to IfStatement', () => {
+            testTranspile(`
+                sub main()
+                    m["a"] += true ? 1 : 2
+                end sub
+            `, `
+                sub main()
+                    if true then
+                        m["a"] += 1
+                    else
+                        m["a"] += 2
+                    end if
+                end sub
+            `);
+        });
+
         it('uses the proper prefix when aliased package is installed', () => {
             program.setFile('source/roku_modules/rokucommunity_bslib/bslib.brs', '');
             testTranspile(`
@@ -641,6 +721,98 @@ describe('ternary expressions', () => {
                     ]
                 end sub
             `);
+        });
+
+        it('supports scope-captured outer, and simple inner', () => {
+            testTranspile(
+                `
+                    sub main()
+                        zombie = {}
+                        human = {}
+                        result = zombie <> invalid ? zombie.Attack(human <> invalid ? human: zombie) : "zombie"
+                    end sub
+                `,
+                `
+                    sub main()
+                        zombie = {}
+                        human = {}
+                        if zombie <> invalid then
+                            result = zombie.Attack(bslib_ternary(human <> invalid, human, zombie))
+                        else
+                            result = "zombie"
+                        end if
+                    end sub
+                `
+            );
+        });
+
+        it('supports nested ternary in assignment', () => {
+            testTranspile(
+                `
+                    sub main()
+                        result = true ? (false ? "one" : "two") : "three"
+                    end sub
+                `,
+                `
+                    sub main()
+                        if true then
+                            if false then
+                                result = "one"
+                            else
+                                result = "two"
+                            end if
+                        else
+                            result = "three"
+                        end if
+                    end sub
+                `
+            );
+        });
+
+        it('supports nested ternary in DottedSet', () => {
+            testTranspile(
+                `
+                    sub main()
+                        m.result = true ? (false ? "one" : "two") : "three"
+                    end sub
+                `,
+                `
+                    sub main()
+                        if true then
+                            if false then
+                                m.result = "one"
+                            else
+                                m.result = "two"
+                            end if
+                        else
+                            m.result = "three"
+                        end if
+                    end sub
+                `
+            );
+        });
+
+        it('supports nested ternary in IndexedSet', () => {
+            testTranspile(
+                `
+                    sub main()
+                        m["result"] = true ? (false ? "one" : "two") : "three"
+                    end sub
+                `,
+                `
+                    sub main()
+                        if true then
+                            if false then
+                                m["result"] = "one"
+                            else
+                                m["result"] = "two"
+                            end if
+                        else
+                            m["result"] = "three"
+                        end if
+                    end sub
+                `
+            );
         });
 
         it('supports scope-captured outer, and simple inner', () => {

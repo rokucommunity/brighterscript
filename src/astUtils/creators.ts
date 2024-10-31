@@ -4,7 +4,7 @@ import { TokenKind } from '../lexer/TokenKind';
 import type { Expression, Statement } from '../parser/AstNode';
 import { LiteralExpression, CallExpression, DottedGetExpression, VariableExpression, FunctionExpression } from '../parser/Expression';
 import type { SGAttribute } from '../parser/SGTypes';
-import { AssignmentStatement, Block, IfStatement, MethodStatement } from '../parser/Statement';
+import { AssignmentStatement, Block, DottedSetStatement, IfStatement, IndexedSetStatement, MethodStatement } from '../parser/Statement';
 
 /**
  * A range that points to the beginning of the file. Used to give non-null ranges to programmatically-added source code.
@@ -223,5 +223,41 @@ export function createAssignmentStatement(options: {
         options.equals ?? createToken(TokenKind.Equal),
         typeof options.name === 'string' ? createIdentifier(options.name) : options.name,
         options.value
+    );
+}
+
+export function createDottedSetStatement(options: {
+    obj: Expression;
+    dot?: Token;
+    name: Identifier | string;
+    equals?: Token;
+    value: Expression;
+}) {
+    return new DottedSetStatement(
+        options.obj,
+        typeof options.name === 'string' ? createIdentifier(options.name) : options.name,
+        options.value,
+        options.dot,
+        options.equals ?? createToken(TokenKind.Equal)
+    );
+}
+
+export function createIndexedSetStatement(options: {
+    obj: Expression;
+    openingSquare?: Token;
+    index: Expression;
+    closingSquare?: Token;
+    equals?: Token;
+    value: Expression;
+    additionalIndexes?: Expression[];
+}) {
+    return new IndexedSetStatement(
+        options.obj,
+        options.index,
+        options.value,
+        options.openingSquare ?? createToken(TokenKind.LeftSquareBracket),
+        options.closingSquare ?? createToken(TokenKind.RightSquareBracket),
+        options.additionalIndexes || [],
+        options.equals ?? createToken(TokenKind.Equal)
     );
 }
