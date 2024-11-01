@@ -197,7 +197,7 @@ class DocCompiler {
         const program = new Program({
             rootDir: `${__dirname}/rootDir`,
             files: [
-                'source/main.brs'
+                'source/main.bs'
             ],
             //use the current bsconfig
             ...(this.bsconfig ?? {})

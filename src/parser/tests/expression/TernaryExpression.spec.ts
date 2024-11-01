@@ -265,6 +265,18 @@ describe('ternary expressions', () => {
             program.dispose();
         });
 
+        it('transpiles top-level ternary expression', () => {
+            testTranspile(`
+                a += true ? 1 : 2
+            `, `
+                if true then
+                    a += 1
+                else
+                    a += 2
+                end if
+            `, undefined, undefined, false);
+        });
+
         it('transpiles ternary in RHS of AssignmentStatement to IfStatement', () => {
             testTranspile(`
                 sub main()

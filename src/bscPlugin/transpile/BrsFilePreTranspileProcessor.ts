@@ -1,5 +1,5 @@
 import { createAssignmentStatement, createBlock, createDottedSetStatement, createIfStatement, createIndexedSetStatement, createToken } from '../../astUtils/creators';
-import { isAssignmentStatement, isBinaryExpression, isBlock, isBrsFile, isDottedGetExpression, isDottedSetStatement, isGroupingExpression, isIndexedGetExpression, isIndexedSetStatement, isLiteralExpression, isUnaryExpression, isVariableExpression } from '../../astUtils/reflection';
+import { isAssignmentStatement, isBinaryExpression, isBlock, isBody, isBrsFile, isDottedGetExpression, isDottedSetStatement, isGroupingExpression, isIndexedGetExpression, isIndexedSetStatement, isLiteralExpression, isUnaryExpression, isVariableExpression } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BeforeFileTranspileEvent } from '../../interfaces';
@@ -49,7 +49,7 @@ export class BrsFilePreTranspileProcessor {
     private processTernaryExpression(ternaryExpression: TernaryExpression, visitor: ReturnType<typeof createVisitor>, walkMode: WalkMode) {
         function getOwnerAndKey(statement: Statement) {
             const parent = statement.parent;
-            if (isBlock(parent)) {
+            if (isBlock(parent) || isBody(parent)) {
                 let idx = parent.statements.indexOf(statement);
                 if (idx > -1) {
                     return { owner: parent.statements, key: idx };
