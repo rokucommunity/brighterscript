@@ -227,7 +227,7 @@ export class Project implements LspProject {
             const action = result[i];
             let didChangeThisFile = false;
             //if this is a `set` and the file matches the project's files array, set it
-            if (action.type === 'set' && this.willAcceptFile(action.srcPath)) {
+            if (action.type === 'set' && Project.willAcceptFile(action.srcPath, this.builder.program.options.files, this.builder.program.options.rootDir)) {
                 //load the file contents from disk if we don't have an in memory copy
                 const fileContents = action.fileContents ?? util.readFileSync(action.srcPath)?.toString();
 
@@ -255,6 +255,10 @@ export class Project implements LspProject {
                 didChangeThisFile = this.removeFileOrDirectory(action.srcPath);
                 //if we deleted at least one file, mark this action as accepted
                 action.status = didChangeThisFile ? 'accepted' : 'rejected';
+
+                //we did not handle this action, so reject
+            } else {
+                action.status = 'rejected';
             }
             didChangeFiles = didChangeFiles || didChangeThisFile;
         }
@@ -271,12 +275,12 @@ export class Project implements LspProject {
     /**
      * Determine if this project will accept the file at the specified path (i.e. does it match a pattern in the project's files array)
      */
-    private willAcceptFile(srcPath: string) {
+    public static willAcceptFile(srcPath: string, files: BsConfig['files'], rootDir: string) {
         srcPath = util.standardizePath(srcPath);
-        if (rokuDeploy.getDestPath(srcPath, this.builder.program.options.files, this.builder.program.options.rootDir) !== undefined) {
+        if (rokuDeploy.getDestPath(srcPath, files, rootDir) !== undefined) {
             return true;
             //is this exact path in the `files` array? (this check is mostly for standalone projects)
-        } else if ((this.builder.program.options.files as StandardizedFileEntry[]).find(x => s`${x.src}` === srcPath)) {
+        } else if ((files as StandardizedFileEntry[]).find(x => s`${x.src}` === srcPath)) {
             return true;
         }
         return false;

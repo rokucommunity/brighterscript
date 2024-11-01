@@ -223,7 +223,8 @@ module.exports = {
             '@typescript-eslint/no-unsafe-argument': 'off',
             'new-cap': 'off',
             'no-shadow': 'off',
-            'no-void': 'off'
+            'no-void': 'off',
+            'func-names': 'off'
         }
     }, {
         files: ['benchmarks/**/*'],
