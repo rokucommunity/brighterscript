@@ -19,6 +19,12 @@ import { createLogger } from '../logging';
 import { Cache } from '../Cache';
 import { ActionQueue } from './ActionQueue';
 
+const FileChangeTypeLookup = Object.entries(FileChangeType).reduce((acc, [key, value]) => {
+    acc[value] = key;
+    acc[key] = value;
+    return acc;
+}, {});
+
 /**
  * Manages all brighterscript projects for the language server
  */
@@ -57,7 +63,7 @@ export class ProjectManager {
      * Collection of standalone projects. These are projects that are not part of a workspace, but are instead single files.
      * All of these are also present in the `projects` collection.
      */
-    private standaloneProjects: StandaloneProject[] = [];
+    private standaloneProjects = new Map<string, StandaloneProject>();
 
     private documentManager: DocumentManager;
     public static documentManagerDelay = 150;
@@ -99,7 +105,12 @@ export class ProjectManager {
             });
             // only include files that are applicable to this specific project (still allow deletes to flow through since they're cheap)
             const projectActions = actions.filter(action => {
-                return action.type === 'delete' || filterer.isMatch(action.srcPath);
+                return (
+                    //if this is a delete, just pass it through because they're cheap to apply
+                    action.type === 'delete' ||
+                    //if this is a set, only pass it through if it's a file that this project cares about
+                    filterer.isMatch(action.srcPath)
+                );
             });
             if (projectActions.length > 0) {
                 const responseActions = await project.applyFileChanges(projectActions);
@@ -122,29 +133,38 @@ export class ProjectManager {
             const handledResponses = flatResponses.filter(x => x?.action?.id === action.id && x?.action?.status === 'accepted');
 
             //remove any standalone project created for this file since it was handled by a normal project
-            if (handledResponses.some(x => x.project.isStandaloneProject === false)) {
-                this.removeStandaloneProject(action.srcPath);
+            const normalProjectsThatHandledThisFile = handledResponses.filter(x => !x.project.isStandaloneProject);
+            if (normalProjectsThatHandledThisFile.length > 0) {
+                //if there's a standalone project for this file, delete it
+                if (this.getStandaloneProject(action.srcPath, false)) {
+                    this.logger.debug(
+                        `flushDocumentChanges: removing standalone project because the following normal projects handled the file: '${action.srcPath}', projects:`,
+                        normalProjectsThatHandledThisFile.map(x => x.project.projectIdentifier)
+                    );
+                    this.removeStandaloneProject(action.srcPath);
+                }
 
                 // create a standalone project if this action was handled by zero normal projects.
-                //(save to call even if there's already a standalone project, won't create dupes)
+                //(safe to call even if there's already a standalone project, won't create dupes)
             } else {
                 //TODO only create standalone projects for files we understand (brightscript, brighterscript, scenegraph xml, etc)
                 await this.createStandaloneProject(action.srcPath);
             }
-            this.logger.info('flushDocumentChanges complete', actions.map(x => ({
-                type: x.type,
-                srcPath: x.srcPath,
-                allowStandaloneProject: x.allowStandaloneProject
-            })));
         }
+        this.logger.info('flushDocumentChanges complete', actions.map(x => ({
+            type: x.type,
+            srcPath: x.srcPath,
+            allowStandaloneProject: x.allowStandaloneProject
+        })));
     }
 
     /**
      * Get a standalone project for a given file path
      */
-    private getStandaloneProject(srcPath: string) {
-        srcPath = util.standardizePath(srcPath);
-        return this.standaloneProjects.find(x => x.srcPath === srcPath);
+    private getStandaloneProject(srcPath: string, standardizePath = true) {
+        return this.standaloneProjects.get(
+            standardizePath ? util.standardizePath(srcPath) : srcPath
+        );
     }
 
     /**
@@ -154,7 +174,7 @@ export class ProjectManager {
         srcPath = util.standardizePath(srcPath);
 
         //if we already have a standalone project with this path, do nothing because it already exists
-        if (this.getStandaloneProject(srcPath)) {
+        if (this.getStandaloneProject(srcPath, false)) {
             this.logger.log('createStandaloneProject skipping because we already have one for this path');
             return;
         }
@@ -179,18 +199,18 @@ export class ProjectManager {
         project.srcPath = srcPath;
         project.isStandaloneProject = true;
 
-        this.standaloneProjects.push(project);
+        this.standaloneProjects.set(srcPath, project);
         await this.activateProject(project, projectOptions);
     }
 
     private removeStandaloneProject(srcPath: string) {
         srcPath = util.standardizePath(srcPath);
-        //remove all standalone projects that have this srcPath
-        for (let i = this.standaloneProjects.length - 1; i >= 0; i--) {
-            const project = this.standaloneProjects[i];
+        const project = this.getStandaloneProject(srcPath, false);
+        if (project) {
             if (project.srcPath === srcPath) {
+                this.logger.debug(`Removing standalone project for file '${srcPath}'`);
                 this.removeProject(project);
-                this.standaloneProjects.splice(i, 1);
+                this.standaloneProjects.delete(srcPath);
             }
         }
     }
@@ -312,7 +332,7 @@ export class ProjectManager {
     });
 
     public handleFileChanges(changes: FileChange[]) {
-        this.logger.debug('handleFileChanges', changes.map(x => `${FileChangeType[x.type]}: ${x.srcPath}`));
+        this.logger.debug('handleFileChanges', changes.map(x => `${FileChangeTypeLookup[x.type]}: ${x.srcPath}`));
 
         //this function should NOT be marked as async, because typescript wraps the body in an async call sometimes. These need to be registered synchronously
         return this.fileChangesQueue.run(async (changes) => {
@@ -331,7 +351,7 @@ export class ProjectManager {
         //filter any changes that are not allowed by the path filterer
         changes = this.pathFilterer.filter(changes, x => x.srcPath);
 
-        this.logger.debug('handleFileChanges -> filtered', changes.map(x => `${FileChangeType[x.type]}: ${x.srcPath}`));
+        this.logger.debug('handleFileChanges -> filtered', changes.map(x => `${FileChangeTypeLookup[x.type]}: ${x.srcPath}`));
 
         //process all file changes in parallel
         await Promise.all(changes.map(async (change) => {
@@ -378,15 +398,18 @@ export class ProjectManager {
 
         //reload any projects whose bsconfig.json was changed
         const projectsToReload = this.projects.filter(x => x.bsconfigPath?.toLowerCase() === change.srcPath.toLowerCase());
-        await Promise.all(
-            projectsToReload.map(x => this.reloadProject(x))
-        );
+        if (projectsToReload.length > 0) {
+            await Promise.all(
+                projectsToReload.map(x => this.reloadProject(x))
+            );
+        }
     }
 
     /**
      * Handle when a file is closed in the editor (this mostly just handles removing standalone projects)
      */
     public async handleFileClose(event: { srcPath: string }) {
+        this.logger.debug(`File was closed. ${event.srcPath}`);
         this.removeStandaloneProject(event.srcPath);
         //most other methods on this class are async, might as well make this one async too for consistency and future expansion
         await Promise.resolve();
@@ -761,6 +784,10 @@ export class ProjectManager {
 
     @TrackBusyStatus
     private async activateProject(project: LspProject, config: ProjectConfig) {
+        this.logger.debug('Activating project', project.projectIdentifier, {
+            projectPath: config?.projectPath,
+            bsconfigPath: config.bsconfigPath
+        });
         await project.activate(config);
 
         //send an event to indicate that this project has been activated

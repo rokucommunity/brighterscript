@@ -513,7 +513,7 @@ describe('ProjectManager', () => {
             await onNextDiagnostics();
 
             //there should NOT be a standalone project
-            expect(manager['standaloneProjects'].length).to.eql(0);
+            expect(manager['standaloneProjects'].size).to.eql(0);
         });
 
         it('converts a missing file to a delete', async () => {
@@ -740,13 +740,15 @@ describe('ProjectManager', () => {
                 allowStandaloneProject: true
             }]);
             await onNextDiagnostics();
-            expect(manager['standaloneProjects'][0]?.srcPath).to.eql(s`${rootDir}/source/main.brs`);
+            expect(
+                [...manager['standaloneProjects'].values()][0]?.srcPath
+            ).to.eql(s`${rootDir}/source/main.brs`);
 
             //it deletes the standalone project when the file is closed
             await manager.handleFileClose({
                 srcPath: `${rootDir}/source/main.brs`
             });
-            expect(manager['standaloneProjects']).to.be.empty;
+            expect(manager['standaloneProjects'].size).to.eql(0);
         });
     });
 });

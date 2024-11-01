@@ -433,3 +433,41 @@ export async function onCalledOnce<T, K extends keyof T>(thing: T, method: K): P
         });
     });
 }
+
+
+/**
+ * Create a stub that resolves a promise after the function has settled for a period of time
+ */
+export function createInactivityStub<T, K extends keyof T>(obj: T, methodName: keyof T, inactivityPeriod = 400, sinonRef = sinon) {
+    // Store reference to the original method
+    const originalMethod = obj[methodName];
+
+    // Track the timeout for inactivity
+    let inactivityTimeout;
+
+    // Create the inactivity promise
+    let inactivityPromiseResolve;
+    const inactivityPromise = new Promise((resolve) => {
+        inactivityPromiseResolve = resolve;
+    });
+
+    // Stub the method
+    const stub = sinonRef.stub(obj, methodName).callsFake(function (this: any, ...args) {
+        // Call the original method
+        const result = (originalMethod as any).apply(this, args);
+
+        // Clear previous inactivity timeout and restart the timer
+        clearTimeout(inactivityTimeout);
+        inactivityTimeout = setTimeout(() => {
+            inactivityPromiseResolve();
+        }, inactivityPeriod);
+
+        return result;
+    });
+
+    // Return the stub and inactivity promise
+    return {
+        stub: stub,
+        promise: inactivityPromise
+    };
+}

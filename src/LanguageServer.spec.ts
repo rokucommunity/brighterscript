@@ -11,7 +11,7 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import type { Program } from './Program';
 import * as assert from 'assert';
 import type { PartialDiagnostic } from './testHelpers.spec';
-import { expectZeroDiagnostics, normalizeDiagnostics, trim } from './testHelpers.spec';
+import { createInactivityStub, expectZeroDiagnostics, normalizeDiagnostics, trim } from './testHelpers.spec';
 import { isBrsFile, isLiteralString } from './astUtils/reflection';
 import { createVisitor, WalkMode } from './astUtils/visitors';
 import { tempDir, rootDir } from './testHelpers.spec';
@@ -23,6 +23,7 @@ import { LogLevel, Logger, createLogger } from './logging';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { standardizePath } from 'roku-deploy';
 import undent from 'undent';
+import { ProjectManager } from './lsp/ProjectManager';
 
 const sinon = createSandbox();
 
@@ -84,6 +85,8 @@ describe('LanguageServer', () => {
 
     beforeEach(() => {
         sinon.restore();
+        fsExtra.emptyDirSync(tempDir);
+
         server = new LanguageServer();
         server['busyStatusTracker'] = new BusyStatusTracker();
         workspaceFolders = [workspacePath];
@@ -95,9 +98,11 @@ describe('LanguageServer', () => {
         });
         server['hasConfigurationCapability'] = true;
     });
+
     afterEach(() => {
         sinon.restore();
         fsExtra.emptyDirSync(tempDir);
+
         server['dispose']();
         LanguageServer.enableThreadingDefault = enableThreadingDefault;
     });
@@ -122,6 +127,44 @@ describe('LanguageServer', () => {
             return document;
         }
     }
+
+    it('does not cause infinite loop of project creation', async () => {
+        //add a project with a files array that includes (and then excludes) a file
+        fsExtra.outputFileSync(s`${rootDir}/bsconfig.json`, JSON.stringify({
+            files: ['source/**/*', '!source/**/*.spec.bs']
+        }));
+
+        server['run']();
+
+        function setSyncedDocument(srcPath: string, text: string, version = 1) {
+            //force an open text document
+            const document = TextDocument.create(util.pathToUri(
+                util.standardizePath(srcPath
+                )
+            ), 'brightscript', 1, `sub main()\nend sub`);
+            (server['documents']['_syncedDocuments'] as Map<string, TextDocument>).set(document.uri, document);
+        }
+
+        //wait for the projects to finish loading up
+        await server['syncProjects']();
+
+        //this bug was causing an infinite async loop of new project creations. So monitor the creation of new projects for evaluation later
+        const { stub, promise: createProjectsSettled } = createInactivityStub(ProjectManager.prototype as any, 'constructProject', 400, sinon);
+
+        setSyncedDocument(s`${rootDir}/source/lib1.spec.bs`, 'sub lib1()\nend sub');
+        setSyncedDocument(s`${rootDir}/source/lib2.spec.bs`, 'sub lib2()\nend sub');
+
+        // open a file that is excluded by the project, so it should trigger a standalone project.
+        await server['onTextDocumentDidChangeContent']({
+            document: TextDocument.create(util.pathToUri(s`${rootDir}/source/lib1.spec.bs`), 'brightscript', 1, `sub main()\nend sub`)
+        });
+
+        //wait for the "create projects" deferred debounce to settle
+        await createProjectsSettled;
+
+        //test passes if we've only made 2 new projects (one for each of the standalone projects)
+        expect(stub.callCount).to.eql(2);
+    });
 
     describe('onDidChangeConfiguration', () => {
         async function doTest(startingConfigs: WorkspaceConfigWithExtras[], endingConfigs: WorkspaceConfigWithExtras[]) {
@@ -637,6 +680,7 @@ describe('LanguageServer', () => {
             expect(
                 filterer.filter([
                     s`${workspacePath}/src/source/file.brs`,
+                    //this file should be excluded
                     s`${workspacePath}/dist/source/file.brs`
                 ])
             ).to.eql([

@@ -178,3 +178,47 @@ describe('PathFilterer', () => {
         });
     });
 });
+
+describe('PathCollection', () => {
+    function doTest(globs: string[], filePath: string, expected: boolean) {
+        const collection = new PathCollection({
+            rootDir: rootDir,
+            globs: globs
+        });
+        expect(collection.isMatch(filePath)).to.equal(expected);
+    }
+
+    it('includes a file that matches a single pattern', () => {
+        doTest([
+            '**/*.brs'
+        ], s`${rootDir}/alpha.brs`, true);
+    });
+
+    it('includes a file that matches the 2nd pattern', () => {
+        doTest([
+            '**/*beta*.brs',
+            '**/*alpha*.brs'
+        ], s`${rootDir}/alpha.brs`, true);
+    });
+
+    it('includes a file that is included then excluded then included again', () => {
+        doTest([
+            '**/*.brs',
+            '!**/a*.brs',
+            '**/alpha.brs'
+        ], s`${rootDir}/alpha.brs`, true);
+    });
+
+    it('excludes a file that does not match the pattern', () => {
+        doTest([
+            '**/beta.brs'
+        ], s`${rootDir}/alpha.brs`, false);
+    });
+
+    it('excludes a file that matches first pattern but is excluded from the second pattern', () => {
+        doTest([
+            '**/*.brs',
+            '!**/alpha.brs'
+        ], s`${rootDir}/alpha.brs`, false);
+    });
+});

@@ -135,7 +135,6 @@ export class LanguageServer {
         });
 
         this.projectManager.busyStatusTracker.on('active-runs-change', (event) => {
-            console.log(event);
             this.sendBusyStatus();
         });
     }

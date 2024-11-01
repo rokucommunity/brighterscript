@@ -70,7 +70,7 @@ describe('Project', () => {
         });
     });
 
-    describe('setFile', () => {
+    describe('applyFileChanges', () => {
         it('skips setting the file if the contents have not changed', async () => {
             await project.activate({ projectPath: rootDir } as any);
             //initial set should be true
@@ -99,6 +99,43 @@ describe('Project', () => {
                     type: 'set'
                 }]))[0].status
             ).to.eql('accepted');
+        });
+
+        it('always includes a status', async () => {
+            await project.activate({
+                projectPath: rootDir
+            } as any);
+
+            project['builder'].options.files = [
+                'source/**/*',
+                '!source/**/*.spec.bs'
+            ];
+
+            //set file that maches files array
+            expect((await project['applyFileChanges']([{
+                fileContents: '',
+                srcPath: s`${rootDir}/source/main.bs`,
+                type: 'set'
+            }]))[0].status).to.eql('accepted');
+
+            //delete this file that matches a file in the program
+            expect((await project['applyFileChanges']([{
+                srcPath: s`${rootDir}/source/main.bs`,
+                type: 'delete'
+            }]))[0].status).to.eql('accepted');
+
+            //set file that does not match files array files array
+            expect((await project['applyFileChanges']([{
+                fileContents: '',
+                srcPath: s`${rootDir}/source/main.spec.bs`,
+                type: 'set'
+            }]))[0].status).to.eql('rejected');
+
+            //delete directory is "reject" because those should be unraveled into individual files on the outside
+            expect((await project['applyFileChanges']([{
+                srcPath: s`${rootDir}/source`,
+                type: 'delete'
+            }]))[0].status).to.eql('rejected');
         });
     });
 

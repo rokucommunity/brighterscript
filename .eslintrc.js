@@ -221,6 +221,7 @@ module.exports = {
             '@typescript-eslint/no-unused-vars-experimental': 'off',
             '@typescript-eslint/dot-notation': 'off',
             '@typescript-eslint/no-unsafe-argument': 'off',
+            'func-names': 'off',
             'new-cap': 'off',
             'no-shadow': 'off',
             'no-void': 'off'

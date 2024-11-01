@@ -133,7 +133,8 @@ export class PathFilterer {
         this.logger.debug('registerExcludeMatcher', matcher);
 
         const collection = new PathCollection({
-            matcher: matcher
+            matcher: matcher,
+            isExcludePattern: false
         });
         this.excludeCollections.push(collection);
         return () => {
@@ -168,33 +169,55 @@ export class PathCollection {
             globs: string[];
         } | {
             matcher: (path: string) => boolean;
+            isExcludePattern: boolean;
         }
     ) {
         if ('globs' in options) {
             //build matcher patterns from the globs
-            for (const glob of options.globs ?? []) {
+            for (let glob of options.globs ?? []) {
+                let isExcludePattern = glob.startsWith('!');
+                if (isExcludePattern) {
+                    glob = glob.substring(1);
+                }
                 const pattern = path.resolve(
                     options.rootDir,
                     glob
                 ).replace(/\\+/g, '/');
-                this.matchers.push(
-                    micromatch.matcher(pattern)
-                );
+                this.matchers.push({
+                    pattern: pattern,
+                    isMatch: micromatch.matcher(pattern),
+                    isExcludePattern: isExcludePattern
+                });
             }
         } else {
-            this.matchers.push(options.matcher);
+            this.matchers.push({
+                isMatch: options.matcher,
+                isExcludePattern: options.isExcludePattern
+            });
         }
     }
 
-    private matchers: Array<(string) => boolean> = [];
+    private matchers: Array<{
+        pattern?: string;
+        isMatch: (string) => boolean;
+        isExcludePattern: boolean;
+    }> = [];
+
     public isMatch(path: string) {
+        let keep = false;
         //coerce the path into a normalized form and unix slashes
         path = util.standardizePath(path).replace(/\\+/g, '/');
         for (let matcher of this.matchers) {
-            if (matcher(path)) {
-                return true;
+            //exclusion pattern: do not keep the path if it matches
+            if (matcher.isExcludePattern) {
+                if (matcher.isMatch(path)) {
+                    keep = false;
+                }
+                //inclusion pattern: keep the path if it matches
+            } else {
+                keep = keep || matcher.isMatch(path);
             }
         }
-        return false;
+        return keep;
     }
 }
