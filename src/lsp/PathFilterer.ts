@@ -134,7 +134,7 @@ export class PathFilterer {
 
         const collection = new PathCollection({
             matcher: matcher,
-            isExcludePattern: true
+            isExcludePattern: false
         });
         this.excludeCollections.push(collection);
         return () => {
@@ -184,6 +184,7 @@ export class PathCollection {
                     glob
                 ).replace(/\\+/g, '/');
                 this.matchers.push({
+                    pattern: pattern,
                     isMatch: micromatch.matcher(pattern),
                     isExcludePattern: isExcludePattern
                 });
@@ -197,6 +198,7 @@ export class PathCollection {
     }
 
     private matchers: Array<{
+        pattern?: string;
         isMatch: (string) => boolean;
         isExcludePattern: boolean;
     }> = [];

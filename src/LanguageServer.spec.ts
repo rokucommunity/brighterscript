@@ -680,6 +680,7 @@ describe('LanguageServer', () => {
             expect(
                 filterer.filter([
                     s`${workspacePath}/src/source/file.brs`,
+                    //this file should be excluded
                     s`${workspacePath}/dist/source/file.brs`
                 ])
             ).to.eql([
