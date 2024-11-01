@@ -227,6 +227,38 @@ export interface CompilerPlugin {
     afterProvideReferences?(event: AfterProvideReferencesEvent): any;
 
 
+    /**
+     * Called before the `provideDocumentSymbols` hook
+     */
+    beforeProvideDocumentSymbols?(event: BeforeProvideDocumentSymbolsEvent): any;
+    /**
+     * Provide all of the `DocumentSymbol`s for the given file
+     * @param event
+     */
+    provideDocumentSymbols?(event: ProvideDocumentSymbolsEvent): any;
+    /**
+     * Called after `provideDocumentSymbols`. Use this if you want to intercept or sanitize the document symbols data provided by bsc or other plugins
+     * @param event
+     */
+    afterProvideDocumentSymbols?(event: AfterProvideDocumentSymbolsEvent): any;
+
+
+    /**
+     * Called before the `provideWorkspaceSymbols` hook
+     */
+    beforeProvideWorkspaceSymbols?(event: BeforeProvideWorkspaceSymbolsEvent): any;
+    /**
+     * Provide all of the workspace symbols for the entire project
+     * @param event
+     */
+    provideWorkspaceSymbols?(event: ProvideWorkspaceSymbolsEvent): any;
+    /**
+     * Called after `provideWorkspaceSymbols`. Use this if you want to intercept or sanitize the workspace symbols data provided by bsc or other plugins
+     * @param event
+     */
+    afterProvideWorkspaceSymbols?(event: AfterProvideWorkspaceSymbolsEvent): any;
+
+
     onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
     //scope events
     afterScopeCreate?: (scope: Scope) => void;

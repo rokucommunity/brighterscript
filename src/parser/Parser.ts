@@ -1055,7 +1055,7 @@ export class Parser {
         } else {
             const nameExpression = new VariableExpression(name);
             result = new AssignmentStatement(
-                operator,
+                { kind: TokenKind.Equal, text: '=', range: operator.range },
                 name,
                 new BinaryExpression(nameExpression, operator, value)
             );
@@ -2090,7 +2090,10 @@ export class Parser {
                         : new BinaryExpression(left, operator, right),
                     left.openingSquare,
                     left.closingSquare,
-                    left.additionalIndexes
+                    left.additionalIndexes,
+                    operator.kind === TokenKind.Equal
+                        ? operator
+                        : { kind: TokenKind.Equal, text: '=', range: operator.range }
                 );
             } else if (isDottedGetExpression(left)) {
                 return new DottedSetStatement(
@@ -2099,7 +2102,10 @@ export class Parser {
                     operator.kind === TokenKind.Equal
                         ? right
                         : new BinaryExpression(left, operator, right),
-                    left.dot
+                    left.dot,
+                    operator.kind === TokenKind.Equal
+                        ? operator
+                        : { kind: TokenKind.Equal, text: '=', range: operator.range }
                 );
             }
         }
