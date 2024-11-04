@@ -2,6 +2,7 @@ import type { MessagePort, parentPort } from 'worker_threads';
 import * as EventEmitter from 'eventemitter3';
 import type { DisposableLike } from '../../interfaces';
 import util from '../../util';
+import { Deferred } from '../../deferred';
 
 interface PseudoMessagePort {
     on: (name: 'message', cb: (message: any) => any) => any;
@@ -53,17 +54,31 @@ export class MessageHandler<T, TRequestName = MethodNames<T>> {
 
     private emitter = new EventEmitter();
 
+    private activeRequests = new Map<number, {
+        id: number;
+        deferred: Deferred<any>;
+    }>();
+
     /**
      * Get the response with this ID
      * @param id the ID of the response
      * @returns the message
      */
-    private onResponse<T>(id: number) {
-        return new Promise<WorkerResponse<T>>((resolve) => {
-            this.emitter.once(`response-${id}`, (response) => {
-                resolve(response);
-            });
+    private onResponse<T, R = WorkerResponse<T>>(id: number): Promise<R> {
+        const deferred = new Deferred<R>();
+
+        //store this request so we can resolve it later, or reject if this class is disposed
+        this.activeRequests.set(id, {
+            id: id,
+            deferred: deferred
         });
+
+        this.emitter.once(`response-${id}`, (response) => {
+            deferred.resolve(response);
+            this.activeRequests.delete(id);
+        });
+
+        return deferred.promise;
     }
 
     /**
@@ -148,6 +163,10 @@ export class MessageHandler<T, TRequestName = MethodNames<T>> {
 
     public dispose() {
         util.applyDispose(this.disposables);
+        //reject all active requests
+        for (const request of this.activeRequests.values()) {
+            request.deferred.reject(new Error(`Request ${request.id} has been rejected because MessageHandler is now disposed`));
+        }
     }
 }
 

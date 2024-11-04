@@ -14,6 +14,11 @@ import { FileChangeType } from 'vscode-languageserver-protocol';
 import { PathFilterer } from './PathFilterer';
 import { Deferred } from '../deferred';
 import type { DocumentActionWithStatus } from './DocumentManager';
+import * as net from 'net';
+import type { Program } from '../Program';
+import * as getPort from 'get-port';
+
+
 const sinon = createSandbox();
 
 describe('ProjectManager', () => {
@@ -750,5 +755,111 @@ describe('ProjectManager', () => {
             });
             expect(manager['standaloneProjects'].size).to.eql(0);
         });
+    });
+
+    it('completes promise when project is disposed in the middle of a flow', async function () {
+        this.timeout(20_000);
+        //small plugin to communicate over a socket inside the worker thread.
+        //This transpiles from tsc use `require()` for all imports and don't reference external vars
+        class Plugin {
+            public server: net.Server;
+
+            private deferred = this.defer();
+
+            constructor(port: number, host: string) {
+                // eslint-disable-next-line
+                const net = require('net');
+                console.log('Starting server');
+                this.server = net.createServer((socket) => {
+                    console.log('Client connected');
+                    socket.on('data', (data: Buffer) => {
+                        let text = data.toString();
+                        console.log('message received', JSON.stringify(text));
+                        //when we get the event to resolve, do it
+                        if (text === 'resolve') {
+                            console.log('Resolving promise');
+                            this.deferred.resolve();
+                            this.server.close();
+                        }
+                    });
+                });
+                this.server.listen(port, host);
+            }
+
+            afterProgramCreate(program: Program) {
+                // hijack the function to get workspace symbols, return a promise that resolves in the future
+                program.getWorkspaceSymbols = () => {
+                    return this.deferred.promise as any;
+                };
+            }
+
+            private defer() {
+                let resolve;
+                let reject;
+                let promise = new Promise((res, rej) => {
+                    resolve = res;
+                    reject = rej;
+                });
+                return {
+                    resolve: resolve,
+                    reject: reject,
+                    promise: promise
+                };
+            }
+        }
+
+        const port = await getPort();
+        const host = '127.0.0.1';
+
+        //write a small brighterscript plugin to allow this test to communicate with the thread
+        fsExtra.outputFileSync(`${rootDir}/plugin.js`, `
+            ${Plugin.toString()};
+            exports.default = function() {
+                return new Plugin(${port}, "${host}");
+            };
+        `);
+        //write a bsconfig that will load this plugin
+        fsExtra.outputJsonSync(`${rootDir}/bsconfig.json`, {
+            plugins: [
+                `${rootDir}/plugin.js`
+            ]
+        });
+
+        //wait for the projects to finish syncing/loading
+        await manager.syncProjects([{
+            workspaceFolder: rootDir,
+            enableThreading: true
+        }]);
+
+        //establish the connection with the plugin
+        const connection = net.createConnection({
+            host: host,
+            port: port
+        });
+
+        //do the request to fetch symbols (this will be stalled on purpose by our test plugin)
+        let managerGetWorkspaceSymbolPromise = manager.getWorkspaceSymbol();
+
+        //small sleep to let things settle
+        await util.sleep(20);
+
+        //now dispose the project (which should destroy all of the listeners)
+        manager['removeProject'](manager.projects[0]);
+
+        //settle again
+        await util.sleep(20);
+
+        console.log('Asking the client to resolve');
+
+        //resolve the request
+        connection.write('resolve');
+
+        //now wait to see if we ever get the response back
+        let result = await managerGetWorkspaceSymbolPromise;
+
+        //the result should be an empty array, since the only project was rejected in the middle of the request
+        expect(result).to.eql([]);
+
+        //test passes if the promise resolves
     });
 });
