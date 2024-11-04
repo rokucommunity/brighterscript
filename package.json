@@ -108,6 +108,7 @@
     "eslint-plugin-import": "^2.29.1",
     "eslint-plugin-jsdoc": "^39.3.6",
     "eslint-plugin-no-only-tests": "2.6.0",
+    "get-port": "^5.1.1",
     "he": "^1.2.0",
     "madge": "^4.0.2",
     "marked": "^4.0.12",
