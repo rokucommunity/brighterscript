@@ -39,7 +39,8 @@ export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: W
     }
 
     //link this node to its parent
-    element.parent = parent ?? owner as unknown as AstNode;
+    parent = parent ?? owner as unknown as AstNode;
+    element.parent = parent;
 
     //notify the visitor of this element
     if (element.visitMode & options.walkMode) {
@@ -47,12 +48,13 @@ export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: W
 
         //replace the value on the parent if the visitor returned a Statement or Expression (this is how visitors can edit AST)
         if (result && (isExpression(result) || isStatement(result))) {
+            //if we have an editor, use that to modify the AST
             if (options.editor) {
                 options.editor.setProperty(owner, key, result as any);
+
+                //we don't have an editor, modify the AST directly
             } else {
                 (owner as any)[key] = result;
-                //don't walk the new element
-                return;
             }
         }
     }
@@ -61,6 +63,15 @@ export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: W
     if (options.cancel?.isCancellationRequested) {
         return;
     }
+
+    //get the element again in case it was replaced by the visitor
+    element = owner[key] as any as AstNode;
+    if (!element) {
+        return;
+    }
+
+    //set the parent of this new expression
+    element.parent = parent;
 
     if (!element.walk) {
         throw new Error(`${owner.constructor.name}["${String(key)}"]${parent ? ` for ${parent.constructor.name}` : ''} does not contain a "walk" method`);
@@ -78,12 +89,32 @@ export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: W
  * @param filter a function used to filter items from the array. return true if that item should be walked
  */
 export function walkArray<T = AstNode>(array: Array<T>, visitor: WalkVisitor, options: WalkOptions, parent?: AstNode, filter?: <T>(element: T) => boolean) {
+    let processedNodes = new Set<T>();
+
     for (let i = 0; i < array?.length; i++) {
         if (!filter || filter(array[i])) {
-            const startLength = array.length;
+            let item = array[i];
+            processedNodes.add(item);
+
             walk(array, i, visitor, options, parent);
-            //compensate for deleted or added items.
-            i += array.length - startLength;
+
+            //if the current item changed, recover
+            if (array[i] !== item) {
+                //get the index of the current item
+                let currentIndex = array.indexOf(item);
+                if (currentIndex > -1) {
+                    i = currentIndex;
+
+                    //if the current item is no longer in this array, walk backwards until we find something we have already processed
+                } else {
+                    for (let j = i - 1; j >= 0; j--) {
+                        if (processedNodes.has(array[j])) {
+                            i = j;
+                            break;
+                        }
+                    }
+                }
+            }
         }
     }
 }

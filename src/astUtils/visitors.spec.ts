@@ -8,14 +8,16 @@ import type { BrsFile } from '../files/BrsFile';
 import type { FunctionStatement } from '../parser/Statement';
 import { PrintStatement, Block, ReturnStatement, ExpressionStatement } from '../parser/Statement';
 import { TokenKind } from '../lexer/TokenKind';
-import { createVisitor, WalkMode, walkStatements } from './visitors';
-import { isPrintStatement } from './reflection';
-import { createCall, createToken, createVariableExpression } from './creators';
+import { createVisitor, walkArray, WalkMode, walkStatements } from './visitors';
+import { isLiteralExpression, isPrintStatement } from './reflection';
+import { createCall, createIdentifier, createIntegerLiteral, createToken, createVariableExpression } from './creators';
 import { createStackedVisitor } from './stackedVisitor';
 import { AstEditor } from './AstEditor';
 import { Parser } from '../parser/Parser';
 import type { Statement, Expression, AstNode } from '../parser/AstNode';
 import { expectZeroDiagnostics } from '../testHelpers.spec';
+import type { LiteralExpression, VariableExpression } from '../parser/Expression';
+import { BinaryExpression } from '../parser/Expression';
 
 describe('astUtils visitors', () => {
     const rootDir = process.cwd();
@@ -1085,23 +1087,142 @@ describe('astUtils visitors', () => {
                     //add another expression to the list every time. This should result in 1 the first time, 2 the second, 3 the third.
                     calls.push(new ExpressionStatement(
                         createCall(
-                            createVariableExpression('doSomethingBeforePrint')
+                            createVariableExpression('doSomethingBeforePrint'),
+                            [
+                                createIntegerLiteral(callExpressionCount.toString())
+                            ]
                         )
                     ));
-                    owner.splice(key, 0, ...calls);
+                    owner.splice(key + 1, 0, ...calls.map(x => x.clone()));
                 },
-                CallExpression: () => {
+                CallExpression: (call) => {
                     callExpressionCount++;
+                    console.log('call visitor for', (call.args[0] as LiteralExpression).token.text);
                 }
             }), {
                 walkMode: WalkMode.visitAllRecursive
             });
             //the visitor should have been called for every statement
             expect(printStatementCount).to.eql(3);
-            expect(callExpressionCount).to.eql(0);
+            //since the calls were injected after each print statement, we should have 1 call for the first print, 2 for the second, and 3 for the third
+            expect(callExpressionCount).to.eql(6);
             expect(
                 (ast.statements[0] as FunctionStatement).func.body.statements
             ).to.be.lengthOf(9);
+        });
+
+        it('walks a new child when returned from a visitor', () => {
+            let walkedLiterals: string[] = [];
+
+            Parser.parse(`
+                sub main()
+                    print 1 + 2
+                end sub
+            `).ast.walk(createVisitor({
+                BinaryExpression: (node, parent, owner: Statement[], key) => {
+                    //replace the `1 + 2` binary expression with a new binary expression
+                    if (isLiteralExpression(node.left) && node.left.token.text === '1') {
+                        return new BinaryExpression(
+                            createIntegerLiteral('3'),
+                            createToken(TokenKind.Plus),
+                            createIntegerLiteral('4')
+                        );
+                    }
+                },
+                LiteralExpression: (node) => {
+                    walkedLiterals.push(node.token.text);
+                }
+            }), {
+                walkMode: WalkMode.visitAllRecursive
+            });
+
+            expect(walkedLiterals).to.eql(['3', '4']);
+        });
+
+        it('walks a new child when returned from a visitor and using an AstEditor', () => {
+            let walkedLiterals: string[] = [];
+
+            Parser.parse(`
+                sub main()
+                    print 1 + 2
+                end sub
+            `).ast.walk(createVisitor({
+                BinaryExpression: (node, parent, owner: Statement[], key) => {
+                    //replace the `1 + 2` binary expression with a new binary expression
+                    if (isLiteralExpression(node.left) && node.left.token.text === '1') {
+                        return new BinaryExpression(
+                            createIntegerLiteral('3'),
+                            createToken(TokenKind.Plus),
+                            createIntegerLiteral('4')
+                        );
+                    }
+                },
+                LiteralExpression: (node) => {
+                    walkedLiterals.push(node.token.text);
+                }
+            }), {
+                walkMode: WalkMode.visitAllRecursive,
+                editor: new AstEditor()
+            });
+
+            expect(walkedLiterals).to.eql(['3', '4']);
+        });
+    });
+
+    describe('walkArray', () => {
+        const one = createVariableExpression('one');
+        const two = createVariableExpression('two');
+        const three = createVariableExpression('three');
+        const four = createVariableExpression('four');
+        const five = createVariableExpression('five');
+
+        function doTest(startingArray: VariableExpression[], expected: VariableExpression[], visitor?: (item: AstNode, parent: AstNode, owner: any, key: number) => any) {
+            const visitedItems: VariableExpression[] = [];
+            walkArray(startingArray, (item, parent, owner, key) => {
+                visitedItems.push(item as any);
+                return visitor?.(item, parent, owner, key);
+            }, { walkMode: WalkMode.visitAllRecursive });
+            expect(
+                visitedItems.map(x => x.name.text)
+            ).to.eql(
+                expected.map(x => x.name.text)
+            );
+        }
+
+        it('walks every element in the array', () => {
+            doTest(
+                [one, two, three, four, five],
+                [one, two, three, four, five]
+            );
+        });
+
+        it('walks new items added to the array', () => {
+            doTest(
+                [one, two],
+                [one, three, two, four],
+                (item, parent, owner, key) => {
+                    //insert a value after one
+                    if (item === one) {
+                        owner.splice(key + 1, 0, three);
+                        //insert a value after one
+                    } else if (item === two) {
+                        owner.splice(key + 1, 0, four);
+                    }
+                }
+            );
+        });
+
+        it('does not trigger extra walks on elements when element is inserted above current', () => {
+            doTest(
+                [one, two, three],
+                [one, /*four is skipped since we were already past two*/ two, three],
+                (item, parent, owner, key) => {
+                    //insert a value after one
+                    if (item === two) {
+                        owner.splice(key, 0, four);
+                    }
+                }
+            );
         });
     });
 });
