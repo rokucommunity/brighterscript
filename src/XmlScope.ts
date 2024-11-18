@@ -7,6 +7,7 @@ import type { BscFile } from './files/BscFile';
 import { DynamicType } from './types/DynamicType';
 import type { BaseFunctionType } from './types/BaseFunctionType';
 import { ComponentType } from './types/ComponentType';
+import { ExtraSymbolData } from './interfaces';
 
 export class XmlScope extends Scope {
     constructor(
@@ -56,13 +57,14 @@ export class XmlScope extends Scope {
         //add functions
         for (const func of iface.functions ?? []) {
             if (func.name) {
-                const componentFuncType = this.symbolTable.getSymbolType(func.name, { flags: SymbolTypeFlag.runtime, fullName: func.name, tableProvider: () => this.symbolTable });
+                const extraData: ExtraSymbolData = {};
+                const componentFuncType = this.symbolTable.getSymbolType(func.name, { flags: SymbolTypeFlag.runtime, data: extraData, fullName: func.name, tableProvider: () => this.symbolTable });
                 // TODO: Get correct function type, and fully resolve all param and return types of function
                 // eg.:
                 // callFuncType = new CallFuncType(componentFuncType) // does something to fully resolve & store all associated types
 
                 //TODO: add documentation - need to get previous comment from XML
-                result.addCallFuncMember(func.name, {}, componentFuncType as BaseFunctionType, SymbolTypeFlag.runtime);
+                result.addCallFuncMember(func.name, extraData, componentFuncType as BaseFunctionType, SymbolTypeFlag.runtime);
             }
         }
         //add fields

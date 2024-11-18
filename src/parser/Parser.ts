@@ -2861,19 +2861,24 @@ export class Parser {
     private callfunc(callee: Expression): Expression {
         this.warnIfNotBrighterScriptMode('callfunc operator');
         let operator = this.previous();
-        let methodName = this.consume(DiagnosticMessages.expectedIdentifier(), TokenKind.Identifier, ...AllowedProperties);
-        // force it into an identifier so the AST makes some sense
-        methodName.kind = TokenKind.Identifier;
-        let openParen = this.consume(DiagnosticMessages.expectedOpenParenToFollowCallfuncIdentifier(), TokenKind.LeftParen);
-        let call = this.finishCall(openParen, callee, false);
-
+        let methodName = this.tryConsume(DiagnosticMessages.expectedIdentifier(), TokenKind.Identifier, ...AllowedProperties);
+        let openParen: Token;
+        let call: CallExpression;
+        if (methodName) {
+            // force it into an identifier so the AST makes some sense
+            methodName.kind = TokenKind.Identifier;
+            openParen = this.tryConsume(DiagnosticMessages.expectedOpenParenToFollowCallfuncIdentifier(), TokenKind.LeftParen);
+            if (openParen) {
+                call = this.finishCall(openParen, callee, false);
+            }
+        }
         return new CallfuncExpression({
             callee: callee,
             operator: operator,
             methodName: methodName as Identifier,
             openingParen: openParen,
-            args: call.args,
-            closingParen: call.tokens.closingParen
+            args: call?.args,
+            closingParen: call?.tokens?.closingParen
         });
     }
 

@@ -8,7 +8,7 @@ import type { AliasStatement, AssignmentStatement, Block, ClassStatement, Condit
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { isAliasStatement, isAssignmentStatement, isBinaryExpression, isBlock, isBody, isCallExpression, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isDottedGetExpression, isExitStatement, isExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypecastExpression, isTypecastStatement, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAliasStatement, isAssignmentStatement, isBinaryExpression, isBlock, isBody, isCallExpression, isCallfuncExpression, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isDottedGetExpression, isExitStatement, isExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypecastExpression, isTypecastStatement, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, rootDir } from '../testHelpers.spec';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { Expression, Statement } from './AstNode';
@@ -595,6 +595,19 @@ describe('parser', () => {
                     expect(isExpressionStatement(stmt)).to.be.true;
                     expect(isBinaryExpression((stmt).expression)).to.be.true;
                 }
+            });
+
+            it('adds callfunc expressions', () => {
+                let parser = parse(`
+                    sub foo(thing)
+                        thing@.
+                    end sub
+                `, ParseMode.BrighterScript);
+                expect(parser.diagnostics[0]?.message).to.exist;
+                let body = (parser.ast.statements[0] as FunctionStatement).func.body;
+
+                let callFunc = body.findChild<CallExpression>(isCallfuncExpression);
+                expect(callFunc).to.exist;
             });
         });
 

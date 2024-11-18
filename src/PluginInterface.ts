@@ -54,6 +54,7 @@ export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> 
      * Call `event` on plugins
      */
     public emit<K extends keyof PluginEventArgs<T> & string>(event: K, ...args: PluginEventArgs<T>[K]) {
+        this.logger.debug(`Emitting plugin event: ${event}`);
         for (let plugin of this.plugins) {
             if ((plugin as any)[event]) {
                 try {
@@ -75,6 +76,7 @@ export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> 
      * Call `event` on plugins, but allow the plugins to return promises that will be awaited before the next plugin is notified
      */
     public async emitAsync<K extends keyof PluginEventArgs<T> & string>(event: K, ...args: PluginEventArgs<T>[K]): Promise< PluginEventArgs<T>[K][0]> {
+        this.logger.debug(`Emitting async plugin event: ${event}`);
         for (let plugin of this.plugins) {
             if ((plugin as any)[event]) {
                 try {
