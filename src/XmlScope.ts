@@ -7,7 +7,7 @@ import type { BscFile } from './files/BscFile';
 import { DynamicType } from './types/DynamicType';
 import type { BaseFunctionType } from './types/BaseFunctionType';
 import { ComponentType } from './types/ComponentType';
-import { ExtraSymbolData } from './interfaces';
+import type { ExtraSymbolData } from './interfaces';
 
 export class XmlScope extends Scope {
     constructor(

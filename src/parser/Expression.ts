@@ -1713,18 +1713,14 @@ export class CallfuncExpression extends Expression {
                 }));
                 if (options.ignoreCall) {
                     result = funcType;
+                } else if (isCallableType(funcType) && (!isReferenceType(funcType.returnType) || funcType.returnType.isResolvable())) {
+                    result = funcType.returnType;
+                } else if (!isReferenceType(funcType) && (funcType as any)?.returnType?.isResolvable()) {
+                    result = (funcType as any).returnType;
+                } else {
+                    return new TypePropertyReferenceType(funcType, 'returnType');
                 }
             }
-            /* TODO:
-                make callfunc return types work
-            else if (isCallableType(funcType) && (!isReferenceType(funcType.returnType) || funcType.returnType.isResolvable())) {
-                result = funcType.returnType;
-            } else if (!isReferenceType(funcType) && (funcType as any)?.returnType?.isResolvable()) {
-                result = (funcType as any).returnType;
-            } else {
-                return new TypePropertyReferenceType(funcType, 'returnType');
-            }
-            */
         }
 
         return result;
