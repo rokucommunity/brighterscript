@@ -25,49 +25,53 @@ export type WalkVisitor = <T = AstNode>(node: AstNode, parent?: AstNode, owner?:
 
 /**
  * A helper function for Statement and Expression `walkAll` calls.
+ * @returns a new AstNode if it was changed by returning from the visitor, or undefined if not
  */
-export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: WalkOptions, parent?: AstNode) {
+export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: WalkOptions, parent?: AstNode): AstNode | void {
+    let returnValue: AstNode | void;
+
     //stop processing if canceled
     if (options.cancel?.isCancellationRequested) {
-        return;
+        return returnValue;
     }
 
     //the object we're visiting
     let element = owner[key] as any as AstNode;
     if (!element) {
-        return;
+        return returnValue;
     }
 
     //link this node to its parent
     parent = parent ?? owner as unknown as AstNode;
     element.parent = parent;
 
+
     //notify the visitor of this element
     if (element.visitMode & options.walkMode) {
-        const result = visitor?.(element, element.parent as any, owner, key);
+        returnValue = visitor?.(element, element.parent as any, owner, key);
 
         //replace the value on the parent if the visitor returned a Statement or Expression (this is how visitors can edit AST)
-        if (result && (isExpression(result) || isStatement(result))) {
+        if (returnValue && (isExpression(returnValue) || isStatement(returnValue))) {
             //if we have an editor, use that to modify the AST
             if (options.editor) {
-                options.editor.setProperty(owner, key, result as any);
+                options.editor.setProperty(owner, key, returnValue as any);
 
                 //we don't have an editor, modify the AST directly
             } else {
-                (owner as any)[key] = result;
+                (owner as any)[key] = returnValue;
             }
         }
     }
 
     //stop processing if canceled
     if (options.cancel?.isCancellationRequested) {
-        return;
+        return returnValue;
     }
 
     //get the element again in case it was replaced by the visitor
     element = owner[key] as any as AstNode;
     if (!element) {
-        return;
+        return returnValue;
     }
 
     //set the parent of this new expression
@@ -78,6 +82,8 @@ export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: W
     }
     //walk the child expressions
     element.walk(visitor, options);
+
+    return returnValue;
 }
 
 /**
@@ -88,32 +94,27 @@ export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: W
  * @param parent the parent AstNode of each item in the array
  * @param filter a function used to filter items from the array. return true if that item should be walked
  */
-export function walkArray<T = AstNode>(array: Array<T>, visitor: WalkVisitor, options: WalkOptions, parent?: AstNode, filter?: <T>(element: T) => boolean) {
-    let processedNodes = new Set<T>();
+export function walkArray<T extends AstNode = AstNode>(array: Array<T>, visitor: WalkVisitor, options: WalkOptions, parent?: AstNode, filter?: <T>(element: T) => boolean) {
+    let processedNodes = new Set<AstNode>();
 
     for (let i = 0; i < array?.length; i++) {
         if (!filter || filter(array[i])) {
             let item = array[i];
+            //skip already processed nodes for this array walk
+            if (processedNodes.has(item)) {
+                continue;
+            }
             processedNodes.add(item);
 
-            walk(array, i, visitor, options, parent);
+            //if the walk produced a new node, we will assume the original node was handled, and the new node's children were walked, so we can skip it if we enter recovery mode
+            const newNode = walk(array, i, visitor, options, parent);
+            if (newNode) {
+                processedNodes.add(newNode);
+            }
 
-            //if the current item changed, recover
+            //if the current item changed, restart the entire loop (we'll skip any already-processed items)
             if (array[i] !== item) {
-                //get the index of the current item
-                let currentIndex = array.indexOf(item);
-                if (currentIndex > -1) {
-                    i = currentIndex;
-
-                    //if the current item is no longer in this array, walk backwards until we find something we have already processed
-                } else {
-                    for (let j = i - 1; j >= 0; j--) {
-                        if (processedNodes.has(array[j])) {
-                            i = j;
-                            break;
-                        }
-                    }
-                }
+                i = -1;
             }
         }
     }

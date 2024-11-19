@@ -9,8 +9,8 @@ import type { FunctionStatement } from '../parser/Statement';
 import { PrintStatement, Block, ReturnStatement, ExpressionStatement } from '../parser/Statement';
 import { TokenKind } from '../lexer/TokenKind';
 import { createVisitor, walkArray, WalkMode, walkStatements } from './visitors';
-import { isLiteralExpression, isPrintStatement } from './reflection';
-import { createCall, createIdentifier, createIntegerLiteral, createToken, createVariableExpression } from './creators';
+import { isBlock, isLiteralExpression, isPrintStatement } from './reflection';
+import { createCall, createIntegerLiteral, createToken, createVariableExpression } from './creators';
 import { createStackedVisitor } from './stackedVisitor';
 import { AstEditor } from './AstEditor';
 import { Parser } from '../parser/Parser';
@@ -1070,6 +1070,88 @@ describe('astUtils visitors', () => {
             ).to.be.lengthOf(0);
         });
 
+        it('walks everything when the first element is replaced', () => {
+            const { ast } = Parser.parse(`
+                sub main()
+                    print 1
+                    print 2
+                    print 3
+                end sub
+            `);
+            const target = ast.findChild<Block>(isBlock).statements[0];
+            let callCount = 0;
+            ast.walk((astNode, parent, owner: Statement[], key) => {
+                if (isPrintStatement(astNode)) {
+                    callCount++;
+                }
+                if (astNode === target) {
+                    owner.splice(key, 1);
+                }
+            }, {
+                walkMode: WalkMode.visitAllRecursive
+            });
+            //the visitor should have been called for every statement
+            expect(callCount).to.eql(3);
+            expect(
+                (ast.statements[0] as FunctionStatement).func.body.statements
+            ).not.to.include(target);
+        });
+
+        it('walks everything when the middle element is replaced', () => {
+            const { ast } = Parser.parse(`
+                sub main()
+                    print 1
+                    print 2
+                    print 3
+                end sub
+            `);
+            const target = ast.findChild<Block>(isBlock).statements[1];
+            let callCount = 0;
+            ast.walk((astNode, parent, owner: Statement[], key) => {
+                if (isPrintStatement(astNode)) {
+                    callCount++;
+                }
+                if (astNode === target) {
+                    owner.splice(key, 1);
+                }
+            }, {
+                walkMode: WalkMode.visitAllRecursive
+            });
+            //the visitor should have been called for every statement
+            expect(callCount).to.eql(3);
+            expect(
+                (ast.statements[0] as FunctionStatement).func.body.statements
+            ).not.to.include(target);
+        });
+
+        it('walks everything when the end element is replaced', () => {
+            const { ast } = Parser.parse(`
+                sub main()
+                    print 1
+                    print 2
+                    print 3
+                end sub
+            `);
+            const target = ast.findChild<Block>(isBlock).statements[2];
+            let callCount = 0;
+            ast.walk((astNode, parent, owner: Statement[], key) => {
+                if (isPrintStatement(astNode)) {
+                    callCount++;
+                }
+                if (astNode === target) {
+                    owner.splice(key, 1);
+                }
+            }, {
+                walkMode: WalkMode.visitAllRecursive
+            });
+            //the visitor should have been called for every statement
+            expect(callCount).to.eql(3);
+            expect(
+                (ast.statements[0] as FunctionStatement).func.body.statements
+            ).not.to.include(target);
+        });
+
+
         it('can be used to insert statements', () => {
             const { ast } = Parser.parse(`
                 sub main()
@@ -1212,10 +1294,10 @@ describe('astUtils visitors', () => {
             );
         });
 
-        it('does not trigger extra walks on elements when element is inserted above current', () => {
+        it('triggers on nodes that were skiped due to insertions', () => {
             doTest(
                 [one, two, three],
-                [one, /*four is skipped since we were already past two*/ two, three],
+                [one, two, four, three],
                 (item, parent, owner, key) => {
                     //insert a value after one
                     if (item === two) {
