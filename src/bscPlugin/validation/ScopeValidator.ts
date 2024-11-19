@@ -696,7 +696,7 @@ export class ScopeValidator {
                     }
                 } else {
                     const typeChainScan = util.processTypeChain(typeChain);
-                    //if this is a function call, provide a different diganostic code
+                    //if this is a function call, provide a different diagnostic code
                     if (isCallExpression(typeChainScan.astNode.parent) && typeChainScan.astNode.parent.callee === expression) {
                         this.addMultiScopeDiagnostic({
                             ...DiagnosticMessages.cannotFindFunction(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan)),
@@ -710,7 +710,7 @@ export class ScopeValidator {
                     }
                 }
 
-            } else if (!typeData?.isFromDocComment) {
+            } else if (!(typeData?.isFromDocComment || typeData?.isFromCallFunc)) {
                 // only show "cannot find... " errors if the type is not defined from a doc comment
                 const typeChainScan = util.processTypeChain(typeChain);
                 if (isCallExpression(typeChainScan.astNode.parent) && typeChainScan.astNode.parent.callee === expression) {

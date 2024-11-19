@@ -233,6 +233,7 @@ export class SymbolTable implements SymbolTypeGetter {
             options.data.isAlias = data?.isAlias;
             options.data.isInstance = data?.isInstance;
             options.data.isFromDocComment = data?.isFromDocComment;
+            options.data.isFromCallFunc = data?.isFromCallFunc;
         }
         return resolvedType;
     }

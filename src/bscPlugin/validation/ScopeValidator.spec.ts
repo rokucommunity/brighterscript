@@ -3638,4 +3638,54 @@ describe('ScopeValidator', () => {
         });
     });
 
+    describe('callFunc', () => {
+        it('allows access to member of return type when return type is custom node', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getOther" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                function getOther(name as string) as roSgNodeOther
+                    other =  createObject("roSgNode", "Other")
+                    other.myValue = name
+                    return other
+                end function
+            `);
+
+            program.setFile('components/Other.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Other" extends="Group">
+                    <interface>
+                        <field id="myValue" type="string" />
+                    </interface>
+                </component>
+            `);
+
+
+            program.setFile('components/MainScene.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MainScene" extends="Scene">
+                    <script uri="MainScene.bs"/>
+                </component>
+            `);
+
+            program.setFile('components/MainScene.bs', `
+                sub someFunc(widget as roSGNodeWidget)
+                    otherNode = widget@.getOther("3.14")
+                    print otherNode.myValue
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+    });
+
 });

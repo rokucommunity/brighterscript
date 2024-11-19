@@ -10,7 +10,7 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallExpression, isCallableType, isCallfuncExpression, isComponentType, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isPrimitiveType, isReferenceType, isStringType, isTemplateStringExpression, isTypecastExpression, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallExpression, isCallableType, isCallfuncExpression, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isPrimitiveType, isReferenceType, isStringType, isTemplateStringExpression, isTypecastExpression, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
@@ -26,8 +26,6 @@ import { TypePropertyReferenceType } from '../types/ReferenceType';
 import { UnionType } from '../types/UnionType';
 import { ArrayType } from '../types/ArrayType';
 import { AssociativeArrayType } from '../types/AssociativeArrayType';
-import type { ComponentType } from '../types/ComponentType';
-import { createToken } from '../astUtils/creators';
 import { TypedFunctionType } from '../types';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { FunctionType } from '../types/FunctionType';
@@ -199,7 +197,7 @@ export class CallExpression extends Expression {
         if (isNewExpression(this.parent)) {
             return calleeType;
         }
-        const specialCaseReturnType = util.getSpecialCaseCallExpressionReturnType(this);
+        const specialCaseReturnType = util.getSpecialCaseCallExpressionReturnType(this, options);
         if (specialCaseReturnType) {
             return specialCaseReturnType;
         }
@@ -1696,33 +1694,7 @@ export class CallfuncExpression extends Expression {
     }
 
     getType(options: GetTypeOptions) {
-        let result: BscType = DynamicType.instance;
-        // a little hacky here with checking options.ignoreCall because callFuncExpression has the method name
-        // It's nicer for CallExpression, because it's a call on any expression.
-        const calleeType = this.callee.getType({ ...options, flags: SymbolTypeFlag.runtime });
-        if (isComponentType(calleeType) || isReferenceType(calleeType)) {
-            const funcType = (calleeType as ComponentType).getCallFuncType?.(this.tokens.methodName.text, options);
-            if (funcType) {
-                options.typeChain?.push(new TypeChainEntry({
-                    name: this.tokens.methodName.text,
-                    type: funcType,
-                    data: options.data,
-                    location: this.tokens.methodName.location,
-                    separatorToken: createToken(TokenKind.Callfunc),
-                    astNode: this
-                }));
-                if (options.ignoreCall) {
-                    result = funcType;
-                } else if (isCallableType(funcType) && (!isReferenceType(funcType.returnType) || funcType.returnType.isResolvable())) {
-                    result = funcType.returnType;
-                } else if (!isReferenceType(funcType) && (funcType as any)?.returnType?.isResolvable()) {
-                    result = (funcType as any).returnType;
-                } else {
-                    return new TypePropertyReferenceType(funcType, 'returnType');
-                }
-            }
-        }
-
+        const result = util.getCallFuncType(this, this.tokens.methodName, options) ?? DynamicType.instance;
         return result;
     }
 

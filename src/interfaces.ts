@@ -977,6 +977,10 @@ export interface ExtraSymbolData {
      * Is this type as defined in a doc comment?
      */
     isFromDocComment?: boolean;
+    /**
+     * was this a result of a callfunc?
+     */
+    isFromCallFunc?: boolean;
 }
 
 export interface GetTypeOptions {
