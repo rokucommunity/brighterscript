@@ -3638,7 +3638,7 @@ describe('ScopeValidator', () => {
         });
     });
 
-    describe.only('callFunc', () => {
+    describe('callFunc', () => {
         it('allows access to member of return type when return type is custom node', () => {
             program.setFile('components/Widget.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -3826,7 +3826,7 @@ describe('ScopeValidator', () => {
             ]);
         });
 
-        it.only('allows to types that reference themselves', () => {
+        it('allows to types that reference themselves', () => {
             program.setFile('components/Widget.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Widget" extends="Group">
