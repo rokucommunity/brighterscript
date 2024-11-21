@@ -59,12 +59,7 @@ export class XmlScope extends Scope {
             if (func.name) {
                 const extraData: ExtraSymbolData = {};
                 const componentFuncType = this.symbolTable.getSymbolType(func.name, { flags: SymbolTypeFlag.runtime, data: extraData, fullName: func.name, tableProvider: () => this.symbolTable });
-                // TODO: Get correct function type, and fully resolve all param and return types of function
-                // eg.:
-                // callFuncType = new CallFuncType(componentFuncType) // does something to fully resolve & store all associated types
-
-                //TODO: add documentation - need to get previous comment from XML
-                result.addCallFuncMember(func.name, extraData, componentFuncType as BaseFunctionType, SymbolTypeFlag.runtime);
+                result.addCallFuncMember(func.name, extraData, componentFuncType as BaseFunctionType, SymbolTypeFlag.runtime, () => this.symbolTable);
             }
         }
         //add fields

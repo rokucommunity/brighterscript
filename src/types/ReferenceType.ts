@@ -1,5 +1,5 @@
 import type { GetTypeOptions, TypeChainEntry, TypeCompatibilityData } from '../interfaces';
-import type { GetSymbolTypeOptions, SymbolTypeGetterProvider } from '../SymbolTable';
+import type { GetSymbolTypeOptions, SymbolTable, SymbolTableProvider, SymbolTypeGetterProvider } from '../SymbolTable';
 import type { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { isAnyReferenceType, isArrayDefaultTypeReferenceType, isArrayType, isBinaryOperatorReferenceType, isComponentType, isDynamicType, isReferenceType, isTypePropertyReferenceType } from '../astUtils/reflection';
 import { BscType } from './BscType';
@@ -22,7 +22,7 @@ export class ReferenceType extends BscType {
      * @param flags is this type available at typetime, runtime, etc.
      * @param tableProvider function that returns a SymbolTable that we use for the lookup.
      */
-    constructor(public memberKey: string, public fullName, public flags: SymbolTypeFlag, private tableProvider: SymbolTypeGetterProvider) {
+    constructor(public memberKey: string, public fullName, public flags: SymbolTypeFlag, public tableProvider: SymbolTypeGetterProvider) {
         super(memberKey);
         // eslint-disable-next-line no-constructor-return
         return new Proxy(this, {
@@ -188,6 +188,8 @@ export class ReferenceType extends BscType {
                     } else if (propName === 'hasAddedBuiltInInterfaces') {
                         // this is an unknown type. There is no use in adding built in interfaces
                         return true;
+                    } else if (propName === 'isBuiltIn') {
+                        return false;
                     }
                 }
 
@@ -206,6 +208,9 @@ export class ReferenceType extends BscType {
 
                 // Look for circular references
                 if (!innerType || this.referenceChain.has(innerType)) {
+                    console.log(`Proxy set error`, name, value, innerType);
+                    const error = new Error();
+                    console.log(error.stack);
                     return false;
                 }
                 const result = Reflect.set(innerType, name, value, innerType);
@@ -216,6 +221,8 @@ export class ReferenceType extends BscType {
     }
 
     public readonly kind = BscTypeKind.ReferenceType;
+
+    getTarget: () => BscType;
 
     /**
      * Resolves the type based on the original name and the table provider
@@ -286,6 +293,12 @@ export class ReferenceType extends BscType {
                 if (resolvedType) {
                     resolvedType.memberTable.setCachedType(innerName, innerResolvedTypeCacheEntry, options);
                 }
+            },
+            addSibling: (symbolTable: SymbolTable) => {
+                const resolvedType = this.resolve();
+                if (resolvedType) {
+                    resolvedType.memberTable?.addSibling?.(symbolTable);
+                }
             }
         };
     };
@@ -303,6 +316,12 @@ export class ReferenceType extends BscType {
                 const resolvedType = this.resolve();
                 if (isComponentType(resolvedType)) {
                     resolvedType.getCallFuncTable().setCachedType(innerName, innerResolvedTypeCacheEntry, options);
+                }
+            },
+            addSibling: (symbolTable: SymbolTable) => {
+                const resolvedType = this.resolve();
+                if (isComponentType(resolvedType)) {
+                    resolvedType.getCallFuncTable()?.addSibling?.(symbolTable);
                 }
             }
         };
@@ -350,6 +369,9 @@ export class TypePropertyReferenceType extends BscType {
                                     },
                                     setCachedType: (innerName: string, innerTypeCacheEntry: TypeChainEntry, innerOptions: GetTypeOptions) => {
                                         return this.outerType?.[this.propertyName]?.memberTable.setCachedType(innerName, innerTypeCacheEntry, innerOptions);
+                                    },
+                                    addSibling: (symbolTable: SymbolTable) => {
+                                        return this.outerType?.[this.propertyName]?.memberTable?.addSibling?.(symbolTable);
                                     }
                                 };
                             });
@@ -384,6 +406,10 @@ export class TypePropertyReferenceType extends BscType {
             }
         });
     }
+
+    getTarget: () => BscType;
+
+    tableProvider: SymbolTableProvider;
 }
 
 
@@ -437,6 +463,10 @@ export class BinaryOperatorReferenceType extends BscType {
             }
         });
     }
+
+    getTarget: () => BscType;
+
+    tableProvider: SymbolTableProvider;
 }
 
 
@@ -488,6 +518,10 @@ export class ArrayDefaultTypeReferenceType extends BscType {
             }
         });
     }
+
+    getTarget: () => BscType;
+
+    tableProvider: SymbolTableProvider;
 }
 
 /**

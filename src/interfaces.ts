@@ -1063,6 +1063,10 @@ export interface TypeChainProcessResult {
      * The AstNode of the item
      */
     astNode: AstNode;
+    /**
+     * Does the chain contain a type that crossed a callFunc boundary?
+     */
+    crossedCallFunc: boolean;
 }
 
 export interface TypeCompatibilityData {

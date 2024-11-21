@@ -18,6 +18,7 @@ export class ArrayType extends BscType {
     }
 
     public readonly kind = BscTypeKind.ArrayType;
+    public isBuiltIn = true;
 
     public innerTypes: BscType[] = [];
 

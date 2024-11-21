@@ -16,6 +16,8 @@ export class VoidType extends BscType {
 
     public static instance = new VoidType('void');
 
+    public isBuiltIn = true;
+
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         return (
             isVoidType(targetType) ||

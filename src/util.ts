@@ -2185,6 +2185,7 @@ export class Util {
         let errorLocation: Location;
         let containsDynamic = false;
         let continueResolvingAllItems = true;
+        let crossedCallFunc = false;
         for (let i = 0; i < typeChain.length; i++) {
             const chainItem = typeChain[i];
             const dotSep = chainItem.separatorToken?.text ?? '.';
@@ -2230,6 +2231,7 @@ export class Util {
                 itemName = chainItem.name;
                 astNode = chainItem.astNode;
                 containsDynamic = containsDynamic || (isDynamicType(chainItem.type) && !isAnyReferenceType(chainItem.type));
+                crossedCallFunc = crossedCallFunc || chainItem.data?.isFromCallFunc;
                 if (!chainItem.isResolved) {
                     errorLocation = chainItem.location;
                     continueResolvingAllItems = false;
@@ -2245,7 +2247,8 @@ export class Util {
             fullChainName: fullChainName,
             location: errorLocation,
             containsDynamic: containsDynamic,
-            astNode: astNode
+            astNode: astNode,
+            crossedCallFunc: crossedCallFunc
         };
     }
 

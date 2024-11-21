@@ -16,6 +16,8 @@ export class FloatType extends BscType {
 
     public static instance = new FloatType('float');
 
+    public isBuiltIn = true;
+
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         return (
             isDynamicType(targetType) ||

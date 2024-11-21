@@ -1,5 +1,5 @@
 import { DiagnosticTag, type Range } from 'vscode-languageserver';
-import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isComponentType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringType, isTypedFunctionType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
+import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringType, isTypedFunctionType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -13,7 +13,7 @@ import type { Token } from '../../lexer/Token';
 import { AstNodeKind } from '../../parser/AstNode';
 import type { AstNode } from '../../parser/AstNode';
 import type { Expression } from '../../parser/AstNode';
-import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression, LiteralExpression, FunctionExpression } from '../../parser/Expression';
+import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression, LiteralExpression, FunctionExpression, CallfuncExpression } from '../../parser/Expression';
 import { CallExpression } from '../../parser/Expression';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BscType } from '../../types/BscType';
@@ -31,6 +31,7 @@ import { VoidType } from '../../types/VoidType';
 import { BscTypeKind } from '../../types/BscTypeKind';
 import type { BrsDocWithType } from '../../parser/BrightScriptDocParser';
 import brsDocParser from '../../parser/BrightScriptDocParser';
+import type { Location } from 'vscode-languageserver';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -135,6 +136,9 @@ export class ScopeValidator {
                     CallExpression: (functionCall) => {
                         this.validateFunctionCall(file, functionCall);
                         this.validateCreateObjectCall(file, functionCall);
+                    },
+                    CallfuncExpression: (functionCall) => {
+                        this.validateFunctionCall(file, functionCall);
                     },
                     ReturnStatement: (returnStatement) => {
                         this.validateReturnStatement(file, returnStatement);
@@ -343,9 +347,18 @@ export class ScopeValidator {
     /**
      * Detect calls to functions with the incorrect number of parameters, or wrong types of arguments
      */
-    private validateFunctionCall(file: BrsFile, expression: CallExpression) {
+    private validateFunctionCall(file: BrsFile, expression: CallExpression | CallfuncExpression) {
         const getTypeOptions = { flags: SymbolTypeFlag.runtime, data: {} };
-        let funcType = this.getNodeTypeWrapper(file, expression?.callee, getTypeOptions);
+        let funcType: BscType;
+        let callErrorLocation: Location;
+        if (isCallExpression(expression)) {
+            funcType = this.getNodeTypeWrapper(file, expression?.callee, getTypeOptions);
+            callErrorLocation = expression?.callee?.location;
+        } else if (isCallfuncExpression(expression)) {
+            funcType = this.getNodeTypeWrapper(file, expression, { ...getTypeOptions, ignoreCall: true });
+            callErrorLocation = expression.location;
+        }
+
         if (funcType?.isResolvable() && isClassType(funcType)) {
             // We're calling a class - get the constructor
             funcType = funcType.getMemberType('new', getTypeOptions);
@@ -373,7 +386,7 @@ export class ScopeValidator {
                 let minMaxParamsText = minParams === maxParams ? maxParams : `${minParams}-${maxParams}`;
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.mismatchArgumentCount(minMaxParamsText, expCallArgCount),
-                    location: expression.callee.location
+                    location: callErrorLocation
                 });
             }
             let paramIndex = 0;
@@ -710,7 +723,7 @@ export class ScopeValidator {
                     }
                 }
 
-            } else if (!(typeData?.isFromDocComment || typeData?.isFromCallFunc)) {
+            } else if (!(typeData?.isFromDocComment)) { //|| typeData?.isFromCallFunc)) {
                 // only show "cannot find... " errors if the type is not defined from a doc comment
                 const typeChainScan = util.processTypeChain(typeChain);
                 if (isCallExpression(typeChainScan.astNode.parent) && typeChainScan.astNode.parent.callee === expression) {

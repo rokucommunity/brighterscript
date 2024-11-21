@@ -10,6 +10,7 @@ export abstract class BscType {
     public readonly memberTable: SymbolTable;
     protected __identifier: string;
     protected hasAddedBuiltInInterfaces = false;
+    public isBuiltIn = false;
 
     constructor(name = '') {
         this.__identifier = `${this.constructor.name}${name ? ': ' + name : ''}`;

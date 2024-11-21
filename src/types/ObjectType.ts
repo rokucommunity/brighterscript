@@ -15,6 +15,8 @@ export class ObjectType extends BscType {
 
     public readonly kind = BscTypeKind.ObjectType;
 
+    public isBuiltIn = true;
+
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         //Brightscript allows anything passed "as object", so as long as a type is provided, this is true
         return !!targetType;

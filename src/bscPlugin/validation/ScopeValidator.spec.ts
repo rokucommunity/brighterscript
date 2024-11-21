@@ -3638,7 +3638,7 @@ describe('ScopeValidator', () => {
         });
     });
 
-    describe('callFunc', () => {
+    describe.only('callFunc', () => {
         it('allows access to member of return type when return type is custom node', () => {
             program.setFile('components/Widget.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -3686,6 +3686,198 @@ describe('ScopeValidator', () => {
             expectZeroDiagnostics(program);
         });
 
+        it('allows access to member of return type when return type is custom type', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getOther" />
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/types.bs', `
+                interface SomeIFace
+                   myValue as string
+                end interface
+            `);
+
+            program.setFile('components/Widget.bs', `
+                import "pkg:/components/types.bs"
+
+                function getOther(name as string) as SomeIFace
+                    other = {myValue: name} as SomeIface
+                    other.myValue = name
+                    return other
+                end function
+            `);
+
+            program.setFile('components/MainScene.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MainScene" extends="Scene">
+                    <script uri="MainScene.bs"/>
+                </component>
+            `);
+
+            program.setFile('components/MainScene.bs', `
+                sub someFunc(widget as roSGNodeWidget)
+                    otherNode = widget@.getOther("3.14")
+                    print otherNode.myValue
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows access to custom type member of return type when return type is custom type', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getOther" />
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/types.bs', `
+                interface SomeIFace
+                   subFace as SubIface
+                end interface
+
+                interface SubIface
+                    myValue as string
+                end interface
+            `);
+
+            program.setFile('components/Widget.bs', `
+                import "pkg:/components/types.bs"
+
+                function getOther(name as string) as SomeIFace
+                    other = {subFace: {myValue: name}} as SomeIface
+                    return other
+                end function
+            `);
+
+            program.setFile('components/MainScene.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MainScene" extends="Scene">
+                    <script uri="MainScene.bs"/>
+                </component>
+            `);
+
+            program.setFile('components/MainScene.bs', `
+                sub someFunc(widget as roSGNodeWidget)
+                    otherNode = widget@.getOther("3.14")
+                    print otherNode.subFace.myValue
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('correctly finds error with using unknown member of callfunc return type when return type is custom type', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getOther" />
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/types.bs', `
+                interface SomeIFace
+                   subFace as SubIface
+                end interface
+
+                interface SubIface
+                    myValue as string
+                end interface
+            `);
+
+            program.setFile('components/Widget.bs', `
+                import "pkg:/components/types.bs"
+
+                function getOther(name as string) as SomeIFace
+                    other = {subFace: {myValue: name}} as SomeIface
+                    return other
+                end function
+            `);
+
+            program.setFile('components/MainScene.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MainScene" extends="Scene">
+                    <script uri="MainScene.bs"/>
+                </component>
+            `);
+
+            program.setFile('components/MainScene.bs', `
+                sub someFunc(widget as roSGNodeWidget)
+                    otherNode = widget@.getOther("3.14")
+                    print otherNode.subFace.notIncluded
+                end sub
+            `);
+
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('notIncluded', 'SubIface.notIncluded', 'SubIface').message
+            ]);
+        });
+
+        it.only('allows to types that reference themselves', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getList" />
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/types.bs', `
+                interface LinkedList
+                    value as integer
+                    optional data as roAssociativeArray
+                    optional next as LinkedList
+                end interface
+            `);
+
+            program.setFile('components/Widget.bs', `
+                import "pkg:/components/types.bs"
+
+                function getList() as LinkedList
+                    list  = {
+                        value: 1,
+                        next: {
+                            value: 2,
+                            next: {
+                                value: 3
+                            }
+                        }
+                    } as LinkedList
+                    return list
+                end function
+            `);
+
+            program.setFile('components/MainScene.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MainScene" extends="Scene">
+                    <script uri="MainScene.bs"/>
+                </component>
+            `);
+
+            program.setFile('components/MainScene.bs', `
+                sub someFunc(widget as roSGNodeWidget)
+                    list = widget@.getList()
+                    print list.next.next.value
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
 });

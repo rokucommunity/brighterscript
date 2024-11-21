@@ -411,6 +411,7 @@ export interface SymbolTypeGetter {
     name: string;
     getSymbolType(name: string, options: GetSymbolTypeOptions): BscType;
     setCachedType(name: string, cacheEntry: TypeCacheEntry, options: GetSymbolTypeOptions);
+    addSibling(symbolTable: SymbolTable);
 }
 
 /**

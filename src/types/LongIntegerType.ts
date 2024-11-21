@@ -16,6 +16,8 @@ export class LongIntegerType extends BscType {
 
     public static instance = new LongIntegerType('longinteger');
 
+    public isBuiltIn = true;
+
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         return (
             isDynamicType(targetType) ||

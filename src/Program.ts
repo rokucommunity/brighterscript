@@ -54,6 +54,8 @@ import { DiagnosticManager } from './DiagnosticManager';
 import { ProgramValidatorDiagnosticsTag } from './bscPlugin/validation/ProgramValidator';
 import type { ProvidedSymbolInfo, BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
+import { SymbolTable } from './SymbolTable';
+import { ReferenceType } from './types';
 
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
@@ -115,6 +117,7 @@ export class Program {
         this.scopes.global = this.globalScope;
 
         this.populateGlobalSymbolTable();
+        this.globalScope.symbolTable.addSibling(this.componentsTable);
 
         //hardcode the files list for global scope to only contain the global file
         this.globalScope.getAllFiles = () => [globalFile];
@@ -144,6 +147,7 @@ export class Program {
             }
             nodeType = new ComponentType(nodeData.name, parentNode);
             nodeType.addBuiltInInterfaces();
+            nodeType.isBuiltIn = true;
             if (nodeData.name === 'Node') {
                 // Add `roSGNode` as shorthand for `roSGNodeNode`
                 this.globalScope.symbolTable.addSymbol('roSGNode', { description: nodeData.description }, nodeType, SymbolTypeFlag.typetime);
@@ -181,12 +185,14 @@ export class Program {
         for (const ifaceData of Object.values(interfaces) as BRSInterfaceData[]) {
             const nodeType = new InterfaceType(ifaceData.name);
             nodeType.addBuiltInInterfaces();
+            nodeType.isBuiltIn = true;
             this.globalScope.symbolTable.addSymbol(ifaceData.name, { description: ifaceData.description }, nodeType, SymbolTypeFlag.typetime);
         }
 
         for (const componentData of Object.values(components) as BRSComponentData[]) {
             const nodeType = new InterfaceType(componentData.name);
             nodeType.addBuiltInInterfaces();
+            nodeType.isBuiltIn = true;
             if (componentData.name !== 'roSGNode') {
                 // we will add `roSGNode` as shorthand for `roSGNodeNode`, since all roSgNode components are SceneGraph nodes
                 this.globalScope.symbolTable.addSymbol(componentData.name, { description: componentData.description }, nodeType, SymbolTypeFlag.typetime);
@@ -200,6 +206,7 @@ export class Program {
         for (const eventData of Object.values(events) as BRSEventData[]) {
             const nodeType = new InterfaceType(eventData.name);
             nodeType.addBuiltInInterfaces();
+            nodeType.isBuiltIn = true;
             this.globalScope.symbolTable.addSymbol(eventData.name, { description: eventData.description }, nodeType, SymbolTypeFlag.typetime);
         }
 
@@ -227,6 +234,9 @@ export class Program {
     public plugins: PluginInterface;
 
     private fileSymbolInformation = new Map<string, { provides: ProvidedSymbolInfo; requires: UnresolvedSymbol[] }>();
+
+
+    private componentsTable = new SymbolTable('Custom Components');
 
     public addFileSymbolInfo(file: BrsFile) {
         this.fileSymbolInformation.set(file.pkgPath, {
@@ -394,7 +404,7 @@ export class Program {
     }
 
     /**
-     * Updates the global symbol table with the first component in this.components to have the same name as the component in the file
+     * Resolves symbol table with the first component in this.components to have the same name as the component in the file
      * @param componentKey key getting a component from `this.components`
      * @param componentName the unprefixed name of the component that will be added (e.g. 'MyLabel' NOT 'roSgNodeMyLabel')
      */
@@ -405,17 +415,42 @@ export class Program {
         }
         const components = this.components[componentKey] || [];
         // Remove any existing symbols that match
-        this.globalScope.symbolTable.removeSymbol(symbolName);
+        this.componentsTable.removeSymbol(symbolName);
         // There is a component that can be added - use it.
         if (components.length > 0) {
             const componentScope = components[0].scope;
             // TODO: May need to link symbol tables to get correct types for callfuncs
-            // componentScope.linkSymbolTable();
+            componentScope.linkSymbolTable();
             const componentType = componentScope.getComponentType();
             if (componentType) {
-                this.globalScope.symbolTable.addSymbol(symbolName, {}, componentType, SymbolTypeFlag.typetime);
+                this.componentsTable.addSymbol(symbolName, {}, componentType, SymbolTypeFlag.typetime);
             }
-            // TODO: Remember to unlink! componentScope.unlinkSymbolTable();
+            // TODO: Remember to unlink!
+            componentScope.unlinkSymbolTable();
+        }
+    }
+
+    /**
+     * Adds a reference type to the global symbol table with the first component in this.components to have the same name as the component in the file
+     * @param componentKey key getting a component from `this.components`
+     * @param componentName the unprefixed name of the component that will be added (e.g. 'MyLabel' NOT 'roSgNodeMyLabel')
+     */
+    private addComponentReferenceType(componentKey: string, componentName: string) {
+        const symbolName = componentName ? util.getSgNodeTypeName(componentName) : undefined;
+        if (!symbolName) {
+            return;
+        }
+        const components = this.components[componentKey] || [];
+        // Remove any existing symbols that match
+        this.globalScope.symbolTable.removeSymbol(symbolName);
+        // There is a component that can be added - use it.
+        if (components.length > 0) {
+
+            const componentRefType = new ReferenceType(symbolName, symbolName, SymbolTypeFlag.typetime, () => this.componentsTable);
+            if (componentRefType) {
+                this.globalScope.symbolTable.addSymbol(symbolName, {}, componentRefType, SymbolTypeFlag.typetime);
+            }
+
         }
     }
 
@@ -846,6 +881,14 @@ export class Program {
             //validate every file
             const brsFilesValidated: BrsFile[] = [];
             const afterValidateFiles: BscFile[] = [];
+
+            // Create reference component types for any component that changes
+            this.logger.time(LogLevel.info, ['Build component types'], () => {
+                for (let { componentKey, componentName } of this.componentSymbolsToUpdate) {
+                    this.addComponentReferenceType(componentKey, componentName);
+                }
+            });
+
 
             metrics.fileValidationTime = validationStopwatch.getDurationTextFor(() => {
                 //sort files by path so we get consistent results

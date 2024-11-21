@@ -1,7 +1,7 @@
-import type { GetSymbolTypeOptions } from '../SymbolTable';
-import type { SymbolTypeFlag } from '../SymbolTypeFlag';
+import type { GetSymbolTypeOptions, SymbolTableProvider } from '../SymbolTable';
+import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { SymbolTable } from '../SymbolTable';
-import { isComponentType, isDynamicType, isObjectType } from '../astUtils/reflection';
+import { isAnyReferenceType, isComponentType, isDynamicType, isObjectType, isPrimitiveType, isReferenceType, isTypedFunctionType } from '../astUtils/reflection';
 import type { ExtraSymbolData, TypeCompatibilityData } from '../interfaces';
 import type { BaseFunctionType } from './BaseFunctionType';
 import type { BscType } from './BscType';
@@ -16,6 +16,7 @@ export class ComponentType extends InheritableType {
     constructor(public name: string, superComponent?: ComponentType) {
         super(name, superComponent);
         this.callFuncMemberTable = new SymbolTable(`${this.name}: CallFunc`, () => this.parentComponent?.callFuncMemberTable);
+        this.callFuncAssociatedTypesTable = new SymbolTable(`${this.name}: CallFuncAssociatedTypes`);
     }
 
     public readonly kind = BscTypeKind.ComponentType;
@@ -85,9 +86,59 @@ export class ComponentType extends InheritableType {
     }
 
     public readonly callFuncMemberTable: SymbolTable;
+    public readonly callFuncAssociatedTypesTable: SymbolTable;
 
-    addCallFuncMember(name: string, data: ExtraSymbolData, type: BaseFunctionType, flags: SymbolTypeFlag) {
-        this.callFuncMemberTable.addSymbol(name, data, type, flags);
+    /**
+     * Adds a function to the call func member table
+     * Also adds any associated custom types to its own table, so they can be used through a callfunc
+     */
+    addCallFuncMember(name: string, data: ExtraSymbolData, funcType: BaseFunctionType, flags: SymbolTypeFlag, associatedTypesTableProvider?: SymbolTableProvider) {
+        const originalTypesToCheck = new Set<BscType>();
+        if (isTypedFunctionType(funcType)) {
+            const paramTypes = (funcType.params ?? []).map(p => p.type);
+            for (const paramType of paramTypes) {
+                originalTypesToCheck.add(paramType);
+            }
+        }
+        if (funcType.returnType) {
+            originalTypesToCheck.add(funcType.returnType);
+        }
+        const additionalTypesToCheck = new Set<BscType>();
+        function addSubTypes(type: BscType) {
+            const subSymbols = type.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime);
+            for (const subSymbol of subSymbols) {
+                if (!subSymbol.type.isBuiltIn && !(additionalTypesToCheck.has(subSymbol.type) || originalTypesToCheck.has(subSymbol.type))) {
+                    // if this is a custom type, and we haven't added it to the types to check to see if can add it to the additional types
+                    // add the type, and investigate any members
+                    additionalTypesToCheck.add(subSymbol.type);
+                    addSubTypes(subSymbol.type);
+                }
+
+            }
+        }
+
+        for (const type of originalTypesToCheck) {
+            if (!type.isBuiltIn) {
+                addSubTypes(type);
+            }
+        }
+
+        for (const type of [...originalTypesToCheck.values(), ...additionalTypesToCheck.values()]) {
+            if (!isPrimitiveType(type) && type.isResolvable()) {
+                // This type is a reference type, but was able to be resolved here
+                // add it to the table of associated types, so it can be used through a callfunc
+                const extraData = {};
+                if (associatedTypesTableProvider) {
+                    associatedTypesTableProvider().getSymbolType(type.toString(), { flags: SymbolTypeFlag.typetime, data: extraData });
+                }
+                let targetType = isAnyReferenceType(type) ? type.getTarget?.() : type;
+
+                this.callFuncAssociatedTypesTable.addSymbol(type.toString(), { ...extraData, isFromCallFunc: true }, targetType, SymbolTypeFlag.typetime);
+            }
+        }
+
+        // add this function to be available through callfunc
+        this.callFuncMemberTable.addSymbol(name, data, funcType, flags);
     }
 
     getCallFuncTable() {
@@ -95,7 +146,34 @@ export class ComponentType extends InheritableType {
     }
 
     getCallFuncType(name: string, options: GetSymbolTypeOptions) {
-        return this.callFuncMemberTable.getSymbolType(name, options);
+        const callFuncType = this.callFuncMemberTable.getSymbolType(name, options);
+
+        const addAssociatedTypesTableAsSiblingToMemberTable = (type: BscType) => {
+            if (isReferenceType(type) &&
+                !type.isResolvable()) {
+                // This param or return type is a reference - make sure the associated types are included
+                type.tableProvider().addSibling(this.callFuncAssociatedTypesTable);
+
+                // add this as a sister table to member tables too!
+                const memberTable: SymbolTable = type.getMemberTable();
+                if (memberTable.getAllSymbols) {
+                    for (const memberSymbol of memberTable.getAllSymbols(SymbolTypeFlag.runtime)) {
+                        addAssociatedTypesTableAsSiblingToMemberTable(memberSymbol?.type);
+                    }
+                }
+
+            }
+        };
+
+        if (isTypedFunctionType(callFuncType)) {
+            const typesToCheck = [...callFuncType.params.map(p => p.type), callFuncType.returnType];
+
+            for (const type of typesToCheck) {
+                addAssociatedTypesTableAsSiblingToMemberTable(type);
+            }
+        }
+
+        return callFuncType;
     }
 }
 
