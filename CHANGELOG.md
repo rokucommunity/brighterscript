@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.68.0](https://github.com/rokucommunity/brighterscript/compare/v0.67.8...v0.68.0) - 2024-11-21
+### Changed
+ - Fix issues with the ast walkArray function ([#1347](https://github.com/rokucommunity/brighterscript/pull/1347))
+ - Optimize ternary transpilation for assignments ([#1341](https://github.com/rokucommunity/brighterscript/pull/1341))
+
+
+
 ## [0.67.8](https://github.com/rokucommunity/brighterscript/compare/v0.67.7...v0.67.8) - 2024-10-18
 ### Changed
  - upgrade to [roku-deploy@3.12.2](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3122---2024-10-18). Notable changes since 3.12.1:
