@@ -851,6 +851,22 @@ describe('lexer', () => {
             expect(f.text).to.eql('2.5e3');
         });
 
+        it('supports very long numbers with !', () => {
+            function doTest(number: string) {
+                let f = Lexer.scan(number).tokens[0];
+                expect(f.kind).to.equal(TokenKind.FloatLiteral);
+                expect(f.text).to.eql(number);
+            }
+            doTest('0!');
+            doTest('0!');
+            doTest('147483648!');
+            doTest('2147483648!');
+            doTest('2147483648111!');
+            doTest('2.4e-38!');
+            doTest('2.4e-32342342342342342342342342348!');
+            doTest('2.4e+32342342342342342342342342348!');
+        });
+
         it('supports larger-than-supported-precision floats to be defined with exponents', () => {
             let f = Lexer.scan('2.3659475627512424e-38').tokens[0];
             expect(f.kind).to.equal(TokenKind.FloatLiteral);
