@@ -16,7 +16,7 @@ import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import type { TranspileState } from './TranspileState';
 import { SymbolTable } from '../SymbolTable';
-import type { Expression } from './AstNode';
+import type { AstNode, Expression } from './AstNode';
 import { Statement } from './AstNode';
 
 export class EmptyStatement extends Statement {
@@ -699,7 +699,7 @@ export class PrintStatement extends Statement {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             //sometimes we have semicolon Tokens in the expressions list (should probably fix that...), so only walk the actual expressions
-            walkArray(this.expressions, visitor, options, this, (item) => isExpression(item as any));
+            walkArray(this.expressions as AstNode[], visitor, options, this, (item) => isExpression(item as any));
         }
     }
 
