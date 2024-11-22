@@ -16,7 +16,7 @@ import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import type { TranspileState } from './TranspileState';
 import { SymbolTable } from '../SymbolTable';
-import type { Expression } from './AstNode';
+import type { AstNode, Expression } from './AstNode';
 import { Statement } from './AstNode';
 
 export class EmptyStatement extends Statement {
@@ -699,7 +699,7 @@ export class PrintStatement extends Statement {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             //sometimes we have semicolon Tokens in the expressions list (should probably fix that...), so only walk the actual expressions
-            walkArray(this.expressions, visitor, options, this, (item) => isExpression(item as any));
+            walkArray(this.expressions as AstNode[], visitor, options, this, (item) => isExpression(item as any));
         }
     }
 
@@ -1229,13 +1229,15 @@ export class DottedSetStatement extends Statement {
         readonly obj: Expression,
         readonly name: Identifier,
         readonly value: Expression,
-        readonly dot?: Token
+        readonly dot?: Token,
+        readonly equals?: Token
     ) {
         super();
         this.range = util.createBoundingRange(
             obj,
             dot,
             name,
+            equals,
             value
         );
     }
@@ -1253,7 +1255,9 @@ export class DottedSetStatement extends Statement {
                 this.dot ? state.tokenToSourceNode(this.dot) : '.',
                 //name
                 state.transpileToken(this.name),
-                ' = ',
+                ' ',
+                state.transpileToken(this.equals, '='),
+                ' ',
                 //right-hand-side of assignment
                 ...this.value.transpile(state)
             ];
@@ -1273,7 +1277,8 @@ export class DottedSetStatement extends Statement {
                 this.obj?.clone(),
                 util.cloneToken(this.name),
                 this.value?.clone(),
-                util.cloneToken(this.dot)
+                util.cloneToken(this.dot),
+                util.cloneToken(this.equals)
             ),
             ['obj', 'value']
         );
@@ -1287,17 +1292,20 @@ export class IndexedSetStatement extends Statement {
         readonly value: Expression,
         readonly openingSquare: Token,
         readonly closingSquare: Token,
-        readonly additionalIndexes?: Expression[]
+        readonly additionalIndexes?: Expression[],
+        readonly equals?: Token
     ) {
         super();
+        this.additionalIndexes ??= [];
         this.range = util.createBoundingRange(
             obj,
             openingSquare,
             index,
             closingSquare,
-            value
+            equals,
+            value,
+            ...this.additionalIndexes
         );
-        this.additionalIndexes ??= [];
     }
 
     public readonly range: Range | undefined;
@@ -1327,7 +1335,9 @@ export class IndexedSetStatement extends Statement {
             }
             result.push(
                 state.transpileToken(this.closingSquare),
-                ' = ',
+                ' ',
+                state.transpileToken(this.equals, '='),
+                ' ',
                 ...this.value.transpile(state)
             );
             return result;
@@ -1351,7 +1361,8 @@ export class IndexedSetStatement extends Statement {
                 this.value?.clone(),
                 util.cloneToken(this.openingSquare),
                 util.cloneToken(this.closingSquare),
-                this.additionalIndexes?.map(e => e?.clone())
+                this.additionalIndexes?.map(e => e?.clone()),
+                util.cloneToken(this.equals)
             ),
             ['obj', 'index', 'value', 'additionalIndexes']
         );

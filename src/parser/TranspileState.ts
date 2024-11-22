@@ -86,7 +86,11 @@ export class TranspileState {
     /**
      * Create a SourceNode from a token, accounting for missing range and multi-line text
      */
-    public transpileToken(token: { range?: Range; text: string }) {
+    public transpileToken(token: { range?: Range; text: string }, defaultValue?: string) {
+        if (!token?.text && defaultValue !== undefined) {
+            return defaultValue;
+        }
+
         if (!token.range) {
             return token.text;
         }
