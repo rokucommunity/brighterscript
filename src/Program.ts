@@ -419,13 +419,12 @@ export class Program {
         // There is a component that can be added - use it.
         if (components.length > 0) {
             const componentScope = components[0].scope;
-            // TODO: May need to link symbol tables to get correct types for callfuncs
+
             componentScope.linkSymbolTable();
             const componentType = componentScope.getComponentType();
             if (componentType) {
                 this.componentsTable.addSymbol(symbolName, {}, componentType, SymbolTypeFlag.typetime);
             }
-            // TODO: Remember to unlink!
             componentScope.unlinkSymbolTable();
         }
     }
@@ -661,7 +660,7 @@ export class Program {
                     let scope = new XmlScope(file, this);
                     this.addScope(scope);
 
-                    //register this compoent now that we have parsed it and know its component name
+                    //register this componet now that we have parsed it and know its component name
                     this.registerComponent(file, scope);
 
                     //notify plugins that the scope is created and the component is registered
