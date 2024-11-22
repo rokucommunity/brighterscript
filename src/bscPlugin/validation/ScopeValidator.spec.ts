@@ -3990,33 +3990,29 @@ describe('ScopeValidator', () => {
             ]);
         });
 
-        it('validates arg count of callfunc()', () => {
-            program.setFile('components/Widget.xml', trim`
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="Widget" extends="Group">
-                    <script uri="Widget.bs"/>
-                    <interface>
-                        <function name="getName" />
-                    </interface>
-                </component>
-            `);
-
-            program.setFile('components/Widget.bs', `
-                function getName() as string
-                    return "John Doe"
-                end function
-            `);
-
+        it('has no error on plain roSGNode', () => {
             program.setFile('source/test.bs', `
-                sub printName(widget as roSGNodeWidget)
-                    print widget.callFunc("getName", "extra", "args", "here")
+                sub doCallfunc(nodeName as string)
+                    node = createObject("roSgNode", nodeName)
+                    node.callfunc("someFunc", 1, 2, 3)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('has error on regular builtIn types', () => {
+            program.setFile('source/test.bs', `
+                sub doCallfunc()
+                    node = createObject("roSgNode", "Rectangle")
+                    node.callfunc("someFunc", 1, 2, 3)
                 end sub
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.mismatchArgumentCount(1, 4).message
+                DiagnosticMessages.cannotFindFunction('someFunc', 'roSGNodeRectangle@.someFunc', 'roSGNodeRectangle')
             ]);
         });
     });
-
 });
+

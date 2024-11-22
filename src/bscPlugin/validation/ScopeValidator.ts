@@ -368,10 +368,12 @@ export class ScopeValidator {
         if (!isComponentType(callerType)) {
             return;
         }
+        const componentNameLower = callerType.toString().toLowerCase();
+
         const firstArgToken = call?.args[0]?.tokens.value;
         if (callName === 'createchild') {
             this.checkComponentName(firstArgToken);
-        } else if (callName === 'callfunc') {
+        } else if (callName === 'callfunc' && !['rosgnode', 'rosgnodenode'].includes(componentNameLower)) {
             const funcType = util.getCallFuncType(call, firstArgToken, { flags: SymbolTypeFlag.runtime, ignoreCall: true });
             if (!funcType?.isResolvable()) {
                 const functionName = firstArgToken.text.replace(/"/g, '');
