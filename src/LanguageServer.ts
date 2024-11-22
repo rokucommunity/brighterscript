@@ -443,7 +443,6 @@ export class LanguageServer {
             try {
                 await project.firstRunPromise;
             } catch (e: any) {
-                status = 'critical-error';
                 //the first run failed...that won't change unless we reload the workspace, so replace with resolved promise
                 //so we don't show this error again
                 project.firstRunPromise = Promise.resolve();
