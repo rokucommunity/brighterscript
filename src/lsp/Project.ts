@@ -17,6 +17,7 @@ import type { SignatureInfoObj } from '../Program';
 import type { BsConfig } from '../BsConfig';
 import type { Logger, LogLevel } from '../logging';
 import { createLogger } from '../logging';
+import * as fsExtra from 'fs-extra';
 
 export class Project implements LspProject {
     public constructor(
@@ -56,6 +57,11 @@ export class Project implements LspProject {
         //if the config file exists, use it and its folder as cwd
         if (this.bsconfigPath && await util.pathExists(this.bsconfigPath)) {
             cwd = path.dirname(this.bsconfigPath);
+            //load the bsconfig file contents (used for performance optimizations externally)
+            try {
+                this.bsconfigFileContents = (await fsExtra.readFile(this.bsconfigPath)).toString();
+            } catch { }
+
         } else {
             cwd = this.projectPath;
             //config file doesn't exist...let `brighterscript` resolve the default way
@@ -474,6 +480,13 @@ export class Project implements LspProject {
      */
     public bsconfigPath?: string;
 
+    /**
+     * The contents of the bsconfig.json file. This is used to detect when the bsconfig file has not actually been changed (even if the fs says it did).
+     *
+     * Only available after `.activate()` has completed.
+     * @deprecated do not depend on this property. This will certainly be removed in a future release
+     */
+    public bsconfigFileContents?: string;
 
     /**
      * Find the path to the bsconfig.json file for this project

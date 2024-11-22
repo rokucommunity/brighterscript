@@ -862,4 +862,47 @@ describe('ProjectManager', () => {
 
         //test passes if the promise resolves
     });
+
+    it('properly handles reloading when bsconfig.json contents change', async () => {
+        fsExtra.outputJsonSync(`${rootDir}/bsconfig.json`, {
+            files: [
+                'one'
+            ]
+        });
+
+        //wait for the projects to finish syncing/loading
+        await manager.syncProjects([{
+            workspaceFolder: rootDir,
+            enableThreading: false
+        }]);
+
+        const stub = sinon.stub(manager as any, 'reloadProject').callThrough();
+
+        //change the file to new contents
+        fsExtra.outputJsonSync(`${rootDir}/bsconfig.json`, {
+            files: [
+                'two'
+            ]
+        });
+        await manager.handleFileChanges([{
+            srcPath: `${rootDir}/bsconfig.json`,
+            type: FileChangeType.Changed
+        }]);
+
+        //the project was reloaded
+        expect(stub.callCount).to.eql(1);
+
+        //change the file to the same contents
+        fsExtra.outputJsonSync(`${rootDir}/bsconfig.json`, {
+            files: [
+                'two'
+            ]
+        });
+        await manager.handleFileChanges([{
+            srcPath: `${rootDir}/bsconfig.json`,
+            type: FileChangeType.Changed
+        }]);
+        //the project was not reloaded this time
+        expect(stub.callCount).to.eql(1);
+    });
 });

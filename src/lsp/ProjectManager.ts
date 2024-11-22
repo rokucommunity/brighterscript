@@ -18,6 +18,7 @@ import type { Logger } from '../logging';
 import { createLogger } from '../logging';
 import { Cache } from '../Cache';
 import { ActionQueue } from './ActionQueue';
+import * as fsExtra from 'fs-extra';
 
 const FileChangeTypeLookup = Object.entries(FileChangeType).reduce((acc, [key, value]) => {
     acc[value] = key;
@@ -331,7 +332,7 @@ export class ProjectManager {
         maxActionDuration: 45_000
     });
 
-    public handleFileChanges(changes: FileChange[]) {
+    public handleFileChanges(changes: FileChange[]): Promise<void> {
         this.logger.debug('handleFileChanges', changes.map(x => `${FileChangeTypeLookup[x.type]}: ${x.srcPath}`));
 
         //this function should NOT be marked as async, because typescript wraps the body in an async call sometimes. These need to be registered synchronously
@@ -347,7 +348,12 @@ export class ProjectManager {
      * Handle when files or directories are added, changed, or deleted in the workspace.
      * This is safe to call any time. Changes will be queued and flushed at the correct times
      */
-    public async _handleFileChanges(changes: FileChange[]) {
+    private async _handleFileChanges(changes: FileChange[]) {
+        //normalize srcPath for all changes
+        for (const change of changes) {
+            change.srcPath = util.standardizePath(change.srcPath);
+        }
+
         //filter any changes that are not allowed by the path filterer
         changes = this.pathFilterer.filter(changes, x => x.srcPath);
 
@@ -363,15 +369,14 @@ export class ProjectManager {
      * Handle a single file change. If the file is a directory, this will recursively read all files in the directory and call `handleFileChanges` again
      */
     private async handleFileChange(change: FileChange) {
-        const srcPath = util.standardizePath(change.srcPath);
         if (change.type === FileChangeType.Deleted) {
             //mark this document or directory as deleted
-            this.documentManager.delete(srcPath);
+            this.documentManager.delete(change.srcPath);
 
             //file added or changed
         } else {
             //if this is a new directory, read all files recursively and register those as file changes too
-            if (util.isDirectorySync(srcPath)) {
+            if (util.isDirectorySync(change.srcPath)) {
                 const files = await fastGlob('**/*', {
                     cwd: change.srcPath,
                     onlyFiles: true,
@@ -380,7 +385,7 @@ export class ProjectManager {
                 //pipe all files found recursively in the new directory through this same function so they can be processed correctly
                 await Promise.all(files.map((srcPath) => {
                     return this.handleFileChange({
-                        srcPath: srcPath,
+                        srcPath: util.standardizePath(srcPath),
                         type: FileChangeType.Changed,
                         allowStandaloneProject: change.allowStandaloneProject
                     });
@@ -397,7 +402,23 @@ export class ProjectManager {
         }
 
         //reload any projects whose bsconfig.json was changed
-        const projectsToReload = this.projects.filter(x => x.bsconfigPath?.toLowerCase() === change.srcPath.toLowerCase());
+        const projectsToReload = this.projects.filter(project => {
+            //this is a path to a bsconfig.json file
+            if (project.bsconfigPath?.toLowerCase() === change.srcPath.toLowerCase()) {
+                //fetch file contents if we don't already have them
+                if (!change.fileContents) {
+                    try {
+                        change.fileContents = fsExtra.readFileSync(project.bsconfigPath).toString();
+                    } finally { }
+                }
+                ///the bsconfig contents have changed since we last saw it, so reload this project
+                if (project.bsconfigFileContents !== change.fileContents) {
+                    return true;
+                }
+            }
+            return false;
+        });
+
         if (projectsToReload.length > 0) {
             await Promise.all(
                 projectsToReload.map(x => this.reloadProject(x))
