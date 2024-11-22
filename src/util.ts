@@ -2409,15 +2409,28 @@ export class Util {
                 }
             }
         } else if (isDottedGetExpression(callExpr.callee) &&
-            callExpr.callee.tokens.name.text.toLowerCase() === 'callfunc' &&
+            callExpr.callee.tokens?.name?.text?.toLowerCase() === 'callfunc' &&
             isLiteralString(callExpr.args?.[0])) {
             return this.getCallFuncType(callExpr, callExpr.args?.[0]?.tokens.value, options);
+        } else if (isDottedGetExpression(callExpr.callee) &&
+            callExpr.callee.tokens?.name?.text?.toLowerCase() === 'createchild' &&
+            isComponentType(callExpr.callee.obj?.getType({ flags: SymbolTypeFlag.runtime })) &&
+            isLiteralString(callExpr.args?.[0])) {
+            const fullName = `roSGNode${callExpr.args?.[0].tokens?.value?.text?.replace(/"/g, '')}`;
+            const data = {};
+            const symbolTable = callExpr.getSymbolTable();
+            return symbolTable.getSymbolType(fullName, {
+                flags: SymbolTypeFlag.typetime,
+                data: data,
+                tableProvider: () => callExpr?.getSymbolTable(),
+                fullName: fullName
+            });
         }
     }
 
     public getCallFuncType(callExpr: CallExpression | CallfuncExpression, methodNameToken: Token | Identifier, options: GetSymbolTypeOptions) {
         let result: BscType;
-        let methodName = methodNameToken.text.replaceAll('"', '');
+        let methodName = methodNameToken?.text?.replace(/"/g, ''); // remove quotes if it was the first arg of .callFunc()
 
         // a little hacky here with checking options.ignoreCall because callFuncExpression has the method name
         // It's nicer for CallExpression, because it's a call on any expression.

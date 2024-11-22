@@ -218,14 +218,40 @@ describe('ScopeValidator', () => {
                 end sub
             `);
             program.setFile('source/util.bs', `
+                sub useCallFunc(input as roSGNodeWidget, funcToCall as string)
+                    input.callFunc(funcToCall, 1, 2, 3, {})
+                end sub
+            `);
+            program.validate();
+            // no error, because we can't know what function you're actually calling
+            expectZeroDiagnostics(program);
+        });
+
+
+        it('checks for target args count on callfunc', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.brs"/>
+                    <interface>
+                        <function name="someFunc" />
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/Widget.brs', `
+                sub someFunc(input as object)
+                    print input
+                end sub
+            `);
+            program.setFile('source/util.bs', `
                 sub useCallFunc(input as roSGNodeWidget)
                     input.callFunc("someFunc", 1, 2, 3, {})
                 end sub
             `);
             program.validate();
-            //TODO: do a better job of handling callFunc() invocations!
-            //should have an error
-            expectZeroDiagnostics(program);
+            expectDiagnostics(program, [
+                DiagnosticMessages.mismatchArgumentCount(2, 5)
+            ]);
         });
 
         it('validates against scope-defined func in inner namespace, when outer namespace has same named func', () => {
@@ -3877,6 +3903,119 @@ describe('ScopeValidator', () => {
 
             program.validate();
             expectZeroDiagnostics(program);
+        });
+
+        it('finds invalid func name of callfunc()', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getName" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                function getName() as string
+                    return "John Doe"
+                end function
+            `);
+
+            program.setFile('source/test.bs', `
+                sub printName(widget as roSGNodeWidget)
+                    print widget.callFunc("whatever")
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindFunction('whatever', 'roSGNodeWidget@.whatever', 'roSGNodeWidget').message
+            ]);
+        });
+
+        it('catches func name of callfunc() with spaces', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getName" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                function getName() as string
+                    return "John Doe"
+                end function
+            `);
+
+            program.setFile('source/test.bs', `
+                sub printName(widget as roSGNodeWidget)
+                    print widget.callFunc("whatever the name is")
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindFunction('whatever the name is', 'roSGNodeWidget@.whatever the name is', 'roSGNodeWidget').message
+            ]);
+        });
+
+        it('validates arg type of callfunc()', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getName" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                function getName(name as string, count as integer) as string
+                    return "John Doe"
+                end function
+            `);
+
+            program.setFile('source/test.bs', `
+                sub printName(widget as roSGNodeWidget)
+                    print widget.callFunc("getName", 12, "not int")
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('integer', 'string').message,
+                DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+            ]);
+        });
+
+        it('validates arg count of callfunc()', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getName" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                function getName() as string
+                    return "John Doe"
+                end function
+            `);
+
+            program.setFile('source/test.bs', `
+                sub printName(widget as roSGNodeWidget)
+                    print widget.callFunc("getName", "extra", "args", "here")
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.mismatchArgumentCount(1, 4).message
+            ]);
         });
     });
 

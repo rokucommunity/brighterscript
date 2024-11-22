@@ -1,5 +1,5 @@
 import { DiagnosticTag, type Range } from 'vscode-languageserver';
-import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringType, isTypedFunctionType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
+import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isComponentType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringType, isTypedFunctionType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -134,11 +134,12 @@ export class ScopeValidator {
                         this.validateVariableAndDottedGetExpressions(file, dottedGet);
                     },
                     CallExpression: (functionCall) => {
-                        this.validateFunctionCall(file, functionCall);
+                        this.validateCallExpression(file, functionCall);
                         this.validateCreateObjectCall(file, functionCall);
+                        this.validateComponentMethods(file, functionCall);
                     },
                     CallfuncExpression: (functionCall) => {
-                        this.validateFunctionCall(file, functionCall);
+                        this.validateCallFuncExpression(file, functionCall);
                     },
                     ReturnStatement: (returnStatement) => {
                         this.validateReturnStatement(file, returnStatement);
@@ -292,18 +293,8 @@ export class ScopeValidator {
         //if this is a `createObject('roSGNode'` call, only support known sg node types
         if (firstParamStringValueLower === 'rosgnode' && isLiteralExpression(call?.args[1])) {
             const componentName: Token = call?.args[1]?.tokens.value;
-            //don't validate any components with a colon in their name (probably component libraries, but regular components can have them too).
-            if (!componentName || componentName?.text?.includes(':')) {
-                return;
-            }
-            //add diagnostic for unknown components
-            const unquotedComponentName = componentName?.text?.replace(/"/g, '');
-            if (unquotedComponentName && !platformNodeNames.has(unquotedComponentName.toLowerCase()) && !this.event.program.getComponent(unquotedComponentName)) {
-                this.addDiagnostic({
-                    ...DiagnosticMessages.unknownRoSGNode(unquotedComponentName),
-                    location: componentName.location
-                });
-            } else if (call?.args.length !== 2) {
+            this.checkComponentName(componentName);
+            if (call?.args.length !== 2) {
                 // roSgNode should only ever have 2 args in `createObject`
                 this.addDiagnostic({
                     ...DiagnosticMessages.mismatchCreateObjectArgumentCount(firstParamStringValue, [2], call?.args.length),
@@ -344,77 +335,134 @@ export class ScopeValidator {
 
     }
 
+    private checkComponentName(componentName: Token) {
+        //don't validate any components with a colon in their name (probably component libraries, but regular components can have them too).
+        if (!componentName || componentName?.text?.includes(':')) {
+            return;
+        }
+        //add diagnostic for unknown components
+        const unquotedComponentName = componentName?.text?.replace(/"/g, '');
+        if (unquotedComponentName && !platformNodeNames.has(unquotedComponentName.toLowerCase()) && !this.event.program.getComponent(unquotedComponentName)) {
+            this.addDiagnostic({
+                ...DiagnosticMessages.unknownRoSGNode(unquotedComponentName),
+                location: componentName.location
+            });
+        }
+    }
+
     /**
-     * Detect calls to functions with the incorrect number of parameters, or wrong types of arguments
+     * Validate every method call to `component.callfunc()`, `component.createChild()`, etc.
      */
-    private validateFunctionCall(file: BrsFile, expression: CallExpression | CallfuncExpression) {
-        const getTypeOptions = { flags: SymbolTypeFlag.runtime, data: {} };
-        let funcType: BscType;
-        let callErrorLocation: Location;
-        if (isCallExpression(expression)) {
-            funcType = this.getNodeTypeWrapper(file, expression?.callee, getTypeOptions);
-            callErrorLocation = expression?.callee?.location;
-        } else if (isCallfuncExpression(expression)) {
-            funcType = this.getNodeTypeWrapper(file, expression, { ...getTypeOptions, ignoreCall: true });
-            callErrorLocation = expression.location;
+    protected validateComponentMethods(file: BrsFile, call: CallExpression) {
+        const lowerMethodNamesChecked = ['callfunc', 'createchild'];
+        if (!isDottedGetExpression(call.callee)) {
+            return;
         }
 
+        const callName = call.callee.tokens?.name?.text?.toLowerCase();
+        if (!callName || !lowerMethodNamesChecked.includes(callName) || !isLiteralExpression(call?.args[0])) {
+            return;
+        }
+
+        const callerType = call.callee.obj?.getType({ flags: SymbolTypeFlag.runtime });
+        if (!isComponentType(callerType)) {
+            return;
+        }
+        const firstArgToken = call?.args[0]?.tokens.value;
+        if (callName === 'createchild') {
+            this.checkComponentName(firstArgToken);
+        } else if (callName === 'callfunc') {
+            const funcType = util.getCallFuncType(call, firstArgToken, { flags: SymbolTypeFlag.runtime, ignoreCall: true });
+            if (!funcType?.isResolvable()) {
+                const functionName = firstArgToken.text.replace(/"/g, '');
+                const functionFullname = `${callerType.toString()}@.${functionName}`;
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.cannotFindFunction(functionName, functionFullname, callerType.toString()),
+                    location: firstArgToken?.location
+                });
+            } else {
+                this.validateFunctionCall(file, funcType, firstArgToken.location, call.args, 1);
+            }
+        }
+    }
+
+
+    private validateCallExpression(file: BrsFile, expression: CallExpression) {
+        const getTypeOptions = { flags: SymbolTypeFlag.runtime, data: {} };
+        let funcType = this.getNodeTypeWrapper(file, expression?.callee, getTypeOptions);
         if (funcType?.isResolvable() && isClassType(funcType)) {
             // We're calling a class - get the constructor
             funcType = funcType.getMemberType('new', getTypeOptions);
         }
-        if (funcType?.isResolvable() && isTypedFunctionType(funcType)) {
-            //funcType.setName(expression.callee. .name);
+        const callErrorLocation = expression?.callee?.location;
+        return this.validateFunctionCall(file, funcType, callErrorLocation, expression.args);
 
-            //get min/max parameter count for callable
-            let minParams = 0;
-            let maxParams = 0;
-            for (let param of funcType.params) {
-                maxParams++;
-                //optional parameters must come last, so we can assume that minParams won't increase once we hit
-                //the first isOptional
-                if (param.isOptional !== true) {
-                    minParams++;
-                }
+    }
+
+    private validateCallFuncExpression(file: BrsFile, expression: CallfuncExpression) {
+        const getTypeOptions = { flags: SymbolTypeFlag.runtime, data: {} };
+        const funcType = this.getNodeTypeWrapper(file, expression, { ...getTypeOptions, ignoreCall: true });
+        const callErrorLocation = expression.location;
+        return this.validateFunctionCall(file, funcType, callErrorLocation, expression.args);
+    }
+
+    /**
+     * Detect calls to functions with the incorrect number of parameters, or wrong types of arguments
+     */
+    private validateFunctionCall(file: BrsFile, funcType: BscType, callErrorLocation: Location, args: Expression[], argOffset = 0) {
+        if (!funcType?.isResolvable() || !isTypedFunctionType(funcType)) {
+            return;
+        }
+
+        //get min/max parameter count for callable
+        let minParams = 0;
+        let maxParams = 0;
+        for (let param of funcType.params) {
+            maxParams++;
+            //optional parameters must come last, so we can assume that minParams won't increase once we hit
+            //the first isOptional
+            if (param.isOptional !== true) {
+                minParams++;
             }
-            if (funcType.isVariadic) {
-                // function accepts variable number of arguments
-                maxParams = CallExpression.MaximumArguments;
+        }
+        if (funcType.isVariadic) {
+            // function accepts variable number of arguments
+            maxParams = CallExpression.MaximumArguments;
+        }
+        const argsForCall = argOffset < 1 ? args : args.slice(argOffset);
+
+        let expCallArgCount = argsForCall.length;
+        if (expCallArgCount > maxParams || expCallArgCount < minParams) {
+            let minMaxParamsText = minParams === maxParams ? maxParams + argOffset : `${minParams + argOffset}-${maxParams + argOffset}`;
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.mismatchArgumentCount(minMaxParamsText, expCallArgCount + argOffset),
+                location: callErrorLocation
+            });
+        }
+        let paramIndex = 0;
+        for (let arg of argsForCall) {
+            const data = {} as ExtraSymbolData;
+            let argType = this.getNodeTypeWrapper(file, arg, { flags: SymbolTypeFlag.runtime, data: data });
+
+            const paramType = funcType.params[paramIndex]?.type;
+            if (!paramType) {
+                // unable to find a paramType -- maybe there are more args than params
+                break;
             }
-            let expCallArgCount = expression.args.length;
-            if (expCallArgCount > maxParams || expCallArgCount < minParams) {
-                let minMaxParamsText = minParams === maxParams ? maxParams : `${minParams}-${maxParams}`;
+
+            if (isCallableType(paramType) && isClassType(argType) && isClassStatement(data.definingNode)) {
+                argType = data.definingNode.getConstructorType();
+            }
+
+            const compatibilityData: TypeCompatibilityData = {};
+            const isAllowedArgConversion = this.checkAllowedArgConversions(paramType, argType);
+            if (!isAllowedArgConversion && !paramType?.isTypeCompatible(argType, compatibilityData)) {
                 this.addMultiScopeDiagnostic({
-                    ...DiagnosticMessages.mismatchArgumentCount(minMaxParamsText, expCallArgCount),
-                    location: callErrorLocation
+                    ...DiagnosticMessages.argumentTypeMismatch(argType.toString(), paramType.toString(), compatibilityData),
+                    location: arg.location
                 });
             }
-            let paramIndex = 0;
-            for (let arg of expression.args) {
-                const data = {} as ExtraSymbolData;
-                let argType = this.getNodeTypeWrapper(file, arg, { flags: SymbolTypeFlag.runtime, data: data });
-
-                const paramType = funcType.params[paramIndex]?.type;
-                if (!paramType) {
-                    // unable to find a paramType -- maybe there are more args than params
-                    break;
-                }
-
-                if (isCallableType(paramType) && isClassType(argType) && isClassStatement(data.definingNode)) {
-                    argType = data.definingNode.getConstructorType();
-                }
-
-                const compatibilityData: TypeCompatibilityData = {};
-                const isAllowedArgConversion = this.checkAllowedArgConversions(paramType, argType);
-                if (!isAllowedArgConversion && !paramType?.isTypeCompatible(argType, compatibilityData)) {
-                    this.addMultiScopeDiagnostic({
-                        ...DiagnosticMessages.argumentTypeMismatch(argType.toString(), paramType.toString(), compatibilityData),
-                        location: arg.location
-                    });
-                }
-                paramIndex++;
-            }
-
+            paramIndex++;
         }
     }
 

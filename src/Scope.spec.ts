@@ -3423,7 +3423,6 @@ describe('Scope', () => {
             });
 
             it('should set correct return type when using `callFunc()`', () => {
-
                 program.setFile('components/Widget.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
                     <component name="Widget" extends="Group">
@@ -3454,6 +3453,26 @@ describe('Scope', () => {
                 const sourceScope = program.getScopeByName('source');
                 sourceScope.linkSymbolTable();
                 expectTypeToBe(symbolTable.getSymbolType('pi', opts), FloatType);
+                sourceScope.unlinkSymbolTable();
+            });
+
+            it('should set correct return type when using `<component>.createchild()`', () => {
+                let utilFile = program.setFile<BrsFile>('source/util.bs', `
+                    sub someFunc()
+                        rect = createObject("roSgNode", "Rectangle")
+                        label = rect.createChild("label")
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = utilFile.getFunctionScopeAtPosition(util.createPosition(3, 31));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                const sourceScope = program.getScopeByName('source');
+                sourceScope.linkSymbolTable();
+                const labelType = symbolTable.getSymbolType('label', opts) as ComponentType;
+                expectTypeToBe(labelType, ComponentType);
+                expect(labelType.toString()).to.eql('roSGNodeLabel');
                 sourceScope.unlinkSymbolTable();
             });
 
