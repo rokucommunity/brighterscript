@@ -562,7 +562,7 @@ export class Scope {
 
         //get callables from own files
         this.enumerateOwnFiles((file) => {
-            for (let callable of file.callables) {
+            for (let callable of file?.callables ?? []) {
                 result.push({
                     callable: callable,
                     scope: this
@@ -843,7 +843,7 @@ export class Scope {
      * Find various function collisions
      */
     private diagnosticDetectFunctionCollisions(file: BscFile) {
-        for (let func of file.callables) {
+        for (let func of file?.callables ?? []) {
             const funcName = func.getName(ParseMode.BrighterScript);
             const lowerFuncName = funcName?.toLowerCase();
             if (lowerFuncName) {
@@ -932,7 +932,7 @@ export class Scope {
      */
     private diagnosticDetectFunctionCallsWithWrongParamCount(file: BscFile, callableContainersByLowerName: CallableContainerMap) {
         //validate all function calls
-        for (let expCall of file.functionCalls) {
+        for (let expCall of file?.functionCalls ?? []) {
             let callableContainersWithThisName = callableContainersByLowerName.get(expCall.name.toLowerCase());
 
             //use the first item from callablesByLowerName, because if there are more, that's a separate error

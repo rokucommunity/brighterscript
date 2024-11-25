@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@master
       - uses: actions/setup-node@master
         with:
-          node-version: "14.18.1"
+          node-version: "16.20.2"
           architecture: 'x64' # fix for macos-latest
       - run: npm ci
       - run: npm run build
