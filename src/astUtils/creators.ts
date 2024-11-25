@@ -74,6 +74,8 @@ const tokenDefaults = {
     [TokenKind.Semicolon]: ';',
     [TokenKind.SourceFilePathLiteral]: 'SOURCE_FILE_PATH',
     [TokenKind.SourceFunctionNameLiteral]: 'SOURCE_FUNCTION_NAME',
+    [TokenKind.SourceNamespaceRootNameLiteral]: 'SOURCE_NAMESPACE_ROOT_NAME',
+    [TokenKind.SourceNamespaceNameLiteral]: 'SOURCE_NAMESPACE_NAME',
     [TokenKind.SourceLineNumLiteral]: 'SOURCE_LINE_NUM',
     [TokenKind.SourceLocationLiteral]: 'SOURCE_LOCATION',
     [TokenKind.Star]: '*',
