@@ -57,6 +57,14 @@ export interface LspProject {
     bsconfigPath?: string;
 
     /**
+     * The contents of the bsconfig.json file. This is used to detect when the bsconfig file has not actually been changed (even if the fs says it did).
+     *
+     * Only available after `.activate()` has completed.
+     * @deprecated do not depend on this property. This will certainly be removed in a future release
+     */
+    bsconfigFileContents?: string;
+
+    /**
      * Initialize and start running the project. This will scan for all files, and build a full project in memory, then validate the project
      * @param options
      */

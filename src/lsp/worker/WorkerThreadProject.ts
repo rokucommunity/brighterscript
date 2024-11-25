@@ -15,6 +15,7 @@ import type { FileTranspileResult, SignatureInfoObj } from '../../Program';
 import type { Position, Range, Location, DocumentSymbol, WorkspaceSymbol, CodeAction, CompletionList } from 'vscode-languageserver-protocol';
 import type { Logger } from '../../logging';
 import { createLogger } from '../../logging';
+import * as fsExtra from 'fs-extra';
 
 export const workerPool = new WorkerPool(() => {
     return new Worker(
@@ -70,6 +71,12 @@ export class WorkerThreadProject implements LspProject {
         this.filePatterns = activateResponse.data.filePatterns;
         this.logger.logLevel = activateResponse.data.logLevel;
 
+        //load the bsconfig file contents (used for performance optimizations externally)
+        try {
+            this.bsconfigFileContents = (await fsExtra.readFile(this.bsconfigPath)).toString();
+        } catch { }
+
+
         this.activationDeferred.resolve();
         return activateResponse.data;
     }
@@ -99,6 +106,14 @@ export class WorkerThreadProject implements LspProject {
      * Path to a bsconfig.json file that will be used for this project
      */
     public bsconfigPath?: string;
+
+    /**
+     * The contents of the bsconfig.json file. This is used to detect when the bsconfig file has not actually been changed (even if the fs says it did).
+     *
+     * Only available after `.activate()` has completed.
+     * @deprecated do not depend on this property. This will certainly be removed in a future release
+     */
+    bsconfigFileContents?: string;
 
     /**
      * The worker thread where the actual project will execute
