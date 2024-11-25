@@ -3727,7 +3727,7 @@ describe('ScopeValidator', () => {
             expectZeroDiagnostics(program);
         });
 
-        it.only('rechecks file using callfunc when exported function type of xml changes', () => {
+        it('rechecks file using callfunc when exported function type of xml changes', () => {
             program.setFile('components/Widget.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Widget" extends="Group">
@@ -3746,8 +3746,7 @@ describe('ScopeValidator', () => {
 
 
             program.setFile('source/callFoo.bs', `
-                sub callFoo()
-                    widget = createObject("roSGNode", "Widget")
+                sub callFoo(widget as roSGNodeWidget)
                     widget@.foo(123) ' foo expects string
                 end sub
             `);

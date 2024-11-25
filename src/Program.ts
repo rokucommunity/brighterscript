@@ -350,8 +350,9 @@ export class Program {
 
     /**
      * Keeps a set of all the components that need to have their types updated during the current validation cycle
+     * Map <componentKey, componentName>
      */
-    private componentSymbolsToUpdate = new Set<{ componentKey: string; componentName: string }>();
+    private componentSymbolsToUpdate = new Map<string, string>();
 
     /**
      * Register (or replace) the reference to a component in the component map
@@ -401,8 +402,12 @@ export class Program {
      * @param xmlFile XML file with <component> tag
      */
     private addDeferredComponentTypeSymbolCreation(xmlFile: XmlFile) {
-        this.componentSymbolsToUpdate.add({ componentKey: this.getComponentKey(xmlFile), componentName: xmlFile.componentName?.text });
-
+        const componentKey = this.getComponentKey(xmlFile);
+        const componentName = xmlFile.componentName?.text;
+        if (this.componentSymbolsToUpdate.has(componentKey)) {
+            return;
+        }
+        this.componentSymbolsToUpdate.set(componentKey, componentName);
     }
 
     private getComponentKey(xmlFile: XmlFile) {
@@ -885,7 +890,8 @@ export class Program {
                 scopesValidated: 0,
                 totalLinkTime: '',
                 totalScopeValidationTime: '',
-                componentValidationTime: ''
+                componentValidationTime: '',
+                changedSymbolsTime: ''
             };
 
             const validationStopwatch = new Stopwatch();
@@ -894,10 +900,22 @@ export class Program {
             const xmlFilesValidated: XmlFile[] = [];
 
             const afterValidateFiles: BscFile[] = [];
-
+            const sortedFiles = Object.values(this.files).sort(firstBy(x => x.srcPath));
             // Create reference component types for any component that changes
-            this.logger.time(LogLevel.info, ['Build component types'], () => {
-                for (let { componentKey, componentName } of this.componentSymbolsToUpdate) {
+            this.logger.time(LogLevel.info, ['Prebuild component types'], () => {
+                for (const file of sortedFiles) {
+                    if (isXmlFile(file)) {
+                        this.addDeferredComponentTypeSymbolCreation(file);
+                    } else if (isBrsFile(file)) {
+                        for (const scope of this.getScopesForFile(file)) {
+                            if (isXmlScope(scope)) {
+                                this.addDeferredComponentTypeSymbolCreation(scope.xmlFile);
+                            }
+                        }
+                    }
+                }
+
+                for (let [componentKey, componentName] of this.componentSymbolsToUpdate.entries()) {
                     this.addComponentReferenceType(componentKey, componentName);
                 }
             });
@@ -905,8 +923,7 @@ export class Program {
 
             metrics.fileValidationTime = validationStopwatch.getDurationTextFor(() => {
                 //sort files by path so we get consistent results
-                const files = Object.values(this.files).sort(firstBy(x => x.srcPath));
-                for (const file of files) {
+                for (const file of sortedFiles) {
                     //for every unvalidated file, validate it
                     if (!file.isValidated) {
                         const validateFileEvent = {
@@ -941,7 +958,7 @@ export class Program {
 
             // Build component types for any component that changes
             this.logger.time(LogLevel.info, ['Build component types'], () => {
-                for (let { componentKey, componentName } of this.componentSymbolsToUpdate) {
+                for (let [componentKey, componentName] of this.componentSymbolsToUpdate.entries()) {
                     if (this.updateComponentSymbolInGlobalScope(componentKey, componentName)) {
                         changedComponentTypes.push(util.getSgNodeTypeName(componentName).toLowerCase());
                     }
@@ -949,71 +966,74 @@ export class Program {
                 this.componentSymbolsToUpdate.clear();
             });
 
-            const changedSymbolsMapArr = [...brsFilesValidated, ...xmlFilesValidated]?.map(f => {
-                if (isBrsFile(f)) {
-                    return f.providedSymbols.changes;
-                }
-                return null;
-            }).filter(x => x);
-
-
-            // update the map of typetime dependencies
-            for (const file of brsFilesValidated) {
-                for (const [symbolName, provided] of file.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime).entries()) {
-                    // clear existing dependencies
-                    for (const values of this.symbolDependencies.values()) {
-                        values.delete(symbolName);
-                    }
-
-                    // map types to the set of types that depend upon them
-                    for (const dependentSymbol of provided.requiredSymbolNames?.values() ?? []) {
-                        const dependentSymbolLower = dependentSymbol.toLowerCase();
-                        if (!this.symbolDependencies.has(dependentSymbolLower)) {
-                            this.symbolDependencies.set(dependentSymbolLower, new Set<string>());
-                        }
-                        const symbolsDependentUpon = this.symbolDependencies.get(dependentSymbolLower);
-                        symbolsDependentUpon.add(symbolName);
-                    }
-                }
-            }
-
             // get set of changed symbols
             const changedSymbols = new Map<SymbolTypeFlag, Set<string>>();
-            for (const flag of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
-                const changedSymbolsSetArr = changedSymbolsMapArr.map(symMap => symMap.get(flag));
-                const changedSymbolSet = new Set<string>();
-                for (const changeSet of changedSymbolsSetArr) {
-                    for (const change of changeSet) {
-                        changedSymbolSet.add(change);
+            metrics.changedSymbolsTime = validationStopwatch.getDurationTextFor(() => {
+
+                const changedSymbolsMapArr = [...brsFilesValidated, ...xmlFilesValidated]?.map(f => {
+                    if (isBrsFile(f)) {
+                        return f.providedSymbols.changes;
                     }
-                }
-                changedSymbols.set(flag, changedSymbolSet);
-            }
+                    return null;
+                }).filter(x => x);
 
-            // update changed symbol set with any changed component
-            for (const changedComponentType of changedComponentTypes) {
-                changedSymbols.get(SymbolTypeFlag.typetime).add(changedComponentType);
-            }
 
-            // Add any additional types that depend on a changed type
-            // as each interation of the loop might add new types, need to keep checking until nothing new is added
-            const dependentTypesChanged = new Set<string>();
-            let foundDependentTypes = false;
-            const changedTypeSymbols = changedSymbols.get(SymbolTypeFlag.typetime);
-            do {
-                foundDependentTypes = false;
-                for (const changedSymbol of changedTypeSymbols) {
-                    const symbolsDependentUponChangedSymbol = this.symbolDependencies.get(changedSymbol) ?? [];
-                    for (const symbolName of symbolsDependentUponChangedSymbol) {
-                        if (!changedTypeSymbols.has(symbolName) && !dependentTypesChanged.has(symbolName)) {
-                            foundDependentTypes = true;
-                            dependentTypesChanged.add(symbolName);
+                // update the map of typetime dependencies
+                for (const file of brsFilesValidated) {
+                    for (const [symbolName, provided] of file.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime).entries()) {
+                        // clear existing dependencies
+                        for (const values of this.symbolDependencies.values()) {
+                            values.delete(symbolName);
+                        }
+
+                        // map types to the set of types that depend upon them
+                        for (const dependentSymbol of provided.requiredSymbolNames?.values() ?? []) {
+                            const dependentSymbolLower = dependentSymbol.toLowerCase();
+                            if (!this.symbolDependencies.has(dependentSymbolLower)) {
+                                this.symbolDependencies.set(dependentSymbolLower, new Set<string>());
+                            }
+                            const symbolsDependentUpon = this.symbolDependencies.get(dependentSymbolLower);
+                            symbolsDependentUpon.add(symbolName);
                         }
                     }
                 }
-            } while (foundDependentTypes);
 
-            changedSymbols.set(SymbolTypeFlag.typetime, new Set([...changedTypeSymbols, ...dependentTypesChanged]));
+                for (const flag of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
+                    const changedSymbolsSetArr = changedSymbolsMapArr.map(symMap => symMap.get(flag));
+                    const changedSymbolSet = new Set<string>();
+                    for (const changeSet of changedSymbolsSetArr) {
+                        for (const change of changeSet) {
+                            changedSymbolSet.add(change);
+                        }
+                    }
+                    changedSymbols.set(flag, changedSymbolSet);
+                }
+
+                // update changed symbol set with any changed component
+                for (const changedComponentType of changedComponentTypes) {
+                    changedSymbols.get(SymbolTypeFlag.typetime).add(changedComponentType);
+                }
+
+                // Add any additional types that depend on a changed type
+                // as each iteration of the loop might add new types, need to keep checking until nothing new is added
+                const dependentTypesChanged = new Set<string>();
+                let foundDependentTypes = false;
+                const changedTypeSymbols = changedSymbols.get(SymbolTypeFlag.typetime);
+                do {
+                    foundDependentTypes = false;
+                    for (const changedSymbol of changedTypeSymbols) {
+                        const symbolsDependentUponChangedSymbol = this.symbolDependencies.get(changedSymbol) ?? [];
+                        for (const symbolName of symbolsDependentUponChangedSymbol) {
+                            if (!changedTypeSymbols.has(symbolName) && !dependentTypesChanged.has(symbolName)) {
+                                foundDependentTypes = true;
+                                dependentTypesChanged.add(symbolName);
+                            }
+                        }
+                    }
+                } while (foundDependentTypes);
+
+                changedSymbols.set(SymbolTypeFlag.typetime, new Set([...changedTypeSymbols, ...dependentTypesChanged]));
+            }).durationText;
 
             const filesToBeValidatedInScopeContext = new Set<BscFile>(afterValidateFiles);
 
