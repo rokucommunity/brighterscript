@@ -3726,6 +3726,48 @@ describe('ScopeValidator', () => {
             // there should be no more errors
             expectZeroDiagnostics(program);
         });
+
+        it.only('rechecks file using callfunc when exported function type of xml changes', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="foo" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                sub foo(input as string)
+                    print input
+                end sub
+            `);
+
+
+            program.setFile('source/callFoo.bs', `
+                sub callFoo()
+                    widget = createObject("roSGNode", "Widget")
+                    widget@.foo(123) ' foo expects string
+                end sub
+            `);
+
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('integer', 'string').message
+            ]);
+
+            // fix function
+            program.setFile('components/Widget.bs', `
+                sub foo(input as integer)
+                    print input
+                end sub
+            `);
+            program.validate();
+
+            // there should be no more errors
+            expectZeroDiagnostics(program);
+        });
     });
 
 
