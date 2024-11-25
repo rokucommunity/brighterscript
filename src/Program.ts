@@ -901,8 +901,8 @@ export class Program {
 
             const afterValidateFiles: BscFile[] = [];
             const sortedFiles = Object.values(this.files).sort(firstBy(x => x.srcPath));
-            // Create reference component types for any component that changes
             this.logger.time(LogLevel.info, ['Prebuild component types'], () => {
+                // cast a wide net for potential changes in components
                 for (const file of sortedFiles) {
                     if (isXmlFile(file)) {
                         this.addDeferredComponentTypeSymbolCreation(file);
@@ -915,6 +915,7 @@ export class Program {
                     }
                 }
 
+                // Create reference component types for any component that changes
                 for (let [componentKey, componentName] of this.componentSymbolsToUpdate.entries()) {
                     this.addComponentReferenceType(componentKey, componentName);
                 }
@@ -976,7 +977,6 @@ export class Program {
                     }
                     return null;
                 }).filter(x => x);
-
 
                 // update the map of typetime dependencies
                 for (const file of brsFilesValidated) {
