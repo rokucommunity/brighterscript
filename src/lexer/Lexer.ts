@@ -6,6 +6,11 @@ import type { Range, Diagnostic } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import util from '../util';
 
+/**
+ * Numeric type designators can only be one of these characters
+ */
+const numericTypeDesignatorCharsRegexp = /[#d!e&%]/;
+
 export class Lexer {
     /**
      * The zero-indexed position at which the token under consideration begins.
@@ -675,8 +680,12 @@ export class Lexer {
         let asString = this.source.slice(this.start, this.current);
         let numberOfDigits = containsDecimal ? asString.length - 1 : asString.length;
         let designator = this.peek().toLowerCase();
+        //set to undefined if it's not one of the supported designator chars
+        if (!numericTypeDesignatorCharsRegexp.test(designator)) {
+            designator = undefined;
+        }
 
-        if (numberOfDigits >= 10 && designator !== '&' && designator !== 'e') {
+        if (numberOfDigits >= 10 && !designator) {
             // numeric literals over 10 digits with no type designator are implicitly Doubles
             this.addToken(TokenKind.DoubleLiteral);
         } else if (designator === '#') {
@@ -707,9 +716,9 @@ export class Lexer {
             this.advance();
             this.addToken(TokenKind.FloatLiteral);
         } else if (designator === 'e') {
-            // literals that use "E" as the exponent are also automatic Floats
+            // literals that use "e" as the exponent are also automatic Floats
 
-            // consume the "E"
+            // consume the "e"
             this.advance();
 
             // exponents are optionally signed
@@ -719,6 +728,11 @@ export class Lexer {
 
             // consume the exponent
             while (isDecimalDigit(this.peek())) {
+                this.advance();
+            }
+
+            //optionally consume a trailing type designator
+            if (numericTypeDesignatorCharsRegexp.test(this.peek())) {
                 this.advance();
             }
 
@@ -737,7 +751,6 @@ export class Lexer {
         } else {
             // otherwise, it's a regular integer
             this.addToken(TokenKind.IntegerLiteral);
-
         }
     }
 
