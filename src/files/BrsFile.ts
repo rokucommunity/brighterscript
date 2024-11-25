@@ -46,6 +46,7 @@ import { DefinitionProvider } from '../bscPlugin/definition/DefinitionProvider';
 export interface ProvidedSymbol {
     symbol: BscSymbol;
     duplicates: BscSymbol[];
+    requiredSymbolNames?: Set<string>;
 }
 export type ProvidedSymbolMap = Map<SymbolTypeFlag, Map<string, ProvidedSymbol>>;
 export type ChangedSymbolMap = Map<SymbolTypeFlag, Set<string>>;
@@ -1065,9 +1066,12 @@ export class BrsFile implements BscFile {
                         // this catches namespaced things
                         continue;
                     }
-                    if (this.ast.getSymbolTable().hasSymbol(fullSymbolKey, flag)) {
-                        //catches aliases
-                        continue;
+                    const existingSymbol = this.ast.getSymbolTable().getSymbol(fullSymbolKey, flag);
+                    if (existingSymbol?.length > 0) {
+                        if (symbol[0]?.data?.isAlias) {
+                            //catches aliases
+                            continue;
+                        }
                     }
                     if (!addedSymbols.get(flag)?.has(fullSymbolKey)) {
                         requiredSymbols.push(symbol);
@@ -1161,9 +1165,16 @@ export class BrsFile implements BscFile {
                 if (symbolNameLower === 'm') {
                     continue;
                 }
+
                 const duplicates = getAnyDuplicates(symbolNameLower, typeTimeSymbolMap, referenceTypeTimeSymbolMap);
                 if (!isAnyReferenceType(symbol.type)) {
-                    typeTimeSymbolMap.set(symbolNameLower, { symbol: symbol, duplicates: duplicates });
+                    const requiredSymbolTypes = new Set<BscType>();
+                    util.getCustomTypesInSymbolTree(requiredSymbolTypes, symbol.type);
+                    const requiredSymbolNames = new Set<string>();
+                    for (const requiredType of requiredSymbolTypes.values()) {
+                        requiredSymbolNames.add(requiredType.toString());
+                    }
+                    typeTimeSymbolMap.set(symbolNameLower, { symbol: symbol, duplicates: duplicates, requiredSymbolNames: requiredSymbolNames });
                 } else {
                     referenceTypeTimeSymbolMap.set(symbolNameLower, { symbol: symbol, duplicates: duplicates });
                 }

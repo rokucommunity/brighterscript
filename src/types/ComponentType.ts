@@ -1,4 +1,4 @@
-import type { GetSymbolTypeOptions, SymbolTableProvider } from '../SymbolTable';
+import type { BscSymbol, GetSymbolTypeOptions, SymbolTableProvider } from '../SymbolTable';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { SymbolTable } from '../SymbolTable';
 import { isAnyReferenceType, isComponentType, isDynamicType, isObjectType, isPrimitiveType, isReferenceType, isTypedFunctionType } from '../astUtils/reflection';
@@ -40,8 +40,20 @@ export class ComponentType extends InheritableType {
 
     public static instance = new ComponentType('Node');
 
-    isEqual(targetType: BscType): boolean {
-        return isComponentType(targetType) && this.name.toLowerCase() === targetType.name.toLowerCase();
+    isEqual(targetType: BscType, data: TypeCompatibilityData = {}): boolean {
+        if (isReferenceType(targetType) && targetType.isResolvable()) {
+            targetType = targetType.getTarget();
+        }
+        if (this === targetType) {
+            return true;
+        }
+
+        return isComponentType(targetType) && this.name.toLowerCase() === targetType.name.toLowerCase() &&
+            this.isParentTypeEqual(targetType, data) &&
+            this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlag.runtime, data) &&
+            targetType.checkCompatibilityBasedOnMembers(this, SymbolTypeFlag.runtime, data) &&
+            this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlag.runtime, data, this.callFuncMemberTable) &&
+            targetType.checkCompatibilityBasedOnMembers(this, SymbolTypeFlag.runtime, data, this.callFuncMemberTable);
     }
 
     public toString() {
@@ -61,9 +73,11 @@ export class ComponentType extends InheritableType {
         }
     }
 
+    private hasStartedAddingBuiltInInterfaces = false;
 
     addBuiltInInterfaces() {
-        if (!this.hasAddedBuiltInInterfaces) {
+        if (!this.hasAddedBuiltInInterfaces && !this.hasStartedAddingBuiltInInterfaces) {
+            this.hasStartedAddingBuiltInInterfaces = true;
             if (this.parentType) {
                 this.parentType.addBuiltInInterfaces();
             }
@@ -74,9 +88,12 @@ export class ComponentType extends InheritableType {
     }
 
     private hasAddedBuiltInFields = false;
+    private hasStartedAddingBuiltInFields = false;
+
 
     addBuiltInFields() {
-        if (!this.hasAddedBuiltInFields) {
+        if (!this.hasAddedBuiltInFields && !this.hasStartedAddingBuiltInFields) {
+            this.hasStartedAddingBuiltInFields = true;
             if (isComponentType(this.parentType)) {
                 this.parentType.addBuiltInFields();
             }
@@ -104,7 +121,7 @@ export class ComponentType extends InheritableType {
             originalTypesToCheck.add(funcType.returnType);
         }
         const additionalTypesToCheck = new Set<BscType>();
-        function addSubTypes(type: BscType) {
+        /*function addSubTypes(type: BscType) {
             const subSymbols = type.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime);
             for (const subSymbol of subSymbols) {
                 if (!subSymbol.type.isBuiltIn && !(additionalTypesToCheck.has(subSymbol.type) || originalTypesToCheck.has(subSymbol.type))) {
@@ -115,11 +132,16 @@ export class ComponentType extends InheritableType {
                 }
 
             }
-        }
+        }*/
 
         for (const type of originalTypesToCheck) {
             if (!type.isBuiltIn) {
-                addSubTypes(type);
+                util.getCustomTypesInSymbolTree(additionalTypesToCheck, type, (subSymbol: BscSymbol) => {
+                    return !originalTypesToCheck.has(subSymbol.type);
+                });
+
+
+                //addSubTypes(type);
             }
         }
 

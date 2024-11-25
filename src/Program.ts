@@ -16,7 +16,7 @@ import { globalCallables, globalFile } from './globalCallables';
 import { parseManifest, getBsConst } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
-import { isBrsFile, isXmlFile, isXmlScope, isNamespaceStatement } from './astUtils/reflection';
+import { isBrsFile, isXmlFile, isXmlScope, isNamespaceStatement, isReferenceType } from './astUtils/reflection';
 import type { FunctionStatement, MethodStatement, NamespaceStatement } from './parser/Statement';
 import { BscPlugin } from './bscPlugin/BscPlugin';
 import { Editor } from './astUtils/Editor';
@@ -236,6 +236,12 @@ export class Program {
     private fileSymbolInformation = new Map<string, { provides: ProvidedSymbolInfo; requires: UnresolvedSymbol[] }>();
 
 
+    /**
+     *  Map of typetime symbols which depend upon the key symbol
+     */
+    private symbolDependencies = new Map<string, Set<string>>();
+
+
     private componentsTable = new SymbolTable('Custom Components');
 
     public addFileSymbolInfo(file: BrsFile) {
@@ -414,10 +420,11 @@ export class Program {
             return;
         }
         const components = this.components[componentKey] || [];
+        const previousComponentType = this.componentsTable.getSymbolType(symbolName, { flags: SymbolTypeFlag.typetime });
         // Remove any existing symbols that match
         this.componentsTable.removeSymbol(symbolName);
-        // There is a component that can be added - use it.
         if (components.length > 0) {
+            // There is a component that can be added - use it.
             const componentScope = components[0].scope;
 
             componentScope.linkSymbolTable();
@@ -425,8 +432,14 @@ export class Program {
             if (componentType) {
                 this.componentsTable.addSymbol(symbolName, {}, componentType, SymbolTypeFlag.typetime);
             }
+            const isComponentTypeDifferent = !previousComponentType || isReferenceType(previousComponentType) || !componentType.isEqual(previousComponentType);
             componentScope.unlinkSymbolTable();
+
+            return isComponentTypeDifferent;
+
         }
+        // There was a previous component type, but no new one, so it's different
+        return !!previousComponentType;
     }
 
     /**
@@ -441,15 +454,14 @@ export class Program {
         }
         const components = this.components[componentKey] || [];
         // Remove any existing symbols that match
-        this.globalScope.symbolTable.removeSymbol(symbolName);
+        this.componentsTable.removeSymbol(symbolName);
         // There is a component that can be added - use it.
         if (components.length > 0) {
 
             const componentRefType = new ReferenceType(symbolName, symbolName, SymbolTypeFlag.typetime, () => this.componentsTable);
             if (componentRefType) {
-                this.globalScope.symbolTable.addSymbol(symbolName, {}, componentRefType, SymbolTypeFlag.typetime);
+                this.componentsTable.addSymbol(symbolName, {}, componentRefType, SymbolTypeFlag.typetime);
             }
-
         }
     }
 
@@ -879,6 +891,8 @@ export class Program {
             const validationStopwatch = new Stopwatch();
             //validate every file
             const brsFilesValidated: BrsFile[] = [];
+            const xmlFilesValidated: XmlFile[] = [];
+
             const afterValidateFiles: BscFile[] = [];
 
             // Create reference component types for any component that changes
@@ -905,6 +919,8 @@ export class Program {
                         file.isValidated = true;
                         if (isBrsFile(file)) {
                             brsFilesValidated.push(file);
+                        } else if (isXmlFile(file)) {
+                            xmlFilesValidated.push(file);
                         }
                         afterValidateFiles.push(file);
                     }
@@ -921,32 +937,88 @@ export class Program {
 
             metrics.filesChanged = afterValidateFiles.length;
 
+            const changedComponentTypes: string[] = [];
+
             // Build component types for any component that changes
             this.logger.time(LogLevel.info, ['Build component types'], () => {
                 for (let { componentKey, componentName } of this.componentSymbolsToUpdate) {
-                    this.updateComponentSymbolInGlobalScope(componentKey, componentName);
+                    if (this.updateComponentSymbolInGlobalScope(componentKey, componentName)) {
+                        changedComponentTypes.push(util.getSgNodeTypeName(componentName).toLowerCase());
+                    }
                 }
                 this.componentSymbolsToUpdate.clear();
             });
 
-
-            const changedSymbolsMapArr = brsFilesValidated?.map(f => {
+            const changedSymbolsMapArr = [...brsFilesValidated, ...xmlFilesValidated]?.map(f => {
                 if (isBrsFile(f)) {
                     return f.providedSymbols.changes;
                 }
                 return null;
             }).filter(x => x);
 
+
+            // update the map of typetime dependencies
+            for (const file of brsFilesValidated) {
+                for (const [symbolName, provided] of file.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime).entries()) {
+                    // clear existing dependencies
+                    for (const values of this.symbolDependencies.values()) {
+                        values.delete(symbolName);
+                    }
+
+                    // map types to the set of types that depend upon them
+                    for (const dependentSymbol of provided.requiredSymbolNames?.values() ?? []) {
+                        const dependentSymbolLower = dependentSymbol.toLowerCase();
+                        if (!this.symbolDependencies.has(dependentSymbolLower)) {
+                            this.symbolDependencies.set(dependentSymbolLower, new Set<string>());
+                        }
+                        const symbolsDependentUpon = this.symbolDependencies.get(dependentSymbolLower);
+                        symbolsDependentUpon.add(symbolName);
+                    }
+                }
+            }
+
+            // get set of changed symbols
             const changedSymbols = new Map<SymbolTypeFlag, Set<string>>();
             for (const flag of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
                 const changedSymbolsSetArr = changedSymbolsMapArr.map(symMap => symMap.get(flag));
-                changedSymbols.set(flag, new Set(...changedSymbolsSetArr));
+                const changedSymbolSet = new Set<string>();
+                for (const changeSet of changedSymbolsSetArr) {
+                    for (const change of changeSet) {
+                        changedSymbolSet.add(change);
+                    }
+                }
+                changedSymbols.set(flag, changedSymbolSet);
             }
+
+            // update changed symbol set with any changed component
+            for (const changedComponentType of changedComponentTypes) {
+                changedSymbols.get(SymbolTypeFlag.typetime).add(changedComponentType);
+            }
+
+            // Add any additional types that depend on a changed type
+            // as each interation of the loop might add new types, need to keep checking until nothing new is added
+            const dependentTypesChanged = new Set<string>();
+            let foundDependentTypes = false;
+            const changedTypeSymbols = changedSymbols.get(SymbolTypeFlag.typetime);
+            do {
+                foundDependentTypes = false;
+                for (const changedSymbol of changedTypeSymbols) {
+                    const symbolsDependentUponChangedSymbol = this.symbolDependencies.get(changedSymbol) ?? [];
+                    for (const symbolName of symbolsDependentUponChangedSymbol) {
+                        if (!changedTypeSymbols.has(symbolName) && !dependentTypesChanged.has(symbolName)) {
+                            foundDependentTypes = true;
+                            dependentTypesChanged.add(symbolName);
+                        }
+                    }
+                }
+            } while (foundDependentTypes);
+
+            changedSymbols.set(SymbolTypeFlag.typetime, new Set([...changedTypeSymbols, ...dependentTypesChanged]));
 
             const filesToBeValidatedInScopeContext = new Set<BscFile>(afterValidateFiles);
 
             metrics.crossScopeValidationTime = validationStopwatch.getDurationTextFor(() => {
-                const scopesToCheck = this.getScopesForCrossScopeValidation();
+                const scopesToCheck = this.getScopesForCrossScopeValidation(changedComponentTypes.length > 0);
                 this.crossScopeValidation.buildComponentsMap();
                 this.crossScopeValidation.addDiagnosticsForScopes(scopesToCheck);
                 const filesToRevalidate = this.crossScopeValidation.getFilesRequiringChangedSymbol(scopesToCheck, changedSymbols);
@@ -967,6 +1039,9 @@ export class Program {
                 for (const file of filesToBeValidatedInScopeContext) {
                     if (isBrsFile(file)) {
                         file.validationSegmenter.unValidateAllSegments();
+                        for (const scope of this.getScopesForFile(file)) {
+                            scope.invalidate();
+                        }
                     }
                 }
                 for (let scopeName of scopeNames) {
@@ -1012,11 +1087,11 @@ export class Program {
         this.logger.info(`Validation Metrics: ${logs.join(', ')}`);
     }
 
-    private getScopesForCrossScopeValidation() {
+    private getScopesForCrossScopeValidation(someComponentTypeChanged = false) {
         const scopesForCrossScopeValidation = [];
         for (let scopeName of this.getSortedScopeNames()) {
             let scope = this.scopes[scopeName];
-            if (this.globalScope !== scope && !scope.isValidated) {
+            if (this.globalScope !== scope && (someComponentTypeChanged || !scope.isValidated)) {
                 scopesForCrossScopeValidation.push(scope);
             }
         }

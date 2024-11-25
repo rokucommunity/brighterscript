@@ -3593,6 +3593,139 @@ describe('ScopeValidator', () => {
                 DiagnosticMessages.cannotFindName('missingBool2', undefined, 'MediaObject').message
             ]);
         });
+
+        it('rechecks source when member type of import changes', () => {
+            // notice that width is wrongly typed as a boolean
+            program.setFile('source/type1.bs', `
+                interface SubType
+                    value as string
+                end interface
+            `);
+
+            program.setFile('source/type2.bs', `
+                interface ParentType
+                    child as Subtype
+                end interface
+            `);
+
+            program.setFile('source/main.bs', `
+                sub foo(input as ParentType)
+                    input.child.value = 1
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.assignmentTypeMismatch('integer', 'string').message
+            ]);
+
+            // fix width field type to integer
+            program.setFile('source/type1.bs', `
+                interface SubType
+                    value as integer
+                end interface
+            `);
+            program.validate();
+
+            // there should be no more errors
+            expectZeroDiagnostics(program);
+        });
+
+        it('rechecks component source when xml changes', () => {
+            // notice that width is wrongly typed as a boolean
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <field id="width" type="boolean" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                interface IWidget
+                    top as roSGNodeWidget
+                    data as roAssociativeArray
+                end interface
+
+                sub init()
+                    (m as IWidget).top.width =  100
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.assignmentTypeMismatch('integer', 'boolean').message
+            ]);
+
+            // fix width field type to integer
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <field id="width" type="integer" />
+                    </interface>
+                </component>
+            `);
+            program.validate();
+
+            // there should be no more errors
+            expectZeroDiagnostics(program);
+        });
+
+        it('rechecks complete file when type of typecasted m changes indirectly', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <interface>
+                        <field id="width" type="boolean" />
+                    </interface>
+                </component>
+            `);
+
+
+            // notice that width is wrongly typed as a boolean
+            program.setFile('components/WidgetContainer.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="WidgetContainer" extends="Group">
+                    <script uri="WidgetContainer.bs"/>
+                </component>
+            `);
+            program.setFile('components/WidgetContainerTypes.bs', `
+                interface IWidgetContainer
+                    top as roSGNodeWidgetContainer
+                    widget as roSGNodeWidget
+                end interface
+            `);
+
+            program.setFile('components/WidgetContainer.bs', `
+                import "WidgetContainerTypes.bs"
+                typecast m as IWidgetContainer
+
+                sub init()
+                    m.widget.width =  100
+                end sub
+            `);
+
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.assignmentTypeMismatch('integer', 'boolean').message
+            ]);
+
+            // fix width field type to integer
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <interface>
+                        <field id="width" type="integer" />
+                    </interface>
+                </component>
+            `);
+            program.validate();
+
+            // there should be no more errors
+            expectZeroDiagnostics(program);
+        });
     });
 
 

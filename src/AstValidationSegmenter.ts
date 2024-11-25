@@ -1,5 +1,5 @@
 import type { DottedGetExpression, TypeExpression, VariableExpression } from './parser/Expression';
-import { isAliasStatement, isBinaryExpression, isBlock, isBody, isClassStatement, isConditionalCompileStatement, isDottedGetExpression, isInterfaceStatement, isNamespaceStatement, isTypeExpression, isVariableExpression } from './astUtils/reflection';
+import { isAliasStatement, isBinaryExpression, isBlock, isBody, isClassStatement, isConditionalCompileStatement, isDottedGetExpression, isInterfaceStatement, isNamespaceStatement, isTypecastStatement, isTypeExpression, isVariableExpression } from './astUtils/reflection';
 import { ChildrenSkipper, WalkMode, createVisitor } from './astUtils/visitors';
 import type { ExtraSymbolData, GetTypeOptions, TypeChainEntry } from './interfaces';
 import type { AstNode, Expression } from './parser/AstNode';
@@ -73,12 +73,14 @@ export class AstValidationSegmenter {
             return this.checkExpressionForUnresolved(segment, expression.expression.left as VariableExpression, assignedSymbolsNames) ||
                 this.checkExpressionForUnresolved(segment, expression.expression.right as VariableExpression, assignedSymbolsNames);
         }
+        return this.addUnresolvedSymbol(segment, expression, assignedSymbolsNames);
+    }
 
+    private addUnresolvedSymbol(segment: AstNode, expression: Expression, assignedSymbolsNames?: Set<string>) {
         const flag = util.isInTypeExpression(expression) ? SymbolTypeFlag.typetime : SymbolTypeFlag.runtime;
         let typeChain: TypeChainEntry[] = [];
         const extraData = {} as ExtraSymbolData;
         const options: GetTypeOptions = { flags: flag, onlyCacheResolvedTypes: true, typeChain: typeChain, data: extraData };
-
         const nodeType = expression.getType(options);
         if (!nodeType?.isResolvable()) {
             let symbolsSet: Set<UnresolvedSymbol>;
@@ -126,6 +128,8 @@ export class AstValidationSegmenter {
 
     private currentNamespaceStatement: NamespaceStatement;
     private currentClassStatement: ClassStatement;
+    private unresolvedTypeCastTypeExpressions: TypeExpression[] = [];
+
 
     checkSegmentWalk(segment: AstNode) {
         if (isNamespaceStatement(segment) || isBody(segment)) {
@@ -161,6 +165,7 @@ export class AstValidationSegmenter {
             return;
         }
 
+
         this.segmentsForValidation.push(segment);
         this.validatedSegments.set(segment, false);
         let foundUnresolvedInSegment = false;
@@ -168,6 +173,16 @@ export class AstValidationSegmenter {
         const assignedSymbols = new Set<AssignedSymbol>();
         const assignedSymbolsNames = new Set<string>();
         this.currentClassStatement = segment.findAncestor(isClassStatement);
+
+        if (isTypecastStatement(segment)) {
+            if (this.checkExpressionForUnresolved(segment, segment.typecastExpression.typeExpression)) {
+                this.unresolvedTypeCastTypeExpressions.push(segment.typecastExpression.typeExpression);
+            }
+        }
+        let unresolvedTypeCastTypeExpression: TypeExpression;
+        if (this.unresolvedTypeCastTypeExpressions.length > 0) {
+            unresolvedTypeCastTypeExpression = this.unresolvedTypeCastTypeExpressions[this.unresolvedTypeCastTypeExpressions.length - 1];
+        }
 
         segment.walk(createVisitor({
             AssignmentStatement: (stmt) => {
@@ -186,7 +201,11 @@ export class AstValidationSegmenter {
                 assignedSymbolsNames.add(stmt.tokens.item.text.toLowerCase());
             },
             VariableExpression: (expr) => {
-                if (!assignedSymbolsNames.has(expr.tokens.name.text.toLowerCase())) {
+                const hasUnresolvedTypecastedM = unresolvedTypeCastTypeExpression && expr.tokens.name.text.toLowerCase() === 'm';
+                if (hasUnresolvedTypecastedM) {
+                    this.addUnresolvedSymbol(segment, unresolvedTypeCastTypeExpression);
+
+                } else if (!assignedSymbolsNames.has(expr.tokens.name.text.toLowerCase())) {
                     const expressionIsUnresolved = this.checkExpressionForUnresolved(segment, expr, assignedSymbolsNames);
                     foundUnresolvedInSegment = expressionIsUnresolved || foundUnresolvedInSegment;
                 }
@@ -195,6 +214,18 @@ export class AstValidationSegmenter {
             DottedGetExpression: (expr) => {
                 const expressionIsUnresolved = this.checkExpressionForUnresolved(segment, expr, assignedSymbolsNames);
                 foundUnresolvedInSegment = expressionIsUnresolved || foundUnresolvedInSegment;
+                if (!foundUnresolvedInSegment && unresolvedTypeCastTypeExpression) {
+                    let startOfDottedGet: Expression = expr;
+                    while (isDottedGetExpression(startOfDottedGet)) {
+                        startOfDottedGet = startOfDottedGet.obj;
+                    }
+                    if (isVariableExpression(startOfDottedGet)) {
+                        const hasUnresolvedTypecastedM = unresolvedTypeCastTypeExpression && startOfDottedGet.tokens.name.text.toLowerCase() === 'm';
+                        if (hasUnresolvedTypecastedM) {
+                            this.addUnresolvedSymbol(segment, unresolvedTypeCastTypeExpression);
+                        }
+                    }
+                }
                 skipper.skip();
             },
             TypeExpression: (expr) => {
@@ -212,7 +243,6 @@ export class AstValidationSegmenter {
         }
         this.currentClassStatement = undefined;
         this.currentClassStatement = undefined;
-
     }
 
     getAllUnvalidatedSegments() {
@@ -228,6 +258,7 @@ export class AstValidationSegmenter {
 
     getSegmentsWithChangedSymbols(changedSymbols: Map<SymbolTypeFlag, Set<string>>): AstNode[] {
         const segmentsToWalkForValidation: AstNode[] = [];
+
         for (const segment of this.segmentsForValidation) {
             if (this.validatedSegments.get(segment)) {
                 continue;

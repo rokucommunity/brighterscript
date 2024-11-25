@@ -50,8 +50,11 @@ export class ClassType extends InheritableType {
         }
     }
 
+    private hasStartedAddingBuiltInInterfaces = false;
+
     addBuiltInInterfaces() {
-        if (!this.hasAddedBuiltInInterfaces) {
+        if (!this.hasAddedBuiltInInterfaces && !this.hasStartedAddingBuiltInInterfaces) {
+            this.hasStartedAddingBuiltInInterfaces = true;
             if (this.parentType) {
                 this.parentType.addBuiltInInterfaces();
             }

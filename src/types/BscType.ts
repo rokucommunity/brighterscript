@@ -74,7 +74,7 @@ export abstract class BscType {
         throw new Error('Method not implemented.');
     }
 
-    checkCompatibilityBasedOnMembers(targetType: BscType, flags: SymbolTypeFlag, data: TypeCompatibilityData = {}) {
+    checkCompatibilityBasedOnMembers(targetType: BscType, flags: SymbolTypeFlag, data: TypeCompatibilityData = {}, memberTable?: SymbolTable) {
         if (!targetType) {
             return false;
         }
@@ -99,7 +99,7 @@ export abstract class BscType {
             // some sort of circular reference
             return false;
         }
-        const mySymbols = this.getMemberTable()?.getAllSymbols(flags);
+        const mySymbols = (memberTable ?? this.getMemberTable())?.getAllSymbols(flags);
         for (const memberSymbol of mySymbols) {
             const targetTypesOfSymbol = targetType.getMemberTable()
                 .getSymbolTypes(memberSymbol.name, { flags: flags })
