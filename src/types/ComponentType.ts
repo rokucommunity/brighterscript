@@ -121,27 +121,12 @@ export class ComponentType extends InheritableType {
             originalTypesToCheck.add(funcType.returnType);
         }
         const additionalTypesToCheck = new Set<BscType>();
-        /*function addSubTypes(type: BscType) {
-            const subSymbols = type.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime);
-            for (const subSymbol of subSymbols) {
-                if (!subSymbol.type.isBuiltIn && !(additionalTypesToCheck.has(subSymbol.type) || originalTypesToCheck.has(subSymbol.type))) {
-                    // if this is a custom type, and we haven't added it to the types to check to see if can add it to the additional types
-                    // add the type, and investigate any members
-                    additionalTypesToCheck.add(subSymbol.type);
-                    addSubTypes(subSymbol.type);
-                }
-
-            }
-        }*/
 
         for (const type of originalTypesToCheck) {
             if (!type.isBuiltIn) {
                 util.getCustomTypesInSymbolTree(additionalTypesToCheck, type, (subSymbol: BscSymbol) => {
                     return !originalTypesToCheck.has(subSymbol.type);
                 });
-
-
-                //addSubTypes(type);
             }
         }
 
@@ -183,7 +168,6 @@ export class ComponentType extends InheritableType {
                         addAssociatedTypesTableAsSiblingToMemberTable(memberSymbol?.type);
                     }
                 }
-
             }
         };
 
