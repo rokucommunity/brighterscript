@@ -773,7 +773,7 @@ export class ScopeValidator {
                     }
                 }
 
-            } else if (!(typeData?.isFromDocComment)) { //|| typeData?.isFromCallFunc)) {
+            } else if (!(typeData?.isFromDocComment)) {
                 // only show "cannot find... " errors if the type is not defined from a doc comment
                 const typeChainScan = util.processTypeChain(typeChain);
                 if (isCallExpression(typeChainScan.astNode.parent) && typeChainScan.astNode.parent.callee === expression) {
