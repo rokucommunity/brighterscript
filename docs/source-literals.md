@@ -142,16 +142,16 @@ function Human_Versus_Zombie_Eat()
 end function
 ```
 
-## SOURCE_NAMESPACE
+## SOURCE_NAMESPACE_NAME
 
 This works the same as SOURCE_FUNCTION_NAME except that it does not include the function name.
 
-The SOURCE_NAMESPACE can be a useful string for debug logs and logging filters.
+The SOURCE_NAMESPACE_NAME can be a useful string for debug logs and logging filters.
 
 ```BrighterScript
 namespace Human.Versus.Zombie
     function Eat()
-        print SOURCE_NAMESPACE
+        print SOURCE_NAMESPACE_NAME
     end function
 end namespace
 ```
@@ -164,16 +164,16 @@ function Human_Versus_Zombie_Eat()
 end function
 ```
 
-## SOURCE_NAMESPACE_ROOT
+## SOURCE_NAMESPACE_ROOT_NAME
 
-This works the same as SOURCE_NAMESPACE except that it only includes the lowest-level namespace.
+This works the same as SOURCE_NAMESPACE_NAME except that it only includes the lowest-level namespace.
 
-The SOURCE_NAMESPACE_ROOT can be a useful string for debug logs and logging filters.
+The SOURCE_NAMESPACE_ROOT_NAME can be a useful string for debug logs and logging filters.
 
 ```BrighterScript
 namespace Human.Versus.Zombie
     function Eat()
-        print SOURCE_NAMESPACE_ROOT
+        print SOURCE_NAMESPACE_ROOT_NAME
     end function
 end namespace
 ```

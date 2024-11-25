@@ -1332,15 +1332,15 @@ describe('lexer', () => {
     });
 
     it('identifies brighterscript source literals', () => {
-        let { tokens } = Lexer.scan('LINE_NUM SOURCE_FILE_PATH SOURCE_LINE_NUM FUNCTION_NAME SOURCE_FUNCTION_NAME SOURCE_NAMESPACE SOURCE_NAMESPACE_ROOT SOURCE_LOCATION PKG_PATH PKG_LOCATION');
+        let { tokens } = Lexer.scan('LINE_NUM SOURCE_FILE_PATH SOURCE_LINE_NUM FUNCTION_NAME SOURCE_FUNCTION_NAME SOURCE_NAMESPACE_NAME SOURCE_NAMESPACE_ROOT_NAME SOURCE_LOCATION PKG_PATH PKG_LOCATION');
         expect(tokens.map(x => x.kind)).to.eql([
             TokenKind.LineNumLiteral,
             TokenKind.SourceFilePathLiteral,
             TokenKind.SourceLineNumLiteral,
             TokenKind.FunctionNameLiteral,
             TokenKind.SourceFunctionNameLiteral,
-            TokenKind.SourceNamespaceLiteral,
-            TokenKind.SourceNamespaceRootLiteral,
+            TokenKind.SourceNamespaceNameLiteral,
+            TokenKind.SourceNamespaceRootNameLiteral,
             TokenKind.SourceLocationLiteral,
             TokenKind.PkgPathLiteral,
             TokenKind.PkgLocationLiteral,

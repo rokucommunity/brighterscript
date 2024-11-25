@@ -1163,13 +1163,13 @@ export class SourceLiteralExpression extends Expression {
             case TokenKind.SourceFunctionNameLiteral:
                 text = `"${this.getFunctionName(state, ParseMode.BrighterScript)}"`;
                 break;
-            case TokenKind.SourceNamespaceLiteral:
+            case TokenKind.SourceNamespaceNameLiteral:
                 let namespaceParts = this.getFunctionName(state, ParseMode.BrighterScript).split('.');
                 namespaceParts.pop(); // remove the function name
 
                 text = `"${namespaceParts.join('.')}"`;
                 break;
-            case TokenKind.SourceNamespaceRootLiteral:
+            case TokenKind.SourceNamespaceRootNameLiteral:
                 let namespaceRootParts = this.getFunctionName(state, ParseMode.BrighterScript).split('.');
                 namespaceRootParts.pop(); // remove the function name
 
