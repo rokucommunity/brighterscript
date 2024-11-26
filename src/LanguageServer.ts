@@ -456,7 +456,7 @@ export class LanguageServer {
      * anytime the program wants to load a file, check with our in-memory document cache first
      */
     private documentFileResolver(srcPath: string) {
-        let pathUri = URI.file(srcPath).toString();
+        let pathUri = util.pathToUri(srcPath);
         let document = this.documents.get(pathUri);
         if (document) {
             return document.getText();
@@ -468,7 +468,7 @@ export class LanguageServer {
         if (workspacePath.startsWith('file:')) {
             scopeUri = URI.parse(workspacePath).toString();
         } else {
-            scopeUri = URI.file(workspacePath).toString();
+            scopeUri = util.pathToUri(workspacePath);
         }
         let config = {
             configFile: undefined
@@ -598,7 +598,7 @@ export class LanguageServer {
         if (configFilePath && path.basename(configFilePath) === 'brsconfig.json') {
             builder.addDiagnostic(configFilePath, {
                 ...DiagnosticMessages.brsConfigJsonIsDeprecated(),
-                range: util.createRange(0, 0, 0, 0)
+                location: util.createLocationFromRange(util.pathToUri(configFilePath), util.createRange(0, 0, 0, 0))
             });
             return this.sendDiagnostics();
         }
@@ -695,16 +695,25 @@ export class LanguageServer {
 
         //wait until the file has settled
         await this.keyedThrottler.onIdleOnce(filePath, true);
+        // make sure validation is complete
+        await this.validateAllThrottled();
+        //wait for the validation cycle to settle
+        await this.onValidateSettled();
 
         let completions = this
             .getProjects()
             .flatMap(workspace => workspace.builder.program.getCompletions(filePath, params.position));
 
+        //only send one completion if name and type are the same
+        let completionsMap = new Map<string, CompletionItem>();
+
         for (let completion of completions) {
             completion.commitCharacters = ['.'];
+            let key = `${completion.sortText}-${completion.label}-${completion.kind}`;
+            completionsMap.set(key, completion);
         }
 
-        return completions;
+        return [...completionsMap.values()];
     }
 
     /**
@@ -967,23 +976,21 @@ export class LanguageServer {
     public async handleFileChanges(project: Project, changes: { type: FileChangeType; srcPath: string }[]) {
         //this loop assumes paths are both file paths and folder paths, which eliminates the need to detect.
         //All functions below can handle being given a file path AND a folder path, and will only operate on the one they are looking for
-        let consumeCount = 0;
         await Promise.all(changes.map(async (change) => {
             await this.keyedThrottler.run(change.srcPath, async () => {
-                consumeCount += await this.handleFileChange(project, change) ? 1 : 0;
+                if (await this.handleFileChange(project, change)) {
+                    await this.validateAllThrottled();
+                }
             });
         }));
-
-        if (consumeCount > 0) {
-            await this.validateAllThrottled();
-        }
     }
 
     /**
      * This only operates on files that match the specified files globs, so it is safe to throw
      * any file changes you receive with no unexpected side-effects
+     * @returns true if the file was handled by this project, false if it was not
      */
-    private async handleFileChange(project: Project, change: { type: FileChangeType; srcPath: string }) {
+    private async handleFileChange(project: Project, change: { type: FileChangeType; srcPath: string }): Promise<boolean> {
         const { program, options, rootDir } = project.builder;
 
         //deleted
@@ -1062,7 +1069,7 @@ export class LanguageServer {
                 //remove nulls
                 .filter(x => !!x)
                 //dedupe hovers across all projects
-                .reduce((set, content) => set.add(content), new Set<string>()).values()
+                .reduce((set, content) => set.add(content as any), new Set<string>()).values()
         ];
 
         if (contents.length > 0) {
@@ -1132,7 +1139,6 @@ export class LanguageServer {
             await this.synchronizeStandaloneProjects();
 
             let projects = this.getProjects();
-
             //validate all programs
             await Promise.all(
                 projects.map((project) => {
@@ -1140,6 +1146,7 @@ export class LanguageServer {
                     return project;
                 })
             );
+
         } catch (e: any) {
             this.connection.console.error(e);
             await this.sendCriticalFailure(`Critical error validating project: ${e.message}${e.stack ?? ''}`);
@@ -1266,6 +1273,8 @@ export class LanguageServer {
         await this.waitAllProjectFirstRuns();
         //wait for the file to settle (in case there are multiple file changes in quick succession)
         await this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true);
+        // make sure validation is complete
+        await this.validateAllThrottled();
         //wait for the validation cycle to settle
         await this.onValidateSettled();
 
@@ -1295,12 +1304,11 @@ export class LanguageServer {
             //Get only the changes to diagnostics since the last time we sent them to the client
             const patch = this.diagnosticCollection.getPatch(this.projects);
 
-            for (let filePath in patch) {
-                const uri = URI.file(filePath).toString();
-                const diagnostics = patch[filePath].map(d => util.toDiagnostic(d, uri));
+            for (let fileUri in patch) {
+                const diagnostics = patch[fileUri].map(d => util.toDiagnostic(d, fileUri));
 
                 await this.connection.sendDiagnostics({
-                    uri: uri,
+                    uri: fileUri,
                     diagnostics: diagnostics
                 });
             }
