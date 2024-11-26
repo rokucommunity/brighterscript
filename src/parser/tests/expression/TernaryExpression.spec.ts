@@ -831,11 +831,13 @@ describe('ternary expressions', () => {
             testTranspile(
                 `
                     sub main()
+                        m[m.isShiftPressed ? "a" : "b"] = 0
                         m[m.useAltKey ? m.altKey : m.key] = 1
                     end sub
                 `,
                 `
                     sub main()
+                        m[bslib_ternary(m.isShiftPressed, "a", "b")] = 0
                         m[(function(__bsCondition, m)
                                 if __bsCondition then
                                     return m.altKey
