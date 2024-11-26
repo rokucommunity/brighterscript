@@ -1035,6 +1035,12 @@ export class Program {
                 changedSymbols.set(SymbolTypeFlag.typetime, new Set([...changedTypeSymbols, ...dependentTypesChanged]));
             }).durationText;
 
+            if (this.options.logLevel === LogLevel.debug) {
+                const changedRuntime = Array.from(changedSymbols.get(SymbolTypeFlag.runtime)).sort();
+                this.logger.debug('Changed Symbols (runTime):', changedRuntime.join(', '));
+                const changedTypetime = Array.from(changedSymbols.get(SymbolTypeFlag.typetime)).sort();
+                this.logger.debug('Changed Symbols (typeTime):', changedTypetime.join(', '));
+            }
             const filesToBeValidatedInScopeContext = new Set<BscFile>(afterValidateFiles);
 
             metrics.crossScopeValidationTime = validationStopwatch.getDurationTextFor(() => {
