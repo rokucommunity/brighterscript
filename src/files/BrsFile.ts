@@ -986,9 +986,10 @@ export class BrsFile implements BscFile {
 
     public processSymbolInformation() {
         // Get namespaces across imported files
+        this.program.logger.debug('Processing symbol information', this.srcPath);
+
         const nsTable = this.getNamespaceSymbolTable(false);
         this.linkSymbolTableDisposables.push(this.ast.symbolTable.addSibling(nsTable));
-
         this.validationSegmenter.processTree(this.ast);
         this.program.addFileSymbolInfo(this);
         this.unlinkNamespaceSymbolTables();
@@ -1052,6 +1053,8 @@ export class BrsFile implements BscFile {
 
     public get requiredSymbols() {
         return this.cache.getOrAdd(`requiredSymbols`, () => {
+            this.program.logger.debug('Getting required symbols', this.srcPath);
+
             const allNeededSymbolSets = this.validationSegmenter.unresolvedSegmentsSymbols.values();
 
             const requiredSymbols: UnresolvedSymbol[] = [];
@@ -1103,6 +1106,8 @@ export class BrsFile implements BscFile {
     }
 
     private getProvidedSymbols() {
+        this.program.logger.debug('Getting provided symbols', this.srcPath);
+
         const symbolMap = new Map<SymbolTypeFlag, Map<string, ProvidedSymbol>>();
         const runTimeSymbolMap = new Map<string, ProvidedSymbol>();
         const typeTimeSymbolMap = new Map<string, ProvidedSymbol>();

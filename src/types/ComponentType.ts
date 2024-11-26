@@ -47,9 +47,20 @@ export class ComponentType extends InheritableType {
         if (this === targetType) {
             return true;
         }
+        if (!isComponentType(targetType)) {
+            return false;
+        }
 
-        return isComponentType(targetType) && this.name.toLowerCase() === targetType.name.toLowerCase() &&
-            this.isParentTypeEqual(targetType, data) &&
+        const thisNameLower = this.name.toLowerCase();
+        const targetNameLower = targetType.name.toLowerCase();
+        if (thisNameLower !== targetNameLower) {
+            return false;
+        }
+        if (this.isBuiltIn && targetType.isBuiltIn) {
+            return true;
+        }
+
+        return this.isParentTypeEqual(targetType, data) &&
             this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlag.runtime, data) &&
             targetType.checkCompatibilityBasedOnMembers(this, SymbolTypeFlag.runtime, data) &&
             this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlag.runtime, data, this.callFuncMemberTable) &&
