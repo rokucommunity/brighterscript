@@ -827,6 +827,27 @@ describe('ternary expressions', () => {
             );
         });
 
+        it('supports ternary in indexedSet key', () => {
+            testTranspile(
+                `
+                    sub main()
+                        m[m.useAltKey ? m.altKey : m.key] = 1
+                    end sub
+                `,
+                `
+                    sub main()
+                        m[(function(__bsCondition, m)
+                                if __bsCondition then
+                                    return m.altKey
+                                else
+                                    return m.key
+                                end if
+                            end function)(m.useAltKey, m)] = 1
+                    end sub
+                `
+            );
+        });
+
         it('supports scope-captured outer, and simple inner', () => {
             testTranspile(
                 `
