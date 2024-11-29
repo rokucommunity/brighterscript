@@ -368,18 +368,16 @@ export class ScopeValidator {
         if (!isComponentType(callerType)) {
             return;
         }
-        const componentNameLower = callerType.toString().toLowerCase();
-
         const firstArgToken = call?.args[0]?.tokens.value;
         if (callName === 'createchild') {
             this.checkComponentName(firstArgToken);
-        } else if (callName === 'callfunc' && !['rosgnode', 'rosgnodenode'].includes(componentNameLower)) {
+        } else if (callName === 'callfunc' && !util.isGenericNodeType(callerType)) {
             const funcType = util.getCallFuncType(call, firstArgToken, { flags: SymbolTypeFlag.runtime, ignoreCall: true });
             if (!funcType?.isResolvable()) {
                 const functionName = firstArgToken.text.replace(/"/g, '');
                 const functionFullname = `${callerType.toString()}@.${functionName}`;
                 this.addMultiScopeDiagnostic({
-                    ...DiagnosticMessages.cannotFindFunction(functionName, functionFullname, callerType.toString()),
+                    ...DiagnosticMessages.cannotFindCallFuncFunction(functionName, functionFullname, callerType.toString()),
                     location: firstArgToken?.location
                 });
             } else {
@@ -402,9 +400,33 @@ export class ScopeValidator {
     }
 
     private validateCallFuncExpression(file: BrsFile, expression: CallfuncExpression) {
-        const getTypeOptions = { flags: SymbolTypeFlag.runtime, data: {} };
-        const funcType = this.getNodeTypeWrapper(file, expression, { ...getTypeOptions, ignoreCall: true });
+        const callerType = expression.callee?.getType({ flags: SymbolTypeFlag.runtime });
+        if (isDynamicType(callerType)) {
+            return;
+        }
+        const methodToken = expression.tokens.methodName;
+        const methodName = methodToken?.text ?? '';
+        const functionFullname = `${callerType.toString()}@.${methodName}`;
         const callErrorLocation = expression.location;
+
+        if (!isComponentType(callerType)) {
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.cannotFindCallFuncFunction(methodName, functionFullname, callerType.toString()),
+                location: callErrorLocation
+            });
+            return;
+        }
+        if (util.isGenericNodeType(callerType)) {
+            // ignore "general" node
+            return;
+        }
+        const funcType = util.getCallFuncType(expression, methodToken, { flags: SymbolTypeFlag.runtime, ignoreCall: true });
+        if (!funcType?.isResolvable()) {
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.cannotFindCallFuncFunction(methodName, functionFullname, callerType.toString()),
+                location: callErrorLocation
+            });
+        }
         return this.validateFunctionCall(file, funcType, callErrorLocation, expression.args);
     }
 

@@ -16,7 +16,7 @@ export class ComponentType extends InheritableType {
     constructor(public name: string, superComponent?: ComponentType) {
         super(name, superComponent);
         this.callFuncMemberTable = new SymbolTable(`${this.name}: CallFunc`, () => this.parentComponent?.callFuncMemberTable);
-        this.callFuncAssociatedTypesTable = new SymbolTable(`${this.name}: CallFuncAssociatedTypes`);
+        this.callFuncAssociatedTypesTable = new SymbolTable(`${this.name}: CallFuncAssociatedTypes`, () => this.parentComponent?.callFuncAssociatedTypesTable);
     }
 
     public readonly kind = BscTypeKind.ComponentType;
@@ -42,7 +42,7 @@ export class ComponentType extends InheritableType {
 
     isEqual(targetType: BscType, data: TypeCompatibilityData = {}): boolean {
         if (isReferenceType(targetType) && targetType.isResolvable()) {
-            targetType = targetType.getTarget();
+            targetType = targetType.getTarget?.() ?? targetType;
         }
         if (this === targetType) {
             return true;
@@ -60,11 +60,19 @@ export class ComponentType extends InheritableType {
             return true;
         }
 
-        return this.isParentTypeEqual(targetType, data) &&
-            this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlag.runtime, data) &&
-            targetType.checkCompatibilityBasedOnMembers(this, SymbolTypeFlag.runtime, data) &&
-            this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlag.runtime, data, this.callFuncMemberTable) &&
-            targetType.checkCompatibilityBasedOnMembers(this, SymbolTypeFlag.runtime, data, this.callFuncMemberTable);
+        if (!this.isParentTypeEqual(targetType, data)) {
+            return false;
+        }
+        if (!this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlag.runtime, data) ||
+            !targetType.checkCompatibilityBasedOnMembers(this, SymbolTypeFlag.runtime, data)) {
+            return false;
+        }
+        if (!this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlag.runtime, data, this.callFuncMemberTable, targetType.callFuncMemberTable) ||
+            !targetType.checkCompatibilityBasedOnMembers(this, SymbolTypeFlag.runtime, data, targetType.callFuncMemberTable, this.callFuncMemberTable)) {
+            return false;
+        }
+
+        return true;
     }
 
     public toString() {

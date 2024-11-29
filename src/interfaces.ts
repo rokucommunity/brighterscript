@@ -1076,6 +1076,8 @@ export interface TypeCompatibilityData {
     // override for diagnostic message - useful for Arrays with different default types
     actualType?: BscType;
     expectedType?: BscType;
+    allowNameEquality?: boolean;
+    unresolveableTarget?: string;
 }
 
 export interface NamespaceContainer {

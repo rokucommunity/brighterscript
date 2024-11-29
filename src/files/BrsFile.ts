@@ -1199,6 +1199,7 @@ export class BrsFile implements BscFile {
         const previousSymbolsChecked = new Map<SymbolTypeFlag, Set<string>>();
         previousSymbolsChecked.set(SymbolTypeFlag.runtime, new Set<string>());
         previousSymbolsChecked.set(SymbolTypeFlag.typetime, new Set<string>());
+
         for (const flag of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
             const newSymbolMapForFlag = symbolMap.get(flag);
             const oldSymbolMapForFlag = previouslyProvidedSymbols?.get(flag);

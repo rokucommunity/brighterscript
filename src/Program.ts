@@ -5,7 +5,7 @@ import type { CodeAction, Position, Range, SignatureInformation, Location, Docum
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeFileAddEvent, BeforeFileRemoveEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj, SerializeFileEvent } from './interfaces';
+import type { FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeFileAddEvent, BeforeFileRemoveEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj, SerializeFileEvent, ScopeValidationOptions } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DependencyGraph } from './DependencyGraph';
@@ -235,6 +235,7 @@ export class Program {
 
     private fileSymbolInformation = new Map<string, { provides: ProvidedSymbolInfo; requires: UnresolvedSymbol[] }>();
 
+    private currentScopeValidationOptions: ScopeValidationOptions;
 
     /**
      *  Map of typetime symbols which depend upon the key symbol
@@ -432,14 +433,16 @@ export class Program {
             // There is a component that can be added - use it.
             const componentScope = components[0].scope;
 
+            this.componentsTable.removeSymbol(symbolName);
             componentScope.linkSymbolTable();
             const componentType = componentScope.getComponentType();
             if (componentType) {
                 this.componentsTable.addSymbol(symbolName, {}, componentType, SymbolTypeFlag.typetime);
             }
-            const isComponentTypeDifferent = !previousComponentType || isReferenceType(previousComponentType) || !componentType.isEqual(previousComponentType);
+            const typeData = {};
+            const isSameAsPrevious = previousComponentType && componentType.isEqual(previousComponentType, typeData);
+            const isComponentTypeDifferent = !previousComponentType || isReferenceType(previousComponentType) || !isSameAsPrevious;
             componentScope.unlinkSymbolTable();
-
             return isComponentTypeDifferent;
 
         }
@@ -458,15 +461,19 @@ export class Program {
             return;
         }
         const components = this.components[componentKey] || [];
-        // Remove any existing symbols that match
-        this.componentsTable.removeSymbol(symbolName);
-        // There is a component that can be added - use it.
-        if (components.length > 0) {
 
-            const componentRefType = new ReferenceType(symbolName, symbolName, SymbolTypeFlag.typetime, () => this.componentsTable);
-            if (componentRefType) {
-                this.componentsTable.addSymbol(symbolName, {}, componentRefType, SymbolTypeFlag.typetime);
+        if (components.length > 0) {
+            // There is a component that can be added,
+            if (!this.componentsTable.hasSymbol(symbolName, SymbolTypeFlag.typetime)) {
+                // it doesn't already exist in the table
+                const componentRefType = new ReferenceType(symbolName, symbolName, SymbolTypeFlag.typetime, () => this.componentsTable);
+                if (componentRefType) {
+                    this.componentsTable.addSymbol(symbolName, {}, componentRefType, SymbolTypeFlag.typetime);
+                }
             }
+        } else {
+            // there is no component. remove from table
+            this.componentsTable.removeSymbol(symbolName);
         }
     }
 
@@ -823,6 +830,7 @@ export class Program {
             //if there is a scope named the same as this file's path, remove it (i.e. xml scopes)
             let scope = this.scopes[file.destPath];
             if (scope) {
+                this.logger.debug('Removing associated scope', scope.name);
                 const scopeDisposeEvent = {
                     program: this,
                     scope: scope
@@ -845,6 +853,8 @@ export class Program {
                 this.dependencyGraph.removeDependency('scope:source', file.dependencyGraphKey);
             }
             if (isBrsFile(file)) {
+                this.logger.debug('Removing file symbol info', file.srcPath);
+
                 if (!keepSymbolInformation) {
                     this.fileSymbolInformation.delete(file.pkgPath);
                 }
@@ -853,8 +863,12 @@ export class Program {
 
             //if this is a component, remove it from our components map
             if (isXmlFile(file)) {
+                this.logger.debug('Unregistering component', file.srcPath);
+
                 this.unregisterComponent(file);
             }
+            this.logger.debug('Disposing file', file.srcPath);
+
             //dispose any disposable things on the file
             for (const disposable of file?.disposables ?? []) {
                 disposable();
@@ -904,6 +918,9 @@ export class Program {
             this.logger.time(LogLevel.info, ['Prebuild component types'], () => {
                 // cast a wide net for potential changes in components
                 for (const file of sortedFiles) {
+                    if (file.isValidated) {
+                        continue;
+                    }
                     if (isXmlFile(file)) {
                         this.addDeferredComponentTypeSymbolCreation(file);
                     } else if (isBrsFile(file)) {
@@ -1021,7 +1038,8 @@ export class Program {
                 const changedTypeSymbols = changedSymbols.get(SymbolTypeFlag.typetime);
                 do {
                     foundDependentTypes = false;
-                    for (const changedSymbol of changedTypeSymbols) {
+                    const allChangedTypesSofar = [...Array.from(changedTypeSymbols), ...Array.from(dependentTypesChanged)];
+                    for (const changedSymbol of allChangedTypesSofar) {
                         const symbolsDependentUponChangedSymbol = this.symbolDependencies.get(changedSymbol) ?? [];
                         for (const symbolName of symbolsDependentUponChangedSymbol) {
                             if (!changedTypeSymbols.has(symbolName) && !dependentTypesChanged.has(symbolName)) {
@@ -1059,6 +1077,12 @@ export class Program {
             let validationTime = 0;
             let scopesValidated = 0;
             let changedFiles = new Set<BscFile>(afterValidateFiles);
+            this.currentScopeValidationOptions = {
+                filesToBeValidatedInScopeContext: filesToBeValidatedInScopeContext,
+                changedSymbols: changedSymbols,
+                changedFiles: changedFiles,
+                initialValidation: this.isFirstValidation
+            };
             this.logger.time(LogLevel.info, ['Validate all scopes'], () => {
                 //sort the scope names so we get consistent results
                 const scopeNames = this.getSortedScopeNames();
@@ -1072,12 +1096,7 @@ export class Program {
                 }
                 for (let scopeName of scopeNames) {
                     let scope = this.scopes[scopeName];
-                    const scopeValidated = scope.validate({
-                        filesToBeValidatedInScopeContext: filesToBeValidatedInScopeContext,
-                        changedSymbols: changedSymbols,
-                        changedFiles: changedFiles,
-                        initialValidation: this.isFirstValidation
-                    });
+                    const scopeValidated = scope.validate(this.currentScopeValidationOptions);
                     if (scopeValidated) {
                         scopesValidated++;
                     }

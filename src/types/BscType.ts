@@ -74,7 +74,7 @@ export abstract class BscType {
         throw new Error('Method not implemented.');
     }
 
-    checkCompatibilityBasedOnMembers(targetType: BscType, flags: SymbolTypeFlag, data: TypeCompatibilityData = {}, memberTable?: SymbolTable) {
+    checkCompatibilityBasedOnMembers(targetType: BscType, flags: SymbolTypeFlag, data: TypeCompatibilityData = {}, memberTable?: SymbolTable, targetMemberTable?: SymbolTable) {
         if (!targetType) {
             return false;
         }
@@ -91,6 +91,7 @@ export abstract class BscType {
         }
 
         if (isReferenceType(targetType) && !targetType.isResolvable()) {
+            data.unresolveableTarget = targetType.fullName;
             // we can't resolve the other type. Assume it does not fail on member checks
             return true;
         }
@@ -100,8 +101,9 @@ export abstract class BscType {
             return false;
         }
         const mySymbols = (memberTable ?? this.getMemberTable())?.getAllSymbols(flags);
+        const targetTable = (targetMemberTable ?? targetType.getMemberTable());
         for (const memberSymbol of mySymbols) {
-            const targetTypesOfSymbol = targetType.getMemberTable()
+            const targetTypesOfSymbol = targetTable
                 .getSymbolTypes(memberSymbol.name, { flags: flags })
                 ?.map(symbol => symbol.type);
             if (!targetTypesOfSymbol || targetTypesOfSymbol.length === 0) {

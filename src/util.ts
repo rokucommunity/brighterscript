@@ -2271,6 +2271,17 @@ export class Util {
         return false;
     }
 
+    public isGenericNodeType(type: BscType) {
+        if (isComponentType(type)) {
+            const lowerName = type.toString().toLowerCase();
+            if (lowerName === 'rosgnode' || lowerName === 'rosgnodenode') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+
     public hasAnyRequiredSymbolChanged(requiredSymbols: UnresolvedSymbol[], changedSymbols: Map<SymbolTypeFlag, Set<string>>) {
         if (!requiredSymbols || !changedSymbols) {
             return false;

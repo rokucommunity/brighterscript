@@ -1833,8 +1833,8 @@ describe('BrsFile', () => {
                         print PKG_PATH
                         print LINE_NUM
                         print new Person()
-                        m@.someCallfunc()
-                        m@.someCallfunc(1, 2)
+                        m.node@.someCallfunc()
+                        m.node@.someCallfunc(1, 2)
                         print tag\`stuff\${LINE_NUM}\${LINE_NUM}\`
                         print 1 = 1 ? 1 : 2
                         print 1 = 1 ? m.one : m.two
@@ -1887,8 +1887,8 @@ describe('BrsFile', () => {
                         print "pkg:/source/main.brs"
                         print LINE_NUM
                         print Person()
-                        m.callfunc("someCallfunc")
-                        m.callfunc("someCallfunc", 1, 2)
+                        m.node.callfunc("someCallfunc")
+                        m.node.callfunc("someCallfunc", 1, 2)
                         print tag(["stuff", "", ""], [LINE_NUM, LINE_NUM])
                         print bslib_ternary(1 = 1, 1, 2)
                         print (function(__bsCondition, m)
@@ -4090,10 +4090,10 @@ describe('BrsFile', () => {
 
     describe('callfunc operator', () => {
         describe('transpile', () => {
-            it('does not produce diagnostics', () => {
+            it('does not produce diagnostics on plain roSGNode', () => {
                 program.setFile('source/main.bs', `
                     sub test()
-                        someNode = createObject("roSGNode", "Rectangle")
+                        someNode = createObject("roSGNode", "Node")
                         someNode@.someFunction({test: "value"})
                     end sub
                 `);

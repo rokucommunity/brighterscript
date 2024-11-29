@@ -822,6 +822,17 @@ export let DiagnosticMessages = {
         message: `Expected return statement in function`,
         code: 1155,
         severity: DiagnosticSeverity.Error
+    }),
+    cannotFindCallFuncFunction: (name: string, fullName: string, typeName: string) => ({
+        message: `Cannot find callfunc function '${name}' for type '${typeName}'`,
+        code: 1156,
+        data: {
+            name: name,
+            fullName: fullName,
+            typeName: typeName,
+            isCallfunc: true
+        },
+        severity: DiagnosticSeverity.Error
     })
 };
 export const defaultMaximumTruncationLength = 160;

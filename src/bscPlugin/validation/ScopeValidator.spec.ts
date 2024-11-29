@@ -4026,6 +4026,18 @@ describe('ScopeValidator', () => {
             ]);
         });
 
+        it('catches when a non-component type has callfunc invocation', () => {
+            program.setFile('source/test.bs', `
+                sub printName(widget as integer)
+                    print widget@.toStr()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindCallFuncFunction('toStr', 'integer@.toStr', 'integer').message
+            ]);
+        });
+
         it('allows to types that reference themselves', () => {
             program.setFile('components/Widget.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -4103,7 +4115,35 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindFunction('whatever', 'roSGNodeWidget@.whatever', 'roSGNodeWidget').message
+                DiagnosticMessages.cannotFindCallFuncFunction('whatever', 'roSGNodeWidget@.whatever', 'roSGNodeWidget').message
+            ]);
+        });
+
+        it('finds invalid func name of @ callfunc invocation', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getName" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                function getName() as string
+                    return "John Doe"
+                end function
+            `);
+
+            program.setFile('source/test.bs', `
+                sub printName(widget as roSGNodeWidget)
+                    print widget@.whatever()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindCallFuncFunction('whatever', 'roSGNodeWidget@.whatever', 'roSGNodeWidget').message
             ]);
         });
 
@@ -4131,7 +4171,7 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindFunction('whatever the name is', 'roSGNodeWidget@.whatever the name is', 'roSGNodeWidget').message
+                DiagnosticMessages.cannotFindCallFuncFunction('whatever the name is', 'roSGNodeWidget@.whatever the name is', 'roSGNodeWidget').message
             ]);
         });
 
@@ -4184,7 +4224,7 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindFunction('someFunc', 'roSGNodeRectangle@.someFunc', 'roSGNodeRectangle')
+                DiagnosticMessages.cannotFindCallFuncFunction('someFunc', 'roSGNodeRectangle@.someFunc', 'roSGNodeRectangle')
             ]);
         });
     });
