@@ -2256,12 +2256,12 @@ export class Util {
     public isInTypeExpression(expression: AstNode): boolean {
         //TODO: this is much faster than node.findAncestor(), but may need to be updated for "complicated" type expressions
         if (isTypeExpression(expression) ||
-            isTypeExpression(expression.parent) ||
+            isTypeExpression(expression?.parent) ||
             isTypedArrayExpression(expression) ||
-            isTypedArrayExpression(expression.parent)) {
+            isTypedArrayExpression(expression?.parent)) {
             return true;
         }
-        if (isBinaryExpression(expression.parent)) {
+        if (isBinaryExpression(expression?.parent)) {
             let currentExpr: AstNode = expression.parent;
             while (isBinaryExpression(currentExpr) && currentExpr.tokens.operator.kind === TokenKind.Or) {
                 currentExpr = currentExpr.parent;
