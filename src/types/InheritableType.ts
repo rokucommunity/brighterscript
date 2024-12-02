@@ -125,6 +125,15 @@ export abstract class InheritableType extends BscType {
         if (this === targetType) {
             return true;
         }
+        if (data?.allowNameEquality) {
+            const thisKind = (this as any).kind;
+            if (thisKind && thisKind === (targetType as any).kind) {
+                if (this.toString().toLowerCase() === targetType.toString().toLowerCase()) {
+                    return true;
+                }
+            }
+        }
+
         if (this.isAncestorUnresolvedReferenceType() || targetType.isAncestorUnresolvedReferenceType()) {
             return this.name.toLowerCase() === targetType.name?.toLowerCase() &&
                 this.isParentTypeEqual(targetType, data);

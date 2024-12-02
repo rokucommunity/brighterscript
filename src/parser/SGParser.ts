@@ -248,7 +248,7 @@ export default class SGParser {
             startTagName: this.mapToken(children.Name[0]),
             attributes: this.mapAttributes(children.attribute),
             // > or />
-            startTagClose: this.mapToken((children.SLASH_CLOSE ?? children.START_CLOSE)[0]),
+            startTagClose: this.mapToken((children.SLASH_CLOSE ?? children.START_CLOSE)?.[0]),
             elements: this.mapNodes(children.content?.[0]),
             // </
             endTagOpen: this.mapToken(children.SLASH_OPEN?.[0]),

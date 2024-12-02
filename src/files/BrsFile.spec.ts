@@ -1833,8 +1833,8 @@ describe('BrsFile', () => {
                         print PKG_PATH
                         print LINE_NUM
                         print new Person()
-                        m@.someCallfunc()
-                        m@.someCallfunc(1, 2)
+                        m.node@.someCallfunc()
+                        m.node@.someCallfunc(1, 2)
                         print tag\`stuff\${LINE_NUM}\${LINE_NUM}\`
                         print 1 = 1 ? 1 : 2
                         print 1 = 1 ? m.one : m.two
@@ -1887,8 +1887,8 @@ describe('BrsFile', () => {
                         print "pkg:/source/main.brs"
                         print LINE_NUM
                         print Person()
-                        m.callfunc("someCallfunc")
-                        m.callfunc("someCallfunc", 1, 2)
+                        m.node.callfunc("someCallfunc")
+                        m.node.callfunc("someCallfunc", 1, 2)
                         print tag(["stuff", "", ""], [LINE_NUM, LINE_NUM])
                         print bslib_ternary(1 = 1, 1, 2)
                         print (function(__bsCondition, m)
@@ -4090,10 +4090,10 @@ describe('BrsFile', () => {
 
     describe('callfunc operator', () => {
         describe('transpile', () => {
-            it('does not produce diagnostics', () => {
+            it('does not produce diagnostics on plain roSGNode', () => {
                 program.setFile('source/main.bs', `
                     sub test()
-                        someNode = createObject("roSGNode", "Rectangle")
+                        someNode = createObject("roSGNode", "Node")
                         someNode@.someFunction({test: "value"})
                     end sub
                 `);
@@ -5066,15 +5066,22 @@ describe('BrsFile', () => {
                 end class
             `);
             validateFile(mainFile);
-
-            expect(mainFile.requiredSymbols.length).to.eq(5);
+            // 'DataKind' is there twice:
+            // - when used as a type
+            // - when DataObject.kind is used
+            expect(mainFile.requiredSymbols.length).to.eq(6);
             const requiredTypeChains = mainFile.requiredSymbols.map(x => x.typeChain.map(tc => tc.name).join('.'));
-            expect(requiredTypeChains).to.have.same.members([
-                'DataKind', 'SubData', 'BaseData', 'DataProcessor', 'ProcessedData'
+            expect(Array.from(requiredTypeChains)).to.have.same.members([
+                'DataKind', 'DataKind', 'SubData', 'BaseData', 'DataProcessor', 'ProcessedData'
             ]);
             const requiredSymbolsFlags = mainFile.requiredSymbols.map(x => x.flags);
             expect(requiredSymbolsFlags).to.have.same.members([
-                SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime
+                SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime
+            ]);
+
+            const requiredSymbolsEndFlags = mainFile.requiredSymbols.map(x => x.endChainFlags);
+            expect(requiredSymbolsEndFlags).to.have.same.members([
+                SymbolTypeFlag.typetime, SymbolTypeFlag.runtime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime
             ]);
         });
 

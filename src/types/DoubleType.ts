@@ -17,6 +17,8 @@ export class DoubleType extends BscType {
 
     public static instance = new DoubleType('double');
 
+    public isBuiltIn = true;
+
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         return (
             isDynamicType(targetType) ||

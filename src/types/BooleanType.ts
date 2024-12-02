@@ -13,6 +13,7 @@ export class BooleanType extends BscType {
     }
 
     public readonly kind = BscTypeKind.BooleanType;
+    public isBuiltIn = true;
 
     public static instance = new BooleanType('boolean');
 

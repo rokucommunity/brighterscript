@@ -12,6 +12,8 @@ export class AssociativeArrayType extends BscType {
 
     public readonly kind = BscTypeKind.AssociativeArrayType;
 
+    public isBuiltIn = true;
+
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         if (isDynamicType(targetType)) {
             return true;

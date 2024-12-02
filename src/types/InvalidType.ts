@@ -15,6 +15,8 @@ export class InvalidType extends BscType {
 
     public static instance = new InvalidType('invalid');
 
+    public isBuiltIn = true;
+
     public isTypeCompatible(targetType: BscType) {
         return (
             isInvalidType(targetType) ||

@@ -433,7 +433,7 @@ export class CompletionsProcessor {
             const symbolNameLower = symbol?.name.toLowerCase();
             let nameMatchesType = symbolNameLower === finalTypeNameLower;
             if (isTypedFunctionType(type) && !nameMatchesType) {
-                if (symbolNameLower === type.name.replace(/\./gi, '_').toLowerCase()) {
+                if (symbolNameLower === type.name?.replace(/\./gi, '_').toLowerCase()) {
                     nameMatchesType = true;
                 }
             }
