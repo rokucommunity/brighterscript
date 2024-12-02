@@ -5066,15 +5066,22 @@ describe('BrsFile', () => {
                 end class
             `);
             validateFile(mainFile);
-
-            expect(mainFile.requiredSymbols.length).to.eq(5);
+            // 'DataKind' is there twice:
+            // - when used as a type
+            // - when DataObject.kind is used
+            expect(mainFile.requiredSymbols.length).to.eq(6);
             const requiredTypeChains = mainFile.requiredSymbols.map(x => x.typeChain.map(tc => tc.name).join('.'));
-            expect(requiredTypeChains).to.have.same.members([
-                'DataKind', 'SubData', 'BaseData', 'DataProcessor', 'ProcessedData'
+            expect(Array.from(requiredTypeChains)).to.have.same.members([
+                'DataKind', 'DataKind', 'SubData', 'BaseData', 'DataProcessor', 'ProcessedData'
             ]);
             const requiredSymbolsFlags = mainFile.requiredSymbols.map(x => x.flags);
             expect(requiredSymbolsFlags).to.have.same.members([
-                SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime
+                SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime
+            ]);
+
+            const requiredSymbolsEndFlags = mainFile.requiredSymbols.map(x => x.endChainFlags);
+            expect(requiredSymbolsEndFlags).to.have.same.members([
+                SymbolTypeFlag.typetime, SymbolTypeFlag.runtime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime
             ]);
         });
 

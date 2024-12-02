@@ -9,6 +9,7 @@ import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { Token } from './lexer/Token';
 import type { BrsFile } from './files/BrsFile';
 import { TokenKind } from './lexer/TokenKind';
+import type { BscSymbol } from './SymbolTable';
 
 // eslint-disable-next-line no-bitwise
 export const InsideSegmentWalkMode = WalkMode.visitStatements | WalkMode.visitExpressions | WalkMode.recurseChildFunctions;
@@ -72,6 +73,12 @@ export class AstValidationSegmenter {
         if (isTypeExpression(expression) && isBinaryExpression(expression.expression)) {
             return this.checkExpressionForUnresolved(segment, expression.expression.left as VariableExpression, assignedSymbolsNames) ||
                 this.checkExpressionForUnresolved(segment, expression.expression.right as VariableExpression, assignedSymbolsNames);
+        }
+        if (isTypeExpression(expression)) {
+            const typeIntypeExpression = expression.getType({ flags: SymbolTypeFlag.typetime });
+            if (typeIntypeExpression.isResolvable()) {
+                return this.handleTypeCastTypeExpression(segment, expression);
+            }
         }
         return this.addUnresolvedSymbol(segment, expression, assignedSymbolsNames);
     }
@@ -220,9 +227,9 @@ export class AstValidationSegmenter {
                         startOfDottedGet = startOfDottedGet.obj;
                     }
                     if (isVariableExpression(startOfDottedGet)) {
-                        const hasUnresolvedTypecastedM = unresolvedTypeCastTypeExpression && startOfDottedGet.tokens.name.text.toLowerCase() === 'm';
-                        if (hasUnresolvedTypecastedM) {
-                            this.addUnresolvedSymbol(segment, unresolvedTypeCastTypeExpression);
+                        const hasUnresolvedTypeCastedM = unresolvedTypeCastTypeExpression && startOfDottedGet.tokens.name.text.toLowerCase() === 'm';
+                        if (hasUnresolvedTypeCastedM) {
+                            this.handleTypeCastTypeExpression(segment, unresolvedTypeCastTypeExpression);
                         }
                     }
                 }
@@ -243,6 +250,32 @@ export class AstValidationSegmenter {
         }
         this.currentClassStatement = undefined;
         this.currentClassStatement = undefined;
+    }
+
+
+    private handleTypeCastTypeExpression(segment: AstNode, typecastTypeExpression: TypeExpression) {
+        const expression = typecastTypeExpression;
+        if (isTypeExpression(expression)) {
+            const typeIntypeExpression = expression.getType({ flags: SymbolTypeFlag.typetime });
+
+            if (typeIntypeExpression.isResolvable()) {
+                const memberSymbols = typeIntypeExpression.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime);
+                const unresolvedMembers: BscSymbol[] = [];
+                for (const memberSymbol of memberSymbols) {
+                    if (!memberSymbol.type.isResolvable()) {
+                        unresolvedMembers.push(memberSymbol);
+                    }
+                }
+                let addedSymbol = false;
+                for (const unresolvedMember of unresolvedMembers) {
+                    addedSymbol = this.addUnresolvedSymbol(segment, unresolvedMember?.data?.definingNode) || addedSymbol;
+
+                }
+                return addedSymbol;
+            }
+            return this.addUnresolvedSymbol(segment, expression);
+        }
+        return false;
     }
 
     getAllUnvalidatedSegments() {

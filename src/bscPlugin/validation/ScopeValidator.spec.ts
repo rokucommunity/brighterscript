@@ -3767,6 +3767,58 @@ describe('ScopeValidator', () => {
             // there should be no more errors
             expectZeroDiagnostics(program);
         });
+
+        it('rechecks complete file when type of typecasted m  in same file changes indirectly', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <interface>
+                        <field id="width" type="boolean" />
+                    </interface>
+                </component>
+            `);
+
+
+            // notice that width is wrongly typed as a boolean
+            program.setFile('components/WidgetContainer.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="WidgetContainer" extends="Group">
+                    <script uri="WidgetContainer.bs"/>
+                </component>
+            `);
+
+            program.setFile('components/WidgetContainer.bs', `
+                typecast m as IWidgetContainer
+
+                 interface IWidgetContainer
+                    top as roSGNodeWidgetContainer
+                    widget as roSGNodeWidget
+                end interface
+
+                sub init()
+                    m.widget.width =  100
+                end sub
+            `);
+
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.assignmentTypeMismatch('integer', 'boolean').message
+            ]);
+
+            // fix width field type to integer
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <interface>
+                        <field id="width" type="integer" />
+                    </interface>
+                </component>
+            `);
+            program.validate();
+
+            // there should be no more errors
+            expectZeroDiagnostics(program);
+        });
     });
 
 
