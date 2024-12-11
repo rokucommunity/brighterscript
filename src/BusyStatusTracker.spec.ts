@@ -1,6 +1,8 @@
 import { expect } from 'chai';
 import { Deferred } from './deferred';
 import { BusyStatus, BusyStatusTracker } from './BusyStatusTracker';
+import { createSandbox } from 'sinon';
+const sinon = createSandbox();
 
 describe('BusyStatusTracker', () => {
     let tracker: BusyStatusTracker;
@@ -8,6 +10,7 @@ describe('BusyStatusTracker', () => {
     let latestStatus: BusyStatus;
 
     beforeEach(() => {
+        sinon.restore();
         latestStatus = BusyStatus.idle;
         tracker = new BusyStatusTracker();
         tracker.on('change', (value) => {
@@ -16,6 +19,7 @@ describe('BusyStatusTracker', () => {
     });
 
     afterEach(() => {
+        sinon.restore();
         tracker?.destroy();
     });
 
@@ -207,6 +211,24 @@ describe('BusyStatusTracker', () => {
 
             //we should have 10 total events (5 starts, 5 ends)
             expect(count).to.eql(10);
+        });
+
+        it('emits active-runs-change with the correct list of remaining active runs', () => {
+            const spy = sinon.spy();
+            tracker.on('active-runs-change', spy);
+            tracker.run(() => {
+                expect(tracker.status).to.eql(BusyStatus.busy);
+            }, 'test');
+            //small timeout to allow all the events to show up
+            expect(spy.callCount).to.eql(2);
+            expect(
+                spy.getCall(0).args[0].activeRuns.map(x => ({ label: x.label }))
+            ).to.eql([
+                { label: 'test' }
+            ]);
+            expect(
+                spy.getCall(1).args[0].activeRuns
+            ).to.eql([]);
         });
 
         it('removes the entry for the scope when the last run is cleared', async () => {
