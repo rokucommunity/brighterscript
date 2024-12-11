@@ -213,7 +213,7 @@ describe('BusyStatusTracker', () => {
             expect(count).to.eql(10);
         });
 
-        it.only('emits active-runs-change with the correct list of remaining active runs', () => {
+        it('emits active-runs-change with the correct list of remaining active runs', () => {
             const spy = sinon.spy();
             tracker.on('active-runs-change', spy);
             tracker.run(() => {
