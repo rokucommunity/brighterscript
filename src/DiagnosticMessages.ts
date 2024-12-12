@@ -995,7 +995,7 @@ export let DiagnosticMessages = {
         message: `Unsafe unmatched terminator '${terminator}' in conditional compilation block`,
         legacyCode: 1153,
         severity: DiagnosticSeverity.Error,
-        code: 'unmatched-terminator-on-conditional-compile'
+        code: 'inconsistent-conditional-compile-nesting'
     }),
     cannotFindTypeInCommentDoc: (name: string) => ({
         message: `Cannot find type '${name}' in doc comment`,
