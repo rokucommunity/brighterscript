@@ -192,7 +192,7 @@ export abstract class AstNode {
     }
 
     public getBsConsts() {
-        return this.bsConsts ?? this.parent?.getBsConsts();
+        return this.bsConsts ?? this.parent?.getBsConsts?.();
     }
 
     /**

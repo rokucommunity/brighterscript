@@ -3,9 +3,9 @@ import type { Identifier, Token } from '../lexer/Token';
 import type { SGToken } from '../parser/SGTypes';
 import { SGAttribute, SGComponent, SGInterface, SGInterfaceField, SGInterfaceFunction, SGScript } from '../parser/SGTypes';
 import { TokenKind } from '../lexer/TokenKind';
-import type { Expression } from '../parser/AstNode';
-import { CallExpression, DottedGetExpression, FunctionExpression, LiteralExpression, VariableExpression } from '../parser/Expression';
-import { Block, MethodStatement } from '../parser/Statement';
+import type { Expression, Statement } from '../parser/AstNode';
+import { LiteralExpression, CallExpression, DottedGetExpression, VariableExpression, FunctionExpression } from '../parser/Expression';
+import { AssignmentStatement, Block, DottedSetStatement, IfStatement, IndexedSetStatement, MethodStatement } from '../parser/Statement';
 
 const tokenDefaults = {
     [TokenKind.BackTick]: '`',
@@ -261,5 +261,77 @@ export function createSGScript(attributes: { type?: string; uri?: string }) {
         startTagName: { text: 'script' },
         attributes: attrs,
         startTagClose: { text: '/>' }
+    });
+}
+
+export function createIfStatement(options: {
+    if?: Token;
+    condition: Expression;
+    then?: Token;
+    thenBranch: Block;
+    else?: Token;
+    elseBranch?: IfStatement | Block;
+    endIf?: Token;
+}) {
+    return new IfStatement(
+        {
+            if: options.if ?? createToken(TokenKind.If),
+            condition: options.condition,
+            then: options.then ?? createToken(TokenKind.Then),
+            thenBranch: options.thenBranch,
+            else: options.else ?? createToken(TokenKind.Else),
+            elseBranch: options.elseBranch,
+            endIf: options.endIf ?? createToken(TokenKind.EndIf)
+        }
+    );
+}
+
+export function createBlock(options: { statements: Statement[] }) {
+    return new Block(options);
+}
+
+export function createAssignmentStatement(options: {
+    name: Identifier | string;
+    equals?: Token;
+    value: Expression;
+}) {
+    return new AssignmentStatement({
+        equals: options.equals ?? createToken(TokenKind.Equal),
+        name: typeof options.name === 'string' ? createIdentifier(options.name) : options.name,
+        value: options.value
+    });
+}
+
+export function createDottedSetStatement(options: {
+    obj: Expression;
+    dot?: Token;
+    name: Identifier | string;
+    equals?: Token;
+    value: Expression;
+}) {
+    return new DottedSetStatement({
+        obj: options.obj,
+        name: typeof options.name === 'string' ? createIdentifier(options.name) : options.name,
+        value: options.value,
+        dot: options.dot,
+        equals: options.equals ?? createToken(TokenKind.Equal)
+    });
+}
+
+export function createIndexedSetStatement(options: {
+    obj: Expression;
+    openingSquare?: Token;
+    indexes: Expression[];
+    closingSquare?: Token;
+    equals?: Token;
+    value: Expression;
+}) {
+    return new IndexedSetStatement({
+        obj: options.obj,
+        indexes: options.indexes,
+        value: options.value,
+        openingSquare: options.openingSquare ?? createToken(TokenKind.LeftSquareBracket),
+        closingSquare: options.closingSquare ?? createToken(TokenKind.RightSquareBracket),
+        equals: options.equals ?? createToken(TokenKind.Equal)
     });
 }
