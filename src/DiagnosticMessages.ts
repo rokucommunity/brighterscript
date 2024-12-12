@@ -539,13 +539,13 @@ export let DiagnosticMessages = {
         message: `Expected identifier or string as associative array key`,
         legacyCode: 1078,
         severity: DiagnosticSeverity.Error,
-        code: 'expected-identifier-as-key'
+        code: 'invalid-aa-key'
     }),
     expectedColonBetweenAAKeyAndvalue: () => ({
         message: `Expected ':' between associative array key and value`,
         legacyCode: 1079,
         severity: DiagnosticSeverity.Error,
-        code: 'expected-colon-after-aa-key'
+        code: 'expected-aa-separator'
     }),
     __unused25: () => ({
         message: `Unmatched '{': expected '}' after associative array literal`,
@@ -977,7 +977,7 @@ export let DiagnosticMessages = {
         message: `'${typeText}' cannot be used as a type`,
         legacyCode: 1149,
         severity: DiagnosticSeverity.Error,
-        code: 'item-cannot-be-used-as-type'
+        code: 'invalid-type-reference'
     }),
     expectedNewlineInConditionalCompile: () => ({
         message: `Expected newline in conditional compilation statement`,
