@@ -14,9 +14,9 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import util, { standardizePath as s } from '../util';
 import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
 import { ParseMode, Parser } from '../parser/Parser';
-import type { FunctionStatement } from '../parser/Statement';
-import { ImportStatement } from '../parser/Statement';
-import { createToken } from '../astUtils/creators';
+import { Block, FunctionStatement } from '../parser/Statement';
+import { ImportStatement, PrintStatement } from '../parser/Statement';
+import { createIdentifier, createStringLiteral, createToken } from '../astUtils/creators';
 import * as fsExtra from 'fs-extra';
 import undent from 'undent';
 import { tempDir, rootDir } from '../testHelpers.spec';
@@ -24,8 +24,9 @@ import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { ClassType, EnumType, FloatType, InterfaceType } from '../types';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import * as fileUrl from 'file-url';
-import { isAALiteralExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isBlock } from '../astUtils/reflection';
 import type { AALiteralExpression } from '../parser/Expression';
+import { CallExpression, FunctionExpression, LiteralExpression } from '../parser/Expression';
 
 let sinon = sinonImport.createSandbox();
 
@@ -1330,10 +1331,10 @@ describe('BrsFile', () => {
                 end function
             `);
             expectDiagnostics(file.parser.diagnostics, [
-                DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
+                DiagnosticMessages.unmatchedLeftToken('(', 'function call arguments'),
                 DiagnosticMessages.expectedNewlineOrColon(),
                 DiagnosticMessages.unexpectedToken('end function'),
-                DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
+                DiagnosticMessages.unmatchedLeftToken('(', 'function call arguments'),
                 DiagnosticMessages.expectedNewlineOrColon()
             ]);
         });
@@ -1982,6 +1983,59 @@ describe('BrsFile', () => {
                     undent(expected)
                 );
             }
+
+            it('transpiles call expression when paren tokens are missing', async () => {
+                const file = program.setFile<BrsFile>('source/main.bs', `
+                    sub main()
+                    end sub
+                `);
+                const body = file.ast.findChild<Block>(isBlock);
+                body.statements.push(new CallExpression({
+                    callee: new LiteralExpression({ value: createIdentifier('lcase') }),
+                    args: [createStringLiteral('HELLO')]
+                }));
+
+                await testTranspile(file, `
+                    sub main()
+                        lcase("HELLO")
+                    end sub
+                `, undefined, undefined, false);
+            });
+
+            it('transpiles print expression when print token is missing', async () => {
+                const file = program.setFile<BrsFile>('source/main.bs', `
+                    sub main()
+                    end sub
+                `);
+                const body = file.ast.findChild<Block>(isBlock);
+                body.statements.push(new PrintStatement({
+                    expressions: [createStringLiteral('HELLO')]
+                }));
+
+                await testTranspile(file, `
+                    sub main()
+                        print "HELLO"
+                    end sub
+                `, undefined, undefined, false);
+            });
+
+
+            it('transpiles function expression when paren tokens are missing', async () => {
+                const file = program.setFile<BrsFile>('source/main.bs', `
+                `);
+                file.ast.statements.push(new FunctionStatement({
+                    func: new FunctionExpression({
+                        body: new Block({ statements: [] })
+                    }),
+                    name: createIdentifier('main')
+                }));
+
+                await testTranspile(file, `
+                    function main()
+                    end function
+                `, undefined, undefined, false);
+            });
+
         });
 
         it('transpilies libpkg:/ paths when encountered', async () => {
@@ -2111,27 +2165,30 @@ describe('BrsFile', () => {
         });
 
         it('retains casing of return types', async () => {
-            async function test(type: string) {
+            async function test(type: string, result: string) {
                 await testTranspile(`
                     sub one() as ${type}
+                        return ${result}
                     end sub
 
                     sub two() as ${type.toLowerCase()}
+                        return ${result}
                     end sub
 
                     sub three() as ${type.toUpperCase()}
+                        return ${result}
                     end sub
                 `);
             }
-            await test('Boolean');
-            await test('Double');
-            await test('Dynamic');
-            await test('Float');
-            await test('Integer');
-            await test('LongInteger');
-            await test('Object');
-            await test('String');
-            await test('Void');
+            await test('Boolean', 'true');
+            await test('Double', '1.23');
+            await test('Dynamic', 'invalid');
+            await test('Float', '1.23');
+            await test('Integer', '123');
+            await test('LongInteger', '123');
+            await test('Object', '{}');
+            await test('String', '"test"');
+            await test('Void', '');
         });
 
         it('retains casing of literal types', async () => {
@@ -2273,6 +2330,38 @@ describe('BrsFile', () => {
                 `);
             });
 
+            it('transpiles namespace calls from within an array', async () => {
+                await testTranspile(`
+                    namespace Vertibrates.Birds
+                        function GetAllBirds()
+                            return [
+                                GetDuck(),
+                                GetGoose()
+                            ]
+                        end function
+
+                        function GetDuck()
+                        end function
+
+                        function GetGoose()
+                        end function
+                    end namespace
+                    `, `
+                        function Vertibrates_Birds_GetAllBirds()
+                            return [
+                                Vertibrates_Birds_GetDuck()
+                                Vertibrates_Birds_GetGoose()
+                            ]
+                        end function
+
+                        function Vertibrates_Birds_GetDuck()
+                        end function
+
+                        function Vertibrates_Birds_GetGoose()
+                        end function
+                `, undefined, 'components/NobodyImportsMe.bs', false);
+            });
+
             it('properly transpiles inferred namespace function for assignment', async () => {
                 await testTranspile(`
                     namespace NameA.NameB
@@ -2354,6 +2443,47 @@ describe('BrsFile', () => {
                         return is_a_deep_namespace_valid(thing) and is_a_deep_namespace_valid(getInterface(thing, "ifSgNodeChildren"))
                     end function`
                 );
+            });
+
+            it('transpiles namespaced functions when used as variables', async () => {
+                await testTranspile(`
+                    namespace Vertibrates.Birds
+                        function GetAllBirds()
+                            return [
+                                GetDuck(),
+                                GetGoose()
+                            ]
+                        end function
+
+                        function GetDuck()
+                        end function
+
+                        function GetGoose()
+                        end function
+
+                        function Test()
+                            duckGetter = Vertibrates.Birds.GetDuck
+                            gooseGetter = GetGoose
+                        end function
+                    end namespace`, `
+                    function Vertibrates_Birds_GetAllBirds()
+                        return [
+                            Vertibrates_Birds_GetDuck()
+                            Vertibrates_Birds_GetGoose()
+                        ]
+                    end function
+
+                    function Vertibrates_Birds_GetDuck()
+                    end function
+
+                    function Vertibrates_Birds_GetGoose()
+                    end function
+
+                    function Vertibrates_Birds_Test()
+                        duckGetter = Vertibrates_Birds_GetDuck
+                        gooseGetter = Vertibrates_Birds_GetGoose
+                    end function
+               `);
             });
 
         });
@@ -2637,6 +2767,7 @@ describe('BrsFile', () => {
         it('keeps function parameter types in proper order', async () => {
             await testTranspile(`
                 function CreateTestStatistic(name as string, result = "Success" as string, time = 0 as integer, errorCode = 0 as integer, errorMessage = "" as string) as object
+                    return {}
                 end function
             `);
         });
@@ -4201,9 +4332,11 @@ describe('BrsFile', () => {
     });
 
     describe('getTypedef', () => {
-        function testTypedef(original: string, expected: string) {
-            let file = program.setFile<BrsFile>('source/main.brs', original);
+        function testTypedef(original: string, expected: string, mode: ParseMode = ParseMode.BrighterScript) {
+            const ext = mode === ParseMode.BrighterScript ? 'bs' : 'brs';
+            let file = program.setFile<BrsFile>(`source/main.${ext}`, original);
             program.validate();
+            expectZeroDiagnostics(program);
             expect(file.getTypedef().trimEnd()).to.eql(expected);
         }
 
@@ -4280,6 +4413,7 @@ describe('BrsFile', () => {
         });
 
         it('includes import statements', () => {
+            program.setFile('source/lib.brs', ``);
             testTypedef(`
                import "pkg:/source/lib.brs"
             `, trim`
@@ -4380,6 +4514,7 @@ describe('BrsFile', () => {
         it('includes class inheritance', () => {
             testTypedef(`
                 class Human
+                    name
                     sub new(name as string)
                         m.name = name
                     end sub
@@ -4391,6 +4526,7 @@ describe('BrsFile', () => {
                 end class
             `, trim`
                 class Human
+                    public name as dynamic
                     sub new(name as string)
                     end sub
                 end class
@@ -4466,6 +4602,7 @@ describe('BrsFile', () => {
             testTypedef(`
                 namespace NameA
                     class Human
+                        name
                         sub new(name as string)
                             m.name = name
                         end sub
@@ -4481,6 +4618,7 @@ describe('BrsFile', () => {
             `, trim`
                 namespace NameA
                     class Human
+                        public name as dynamic
                         sub new(name as string)
                         end sub
                     end class

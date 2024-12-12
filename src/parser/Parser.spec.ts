@@ -219,9 +219,21 @@ describe('parser', () => {
             const parser = parse(`
                 sub test(param1 as unknownType)
                 end sub
-            `);
+            `, ParseMode.BrighterScript);
             // type validation happens at scope validation, not at the parser
             expectZeroDiagnostics(parser);
+            expect(
+                isFunctionStatement(parser.ast.statements[0])
+            ).to.be.true;
+        });
+
+        it('does not scrap the entire function when encountering unknown parameter type in brightscript mode', () => {
+            const parser = parse(`
+                sub test(param1 as unknownType)
+                end sub
+            `, ParseMode.BrightScript);
+            // type validation happens at scope validation, not at the parser
+            expectDiagnosticsIncludes(parser, DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('custom types'));
             expect(
                 isFunctionStatement(parser.ast.statements[0])
             ).to.be.true;
@@ -381,7 +393,7 @@ describe('parser', () => {
                 function log() as UNKNOWN_TYPE
                 end function
             `, ParseMode.BrightScript);
-            expectZeroDiagnostics(diagnostics); // type validation happens at scope validation step
+            expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('custom types').message); // type validation happens at scope validation step
             expect(ast.statements[0]).to.exist;
         });
         it('unknown function type is not a problem in Brighterscript mode', () => {
@@ -389,7 +401,7 @@ describe('parser', () => {
                 function log() as UNKNOWN_TYPE
                 end function
             `, ParseMode.BrighterScript);
-            expect(diagnostics.length).to.equal(0);
+            expectZeroDiagnostics(diagnostics);
             expect(ast.statements[0]).to.exist;
         });
         it('allows namespaced function type in Brighterscript mode', () => {
@@ -408,12 +420,12 @@ describe('parser', () => {
             expect(diagnostics.length).to.equal(0);
             expect(ast.statements[0]).to.exist;
         });
-        it('does not cause any diagnostics when custom parameter types are used in Brightscript Mode', () => {
+        it('does cause diagnostics when custom parameter types are used in Brightscript Mode', () => {
             let { diagnostics } = parse(`
                 sub foo(value as UNKNOWN_TYPE)
                 end sub
             `, ParseMode.BrightScript);
-            expect(diagnostics.length).to.equal(0);
+            expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('custom types').message);
         });
         it('allows custom namespaced parameter types in BrighterscriptMode', () => {
             let { ast, diagnostics } = parse(`
@@ -2374,6 +2386,88 @@ describe('parser', () => {
             let exitStmt = loop.body.statements[1] as ExitStatement;
             expect(isExitStatement(exitStmt)).to.be.true;
             expect(exitStmt.tokens.loopType.text).to.eq('for');
+        });
+    });
+
+    describe('custom types', () => {
+        it('built-in interface param types disallowed in brightscript mode', () => {
+            let { diagnostics } = parse(`
+                sub test(foo as roAssociativeArray)
+                    print foo.x
+                end sub
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('custom types')
+            ]);
+        });
+
+        it('built-in interface types disallowed in brightscript mode', () => {
+            let { diagnostics } = parse(`
+                function test(foo) as roAssociativeArray
+                    return foo.x
+                end function
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('custom types')
+            ]);
+        });
+
+        it('custom param types disallowed in brightscript mode', () => {
+            let { diagnostics } = parse(`
+                sub test(foo as Whatever)
+                    print foo.x
+                end sub
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('custom types')
+            ]);
+        });
+
+        it('custom return types disallowed in brightscript mode', () => {
+            let { diagnostics } = parse(`
+                function test(foo) as Whatever
+                    return foo.x
+                end function
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('custom types')
+            ]);
+        });
+
+        it('built-in interface param types allowed in brighterscript mode', () => {
+            let { diagnostics } = parse(`
+                sub test(foo as roAssociativeArray)
+                    print foo.x
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('built-in interface types allowed in brighterscript mode', () => {
+            let { diagnostics } = parse(`
+                function test(foo) as roAssociativeArray
+                    return foo.x
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('custom param types allowed in brighterscript mode', () => {
+            let { diagnostics } = parse(`
+                sub test(foo as Whatever)
+                    print foo.x
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('custom return types allowed in brighterscript mode', () => {
+            let { diagnostics } = parse(`
+                function test(foo) as Whatever
+                    return foo.x
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
         });
     });
 });

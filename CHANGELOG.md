@@ -6,6 +6,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.41](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.40...v1.0.0-alpha.41) - 2024-10-20
+### Fixed
+ - allow any node members in brs files ([#1299)](https://github.com/rokucommunity/brighterscript/pull/1333))
+
+
+
+## [1.0.0-alpha.40](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.39...v1.0.0-alpha.40) - 2024-10-19
+### Added
+ - diagnostic if no return statement found in function ([#1299)](https://github.com/rokucommunity/brighterscript/pull/1299))
+### Fixed
+ - hide annoying log messages ([#1332](https://github.com/rokucommunity/brighterscript/pull/1332))
+ - flag using outer namespaced function indirectly ([#1319)](https://github.com/rokucommunity/brighterscript/pull/1319))
+
+
+
+## [1.0.0-alpha.39](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.38...v1.0.0-alpha.39) - 2024-10-03
+### Fixed
+ - bslib prefix transpile bug  ([#1317](https://github.com/rokucommunity/brighterscript/pull/1317))
+
+
+
 ## [1.0.0-alpha.38](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.37...v1.0.0-alpha.38) - 2024-10-01
 ### Added
  - ability to omit the exception variable in bs files and convert exception var to an `Expression` ([#1305](https://github.com/rokucommunity/brighterscript/pull/1305))
@@ -337,6 +358,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.66.0-alpha.0](https://github.com/rokucommunity/brighterscript/compare/v0.65.1...v0.66.0-alpha.0) - 2023-06-09
 ### Changed
  - all the type tracking stuff!
+
+
+
+## [0.68.0](https://github.com/rokucommunity/brighterscript/compare/v0.67.8...v0.68.0) - 2024-11-21
+### Changed
+ - Fix issues with the ast walkArray function ([#1347](https://github.com/rokucommunity/brighterscript/pull/1347))
+ - Optimize ternary transpilation for assignments ([#1341](https://github.com/rokucommunity/brighterscript/pull/1341))
+
+
+
+## [0.67.8](https://github.com/rokucommunity/brighterscript/compare/v0.67.7...v0.67.8) - 2024-10-18
+### Changed
+ - upgrade to [roku-deploy@3.12.2](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3122---2024-10-18). Notable changes since 3.12.1:
+     - fixes #175 - updated regex to find a signed package on `/plugin_package` page ([roku-deploy#176](https://github.com/rokucommunity/roku-deploy/pull/176))
+### Fixed
+ - namespace-relative transpile bug for standalone file ([#1324](https://github.com/rokucommunity/brighterscript/pull/1324))
+ - Prevent crash when `ProgramBuilder.run` called with no options ([#1316](https://github.com/rokucommunity/brighterscript/pull/1316))
+
+
+
 ## [0.67.7](https://github.com/rokucommunity/brighterscript/compare/v0.67.6...v0.67.7) - 2024-09-25
 ### Changed
  - Ast node clone ([#1281](https://github.com/rokucommunity/brighterscript/pull/1281))

@@ -1314,6 +1314,7 @@ describe('Scope', () => {
                             return a + b
                         end function
                     }
+                    return aa
                 end function
             `);
             program.setFile('components/comp.xml', trim`
@@ -1548,10 +1549,9 @@ describe('Scope', () => {
                         end interface
 
                         function bar(param as MyNamespace.MyInterface) as MyNamespace.MyInterface
+                            return param
                         end function
-
                     end namespace
-
                 `);
                 program.validate();
 
@@ -1566,10 +1566,9 @@ describe('Scope', () => {
 
                     namespace MyNamespace
                         function bar(param as MyInterface) as MyInterface
+                            return param
                         end function
-
                     end namespace
-
                 `);
                 program.validate();
 
@@ -1584,10 +1583,9 @@ describe('Scope', () => {
                         end enum
 
                         function bar(param as MyNamespace.MyEnum) as MyNamespace.MyEnum
+                            return param
                         end function
-
                     end namespace
-
                 `);
                 program.validate();
 
@@ -1602,10 +1600,9 @@ describe('Scope', () => {
 
                     namespace MyNamespace
                         function bar(param as MyEnum) as MyEnum
+                            return param
                         end function
-
                     end namespace
-
                 `);
                 program.validate();
 
@@ -1619,13 +1616,13 @@ describe('Scope', () => {
                         end class
 
                         function foo(param as MyClass) as MyClass
+                            return param
                         end function
 
                         function bar(param as MyNamespace.MyClass) as MyNamespace.MyClass
+                            return param
                         end function
-
                     end namespace
-
                 `);
                 program.validate();
 
@@ -1640,6 +1637,7 @@ describe('Scope', () => {
                     end namespace
 
                     function foo(param as MyNamespace.MyClass) as MyNamespace.MyClass
+                        return param
                     end function
                 `);
                 program.validate();
@@ -1681,6 +1679,7 @@ describe('Scope', () => {
                     namespace MyNamespace
                         class OtherKlass
                             function beClassy() as MyNamespace.Klass
+                                return new Klass()
                             end function
                         end class
                     end namespace
@@ -1711,6 +1710,7 @@ describe('Scope', () => {
             it('finds custom types from other other files', () => {
                 program.setFile(`source/main.bs`, `
                     function foo(param as MyClass) as MyClass
+                        return param
                     end function
                 `);
                 program.setFile(`source/MyClass.bs`, `
@@ -1725,6 +1725,7 @@ describe('Scope', () => {
             it('finds custom types from other other files', () => {
                 program.setFile(`source/main.bs`, `
                     function foo(param as MyNameSpace.MyClass) as MyNameSpace.MyClass
+                        return param
                     end function
                 `);
                 program.setFile(`source/MyNameSpace.bs`, `
@@ -1811,6 +1812,7 @@ describe('Scope', () => {
                 `);
                 program.setFile(s`components/child.bs`, `
                     function getFoo() as MyClass
+                        return invalid
                     end function
                 `);
 

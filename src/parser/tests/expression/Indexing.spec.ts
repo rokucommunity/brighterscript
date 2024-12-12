@@ -307,7 +307,7 @@ describe('parser indexing', () => {
                 end sub
             `);
             expectDiagnosticsIncludes(diagnostics, [
-                DiagnosticMessages.expectedRightSquareBraceAfterArrayOrObjectIndex()
+                DiagnosticMessages.unmatchedLeftToken('[', 'array or object index')
             ]);
         });
 
@@ -318,7 +318,7 @@ describe('parser indexing', () => {
                 end sub
             `);
             expectDiagnosticsIncludes(diagnostics, [
-                DiagnosticMessages.expectedRightSquareBraceAfterArrayOrObjectIndex()
+                DiagnosticMessages.unmatchedLeftToken('[', 'array or object index')
             ]);
         });
     });

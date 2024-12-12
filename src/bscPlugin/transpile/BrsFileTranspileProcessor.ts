@@ -1,14 +1,15 @@
-import { createToken } from '../../astUtils/creators';
+import { createAssignmentStatement, createBlock, createDottedSetStatement, createIfStatement, createIndexedSetStatement, createToken } from '../../astUtils/creators';
 import type { Editor } from '../../astUtils/Editor';
-import { isDottedGetExpression, isLiteralExpression, isVariableExpression, isUnaryExpression, isAliasStatement, isCallExpression, isCallfuncExpression, isEnumType } from '../../astUtils/reflection';
+import { isDottedGetExpression, isLiteralExpression, isVariableExpression, isUnaryExpression, isAliasStatement, isCallExpression, isCallfuncExpression, isEnumType, isAssignmentStatement, isBlock, isBody, isDottedSetStatement, isGroupingExpression, isIndexedSetStatement, isAugmentedAssignmentStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ExtraSymbolData, OnPrepareFileEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
-import type { Expression } from '../../parser/AstNode';
+import type { Expression, Statement } from '../../parser/AstNode';
+import type { TernaryExpression } from '../../parser/Expression';
 import { LiteralExpression, VariableExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
-import type { AliasStatement } from '../../parser/Statement';
+import { AugmentedAssignmentStatement, type AliasStatement, type IfStatement } from '../../parser/Statement';
 import type { Scope } from '../../Scope';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import util from '../../util';
@@ -24,17 +25,14 @@ export class BrsFilePreTranspileProcessor {
         this.iterateExpressions();
         //apply prefixes to bslib
         if (BslibManager.isBslibPkgPath(this.event.file.pkgPath)) {
-            this.applyPrefixesIfMissing(this.event.file, this.event.editor);
+            this.applyBslibPrefixesIfMissing(this.event.file, this.event.editor);
         }
     }
 
-    public applyPrefixesIfMissing(file: BrsFile, editor: Editor) {
+    public applyBslibPrefixesIfMissing(file: BrsFile, editor: Editor) {
         file.ast.walk(createVisitor({
             FunctionStatement: (statement) => {
-                //add the bslib prefix
-                if (!statement.tokens.name.text.startsWith('bslib_')) {
-                    editor.setProperty(statement.tokens.name, 'text', `bslib_${statement.tokens.name.text}`);
-                }
+                BslibManager.applyPrefixIfMissing(statement, editor, this.event.program.bslibPrefix);
             }
         }), {
             walkMode: WalkMode.visitAllRecursive
@@ -43,6 +41,7 @@ export class BrsFilePreTranspileProcessor {
 
     private iterateExpressions() {
         const scope = this.event.program.getFirstScopeForFile(this.event.file);
+        //TODO move away from this loop and use a visitor instead
         // eslint-disable-next-line @typescript-eslint/dot-notation
         for (let expression of this.event.file['_cachedLookups'].expressions) {
             if (expression) {
@@ -52,6 +51,153 @@ export class BrsFilePreTranspileProcessor {
                     this.processExpression(expression, scope);
                 }
             }
+        }
+        const walkMode = WalkMode.visitExpressionsRecursive;
+        const visitor = createVisitor({
+            TernaryExpression: (ternaryExpression) => {
+                this.processTernaryExpression(ternaryExpression, visitor, walkMode);
+            }
+        });
+        this.event.file.ast.walk(visitor, { walkMode: walkMode });
+    }
+
+
+    private processTernaryExpression(ternaryExpression: TernaryExpression, visitor: ReturnType<typeof createVisitor>, walkMode: WalkMode) {
+        function getOwnerAndKey(statement: Statement) {
+            const parent = statement.parent;
+            if (isBlock(parent) || isBody(parent)) {
+                let idx = parent.statements.indexOf(statement);
+                if (idx > -1) {
+                    return { owner: parent.statements, key: idx };
+                }
+            }
+        }
+
+        //if the ternary expression is part of a simple assignment, rewrite it as an `IfStatement`
+        let parent = ternaryExpression.findAncestor(x => !isGroupingExpression(x));
+        let ifStatement: IfStatement;
+
+        if (isAssignmentStatement(parent)) {
+            ifStatement = createIfStatement({
+                if: createToken(TokenKind.If, 'if', ternaryExpression.tokens.questionMark.location),
+                condition: ternaryExpression.test,
+                then: createToken(TokenKind.Then, 'then', ternaryExpression.tokens.questionMark.location),
+                thenBranch: createBlock({
+                    statements: [
+                        createAssignmentStatement({
+                            name: parent.tokens.name,
+                            equals: parent.tokens.equals,
+                            value: ternaryExpression.consequent
+                        })
+                    ]
+                }),
+                else: createToken(TokenKind.Else, 'else', ternaryExpression.tokens.questionMark.location),
+                elseBranch: createBlock({
+                    statements: [
+                        createAssignmentStatement({
+                            name: util.cloneToken(parent.tokens.name),
+                            equals: util.cloneToken(parent.tokens.equals),
+                            value: ternaryExpression.alternate
+                        })
+                    ]
+                }),
+                endIf: createToken(TokenKind.EndIf, 'end if', ternaryExpression.tokens.questionMark.location)
+            });
+        } else if (isDottedSetStatement(parent)) {
+            ifStatement = createIfStatement({
+                if: createToken(TokenKind.If, 'if', ternaryExpression.tokens.questionMark.location),
+                condition: ternaryExpression.test,
+                then: createToken(TokenKind.Then, 'then', ternaryExpression.tokens.questionMark.location),
+                thenBranch: createBlock({
+                    statements: [
+                        createDottedSetStatement({
+                            obj: parent.obj,
+                            name: parent.tokens.name,
+                            equals: parent.tokens.equals,
+                            value: ternaryExpression.consequent
+                        })
+                    ]
+                }),
+                else: createToken(TokenKind.Else, 'else', ternaryExpression.tokens.questionMark.location),
+                elseBranch: createBlock({
+                    statements: [
+                        createDottedSetStatement({
+                            obj: parent.obj.clone(),
+                            name: util.cloneToken(parent.tokens.name),
+                            equals: util.cloneToken(parent.tokens.equals),
+                            value: ternaryExpression.alternate
+                        })
+                    ]
+                }),
+                endIf: createToken(TokenKind.EndIf, 'end if', ternaryExpression.tokens.questionMark.location)
+            });
+        } else if (isIndexedSetStatement(parent)) {
+            ifStatement = createIfStatement({
+                if: createToken(TokenKind.If, 'if', ternaryExpression.tokens.questionMark.location),
+                condition: ternaryExpression.test,
+                then: createToken(TokenKind.Then, 'then', ternaryExpression.tokens.questionMark.location),
+                thenBranch: createBlock({
+                    statements: [
+                        createIndexedSetStatement({
+                            obj: parent.obj,
+                            openingSquare: parent.tokens.openingSquare,
+                            indexes: parent.indexes,
+                            closingSquare: parent.tokens.closingSquare,
+                            equals: parent.tokens.equals,
+                            value: ternaryExpression.consequent
+                        })
+                    ]
+                }),
+                else: createToken(TokenKind.Else, 'else', ternaryExpression.tokens.questionMark.location),
+                elseBranch: createBlock({
+                    statements: [
+                        createIndexedSetStatement({
+                            obj: parent.obj,
+                            openingSquare: util.cloneToken(parent.tokens.openingSquare),
+                            indexes: parent.indexes?.map(x => x.clone()),
+                            closingSquare: util.cloneToken(parent.tokens.closingSquare),
+                            equals: util.cloneToken(parent.tokens.equals),
+                            value: ternaryExpression.alternate
+                        })
+                    ]
+                }),
+                endIf: createToken(TokenKind.EndIf, 'end if', ternaryExpression.tokens.questionMark.location)
+            });
+        } else if (isAugmentedAssignmentStatement(parent)) {
+            ifStatement = createIfStatement({
+                if: createToken(TokenKind.If, 'if', ternaryExpression.tokens.questionMark.location),
+                condition: ternaryExpression.test,
+                then: createToken(TokenKind.Then, 'then', ternaryExpression.tokens.questionMark.location),
+                thenBranch: createBlock({
+                    statements: [
+                        new AugmentedAssignmentStatement({
+                            item: parent.item,
+                            operator: parent.tokens.operator,
+                            value: ternaryExpression.consequent
+                        })
+                    ]
+                }),
+                else: createToken(TokenKind.Else, 'else', ternaryExpression.tokens.questionMark.location),
+                elseBranch: createBlock({
+                    statements: [
+                        new AugmentedAssignmentStatement({
+                            item: parent.item.clone(),
+                            operator: parent.tokens.operator,
+                            value: ternaryExpression.alternate
+                        })
+                    ]
+                }),
+                endIf: createToken(TokenKind.EndIf, 'end if', ternaryExpression.tokens.questionMark.location)
+            });
+        }
+
+        if (ifStatement) {
+            let { owner, key } = getOwnerAndKey(parent as Statement) ?? {};
+            if (owner && key !== undefined) {
+                this.event.editor.setProperty(owner, key, ifStatement);
+            }
+            //we've injected an ifStatement, so now we need to trigger a walk to handle any nested ternary expressions
+            ifStatement.walk(visitor, { walkMode: walkMode });
         }
     }
 

@@ -106,6 +106,9 @@ import { createStringLiteral, createToken } from '../astUtils/creators';
 import type { Expression, Statement } from './AstNode';
 import type { BsDiagnostic, DeepWriteable } from '../interfaces';
 
+
+const declarableTypesLower = DeclarableTypes.map(tokenKind => tokenKind.toLowerCase());
+
 export class Parser {
     /**
      * The array of tokens passed to `parse()`
@@ -2813,7 +2816,7 @@ export class Parser {
         while (this.match(TokenKind.Newline)) { }
 
         const closingSquare = this.tryConsume(
-            DiagnosticMessages.expectedRightSquareBraceAfterArrayOrObjectIndex(),
+            DiagnosticMessages.unmatchedLeftToken(openingSquare.text, 'array or object index'),
             TokenKind.RightSquareBracket
         );
 
@@ -2959,7 +2962,7 @@ export class Parser {
         while (this.match(TokenKind.Newline)) { }
 
         const closingParen = this.tryConsume(
-            DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
+            DiagnosticMessages.unmatchedLeftToken(openingParen.text, 'function call arguments'),
             TokenKind.RightParen
         );
 
@@ -3015,10 +3018,17 @@ export class Parser {
      */
     private getTypeExpressionPart(changedTokens: { token: Token; oldKind: TokenKind }[]) {
         let expr: VariableExpression | DottedGetExpression | TypedArrayExpression;
+
         if (this.checkAny(...DeclarableTypes)) {
             // if this is just a type, just use directly
             expr = new VariableExpression({ name: this.advance() as Identifier });
         } else {
+            if (this.options.mode === ParseMode.BrightScript && !declarableTypesLower.includes(this.peek()?.text?.toLowerCase())) {
+                // custom types arrays not allowed in Brightscript
+                this.warnIfNotBrighterScriptMode('custom types');
+                return expr;
+            }
+
             if (this.checkAny(...AllowedTypeIdentifiers)) {
                 // Since the next token is allowed as a type identifier, change the kind
                 let nextToken = this.peek();
@@ -3084,7 +3094,7 @@ export class Parser {
                 let left = this.previous();
                 let expr = this.expression();
                 let right = this.consume(
-                    DiagnosticMessages.unmatchedLeftParenAfterExpression(),
+                    DiagnosticMessages.unmatchedLeftToken(left.text, 'expression'),
                     TokenKind.RightParen
                 );
                 return new GroupingExpression({ leftParen: left, rightParen: right, expression: expr });
@@ -3152,7 +3162,7 @@ export class Parser {
             }
 
             closingSquare = this.tryConsume(
-                DiagnosticMessages.unmatchedLeftSquareBraceAfterArrayLiteral(),
+                DiagnosticMessages.unmatchedLeftToken(openingSquare.text, 'array literal'),
                 TokenKind.RightSquareBracket
             );
         } else {
@@ -3233,7 +3243,7 @@ export class Parser {
             }
 
             closingBrace = this.tryConsume(
-                DiagnosticMessages.unmatchedLeftCurlyAfterAALiteral(),
+                DiagnosticMessages.unmatchedLeftToken(openingBrace.text, 'associative array literal'),
                 TokenKind.RightCurlyBrace
             );
         } else {

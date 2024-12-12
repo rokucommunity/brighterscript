@@ -56,7 +56,7 @@ describe('parser call expressions', () => {
         //there should only be 1 error
         expectDiagnostics(diagnostics, [
             DiagnosticMessages.unexpectedToken(':'),
-            DiagnosticMessages.expectedRightParenAfterFunctionCallArguments()
+            DiagnosticMessages.unmatchedLeftToken('(', 'function call arguments')
         ]);
         expect(ast.statements).to.be.length.greaterThan(0);
         //the error should be BEFORE the `name = "bob"` statement
@@ -218,7 +218,7 @@ describe('parser call expressions', () => {
 
             expect(diagnostics).to.be.lengthOf(2);
             expectDiagnostics(diagnostics, [
-                DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
+                DiagnosticMessages.unmatchedLeftToken('(', 'function call arguments'),
                 DiagnosticMessages.expectedNewlineOrColon()
             ]);
             expect(ast.statements).to.be.lengthOf(1);
@@ -244,7 +244,7 @@ describe('parser call expressions', () => {
                 end sub
             `);
             expectDiagnosticsIncludes(diagnostics, [
-                DiagnosticMessages.expectedRightParenAfterFunctionCallArguments()
+                DiagnosticMessages.unmatchedLeftToken('(', 'function call arguments')
             ]);
         });
 
@@ -255,7 +255,7 @@ describe('parser call expressions', () => {
                 end sub
             `);
             expectDiagnosticsIncludes(diagnostics, [
-                DiagnosticMessages.expectedRightParenAfterFunctionCallArguments()
+                DiagnosticMessages.unmatchedLeftToken('(', 'function call arguments')
             ]);
         });
 
@@ -266,7 +266,7 @@ describe('parser call expressions', () => {
                 end sub
             `);
             expectDiagnosticsIncludes(diagnostics, [
-                DiagnosticMessages.expectedRightParenAfterFunctionCallArguments()
+                DiagnosticMessages.unmatchedLeftToken('(', 'function call arguments')
             ]);
             expect(ast.statements).to.be.lengthOf(1);
             const bodyStatements = (ast.statements[0] as FunctionStatement).func.body.statements;

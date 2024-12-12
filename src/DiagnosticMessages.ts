@@ -478,7 +478,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'expected-label'
     }),
-    expectedRightSquareBraceAfterArrayOrObjectIndex: () => ({
+    __unused26: () => ({
         message: `Expected ']' after array or object index`,
         legacyCode: 1072,
         severity: DiagnosticSeverity.Error,
@@ -496,19 +496,40 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'exceeds-max-argument-count'
     }),
-    expectedRightParenAfterFunctionCallArguments: () => ({
-        message: `Expected ')' after function call arguments`,
-        legacyCode: 1075,
-        severity: DiagnosticSeverity.Error,
-        code: 'expected-right-paren'
-    }),
-    unmatchedLeftParenAfterExpression: () => ({
+    unmatchedLeftToken: (unmatchedToken: string, afterDetail = '') => {
+        let matchingToken = '';
+        switch (unmatchedToken) {
+            case '(':
+                matchingToken = ')';
+                break;
+            case '[':
+                matchingToken = ']';
+                break;
+            case '{':
+                matchingToken = '}';
+                break;
+        }
+        let message = `Unmatched '${unmatchedToken}'`;
+        if (matchingToken) {
+            message += `: expected '${matchingToken}'`;
+        }
+        if (afterDetail) {
+            message += ` after ${afterDetail}`;
+        }
+        return {
+            message: message,
+            legacyCode: 1075,
+            severity: DiagnosticSeverity.Error,
+            code: 'unmatched-left-token'
+        };
+    },
+    __unused23: () => ({
         message: `Unmatched '(': expected ')' after expression`,
         legacyCode: 1076,
         severity: DiagnosticSeverity.Error,
         code: 'unmatched-left-paren'
     }),
-    unmatchedLeftSquareBraceAfterArrayLiteral: () => ({
+    __unused24: () => ({
         message: `Unmatched '[': expected ']' after array literal`,
         legacyCode: 1077,
         severity: DiagnosticSeverity.Error,
@@ -526,7 +547,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'expected-colon-after-aa-key'
     }),
-    unmatchedLeftCurlyAfterAALiteral: () => ({
+    __unused25: () => ({
         message: `Unmatched '{': expected '}' after associative array literal`,
         legacyCode: 1080,
         severity: DiagnosticSeverity.Error,
@@ -984,6 +1005,12 @@ export let DiagnosticMessages = {
         },
         severity: DiagnosticSeverity.Error,
         code: 'missing-type-in-doc-comment'
+    }),
+    expectedReturnStatement: () => ({
+        message: `Expected return statement in function`,
+        legacyCode: 1155,
+        severity: DiagnosticSeverity.Error,
+        code: 'missing-return-statement'
     })
 };
 export const defaultMaximumTruncationLength = 160;

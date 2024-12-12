@@ -15,9 +15,8 @@ import { createInvalidLiteral, createMethodStatement, createToken } from '../ast
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import { SymbolTable } from '../SymbolTable';
-import type { Expression } from './AstNode';
-import { AstNodeKind } from './AstNode';
-import { Statement } from './AstNode';
+import type { AstNode, Expression } from './AstNode';
+import { AstNodeKind, Statement } from './AstNode';
 import { ClassType } from '../types/ClassType';
 import { EnumMemberType, EnumType } from '../types/EnumType';
 import { NamespaceType } from '../types/NamespaceType';
@@ -187,7 +186,7 @@ export class AssignmentStatement extends Statement {
         return [
             state.transpileToken(this.tokens.name),
             ' ',
-            state.transpileToken(this.tokens.equals ?? createToken(TokenKind.Equal)),
+            state.transpileToken(this.tokens.equals ?? createToken(TokenKind.Equal), '='),
             ' ',
             ...this.value.transpile(state)
         ];
@@ -739,7 +738,7 @@ export class IfStatement extends Statement {
         if (this.tokens.then) {
             results.push(' ');
             results.push(
-                state.transpileToken(this.tokens.then)
+                state.transpileToken(this.tokens.then, 'then')
             );
         }
         state.lineage.unshift(this);
@@ -900,7 +899,7 @@ export class PrintStatement extends Statement {
      * @param options.expressions an array of expressions or `PrintSeparator`s to be evaluated and printed.
      */
     constructor(options: {
-        print: Token;
+        print?: Token;
         expressions: Array<Expression | PrintSeparatorTab | PrintSeparatorSpace>;
     }) {
         super();
@@ -914,7 +913,7 @@ export class PrintStatement extends Statement {
         );
     }
     public readonly tokens: {
-        readonly print: Token;
+        readonly print?: Token;
     };
     public readonly expressions: Array<Expression | PrintSeparatorTab | PrintSeparatorSpace>;
     public readonly kind = AstNodeKind.PrintStatement;
@@ -923,7 +922,7 @@ export class PrintStatement extends Statement {
 
     transpile(state: BrsTranspileState) {
         let result = [
-            state.transpileToken(this.tokens.print),
+            state.transpileToken(this.tokens.print, 'print'),
             ' '
         ] as TranspileResult;
         for (let i = 0; i < this.expressions.length; i++) {
@@ -946,7 +945,7 @@ export class PrintStatement extends Statement {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             //sometimes we have semicolon Tokens in the expressions list (should probably fix that...), so only walk the actual expressions
-            walkArray(this.expressions, visitor, options, this, (item) => isExpression(item as any));
+            walkArray(this.expressions as AstNode[], visitor, options, this, (item) => isExpression(item as any));
         }
     }
 
@@ -1637,6 +1636,7 @@ export class DottedSetStatement extends Statement {
         this.location = util.createBoundingLocation(
             this.obj,
             this.tokens.dot,
+            this.tokens.equals,
             this.tokens.name,
             this.value
         );
@@ -1724,12 +1724,12 @@ export class IndexedSetStatement extends Statement {
             equals: options.equals
         };
         this.obj = options.obj;
-        this.indexes = options.indexes;
+        this.indexes = options.indexes ?? [];
         this.value = options.value;
         this.location = util.createBoundingLocation(
             this.obj,
             this.tokens.openingSquare,
-            ...this.indexes ?? [],
+            ...this.indexes,
             this.tokens.closingSquare,
             this.value
         );
@@ -1795,9 +1795,9 @@ export class IndexedSetStatement extends Statement {
                 obj: this.obj?.clone(),
                 openingSquare: util.cloneToken(this.tokens.openingSquare),
                 indexes: this.indexes?.map(x => x?.clone()),
+                closingSquare: util.cloneToken(this.tokens.closingSquare),
                 equals: util.cloneToken(this.tokens.equals),
-                value: this.value?.clone(),
-                closingSquare: util.cloneToken(this.tokens.closingSquare)
+                value: this.value?.clone()
             }),
             ['obj', 'indexes', 'value']
         );
@@ -1879,7 +1879,7 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         };
         this.nameExpression = options.nameExpression;
         this.body = options.body;
-        this.symbolTable = new SymbolTable(`NamespaceStatement: '${this.name}'`, () => this.parent?.getSymbolTable());
+        this.symbolTable = new SymbolTable(`NamespaceStatement: '${this.name}'`, () => this.getRoot()?.getSymbolTable());
     }
 
     public readonly tokens: {
