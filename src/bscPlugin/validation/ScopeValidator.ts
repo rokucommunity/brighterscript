@@ -1196,7 +1196,7 @@ export class ScopeValidator {
             const foundType = docTypeTag.typeExpression?.getType({ flags: SymbolTypeFlag.typetime });
             if (!foundType?.isResolvable()) {
                 this.addMultiScopeDiagnostic({
-                    ...DiagnosticMessages.cannotFindTypeInCommentDoc(docTypeTag.typeString),
+                    ...DiagnosticMessages.cannotFindName(docTypeTag.typeString),
                     location: brsDocParser.getTypeLocationFromToken(docTypeTag.token) ?? docTypeTag.location
                 });
             }

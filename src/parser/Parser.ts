@@ -2261,7 +2261,7 @@ export class Parser {
 
         if (!this.check(TokenKind.Newline)) {
             this.diagnostics.push({
-                ...DiagnosticMessages.expectedNewlineInConditionalCompile(),
+                ...DiagnosticMessages.unexpectedToken(this.peek().text),
                 location: this.peek().location
             });
             throw this.lastDiagnosticAsError();
@@ -2281,7 +2281,7 @@ export class Parser {
         //ensure newline before next keyword
         if (!this.check(TokenKind.Newline)) {
             this.diagnostics.push({
-                ...DiagnosticMessages.expectedNewlineInConditionalCompile(),
+                ...DiagnosticMessages.unexpectedToken(this.peek().text),
                 location: this.peek().location
             });
             throw this.lastDiagnosticAsError();

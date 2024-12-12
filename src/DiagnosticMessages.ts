@@ -979,36 +979,15 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'invalid-type-reference'
     }),
-    expectedNewlineInConditionalCompile: () => ({
-        message: `Expected newline in conditional compilation statement`,
-        legacyCode: 1151,
-        severity: DiagnosticSeverity.Error,
-        code: 'expected-newline-in-conditional-compile'
-    }),
-    __unused22: () => ({
-        message: `Expected '#end if', '#else if', or '#else' to terminate conditional compilation block`,
-        legacyCode: 1152,
-        severity: DiagnosticSeverity.Error,
-        code: 'expected-terminator-on-conditional-compile'
-    }),
     unsafeUnmatchedTerminatorInConditionalCompileBlock: (terminator: string) => ({
         message: `Unsafe unmatched terminator '${terminator}' in conditional compilation block`,
-        legacyCode: 1153,
+        legacyCode: 1150,
         severity: DiagnosticSeverity.Error,
         code: 'inconsistent-conditional-compile-nesting'
     }),
-    cannotFindTypeInCommentDoc: (name: string) => ({
-        message: `Cannot find type '${name}' in doc comment`,
-        legacyCode: 1154,
-        data: {
-            name: name
-        },
-        severity: DiagnosticSeverity.Error,
-        code: 'missing-type-in-doc-comment'
-    }),
     expectedReturnStatement: () => ({
         message: `Expected return statement in function`,
-        legacyCode: 1155,
+        legacyCode: 1151,
         severity: DiagnosticSeverity.Error,
         code: 'missing-return-statement'
     })
