@@ -971,7 +971,7 @@ export let DiagnosticMessages = {
         message: `'typecast' statement can only be applied to 'm', but was applied to '${foundApplication}'`,
         legacyCode: 1148,
         severity: DiagnosticSeverity.Error,
-        code: 'invalid-typecast-statement'
+        code: 'invalid-typecast-target'
     }),
     itemCannotBeUsedAsType: (typeText: string) => ({
         message: `'${typeText}' cannot be used as a type`,
