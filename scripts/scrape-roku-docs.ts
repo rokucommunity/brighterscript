@@ -576,11 +576,13 @@ class Runner {
 
     private getNodeFields(manager: TokenManager) {
         const result = [] as SceneGraphNodeField[];
+        const tableHeadingMatcher = (headingToken) => {
+            return (headingToken as marked.Tokens.Heading)?.text?.toLowerCase() === 'fields';
+        };
         const tables = [
             ...manager.getAllTablesByHeaders(['field', 'type', 'default', 'access permission', 'description']),
-            ...manager.getAllTablesByHeaders(['field', 'type', 'description'], null, null, (headingToken) => {
-                return (headingToken as marked.Tokens.Heading)?.text?.toLowerCase() === 'fields';
-            })
+            ...manager.getAllTablesByHeaders(['field', 'type', 'default', 'description'], null, null, tableHeadingMatcher),
+            ...manager.getAllTablesByHeaders(['field', 'type', 'description'], null, null, tableHeadingMatcher)
         ];
         for (const table of tables) {
             const rows = manager.tableToObjects(table);
