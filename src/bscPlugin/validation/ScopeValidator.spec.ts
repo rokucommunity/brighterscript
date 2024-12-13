@@ -1986,6 +1986,50 @@ describe('ScopeValidator', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        it('has an diagnostic when using a variable defined in parent function', () => {
+            program.setFile('source/main.bs', `
+                function parentFunction()
+                    parentVar = "test"
+
+                    innerFunction = sub()
+                        ' Attempting to use parentVar from the parent function scope
+                        print parentVar ' This should trigger a diagnostic
+                        otherFunc() ' this is fine
+                    end sub
+
+                    innerFunction()
+                end function
+
+                sub otherFunc()
+                    print "hello"
+                end sub
+            `);
+
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('parentVar')
+            ]);
+        });
+
+        it('has an diagnostic when using a param from  parent function', () => {
+            program.setFile('source/main.bs', `
+                function parentFunction(outerVal)
+                    parentVar = "test"
+
+                    innerFunction = sub(inner)
+                        print inner + outer
+                    end sub
+
+                    innerFunction(2)
+                end function
+            `);
+
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('outer')
+            ]);
+        });
     });
 
     describe('itemCannotBeUsedAsVariable', () => {
