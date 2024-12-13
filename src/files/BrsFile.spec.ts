@@ -744,7 +744,7 @@ describe('BrsFile', () => {
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.referencedConstDoesNotExist()
+                    DiagnosticMessages.hashConstDoesNotExist()
                 ]);
             });
 
@@ -758,7 +758,7 @@ describe('BrsFile', () => {
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.referencedConstDoesNotExist()
+                    DiagnosticMessages.hashConstDoesNotExist()
                 ]);
             });
 

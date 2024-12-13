@@ -446,7 +446,7 @@ export class BrsFileValidator {
         const isBool = ccConst.kind === TokenKind.True || ccConst.kind === TokenKind.False;
         if (!isBool && !this.event.file.ast.bsConsts.has(ccConst.text.toLowerCase())) {
             this.event.program.diagnostics.register({
-                ...DiagnosticMessages.referencedConstDoesNotExist(),
+                ...DiagnosticMessages.hashConstDoesNotExist(),
                 location: ccConst.location
             });
             return false;

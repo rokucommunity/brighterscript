@@ -3,7 +3,6 @@ import type { DimStatement } from '../../Statement';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { Parser } from '../../Parser';
 import { expectDiagnostics } from '../../../testHelpers.spec';
-import { TokenKind } from '../../../lexer/TokenKind';
 
 describe('parser DimStatement', () => {
     it('parses properly', () => {

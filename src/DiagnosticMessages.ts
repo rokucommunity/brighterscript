@@ -631,13 +631,13 @@ export let DiagnosticMessages = {
         message: '#const declarations can only have values of `true`, `false`, or other #const names',
         legacyCode: 1089,
         severity: DiagnosticSeverity.Error,
-        code: 'invalid-const-value'
+        code: 'invalid-hash-const-value'
     }),
-    referencedConstDoesNotExist: () => ({
+    hashConstDoesNotExist: () => ({
         message: `Referenced #const does not exist`,
         legacyCode: 1090,
         severity: DiagnosticSeverity.Error,
-        code: 'const-does-not-exist'
+        code: 'hash-const-does-not-exist'
     }),
     invalidHashIfValue: () => ({
         message: `#if conditionals can only be 'true', 'false', or other #const names`,
@@ -645,17 +645,20 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'invalid-hash-if-value'
     }),
+    /**
+     * Treat #error directives like diagnostics, because the presence of `#error` even inside a runtime logical block that evaluates to false will 100% cause a compile error.
+     */
     hashError: (message: string) => ({
         message: `#error ${message} `,
         legacyCode: 1092,
         severity: DiagnosticSeverity.Error,
         code: 'hash-error'
     }),
-    expectedEqualAfterConstName: () => ({
+    __unused43: () => ({
         message: `Expected '=' after #const`,
         legacyCode: 1093,
         severity: DiagnosticSeverity.Error,
-        code: 'expected-equal-after-const'
+        code: 'expected-equal-after-hash-const'
     }),
     __unused17: (startingLine: number) => ({
         message: `Expected '#end if' to close '#if' conditional compilation statement starting on line ${startingLine} `,
