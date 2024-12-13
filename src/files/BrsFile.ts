@@ -6,7 +6,7 @@ import { CompletionItemKind } from 'vscode-languageserver';
 import chalk from 'chalk';
 import * as path from 'path';
 import { Scope } from '../Scope';
-import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
+import { DiagnosticCodeMap, diagnosticCodes, DiagnosticLegacyCodeMap, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
 import type { Callable, CallableParam, CommentFlag, BsDiagnostic, FileReference, FileLink, SerializedCodeFile, NamespaceContainer } from '../interfaces';
 import type { Token } from '../lexer/Token';
@@ -442,7 +442,7 @@ export class BrsFile implements BscFile {
      * @param tokens - an array of tokens of which to find `TokenKind.Comment` from
      */
     public getCommentFlags(tokens: Token[]) {
-        const processor = new CommentFlagProcessor(this, ['rem', `'`], diagnosticCodes, [DiagnosticCodeMap.unknownDiagnosticCode]);
+        const processor = new CommentFlagProcessor(this, ['rem', `'`], diagnosticCodes, [DiagnosticCodeMap.unknownDiagnosticCode, DiagnosticLegacyCodeMap.unknownDiagnosticCode]);
 
         this.commentFlags = [];
         for (let lexerToken of tokens) {

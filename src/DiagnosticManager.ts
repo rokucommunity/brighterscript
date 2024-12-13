@@ -135,14 +135,17 @@ export class DiagnosticManager {
      * Determine whether this diagnostic should be supressed or not, based on brs comment-flags
      */
     public isDiagnosticSuppressed(diagnostic: BsDiagnostic) {
-        const diagnosticCode = typeof diagnostic.code === 'string' ? diagnostic.code.toLowerCase() : diagnostic.code;
+        const diagnosticCode = typeof diagnostic.code === 'string' ? diagnostic.code.toLowerCase() : diagnostic.code?.toString() ?? undefined;
+        const diagnosticLegacyCode = typeof diagnostic.legacyCode === 'string' ? diagnostic.legacyCode.toLowerCase() : diagnostic.legacyCode;
         const file = this.program?.getFile(diagnostic.location?.uri);
 
         for (let flag of file?.commentFlags ?? []) {
             //this diagnostic is affected by this flag
             if (diagnostic.location.range && util.rangeContains(flag.affectedRange, diagnostic.location.range.start)) {
                 //if the flag acts upon this diagnostic's code
-                if (flag.codes === null || (diagnosticCode !== undefined && flag.codes.includes(diagnosticCode))) {
+                const diagCodeSuppressed = (diagnosticCode !== undefined && flag.codes?.includes(diagnosticCode)) ||
+                    (diagnosticLegacyCode !== undefined && flag.codes?.includes(diagnosticLegacyCode));
+                if (flag.codes === null || diagCodeSuppressed) {
                     return true;
                 }
             }
@@ -155,7 +158,7 @@ export class DiagnosticManager {
         let filteredDiagnostics = this.diagnosticFilterer.filter({
             ...this.options ?? {},
             rootDir: this.options?.rootDir
-        }, diagnostics);
+        }, diagnostics, this.program);
         return filteredDiagnostics;
     }
 

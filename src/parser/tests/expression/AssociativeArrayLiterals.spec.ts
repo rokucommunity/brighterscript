@@ -210,7 +210,7 @@ describe('parser associative array literals', () => {
         it('will still be parsed', () => {
             // No closing brace:
             let { ast, diagnostics } = Parser.parse(`_ = {name: "john", age: 42, address: data.address`);
-            expectDiagnostics(diagnostics, [DiagnosticMessages.unmatchedLeftCurlyAfterAALiteral()]);
+            expectDiagnostics(diagnostics, [DiagnosticMessages.unmatchedLeftToken('{', 'associative array literal')]);
             expect(ast.statements).to.be.lengthOf(1);
             expect(isAssignmentStatement(ast.statements[0])).to.be.true;
             const assignStmt = ast.statements[0] as AssignmentStatement;
@@ -231,7 +231,7 @@ describe('parser associative array literals', () => {
             `);
             expectDiagnostics(diagnostics, [
                 DiagnosticMessages.unexpectedToken('\n'),
-                DiagnosticMessages.unmatchedLeftCurlyAfterAALiteral()
+                DiagnosticMessages.unmatchedLeftToken('{', 'associative array literal')
             ]);
         });
 
@@ -243,7 +243,7 @@ describe('parser associative array literals', () => {
                 end sub
             `);
             expectDiagnosticsIncludes(diagnostics, [
-                DiagnosticMessages.unmatchedLeftCurlyAfterAALiteral()
+                DiagnosticMessages.unmatchedLeftToken('{', 'associative array literal')
             ]);
         });
     });

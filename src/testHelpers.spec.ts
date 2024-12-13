@@ -1,7 +1,7 @@
 import type { BsDiagnostic } from './interfaces';
 import * as assert from 'assert';
 import chalk from 'chalk';
-import type { CodeDescription, CompletionItem, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, integer, Location } from 'vscode-languageserver';
+import type { CodeDescription, CompletionItem, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, Location } from 'vscode-languageserver';
 import { createSandbox } from 'sinon';
 import { expect } from './chai-config.spec';
 import type { CodeActionShorthand } from './CodeActionUtil';
@@ -62,7 +62,7 @@ function cloneObject<TOriginal, TTemplate>(original: TOriginal, template: TTempl
 interface PartialDiagnostic {
     location?: Partial<Location>;
     severity?: DiagnosticSeverity;
-    code?: integer | string;
+    code?: number | string;
     codeDescription?: Partial<CodeDescription>;
     source?: string;
     message?: string;
@@ -70,6 +70,7 @@ interface PartialDiagnostic {
     relatedInformation?: Partial<DiagnosticRelatedInformation>[];
     data?: unknown;
     file?: Partial<BscFile>;
+    legacyCode?: number | string;
 }
 
 /**
@@ -79,7 +80,7 @@ function cloneDiagnostic(actualDiagnosticInput: BsDiagnostic, expectedDiagnostic
     const actualDiagnostic = cloneObject(
         actualDiagnosticInput,
         expectedDiagnostic,
-        ['message', 'code', 'severity', 'relatedInformation']
+        ['message', 'code', 'severity', 'relatedInformation', 'legacyCode']
     );
     //clone Location if available
     if (expectedDiagnostic?.location) {
@@ -114,9 +115,14 @@ export function expectDiagnostics(arg: DiagnosticCollection, expected: Array<Par
         expected.map(x => {
             let result = x;
             if (typeof x === 'string') {
-                result = { message: x };
+                if (!x.includes(' ') && x.toLowerCase() === x) {
+                    // it's all lowercase and there's no spaces, so probably a code
+                    result = { code: x };
+                } else {
+                    result = { message: x };
+                }
             } else if (typeof x === 'number') {
-                result = { code: x };
+                result = { legacyCode: x };
             }
             return result as unknown as BsDiagnostic;
         })
@@ -128,7 +134,8 @@ export function expectDiagnostics(arg: DiagnosticCollection, expected: Array<Par
         const actualDiagnostic = cloneDiagnostic(actualDiagnostics[i], expectedDiagnostic);
         actual.push(actualDiagnostic as any);
     }
-    expect(actual).to.eql(expectedDiagnostics);
+    const sortedActual = sortDiagnostics(actual);
+    expect(sortedActual).to.eql(expectedDiagnostics);
 }
 
 /**
@@ -143,9 +150,14 @@ export function expectDiagnosticsIncludes(arg: DiagnosticCollection, expected: P
         actualExpected.map(x => {
             let result = x;
             if (typeof x === 'string') {
-                result = { message: x };
+                if (!x.includes(' ') && x.toLowerCase() === x) {
+                    // it's all lowercase and there's no spaces, so probably a code
+                    result = { code: x };
+                } else {
+                    result = { message: x };
+                }
             } else if (typeof x === 'number') {
-                result = { code: x };
+                result = { legacyCode: x };
             }
             return result as unknown as BsDiagnostic;
         });

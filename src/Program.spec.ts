@@ -1138,10 +1138,13 @@ describe('Program', () => {
             `);
             //the file should be included in the program
             expect(program.getFile('components/a/b/c/main.brs')).to.exist;
-            let diagnostics = program.getDiagnostics();
-            expectHasDiagnostics(diagnostics);
-            let parseError = diagnostics.filter(x => x.message === 'Unterminated string at end of line')[0];
-            expect(parseError).to.exist;
+            expectDiagnostics(program, [
+                DiagnosticMessages.expectedStatement(),
+                {
+                    ...DiagnosticMessages.unterminatedString(),
+                    location: util.createLocation(2, 20, 2, 49, s`${rootDir}/components/a/b/c/main.brs`)
+                }
+            ]);
         });
 
         it('it excludes specified error codes', () => {
@@ -2702,7 +2705,7 @@ describe('Program', () => {
 
             //the buffers should be identical
             expect(
-                data.compare(result)
+                data.compare(result as any)
             ).to.equal(0);
         });
 
