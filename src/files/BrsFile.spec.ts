@@ -1191,7 +1191,7 @@ describe('BrsFile', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('import')
+                DiagnosticMessages.unexpectedStatementLocation('import', 'at the top of the file')
             ]);
         });
 
@@ -1210,7 +1210,7 @@ describe('BrsFile', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('library')
+                DiagnosticMessages.unexpectedStatementLocation('library', 'at the top of the file')
             ]);
         });
 
@@ -1222,7 +1222,7 @@ describe('BrsFile', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('library')
+                DiagnosticMessages.unexpectedStatementLocation('library', 'at the top of the file')
             ]);
         });
 

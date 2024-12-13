@@ -122,12 +122,18 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'invalid-import-path'
     }),
-    expectedIdentifierAfterKeyword: (keywordText: string) => ({
-        message: `Expected identifier after '${keywordText}' keyword`,
-        legacyCode: 1016,
-        severity: DiagnosticSeverity.Error,
-        code: 'expected-identifier'
-    }),
+    expectedIdentifier: (preceedingTokenText?: string) => {
+        let message = `Expected identifier`;
+        if (preceedingTokenText) {
+            message += ` after '${preceedingTokenText}'`;
+        }
+        return {
+            message: message,
+            legacyCode: 1016,
+            severity: DiagnosticSeverity.Error,
+            code: 'expected-identifier'
+        };
+    },
     missingCallableKeyword: () => ({
         message: `Expected 'function' or 'sub' to precede identifier`,
         legacyCode: 1017,
@@ -170,11 +176,11 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'override-keyword-on-constructor'
     }),
-    statementMustBeDeclaredAtTopOfFile: (statementKeyword: string) => ({
-        message: `'${statementKeyword}' statement must be declared at the top of the file`,
+    unexpectedStatementLocation: (statementKeyword: string, locationText: string) => ({
+        message: `'${statementKeyword}' statement must be declared ${locationText}`,
         legacyCode: 1024,
         severity: DiagnosticSeverity.Error,
-        code: 'must-be-declared-at-top'
+        code: 'unexpected-statement-location'
     }),
     __unused8: (methodName: string, className: string) => ({
         message: `Method '${methodName}' does not exist on type '${className}'`,
@@ -646,7 +652,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'const-reservered-word'
     }),
-    expectedIdentifier: () => ({
+    __unused22: () => ({
         message: `Expected identifier`,
         legacyCode: 1096,
         severity: DiagnosticSeverity.Error,
@@ -960,12 +966,6 @@ export let DiagnosticMessages = {
         legacyCode: 1146,
         severity: DiagnosticSeverity.Error,
         code: 'member-access-violation'
-    }),
-    statementMustBeDeclaredAtStart: (statementType: string) => ({
-        message: `${statementType} statement must be declared at the top of the file or beginning of function or namespace`,
-        legacyCode: 1147,
-        severity: DiagnosticSeverity.Error,
-        code: 'unexpected-typecast'
     }),
     invalidTypecastStatementApplication: (foundApplication: string) => ({
         message: `'typecast' statement can only be applied to 'm', but was applied to '${foundApplication}'`,

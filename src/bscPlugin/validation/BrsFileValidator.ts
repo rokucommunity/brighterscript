@@ -519,17 +519,17 @@ export class BrsFileValidator {
             if (!topOfFileStatements.includes(result)) {
                 if (isLibraryStatement(result)) {
                     this.event.program.diagnostics.register({
-                        ...DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('library'),
+                        ...DiagnosticMessages.unexpectedStatementLocation('library', 'at the top of the file'),
                         location: result.location
                     });
                 } else if (isImportStatement(result)) {
                     this.event.program.diagnostics.register({
-                        ...DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('import'),
+                        ...DiagnosticMessages.unexpectedStatementLocation('import', 'at the top of the file'),
                         location: result.location
                     });
                 } else if (isAliasStatement(result)) {
                     this.event.program.diagnostics.register({
-                        ...DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('alias'),
+                        ...DiagnosticMessages.unexpectedStatementLocation('alias', 'at the top of the file'),
                         location: result.location
                     });
                 }
@@ -544,7 +544,7 @@ export class BrsFileValidator {
         for (let i = 1; i < topOfFileTypecastStatements.length; i++) {
             const typecastStmt = topOfFileTypecastStatements[i];
             this.event.program.diagnostics.register({
-                ...DiagnosticMessages.typecastStatementMustBeDeclaredAtStart(),
+                ...DiagnosticMessages.unexpectedStatementLocation('typecast', 'at the top of the file or beginning of function or namespace'),
                 location: typecastStmt.location
             });
         }
@@ -575,7 +575,7 @@ export class BrsFileValidator {
 
             if (!isFirst || !isAllowedBlock) {
                 this.event.program.diagnostics.register({
-                    ...DiagnosticMessages.typecastStatementMustBeDeclaredAtStart(),
+                    ...DiagnosticMessages.unexpectedStatementLocation('typecast', 'at the top of the file or beginning of function or namespace'),
                     location: result.location
                 });
             }

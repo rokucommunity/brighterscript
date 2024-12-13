@@ -406,7 +406,7 @@ export class Parser {
             if (this.checkEndOfStatement()) {
                 if (!ignoreDiagnostics) {
                     this.diagnostics.push({
-                        ...DiagnosticMessages.expectedIdentifierAfterKeyword(asToken.text),
+                        ...DiagnosticMessages.expectedIdentifier(asToken.text),
                         location: asToken.location
                     });
                 }
@@ -415,7 +415,7 @@ export class Parser {
             } else if (this.peek().kind !== TokenKind.Identifier && !this.checkAny(...DeclarableTypes, ...AllowedTypeIdentifiers)) {
                 if (!ignoreDiagnostics) {
                     this.diagnostics.push({
-                        ...DiagnosticMessages.expectedIdentifierAfterKeyword(asToken.text),
+                        ...DiagnosticMessages.expectedIdentifier(asToken.text),
                         location: asToken.location
                     });
                 }
@@ -486,7 +486,7 @@ export class Parser {
             extendsToken = this.advance();
             if (this.checkEndOfStatement()) {
                 this.diagnostics.push({
-                    ...DiagnosticMessages.expectedIdentifierAfterKeyword(extendsToken.text),
+                    ...DiagnosticMessages.expectedIdentifier(extendsToken.text),
                     location: extendsToken.location
                 });
             } else {
@@ -634,14 +634,14 @@ export class Parser {
         let parentClassName: TypeExpression;
 
         //get the class name
-        let className = this.tryConsume(DiagnosticMessages.expectedIdentifierAfterKeyword('class'), TokenKind.Identifier, ...this.allowedLocalIdentifiers) as Identifier;
+        let className = this.tryConsume(DiagnosticMessages.expectedIdentifier('class'), TokenKind.Identifier, ...this.allowedLocalIdentifiers) as Identifier;
 
         //see if the class inherits from parent
         if (this.peek().text.toLowerCase() === 'extends') {
             extendsKeyword = this.advance();
             if (this.checkEndOfStatement()) {
                 this.diagnostics.push({
-                    ...DiagnosticMessages.expectedIdentifierAfterKeyword(extendsKeyword.text),
+                    ...DiagnosticMessages.expectedIdentifier(extendsKeyword.text),
                     location: extendsKeyword.location
                 });
             } else {
@@ -1414,7 +1414,7 @@ export class Parser {
     private identifyingExpression(allowedTokenKinds?: TokenKind[]): DottedGetExpression | VariableExpression {
         allowedTokenKinds = allowedTokenKinds ?? this.allowedLocalIdentifiers;
         let firstIdentifier = this.consume(
-            DiagnosticMessages.expectedIdentifierAfterKeyword(this.previous().text),
+            DiagnosticMessages.expectedIdentifier(this.previous().text),
             TokenKind.Identifier,
             ...allowedTokenKinds
         ) as Identifier;
@@ -1533,7 +1533,7 @@ export class Parser {
             });
         }
         this.diagnostics.push({
-            ...DiagnosticMessages.expectedIdentifierAfterKeyword('typecast'),
+            ...DiagnosticMessages.expectedIdentifier('typecast'),
             location: {
                 uri: typecastToken.location.uri,
                 range: util.createBoundingRange(typecastToken, this.peek())
@@ -1546,7 +1546,7 @@ export class Parser {
         this.warnIfNotBrighterScriptMode('alias statements');
         const aliasToken = this.advance();
         const name = this.tryConsume(
-            DiagnosticMessages.expectedIdentifierAfterKeyword('alias'),
+            DiagnosticMessages.expectedIdentifier('alias'),
             TokenKind.Identifier
         );
         const equals = this.tryConsume(
@@ -1808,7 +1808,7 @@ export class Parser {
     private dimStatement() {
         const dim = this.advance();
 
-        let identifier = this.tryConsume(DiagnosticMessages.expectedIdentifierAfterKeyword('dim'), TokenKind.Identifier, ...this.allowedLocalIdentifiers) as Identifier;
+        let identifier = this.tryConsume(DiagnosticMessages.expectedIdentifier('dim'), TokenKind.Identifier, ...this.allowedLocalIdentifiers) as Identifier;
         // force to an identifier so the AST makes some sense
         if (identifier) {
             identifier.kind = TokenKind.Identifier;

@@ -354,8 +354,8 @@ describe('BrsFileValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.typecastStatementMustBeDeclaredAtStart().message,
-                DiagnosticMessages.typecastStatementMustBeDeclaredAtStart().message
+                DiagnosticMessages.unexpectedStatementLocation('typecast', 'at the top of the file or beginning of function or namespace').message,
+                DiagnosticMessages.unexpectedStatementLocation('typecast', 'at the top of the file or beginning of function or namespace').message
             ]);
         });
 
@@ -393,7 +393,7 @@ describe('BrsFileValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.typecastStatementMustBeDeclaredAtStart().message
+                DiagnosticMessages.unexpectedStatementLocation('typecast', 'at the top of the file or beginning of function or namespace').message
             ]);
         });
 
@@ -425,7 +425,7 @@ describe('BrsFileValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.typecastStatementMustBeDeclaredAtStart().message
+                DiagnosticMessages.unexpectedStatementLocation('typecast', 'at the top of the file or beginning of function or namespace').message
             ]);
         });
 
@@ -636,8 +636,8 @@ describe('BrsFileValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('alias').message,
-                DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('alias').message
+                DiagnosticMessages.unexpectedStatementLocation('alias', 'at the top of the file').message,
+                DiagnosticMessages.unexpectedStatementLocation('alias', 'at the top of the file').message
             ]);
         });
 

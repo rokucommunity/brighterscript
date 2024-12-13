@@ -31,7 +31,7 @@ describe('parser DimStatement', () => {
         //the statement should still exist and have null identifier
         expect(dimStatement).to.exist;
         expect(dimStatement.tokens.name).to.not.exist;
-        expect(parser.diagnostics.map(x => x.message)).to.include(DiagnosticMessages.expectedIdentifierAfterKeyword('dim').message);
+        expect(parser.diagnostics.map(x => x.message)).to.include(DiagnosticMessages.expectedIdentifier('dim').message);
     });
 
     it('flags missing left bracket', () => {

@@ -302,7 +302,7 @@ describe('parser', () => {
                         end namespace
                     `, ParseMode.BrighterScript);
                 expect(diagnostics[0]?.message).to.equal(
-                    DiagnosticMessages.expectedIdentifierAfterKeyword('namespace').message
+                    DiagnosticMessages.expectedIdentifier('namespace').message
                 );
             });
 
