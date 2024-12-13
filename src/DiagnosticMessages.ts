@@ -278,18 +278,24 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'invalid-identifier'
     }),
-    callableBlockMissingEndKeyword: (callableType: string) => ({
+    __unused31: (callableType: string) => ({
         message: `Expected 'end ${callableType}' to terminate ${callableType} block`,
         legacyCode: 1041,
         severity: DiagnosticSeverity.Error,
         code: 'closing-keyword-mismatch'
     }),
-    mismatchedEndCallableKeyword: (expectedCallableType: string, actualCallableType: string) => ({
-        message: `Expected 'end ${expectedCallableType?.replace(/^end\s*/, '')}' to terminate ${expectedCallableType} block but found 'end ${actualCallableType?.replace(/^end\s*/, '')}' instead.`,
-        legacyCode: 1042,
-        severity: DiagnosticSeverity.Error,
-        code: 'mismatched-end-callable-keyword'
-    }),
+    closingKeywordMismatch: (expectedCallableType: string, actualCallableType: string) => {
+        let message = `Expected 'end ${expectedCallableType?.replace(/^end\s*/, '')}' to terminate ${expectedCallableType} block`;
+        if (actualCallableType) {
+            message += ` but found 'end ${actualCallableType?.replace(/^end\s*/, '')}' instead.`;
+        }
+        return {
+            message: message,
+            legacyCode: 1042,
+            severity: DiagnosticSeverity.Error,
+            code: 'closing-keyword'
+        };
+    },
     expectedParameterNameButFound: (text: string) => ({
         message: `Expected parameter name, but found '${text ?? ''}'`,
         legacyCode: 1043,

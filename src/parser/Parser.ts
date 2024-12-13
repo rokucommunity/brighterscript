@@ -911,7 +911,7 @@ export class Parser {
             //add an error but don't hard-fail so the AST can continue more gracefully
             if (endFunctionType.kind !== expectedEndKind) {
                 this.diagnostics.push({
-                    ...DiagnosticMessages.mismatchedEndCallableKeyword(functionTypeText, endFunctionType.text),
+                    ...DiagnosticMessages.closingKeywordMismatch(functionTypeText, endFunctionType.text),
                     location: endFunctionType.location
                 });
             }

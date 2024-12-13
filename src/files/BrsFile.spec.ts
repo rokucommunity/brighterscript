@@ -4858,10 +4858,10 @@ describe('BrsFile', () => {
         `);
         program.validate();
         expectDiagnostics(program, [{
-            ...DiagnosticMessages.mismatchedEndCallableKeyword('function', 'sub'),
+            ...DiagnosticMessages.closingKeywordMismatch('function', 'sub'),
             location: util.createLocationFromFileRange(file, util.createRange(2, 12, 2, 19))
         }, {
-            ...DiagnosticMessages.mismatchedEndCallableKeyword('sub', 'function'),
+            ...DiagnosticMessages.closingKeywordMismatch('sub', 'function'),
             location: util.createLocationFromFileRange(file, util.createRange(4, 12, 4, 24))
         }]);
     });
