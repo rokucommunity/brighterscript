@@ -167,6 +167,10 @@ export class BrsFileValidator {
             FunctionExpression: (node) => {
                 const funcSymbolTable = node.getSymbolTable();
                 const isInlineFunc = !(isFunctionStatement(node.parent) || isMethodStatement(node.parent));
+                if (isInlineFunc) {
+                    // symbol table should not include any symbols from parent func
+                    funcSymbolTable.pushParentProvider(() => node.findAncestor<Body>(isBody).getSymbolTable());
+                }
                 if (!funcSymbolTable?.hasSymbol('m', SymbolTypeFlag.runtime) || isInlineFunc) {
                     if (!isTypecastStatement(node.body?.statements?.[0])) {
                         funcSymbolTable?.addSymbol('m', { isInstance: true }, new AssociativeArrayType(), SymbolTypeFlag.runtime);
