@@ -8,6 +8,7 @@ import { isToken } from './Token';
 import { rangeToArray } from '../parser/Parser.spec';
 import { Range } from 'vscode-languageserver';
 import util from '../util';
+import { DiagnosticMessages } from '../DiagnosticMessages';
 
 describe('lexer', () => {
     it('recognizes the `const` keyword', () => {
@@ -429,7 +430,7 @@ describe('lexer', () => {
         it('disallows multiline strings', () => {
             let { diagnostics } = Lexer.scan(`"multi-line\n\n`);
             expect(diagnostics.map(err => err.message)).to.deep.equal([
-                'Unterminated string at end of line'
+                DiagnosticMessages.unterminatedString().message
             ]);
         });
     });
@@ -1374,6 +1375,7 @@ describe('lexer', () => {
                 /simple/,
                 /SimpleWithValidFlags/g,
                 /UnknownFlags/gi,
+                //@ts-expect-error 1501
                 /with spaces/s,
                 /with(parens)and[squarebraces]/,
                 //lots of special characters

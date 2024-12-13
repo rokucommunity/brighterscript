@@ -141,11 +141,20 @@ export class BsClassValidator {
 
                         //mismatched member type (field/method in child, opposite in ancestor)
                         if (memberType !== ancestorMemberKind) {
+                            const childFieldType = member.getType({ flags: SymbolTypeFlag.typetime });
+                            let ancestorMemberType: BscType = new DynamicType();
+                            if (isFieldStatement(ancestorAndMember.member)) {
+                                ancestorMemberType = ancestorAndMember.member.getType({ flags: SymbolTypeFlag.typetime });
+                            } else if (isMethodStatement(ancestorAndMember.member)) {
+                                ancestorMemberType = ancestorAndMember.member.func.getType({ flags: SymbolTypeFlag.typetime });
+                            }
                             this.diagnostics.push({
-                                ...DiagnosticMessages.classChildMemberDifferentMemberTypeThanAncestor(
-                                    memberType,
-                                    ancestorMemberKind,
-                                    ancestorAndMember.classStatement.getName(ParseMode.BrighterScript)
+                                ...DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty(
+                                    classStatement.getName(ParseMode.BrighterScript) ?? '',
+                                    ancestorAndMember.classStatement.getName(ParseMode.BrighterScript),
+                                    memberName.text,
+                                    childFieldType.toString(),
+                                    ancestorMemberType.toString()
                                 ),
                                 location: member.location
                             });

@@ -783,7 +783,7 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 expectDiagnostics(program, [
-                    DiagnosticMessages.constNameCannotBeReservedWord()
+                    DiagnosticMessages.cannotUseReservedWordAsIdentifier('function')
                 ]);
             });
 

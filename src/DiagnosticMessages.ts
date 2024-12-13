@@ -313,13 +313,17 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'cannot-use-reserved-word'
     }),
-    expectedOperatorAfterIdentifier: (operators: TokenKind[], name: string) => {
+    expectedOperator: (operators: TokenKind[], name: string) => {
         operators = Array.isArray(operators) ? operators : [];
+        let message = `Expected operator ('${operators.join(`', '`)}')`;
+        if (name) {
+            message += ` after idenfifier '${name}'`;
+        }
         return {
-            message: `Expected operator ('${operators.join(`', '`)}') after idenfifier '${name}'`,
+            message: message,
             legacyCode: 1046,
             severity: DiagnosticSeverity.Error,
-            code: 'expected-operator-after-identifier'
+            code: 'expected-operator'
         };
     },
     expectedInlineIfStatement: () => ({
@@ -338,7 +342,7 @@ export let DiagnosticMessages = {
         message: `Could not find matching 'end ${keyword}'`,
         legacyCode: 1049,
         severity: DiagnosticSeverity.Error,
-        code: 'could-not-find-matching-end-keyword'
+        code: 'expected-end-keyword'
     }),
     expectedCatchBlockInTryCatch: () => ({
         message: `Expected 'catch' block in 'try' statement`,
@@ -352,7 +356,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'expected-loop-terminator'
     }),
-    expectedInAfterForEach: (name: string) => ({
+    __unused32: (name: string) => ({
         message: `Expected 'in' after 'for each ${name}'`,
         legacyCode: 1052,
         severity: DiagnosticSeverity.Error,
@@ -580,13 +584,13 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'unexpected-character'
     }),
-    unterminatedStringAtEndOfLine: () => ({
-        message: `Unterminated string at end of line`,
+    unterminatedString: () => ({
+        message: `Unterminated string literal`,
         legacyCode: 1083,
         severity: DiagnosticSeverity.Error,
         code: 'unterminated-string'
     }),
-    unterminatedStringAtEndOfFile: () => ({
+    __unused33: () => ({
         message: `Unterminated string at end of file`,
         legacyCode: 1084,
         severity: DiagnosticSeverity.Error,
@@ -610,7 +614,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'duplicate-const-declaration'
     }),
-    constAliasDoesNotExist: (name: string) => ({
+    __unused34: (name: string) => ({
         message: `Attempting to create #const alias of '${name}', but no such #const exists`,
         legacyCode: 1088,
         severity: DiagnosticSeverity.Error,
@@ -652,7 +656,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'expected-terminator-on-hash-if'
     }),
-    constNameCannotBeReservedWord: () => ({
+    __unused35: () => ({
         message: `#const name cannot be a reserved word`,
         legacyCode: 1095,
         severity: DiagnosticSeverity.Error,
@@ -676,7 +680,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'field-inheritance-mismatch'
     }),
-    classChildMemberDifferentMemberTypeThanAncestor: (memberType: string, parentMemberType: string, parentClassName: string) => ({
+    __unused36: (memberType: string, parentMemberType: string, parentClassName: string) => ({
         message: `Class member is a ${memberType} here but a ${parentMemberType} in ancestor class '${parentClassName}'`,
         legacyCode: 1099,
         severity: DiagnosticSeverity.Error,

@@ -2276,7 +2276,7 @@ describe('parser', () => {
                     #const test
                 `, ParseMode.BrighterScript);
                 expectDiagnostics(diagnostics, [
-                    DiagnosticMessages.expectedOperatorAfterIdentifier([TokenKind.Equal], 'test').message
+                    DiagnosticMessages.expectedOperator([TokenKind.Equal], 'test').message
                 ]);
             });
 
@@ -2285,7 +2285,7 @@ describe('parser', () => {
                     #const test += other
                 `, ParseMode.BrighterScript);
                 expectDiagnostics(diagnostics, [
-                    DiagnosticMessages.expectedOperatorAfterIdentifier([TokenKind.Equal], 'test').message
+                    DiagnosticMessages.expectedOperator([TokenKind.Equal], 'test').message
                 ]);
             });
 

@@ -1417,7 +1417,7 @@ describe('BrsFile BrighterScript classes', () => {
         `);
         program.validate();
         expectDiagnostics(program, [
-            DiagnosticMessages.classChildMemberDifferentMemberTypeThanAncestor('method', 'field', 'Animal')
+            DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty('Duck', 'Animal', 'name', 'function name() as dynamic', 'dynamic')
         ]);
     });
 

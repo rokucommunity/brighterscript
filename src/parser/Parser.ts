@@ -1002,7 +1002,7 @@ export class Parser {
         }
 
         let operator = this.consume(
-            DiagnosticMessages.expectedOperatorAfterIdentifier([TokenKind.Equal], name.text),
+            DiagnosticMessages.expectedOperator([TokenKind.Equal], name.text),
             ...[TokenKind.Equal]
         );
         let value = this.expression();
@@ -1330,7 +1330,7 @@ export class Parser {
             this.advance();
         } else {
             this.diagnostics.push({
-                ...DiagnosticMessages.expectedInAfterForEach(name.text),
+                ...DiagnosticMessages.expectedToken(TokenKind.In),
                 location: this.peek().location
             });
             throw this.lastDiagnosticAsError();
@@ -2228,7 +2228,7 @@ export class Parser {
         //disallow using keywords for const names
         if (ReservedWords.has(constName?.text.toLowerCase())) {
             this.diagnostics.push({
-                ...DiagnosticMessages.constNameCannotBeReservedWord(),
+                ...DiagnosticMessages.cannotUseReservedWordAsIdentifier(constName?.text),
                 location: constName?.location
             });
 
