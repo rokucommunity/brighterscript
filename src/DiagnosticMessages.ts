@@ -126,13 +126,13 @@ export let DiagnosticMessages = {
         message: `Expected identifier after '${keywordText}' keyword`,
         legacyCode: 1016,
         severity: DiagnosticSeverity.Error,
-        code: 'missing-identifier'
+        code: 'expected-identifier'
     }),
     missingCallableKeyword: () => ({
         message: `Expected 'function' or 'sub' to precede identifier`,
         legacyCode: 1017,
         severity: DiagnosticSeverity.Error,
-        code: 'missing-leading-keyword'
+        code: 'expected-leading-keyword'
     }),
     __unused12: () => ({
         message: `Expected valid type to follow 'as' keyword`,
@@ -264,7 +264,7 @@ export let DiagnosticMessages = {
         message: `Expected newline or ':' at the end of a statement`,
         legacyCode: 1039,
         severity: DiagnosticSeverity.Error,
-        code: 'missing-statement-separator'
+        code: 'expected-statement-separator'
     }),
     functionNameCannotEndWithTypeDesignator: (callableType: string, name: string, designator: string) => ({
         message: `${callableType} name '${name}' cannot end with type designator '${designator}'`,
@@ -350,7 +350,7 @@ export let DiagnosticMessages = {
         message: `Expected expression after 'in' keyword from 'for each' statement`,
         legacyCode: 1053,
         severity: DiagnosticSeverity.Error,
-        code: 'missing-loop-expression'
+        code: 'expected-loop-expression'
     }),
     unexpectedColonBeforeIfStatement: () => ({
         message: `Colon before 'if' statement is not allowed`,
@@ -359,7 +359,7 @@ export let DiagnosticMessages = {
         code: 'unexpected-leading-colon'
     }),
     expectedStringLiteralAfterKeyword: (keyword: string) => ({
-        message: `Missing string literal after '${keyword}' keyword`,
+        message: `Expected string literal after '${keyword}' keyword`,
         legacyCode: 1055,
         severity: DiagnosticSeverity.Error,
         code: 'expected-string-literal'
@@ -781,7 +781,7 @@ export let DiagnosticMessages = {
         message: `Missing left square bracket after 'dim' identifier`,
         legacyCode: 1119,
         severity: DiagnosticSeverity.Error,
-        code: 'missing-left-brace-after-dim'
+        code: 'expected-left-brace-after-dim'
     }),
     missingRightSquareBracketAfterDimIdentifier: () => ({
         message: `Missing right square bracket after 'dim' identifier`,
@@ -857,7 +857,7 @@ export let DiagnosticMessages = {
         code: 'deprecated-brightscript-component'
     }),
     circularReferenceDetected: (items: string[], scopeName: string) => ({
-        message: `Circular reference detected between ${Array.isArray(items) ? items.join(' -> ') : ''} in scope '${scopeName}'`,
+        message: `Circular inheritance detected between ${Array.isArray(items) ? items.join(' -> ') : ''} in scope '${scopeName}'`,
         legacyCode: 1132,
         severity: DiagnosticSeverity.Error,
         code: 'circular-inheritance'
@@ -961,11 +961,11 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'member-access-violation'
     }),
-    typecastStatementMustBeDeclaredAtStart: () => ({
-        message: `'typecast' statement must be declared at the top of the file or beginning of function or namespace`,
+    statementMustBeDeclaredAtStart: (statementType: string) => ({
+        message: `${statementType} statement must be declared at the top of the file or beginning of function or namespace`,
         legacyCode: 1147,
         severity: DiagnosticSeverity.Error,
-        code: ''unexpected-typecast'
+        code: 'unexpected-typecast'
     }),
     invalidTypecastStatementApplication: (foundApplication: string) => ({
         message: `'typecast' statement can only be applied to 'm', but was applied to '${foundApplication}'`,
@@ -989,7 +989,7 @@ export let DiagnosticMessages = {
         message: `Expected return statement in function`,
         legacyCode: 1151,
         severity: DiagnosticSeverity.Error,
-        code: 'missing-return-statement'
+        code: 'expected-return-statement'
     })
 };
 export const defaultMaximumTruncationLength = 160;
