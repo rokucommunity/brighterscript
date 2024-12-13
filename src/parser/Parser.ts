@@ -1297,7 +1297,7 @@ export class Parser {
         let endForToken: Token;
         if (!body || !this.checkAny(TokenKind.EndFor, TokenKind.Next)) {
             this.diagnostics.push({
-                ...DiagnosticMessages.expectedEndForOrNextToTerminateForLoop(),
+                ...DiagnosticMessages.expectedEndForOrNextToTerminateForLoop(forToken.text),
                 location: this.peek().location
             });
             if (!body) {
@@ -1349,20 +1349,21 @@ export class Parser {
         this.consumeStatementSeparators();
 
         let body = this.block(TokenKind.EndFor, TokenKind.Next);
-        if (!body) {
+        let endForToken: Token;
+        if (!body || !this.checkAny(TokenKind.EndFor, TokenKind.Next)) {
+
             this.diagnostics.push({
-                ...DiagnosticMessages.expectedEndForOrNextToTerminateForLoop(),
+                ...DiagnosticMessages.expectedEndForOrNextToTerminateForLoop(forEach.text),
                 location: this.peek().location
             });
             throw this.lastDiagnosticAsError();
         }
-
-        let endFor = this.advance();
+        endForToken = this.advance();
 
         return new ForEachStatement({
             forEach: forEach,
             in: maybeIn,
-            endFor: endFor,
+            endFor: endForToken,
             item: name,
             target: target,
             body: body

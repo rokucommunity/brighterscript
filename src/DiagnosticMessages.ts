@@ -334,8 +334,8 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'expected-catch'
     }),
-    expectedEndForOrNextToTerminateForLoop: () => ({
-        message: `Expected 'end for' or 'next' to terminate 'for' loop`,
+    expectedEndForOrNextToTerminateForLoop: (forLoopNameText: string = TokenKind.For) => ({
+        message: `Expected 'end for' or 'next' to terminate '${forLoopNameText}' loop`,
         legacyCode: 1051,
         severity: DiagnosticSeverity.Error,
         code: 'expected-loop-terminator'
@@ -965,7 +965,7 @@ export let DiagnosticMessages = {
         message: `'typecast' statement must be declared at the top of the file or beginning of function or namespace`,
         legacyCode: 1147,
         severity: DiagnosticSeverity.Error,
-        code: ''unexpected-typecast'
+        code: 'unexpected-typecast'
     }),
     invalidTypecastStatementApplication: (foundApplication: string) => ({
         message: `'typecast' statement can only be applied to 'm', but was applied to '${foundApplication}'`,

@@ -239,6 +239,41 @@ describe('parser', () => {
             ).to.be.true;
         });
 
+        it('adds diagnostics when missing end for statements', () => {
+            let parser = parse(`
+                sub test1(x)
+                    for each item in x
+                        print item
+                 end sub
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(parser, [
+                DiagnosticMessages.expectedEndForOrNextToTerminateForLoop('for each')
+            ]);
+
+            parser = parse(`
+                sub test2()
+                    for i = 0 to 10
+                        print i
+                 end sub
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(parser, [
+                DiagnosticMessages.expectedEndForOrNextToTerminateForLoop('for')
+            ]);
+
+            parser = parse(`
+                sub test3(x )
+                    for each item in x
+                        print item
+                    next
+
+                    for i = 0 to 10
+                        print i
+                    next ' next works the same as "end for"
+                 end sub
+            `, ParseMode.BrightScript);
+            expectZeroDiagnostics(parser);
+        });
+
         describe('namespace', () => {
             it('allows namespaces declared inside other namespaces', () => {
                 const parser = parse(`
