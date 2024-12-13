@@ -818,8 +818,8 @@ export let DiagnosticMessages = {
         },
         severity: DiagnosticSeverity.Error
     }),
-    expectedReturnStatement: () => ({
-        message: `Expected return statement in function`,
+    returnTypeCoercionMismatch: (returnType = 'string') => ({
+        message: `Function has no return statement and will return 'invalid': '${returnType}' cannot be coerced into 'invalid'`,
         code: 1155,
         severity: DiagnosticSeverity.Error
     })
