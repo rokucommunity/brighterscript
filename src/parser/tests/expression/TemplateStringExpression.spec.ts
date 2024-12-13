@@ -90,7 +90,7 @@ describe('TemplateStringExpression', () => {
         it('catches missing closing backtick', () => {
             let { tokens } = Lexer.scan('name = `hello world');
             let parser = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
-            expect(parser.diagnostics[0]?.message).to.equal(DiagnosticMessages.unterminatedTemplateStringAtEndOfFile().message);
+            expect(parser.diagnostics[0]?.message).to.equal(DiagnosticMessages.unterminatedTemplateString().message);
         });
     });
 

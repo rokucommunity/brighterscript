@@ -1375,8 +1375,6 @@ describe('lexer', () => {
                 /simple/,
                 /SimpleWithValidFlags/g,
                 /UnknownFlags/gi,
-                //@ts-expect-error 1501
-                /with spaces/s,
                 /with(parens)and[squarebraces]/,
                 //lots of special characters
                 /.*()^$@/,

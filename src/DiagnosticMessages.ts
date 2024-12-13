@@ -164,12 +164,15 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'bsconfig-syntax-errors'
     }),
-    itemIsDeprecated: () => ({
-        message: `Item is deprecated`,
-        legacyCode: 1022,
-        severity: DiagnosticSeverity.Hint,
-        code: 'item-deprecated'
-    }),
+    itemIsDeprecated: (itemName?: string, deprecatedDescription?: string) => {
+        itemName ??= 'Item';
+        return {
+            message: `${itemName} has been deprecated${deprecatedDescription ? ': ' + deprecatedDescription : ''} `,
+            legacyCode: 1022,
+            severity: DiagnosticSeverity.Hint,
+            code: 'item-deprecated'
+        };
+    },
     cannotUseOverrideKeywordOnConstructorFunction: () => ({
         message: 'Override keyword is not allowed on class constructor method',
         legacyCode: 1023,
@@ -512,6 +515,10 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'exceeds-max-argument-count'
     }),
+    /**
+     * @param unmatchedToken Should be one of '(', '[', or '{'
+     * @param afterDetail any additional message to describe what came before the unmatched token
+     */
     unmatchedLeftToken: (unmatchedToken: string, afterDetail = '') => {
         let matchingToken = '';
         switch (unmatchedToken) {
@@ -711,7 +718,7 @@ export let DiagnosticMessages = {
         code: 'unexpected-annotation'
     }),
     localVarShadowedByScopedFunction: () => ({
-        message: `Declaring a local variable with same name as scoped function can result in unexpected behavior`,
+        message: `Declaring a local variable with same name as scoped function or class can result in unexpected behavior`,
         legacyCode: 1104,
         severity: DiagnosticSeverity.Error,
         code: 'var-shadows-function'
@@ -722,7 +729,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'native-function-collision'
     }),
-    localVarSameNameAsClass: (className: string) => ({
+    __unused38: (className: string) => ({
         message: `Local variable has same name as class '${className}'`,
         legacyCode: 1106,
         severity: DiagnosticSeverity.Error,
@@ -734,7 +741,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Warning,
         code: 'unnecessary-import'
     }),
-    expectedOpenParenToFollowCallfuncIdentifier: () => ({
+    __unused37: () => ({
         message: `Expected '(' to follow callfunc identifier`,
         legacyCode: 1108,
         severity: DiagnosticSeverity.Error,
@@ -758,8 +765,8 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'variable-same-name-as-namespace'
     }),
-    unterminatedTemplateStringAtEndOfFile: () => ({
-        message: `Unterminated template string at end of file`,
+    unterminatedTemplateString: () => ({
+        message: `Unterminated template string`,
         legacyCode: 1113,
         severity: DiagnosticSeverity.Error,
         code: 'unterminated-template-string'
@@ -793,13 +800,13 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'expected-throw-expression'
     }),
-    missingLeftSquareBracketAfterDimIdentifier: () => ({
+    __unused42: () => ({
         message: `Missing left square bracket after 'dim' identifier`,
         legacyCode: 1119,
         severity: DiagnosticSeverity.Error,
         code: 'expected-left-brace-after-dim'
     }),
-    missingRightSquareBracketAfterDimIdentifier: () => ({
+    __unused39: () => ({
         message: `Missing right square bracket after 'dim' identifier`,
         legacyCode: 1120,
         severity: DiagnosticSeverity.Error,
@@ -834,7 +841,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'expected-enum-value'
     }),
-    unknownEnumValue: (name: string, enumName: string) => ({
+    __unused40: (name: string, enumName: string) => ({
         message: `Property '${name}' does not exist on enum '${enumName}'`,
         legacyCode: 1126,
         severity: DiagnosticSeverity.Error,
@@ -866,7 +873,7 @@ export let DiagnosticMessages = {
             code: 'incorrect-createobject-argument-count'
         };
     },
-    deprecatedBrightScriptComponent: (componentName: string, deprecatedDescription?: string) => ({
+    __unused41: (componentName: string, deprecatedDescription?: string) => ({
         message: `${componentName} has been deprecated${deprecatedDescription ? ': ' + deprecatedDescription : ''} `,
         legacyCode: 1131,
         severity: DiagnosticSeverity.Error,

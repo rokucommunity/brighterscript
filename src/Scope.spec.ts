@@ -4281,7 +4281,7 @@ describe('Scope', () => {
                 end sub
             `);
             program.validate();
-            expectDiagnosticsIncludes(program, DiagnosticMessages.localVarSameNameAsClass('Person').message);
+            expectDiagnosticsIncludes(program, DiagnosticMessages.localVarShadowedByScopedFunction().message);
         });
 
         it('disallows reusing a class name as "for each" variable in a method', () => {
@@ -4298,7 +4298,7 @@ describe('Scope', () => {
                 end class
             `);
             program.validate();
-            expectDiagnosticsIncludes(program, DiagnosticMessages.localVarSameNameAsClass('Person').message);
+            expectDiagnosticsIncludes(program, DiagnosticMessages.localVarShadowedByScopedFunction().message);
         });
 
         it('allows reusing a namespaced class name as "for each" variable in a method', () => {

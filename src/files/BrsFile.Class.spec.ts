@@ -1775,7 +1775,7 @@ describe('BrsFile BrighterScript classes', () => {
         `);
         program.validate();
         expectDiagnostics(program, [
-            DiagnosticMessages.localVarSameNameAsClass('Animal').message
+            DiagnosticMessages.localVarShadowedByScopedFunction().message
         ]);
     });
 

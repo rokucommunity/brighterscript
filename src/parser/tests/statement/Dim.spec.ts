@@ -2,6 +2,8 @@ import { expect } from '../../../chai-config.spec';
 import type { DimStatement } from '../../Statement';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { Parser } from '../../Parser';
+import { expectDiagnostics } from '../../../testHelpers.spec';
+import { TokenKind } from '../../../lexer/TokenKind';
 
 describe('parser DimStatement', () => {
     it('parses properly', () => {
@@ -40,7 +42,11 @@ describe('parser DimStatement', () => {
         //the statement should still exist and have null dimensions
         expect(dimStatement).to.exist;
         expect(dimStatement.tokens.openingSquare).to.not.exist;
-        expect(parser.diagnostics.map(x => x.message)).to.include(DiagnosticMessages.missingLeftSquareBracketAfterDimIdentifier().message);
+        expectDiagnostics(parser, [
+            DiagnosticMessages.missingExpressionsInDimStatement().message,
+            DiagnosticMessages.expectedToken('[').message,
+            DiagnosticMessages.unexpectedToken(']').message
+        ]);
     });
 
     it('flags missing right bracket', () => {
@@ -49,7 +55,9 @@ describe('parser DimStatement', () => {
         //the statement should still exist and have null dimensions
         expect(dimStatement).to.exist;
         expect(dimStatement.tokens.closingSquare).to.not.exist;
-        expect(parser.diagnostics.map(x => x.message)).to.include(DiagnosticMessages.missingRightSquareBracketAfterDimIdentifier().message);
+        expectDiagnostics(parser, [
+            DiagnosticMessages.unmatchedLeftToken('[', 'dim identifier').message
+        ]);
     });
 
     it('flags missing expression(s)', () => {

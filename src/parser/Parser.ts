@@ -1709,7 +1709,7 @@ export class Parser {
         if (this.isAtEnd()) {
             //error - missing backtick
             this.diagnostics.push({
-                ...DiagnosticMessages.unterminatedTemplateStringAtEndOfFile(),
+                ...DiagnosticMessages.unterminatedTemplateString(),
                 location: {
                     uri: openingBacktick.location.uri,
                     range: util.createBoundingRange(openingBacktick, this.peek())
@@ -1815,7 +1815,7 @@ export class Parser {
             identifier.kind = TokenKind.Identifier;
         }
 
-        let leftSquareBracket = this.tryConsume(DiagnosticMessages.missingLeftSquareBracketAfterDimIdentifier(), TokenKind.LeftSquareBracket);
+        let leftSquareBracket = this.tryConsume(DiagnosticMessages.expectedToken('['), TokenKind.LeftSquareBracket);
 
         let expressions: Expression[] = [];
         let expression: Expression;
@@ -1839,7 +1839,7 @@ export class Parser {
                 location: this.peek().location
             });
         }
-        let rightSquareBracket = this.tryConsume(DiagnosticMessages.missingRightSquareBracketAfterDimIdentifier(), TokenKind.RightSquareBracket);
+        let rightSquareBracket = this.tryConsume(DiagnosticMessages.unmatchedLeftToken('[', 'dim identifier'), TokenKind.RightSquareBracket);
         return new DimStatement({
             dim: dim,
             name: identifier,
@@ -2865,7 +2865,7 @@ export class Parser {
         let methodName = this.consume(DiagnosticMessages.expectedIdentifier(), TokenKind.Identifier, ...AllowedProperties);
         // force it into an identifier so the AST makes some sense
         methodName.kind = TokenKind.Identifier;
-        let openParen = this.consume(DiagnosticMessages.expectedOpenParenToFollowCallfuncIdentifier(), TokenKind.LeftParen);
+        let openParen = this.consume(DiagnosticMessages.expectedToken(TokenKind.LeftParen), TokenKind.LeftParen);
         let call = this.finishCall(openParen, callee, false);
 
         return new CallfuncExpression({
