@@ -340,8 +340,8 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'expected-catch'
     }),
-    expectedEndForOrNextToTerminateForLoop: () => ({
-        message: `Expected 'end for' or 'next' to terminate 'for' loop`,
+    expectedEndForOrNextToTerminateForLoop: (forLoopNameText: string = TokenKind.For) => ({
+        message: `Expected 'end for' or 'next' to terminate '${forLoopNameText}' loop`,
         legacyCode: 1051,
         severity: DiagnosticSeverity.Error,
         code: 'expected-loop-terminator'
@@ -961,12 +961,33 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'incompatible-definition'
     }),
-    memberAccessibilityMismatch: (memberName: string, accessModifierFlag: SymbolTypeFlag, definingClassName: string) => ({
-        message: `Member '${memberName}' is ${accessModifierNameFromFlag(accessModifierFlag)}${accessModifierAdditionalInfo(accessModifierFlag, definingClassName)}`, // TODO: Add scopes where it was defined
-        legacyCode: 1146,
-        severity: DiagnosticSeverity.Error,
-        code: 'member-access-violation'
-    }),
+    memberAccessibilityMismatch: (memberName: string, accessModifierFlag: SymbolTypeFlag, definingClassName: string) => {
+        let accessModName: string = TokenKind.Public;
+        // eslint-disable-next-line no-bitwise
+        if (accessModifierFlag & SymbolTypeFlag.private) {
+            accessModName = TokenKind.Private;
+            // eslint-disable-next-line no-bitwise
+        } else if (accessModifierFlag & SymbolTypeFlag.protected) {
+            accessModName = TokenKind.Protected;
+        }
+        accessModName = accessModName.toLowerCase();
+        let accessAdditionalInfo = '';
+
+        // eslint-disable-next-line no-bitwise
+        if (accessModifierFlag & SymbolTypeFlag.private) {
+            accessAdditionalInfo = ` and only accessible from within class '${definingClassName}'`;
+            // eslint-disable-next-line no-bitwise
+        } else if (accessModifierFlag & SymbolTypeFlag.protected) {
+            accessAdditionalInfo = ` and only accessible from within class '${definingClassName}' and its subclasses`;
+        }
+
+        return {
+            message: `Member '${memberName}' is ${accessModName}${accessAdditionalInfo}`, // TODO: Add scopes where it was defined
+            legacyCode: 1146,
+            severity: DiagnosticSeverity.Error,
+            code: 'member-access-violation'
+        };
+    },
     invalidTypecastStatementApplication: (foundApplication: string) => ({
         message: `'typecast' statement can only be applied to 'm', but was applied to '${foundApplication}'`,
         legacyCode: 1148,
@@ -1018,29 +1039,6 @@ export function typeCompatibilityMessage(actualTypeString: string, expectedTypeS
         });
     }
     return message;
-}
-
-function accessModifierNameFromFlag(accessModifierFlag: SymbolTypeFlag) {
-    let result = TokenKind.Public;
-    // eslint-disable-next-line no-bitwise
-    if (accessModifierFlag & SymbolTypeFlag.private) {
-        result = TokenKind.Private;
-        // eslint-disable-next-line no-bitwise
-    } else if (accessModifierFlag & SymbolTypeFlag.protected) {
-        result = TokenKind.Protected;
-    }
-    return result.toLowerCase();
-}
-
-function accessModifierAdditionalInfo(accessModifierFlag: SymbolTypeFlag, className: string) {
-    // eslint-disable-next-line no-bitwise
-    if (accessModifierFlag & SymbolTypeFlag.private) {
-        return ` and only accessible from within class '${className}'`;
-        // eslint-disable-next-line no-bitwise
-    } else if (accessModifierFlag & SymbolTypeFlag.protected) {
-        return ` and only accessible from within class '${className}' and its subclasses`;
-    }
-    return TokenKind.Public;
 }
 
 function getPossibilitiesString(possibilities: string[] | string) {
