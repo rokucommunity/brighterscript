@@ -213,7 +213,7 @@ export let DiagnosticMessages = {
             className: className
         }
     }),
-    expectedClassFieldIdentifier: () => ({
+    __unused27: () => ({
         message: `Expected identifier in class body`,
         legacyCode: 1030,
         severity: DiagnosticSeverity.Error,
@@ -231,19 +231,19 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'expected-keyword'
     }),
-    expectedLeftParenAfterCallable: (callableType: string) => ({
+    __unused28: (callableType: string) => ({
         message: `Expected '(' after ${callableType}`,
         legacyCode: 1033,
         severity: DiagnosticSeverity.Error,
         code: 'expected-left-paren-after-callable'
     }),
-    expectedNameAfterCallableKeyword: (callableType: string) => ({
+    __unused29: (callableType: string) => ({
         message: `Expected ${callableType} name after '${callableType}' keyword`,
         legacyCode: 1034,
         severity: DiagnosticSeverity.Error,
         code: 'expected-name-after-callable'
     }),
-    expectedLeftParenAfterCallableName: (callableType: string) => ({
+    __unused30: (callableType: string) => ({
         message: `Expected '(' after ${callableType} name`,
         legacyCode: 1035,
         severity: DiagnosticSeverity.Error,

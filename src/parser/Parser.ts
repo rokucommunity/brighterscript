@@ -370,7 +370,7 @@ export class Parser {
 
     private enumMemberStatement() {
         const name = this.consume(
-            DiagnosticMessages.expectedClassFieldIdentifier(),
+            DiagnosticMessages.expectedIdentifier(),
             TokenKind.Identifier,
             ...AllowedProperties
         ) as Identifier;
@@ -768,7 +768,7 @@ export class Parser {
         }
 
         let name = this.consume(
-            DiagnosticMessages.expectedClassFieldIdentifier(),
+            DiagnosticMessages.expectedIdentifier(),
             TokenKind.Identifier,
             ...AllowedProperties
         ) as Identifier;
@@ -838,17 +838,17 @@ export class Parser {
 
             if (isAnonymous) {
                 leftParen = this.consume(
-                    DiagnosticMessages.expectedLeftParenAfterCallable(functionTypeText),
+                    DiagnosticMessages.expectedToken('('),
                     TokenKind.LeftParen
                 );
             } else {
                 name = this.consume(
-                    DiagnosticMessages.expectedNameAfterCallableKeyword(functionTypeText),
+                    DiagnosticMessages.expectedIdentifier(functionTypeText),
                     TokenKind.Identifier,
                     ...AllowedProperties
                 ) as Identifier;
                 leftParen = this.consume(
-                    DiagnosticMessages.expectedLeftParenAfterCallableName(functionTypeText),
+                    DiagnosticMessages.expectedToken('('),
                     TokenKind.LeftParen
                 );
 
