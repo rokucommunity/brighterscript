@@ -52,6 +52,23 @@ describe('parser', () => {
         });
     });
 
+    it('flags function names with invalid characters', () => {
+        const { diagnostics } = Parser.parse(`
+            function alpha$() : end function
+            function beta%() : end function
+            function charlie!() : end function
+            function delta#() : end function
+            function echo&() : end function
+        `);
+        expectDiagnostics(diagnostics, [
+            DiagnosticMessages.invalidIdentifier('alpha$', '$'),
+            DiagnosticMessages.invalidIdentifier('beta%', '%'),
+            DiagnosticMessages.invalidIdentifier('charlie!', '!'),
+            DiagnosticMessages.invalidIdentifier('delta#', '#'),
+            DiagnosticMessages.invalidIdentifier('echo&', '&')
+        ]);
+    });
+
     describe('optional chaining operator', () => {
         function getExpression<T>(text: string, options?: { matcher?: any; parseMode?: ParseMode }) {
             const parser = parse(text, options?.parseMode);

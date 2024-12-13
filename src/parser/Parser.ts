@@ -857,7 +857,7 @@ export class Parser {
                 if (['$', '%', '!', '#', '&'].includes(lastChar)) {
                     //don't throw this error; let the parser continue
                     this.diagnostics.push({
-                        ...DiagnosticMessages.functionNameCannotEndWithTypeDesignator(functionTypeText, name.text, lastChar),
+                        ...DiagnosticMessages.invalidIdentifier(name.text, lastChar),
                         location: name.location
                     });
                 }

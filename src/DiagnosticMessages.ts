@@ -272,11 +272,11 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'expected-statement-separator'
     }),
-    functionNameCannotEndWithTypeDesignator: (callableType: string, name: string, designator: string) => ({
-        message: `${callableType} name '${name}' cannot end with type designator '${designator}'`,
+    invalidIdentifier: (name: string, character: string) => ({
+        message: `Identifier '${name}' may not contain the character '${character}'`,
         legacyCode: 1040,
         severity: DiagnosticSeverity.Error,
-        code: 'function-name-ends-with-type'
+        code: 'invalid-identifier'
     }),
     callableBlockMissingEndKeyword: (callableType: string) => ({
         message: `Expected 'end ${callableType}' to terminate ${callableType} block`,
