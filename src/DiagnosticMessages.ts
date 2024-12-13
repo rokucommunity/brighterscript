@@ -217,7 +217,7 @@ export let DiagnosticMessages = {
         message: `Cannot use the 'new' keyword here because '${expressionType}' is not a constructable type`,
         legacyCode: 1031,
         severity: DiagnosticSeverity.Error,
-        code: 'cannot-use-new-keyword'
+        code: 'not-constructable'
     }),
     expectedKeyword: (kind: TokenKind) => ({
         message: `Expected '${kind}' keyword`,
@@ -258,13 +258,13 @@ export let DiagnosticMessages = {
         message: `Required parameter '${parameterName}' must be declared before any optional parameters`,
         legacyCode: 1038,
         severity: DiagnosticSeverity.Error,
-        code: 'required-parameter-may-not-follow-optional'
+        code: 'required-parameter-before-optional'
     }),
     expectedNewlineOrColon: () => ({
         message: `Expected newline or ':' at the end of a statement`,
         legacyCode: 1039,
         severity: DiagnosticSeverity.Error,
-        code: 'expected-newline-or-colon'
+        code: 'missing-statement-separator'
     }),
     functionNameCannotEndWithTypeDesignator: (callableType: string, name: string, designator: string) => ({
         message: `${callableType} name '${name}' cannot end with type designator '${designator}'`,
@@ -276,7 +276,7 @@ export let DiagnosticMessages = {
         message: `Expected 'end ${callableType}' to terminate ${callableType} block`,
         legacyCode: 1041,
         severity: DiagnosticSeverity.Error,
-        code: 'callable-block-missing-end-keyword'
+        code: 'closing-keyword-mismatch'
     }),
     mismatchedEndCallableKeyword: (expectedCallableType: string, actualCallableType: string) => ({
         message: `Expected 'end ${expectedCallableType?.replace(/^end\s*/, '')}' to terminate ${expectedCallableType} block but found 'end ${actualCallableType?.replace(/^end\s*/, '')}' instead.`,
@@ -314,7 +314,7 @@ export let DiagnosticMessages = {
         message: `If/else statement within an inline if should be also inline`,
         legacyCode: 1047,
         severity: DiagnosticSeverity.Error,
-        code: 'expected-inline-if'
+        code: 'malformed-inline-if'
     }),
     expectedFinalNewline: () => ({
         message: `Expected newline at the end of an inline if statement`,
@@ -338,7 +338,7 @@ export let DiagnosticMessages = {
         message: `Expected 'end for' or 'next' to terminate 'for' loop`,
         legacyCode: 1051,
         severity: DiagnosticSeverity.Error,
-        code: 'expected-end-for'
+        code: 'expected-loop-terminator'
     }),
     expectedInAfterForEach: (name: string) => ({
         message: `Expected 'in' after 'for each ${name}'`,
@@ -587,10 +587,10 @@ export let DiagnosticMessages = {
         code: 'fractional-hex-literal'
     }),
     unexpectedConditionalCompilationString: () => ({
-        message: `Unexpected conditional - compilation string`,
+        message: `Unknown conditional compile keyword`,
         legacyCode: 1086,
         severity: DiagnosticSeverity.Error,
-        code: 'unexpected-conditional-compilation'
+        code: 'unknown-conditional-compile-keyword'
     }),
     duplicateConstDeclaration: (name: string) => ({
         message: `Attempting to redeclare #const with name '${name}'`,
@@ -662,7 +662,7 @@ export let DiagnosticMessages = {
         message: `Field '${fieldName}' in class '${childTypeName}' is not assignable to the same field in base class '${baseTypeName}'.Type '${childFieldType}' is not assignable to type '${parentFieldType}'.`,
         legacyCode: 1098,
         severity: DiagnosticSeverity.Error,
-        code: 'child-field-type-not-assignable'
+        code: 'field-inheritance-mismatch'
     }),
     classChildMemberDifferentMemberTypeThanAncestor: (memberType: string, parentMemberType: string, parentClassName: string) => ({
         message: `Class member is a ${memberType} here but a ${parentMemberType} in ancestor class '${parentClassName}'`,
@@ -674,37 +674,37 @@ export let DiagnosticMessages = {
         message: `Missing "super()" call in class constructor method.`,
         legacyCode: 1100,
         severity: DiagnosticSeverity.Error,
-        code: 'missing-super-call'
+        code: 'expected-super-call'
     }),
     classConstructorIllegalUseOfMBeforeSuperCall: () => ({
         message: `Illegal use of "m" before calling "super()"`,
         legacyCode: 1101,
         severity: DiagnosticSeverity.Error,
-        code: 'use-m-before-super'
+        code: 'expected-super-before-statement'
     }),
     classFieldCannotBeOverridden: () => ({
         message: `Class field cannot be overridden`,
         legacyCode: 1102,
         severity: DiagnosticSeverity.Error,
-        code: 'class-field-override'
+        code: 'invalid-field-override'
     }),
     unusedAnnotation: () => ({
         message: `This annotation is not attached to any statement`,
         legacyCode: 1103,
         severity: DiagnosticSeverity.Error,
-        code: 'unused-annotation'
+        code: 'unexpected-annotation'
     }),
     localVarShadowedByScopedFunction: () => ({
         message: `Declaring a local variable with same name as scoped function can result in unexpected behavior`,
         legacyCode: 1104,
         severity: DiagnosticSeverity.Error,
-        code: 'local-var-shadowed-by-function'
+        code: 'var-shadows-function'
     }),
     scopeFunctionShadowedByBuiltInFunction: () => ({
         message: `Scope function will not be accessible because it has the same name as a built -in function`,
         legacyCode: 1105,
         severity: DiagnosticSeverity.Error,
-        code: 'function-shadowed-by-built-in-function'
+        code: 'native-function-collision'
     }),
     localVarSameNameAsClass: (className: string) => ({
         message: `Local variable has same name as class '${className}'`,
@@ -752,7 +752,7 @@ export let DiagnosticMessages = {
         message: `Unterminated template string expression. '\${' must be followed by expression, then '}'`,
         legacyCode: 1114,
         severity: DiagnosticSeverity.Error,
-        code: 'unterminated-template-expression'
+        code: 'unterminated-template-string-expression'
     }),
     duplicateComponentName: (componentName: string) => ({
         message: `There are multiple components with the name '${componentName}'`,
@@ -769,13 +769,13 @@ export let DiagnosticMessages = {
         message: `Expected exception variable after 'catch' keyword`,
         legacyCode: 1117,
         severity: DiagnosticSeverity.Error,
-        code: 'missing-exception-variable'
+        code: 'expected-exception-variable'
     }),
     missingExceptionExpressionAfterThrowKeyword: () => ({
         message: `Missing exception expression after 'throw' keyword`,
         legacyCode: 1118,
         severity: DiagnosticSeverity.Error,
-        code: 'missing-exception-expression'
+        code: 'expected-throw-expression'
     }),
     missingLeftSquareBracketAfterDimIdentifier: () => ({
         message: `Missing left square bracket after 'dim' identifier`,
@@ -793,7 +793,7 @@ export let DiagnosticMessages = {
         message: `Missing expression(s) in 'dim' statement`,
         legacyCode: 1121,
         severity: DiagnosticSeverity.Error,
-        code: 'missing-expression-in-dim'
+        code: 'expected-dim-expression'
     }),
     mismatchedOverriddenMemberVisibility: (childClassName: string, memberName: string, childAccessModifier: string, ancestorAccessModifier: string, ancestorClassName: string) => ({
         message: `Access modifier mismatch: '${memberName}' is ${childAccessModifier} in type '${childClassName}' but is ${ancestorAccessModifier} in base type '${ancestorClassName}'.`,
@@ -810,13 +810,13 @@ export let DiagnosticMessages = {
         message: `Enum value must be type '${expectedType}'`,
         legacyCode: 1124,
         severity: DiagnosticSeverity.Error,
-        code: 'enum-value-invalid-type'
+        code: 'enum-type-mismatch'
     }),
     enumValueIsRequired: (expectedType: string) => ({
         message: `Value is required for ${expectedType} enum`,
         legacyCode: 1125,
         severity: DiagnosticSeverity.Error,
-        code: 'enum-value-required'
+        code: 'expected-enum-value'
     }),
     unknownEnumValue: (name: string, enumName: string) => ({
         message: `Property '${name}' does not exist on enum '${enumName}'`,
@@ -847,7 +847,7 @@ export let DiagnosticMessages = {
             message: `For ${componentName}, expected ${argCountArray.map(c => c.toString()).join(' or ')} total arguments, but got ${actualCount}.`,
             legacyCode: 1130,
             severity: DiagnosticSeverity.Error,
-            code: 'mismatch-createobject-argument-count'
+            code: 'incorrect-createobject-argument-count'
         };
     },
     deprecatedBrightScriptComponent: (componentName: string, deprecatedDescription?: string) => ({
@@ -860,7 +860,7 @@ export let DiagnosticMessages = {
         message: `Circular reference detected between ${Array.isArray(items) ? items.join(' -> ') : ''} in scope '${scopeName}'`,
         legacyCode: 1132,
         severity: DiagnosticSeverity.Error,
-        code: 'circular-reference'
+        code: 'circular-inheritance'
     }),
     unexpectedStatementOutsideFunction: () => ({
         message: `Unexpected statement found outside of function body`,
@@ -878,31 +878,31 @@ export let DiagnosticMessages = {
         message: `Continue statement must be contained within a loop statement`,
         legacyCode: 1135,
         severity: DiagnosticSeverity.Error,
-        code: 'illegal-continue'
+        code: 'unexpected-continue'
     }),
     keywordMustBeDeclaredAtNamespaceLevel: (keyword: string) => ({
         message: `${keyword} must be declared at the root level or within a namespace`,
         legacyCode: 1136,
         severity: DiagnosticSeverity.Error,
-        code: 'keyword-must-be-at-root-or-namespace'
+        code: 'invalid-declaration-location'
     }),
     itemCannotBeUsedAsVariable: (itemType: string) => ({
         message: `${itemType} cannot be used as a variable`,
         legacyCode: 1137,
         severity: DiagnosticSeverity.Error,
-        code: 'cannout-be-used-as-variable'
+        code: 'type-not-variable'
     }),
     callfuncHasToManyArgs: (numberOfArgs: number) => ({
         message: `You can not have more than 5 arguments in a callFunc.${numberOfArgs} found.`,
         legacyCode: 1138,
         severity: DiagnosticSeverity.Error,
-        code: 'callfunc-has-too-many-arguments'
+        code: 'exceeds-max-callfunc-arg-count'
     }),
     noOptionalChainingInLeftHandSideOfAssignment: () => ({
-        message: `Optional chaining may not be used in the left - hand side of an assignment`,
+        message: `Optional chaining may not be used in the left-hand side of an assignment`,
         legacyCode: 1139,
         severity: DiagnosticSeverity.Error,
-        code: 'optional-chaining-on-left-of-assignment'
+        code: 'unexpected-optional-chain'
     }),
     /**
      *
@@ -959,13 +959,13 @@ export let DiagnosticMessages = {
         message: `Member '${memberName}' is ${accessModifierNameFromFlag(accessModifierFlag)}${accessModifierAdditionalInfo(accessModifierFlag, definingClassName)}`, // TODO: Add scopes where it was defined
         legacyCode: 1146,
         severity: DiagnosticSeverity.Error,
-        code: 'member-accessibility-mismatch'
+        code: 'member-access-violation'
     }),
     typecastStatementMustBeDeclaredAtStart: () => ({
         message: `'typecast' statement must be declared at the top of the file or beginning of function or namespace`,
         legacyCode: 1147,
         severity: DiagnosticSeverity.Error,
-        code: 'typecast-must-be-at-start'
+        code: ''unexpected-typecast'
     }),
     invalidTypecastStatementApplication: (foundApplication: string) => ({
         message: `'typecast' statement can only be applied to 'm', but was applied to '${foundApplication}'`,
