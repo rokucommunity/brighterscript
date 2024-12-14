@@ -81,7 +81,7 @@ describe('parser indexing', () => {
 
                 expect(diagnostics.length).to.equal(3);
                 expectDiagnostics(diagnostics, [
-                    DiagnosticMessages.expectedPropertyNameAfterPeriod(), // expected name after first dot
+                    DiagnosticMessages.expectedIdentifier(), // expected name after first dot
                     DiagnosticMessages.expectedNewlineOrColon(), // expected newline after "_ = foo" statement
                     DiagnosticMessages.unexpectedToken('.') // everything after the 2nd dot is ignored
                 ]);
@@ -307,7 +307,7 @@ describe('parser indexing', () => {
                 end sub
             `);
             expectDiagnosticsIncludes(diagnostics, [
-                DiagnosticMessages.expectedRightSquareBraceAfterArrayOrObjectIndex()
+                DiagnosticMessages.unmatchedLeftToken('[', 'array or object index')
             ]);
         });
 
@@ -318,7 +318,7 @@ describe('parser indexing', () => {
                 end sub
             `);
             expectDiagnosticsIncludes(diagnostics, [
-                DiagnosticMessages.expectedRightSquareBraceAfterArrayOrObjectIndex()
+                DiagnosticMessages.unmatchedLeftToken('[', 'array or object index')
             ]);
         });
     });

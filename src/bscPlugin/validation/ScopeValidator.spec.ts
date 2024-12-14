@@ -3356,7 +3356,7 @@ describe('ScopeValidator', () => {
                 `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindTypeInCommentDoc('TypeNotThere').message
+                DiagnosticMessages.cannotFindName('TypeNotThere').message
             ]);
         });
 
@@ -3369,7 +3369,7 @@ describe('ScopeValidator', () => {
                 `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindTypeInCommentDoc('TypeNotThere').message
+                DiagnosticMessages.cannotFindName('TypeNotThere').message
             ]);
         });
 
@@ -3382,7 +3382,7 @@ describe('ScopeValidator', () => {
                 `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindTypeInCommentDoc('TypeNotThere').message
+                DiagnosticMessages.cannotFindName('TypeNotThere').message
             ]);
         });
 

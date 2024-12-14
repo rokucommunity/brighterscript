@@ -508,7 +508,7 @@ export class Lexer {
             if (this.peekNext() === '\n' || this.peekNext() === '\r') {
                 // BrightScript doesn't support multi-line strings
                 this.diagnostics.push({
-                    ...DiagnosticMessages.unterminatedStringAtEndOfLine(),
+                    ...DiagnosticMessages.unterminatedString(),
                     location: this.locationOf()
                 });
                 isUnterminated = true;
@@ -521,7 +521,7 @@ export class Lexer {
         if (this.isAtEnd()) {
             // terminating a string with EOF is also not allowed
             this.diagnostics.push({
-                ...DiagnosticMessages.unterminatedStringAtEndOfFile(),
+                ...DiagnosticMessages.unterminatedString(),
                 location: this.locationOf()
             });
             isUnterminated = true;

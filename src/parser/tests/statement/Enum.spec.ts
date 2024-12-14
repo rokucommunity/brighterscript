@@ -439,10 +439,10 @@ describe('EnumStatement', () => {
             `);
             program.validate();
             expectDiagnostics(program, [{
-                ...DiagnosticMessages.unknownEnumValue('DOWN', 'Direction'),
+                ...DiagnosticMessages.cannotFindName('DOWN', 'Direction.DOWN', 'Direction', 'enum'),
                 location: { range: util.createRange(7, 36, 7, 40) }
             }, {
-                ...DiagnosticMessages.unknownEnumValue('down', 'Direction'),
+                ...DiagnosticMessages.cannotFindName('down', 'Direction.down', 'Direction', 'enum'),
                 location: { range: util.createRange(8, 36, 8, 40) }
             }]);
         });
@@ -463,10 +463,10 @@ describe('EnumStatement', () => {
             `);
             program.validate();
             expectDiagnostics(program, [{
-                ...DiagnosticMessages.unknownEnumValue('DOWN', 'Enums.Direction'),
+                ...DiagnosticMessages.cannotFindName('DOWN', 'Enums.Direction.DOWN', 'Enums.Direction', 'enum'),
                 location: { range: util.createRange(2, 42, 2, 46) }
             }, {
-                ...DiagnosticMessages.unknownEnumValue('down', 'Enums.Direction'),
+                ...DiagnosticMessages.cannotFindName('down', 'Enums.Direction.down', 'Enums.Direction', 'enum'),
                 location: { range: util.createRange(3, 42, 3, 46) }
             }]);
         });
