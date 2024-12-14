@@ -1030,7 +1030,7 @@ export let DiagnosticMessages = {
         message: `Function has no return statement and will return 'invalid': '${returnType}' cannot be coerced into 'invalid'`,
         legacyCode: 1151,
         severity: DiagnosticSeverity.Error,
-       code: 'return-type-coercion-mismatch'
+        code: 'return-type-coercion-mismatch'
     })
 };
 export const defaultMaximumTruncationLength = 160;
