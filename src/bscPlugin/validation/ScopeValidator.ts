@@ -897,9 +897,9 @@ export class ScopeValidator {
             return;
         }
         const returns = func.body?.findChild<ReturnStatement>(isReturnStatement, { walkMode: WalkMode.visitAll });
-        if (!returns) {
+        if (!returns && isStringType(returnType)) {
             this.addMultiScopeDiagnostic({
-                ...DiagnosticMessages.expectedReturnStatement(),
+                ...DiagnosticMessages.returnTypeCoercionMismatch(returnType.toString()),
                 location: func.location
             });
         }

@@ -1026,11 +1026,11 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'inconsistent-conditional-compile-nesting'
     }),
-    expectedReturnStatement: () => ({
-        message: `Expected return statement in function`,
+    returnTypeCoercionMismatch: (returnType = 'string') => ({
+        message: `Function has no return statement and will return 'invalid': '${returnType}' cannot be coerced into 'invalid'`,
         legacyCode: 1151,
         severity: DiagnosticSeverity.Error,
-        code: 'expected-return-statement'
+        code: 'return-type-coercion-mismatch'
     })
 };
 export const defaultMaximumTruncationLength = 160;
