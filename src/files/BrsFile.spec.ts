@@ -434,6 +434,18 @@ describe('BrsFile', () => {
                 }]);
             });
 
+            it('recognizes diagnostic names', () => {
+                let file = program.setFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                    sub Main()
+                        'bs:disable-next-line: cannot-find-name
+                        name = unknown
+                    end sub
+                `);
+                expect(file.commentFlags[0]).to.exist;
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
         });
 
         describe('bs:disable-line', () => {
@@ -732,7 +744,7 @@ describe('BrsFile', () => {
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.referencedConstDoesNotExist()
+                    DiagnosticMessages.hashConstDoesNotExist()
                 ]);
             });
 
@@ -746,7 +758,7 @@ describe('BrsFile', () => {
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.referencedConstDoesNotExist()
+                    DiagnosticMessages.hashConstDoesNotExist()
                 ]);
             });
 
@@ -771,7 +783,7 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 expectDiagnostics(program, [
-                    DiagnosticMessages.constNameCannotBeReservedWord()
+                    DiagnosticMessages.cannotUseReservedWordAsIdentifier('function')
                 ]);
             });
 
@@ -1179,7 +1191,7 @@ describe('BrsFile', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('import')
+                DiagnosticMessages.unexpectedStatementLocation('import', 'at the top of the file')
             ]);
         });
 
@@ -1198,7 +1210,7 @@ describe('BrsFile', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('library')
+                DiagnosticMessages.unexpectedStatementLocation('library', 'at the top of the file')
             ]);
         });
 
@@ -1210,7 +1222,7 @@ describe('BrsFile', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('library')
+                DiagnosticMessages.unexpectedStatementLocation('library', 'at the top of the file')
             ]);
         });
 
@@ -1319,10 +1331,10 @@ describe('BrsFile', () => {
                 end function
             `);
             expectDiagnostics(file.parser.diagnostics, [
-                DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
+                DiagnosticMessages.unmatchedLeftToken('(', 'function call arguments'),
                 DiagnosticMessages.expectedNewlineOrColon(),
                 DiagnosticMessages.unexpectedToken('end function'),
-                DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
+                DiagnosticMessages.unmatchedLeftToken('(', 'function call arguments'),
                 DiagnosticMessages.expectedNewlineOrColon()
             ]);
         });
@@ -4846,10 +4858,10 @@ describe('BrsFile', () => {
         `);
         program.validate();
         expectDiagnostics(program, [{
-            ...DiagnosticMessages.mismatchedEndCallableKeyword('function', 'sub'),
+            ...DiagnosticMessages.closingKeywordMismatch('function', 'sub'),
             location: util.createLocationFromFileRange(file, util.createRange(2, 12, 2, 19))
         }, {
-            ...DiagnosticMessages.mismatchedEndCallableKeyword('sub', 'function'),
+            ...DiagnosticMessages.closingKeywordMismatch('sub', 'function'),
             location: util.createLocationFromFileRange(file, util.createRange(4, 12, 4, 24))
         }]);
     });

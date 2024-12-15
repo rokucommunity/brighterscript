@@ -99,7 +99,7 @@ export default class SGParser {
         if (lexErrors.length) {
             for (const err of lexErrors) {
                 this.diagnostics.push({
-                    ...DiagnosticMessages.xmlGenericParseError(`Syntax error: ${err.message}`),
+                    ...DiagnosticMessages.syntaxError(`Syntax error: ${err.message}`),
                     location: this.getLocationFromRange(util.createRange(
                         err.line - 1,
                         err.column,
@@ -113,7 +113,7 @@ export default class SGParser {
             const err = parseErrors[0];
             const token = err.token;
             this.diagnostics.push({
-                ...DiagnosticMessages.xmlGenericParseError(`Syntax error: ${err.message}`),
+                ...DiagnosticMessages.syntaxError(`Syntax error: ${err.message}`),
                 location: this.getLocationFromRange(!isNaN(token.startLine) ? this.rangeFromToken(token) : util.createRange(0, 0, 0, Number.MAX_VALUE))
             });
         }
@@ -128,7 +128,7 @@ export default class SGParser {
                 token2?.image.trim() === '<?xml'
             ) {
                 this.diagnostics.push({
-                    ...DiagnosticMessages.xmlGenericParseError('Syntax error: whitespace found before the XML prolog'),
+                    ...DiagnosticMessages.syntaxError('Syntax error: whitespace found before the XML prolog'),
                     location: this.getLocationFromRange(this.rangeFromToken(token1))
                 });
             }

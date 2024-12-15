@@ -2502,7 +2502,7 @@ describe('ScopeValidator', () => {
         });
     });
 
-    describe('expectedReturnStatement', () => {
+    describe('returnTypeCoercionMismatch', () => {
         it('allows functions, subs, and "function as void/dynamic" to not have return statements', () => {
             program.setFile('source/util.bs', `
                 function noTypeSpecified()
@@ -2521,35 +2521,61 @@ describe('ScopeValidator', () => {
             expectZeroDiagnostics(program);
         });
 
-
         it('detects when a function does not have a return statement', () => {
             program.setFile('source/util.bs', `
-                function doSomething() as integer
+                function doSomething() as string
                 end function
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.expectedReturnStatement().message
+                DiagnosticMessages.returnTypeCoercionMismatch().message
             ]);
+        });
+
+        it('allows when a function does not have a return statement, but type coercsion is okay', () => {
+            program.setFile('source/util.bs', `
+                interface Whatever
+                    name as string
+                end interface
+
+                function doSomething() as Whatever
+                end function
+
+                function doSomething2() as object
+                end function
+
+                function doSomething3() as integer
+                end function
+
+                function doSomething4() as float
+                end function
+
+                function doSomething5() as boolean
+                end function
+
+            `);
+            program.validate();
+            // all these are ok
+            expectZeroDiagnostics(program);
         });
 
         it('detects when a namespaced function does not have a return statement', () => {
             program.setFile('source/util.bs', `
                 namespace alpha
-                    function doSomething() as integer
+                    function doSomething() as string
                     end function
                 end namespace
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.expectedReturnStatement().message
+                DiagnosticMessages.returnTypeCoercionMismatch().message
             ]);
         });
 
         it('detects when an inline function does not have a return statement', () => {
             program.setFile('source/util.bs', `
-                function outer() as integer
-                    inner = function() as integer
+                function outer() as string
+                    inner = function () as string
                         print "no return!"
                     end function
                     return inner()
@@ -2557,32 +2583,32 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.expectedReturnStatement().message
+                DiagnosticMessages.returnTypeCoercionMismatch().message
             ]);
         });
 
         it('detects when an outer function does not have a return statement', () => {
             program.setFile('source/util.bs', `
-                function outer() as integer
-                    inner = function() as integer
-                        return 1
+                function outer() as string
+                    inner = function() as string
+                        return "abc"
                     end function
                     print inner()
                 end function
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.expectedReturnStatement().message
+                DiagnosticMessages.returnTypeCoercionMismatch().message
             ]);
         });
 
         it('detects when a outer function has a return statement in a branch', () => {
             program.setFile('source/util.bs', `
-                function hasBranch(x) as integer
+                function hasBranch(x) as string
                     if x = 1
-                        return 1
+                        return "1"
                     else
-                        return 2
+                        return "2"
                     end if
                 end function
             `);
@@ -2592,20 +2618,20 @@ describe('ScopeValidator', () => {
 
         it('works for sub with return types with missing return', () => {
             program.setFile('source/util.bs', `
-                sub doSomething() as integer
+                sub doSomething() as string
                 end sub
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.expectedReturnStatement().message
+                DiagnosticMessages.returnTypeCoercionMismatch().message
             ]);
         });
 
 
         it('works for sub with return types', () => {
             program.setFile('source/util.bs', `
-                sub doSomething() as integer
-                    return 1
+                sub doSomething() as string
+                    return "1"
                 end sub
             `);
             program.validate();
@@ -3356,7 +3382,7 @@ describe('ScopeValidator', () => {
                 `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindTypeInCommentDoc('TypeNotThere').message
+                DiagnosticMessages.cannotFindName('TypeNotThere').message
             ]);
         });
 
@@ -3369,7 +3395,7 @@ describe('ScopeValidator', () => {
                 `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindTypeInCommentDoc('TypeNotThere').message
+                DiagnosticMessages.cannotFindName('TypeNotThere').message
             ]);
         });
 
@@ -3382,7 +3408,7 @@ describe('ScopeValidator', () => {
                 `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindTypeInCommentDoc('TypeNotThere').message
+                DiagnosticMessages.cannotFindName('TypeNotThere').message
             ]);
         });
 

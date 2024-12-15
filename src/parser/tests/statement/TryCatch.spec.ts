@@ -159,7 +159,7 @@ describe('parser try/catch', () => {
         `);
         expectDiagnosticsIncludes(parser, [
             DiagnosticMessages.expectedCatchBlockInTryCatch().message,
-            DiagnosticMessages.expectedEndTryToTerminateTryCatch().message
+            DiagnosticMessages.expectedTerminator('end try', 'try-catch', 'statement').message
         ]);
     });
 });

@@ -1011,11 +1011,14 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.nameCollision('Function', 'Global Function', 'Str').message,
                     {
+                        message: DiagnosticMessages.nameCollision('Function', 'Global Function', 'Str').message,
+                        location: { range: Range.create(4, 29, 4, 32) }
+                    }, {
                         message: DiagnosticMessages.scopeFunctionShadowedByBuiltInFunction().message,
                         location: { range: Range.create(4, 29, 4, 32) }
-                    }]);
+                    }
+                ]);
             });
         });
 
@@ -4372,7 +4375,7 @@ describe('Scope', () => {
                 end sub
             `);
             program.validate();
-            expectDiagnosticsIncludes(program, DiagnosticMessages.localVarSameNameAsClass('Person').message);
+            expectDiagnosticsIncludes(program, DiagnosticMessages.localVarShadowedByScopedFunction().message);
         });
 
         it('disallows reusing a class name as "for each" variable in a method', () => {
@@ -4389,7 +4392,7 @@ describe('Scope', () => {
                 end class
             `);
             program.validate();
-            expectDiagnosticsIncludes(program, DiagnosticMessages.localVarSameNameAsClass('Person').message);
+            expectDiagnosticsIncludes(program, DiagnosticMessages.localVarShadowedByScopedFunction().message);
         });
 
         it('allows reusing a namespaced class name as "for each" variable in a method', () => {

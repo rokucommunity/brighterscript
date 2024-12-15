@@ -6,6 +6,7 @@ import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import util from '../../../util';
+import { expectDiagnostics } from '../../../testHelpers.spec';
 
 describe('parser postfix unary expressions', () => {
     it('parses postfix \'++\' for variables', () => {
@@ -56,11 +57,7 @@ describe('parser postfix unary expressions', () => {
             token(TokenKind.PlusPlus, '++'),
             EOF
         ]);
-
-        expect(diagnostics).to.be.lengthOf(1);
-        expect(diagnostics[0]).deep.include({
-            message: 'Consecutive increment/decrement operators are not allowed'
-        });
+        expectDiagnostics(diagnostics, [DiagnosticMessages.unexpectedOperator().code]);
     });
 
     it('disallows postfix \'--\' for function call results', () => {
@@ -74,7 +71,7 @@ describe('parser postfix unary expressions', () => {
 
         expect(diagnostics).to.be.lengthOf(1);
         expect(diagnostics[0]).to.deep.include({
-            ...DiagnosticMessages.incrementDecrementOperatorsAreNotAllowedAsResultOfFunctionCall()
+            ...DiagnosticMessages.unexpectedOperator()
         });
     });
 

@@ -72,6 +72,11 @@ export interface BsDiagnostic {
      * @since 3.16.0
      */
     data?: any;
+
+    /**
+     * The code used for this diagnostic in v0
+     */
+    legacyCode?: number | string;
 }
 
 export interface DiagnosticContext {
