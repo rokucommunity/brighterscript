@@ -4378,6 +4378,85 @@ describe('ScopeValidator', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        it('allows callfunc on the dynamic result of a function call', () => {
+            program.setFile('source/test.bs', `
+                sub doCallfunc(nodeName)
+                    getNode(nodeName)@.someCallFunc(1,2,3)
+                end sub
+
+                function getNode(nodeType)
+                    return CreateObject("roSGNode", nodeType)
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('validates callfunc on a known result of a function call', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getName" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                function getName(name as string, count as integer) as string
+                    return "John Doe"
+                end function
+            `);
+
+            program.setFile('source/test.bs', `
+                sub doCallfunc()
+                    getWidget()@.getName("someStr", "not an int")
+                end sub
+
+                function getWidget() as roSGNodeWidget
+                    return CreateObject("roSGNode", "Widget")
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+            ]);
+        });
+
+        it('validates callfunc on a known result of a callfunc call', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getName" />
+                        <function name="getSelf" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                function getName(name as string, count as integer) as string
+                    return "John Doe"
+                end function
+
+                function getSelf() as roSGNodeWidget
+                    return m.top
+                end function
+            `);
+
+            program.setFile('source/test.bs', `
+                sub doCallfunc(widget as roSGNodeWidget)
+                    widget@.getSelf()@.getName("someStr", "not an int")
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+            ]);
+        });
     });
 });
 

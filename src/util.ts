@@ -2470,9 +2470,9 @@ export class Util {
         // It's nicer for CallExpression, because it's a call on any expression.
         let calleeType: BscType;
         if (isCallfuncExpression(callExpr)) {
-            calleeType = callExpr.callee.getType({ ...options, flags: SymbolTypeFlag.runtime });
+            calleeType = callExpr.callee.getType({ ...options, flags: SymbolTypeFlag.runtime, ignoreCall: false });
         } else if (isCallExpression(callExpr) && isDottedGetExpression(callExpr.callee)) {
-            calleeType = callExpr.callee.obj.getType({ ...options, flags: SymbolTypeFlag.runtime });
+            calleeType = callExpr.callee.obj.getType({ ...options, flags: SymbolTypeFlag.runtime, ignoreCall: false });
         }
         if (isComponentType(calleeType) || isReferenceType(calleeType)) {
             const funcType = (calleeType as ComponentType).getCallFuncType?.(methodName, options);
