@@ -3387,6 +3387,31 @@ describe('Scope', () => {
                 expectTypeToBe((dataType as ArrayType).defaultType, ComponentType);
                 expect((dataType as ArrayType).defaultType.toString()).to.equal('roSGNodeLabel');
             });
+
+            it('should allow a typed array of an enum', () => {
+                let utilFile = program.setFile<BrsFile>('source/util.bs', `
+                    enum Direction
+                        North = 1
+                        East = 2
+                        South = 3
+                        West = 4
+                    end enum
+
+                    sub EnumTest()
+                        arr = [Direction.North]
+                        arr.push(Direction.South)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = utilFile.getFunctionScopeAtPosition(util.createPosition(9, 24));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                const dataType = symbolTable.getSymbolType('arr', opts) as ArrayType;
+                expectTypeToBe(dataType, ArrayType);
+                expectTypeToBe(dataType.defaultType, EnumType);
+                expect(dataType.defaultType.toString()).to.equal('Direction');
+            });
         });
 
         describe('callFunc invocations', () => {
