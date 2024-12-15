@@ -408,6 +408,10 @@ export class ScopeValidator {
         const methodName = methodToken?.text ?? '';
         const functionFullname = `${callerType.toString()}@.${methodName}`;
         const callErrorLocation = expression.location;
+        if (util.isGenericNodeType(callerType) || isObjectType(callerType) || isDynamicType(callerType)) {
+            // ignore "general" node
+            return;
+        }
 
         if (!isComponentType(callerType)) {
             this.addMultiScopeDiagnostic({
@@ -416,10 +420,7 @@ export class ScopeValidator {
             });
             return;
         }
-        if (util.isGenericNodeType(callerType)) {
-            // ignore "general" node
-            return;
-        }
+
         const funcType = util.getCallFuncType(expression, methodToken, { flags: SymbolTypeFlag.runtime, ignoreCall: true });
         if (!funcType?.isResolvable()) {
             this.addMultiScopeDiagnostic({

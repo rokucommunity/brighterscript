@@ -2422,7 +2422,14 @@ export class Util {
             const componentName = isLiteralString(callExpr.args[0]) ? callExpr.args[0].tokens.value?.text?.replace(/"/g, '') : '';
             const nodeType = componentName.toLowerCase() === 'rosgnode' && isLiteralString(callExpr.args[1]) ? callExpr.args[1].tokens.value?.text?.replace(/"/g, '') : '';
             if (componentName?.toLowerCase().startsWith('ro')) {
-                const fullName = componentName + nodeType;
+                let fullName = componentName + nodeType;
+
+                if (nodeType.includes(':')) {
+                    // This node has a colon in its name, most likely from a component Library
+                    // This componentType is most likely unknown, so return `roSGNode`
+                    fullName = 'roSGNode';
+                }
+
                 const data = {};
                 const symbolTable = callExpr.getSymbolTable();
                 const foundType = symbolTable.getSymbolType(fullName, {

@@ -762,7 +762,7 @@ describe('HoverProcessor', () => {
             expect(hover?.contents).eql([fence('function roSGNodeWidget@.someFunc(input as string) as float')]);
         });
 
-        it('should documentation on @callfunc hovers', () => {
+        it('should include documentation on @callfunc hovers', () => {
             program.setFile('components/Widget.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Widget" extends="Group">

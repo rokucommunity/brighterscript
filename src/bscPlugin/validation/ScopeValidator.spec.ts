@@ -4349,6 +4349,35 @@ describe('ScopeValidator', () => {
                 DiagnosticMessages.cannotFindCallFuncFunction('someFunc', 'roSGNodeRectangle@.someFunc', 'roSGNodeRectangle')
             ]);
         });
+
+        it('allows callfunc on flexible types', () => {
+            program.setFile('source/test.bs', `
+                sub doCallfunc(obj as object, dyn as dynamic, node as roSGNode)
+                    obj.callfunc("testFunc")
+                    obj@.testFunc()
+
+                    dyn.callfunc("testFunc")
+                    dyn@.testFunc()
+
+                    node.callfunc("testFunc")
+                    node@.testFunc()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows callfunc on components from component library', () => {
+            program.setFile('source/test.bs', `
+                sub doCallfunc()
+                    fromComponentLibrary = CreateObject("roSGNode", "library:SomeComponent")
+                    fromComponentLibrary@.someFunc()
+                    fromComponentLibrary.callfunc("someFunc")
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 });
 
