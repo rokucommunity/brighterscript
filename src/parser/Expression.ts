@@ -498,7 +498,7 @@ export class FunctionParameterExpression extends Expression {
 
         const paramTypeFromCode = this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime, typeChain: undefined }) ??
             this.defaultValue?.getType({ ...options, flags: SymbolTypeFlag.runtime, typeChain: undefined });
-        const paramTypeFromDoc = docs.getParamBscType(paramName, { ...options, fullName: paramName, tableProvider: () => this.getSymbolTable() });
+        const paramTypeFromDoc = docs.getParamBscType(paramName, { ...options, fullName: paramName, typeChain: undefined, tableProvider: () => this.getSymbolTable() });
 
         let paramType = util.chooseTypeFromCodeOrDocComment(paramTypeFromCode, paramTypeFromDoc, options) ?? DynamicType.instance;
         options.typeChain?.push(new TypeChainEntry({ name: paramName, type: paramType, data: options.data, astNode: this }));
