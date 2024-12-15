@@ -167,6 +167,10 @@ export class BrsFileValidator {
             FunctionExpression: (node) => {
                 const funcSymbolTable = node.getSymbolTable();
                 const isInlineFunc = !(isFunctionStatement(node.parent) || isMethodStatement(node.parent));
+                if (isInlineFunc) {
+                    // symbol table should not include any symbols from parent func
+                    funcSymbolTable.pushParentProvider(() => node.findAncestor<Body>(isBody).getSymbolTable());
+                }
                 if (!funcSymbolTable?.hasSymbol('m', SymbolTypeFlag.runtime) || isInlineFunc) {
                     if (!isTypecastStatement(node.body?.statements?.[0])) {
                         funcSymbolTable?.addSymbol('m', { isInstance: true }, new AssociativeArrayType(), SymbolTypeFlag.runtime);
@@ -446,7 +450,7 @@ export class BrsFileValidator {
         const isBool = ccConst.kind === TokenKind.True || ccConst.kind === TokenKind.False;
         if (!isBool && !this.event.file.ast.bsConsts.has(ccConst.text.toLowerCase())) {
             this.event.program.diagnostics.register({
-                ...DiagnosticMessages.referencedConstDoesNotExist(),
+                ...DiagnosticMessages.hashConstDoesNotExist(),
                 location: ccConst.location
             });
             return false;
@@ -519,17 +523,17 @@ export class BrsFileValidator {
             if (!topOfFileStatements.includes(result)) {
                 if (isLibraryStatement(result)) {
                     this.event.program.diagnostics.register({
-                        ...DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('library'),
+                        ...DiagnosticMessages.unexpectedStatementLocation('library', 'at the top of the file'),
                         location: result.location
                     });
                 } else if (isImportStatement(result)) {
                     this.event.program.diagnostics.register({
-                        ...DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('import'),
+                        ...DiagnosticMessages.unexpectedStatementLocation('import', 'at the top of the file'),
                         location: result.location
                     });
                 } else if (isAliasStatement(result)) {
                     this.event.program.diagnostics.register({
-                        ...DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('alias'),
+                        ...DiagnosticMessages.unexpectedStatementLocation('alias', 'at the top of the file'),
                         location: result.location
                     });
                 }
@@ -544,7 +548,7 @@ export class BrsFileValidator {
         for (let i = 1; i < topOfFileTypecastStatements.length; i++) {
             const typecastStmt = topOfFileTypecastStatements[i];
             this.event.program.diagnostics.register({
-                ...DiagnosticMessages.typecastStatementMustBeDeclaredAtStart(),
+                ...DiagnosticMessages.unexpectedStatementLocation('typecast', 'at the top of the file or beginning of function or namespace'),
                 location: typecastStmt.location
             });
         }
@@ -575,7 +579,7 @@ export class BrsFileValidator {
 
             if (!isFirst || !isAllowedBlock) {
                 this.event.program.diagnostics.register({
-                    ...DiagnosticMessages.typecastStatementMustBeDeclaredAtStart(),
+                    ...DiagnosticMessages.unexpectedStatementLocation('typecast', 'at the top of the file or beginning of function or namespace'),
                     location: result.location
                 });
             }

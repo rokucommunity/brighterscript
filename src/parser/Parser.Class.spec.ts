@@ -174,7 +174,7 @@ describe('parser class', () => {
             `);
         let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
         expect(diagnostics).length.to.be.greaterThan(0);
-        expect(diagnostics[0].code).to.equal(DiagnosticMessages.expectedIdentifierAfterKeyword('class').code);
+        expect(diagnostics[0].code).to.equal(DiagnosticMessages.expectedIdentifier('class').code);
         expect(ast.statements[0]).instanceof(ClassStatement);
     });
 
@@ -240,7 +240,7 @@ describe('parser class', () => {
             expect(diagnostics.length).to.be.greaterThan(0);
             let cls = ast.statements[0] as ClassStatement;
             expect(cls.fields[0].tokens.name!.text).to.equal('middleName');
-            expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.expectedIdentifierAfterKeyword('as'));
+            expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.expectedIdentifier('as'));
         });
 
         it('field access modifier defaults to undefined when omitted', () => {
@@ -384,7 +384,7 @@ describe('parser class', () => {
             end class
         `);
         let { diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
-        expect(diagnostics[0].code).to.equal(DiagnosticMessages.expectedIdentifierAfterKeyword('extends').code);
+        expect(diagnostics[0].code).to.equal(DiagnosticMessages.expectedIdentifier('extends').code);
     });
 
     describe('new keyword', () => {

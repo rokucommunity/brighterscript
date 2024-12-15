@@ -14,9 +14,9 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import util, { standardizePath as s } from '../util';
 import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
 import { ParseMode, Parser } from '../parser/Parser';
-import type { FunctionStatement } from '../parser/Statement';
-import { ImportStatement } from '../parser/Statement';
-import { createToken } from '../astUtils/creators';
+import { Block, FunctionStatement } from '../parser/Statement';
+import { ImportStatement, PrintStatement } from '../parser/Statement';
+import { createIdentifier, createStringLiteral, createToken } from '../astUtils/creators';
 import * as fsExtra from 'fs-extra';
 import undent from 'undent';
 import { tempDir, rootDir } from '../testHelpers.spec';
@@ -24,8 +24,9 @@ import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { ClassType, EnumType, FloatType, InterfaceType } from '../types';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import * as fileUrl from 'file-url';
-import { isAALiteralExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isBlock } from '../astUtils/reflection';
 import type { AALiteralExpression } from '../parser/Expression';
+import { CallExpression, FunctionExpression, LiteralExpression } from '../parser/Expression';
 
 let sinon = sinonImport.createSandbox();
 
@@ -433,6 +434,18 @@ describe('BrsFile', () => {
                 }]);
             });
 
+            it('recognizes diagnostic names', () => {
+                let file = program.setFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                    sub Main()
+                        'bs:disable-next-line: cannot-find-name
+                        name = unknown
+                    end sub
+                `);
+                expect(file.commentFlags[0]).to.exist;
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
         });
 
         describe('bs:disable-line', () => {
@@ -731,7 +744,7 @@ describe('BrsFile', () => {
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.referencedConstDoesNotExist()
+                    DiagnosticMessages.hashConstDoesNotExist()
                 ]);
             });
 
@@ -745,7 +758,7 @@ describe('BrsFile', () => {
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.referencedConstDoesNotExist()
+                    DiagnosticMessages.hashConstDoesNotExist()
                 ]);
             });
 
@@ -770,7 +783,7 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 expectDiagnostics(program, [
-                    DiagnosticMessages.constNameCannotBeReservedWord()
+                    DiagnosticMessages.cannotUseReservedWordAsIdentifier('function')
                 ]);
             });
 
@@ -1178,7 +1191,7 @@ describe('BrsFile', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('import')
+                DiagnosticMessages.unexpectedStatementLocation('import', 'at the top of the file')
             ]);
         });
 
@@ -1197,7 +1210,7 @@ describe('BrsFile', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('library')
+                DiagnosticMessages.unexpectedStatementLocation('library', 'at the top of the file')
             ]);
         });
 
@@ -1209,7 +1222,7 @@ describe('BrsFile', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('library')
+                DiagnosticMessages.unexpectedStatementLocation('library', 'at the top of the file')
             ]);
         });
 
@@ -1318,10 +1331,10 @@ describe('BrsFile', () => {
                 end function
             `);
             expectDiagnostics(file.parser.diagnostics, [
-                DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
+                DiagnosticMessages.unmatchedLeftToken('(', 'function call arguments'),
                 DiagnosticMessages.expectedNewlineOrColon(),
                 DiagnosticMessages.unexpectedToken('end function'),
-                DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
+                DiagnosticMessages.unmatchedLeftToken('(', 'function call arguments'),
                 DiagnosticMessages.expectedNewlineOrColon()
             ]);
         });
@@ -1970,6 +1983,59 @@ describe('BrsFile', () => {
                     undent(expected)
                 );
             }
+
+            it('transpiles call expression when paren tokens are missing', async () => {
+                const file = program.setFile<BrsFile>('source/main.bs', `
+                    sub main()
+                    end sub
+                `);
+                const body = file.ast.findChild<Block>(isBlock);
+                body.statements.push(new CallExpression({
+                    callee: new LiteralExpression({ value: createIdentifier('lcase') }),
+                    args: [createStringLiteral('HELLO')]
+                }));
+
+                await testTranspile(file, `
+                    sub main()
+                        lcase("HELLO")
+                    end sub
+                `, undefined, undefined, false);
+            });
+
+            it('transpiles print expression when print token is missing', async () => {
+                const file = program.setFile<BrsFile>('source/main.bs', `
+                    sub main()
+                    end sub
+                `);
+                const body = file.ast.findChild<Block>(isBlock);
+                body.statements.push(new PrintStatement({
+                    expressions: [createStringLiteral('HELLO')]
+                }));
+
+                await testTranspile(file, `
+                    sub main()
+                        print "HELLO"
+                    end sub
+                `, undefined, undefined, false);
+            });
+
+
+            it('transpiles function expression when paren tokens are missing', async () => {
+                const file = program.setFile<BrsFile>('source/main.bs', `
+                `);
+                file.ast.statements.push(new FunctionStatement({
+                    func: new FunctionExpression({
+                        body: new Block({ statements: [] })
+                    }),
+                    name: createIdentifier('main')
+                }));
+
+                await testTranspile(file, `
+                    function main()
+                    end function
+                `, undefined, undefined, false);
+            });
+
         });
 
         it('transpilies libpkg:/ paths when encountered', async () => {
@@ -2262,6 +2328,38 @@ describe('BrsFile', () => {
                         someOtherObject = m.other.object
                     end sub
                 `);
+            });
+
+            it('transpiles namespace calls from within an array', async () => {
+                await testTranspile(`
+                    namespace Vertibrates.Birds
+                        function GetAllBirds()
+                            return [
+                                GetDuck(),
+                                GetGoose()
+                            ]
+                        end function
+
+                        function GetDuck()
+                        end function
+
+                        function GetGoose()
+                        end function
+                    end namespace
+                    `, `
+                        function Vertibrates_Birds_GetAllBirds()
+                            return [
+                                Vertibrates_Birds_GetDuck()
+                                Vertibrates_Birds_GetGoose()
+                            ]
+                        end function
+
+                        function Vertibrates_Birds_GetDuck()
+                        end function
+
+                        function Vertibrates_Birds_GetGoose()
+                        end function
+                `, undefined, 'components/NobodyImportsMe.bs', false);
             });
 
             it('properly transpiles inferred namespace function for assignment', async () => {
@@ -4234,9 +4332,11 @@ describe('BrsFile', () => {
     });
 
     describe('getTypedef', () => {
-        function testTypedef(original: string, expected: string) {
-            let file = program.setFile<BrsFile>('source/main.brs', original);
+        function testTypedef(original: string, expected: string, mode: ParseMode = ParseMode.BrighterScript) {
+            const ext = mode === ParseMode.BrighterScript ? 'bs' : 'brs';
+            let file = program.setFile<BrsFile>(`source/main.${ext}`, original);
             program.validate();
+            expectZeroDiagnostics(program);
             expect(file.getTypedef().trimEnd()).to.eql(expected);
         }
 
@@ -4313,6 +4413,7 @@ describe('BrsFile', () => {
         });
 
         it('includes import statements', () => {
+            program.setFile('source/lib.brs', ``);
             testTypedef(`
                import "pkg:/source/lib.brs"
             `, trim`
@@ -4413,6 +4514,7 @@ describe('BrsFile', () => {
         it('includes class inheritance', () => {
             testTypedef(`
                 class Human
+                    name
                     sub new(name as string)
                         m.name = name
                     end sub
@@ -4424,6 +4526,7 @@ describe('BrsFile', () => {
                 end class
             `, trim`
                 class Human
+                    public name as dynamic
                     sub new(name as string)
                     end sub
                 end class
@@ -4499,6 +4602,7 @@ describe('BrsFile', () => {
             testTypedef(`
                 namespace NameA
                     class Human
+                        name
                         sub new(name as string)
                             m.name = name
                         end sub
@@ -4514,6 +4618,7 @@ describe('BrsFile', () => {
             `, trim`
                 namespace NameA
                     class Human
+                        public name as dynamic
                         sub new(name as string)
                         end sub
                     end class
@@ -4753,10 +4858,10 @@ describe('BrsFile', () => {
         `);
         program.validate();
         expectDiagnostics(program, [{
-            ...DiagnosticMessages.mismatchedEndCallableKeyword('function', 'sub'),
+            ...DiagnosticMessages.closingKeywordMismatch('function', 'sub'),
             location: util.createLocationFromFileRange(file, util.createRange(2, 12, 2, 19))
         }, {
-            ...DiagnosticMessages.mismatchedEndCallableKeyword('sub', 'function'),
+            ...DiagnosticMessages.closingKeywordMismatch('sub', 'function'),
             location: util.createLocationFromFileRange(file, util.createRange(4, 12, 4, 24))
         }]);
     });

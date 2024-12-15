@@ -15,9 +15,8 @@ import { createInvalidLiteral, createMethodStatement, createToken } from '../ast
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import { SymbolTable } from '../SymbolTable';
-import type { Expression } from './AstNode';
-import { AstNodeKind } from './AstNode';
-import { Statement } from './AstNode';
+import type { AstNode, Expression } from './AstNode';
+import { AstNodeKind, Statement } from './AstNode';
 import { ClassType } from '../types/ClassType';
 import { EnumMemberType, EnumType } from '../types/EnumType';
 import { NamespaceType } from '../types/NamespaceType';
@@ -187,7 +186,7 @@ export class AssignmentStatement extends Statement {
         return [
             state.transpileToken(this.tokens.name),
             ' ',
-            state.transpileToken(this.tokens.equals ?? createToken(TokenKind.Equal)),
+            state.transpileToken(this.tokens.equals ?? createToken(TokenKind.Equal), '='),
             ' ',
             ...this.value.transpile(state)
         ];
@@ -739,7 +738,7 @@ export class IfStatement extends Statement {
         if (this.tokens.then) {
             results.push(' ');
             results.push(
-                state.transpileToken(this.tokens.then)
+                state.transpileToken(this.tokens.then, 'then')
             );
         }
         state.lineage.unshift(this);
@@ -890,7 +889,7 @@ export class PrintStatement extends Statement {
      * @param options.expressions an array of expressions to be evaluated and printed. Wrap PrintSeparator tokens (`;` or `,`) in `PrintSeparatorExpression`
      */
     constructor(options: {
-        print: Token;
+        print?: Token;
         expressions: Array<Expression>;
     }) {
         super();
@@ -905,7 +904,7 @@ export class PrintStatement extends Statement {
     }
 
     public readonly tokens: {
-        readonly print: Token;
+        readonly print?: Token;
     };
 
     public readonly expressions: Array<Expression>;
@@ -916,7 +915,7 @@ export class PrintStatement extends Statement {
 
     transpile(state: BrsTranspileState) {
         let result = [
-            state.transpileToken(this.tokens.print)
+            state.transpileToken(this.tokens.print, 'print'),
         ] as TranspileResult;
 
         //if the first expression has no leading whitespace, add a single space between the `print` and the expression
@@ -1629,6 +1628,7 @@ export class DottedSetStatement extends Statement {
         this.location = util.createBoundingLocation(
             this.obj,
             this.tokens.dot,
+            this.tokens.equals,
             this.tokens.name,
             this.value
         );
@@ -1716,12 +1716,12 @@ export class IndexedSetStatement extends Statement {
             equals: options.equals
         };
         this.obj = options.obj;
-        this.indexes = options.indexes;
+        this.indexes = options.indexes ?? [];
         this.value = options.value;
         this.location = util.createBoundingLocation(
             this.obj,
             this.tokens.openingSquare,
-            ...this.indexes ?? [],
+            ...this.indexes,
             this.tokens.closingSquare,
             this.value
         );
@@ -1787,9 +1787,9 @@ export class IndexedSetStatement extends Statement {
                 obj: this.obj?.clone(),
                 openingSquare: util.cloneToken(this.tokens.openingSquare),
                 indexes: this.indexes?.map(x => x?.clone()),
+                closingSquare: util.cloneToken(this.tokens.closingSquare),
                 equals: util.cloneToken(this.tokens.equals),
-                value: this.value?.clone(),
-                closingSquare: util.cloneToken(this.tokens.closingSquare)
+                value: this.value?.clone()
             }),
             ['obj', 'indexes', 'value']
         );

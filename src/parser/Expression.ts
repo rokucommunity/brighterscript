@@ -179,11 +179,9 @@ export class CallExpression extends Expression {
             let arg = this.args[i];
             result.push(...arg.transpile(state));
         }
-        if (this.tokens.closingParen) {
-            result.push(
-                state.transpileToken(this.tokens.closingParen)
-            );
-        }
+        result.push(
+            state.transpileToken(this.tokens.closingParen, ')')
+        );
         return result;
     }
 
@@ -319,7 +317,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
         //leftParen
         results.push(
-            state.transpileToken(this.tokens.leftParen)
+            state.transpileToken(this.tokens.leftParen, '(')
         );
         //parameters
         for (let i = 0; i < this.parameters.length; i++) {
@@ -333,7 +331,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
         //right paren
         results.push(
-            state.transpileToken(this.tokens.rightParen)
+            state.transpileToken(this.tokens.rightParen, ')')
         );
         //as [Type]
         if (!state.options.removeParameterTypes && this.returnTypeExpression) {
@@ -872,9 +870,9 @@ export class GroupingExpression extends Expression {
             return this.expression.transpile(state);
         }
         return [
-            state.transpileToken(this.tokens.leftParen),
+            state.transpileToken(this.tokens.leftParen, '('),
             ...this.expression.transpile(state),
-            state.transpileToken(this.tokens.rightParen)
+            state.transpileToken(this.tokens.rightParen, ')')
         ];
     }
 

@@ -143,11 +143,12 @@ describe('SGParser', () => {
                 <script type="text/brightscript" uri="ChildScene.brs" />
             </component>`
         );
+        expect(parser.diagnostics).to.be.lengthOf(2);
         expectDiagnostics(parser, [{ // expecting opening tag but got prolog
-            code: DiagnosticMessages.xmlGenericParseError('').code,
+            code: DiagnosticMessages.syntaxError('Expecting token of type --> OPEN <-- but found --> \'<?xml \' <--').code,
             location: { range: Range.create(1, 12, 1, 18) }
         }, {
-            ...DiagnosticMessages.xmlGenericParseError('Syntax error: whitespace found before the XML prolog'),
+            ...DiagnosticMessages.syntaxError('Syntax error: whitespace found before the XML prolog'),
             location: { range: Range.create(0, 0, 1, 12) }
         }]);
     });

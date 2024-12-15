@@ -354,8 +354,8 @@ describe('BrsFileValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.typecastStatementMustBeDeclaredAtStart().message,
-                DiagnosticMessages.typecastStatementMustBeDeclaredAtStart().message
+                DiagnosticMessages.unexpectedStatementLocation('typecast', 'at the top of the file or beginning of function or namespace').message,
+                DiagnosticMessages.unexpectedStatementLocation('typecast', 'at the top of the file or beginning of function or namespace').message
             ]);
         });
 
@@ -393,7 +393,7 @@ describe('BrsFileValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.typecastStatementMustBeDeclaredAtStart().message
+                DiagnosticMessages.unexpectedStatementLocation('typecast', 'at the top of the file or beginning of function or namespace').message
             ]);
         });
 
@@ -425,7 +425,7 @@ describe('BrsFileValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.typecastStatementMustBeDeclaredAtStart().message
+                DiagnosticMessages.unexpectedStatementLocation('typecast', 'at the top of the file or beginning of function or namespace').message
             ]);
         });
 
@@ -636,8 +636,8 @@ describe('BrsFileValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('alias').message,
-                DiagnosticMessages.statementMustBeDeclaredAtTopOfFile('alias').message
+                DiagnosticMessages.unexpectedStatementLocation('alias', 'at the top of the file').message,
+                DiagnosticMessages.unexpectedStatementLocation('alias', 'at the top of the file').message
             ]);
         });
 
@@ -995,7 +995,7 @@ describe('BrsFileValidator', () => {
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.cannotFindTypeInCommentDoc('TypeNotThere').message
+                    DiagnosticMessages.cannotFindName('TypeNotThere').message
                 ]);
                 const data = {} as ExtraSymbolData;
                 expectTypeToBe(
@@ -1008,6 +1008,32 @@ describe('BrsFileValidator', () => {
                     flags: SymbolTypeFlag.runtime, data: data
                 });
                 expectTypeToBe(infoType, DynamicType);
+                expect(data.isFromDocComment).to.be.true;
+            });
+
+            it('allows built-in type in @param in Brightscript mode', () => {
+                const file = program.setFile<BrsFile>('source/main.brs', `
+                    ' @param {roAssociativeArray} thing
+                    function sayHello(thing)
+                        print "Hello " + thing.name
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                let data = {} as ExtraSymbolData;
+                expectTypeToBe(
+                    file.ast.findChild(isFunctionParameterExpression).getType({
+                        flags: SymbolTypeFlag.runtime, data: data
+                    }),
+                    InterfaceType
+                );
+                data = {};
+                const printSymbolTable = file.ast.findChild(isPrintStatement).getSymbolTable();
+                const thingType = printSymbolTable.getSymbolType('thing', {
+                    flags: SymbolTypeFlag.runtime, data: data
+                });
+                expectTypeToBe(thingType, InterfaceType);
+                expect(thingType.toString()).to.eql('roAssociativeArray');
                 expect(data.isFromDocComment).to.be.true;
             });
         });
@@ -1039,7 +1065,7 @@ describe('BrsFileValidator', () => {
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.cannotFindTypeInCommentDoc('TypeNotThere').message
+                    DiagnosticMessages.cannotFindName('TypeNotThere').message
                 ]);
                 const data = {} as ExtraSymbolData;
                 const funcStmt = file.ast.findChild(isFunctionStatement);
@@ -1146,7 +1172,7 @@ describe('BrsFileValidator', () => {
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.cannotFindTypeInCommentDoc('unknown').message
+                    DiagnosticMessages.cannotFindName('unknown').message
                 ]);
                 const data = {} as ExtraSymbolData;
                 const funcStmt = file.ast.findChild(isFunctionStatement);

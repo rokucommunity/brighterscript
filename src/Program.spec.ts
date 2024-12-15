@@ -1138,10 +1138,13 @@ describe('Program', () => {
             `);
             //the file should be included in the program
             expect(program.getFile('components/a/b/c/main.brs')).to.exist;
-            let diagnostics = program.getDiagnostics();
-            expectHasDiagnostics(diagnostics);
-            let parseError = diagnostics.filter(x => x.message === 'Unterminated string at end of line')[0];
-            expect(parseError).to.exist;
+            expectDiagnostics(program, [
+                DiagnosticMessages.expectedStatement(),
+                {
+                    ...DiagnosticMessages.unterminatedString(),
+                    location: util.createLocation(2, 20, 2, 49, s`${rootDir}/components/a/b/c/main.brs`)
+                }
+            ]);
         });
 
         it('it excludes specified error codes', () => {
@@ -2702,7 +2705,7 @@ describe('Program', () => {
 
             //the buffers should be identical
             expect(
-                data.compare(result)
+                data.compare(result as any)
             ).to.equal(0);
         });
 
@@ -2990,6 +2993,14 @@ describe('Program', () => {
             expect(socketAsyncType.name).to.eq('ifSocketAsync');
             expectTypeToBe(socketAsyncType.getMemberType('setMessagePort', opts), TypedFunctionType);
             expectTypeToBe(streamSocketType.getMemberType('setMessagePort', opts), TypedFunctionType);
+
+            const vector2dInterp = table.getSymbolType('roSGNodeVector2DFieldInterpolator', { flags: SymbolTypeFlag.typetime });
+            expectTypeToBe(vector2dInterp, ComponentType);
+
+            const vector2dKeyValueType = vector2dInterp.getMemberType('keyValue', opts) as ArrayType;
+            expectTypeToBe(vector2dKeyValueType, ArrayType);
+            expectTypeToBe(vector2dKeyValueType.defaultType, ArrayType);
+            expectTypeToBe((vector2dKeyValueType.defaultType as ArrayType).defaultType, FloatType);
         });
 
     });

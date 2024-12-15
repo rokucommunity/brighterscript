@@ -1555,7 +1555,15 @@ export class Program {
 
         // serialize each file
         for (const file of files) {
-            const scope = this.getFirstScopeForFile(file);
+            let scope = this.getFirstScopeForFile(file);
+
+            //if the file doesn't have a scope, create a temporary scope for the file so it can depend on scope-level items
+            if (!scope) {
+                scope = new Scope(`temporary-for-${file.pkgPath}`, this);
+                scope.getAllFiles = () => [file];
+                scope.getOwnFiles = scope.getAllFiles;
+            }
+
             //link the symbol table for all the files in this scope
             scope?.linkSymbolTable();
             const event: SerializeFileEvent = {

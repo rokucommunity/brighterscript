@@ -129,7 +129,7 @@ describe('XmlScope', () => {
                 ...DiagnosticMessages.xmlTagMissingAttribute('function', 'name'),
                 location: { range: Range.create(7, 9, 7, 17) }
             }, { // syntax error expecting '=' but found '/>'
-                code: DiagnosticMessages.xmlGenericParseError('').code
+                code: DiagnosticMessages.syntaxError('').code
             }, { // onChange function
                 ...DiagnosticMessages.xmlFunctionNotFound('func4'),
                 location: { range: Range.create(8, 51, 8, 56) }
@@ -178,7 +178,7 @@ describe('XmlScope', () => {
                 ...DiagnosticMessages.xmlTagMissingAttribute('field', 'type'),
                 location: { range: Range.create(9, 9, 9, 14) }
             }, { // syntax error expecting '=' but found '/>'
-                code: DiagnosticMessages.xmlGenericParseError('').code
+                code: DiagnosticMessages.syntaxError('').code
             }]);
         });
     });
@@ -306,7 +306,7 @@ describe('XmlScope', () => {
                     print input
                 end sub
             `);
-            program.setFile('source/util.brs', `
+            program.setFile('source/util.bs', `
                 sub useCallFunc(input as roSGNodeWidget)
                     input.callFunc("someFunc", {hello: "world"})
                 end sub

@@ -332,7 +332,7 @@ export class ScopeValidator {
             // Test for deprecation
             if (brightScriptComponent?.isDeprecated) {
                 this.addDiagnostic({
-                    ...DiagnosticMessages.deprecatedBrightScriptComponent(firstParamStringValue, brightScriptComponent.deprecatedDescription),
+                    ...DiagnosticMessages.itemIsDeprecated(firstParamStringValue, brightScriptComponent.deprecatedDescription),
                     location: call.location
                 });
             }
@@ -768,10 +768,11 @@ export class ScopeValidator {
             }
         } else if (isDynamicType(exprType) && isEnumType(parentTypeInfo?.type) && isDottedGetExpression(expression)) {
             const enumFileLink = this.event.scope.getEnumFileLink(util.getAllDottedGetPartsAsString(expression.obj));
+            const typeChainScanForItem = util.processTypeChain(typeChain);
             const typeChainScanForParent = util.processTypeChain(typeChain.slice(0, -1));
             if (enumFileLink) {
                 this.addMultiScopeDiagnostic({
-                    ...DiagnosticMessages.unknownEnumValue(lastTypeInfo?.name, typeChainScanForParent.fullChainName),
+                    ...DiagnosticMessages.cannotFindName(lastTypeInfo?.name, typeChainScanForItem.fullChainName, typeChainScanForParent.fullNameOfItem, 'enum'),
                     location: lastTypeInfo?.location,
                     relatedInformation: [{
                         message: 'Enum declared here',
@@ -896,9 +897,9 @@ export class ScopeValidator {
             return;
         }
         const returns = func.body?.findChild<ReturnStatement>(isReturnStatement, { walkMode: WalkMode.visitAll });
-        if (!returns) {
+        if (!returns && isStringType(returnType)) {
             this.addMultiScopeDiagnostic({
-                ...DiagnosticMessages.expectedReturnStatement(),
+                ...DiagnosticMessages.returnTypeCoercionMismatch(returnType.toString()),
                 location: func.location
             });
         }
@@ -1116,7 +1117,7 @@ export class ScopeValidator {
             const classStmtLink = this.event.scope.getClassFileLink(lowerVarName);
             if (classStmtLink) {
                 this.addMultiScopeDiagnostic({
-                    ...DiagnosticMessages.localVarSameNameAsClass(classStmtLink?.item?.getName(ParseMode.BrighterScript)),
+                    ...DiagnosticMessages.localVarShadowedByScopedFunction(),
                     location: util.createLocationFromFileRange(file, varDeclaration.nameRange),
                     relatedInformation: [{
                         message: 'Class declared here',
@@ -1196,7 +1197,7 @@ export class ScopeValidator {
             const foundType = docTypeTag.typeExpression?.getType({ flags: SymbolTypeFlag.typetime });
             if (!foundType?.isResolvable()) {
                 this.addMultiScopeDiagnostic({
-                    ...DiagnosticMessages.cannotFindTypeInCommentDoc(docTypeTag.typeString),
+                    ...DiagnosticMessages.cannotFindName(docTypeTag.typeString),
                     location: brsDocParser.getTypeLocationFromToken(docTypeTag.token) ?? docTypeTag.location
                 });
             }
@@ -1239,6 +1240,8 @@ export class ScopeValidator {
      * In particular, since BrightScript does not support Unions, and there's no way to cast them to something else
      * if the result of .getType() is a union, and we're in a .brs (brightScript) file, treat the result as Dynamic
      *
+     * Also, for BrightScript parse-mode, if .getType() returns a node type, do not validate unknown members.
+     *
      * In most cases, this returns the result of node.getType()
      *
      * @param file the current file being processed
@@ -1264,6 +1267,11 @@ export class ScopeValidator {
             if (isUnionType(type)) {
                 //this is a union
                 return DynamicType.instance;
+            }
+
+            if (isComponentType(type)) {
+                // modify type to allow any member access for Node types
+                type.changeUnknownMemberToDynamic = true;
             }
         }
 

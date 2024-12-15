@@ -14,6 +14,8 @@ export abstract class InheritableType extends BscType {
         }
     }
 
+    changeUnknownMemberToDynamic = false;
+
     getMemberType(memberName: string, options: GetTypeOptions) {
         let hasRoAssociativeArrayAsAncestor = this.name.toLowerCase() === 'roassociativearray' || this.getAncestorTypeList()?.find(ancestorType => ancestorType.name.toLowerCase() === 'roassociativearray');
 
@@ -21,7 +23,12 @@ export abstract class InheritableType extends BscType {
             return super.getMemberType(memberName, options) ?? DynamicType.instance;
         }
 
-        return super.getMemberType(memberName, { ...options, fullName: memberName, tableProvider: () => this.memberTable });
+        const resultType = super.getMemberType(memberName, { ...options, fullName: memberName, tableProvider: () => this.memberTable });
+
+        if (this.changeUnknownMemberToDynamic && !resultType.isResolvable()) {
+            return DynamicType.instance;
+        }
+        return resultType;
     }
 
     public toString() {
