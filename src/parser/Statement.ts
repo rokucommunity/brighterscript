@@ -15,7 +15,7 @@ import { createInvalidLiteral, createMethodStatement, createToken } from '../ast
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import { SymbolTable } from '../SymbolTable';
-import type { AstNode, Expression } from './AstNode';
+import type { Expression } from './AstNode';
 import { AstNodeKind, Statement } from './AstNode';
 import { ClassType } from '../types/ClassType';
 import { EnumMemberType, EnumType } from '../types/EnumType';
@@ -915,7 +915,7 @@ export class PrintStatement extends Statement {
 
     transpile(state: BrsTranspileState) {
         let result = [
-            state.transpileToken(this.tokens.print, 'print'),
+            state.transpileToken(this.tokens.print, 'print')
         ] as TranspileResult;
 
         //if the first expression has no leading whitespace, add a single space between the `print` and the expression

@@ -704,14 +704,6 @@ export const AllowedTriviaTokens: ReadonlyArray<TokenKind> = [
 
 
 /**
- * The tokens that are used as print separators
- */
-export const PrintSeparatorTokens: ReadonlyArray<TokenKind> = [
-    TokenKind.Comma,
-    TokenKind.Semicolon
-];
-
-/**
  * Tokens that can be used between expressions in a print statement
  */
 export type PrintSeparatorToken = Token & {
