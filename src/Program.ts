@@ -243,6 +243,12 @@ export class Program {
     private symbolDependencies = new Map<string, Set<string>>();
 
 
+    /**
+     * Symbol Table for storing custom component types
+     * This is a sibling to the global table (as Components can be used/referenced anywhere)
+     * Keeping custom components out of the global table and in a specific symbol table
+     * compartmentalizes their use
+     */
     private componentsTable = new SymbolTable('Custom Components');
 
     public addFileSymbolInfo(file: BrsFile) {
@@ -452,6 +458,8 @@ export class Program {
 
     /**
      * Adds a reference type to the global symbol table with the first component in this.components to have the same name as the component in the file
+     * This is so on a first validation, these types can be resolved in teh future (eg. when the actual component is created)
+     * If we don't add reference types at this top level, they will be created at the file level, and will never get resolved
      * @param componentKey key getting a component from `this.components`
      * @param componentName the unprefixed name of the component that will be added (e.g. 'MyLabel' NOT 'roSgNodeMyLabel')
      */
