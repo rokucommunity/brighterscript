@@ -1,5 +1,5 @@
 import type { TypeCompatibilityData } from '../interfaces';
-import { isAnyReferenceType, isDynamicType, isEnumMemberType, isEnumType, isInheritableType, isInterfaceType, isUnionType } from '../astUtils/reflection';
+import { isAnyReferenceType, isDynamicType, isEnumMemberType, isEnumType, isInheritableType, isInterfaceType, isReferenceType, isUnionType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 import type { UnionType } from './UnionType';
 
@@ -55,6 +55,13 @@ export function reduceTypesToMostGeneric(types: BscType[]): BscType[] {
         // only one type
         return [types[0]];
     }
+
+    types = types.map(t => {
+        if (isReferenceType(t) && t.isResolvable()) {
+            return (t as any).getTarget() ?? t;
+        }
+        return t;
+    });
 
     // Get a list of unique types, based on the `isEqual()` method
     const uniqueTypes = getUniqueTypesFromArray(types).map(t => {

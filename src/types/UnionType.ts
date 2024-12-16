@@ -134,7 +134,7 @@ export class UnionType extends BscType {
 
 
 function joinTypesString(types: BscType[]) {
-    return types.map(t => t.toString()).join(' or ');
+    return [...new Set(types.map(t => t.toString()))].join(' or ');
 }
 
 BuiltInInterfaceAdder.unionTypeFactory = (types: BscType[]) => {
