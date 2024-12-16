@@ -24,7 +24,9 @@ export class EnumType extends BscType {
             isDynamicType(targetType) ||
             isObjectType(targetType) ||
             this.isEqual(targetType) ||
-            (isEnumMemberType(targetType) && targetType?.enumName.toLowerCase() === this.name.toLowerCase()) ||
+            (isEnumMemberType(targetType) &&
+                (targetType.parentEnumType === this ||
+                    targetType.enumName.toLowerCase() === this.name.toLowerCase())) ||
             isUnionTypeCompatible(this, targetType, data)
         );
     }
@@ -45,8 +47,16 @@ export class EnumType extends BscType {
             targetType.checkCompatibilityBasedOnMembers(this, SymbolTypeFlag.runtime, data);
     }
 
+    private _defaultMemberType: EnumMemberType;
+
     public get defaultMemberType() {
-        return new EnumMemberType(this.name, 'default', this.underlyingType);
+        if (this._defaultMemberType) {
+            return this._defaultMemberType;
+        }
+        const defaultMember = new EnumMemberType(this.name, 'default', this.underlyingType);
+        defaultMember.parentEnumType = this;
+        this._defaultMemberType = defaultMember;
+        return this._defaultMemberType;
     }
 }
 
@@ -65,6 +75,8 @@ export class EnumMemberType extends BscType {
 
     public readonly kind = BscTypeKind.EnumMemberType;
 
+    public parentEnumType: EnumType;
+
     public isAssignableTo(targetType: BscType) {
         return (
             this.isEqual(targetType) ||
@@ -75,6 +87,18 @@ export class EnumMemberType extends BscType {
     }
 
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
+
+
+        if (isEnumMemberType(targetType)) {
+            if (this.enumName.toLowerCase() === targetType.enumName.toLowerCase()) {
+                return true;
+            }
+        } else if (isEnumType(targetType)) {
+            if (this.enumName.toLowerCase() === targetType.toString().toLowerCase()) {
+                return true;
+            }
+        }
+
         return (
             this.isEqual(targetType) ||
             isDynamicType(targetType)

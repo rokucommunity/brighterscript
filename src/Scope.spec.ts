@@ -20,13 +20,13 @@ import { FloatType } from './types/FloatType';
 import { NamespaceType } from './types/NamespaceType';
 import { DoubleType } from './types/DoubleType';
 import { UnionType } from './types/UnionType';
-import { isBlock, isForEachStatement, isFunctionExpression, isFunctionStatement, isNamespaceStatement } from './astUtils/reflection';
+import { isBlock, isCallExpression, isForEachStatement, isFunctionExpression, isFunctionStatement, isNamespaceStatement } from './astUtils/reflection';
 import { ArrayType } from './types/ArrayType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { InterfaceType } from './types/InterfaceType';
 import { ComponentType } from './types/ComponentType';
 import { WalkMode, createVisitor } from './astUtils/visitors';
-import type { FunctionExpression } from './parser/Expression';
+import type { CallExpression, FunctionExpression } from './parser/Expression';
 import { ObjectType } from './types';
 
 describe('Scope', () => {
@@ -2518,9 +2518,10 @@ describe('Scope', () => {
 
         it('finds correct parameter type with default value enums are used', () => {
             const mainFile = program.setFile<BrsFile>('source/main.bs', `
-                sub paint(colorChoice = Color.red)
+                sub paint(x as Color, colorChoice = Color.red)
                     paintColor = colorChoice
                     print paintColor
+                    print x.toStr()
                 end sub
 
                 enum Color
@@ -2535,7 +2536,7 @@ describe('Scope', () => {
             expect(sourceScope).to.exist;
             expect(mainFnScope).to.exist;
             sourceScope.linkSymbolTable();
-            expectTypeToBe(mainFnScope.symbolTable.getSymbol('paintColor', SymbolTypeFlag.runtime)[0].type, EnumMemberType);
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('paintColor', SymbolTypeFlag.runtime)[0].type, EnumType);
         });
 
         it('finds correct class field type with default value enums are used', () => {
@@ -2561,10 +2562,10 @@ describe('Scope', () => {
             const sourceScope = program.getScopeByName('source');
             expect(sourceScope).to.exist;
             expect(mainFnScope).to.exist;
-            //sourceScope.linkSymbolTable();
+            sourceScope.linkSymbolTable();
             let mainScopeSymbolTable = mainFnScope.symbolTable;
             let paintType = mainScopeSymbolTable.getSymbolType('paintColor', { flags: SymbolTypeFlag.runtime });
-            expectTypeToBe(paintType, EnumMemberType);
+            expectTypeToBe(paintType, EnumType);
         });
 
 
@@ -2583,7 +2584,7 @@ describe('Scope', () => {
             expectTypeToBe(mainFnScope.symbolTable.getSymbol('flyBoy', SymbolTypeFlag.runtime)[0].type, ClassType);
             expect(mainFnScope.symbolTable.getSymbol('flyBoy', SymbolTypeFlag.runtime)[0].type.toString()).to.eq('Animals.Bird');
             expectTypeToBe(mainFnScope.symbolTable.getSymbol('flyBoysWings', SymbolTypeFlag.runtime)[0].type, BooleanType);
-            expectTypeToBe(mainFnScope.symbolTable.getSymbol('flyBoysSkin', SymbolTypeFlag.runtime)[0].type, EnumMemberType);
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('flyBoysSkin', SymbolTypeFlag.runtime)[0].type, EnumType);
             expectTypeToBe(mainFnScope.symbolTable.getSymbol('fido', SymbolTypeFlag.runtime)[0].type, ClassType);
             expect(mainFnScope.symbolTable.getSymbol('fido', SymbolTypeFlag.runtime)[0].type.toString()).to.eq('Animals.Dog');
             expectTypeToBe(mainFnScope.symbolTable.getSymbol('fidoBark', SymbolTypeFlag.runtime)[0].type, StringType);
@@ -3386,6 +3387,137 @@ describe('Scope', () => {
                 expectTypeToBe(dataType, ArrayType);
                 expectTypeToBe((dataType as ArrayType).defaultType, ComponentType);
                 expect((dataType as ArrayType).defaultType.toString()).to.equal('roSGNodeLabel');
+            });
+
+            it('should allow a typed array of an enum', () => {
+                let utilFile = program.setFile<BrsFile>('source/util.bs', `
+                    enum Direction
+                        North = 1
+                        East = 2
+                        South = 3
+                        West = 4
+                    end enum
+
+                    sub EnumTest()
+                        arr = [Direction.North]
+                        arr.push(Direction.South)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = utilFile.getFunctionScopeAtPosition(util.createPosition(9, 24));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                const dataType = symbolTable.getSymbolType('arr', opts) as ArrayType;
+                expectTypeToBe(dataType, ArrayType);
+                expectTypeToBe(dataType.defaultType, EnumType);
+                expect(dataType.defaultType.toString()).to.equal('Direction');
+            });
+
+            it('should allow a typed array of an enum defined in a different namespace', () => {
+                let utilFile = program.setFile<BrsFile>('source/util.bs', `
+                    namespace nsOne
+                        sub EnumTest()
+                            arr = [nsTwo.Direction.North]
+                            arr.push(nsTwo.Direction.South)
+                        end sub
+                    end namespace
+
+                    namespace nsTwo
+                        enum Direction
+                            North = 1
+                            East = 2
+                            South = 3
+                            West = 4
+                        end enum
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const symbolTable = utilFile.ast.findChild<CallExpression>(isCallExpression).getSymbolTable();
+                const opts = { flags: SymbolTypeFlag.runtime };
+                const dataType = symbolTable.getSymbolType('arr', opts) as ArrayType;
+                expectTypeToBe(dataType, ArrayType);
+                expectTypeToBe(dataType.defaultType, EnumType);
+                expect(dataType.defaultType.toString()).to.equal('nsTwo.Direction');
+            });
+
+            it('should allow a typed array of an enum defined with multiple enum members', () => {
+                let utilFile = program.setFile<BrsFile>('source/util.bs', `
+                    namespace nsOne
+                        sub EnumTest()
+                            arr = [nsTwo.Direction.North, nsTwo.Direction.South]
+                            arr.push(nsTwo.Direction.South)
+                        end sub
+                    end namespace
+
+                    namespace nsTwo
+                        enum Direction
+                            North = 1
+                            East = 2
+                            South = 3
+                            West = 4
+                        end enum
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const symbolTable = utilFile.ast.findChild<CallExpression>(isCallExpression).getSymbolTable();
+                const opts = { flags: SymbolTypeFlag.runtime };
+                const dataType = symbolTable.getSymbolType('arr', opts) as ArrayType;
+                expectTypeToBe(dataType, ArrayType);
+                expectTypeToBe(dataType.defaultType, EnumType);
+                expect(dataType.defaultType.toString()).to.equal('nsTwo.Direction');
+            });
+
+            it('should allow a typed array of an enum defined with multiple consts', () => {
+                let utilFile = program.setFile<BrsFile>('source/util.bs', `
+                    namespace nsOne
+                        sub ArrayTest()
+                            arr = [nsTwo.Letters.abc, nsTwo.Letters.def]
+                            arr.push(nsTwo.Letters.abc)
+                        end sub
+                    end namespace
+
+                    namespace nsTwo
+                        namespace Letters
+                            const abc = "ABC"
+                            const def = "DEF"
+                        end namespace
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const symbolTable = utilFile.ast.findChild<CallExpression>(isCallExpression).getSymbolTable();
+                const opts = { flags: SymbolTypeFlag.runtime };
+                const dataType = symbolTable.getSymbolType('arr', opts) as ArrayType;
+                expectTypeToBe(dataType, ArrayType);
+                expectTypeToBe(dataType.defaultType, StringType);
+                expect(dataType.defaultType.toString()).to.equal('string');
+            });
+
+            it('should correctly set an array as initial value', () => {
+                let utilFile = program.setFile<BrsFile>('source/util.bs', `
+                    function alsoGoEast(path = [Direction.North, Direction.South])
+                        path.Push(Direction.East) ' "path" should be typed as Array<Direction>
+                        return path
+                    end function
+
+                    enum Direction
+                        North = "North"
+                        South = "South"
+                        East = "East"
+                        West = "West"
+                    end  enum
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                let symbolTable = utilFile.ast.findChild<CallExpression>(isFunctionExpression).getSymbolTable();
+                const opts = { flags: SymbolTypeFlag.runtime };
+                const pathType = symbolTable.getSymbolType('Path', opts) as ArrayType;
+                expectTypeToBe(pathType, ArrayType);
+                expectTypeToBe(pathType.defaultType, EnumType);
+                expect(pathType.defaultType.toString()).to.eql('Direction');
             });
         });
 

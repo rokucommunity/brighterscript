@@ -1242,8 +1242,8 @@ export class Parser {
 
             const exitText = exitToken.text.substring(0, 4);
             const whileText = exitToken.text.substring(4);
-            const originalRange = exitToken.location.range;
-            const originalStart = originalRange.start;
+            const originalRange = exitToken.location?.range;
+            const originalStart = originalRange?.start;
 
             const exitRange = util.createRange(
                 originalStart.line,

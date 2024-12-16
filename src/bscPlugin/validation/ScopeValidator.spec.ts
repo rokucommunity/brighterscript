@@ -1247,6 +1247,141 @@ describe('ScopeValidator', () => {
             expectTypeToBe(data.fieldMismatches[0].actualType, StringType);
         });
 
+        it.skip('TODO: should correctly be able to use a string literal to set a enum value', () => {
+            program.setFile<BrsFile>('source/util.bs', `
+                sub goDirection(dir as Direction)
+                end sub
+
+                sub testStringAsEnumVal()
+                    goDirection("North") ' no error
+                    goDirection("inside out") ' error
+                end sub
+
+                enum Direction
+                    North = "North"
+                    South = "South"
+                    East = "East"
+                    West = "West"
+                end  enum
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        describe('default params', () => {
+            it('generalizes EnumMembers to their parent types', () => {
+                program.setFile('source/util.bs', `
+                    sub takesEnum(enumVal = Direction.South)
+                        print enumVal
+                    end sub
+
+                    sub callTestFunc()
+                        takesEnum(Direction.North)
+                    end sub
+
+                    enum Direction
+                        North
+                        South
+                    end enum
+                `);
+                program.validate();
+                //should have no errors
+                expectZeroDiagnostics(program);
+            });
+
+            it('works with future declared types', () => {
+                program.setFile('source/util.bs', `
+                    sub takesKlass(klassInstance = new Klass())
+                        print klassInstance
+                    end sub
+
+                    sub callTestFunc()
+                        takesKlass()
+                        myKlass = new Klass()
+                        takesKlass(myKlass)
+                    end sub
+
+                    class Klass
+                        name as string
+                    end class
+                `);
+                program.validate();
+                //should have no errors
+                expectZeroDiagnostics(program);
+            });
+
+            it('validates against future declared types', () => {
+                program.setFile('source/util.bs', `
+                    sub takesKlass(klassInstance = new Klass())
+                        print klassInstance
+                    end sub
+
+                    sub callTestFunc()
+                        myOKlass = new OtherKlass()
+                        takesKlass(myOKlass)
+                    end sub
+
+                    class Klass
+                        name as string
+                    end class
+
+                     class OtherKlass
+                        name as integer
+                    end class
+                `);
+                program.validate();
+                //should have no errors
+                expectDiagnostics(program, [
+                    DiagnosticMessages.argumentTypeMismatch('OtherKlass', 'Klass').message
+                ]);
+            });
+
+            it('validates against future declared types in different namespace', () => {
+                program.setFile('source/util.bs', `
+                    sub takesKlass(klassInstance = new alpha.beta.Klass())
+                        print klassInstance
+                    end sub
+
+                    sub callTestFunc()
+                        myOKlass = new alpha.beta.OtherKlass()
+                        takesKlass(myOKlass)
+                    end sub
+
+                    namespace alpha.beta
+                        class Klass
+                            name as string
+                        end class
+
+                        class OtherKlass
+                            name as integer
+                        end class
+                    end namespace
+                `);
+                program.validate();
+                //should have no errors
+                expectDiagnostics(program, [
+                    DiagnosticMessages.argumentTypeMismatch('alpha.beta.OtherKlass', 'alpha.beta.Klass').message
+                ]);
+            });
+
+            it('should correctly be able to modify an array with enum initial values', () => {
+                program.setFile<BrsFile>('source/util.bs', `
+                    function alsoGoEast(path = [Direction.North, Direction.South])
+                        path.Push(Direction.East) ' "path" should be typed as Array<Direction>
+                        return path
+                    end function
+
+                    enum Direction
+                        North = "North"
+                        South = "South"
+                        East = "East"
+                        West = "West"
+                    end  enum
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+        });
 
         describe('array compatibility', () => {
             it('accepts dynamic when assigning to a roArray', () => {
@@ -2754,6 +2889,49 @@ describe('ScopeValidator', () => {
             ]);
         });
 
+
+        it('allows an assignment to a class field with enum initial value', () => {
+            program.setFile('source/util.bs', `
+                sub setDirection(k as Klass, d as Direction)
+                    k.dir = Direction.South
+                    k.dir = d
+                end sub
+
+                class Klass
+                    dir = Direction.north
+                end class
+
+                enum Direction
+                    north
+                    south
+                end enum
+            `);
+            program.validate();
+            //should have no errors
+            expectZeroDiagnostics(program);
+        });
+
+        it('validates an assignment to a class field with enum initial value', () => {
+            program.setFile('source/util.bs', `
+                sub setDirection(k as Klass)
+                    k.dir = "NOT a direction"
+                end sub
+
+                class Klass
+                    dir = Direction.north
+                end class
+
+                enum Direction
+                    north
+                    south
+                end enum
+            `);
+            program.validate();
+            //should have errors
+            expectDiagnostics(program, [
+                DiagnosticMessages.assignmentTypeMismatch('string', 'Direction').message
+            ]);
+        });
 
         describe('Component fields', () => {
             it('allows assigning string to font fields', () => {
