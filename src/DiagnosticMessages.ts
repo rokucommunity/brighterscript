@@ -1031,6 +1031,17 @@ export let DiagnosticMessages = {
         legacyCode: 1151,
         severity: DiagnosticSeverity.Error,
         code: 'return-type-coercion-mismatch'
+    }),
+    cannotFindCallFuncFunction: (name: string, fullName: string, typeName: string) => ({
+        message: `Cannot find callfunc function '${name}' for type '${typeName}'`,
+        data: {
+            name: name,
+            fullName: fullName,
+            typeName: typeName,
+            isCallfunc: true
+        },
+        severity: DiagnosticSeverity.Error,
+        code: 'cannot-find-callfunc'
     })
 };
 export const defaultMaximumTruncationLength = 160;

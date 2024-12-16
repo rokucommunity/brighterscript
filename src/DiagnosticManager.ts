@@ -237,7 +237,7 @@ export class DiagnosticManager {
                     isMatch = !!context.tags?.includes(filter.tag);
                 }
                 if (isMatch && needToMatch.scope) {
-                    isMatch = context.scope === filter.scope;
+                    isMatch = context.scope?.name === filter.scope.name;
                 }
                 if (isMatch && needToMatch.fileUri) {
                     isMatch = cachedData.diagnostic.location?.uri === filter.fileUri;

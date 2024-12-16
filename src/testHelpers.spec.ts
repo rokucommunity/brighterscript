@@ -187,7 +187,7 @@ export function expectZeroDiagnostics(arg: DiagnosticCollection) {
         for (const diagnostic of diagnostics) {
             //escape any newlines
             diagnostic.message = diagnostic.message.replace(/\r/g, '\\r').replace(/\n/g, '\\n');
-            message += `\n        • bs${diagnostic.code} "${diagnostic.message}" at ${diagnostic.location?.uri ?? ''}#(${diagnostic.location?.range?.start.line}:${diagnostic.location?.range?.start.character})-(${diagnostic.location?.range?.end.line}:${diagnostic.location?.range?.end.character})`;
+            message += `\n        • bs:${diagnostic.code} "${diagnostic.message}" at ${diagnostic.location?.uri ?? ''}#(${diagnostic.location?.range?.start.line}:${diagnostic.location?.range?.start.character})-(${diagnostic.location?.range?.end.line}:${diagnostic.location?.range?.end.character})`;
             //print the line containing the error (if we can find it)srcPath
             if (arg instanceof Program) {
                 const file = arg.getFile(diagnostic.location.uri);

@@ -16,6 +16,8 @@ export class IntegerType extends BscType {
 
     public static instance = new IntegerType('integer');
 
+    public isBuiltIn = true;
+
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         return (
             isDynamicType(targetType) ||

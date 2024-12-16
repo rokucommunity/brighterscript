@@ -15,6 +15,8 @@ export class DynamicType extends BscType {
 
     public static readonly instance = new DynamicType();
 
+    public isBuiltIn = true;
+
     get returnType() {
         return DynamicType.instance;
     }

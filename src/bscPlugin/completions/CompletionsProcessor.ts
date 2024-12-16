@@ -433,7 +433,7 @@ export class CompletionsProcessor {
             const symbolNameLower = symbol?.name.toLowerCase();
             let nameMatchesType = symbolNameLower === finalTypeNameLower;
             if (isTypedFunctionType(type) && !nameMatchesType) {
-                if (symbolNameLower === type.name.replace(/\./gi, '_').toLowerCase()) {
+                if (symbolNameLower === type.name?.replace(/\./gi, '_').toLowerCase()) {
                     nameMatchesType = true;
                 }
             }
@@ -516,11 +516,11 @@ export class CompletionsProcessor {
         }));
     }
 
-    public createCompletionFromFunctionStatement(statement: FunctionStatement): CompletionItem {
+    public createCompletionFromFunctionStatement(statement: FunctionStatement, completionKind: CompletionItemKind = CompletionItemKind.Function): CompletionItem {
         const funcType = statement.getType({ flags: SymbolTypeFlag.runtime });
         return {
             label: statement.getName(ParseMode.BrighterScript),
-            kind: CompletionItemKind.Function,
+            kind: completionKind,
             detail: funcType.toString(),
             documentation: util.getNodeDocumentation(statement)
         };
@@ -601,12 +601,10 @@ export class CompletionsProcessor {
         const xmlScopes = this.event.program.getScopes().filter((s) => isXmlScope(s)) as XmlScope[];
         // is next to a @. callfunc invocation - must be an component interface method.
 
-
-        //TODO refactor this to utilize the actual variable's component type (when available)
         for (const scope of xmlScopes) {
             let fileLinks = this.event.program.getStatementsForXmlFile(scope);
             for (let fileLink of fileLinks) {
-                let pushItem = this.createCompletionFromFunctionStatement(fileLink.item);
+                let pushItem = this.createCompletionFromFunctionStatement(fileLink.item, CompletionItemKind.Method);
                 if (!completetionsLabels.includes(pushItem.label)) {
                     completetionsLabels.push(pushItem.label);
                     completionsArray.push(pushItem);

@@ -762,6 +762,34 @@ describe('HoverProcessor', () => {
             expect(hover?.contents).eql([fence('function roSGNodeWidget@.someFunc(input as string) as float')]);
         });
 
+        it('should include documentation on @callfunc hovers', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                     <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="someFunc" />
+                    </interface>
+                </component>
+            `);
+            const file = program.setFile('components/Widget.bs', `
+                sub foo()
+                    top = m.top as roSgNodeWidget
+                    print top@.someFunc("3.14")
+                end sub
+
+                ' Some Cool function
+                function someFunc(input as string) as float
+                    return input.toFloat()
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            // print top@.some|Func("3.14")
+            let hover = program.getHover(file.srcPath, util.createPosition(3, 35))[0];
+            expect(hover?.contents[0]).include('Some Cool function');
+        });
+
     });
 
     describe('multiple definition locations', () => {
