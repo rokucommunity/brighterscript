@@ -83,7 +83,9 @@ export class Sequencer {
                 if (this.options.cancellationToken?.isCancellationRequested) {
                     return this.handleCancel();
                 }
-                action.func(...action.args);
+                await Promise.resolve(
+                    action.func(...action.args)
+                );
             }
             this.emitter.emit('success');
         } finally {
@@ -96,10 +98,13 @@ export class Sequencer {
         try {
             for (const action of this.actions) {
                 //if the cancellation token has asked us to cancel, then stop processing now
-                if (this.options.cancellationToken.isCancellationRequested) {
+                if (this.options.cancellationToken?.isCancellationRequested) {
                     return this.handleCancel();
                 }
-                action.func(...action.args);
+                const result = action.func(...action.args);
+                if (typeof result?.then === 'function') {
+                    throw new Error(`Action returned a promise which is unsupported when running 'runSync'`);
+                }
             }
             this.emitter.emit('success');
         } finally {

@@ -471,3 +471,15 @@ export function createInactivityStub<T, K extends keyof T>(obj: T, methodName: k
         promise: inactivityPromise
     };
 }
+
+export async function once<T = any>(
+    obj: { on: (event, callback) => () => void },
+    event: string
+): Promise<T[]> {
+    return new Promise<T[]>((resolve) => {
+        const off = obj.on('diagnostics', (...args) => {
+            off();
+            resolve(args);
+        });
+    });
+}
