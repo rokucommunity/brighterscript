@@ -786,16 +786,6 @@ export class Lexer {
             this.advance();
         }
 
-        // fractional hex literals aren't valid
-        if (this.peek() === '.' && isHexDigit(this.peekNext())) {
-            this.advance(); // consume the "."
-            this.diagnostics.push({
-                ...DiagnosticMessages.fractionalHexLiteralsAreNotSupported(),
-                location: this.locationOf()
-            });
-            return;
-        }
-
         if (this.peek() === '&') {
             // literals ending with "&" are forced to LongIntegers
             this.advance();
