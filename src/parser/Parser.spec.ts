@@ -291,6 +291,28 @@ describe('parser', () => {
             expectZeroDiagnostics(parser);
         });
 
+        it('does not allow return type as invalid', () => {
+            let parser = parse(`
+                function test(x) as invalid
+                    return invalid
+                 end function
+            `, ParseMode.BrighterScript);
+            expectDiagnosticsIncludes(parser, [
+                DiagnosticMessages.expectedIdentifier('as').message
+            ]);
+        });
+
+        it('does not allow param type as invalid', () => {
+            let parser = parse(`
+                function test(x as invalid)
+                    return invalid
+                 end function
+            `, ParseMode.BrighterScript);
+            expectDiagnosticsIncludes(parser, [
+                DiagnosticMessages.expectedIdentifier('as').message
+            ]);
+        });
+
         describe('namespace', () => {
             it('allows namespaces declared inside other namespaces', () => {
                 const parser = parse(`

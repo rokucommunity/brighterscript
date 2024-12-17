@@ -49,6 +49,7 @@ import { FunctionType } from './types/FunctionType';
 import type { AssignmentStatement, NamespaceStatement } from './parser/Statement';
 import type { BscFile } from './files/BscFile';
 import type { NamespaceType } from './types/NamespaceType';
+import { InvalidType } from './types/InvalidType';
 
 export class Util {
     public clearConsole() {
@@ -1359,7 +1360,7 @@ export class Util {
             case TokenKind.IntegerLiteral:
                 return IntegerType.instance;
             case TokenKind.Invalid:
-                return DynamicType.instance; // TODO: use InvalidType better new InvalidType(token.text);
+                return new InvalidType(token.text);
             case TokenKind.LongInteger:
                 return new LongIntegerType(token.text);
             case TokenKind.LongIntegerLiteral:
@@ -1390,7 +1391,7 @@ export class Util {
                     case 'integer':
                         return new IntegerType(token.text);
                     case 'invalid':
-                        return DynamicType.instance; // TODO: use InvalidType better new InvalidType(token.text);
+                        return new InvalidType(token.text);
                     case 'longinteger':
                         return new LongIntegerType(token.text);
                     case 'object':

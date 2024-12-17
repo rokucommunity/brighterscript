@@ -10,7 +10,7 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallExpression, isCallableType, isCallfuncExpression, isComponentType, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isPrimitiveType, isReferenceType, isStringType, isTemplateStringExpression, isTypecastExpression, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallExpression, isCallableType, isCallfuncExpression, isComponentType, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isPrimitiveType, isReferenceType, isStringType, isTemplateStringExpression, isTypecastExpression, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
@@ -496,8 +496,11 @@ export class FunctionParameterExpression extends Expression {
         const docs = brsDocParser.parseNode(this.findAncestor(isFunctionStatement));
         const paramName = this.tokens.name.text;
 
-        const paramTypeFromCode = this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime, typeChain: undefined }) ??
+        let paramTypeFromCode = this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime, typeChain: undefined }) ??
             this.defaultValue?.getType({ ...options, flags: SymbolTypeFlag.runtime, typeChain: undefined });
+        if (isInvalidType(paramTypeFromCode) || isVoidType(paramTypeFromCode)) {
+            paramTypeFromCode = undefined;
+        }
         const paramTypeFromDoc = docs.getParamBscType(paramName, { ...options, fullName: paramName, typeChain: undefined, tableProvider: () => this.getSymbolTable() });
 
         let paramType = util.chooseTypeFromCodeOrDocComment(paramTypeFromCode, paramTypeFromDoc, options) ?? DynamicType.instance;
