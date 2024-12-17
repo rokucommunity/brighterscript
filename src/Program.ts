@@ -30,6 +30,7 @@ import { CallExpressionInfo } from './bscPlugin/CallExpressionInfo';
 import { SignatureHelpUtil } from './bscPlugin/SignatureHelpUtil';
 import { DiagnosticSeverityAdjuster } from './DiagnosticSeverityAdjuster';
 import { Sequencer } from './common/Sequencer';
+import { Deferred } from './deferred';
 
 const startOfSourcePkgPath = `source${path.sep}`;
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
@@ -663,6 +664,13 @@ export class Program {
     private validationRunSequence = 0;
 
     /**
+     * How many milliseconds can pass while doing synchronous operations in validate before we register a short timeout (i.e. yield to the event loop)
+     */
+    private validationMinSyncDuration = 150;
+
+    private validatePromise: Promise<void> | undefined;
+
+    /**
      * Traverse the entire project, and validate all scopes
      */
     public validate(): void;
@@ -675,13 +683,32 @@ export class Program {
             name: 'program.validate',
             async: options?.async ?? false,
             cancellationToken: options?.cancellationToken ?? new CancellationTokenSource().token,
-            //how many milliseconds can pass while doing synchronous operations before we register a short timeout
-            minSyncDuration: 150
+            minSyncDuration: this.validationMinSyncDuration
         });
+
+        let previousValidationPromise = this.validatePromise;
+        const deferred = new Deferred();
+
+        if (options?.async) {
+            //we're async, so create a new promise chain to resolve after this validation is done
+            this.validatePromise = Promise.resolve(previousValidationPromise).then(() => {
+                return deferred.promise;
+            });
+
+            //we are not async but there's a pending promise, then we cannot run this validation
+        } else if (previousValidationPromise) {
+            throw new Error('Cannot run synchronous validation while an async validation is in progress');
+        }
 
         //this sequencer allows us to run in both sync and async mode, depending on whether options.async is enabled.
         //We use this to prevent starving the CPU during long validate cycles when running in a language server context
         return sequencer
+            .once(() => {
+                //if running in async mode, return the previous validation promise to ensure we're only running one at a time
+                if (options?.async) {
+                    return previousValidationPromise;
+                }
+            })
             .once(() => {
                 this.diagnostics = [];
                 this.plugins.emit('beforeProgramValidate', this);
@@ -719,6 +746,12 @@ export class Program {
             })
             .onSuccess(() => {
                 timeEnd();
+            })
+            .onComplete(() => {
+                //regardless of the success of the validation, mark this run as complete
+                deferred.resolve();
+                //clear the validatePromise which means we're no longer running a validation
+                this.validatePromise = undefined;
             })
             .run();
     }

@@ -1,11 +1,12 @@
 import { expect } from 'chai';
-import { tempDir, rootDir, expectDiagnosticsAsync, expectDiagnostics } from '../testHelpers.spec';
+import { tempDir, rootDir, expectDiagnosticsAsync, expectDiagnostics, once } from '../testHelpers.spec';
 import * as fsExtra from 'fs-extra';
 import { standardizePath as s } from '../util';
 import { Deferred } from '../deferred';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { Project } from './Project';
 import { createSandbox } from 'sinon';
+import { Scope } from '../Scope';
 const sinon = createSandbox();
 
 describe('Project', () => {
@@ -40,6 +41,63 @@ describe('Project', () => {
         });
     });
 
+    describe('validate', () => {
+        it('prevents multiple valiations from running at the same time', async () => {
+            console.log("validate begin");
+            //create 10 scopes, which should each take at least 1ms to validate
+            for (let i = 0; i < 20; i++) {
+                fsExtra.outputFileSync(`${rootDir}/components/component${i}.xml`, `<component name="component${i}"></component>`);
+            }
+            await project.activate({
+                projectPath: rootDir,
+                workspaceFolder: rootDir,
+                enableThreading: false
+            });
+
+            //wait for the first validate to finish
+            const validate = project.validate;
+            await Promise.resolve((resolve) => {
+                const validateStub = sinon.stub(project, 'validate').callsFake((...args) => {
+                    return validate.call(project, ...args).then(() => {
+                        validateStub.restore();
+                        resolve();
+                    });
+                });
+            });
+
+            let validationCount = 0;
+            let maxValidationCount = 0;
+            //force validations to yield very frequently
+            project['builder'].program.plugins.add({
+                name: 'Test',
+                beforeProgramValidate: () => {
+                    validationCount++;
+                    maxValidationCount = Math.max(maxValidationCount, validationCount);
+                },
+                afterProgramValidate: () => {
+                    validationCount--;
+                }
+            });
+
+            //very small threshold so every validation step will yield
+            project['builder'].program['validationMinSyncDuration'] = 0.001;
+            sinon.stub(Scope.prototype, 'validate').callsFake(() => {
+                //each of these needs to take about 1ms to complete
+                const startTime = Date.now();
+                while (Date.now() - startTime < 2) { }
+            });
+
+            //validate 3 times in quick succession
+            await Promise.all([
+                project.validate(),
+                project.validate(),
+                project.validate()
+            ]);
+            expect(validationCount).to.eql(0);
+            expect(maxValidationCount).to.eql(1);
+        });
+    });
+
     describe('activate', () => {
         it('uses `files` from bsconfig.json', async () => {
             fsExtra.outputJsonSync(`${rootDir}/bsconfig.json`, {
@@ -57,6 +115,9 @@ describe('Project', () => {
             await project.activate({
                 projectPath: rootDir
             } as any);
+
+            await once(project, 'diagnostics');
+
             expectDiagnostics(project, [
                 DiagnosticMessages.cannotFindName('alpha').message
             ]);
@@ -158,6 +219,8 @@ describe('Project', () => {
             await project.activate({
                 projectPath: rootDir
             } as any);
+
+            await once(project, 'diagnostics');
 
             await expectDiagnosticsAsync(project, [
                 DiagnosticMessages.cannotFindName('varNotThere').message
