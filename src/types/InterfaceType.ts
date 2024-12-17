@@ -1,6 +1,6 @@
 import type { TypeCompatibilityData } from '../interfaces';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
-import { isDynamicType, isInterfaceType, isObjectType } from '../astUtils/reflection';
+import { isDynamicType, isInterfaceType, isInvalidType, isObjectType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { InheritableType } from './InheritableType';
@@ -18,7 +18,10 @@ export class InterfaceType extends InheritableType {
     public readonly kind = BscTypeKind.InterfaceType;
 
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
-        if (isDynamicType(targetType) || isObjectType(targetType) || isUnionTypeCompatible(this, targetType, data)) {
+        if (isInvalidType(targetType) ||
+            isDynamicType(targetType) ||
+            isObjectType(targetType) ||
+            isUnionTypeCompatible(this, targetType, data)) {
             return true;
         }
         if (isInterfaceType(targetType)) {

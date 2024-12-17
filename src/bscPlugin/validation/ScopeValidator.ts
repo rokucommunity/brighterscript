@@ -539,6 +539,7 @@ export class ScopeValidator {
             // Because you need to verify each combination of types
             return;
         }
+
         const leftIsPrimitive = isPrimitiveType(leftTypeToTest);
         const rightIsPrimitive = isPrimitiveType(rightTypeToTest);
         const leftIsAny = isDynamicType(leftTypeToTest) || isObjectType(leftTypeToTest);

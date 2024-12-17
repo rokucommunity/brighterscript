@@ -3340,8 +3340,14 @@ export class FieldStatement extends Statement implements TypedefProvider {
      * Defaults to `DynamicType`
      */
     getType(options: GetTypeOptions) {
+        let initialValueType = this.initialValue?.getType({ ...options, flags: SymbolTypeFlag.runtime });
+
+        if (isInvalidType(initialValueType) || isVoidType(initialValueType)) {
+            initialValueType = undefined;
+        }
+
         return this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime }) ??
-            this.initialValue?.getType({ ...options, flags: SymbolTypeFlag.runtime }) ?? DynamicType.instance;
+            initialValueType ?? DynamicType.instance;
     }
 
     public readonly location: Location | undefined;
