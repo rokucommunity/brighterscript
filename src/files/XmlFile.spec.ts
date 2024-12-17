@@ -511,25 +511,6 @@ describe('XmlFile', () => {
         });
     });
 
-    it('detects when importing the codebehind file unnecessarily', () => {
-        program = new Program({
-            autoImportComponentScript: true,
-            rootDir: rootDir
-        });
-        program.setFile(`components/SimpleScene.bs`, '');
-        program.setFile(`components/SimpleScene.xml`, trim`
-            <?xml version="1.0" encoding="utf-8" ?>
-            <component name="SimpleScene" extends="Scene">
-                <script type="text/brighterscript" uri="SimpleScene.bs" />
-            </component>
-        `);
-
-        program.validate();
-        expectDiagnostics(program, [
-            DiagnosticMessages.unnecessaryCodebehindScriptImport()
-        ]);
-    });
-
     describe('transpile', () => {
         it('handles single quotes properly', async () => {
             await testTranspile(trim`
