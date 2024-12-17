@@ -43,7 +43,6 @@ describe('Project', () => {
 
     describe('validate', () => {
         it('prevents multiple valiations from running at the same time', async () => {
-            console.log("validate begin");
             //create 10 scopes, which should each take at least 1ms to validate
             for (let i = 0; i < 20; i++) {
                 fsExtra.outputFileSync(`${rootDir}/components/component${i}.xml`, `<component name="component${i}"></component>`);

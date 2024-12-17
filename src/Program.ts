@@ -696,7 +696,7 @@ export class Program {
             });
 
             //we are not async but there's a pending promise, then we cannot run this validation
-        } else if (previousValidationPromise) {
+        } else if (previousValidationPromise !== undefined) {
             throw new Error('Cannot run synchronous validation while an async validation is in progress');
         }
 
