@@ -3088,6 +3088,20 @@ describe('ScopeValidator', () => {
                 DiagnosticMessages.operatorTypeMismatch('++', 'string').message
             ]);
         });
+
+        it('deals with adding int, bool and invalid', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff()
+                    print 1 + (true + invalid)
+                end sub
+
+            `);
+            program.validate();
+            //should have errors
+            expectDiagnostics(program, [
+                DiagnosticMessages.operatorTypeMismatch('+', 'boolean', 'invalid').message
+            ]);
+        });
     });
 
     describe('memberAccessibilityMismatch', () => {

@@ -642,7 +642,7 @@ export const DeclarableTypes = [
 
 /** List of TokenKind that will not break parsing a TypeExpression in Brighterscript*/
 export const AllowedTypeIdentifiers = [
-    ...AllowedProperties
+    ...(AllowedProperties.filter(tokenKind => tokenKind !== TokenKind.Invalid))
 ];
 
 
