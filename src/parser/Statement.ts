@@ -9,13 +9,13 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
-import { isCallExpression, isCatchStatement, isConditionalCompileStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTryCatchStatement, isTypedefProvider, isUnaryExpression, isVoidType, isWhileStatement } from '../astUtils/reflection';
+import { isCallExpression, isCatchStatement, isConditionalCompileStatement, isEnumMemberStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isTryCatchStatement, isTypedefProvider, isUnaryExpression, isVoidType, isWhileStatement } from '../astUtils/reflection';
 import { TypeChainEntry, type GetTypeOptions, type TranspileResult, type TypedefProvider } from '../interfaces';
 import { createInvalidLiteral, createMethodStatement, createToken } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import { SymbolTable } from '../SymbolTable';
-import type { AstNode, Expression } from './AstNode';
+import type { Expression } from './AstNode';
 import { AstNodeKind, Statement } from './AstNode';
 import { ClassType } from '../types/ClassType';
 import { EnumMemberType, EnumType } from '../types/EnumType';
@@ -878,16 +878,6 @@ export class IncrementStatement extends Statement {
     }
 }
 
-/** Used to indent the current `print` position to the next 16-character-width output zone. */
-export interface PrintSeparatorTab extends Token {
-    kind: TokenKind.Comma;
-}
-
-/** Used to insert a single whitespace character at the current `print` position. */
-export interface PrintSeparatorSpace extends Token {
-    kind: TokenKind.Semicolon;
-}
-
 /**
  * Represents a `print` statement within BrightScript.
  */
@@ -896,11 +886,11 @@ export class PrintStatement extends Statement {
      * Creates a new internal representation of a BrightScript `print` statement.
      * @param options the options for this statement
      * @param options.print a print token
-     * @param options.expressions an array of expressions or `PrintSeparator`s to be evaluated and printed.
+     * @param options.expressions an array of expressions to be evaluated and printed. Wrap PrintSeparator tokens (`;` or `,`) in `PrintSeparatorExpression`
      */
     constructor(options: {
         print?: Token;
-        expressions: Array<Expression | PrintSeparatorTab | PrintSeparatorSpace>;
+        expressions: Array<Expression>;
     }) {
         super();
         this.tokens = {
@@ -912,40 +902,48 @@ export class PrintStatement extends Statement {
             ...(this.expressions ?? [])
         );
     }
+
     public readonly tokens: {
         readonly print?: Token;
     };
-    public readonly expressions: Array<Expression | PrintSeparatorTab | PrintSeparatorSpace>;
+
+    public readonly expressions: Array<Expression>;
+
     public readonly kind = AstNodeKind.PrintStatement;
 
     public readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState) {
         let result = [
-            state.transpileToken(this.tokens.print, 'print'),
-            ' '
+            state.transpileToken(this.tokens.print, 'print')
         ] as TranspileResult;
+
+        //if the first expression has no leading whitespace, add a single space between the `print` and the expression
+        if (this.expressions.length > 0 && !this.expressions[0].leadingTrivia.find(t => t.kind === TokenKind.Whitespace)) {
+            result.push(' ');
+        }
+
+        // eslint-disable-next-line @typescript-eslint/prefer-for-of
         for (let i = 0; i < this.expressions.length; i++) {
-            const expressionOrSeparator: any = this.expressions[i];
-            if (expressionOrSeparator.transpile) {
-                result.push(...(expressionOrSeparator as ExpressionStatement).transpile(state));
-            } else {
-                result.push(
-                    state.tokenToSourceNode(expressionOrSeparator)
-                );
-            }
-            //if there's an expression after us, add a space
-            if ((this.expressions[i + 1] as any)?.transpile) {
+            const expression = this.expressions[i];
+            let leadingWhitespace = expression.leadingTrivia.find(t => t.kind === TokenKind.Whitespace)?.text;
+            if (leadingWhitespace) {
+                result.push(leadingWhitespace);
+                //if the previous expression was NOT a separator, and this one is not also, add a space between them
+            } else if (i > 0 && !isPrintSeparatorExpression(this.expressions[i - 1]) && !isPrintSeparatorExpression(expression) && !leadingWhitespace) {
                 result.push(' ');
             }
+
+            result.push(
+                ...expression.transpile(state)
+            );
         }
         return result;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
-            //sometimes we have semicolon Tokens in the expressions list (should probably fix that...), so only walk the actual expressions
-            walkArray(this.expressions as AstNode[], visitor, options, this, (item) => isExpression(item as any));
+            walkArray(this.expressions, visitor, options, this);
         }
     }
 
@@ -957,13 +955,7 @@ export class PrintStatement extends Statement {
         return this.finalizeClone(
             new PrintStatement({
                 print: util.cloneToken(this.tokens.print),
-                expressions: this.expressions?.map(e => {
-                    if (isExpression(e as any)) {
-                        return (e as Expression).clone();
-                    } else {
-                        return util.cloneToken(e as Token);
-                    }
-                })
+                expressions: this.expressions?.map(e => e?.clone())
             }),
             ['expressions' as any]
         );

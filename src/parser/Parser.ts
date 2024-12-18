@@ -1,6 +1,6 @@
 import type { Token, Identifier } from '../lexer/Token';
 import { isToken } from '../lexer/Token';
-import type { BlockTerminator } from '../lexer/TokenKind';
+import type { BlockTerminator, PrintSeparatorToken } from '../lexer/TokenKind';
 import { Lexer } from '../lexer/Lexer';
 import {
     AllowedLocalIdentifiers,
@@ -17,10 +17,6 @@ import {
     CompoundAssignmentOperators,
     BinaryExpressionOperatorTokens
 } from '../lexer/TokenKind';
-import type {
-    PrintSeparatorSpace,
-    PrintSeparatorTab
-} from './Statement';
 import {
     AliasStatement,
     AssignmentStatement,
@@ -96,7 +92,8 @@ import {
     TypedArrayExpression,
     UnaryExpression,
     VariableExpression,
-    XmlAttributeGetExpression
+    XmlAttributeGetExpression,
+    PrintSeparatorExpression
 } from './Expression';
 import type { Range } from 'vscode-languageserver';
 import type { Logger } from '../logging';
@@ -2441,16 +2438,11 @@ export class Parser {
     private printStatement(): PrintStatement {
         let printKeyword = this.advance();
 
-        let values: (
-            | Expression
-            | PrintSeparatorTab
-            | PrintSeparatorSpace)[] = [];
+        let values: Expression[] = [];
 
         while (!this.checkEndOfStatement()) {
-            if (this.check(TokenKind.Semicolon)) {
-                values.push(this.advance() as PrintSeparatorSpace);
-            } else if (this.check(TokenKind.Comma)) {
-                values.push(this.advance() as PrintSeparatorTab);
+            if (this.checkAny(TokenKind.Semicolon, TokenKind.Comma)) {
+                values.push(new PrintSeparatorExpression({ separator: this.advance() as PrintSeparatorToken }));
             } else if (this.check(TokenKind.Else)) {
                 break; // inline branch
             } else {
