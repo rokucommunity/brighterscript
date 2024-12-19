@@ -13,7 +13,7 @@ import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
 import type { FunctionStatement, PrintStatement } from './parser/Statement';
 import { EmptyStatement } from './parser/Statement';
-import { expectCompletionsExcludes, expectCompletionsIncludes, expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
+import { expectCompletionsExcludes, expectCompletionsIncludes, expectDiagnostics, expectHasDiagnostics, expectThrows, expectThrowsAsync, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
 import { doesNotThrow } from 'assert';
 import { createVisitor, WalkMode } from './astUtils/visitors';
 import { isBrsFile } from './astUtils/reflection';
@@ -22,6 +22,7 @@ import type { AstEditor } from './astUtils/AstEditor';
 import { tempDir, rootDir, stagingDir } from './testHelpers.spec';
 import type { BsDiagnostic } from './interfaces';
 import { createLogger } from './logging';
+import { Scope } from './Scope';
 
 let sinon = sinonImport.createSandbox();
 
@@ -225,6 +226,28 @@ describe('Program', () => {
     });
 
     describe('validate', () => {
+        it('validate (sync) passes along inner exception', () => {
+            program.setFile('source/main.brs', ``);
+            sinon.stub(Scope.prototype, 'validate').callsFake(() => {
+                throw new Error('Scope crash');
+            });
+            expectThrows(() => {
+                program.validate();
+            }, 'Scope crash');
+        });
+
+        it('validate (async) passes along inner exception', async () => {
+            program.setFile('source/main.brs', ``);
+            sinon.stub(Scope.prototype, 'validate').callsFake(() => {
+                throw new Error('Scope crash');
+            });
+            await expectThrowsAsync(async () => {
+                await program.validate({
+                    async: true
+                });
+            }, 'Scope crash');
+        });
+
         it('retains expressions after validate', () => {
             const file = program.setFile<BrsFile>('source/main.bs', `
                 sub test()

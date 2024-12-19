@@ -7,17 +7,20 @@ import { EventEmitter } from 'eventemitter3';
  */
 export class Sequencer {
     constructor(
-        private options: {
-            name: string;
-            async?: boolean;
+        private options?: {
+            name?: string;
             cancellationToken?: CancellationToken;
             /**
              * The number of operations to run before registering a nexttick
              */
-            minSyncDuration: number;
+            minSyncDuration?: number;
         }
     ) {
 
+    }
+
+    private get minSyncDuration() {
+        return this.options?.minSyncDuration ?? 150;
     }
 
     // eslint-disable-next-line @typescript-eslint/ban-types
@@ -58,50 +61,50 @@ export class Sequencer {
         return this;
     }
 
-    /**
-     * Actually run the sequence
-     */
-    public run() {
-        if (this.options?.async) {
-            return this.runAsync();
-        } else {
-            return this.runSync();
-        }
-    }
-
-    private async runAsync() {
+    public async run() {
         try {
             let start = Date.now();
             for (const action of this.actions) {
                 //register a very short timeout between every action so we don't hog the CPU
-                if (Date.now() - start > this.options.minSyncDuration) {
+                if (Date.now() - start > this.minSyncDuration) {
                     await util.sleep(1);
                     start = Date.now();
                 }
 
                 //if the cancellation token has asked us to cancel, then stop processing now
-                if (this.options.cancellationToken?.isCancellationRequested) {
+                if (this.options?.cancellationToken?.isCancellationRequested) {
                     return this.handleCancel();
                 }
-                action.func(...action.args);
+                await Promise.resolve(
+                    action.func(...action.args)
+                );
             }
             this.emitter.emit('success');
+        } catch (e) {
+            this.handleCancel();
+            throw e;
         } finally {
             this.emitter.emit('complete');
             this.dispose();
         }
     }
 
-    private runSync() {
+    public runSync() {
         try {
             for (const action of this.actions) {
                 //if the cancellation token has asked us to cancel, then stop processing now
-                if (this.options.cancellationToken.isCancellationRequested) {
+                if (this.options?.cancellationToken?.isCancellationRequested) {
                     return this.handleCancel();
                 }
-                action.func(...action.args);
+                const result = action.func(...action.args);
+                if (typeof result?.then === 'function') {
+                    throw new Error(`Action returned a promise which is unsupported when running 'runSync'`);
+                }
             }
             this.emitter.emit('success');
+        } catch (e) {
+            this.handleCancel();
+            throw e;
         } finally {
             this.emitter.emit('complete');
             this.dispose();
@@ -109,7 +112,7 @@ export class Sequencer {
     }
 
     private handleCancel() {
-        console.log(`Cancelling sequence ${this.options.name}`);
+        console.log(`Cancelling sequence ${this.options?.name}`);
         this.emitter.emit('cancel');
     }
 
