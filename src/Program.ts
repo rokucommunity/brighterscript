@@ -679,13 +679,6 @@ export class Program {
     public validate(options?: { async?: boolean; cancellationToken?: CancellationToken }) {
         const timeEnd = this.logger.timeStart(LogLevel.log, `Validating project${(this.logger.logLevel as LogLevel) > LogLevel.log ? ` (run ${this.validationRunSequence++})` : ''}`);
 
-        const sequencer = new Sequencer({
-            name: 'program.validate',
-            async: options?.async ?? false,
-            cancellationToken: options?.cancellationToken ?? new CancellationTokenSource().token,
-            minSyncDuration: this.validationMinSyncDuration
-        });
-
         let previousValidationPromise = this.validatePromise;
         const deferred = new Deferred();
 
@@ -700,9 +693,15 @@ export class Program {
             throw new Error('Cannot run synchronous validation while an async validation is in progress');
         }
 
+        const sequencer = new Sequencer({
+            name: 'program.validate',
+            cancellationToken: options?.cancellationToken ?? new CancellationTokenSource().token,
+            minSyncDuration: this.validationMinSyncDuration
+        });
+
         //this sequencer allows us to run in both sync and async mode, depending on whether options.async is enabled.
         //We use this to prevent starving the CPU during long validate cycles when running in a language server context
-        return sequencer
+        sequencer
             .once(() => {
                 //if running in async mode, return the previous validation promise to ensure we're only running one at a time
                 if (options?.async) {
@@ -752,8 +751,16 @@ export class Program {
                 deferred.resolve();
                 //clear the validatePromise which means we're no longer running a validation
                 this.validatePromise = undefined;
-            })
-            .run();
+            });
+
+        //run the sequencer in async mode if enabled
+        if (options?.async) {
+            return sequencer.run();
+
+            //run the sequencer in sync mode
+        } else {
+            return sequencer.runSync();
+        }
     }
 
     /**

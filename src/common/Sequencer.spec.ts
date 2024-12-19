@@ -6,7 +6,7 @@ describe('Sequencer', () => {
     it('cancels when asked', () => {
         const cancellationTokenSource = new CancellationTokenSource();
         const values = [];
-        void new Sequencer({
+        new Sequencer({
             name: 'test',
             cancellationToken: cancellationTokenSource.token,
             minSyncDuration: 100
@@ -15,7 +15,7 @@ describe('Sequencer', () => {
             if (i === 2) {
                 cancellationTokenSource.cancel();
             }
-        }).run();
+        }).runSync();
 
         expect(values).to.eql([1, 2]);
     });
@@ -23,25 +23,18 @@ describe('Sequencer', () => {
     it('throws when returning a promise from runSync', () => {
         let error;
         try {
-            void new Sequencer({
-                name: 'test',
-                minSyncDuration: 100
-            }).once(() => {
+            new Sequencer().once(() => {
                 return Promise.resolve();
-            }).run();
+            }).runSync();
         } catch (e) {
             error = e;
         }
-        expect(error.message).to.eql(`Action returned a promise which is unsupported when running 'runSync'`);
+        expect(error?.message).to.eql(`Action returned a promise which is unsupported when running 'runSync'`);
     });
 
     it('waits for async actions to complete', async () => {
         const values = [];
-        await new Sequencer({
-            name: 'test',
-            async: true,
-            minSyncDuration: 100
-        }).forEach([1, 2, 3], async (i) => {
+        await new Sequencer().forEach([1, 2, 3], async (i) => {
             await new Promise((resolve) => {
                 setTimeout(resolve, 10);
             });
@@ -49,5 +42,35 @@ describe('Sequencer', () => {
         }).run();
 
         expect(values).to.eql([1, 2, 3]);
+    });
+
+    it('runSync() calls cancel before throwing', () => {
+        let cancelCalled = false;
+        try {
+            new Sequencer().once(() => {
+                throw new Error('crash');
+            }).onCancel(() => {
+                cancelCalled = true;
+            }).runSync();
+        } catch (e) {
+            //this is expected
+            expect((e as any).message).to.eql('crash');
+        }
+        expect(cancelCalled).to.be.true;
+    });
+
+    it('run() calls cancel before throwing', async () => {
+        let cancelCalled = false;
+        try {
+            await new Sequencer().once(() => {
+                throw new Error('crash');
+            }).onCancel(() => {
+                cancelCalled = true;
+            }).run();
+        } catch (e) {
+            //this is expected
+            expect((e as any).message).to.eql('crash');
+        }
+        expect(cancelCalled).to.be.true;
     });
 });
