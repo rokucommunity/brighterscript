@@ -1,5 +1,6 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
+import type { PrintSeparatorToken } from '../lexer/TokenKind';
 import { TokenKind } from '../lexer/TokenKind';
 import type { Block, NamespaceStatement } from './Statement';
 import type { Location } from 'vscode-languageserver';
@@ -965,6 +966,52 @@ export class LiteralExpression extends Expression {
         );
     }
 }
+
+/**
+ * The print statement can have a mix of expressions and separators. These separators represent actual output to the screen,
+ * so this AstNode represents those separators (comma, semicolon, and whitespace)
+ */
+export class PrintSeparatorExpression extends Expression {
+    constructor(options: {
+        separator: PrintSeparatorToken;
+    }) {
+        super();
+        this.tokens = {
+            separator: options.separator
+        };
+        this.location = this.tokens.separator.location;
+    }
+
+    public readonly tokens: {
+        readonly separator: PrintSeparatorToken;
+    };
+
+    public readonly kind = AstNodeKind.PrintSeparatorExpression;
+
+    public location: Location;
+
+    transpile(state: BrsTranspileState) {
+        return [
+            ...this.tokens.separator.leadingWhitespace ?? [],
+            ...state.transpileToken(this.tokens.separator)
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.separator.leadingTrivia;
+    }
+
+    public clone() {
+        return new PrintSeparatorExpression({
+            separator: util.cloneToken(this.tokens?.separator)
+        });
+    }
+}
+
 
 /**
  * This is a special expression only used within template strings. It exists so we can prevent producing lots of empty strings
