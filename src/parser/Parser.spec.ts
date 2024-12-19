@@ -313,6 +313,30 @@ describe('parser', () => {
             ]);
         });
 
+        it('validates when theres a fraction hex', () => {
+            let parser = parse(`
+                function test()
+                    x = &HFF.01234
+                    return x
+                end function
+            `);
+
+            expectDiagnostics(parser, [
+                DiagnosticMessages.expectedStatement(),
+                DiagnosticMessages.expectedNewlineOrColon()
+            ]);
+        });
+
+        it('allows print statement with hex followed by dot <number>', () => {
+            let parser = parse(`
+                function test()
+                    print  &HFF.01234
+                end function
+            `);
+
+            expectZeroDiagnostics(parser);
+        });
+
         describe('namespace', () => {
             it('allows namespaces declared inside other namespaces', () => {
                 const parser = parse(`
