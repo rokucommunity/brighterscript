@@ -198,7 +198,7 @@ export interface CompilerPlugin {
     afterPublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
     afterProgramCreate?: (program: Program) => void;
     beforeProgramValidate?: (program: Program) => void;
-    afterProgramValidate?: (program: Program) => void;
+    afterProgramValidate?: (program: Program, wasCancelled: boolean) => void;
     beforeProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
     afterProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
     beforeProgramDispose?: PluginHandler<BeforeProgramDisposeEvent>;
