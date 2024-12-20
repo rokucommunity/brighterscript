@@ -552,7 +552,7 @@ export class ScopeValidator {
         }
         const opResult = util.binaryOperatorResultType(leftTypeToTest, binaryExpr.tokens.operator, rightTypeToTest);
 
-        if (!opResult) { //} || isDynamicType(opResult) || isVoidType(opResult)) {
+        if (!opResult) {
             // if the result was dynamic or void, that means there wasn't a valid operation
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.operatorTypeMismatch(binaryExpr.tokens.operator.text, leftType.toString(), rightType.toString()),
