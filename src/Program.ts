@@ -694,13 +694,24 @@ export class Program {
             throw new Error('Cannot run synchronous validation while an async validation is in progress');
         }
 
+        if (options?.async) {
+            //we're async, so create a new promise chain to resolve after this validation is done
+            this.validatePromise = Promise.resolve(previousValidationPromise).then(() => {
+                return deferred.promise;
+            });
+
+            //we are not async but there's a pending promise, then we cannot run this validation
+        } else if (previousValidationPromise !== undefined) {
+            throw new Error('Cannot run synchronous validation while an async validation is in progress');
+        }
+
         const sequencer = new Sequencer({
             name: 'program.validate',
             cancellationToken: options?.cancellationToken ?? new CancellationTokenSource().token,
             minSyncDuration: this.validationMinSyncDuration
         });
 
-        let emitId = 0;
+        let beforeProgramValidateWasEmitted = false;
 
         //this sequencer allows us to run in both sync and async mode, depending on whether options.async is enabled.
         //We use this to prevent starving the CPU during long validate cycles when running in a language server context
@@ -713,8 +724,8 @@ export class Program {
             })
             .once(() => {
                 this.diagnostics = [];
-                emitId = validationRunId;
                 this.plugins.emit('beforeProgramValidate', this);
+                beforeProgramValidateWasEmitted = true;
             })
             .forEach(Object.values(this.files), (file) => {
                 if (!file.isValidated) {
@@ -751,7 +762,7 @@ export class Program {
             })
             .onComplete(() => {
                 //if we emitted the beforeProgramValidate hook, emit the afterProgramValidate hook as well
-                if (emitId > 0) {
+                if (beforeProgramValidateWasEmitted) {
                     const wasCancelled = options?.cancellationToken?.isCancellationRequested ?? false;
                     this.plugins.emit('afterProgramValidate', this, wasCancelled);
                 }
