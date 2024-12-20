@@ -1247,6 +1247,40 @@ describe('ScopeValidator', () => {
             expectTypeToBe(data.fieldMismatches[0].actualType, StringType);
         });
 
+        it('allows a non-built-in void function as an argument', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                sub voidFunc() as void
+                end sub
+
+                sub doPrint(x)
+                    print x
+                end sub
+
+                sub useVoidAsArg()
+                    doPrint(voidFunc()) ' will print "invalid"
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('validates a built-in void function as an argument', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                sub doPrint(x)
+                    print x
+                end sub
+
+                sub useVoidAsArg()
+                    arr = [1,2,3]
+                    doPrint(arr.push(4))
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('void', 'dynamic').message
+            ]);
+        });
+
 
         describe('array compatibility', () => {
             it('accepts dynamic when assigning to a roArray', () => {
@@ -2511,6 +2545,31 @@ describe('ScopeValidator', () => {
                 DiagnosticMessages.returnTypeMismatch('integer', 'void').message
             ]);
         });
+
+        it('allows empty return when return as void', () => {
+            program.setFile('source/util.bs', `
+                function doNothing1() as void
+                    return
+                end function
+
+                sub doNothing2() as void
+                    return
+                end sub
+
+                sub doNothing3() as void
+                end sub
+
+                sub doNothing4()
+                    return
+                end sub
+
+                function doNothing5()
+                    return
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('returnTypeCoercionMismatch', () => {
@@ -3137,6 +3196,38 @@ describe('ScopeValidator', () => {
             //should have errors
             expectDiagnostics(program, [
                 DiagnosticMessages.operatorTypeMismatch('+', 'boolean', 'invalid').message
+            ]);
+        });
+
+        it('allows using return of a void func as a variable', () => {
+            program.setFile<BrsFile>('source/main.brs', `
+                sub voidFunc() as void
+                end sub
+
+                sub test()
+                    x = voidFunc()
+                    if x = invalid
+                        print "invalid"
+                    end if
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('validates using return of a built-in void func as a variable', () => {
+            program.setFile<BrsFile>('source/main.brs', `
+                sub test()
+                    arr = [1,2,3]
+                    x = arr.push(4)
+                    if x = invalid
+                        print "invalid"
+                    end if
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.operatorTypeMismatch('=', 'void', 'invalid').message
             ]);
         });
     });

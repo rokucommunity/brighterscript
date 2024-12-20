@@ -28,7 +28,7 @@ import { ArrayType } from '../types/ArrayType';
 import { AssociativeArrayType } from '../types/AssociativeArrayType';
 import type { ComponentType } from '../types/ComponentType';
 import { createToken } from '../astUtils/creators';
-import { TypedFunctionType } from '../types';
+import { InvalidType, TypedFunctionType } from '../types';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { FunctionType } from '../types/FunctionType';
 import type { BaseFunctionType } from '../types/BaseFunctionType';
@@ -92,7 +92,7 @@ export class BinaryExpression extends Expression {
             return util.binaryOperatorResultType(
                 this.left.getType(options),
                 this.tokens.operator,
-                this.right.getType(options));
+                this.right.getType(options)) ?? DynamicType.instance;
         }
         return DynamicType.instance;
     }
@@ -204,6 +204,10 @@ export class CallExpression extends Expression {
             return specialCaseReturnType;
         }
         if (isCallableType(calleeType) && (!isReferenceType(calleeType.returnType) || calleeType.returnType?.isResolvable())) {
+            if (isVoidType(calleeType.returnType) && !options.data?.isBuiltIn) {
+                // non-built in functions with return type`as void` actually return `invalid`
+                return InvalidType.instance;
+            }
             return calleeType.returnType;
         }
         if (!isReferenceType(calleeType) && (calleeType as BaseFunctionType)?.returnType?.isResolvable()) {

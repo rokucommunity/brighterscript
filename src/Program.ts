@@ -5,7 +5,7 @@ import type { CodeAction, Position, Range, SignatureInformation, Location, Docum
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeFileAddEvent, BeforeFileRemoveEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj, SerializeFileEvent } from './interfaces';
+import type { FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeFileAddEvent, BeforeFileRemoveEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj, SerializeFileEvent, ExtraSymbolData } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DependencyGraph } from './DependencyGraph';
@@ -146,9 +146,9 @@ export class Program {
             nodeType.addBuiltInInterfaces();
             if (nodeData.name === 'Node') {
                 // Add `roSGNode` as shorthand for `roSGNodeNode`
-                this.globalScope.symbolTable.addSymbol('roSGNode', { description: nodeData.description }, nodeType, SymbolTypeFlag.typetime);
+                this.globalScope.symbolTable.addSymbol('roSGNode', { description: nodeData.description, isBuiltIn: true }, nodeType, SymbolTypeFlag.typetime);
             }
-            this.globalScope.symbolTable.addSymbol(nodeName, { description: nodeData.description }, nodeType, SymbolTypeFlag.typetime);
+            this.globalScope.symbolTable.addSymbol(nodeName, { description: nodeData.description, isBuiltIn: true }, nodeType, SymbolTypeFlag.typetime);
         } else {
             nodeType = this.globalScope.symbolTable.getSymbolType(nodeName, { flags: SymbolTypeFlag.typetime }) as ComponentType;
         }
@@ -161,27 +161,29 @@ export class Program {
     private populateGlobalSymbolTable() {
         //Setup primitive types in global symbolTable
 
-        this.globalScope.symbolTable.addSymbol('boolean', undefined, BooleanType.instance, SymbolTypeFlag.typetime);
-        this.globalScope.symbolTable.addSymbol('double', undefined, DoubleType.instance, SymbolTypeFlag.typetime);
-        this.globalScope.symbolTable.addSymbol('dynamic', undefined, DynamicType.instance, SymbolTypeFlag.typetime);
-        this.globalScope.symbolTable.addSymbol('float', undefined, FloatType.instance, SymbolTypeFlag.typetime);
-        this.globalScope.symbolTable.addSymbol('function', undefined, new FunctionType(), SymbolTypeFlag.typetime);
-        this.globalScope.symbolTable.addSymbol('integer', undefined, IntegerType.instance, SymbolTypeFlag.typetime);
-        this.globalScope.symbolTable.addSymbol('longinteger', undefined, LongIntegerType.instance, SymbolTypeFlag.typetime);
-        this.globalScope.symbolTable.addSymbol('object', undefined, new ObjectType(), SymbolTypeFlag.typetime);
-        this.globalScope.symbolTable.addSymbol('string', undefined, StringType.instance, SymbolTypeFlag.typetime);
-        this.globalScope.symbolTable.addSymbol('void', undefined, VoidType.instance, SymbolTypeFlag.typetime);
+        const builtInSymbolData: ExtraSymbolData = { isBuiltIn: true };
+
+        this.globalScope.symbolTable.addSymbol('boolean', builtInSymbolData, BooleanType.instance, SymbolTypeFlag.typetime);
+        this.globalScope.symbolTable.addSymbol('double', builtInSymbolData, DoubleType.instance, SymbolTypeFlag.typetime);
+        this.globalScope.symbolTable.addSymbol('dynamic', builtInSymbolData, DynamicType.instance, SymbolTypeFlag.typetime);
+        this.globalScope.symbolTable.addSymbol('float', builtInSymbolData, FloatType.instance, SymbolTypeFlag.typetime);
+        this.globalScope.symbolTable.addSymbol('function', builtInSymbolData, new FunctionType(), SymbolTypeFlag.typetime);
+        this.globalScope.symbolTable.addSymbol('integer', builtInSymbolData, IntegerType.instance, SymbolTypeFlag.typetime);
+        this.globalScope.symbolTable.addSymbol('longinteger', builtInSymbolData, LongIntegerType.instance, SymbolTypeFlag.typetime);
+        this.globalScope.symbolTable.addSymbol('object', builtInSymbolData, new ObjectType(), SymbolTypeFlag.typetime);
+        this.globalScope.symbolTable.addSymbol('string', builtInSymbolData, StringType.instance, SymbolTypeFlag.typetime);
+        this.globalScope.symbolTable.addSymbol('void', builtInSymbolData, VoidType.instance, SymbolTypeFlag.typetime);
 
         BuiltInInterfaceAdder.getLookupTable = () => this.globalScope.symbolTable;
 
         for (const callable of globalCallables) {
-            this.globalScope.symbolTable.addSymbol(callable.name, { description: callable.shortDescription }, callable.type, SymbolTypeFlag.runtime);
+            this.globalScope.symbolTable.addSymbol(callable.name, { ...builtInSymbolData, description: callable.shortDescription }, callable.type, SymbolTypeFlag.runtime);
         }
 
         for (const ifaceData of Object.values(interfaces) as BRSInterfaceData[]) {
             const nodeType = new InterfaceType(ifaceData.name);
             nodeType.addBuiltInInterfaces();
-            this.globalScope.symbolTable.addSymbol(ifaceData.name, { description: ifaceData.description }, nodeType, SymbolTypeFlag.typetime);
+            this.globalScope.symbolTable.addSymbol(ifaceData.name, { ...builtInSymbolData, description: ifaceData.description }, nodeType, SymbolTypeFlag.typetime);
         }
 
         for (const componentData of Object.values(components) as BRSComponentData[]) {
@@ -189,7 +191,7 @@ export class Program {
             nodeType.addBuiltInInterfaces();
             if (componentData.name !== 'roSGNode') {
                 // we will add `roSGNode` as shorthand for `roSGNodeNode`, since all roSgNode components are SceneGraph nodes
-                this.globalScope.symbolTable.addSymbol(componentData.name, { description: componentData.description }, nodeType, SymbolTypeFlag.typetime);
+                this.globalScope.symbolTable.addSymbol(componentData.name, { ...builtInSymbolData, description: componentData.description }, nodeType, SymbolTypeFlag.typetime);
             }
         }
 
@@ -200,7 +202,7 @@ export class Program {
         for (const eventData of Object.values(events) as BRSEventData[]) {
             const nodeType = new InterfaceType(eventData.name);
             nodeType.addBuiltInInterfaces();
-            this.globalScope.symbolTable.addSymbol(eventData.name, { description: eventData.description }, nodeType, SymbolTypeFlag.typetime);
+            this.globalScope.symbolTable.addSymbol(eventData.name, { ...builtInSymbolData, description: eventData.description }, nodeType, SymbolTypeFlag.typetime);
         }
 
     }

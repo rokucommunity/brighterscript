@@ -1006,7 +1006,7 @@ describe('util', () => {
             // String + String is string
             expectTypeToBe(util.binaryOperatorResultType(StringType.instance, createToken(TokenKind.Plus), StringType.instance), StringType);
             // string plus anything else is an error - return dynamic
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Plus), StringType.instance), DynamicType);
+            expect(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Plus), StringType.instance)).to.be.undefined;
 
             // Plus
             expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Plus), IntegerType.instance), DoubleType);
@@ -1060,7 +1060,7 @@ describe('util', () => {
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Equal), LongIntegerType.instance), BooleanType);
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Equal), IntegerType.instance), BooleanType);
             expectTypeToBe(util.binaryOperatorResultType(InvalidType.instance, createToken(TokenKind.Equal), IntegerType.instance), BooleanType); // = accepts invalid
-            expectTypeToBe(util.binaryOperatorResultType(StringType.instance, createToken(TokenKind.Equal), IntegerType.instance), DynamicType); // only one string is not accepted
+            expect(util.binaryOperatorResultType(StringType.instance, createToken(TokenKind.Equal), IntegerType.instance)).to.be.undefined; // only one string is not accepted
             expectTypeToBe(util.binaryOperatorResultType(StringType.instance, createToken(TokenKind.Equal), StringType.instance), BooleanType); // both strings is accepted
             // <>
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.LessGreater), InvalidType.instance), BooleanType); // <> accepts invalid
@@ -1069,7 +1069,7 @@ describe('util', () => {
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Greater), FloatType.instance), BooleanType);
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Greater), LongIntegerType.instance), BooleanType);
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Greater), IntegerType.instance), BooleanType);
-            expectTypeToBe(util.binaryOperatorResultType(InvalidType.instance, createToken(TokenKind.Greater), IntegerType.instance), DynamicType);
+            expect(util.binaryOperatorResultType(InvalidType.instance, createToken(TokenKind.Greater), IntegerType.instance)).to.be.undefined; // invalid not accepted
             // etc. - all should be boolean
         });
 
@@ -1079,14 +1079,26 @@ describe('util', () => {
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.And), FloatType.instance), IntegerType);
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.And), BooleanType.instance), BooleanType);
             expectTypeToBe(util.binaryOperatorResultType(BooleanType.instance, createToken(TokenKind.And), IntegerType.instance), BooleanType);
-            expectTypeToBe(util.binaryOperatorResultType(InvalidType.instance, createToken(TokenKind.And), IntegerType.instance), DynamicType); // invalid not accepted
-            expectTypeToBe(util.binaryOperatorResultType(StringType.instance, createToken(TokenKind.And), IntegerType.instance), DynamicType); // strings are not accepted
+            expect(util.binaryOperatorResultType(InvalidType.instance, createToken(TokenKind.And), IntegerType.instance)).to.be.undefined; // invalid not accepted
+            expect(util.binaryOperatorResultType(StringType.instance, createToken(TokenKind.And), IntegerType.instance)).to.be.undefined; // strings are not accepted
             // or
             expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Or), IntegerType.instance), IntegerType);
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Or), FloatType.instance), IntegerType);
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Or), LongIntegerType.instance), LongIntegerType);
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Or), IntegerType.instance), IntegerType);
-            expectTypeToBe(util.binaryOperatorResultType(InvalidType.instance, createToken(TokenKind.Or), IntegerType.instance), DynamicType);
+            expect(util.binaryOperatorResultType(InvalidType.instance, createToken(TokenKind.Or), IntegerType.instance)).to.be.undefined;
+        });
+
+        it('assumes a dynamic type is a valid type', () => {
+            expectTypeToBe(util.binaryOperatorResultType(StringType.instance, createToken(TokenKind.Plus), DynamicType.instance), StringType);
+            expectTypeToBe(util.binaryOperatorResultType(DynamicType.instance, createToken(TokenKind.Plus), StringType.instance), StringType);
+            expectTypeToBe(util.binaryOperatorResultType(FloatType.instance, createToken(TokenKind.ForwardslashEqual), DynamicType.instance), FloatType);
+
+            // "and" / "or" are logic operators with booleans
+            expectTypeToBe(util.binaryOperatorResultType(DynamicType.instance, createToken(TokenKind.And), BooleanType.instance), BooleanType);
+
+            // "and" / "or" are bitwise operators with number
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Or), DynamicType.instance), IntegerType);
         });
     });
 
@@ -1095,21 +1107,22 @@ describe('util', () => {
             let minus = createToken(TokenKind.Minus);
             expectTypeToBe(util.unaryOperatorResultType(minus, IntegerType.instance), IntegerType);
             expectTypeToBe(util.unaryOperatorResultType(minus, FloatType.instance), FloatType);
-            expectTypeToBe(util.unaryOperatorResultType(minus, BooleanType.instance), DynamicType);
+            expect(util.unaryOperatorResultType(minus, BooleanType.instance)).to.be.undefined;
             expectTypeToBe(util.unaryOperatorResultType(minus, DoubleType.instance), DoubleType);
-            expectTypeToBe(util.unaryOperatorResultType(minus, StringType.instance), DynamicType);
+            expect(util.unaryOperatorResultType(minus, StringType.instance)).to.be.undefined;
+            expectTypeToBe(util.unaryOperatorResultType(minus, DynamicType.instance), DynamicType);
+            expect(util.unaryOperatorResultType(minus, VoidType.instance)).to.be.undefined;
         });
 
-        describe('unaryOperatorResultType', () => {
-            it('returns the correct type for not operation', () => {
-                let notToken = createToken(TokenKind.Not);
-                expectTypeToBe(util.unaryOperatorResultType(notToken, IntegerType.instance), IntegerType);
-                expectTypeToBe(util.unaryOperatorResultType(notToken, FloatType.instance), IntegerType);
-                expectTypeToBe(util.unaryOperatorResultType(notToken, BooleanType.instance), BooleanType);
-                expectTypeToBe(util.unaryOperatorResultType(notToken, DoubleType.instance), IntegerType);
-                expectTypeToBe(util.unaryOperatorResultType(notToken, StringType.instance), DynamicType);
-                expectTypeToBe(util.unaryOperatorResultType(notToken, LongIntegerType.instance), LongIntegerType);
-            });
+        it('returns the correct type for not operation', () => {
+            let notToken = createToken(TokenKind.Not);
+            expectTypeToBe(util.unaryOperatorResultType(notToken, IntegerType.instance), IntegerType);
+            expectTypeToBe(util.unaryOperatorResultType(notToken, FloatType.instance), IntegerType);
+            expectTypeToBe(util.unaryOperatorResultType(notToken, BooleanType.instance), BooleanType);
+            expectTypeToBe(util.unaryOperatorResultType(notToken, DoubleType.instance), IntegerType);
+            expect(util.unaryOperatorResultType(notToken, StringType.instance)).to.be.undefined;
+            expectTypeToBe(util.unaryOperatorResultType(notToken, LongIntegerType.instance), LongIntegerType);
+            expect(util.unaryOperatorResultType(notToken, VoidType.instance)).to.be.undefined;
         });
     });
 

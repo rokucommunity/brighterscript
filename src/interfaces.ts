@@ -982,6 +982,10 @@ export interface ExtraSymbolData {
      * Is this type as defined in a doc comment?
      */
     isFromDocComment?: boolean;
+    /**
+     * Is this symbol built in to Brightscript?
+     */
+    isBuiltIn?: boolean;
 }
 
 export interface GetTypeOptions {

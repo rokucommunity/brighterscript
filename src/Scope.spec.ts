@@ -2267,6 +2267,19 @@ describe('Scope', () => {
             expectZeroDiagnostics(program);
         });
 
+        it('should allow object = invalid test', () => {
+            program.setFile(`source/main.brs`, `
+                sub create(objName)
+                    obj = createObject(objName)
+                    if obj = invalid
+                        print "not valid"
+                    end if
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
         it('should correctly validate formatJson', () => {
             program.setFile(`source/main.brs`, `
                 sub main()
