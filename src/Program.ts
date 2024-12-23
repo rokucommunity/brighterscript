@@ -661,7 +661,7 @@ export class Program {
     /**
      * Counter used to track which validation run is being logged
      */
-    private validationRunSequence = 0;
+    private validationRunSequence = 1;
 
     /**
      * How many milliseconds can pass while doing synchronous operations in validate before we register a short timeout (i.e. yield to the event loop)
@@ -677,10 +677,22 @@ export class Program {
     public validate(options: { async: false; cancellationToken?: CancellationToken }): void;
     public validate(options: { async: true; cancellationToken?: CancellationToken }): Promise<void>;
     public validate(options?: { async?: boolean; cancellationToken?: CancellationToken }) {
-        const timeEnd = this.logger.timeStart(LogLevel.log, `Validating project${(this.logger.logLevel as LogLevel) > LogLevel.log ? ` (run ${this.validationRunSequence++})` : ''}`);
+        const validationRunId = this.validationRunSequence++;
+        const timeEnd = this.logger.timeStart(LogLevel.log, `Validating project${(this.logger.logLevel as LogLevel) > LogLevel.log ? ` (run ${validationRunId})` : ''}`);
 
         let previousValidationPromise = this.validatePromise;
         const deferred = new Deferred();
+
+        if (options?.async) {
+            //we're async, so create a new promise chain to resolve after this validation is done
+            this.validatePromise = Promise.resolve(previousValidationPromise).then(() => {
+                return deferred.promise;
+            });
+
+            //we are not async but there's a pending promise, then we cannot run this validation
+        } else if (previousValidationPromise !== undefined) {
+            throw new Error('Cannot run synchronous validation while an async validation is in progress');
+        }
 
         if (options?.async) {
             //we're async, so create a new promise chain to resolve after this validation is done
@@ -699,6 +711,8 @@ export class Program {
             minSyncDuration: this.validationMinSyncDuration
         });
 
+        let beforeProgramValidateWasEmitted = false;
+
         //this sequencer allows us to run in both sync and async mode, depending on whether options.async is enabled.
         //We use this to prevent starving the CPU during long validate cycles when running in a language server context
         sequencer
@@ -711,6 +725,7 @@ export class Program {
             .once(() => {
                 this.diagnostics = [];
                 this.plugins.emit('beforeProgramValidate', this);
+                beforeProgramValidateWasEmitted = true;
             })
             .forEach(Object.values(this.files), (file) => {
                 if (!file.isValidated) {
@@ -738,7 +753,6 @@ export class Program {
             })
             .once(() => {
                 this.detectDuplicateComponentNames();
-                this.plugins.emit('afterProgramValidate', this);
             })
             .onCancel(() => {
                 timeEnd('cancelled');
@@ -747,6 +761,12 @@ export class Program {
                 timeEnd();
             })
             .onComplete(() => {
+                //if we emitted the beforeProgramValidate hook, emit the afterProgramValidate hook as well
+                if (beforeProgramValidateWasEmitted) {
+                    const wasCancelled = options?.cancellationToken?.isCancellationRequested ?? false;
+                    this.plugins.emit('afterProgramValidate', this, wasCancelled);
+                }
+
                 //regardless of the success of the validation, mark this run as complete
                 deferred.resolve();
                 //clear the validatePromise which means we're no longer running a validation
@@ -1532,4 +1552,11 @@ export interface FileTranspileResult {
     code: string;
     map: SourceMapGenerator;
     typedef: string;
+}
+
+export function test(foo) {
+    const bar = foo + 'Hello';
+
+
+    return bar;
 }

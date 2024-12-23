@@ -54,19 +54,18 @@ describe('Project', () => {
             });
 
             //wait for the first validate to finish
-            const validate = project.validate;
-            await Promise.resolve((resolve) => {
-                const validateStub = sinon.stub(project, 'validate').callsFake((...args) => {
-                    return validate.call(project, ...args).then(() => {
-                        validateStub.restore();
-                        resolve();
-                    });
+            await new Promise<void>((resolve) => {
+                const off = project.on('validate-end', () => {
+                    off();
+                    resolve();
                 });
             });
 
             let validationCount = 0;
             let maxValidationCount = 0;
-            //force validations to yield very frequently
+            //force validation cycles to yield very frequently
+            project['builder'].program['validationMinSyncDuration'] = 0.001;
+
             project['builder'].program.plugins.add({
                 name: 'Test',
                 beforeProgramValidate: () => {

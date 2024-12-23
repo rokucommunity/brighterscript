@@ -190,7 +190,7 @@ export class Project implements LspProject {
     }
 
     /**
-     * Cancel any active validation that's running
+     * Cancel any active running validation
      */
     public cancelValidate() {
         this.validationCancelToken?.cancel();
