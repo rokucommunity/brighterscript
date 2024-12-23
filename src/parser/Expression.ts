@@ -1498,6 +1498,19 @@ export class SourceLiteralExpression extends Expression {
             case TokenKind.SourceFunctionNameLiteral:
                 text = `"${this.getFunctionName(state, ParseMode.BrighterScript)}"`;
                 break;
+            case TokenKind.SourceNamespaceNameLiteral:
+                let namespaceParts = this.getFunctionName(state, ParseMode.BrighterScript).split('.');
+                namespaceParts.pop(); // remove the function name
+
+                text = `"${namespaceParts.join('.')}"`;
+                break;
+            case TokenKind.SourceNamespaceRootNameLiteral:
+                let namespaceRootParts = this.getFunctionName(state, ParseMode.BrighterScript).split('.');
+                namespaceRootParts.pop(); // remove the function name
+
+                let rootNamespace = namespaceRootParts.shift() ?? '';
+                text = `"${rootNamespace}"`;
+                break;
             case TokenKind.SourceLocationLiteral:
                 const locationUrl = fileUrl(state.srcPath);
                 //TODO find first parent that has range, or default to -1

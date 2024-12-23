@@ -19,7 +19,7 @@ export * from './parser/BrightScriptDocParser';
 export * from './BsConfig';
 export * from './deferred';
 // convenience re-export from vscode
-export { Location, Range, Position, CancellationToken, CancellationTokenSource, DiagnosticSeverity, DiagnosticTag, SemanticTokenTypes, CodeAction } from 'vscode-languageserver';
+export { Diagnostic, Range, Location, Position, CancellationToken, CancellationTokenSource, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, SemanticTokenTypes, CodeAction, CodeDescription, URI } from 'vscode-languageserver';
 export * from './astUtils/visitors';
 export * from './astUtils/stackedVisitor';
 export * from './astUtils/reflection';
