@@ -497,7 +497,7 @@ export class FunctionParameterExpression extends Expression {
         const paramName = this.tokens.name.text;
 
         let paramTypeFromCode = this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime, typeChain: undefined }) ??
-            this.defaultValue?.getType({ ...options, flags: SymbolTypeFlag.runtime, typeChain: undefined });
+            util.getDefaultTypeFromValueType(this.defaultValue?.getType({ ...options, flags: SymbolTypeFlag.runtime, typeChain: undefined }));
         if (isInvalidType(paramTypeFromCode) || isVoidType(paramTypeFromCode)) {
             paramTypeFromCode = undefined;
         }

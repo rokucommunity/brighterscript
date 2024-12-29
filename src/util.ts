@@ -42,13 +42,14 @@ import { MAX_RELATED_INFOS_COUNT } from './diagnosticUtils';
 import type { BscType } from './types/BscType';
 import { unionTypeFactory } from './types/UnionType';
 import { ArrayType } from './types/ArrayType';
-import { BinaryOperatorReferenceType } from './types/ReferenceType';
+import { BinaryOperatorReferenceType, ParamTypeFromValueReferenceType } from './types/ReferenceType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { ComponentType } from './types/ComponentType';
 import { FunctionType } from './types/FunctionType';
 import type { AssignmentStatement, NamespaceStatement } from './parser/Statement';
 import type { BscFile } from './files/BscFile';
 import type { NamespaceType } from './types/NamespaceType';
+import { getUniqueType } from './types/helpers';
 import { InvalidType } from './types/InvalidType';
 
 export class Util {
@@ -2495,6 +2496,46 @@ export class Util {
             }
         }
         return returnType;
+    }
+
+    /**
+     * Gets the type for a default value (eg. as a function param, class member or typed array)
+     */
+    public getDefaultTypeFromValueType(valueType: (BscType | BscType[])) {
+        if (!valueType) {
+            return undefined;
+        }
+        let resultType: BscType = DynamicType.instance;
+        if (Array.isArray(valueType)) {
+            // passed an array opf types, potential from ArrayType.innerTypes
+            if (valueType.length > 0) {
+                //at least one, use it
+                resultType = valueType[0];
+                if (valueType?.length > 1) {
+                    // more than 1, find union
+                    resultType = getUniqueType(valueType, unionTypeFactory);
+                }
+            }
+        } else {
+            resultType = valueType;
+        }
+        if (!resultType.isResolvable()) {
+            resultType = new ParamTypeFromValueReferenceType(resultType);
+        } else if (isEnumMemberType(resultType)) {
+            // the type was an enum member... Try to get the parent enum type
+            resultType = resultType.parentEnumType ?? resultType;
+        } else if (isUnionType(resultType)) {
+            // it was a union -- I wonder if they're resolvable now?
+            const moddedTypes = resultType.types.map(t => {
+                if (isEnumMemberType(t)) {
+                    // the type was an enum member... Try to get the parent enum type
+                    return t.parentEnumType ?? resultType;
+                }
+                return t;
+            });
+            resultType = getUniqueType(moddedTypes, unionTypeFactory);
+        }
+        return resultType;
     }
 }
 
