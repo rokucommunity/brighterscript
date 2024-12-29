@@ -2139,6 +2139,43 @@ describe('ScopeValidator', () => {
                 DiagnosticMessages.cannotFindName('outer')
             ]);
         });
+
+        it('allows method call on hex literal', () => {
+            program.setFile('source/main.bs', `
+                function test()
+                    x = &HFF.toStr()
+                    return x
+                end function
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+
+        it('allows method call on hex literal', () => {
+            program.setFile('source/main.bs', `
+                function test()
+                    x = &HFF.toStr()
+                    return x
+                end function
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('has no validation errors with print statement with hex followed by dot <number>', () => {
+            program.setFile('source/main.bs', `
+                sub test()
+                    print &hFF.123.456.5678
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
     });
 
     describe('itemCannotBeUsedAsVariable', () => {
@@ -3264,6 +3301,20 @@ describe('ScopeValidator', () => {
             //should have errors
             expectDiagnostics(program, [
                 DiagnosticMessages.operatorTypeMismatch('++', 'string').message
+            ]);
+        });
+
+        it('deals with adding int, bool and invalid', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff()
+                    print 1 + (true + invalid)
+                end sub
+
+            `);
+            program.validate();
+            //should have errors
+            expectDiagnostics(program, [
+                DiagnosticMessages.operatorTypeMismatch('+', 'boolean', 'invalid').message
             ]);
         });
     });

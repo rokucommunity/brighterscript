@@ -131,7 +131,9 @@ export class BrsFilePreTranspileProcessor {
                 }),
                 endIf: createToken(TokenKind.EndIf, 'end if', ternaryExpression.tokens.questionMark.location)
             });
-        } else if (isIndexedSetStatement(parent)) {
+
+            //if this is an indexedSetStatement, and the ternary expression is NOT an index
+        } else if (isIndexedSetStatement(parent) && !parent.indexes?.includes(ternaryExpression)) {
             ifStatement = createIfStatement({
                 if: createToken(TokenKind.If, 'if', ternaryExpression.tokens.questionMark.location),
                 condition: ternaryExpression.test,
