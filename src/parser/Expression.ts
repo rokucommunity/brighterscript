@@ -501,7 +501,7 @@ export class FunctionParameterExpression extends Expression {
         const paramName = this.tokens.name.text;
 
         let paramTypeFromCode = this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime, typeChain: undefined }) ??
-            this.defaultValue?.getType({ ...options, flags: SymbolTypeFlag.runtime, typeChain: undefined });
+            util.getDefaultTypeFromValueType(this.defaultValue?.getType({ ...options, flags: SymbolTypeFlag.runtime, typeChain: undefined }));
         if (isInvalidType(paramTypeFromCode) || isVoidType(paramTypeFromCode)) {
             paramTypeFromCode = undefined;
         }
@@ -1501,6 +1501,19 @@ export class SourceLiteralExpression extends Expression {
                 break;
             case TokenKind.SourceFunctionNameLiteral:
                 text = `"${this.getFunctionName(state, ParseMode.BrighterScript)}"`;
+                break;
+            case TokenKind.SourceNamespaceNameLiteral:
+                let namespaceParts = this.getFunctionName(state, ParseMode.BrighterScript).split('.');
+                namespaceParts.pop(); // remove the function name
+
+                text = `"${namespaceParts.join('.')}"`;
+                break;
+            case TokenKind.SourceNamespaceRootNameLiteral:
+                let namespaceRootParts = this.getFunctionName(state, ParseMode.BrighterScript).split('.');
+                namespaceRootParts.pop(); // remove the function name
+
+                let rootNamespace = namespaceRootParts.shift() ?? '';
+                text = `"${rootNamespace}"`;
                 break;
             case TokenKind.SourceLocationLiteral:
                 const locationUrl = fileUrl(state.srcPath);

@@ -382,7 +382,7 @@ export class ScopeValidator {
                 const data = {} as ExtraSymbolData;
                 let argType = this.getNodeTypeWrapper(file, arg, { flags: SymbolTypeFlag.runtime, data: data });
 
-                const paramType = funcType.params[paramIndex]?.type;
+                let paramType = funcType.params[paramIndex]?.type;
                 if (!paramType) {
                     // unable to find a paramType -- maybe there are more args than params
                     break;
