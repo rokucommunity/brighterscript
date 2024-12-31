@@ -1264,28 +1264,6 @@ describe('ScopeValidator', () => {
             expectZeroDiagnostics(program);
         });
 
-        it.skip('TODO: should correctly be able to use a string literal to set a enum value', () => {
-            program.setFile<BrsFile>('source/util.bs', `
-                sub goDirection(dir as Direction)
-                end sub
-
-                sub testStringAsEnumVal()
-                    goDirection("North") ' no error
-                    goDirection("inside out") ' error
-                end sub
-
-                enum Direction
-                    North = "North"
-                    South = "South"
-                    East = "East"
-                    West = "West"
-                end  enum
-
-            `);
-            program.validate();
-            expectZeroDiagnostics(program);
-        });
-
         it('validates a built-in void function as an argument', () => {
             program.setFile<BrsFile>('source/main.bs', `
                 sub doPrint(x)
@@ -1299,7 +1277,7 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.argumentTypeMismatch('void', 'dynamic').message
+                DiagnosticMessages.argumentTypeMismatch('uninitialized', 'dynamic').message
             ]);
         });
 
@@ -3406,7 +3384,7 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.operatorTypeMismatch('=', 'void', 'invalid').message
+                DiagnosticMessages.operatorTypeMismatch('=', 'uninitialized', 'invalid').message
             ]);
         });
     });

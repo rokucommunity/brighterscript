@@ -26,7 +26,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { LogLevel, createLogger } from './logging';
 import { isToken, type Identifier, type Locatable, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLiteralString, isLongIntegerType, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isPrimitiveType, isReferenceType, isStatement, isStringType, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLiteralString, isLongIntegerType, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isPrimitiveType, isReferenceType, isStatement, isStringType, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import * as requireRelative from 'require-relative';
@@ -1551,7 +1551,7 @@ export class Util {
             });
         }
 
-        if (isVoidType(leftType) || isVoidType(rightType)) {
+        if (isVoidType(leftType) || isVoidType(rightType) || isUninitializedType(leftType) || isUninitializedType(rightType)) {
             return undefined;
         }
 
@@ -1728,7 +1728,7 @@ export class Util {
      */
     public unaryOperatorResultType(operator: Token, exprType: BscType): BscType {
 
-        if (isVoidType(exprType) || isInvalidType(exprType)) {
+        if (isVoidType(exprType) || isInvalidType(exprType) || isUninitializedType(exprType)) {
             return undefined;
         }
 
