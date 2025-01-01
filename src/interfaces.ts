@@ -221,6 +221,21 @@ export type CompilerPluginFactory = () => CompilerPlugin;
 
 export interface CompilerPlugin {
     name: string;
+
+    /**
+     * A list of brighterscript-style function declarations of allowed annotations
+     * Eg.: [
+     *   `inline()`,
+     *   `suite(suiteConfig as object)`
+     * ]
+     */
+    annotations?: string[];
+
+    /**
+     * Called when plugin is initially loaded
+     */
+    onPluginConfigure?(event: onPluginConfigureEvent): any;
+
     /**
      * Called before a new program is created
      */
@@ -506,6 +521,9 @@ export interface OnGetCodeActionsEvent<TFile extends BscFile = BscFile> {
     codeActions: CodeAction[];
 }
 
+export interface onPluginConfigureEvent {
+    builder: ProgramBuilder;
+}
 export interface BeforeProgramCreateEvent {
     builder: ProgramBuilder;
 }

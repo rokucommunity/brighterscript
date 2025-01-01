@@ -50,6 +50,7 @@ While there are no restrictions on plugin names, it helps others to find your pl
 
 Full compiler lifecycle:
 
+- `onPluginConfigure`
 - `beforeProgramCreate`
 - `afterProgramCreate`
     - `afterScopeCreate` ("source" scope)
@@ -75,13 +76,13 @@ Full compiler lifecycle:
     - `afterProgramValidate`
 - `beforePrepublish`
 - `afterPrepublish`
-- `beforePublish`
-    - `beforeProgramTranspile`
+- `beforeSerializeProgram`
+    - `beforeBuildProgram`
     - For each file:
-        - `beforeFileTranspile`
-        - `afterFileTranspile`
-    - `afterProgramTranspile`
-- `afterPublish`
+        - `beforePrepareFile`
+        - `afterPrepareFile`
+    - `afterBuildProgram`
+- `afterSerializeProgram`
 - `beforeProgramDispose`
 
 ### Language server
@@ -90,15 +91,15 @@ Once the program has been validated, the language server runs a special loop - i
 
 When a file is removed:
 
-- `beforeFileDispose`
+- `beforeFileRemove`
 - `beforeScopeDispose` (component scope)
 - `afterScopeDispose` (component scope)
-- `afterFileDispose`
+- `afterFileRemove`
 
 When a file is added:
 
-- `beforeFileParse`
-- `afterFileParse`
+- `beforeProvideFile`
+- `afterProvideFile`
 - `afterScopeCreate` (component scope)
 - `afterFileValidate`
 
@@ -157,10 +158,25 @@ The top level object is the `ProgramBuilder` which runs the overall process: pre
 Here are some important interfaces. You can view them in the code at [this link](https://github.com/rokucommunity/brighterscript/blob/ddcb7b2cd219bd9fecec93d52fbbe7f9b972816b/src/interfaces.ts#L190:~:text=export%20interface%20CompilerPlugin%20%7B).
 
 ```typescript
-export type CompilerPluginFactory = () => CompilierPlugin;
+export type CompilerPluginFactory = () => CompilerPlugin;
 
 export interface CompilerPlugin {
     name: string;
+
+    /**
+     * A list of brighterscript-style function declarations of allowed annotations
+     * Eg.: [
+     *   `inline()`,
+     *   `suite(suiteConfig as object)`
+     * ]
+     */
+    annotations?: string[];
+
+    /**
+     * Called when plugin is initially loaded
+     */
+    onPluginConfigure?(event: onPluginConfigureEvent): any;
+
     /**
      * Called before a new program is created
      */
@@ -240,7 +256,6 @@ export interface CompilerPlugin {
     afterScopeDispose?(event: AfterScopeDisposeEvent): any;
 
     beforeScopeValidate?(event: BeforeScopeValidateEvent): any;
-
     /**
      * Called before the `provideDefinition` hook
      */
@@ -255,7 +270,6 @@ export interface CompilerPlugin {
      * @param event
      */
     afterProvideDefinition?(event: AfterProvideDefinitionEvent): any;
-
 
     /**
      * Called before the `provideReferences` hook
@@ -304,8 +318,6 @@ export interface CompilerPlugin {
      */
     afterProvideWorkspaceSymbols?(event: AfterProvideWorkspaceSymbolsEvent): any;
 
-
-    onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
     //scope events
     onScopeValidate?(event: OnScopeValidateEvent): any;
     afterScopeValidate?(event: BeforeScopeValidateEvent): any;
@@ -554,7 +566,7 @@ export default function () {
 ## Modifying code
 Sometimes plugins will want to modify code before the project is transpiled. While you can technically edit the AST directly at any point in the file's lifecycle, this is not recommended as those changes will remain changed as long as that file exists in memory and could cause issues with file validation if the plugin is used in a language-server context (i.e. inside vscode).
 
-Instead, we provide an instace of an `Editor` class in the `beforeFileTranspile` event that allows you to modify AST before the file is transpiled, and then those modifications are undone `afterFileTranspile`.
+Instead, we provide an instance of an `Editor` class in the `beforeBuildProgram` and `beforePrepareFile` events that allows you to modify AST before the file is transpiled, and then those modifications are undone after the `afterBuildProgram` event.
 
 For example, consider the following brightscript code:
 ```brightscript
@@ -566,14 +578,14 @@ end sub
 Here's the plugin:
 
 ```typescript
-import { CompilerPlugin, BeforeFileTranspileEvent, isBrsFile, WalkMode, createVisitor, TokenKind } from 'brighterscript';
+import { CompilerPlugin, BeforePrepareFileEvent, isBrsFile, WalkMode, createVisitor, TokenKind } from 'brighterscript';
 
 // plugin factory
 export default function () {
     return {
         name: 'replacePlaceholders',
         // transform AST before transpilation
-        beforeFileTranspile: (event: BeforeFileTranspileEvent) => {
+        beforePrepareFile: (event: BeforePrepareFileEvent) => {
             if (isBrsFile(event.file)) {
                 event.file.ast.walk(createVisitor({
                     LiteralExpression: (literal) => {
@@ -600,12 +612,12 @@ Another common use case is to remove print statements and comments. Here's a plu
 Note: Comments are not regular nodes in the AST. They're considered "trivia". To access them, you need to ask each AstNode for its trivia. to help with this, we've included the `AstNode` visitor method. Here's how you'd do that:
 
 ```typescript
-import { isBrsFile, createVisitor, WalkMode, BeforeFileTranspileEvent, CompilerPlugin } from 'brighterscript';
+import { isBrsFile, createVisitor, WalkMode, BeforePrepareFileEvent, CompilerPlugin } from 'brighterscript';
 
 export default function plugin() {
     return {
         name: 'removeCommentAndPrintStatements',
-        beforeFileTranspile: (event: BeforeFileTranspileEvent) => {
+        beforePrepareFile: (event: BeforePrepareFileEvent) => {
             if (isBrsFile(event.file)) {
                 // visit functions bodies
                 event.file.ast.walk(createVisitor({
@@ -631,6 +643,64 @@ export default function plugin() {
     } as CompilerPlugin;
 }
 ```
+
+## Providing Annotations via a plugin
+
+Plugins may provide [annotations](annotations.md) that can be used to add metadata to any statement in the code.
+
+Plugins must declare the annotations they support, so they can be validated properly. To declare an annotation, it must be listed in the `annotations` property - a list of Brighterscript-style function declarations.
+
+For example:
+
+```typescript
+   this.annotations = [
+        'inline()',
+        'log(prefix as string, addLineNumbers = false as boolean)'
+   ];
+```
+
+Annotations that do not require any arguments are listed as functions with no parameters. Annotations that require arguments may have their parameters types listed as well.
+
+Here's an example plugin that provides the `log` annotation above:
+
+```typescript
+import { isBrsFile, createVisitor, WalkMode, BeforePrepareFileEvent, CompilerPlugin, FunctionStatement, PrintStatement, createStringLiteral, VariableExpression, createToken, TokenKind, Identifier } from 'brighterscript';
+
+export default function plugin() {
+    return {
+        name: 'addLogging',
+        annotations: [
+            'log(prefix as string, addLineNumbers = false as boolean)'
+        ],
+        beforePrepareFile: (event: BeforePrepareFileEvent) => {
+            if (isBrsFile(event.file)) {
+                event.file.ast.walk(createVisitor({
+                    FunctionStatement: (funcStmt: FunctionStatement, _parent, owner, key) => {
+                        const logAnnotation = funcStmt.annotations?.find(anno => anno.name === 'log');
+                        if (logAnnotation) {
+                            const args = logAnnotation.getArguments();
+                            const logPrintStmt = new PrintStatement({
+                                print: createToken(TokenKind.Print),
+                                expressions:[
+                                    createStringLiteral(args[0].toString()), // prefix,
+                                    createStringLiteral(funcStmt.tokens.name.text) // function name
+                                ]
+                            });
+                            if(args[1]) { // add line num
+                                logPrintStmt.expressions.unshift(new VariableExpression({ name: createToken(TokenKind.SourceLineNumLiteral) as Identifier }))
+                            }
+                            event.editor.arrayUnshift(funcStmt.func.body.statements, logPrintStmt)
+                        }
+                    }
+                }), {
+                    walkMode: WalkMode.visitStatements
+                });
+            }
+        }
+    } as CompilerPlugin;
+}
+```
+
 
 ## Modifying `bsconfig.json` via a plugin
 

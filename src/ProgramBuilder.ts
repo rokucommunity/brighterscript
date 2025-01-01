@@ -163,6 +163,9 @@ export class ProgramBuilder {
         for (let plugin of plugins) {
             this.plugins.add(plugin);
         }
+        this.plugins.emit('onPluginConfigure', {
+            builder: this
+        });
 
         this.plugins.emit('beforeProgramCreate', {
             builder: this
