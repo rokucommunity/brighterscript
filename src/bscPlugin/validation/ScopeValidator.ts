@@ -27,11 +27,12 @@ import type { XmlScope } from '../../XmlScope';
 import type { XmlFile } from '../../files/XmlFile';
 import { SGFieldTypes } from '../../parser/SGTypes';
 import { DynamicType } from '../../types/DynamicType';
-import { VoidType } from '../../types/VoidType';
 import { BscTypeKind } from '../../types/BscTypeKind';
 import type { BrsDocWithType } from '../../parser/BrightScriptDocParser';
 import brsDocParser from '../../parser/BrightScriptDocParser';
 import type { Location } from 'vscode-languageserver';
+import { InvalidType } from '../../types/InvalidType';
+import { VoidType } from '../../types/VoidType';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -507,16 +508,25 @@ export class ScopeValidator {
         const getTypeOptions = { flags: SymbolTypeFlag.runtime, data: data };
         let funcType = returnStmt.findAncestor(isFunctionExpression)?.getType({ flags: SymbolTypeFlag.typetime });
         if (isTypedFunctionType(funcType)) {
-            const actualReturnType = returnStmt?.value
+            let actualReturnType = returnStmt?.value
                 ? this.getNodeTypeWrapper(file, returnStmt?.value, getTypeOptions)
                 : VoidType.instance;
             const compatibilityData: TypeCompatibilityData = {};
 
-            if (funcType.returnType.isResolvable() && actualReturnType && !funcType.returnType.isTypeCompatible(actualReturnType, compatibilityData)) {
-                this.addMultiScopeDiagnostic({
-                    ...DiagnosticMessages.returnTypeMismatch(actualReturnType.toString(), funcType.returnType.toString(), compatibilityData),
-                    location: returnStmt.value?.location ?? returnStmt.location
-                });
+            // `return` statement by itself in non-built-in function will actually result in `invalid`
+            const valueReturnType = isVoidType(actualReturnType) ? InvalidType.instance : actualReturnType;
+
+            if (funcType.returnType.isResolvable()) {
+                if (!returnStmt?.value && isVoidType(funcType.returnType)) {
+                    // allow empty return when function is return `as void`
+                    // eslint-disable-next-line no-useless-return
+                    return;
+                } else if (!funcType.returnType.isTypeCompatible(valueReturnType, compatibilityData)) {
+                    this.addMultiScopeDiagnostic({
+                        ...DiagnosticMessages.returnTypeMismatch(actualReturnType.toString(), funcType.returnType.toString(), compatibilityData),
+                        location: returnStmt.value?.location ?? returnStmt.location
+                    });
+                }
             }
         }
     }
@@ -610,6 +620,7 @@ export class ScopeValidator {
             // Can not find the type. error handled elsewhere
             return;
         }
+
         let leftTypeToTest = leftType;
         let rightTypeToTest = rightType;
 
@@ -625,24 +636,10 @@ export class ScopeValidator {
             // Because you need to verify each combination of types
             return;
         }
-
-        const leftIsPrimitive = isPrimitiveType(leftTypeToTest);
-        const rightIsPrimitive = isPrimitiveType(rightTypeToTest);
-        const leftIsAny = isDynamicType(leftTypeToTest) || isObjectType(leftTypeToTest);
-        const rightIsAny = isDynamicType(rightTypeToTest) || isObjectType(rightTypeToTest);
-
-
-        if (leftIsAny && rightIsAny) {
-            // both operands are basically "any" type... ignore;
-            return;
-        } else if ((leftIsAny && rightIsPrimitive) || (leftIsPrimitive && rightIsAny)) {
-            // one operand is basically "any" type... ignore;
-            return;
-        }
         const opResult = util.binaryOperatorResultType(leftTypeToTest, binaryExpr.tokens.operator, rightTypeToTest);
 
-        if (isDynamicType(opResult)) {
-            // if the result was dynamic, that means there wasn't a valid operation
+        if (!opResult) {
+            // if the result was dynamic or void, that means there wasn't a valid operation
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.operatorTypeMismatch(binaryExpr.tokens.operator.text, leftType.toString(), rightType.toString()),
                 location: binaryExpr.location
@@ -667,7 +664,6 @@ export class ScopeValidator {
             rightTypeToTest = rightType.underlyingType;
         }
 
-
         if (isUnionType(rightTypeToTest)) {
             // TODO: it is possible to validate based on innerTypes, but more complicated
             // Because you need to verify each combination of types
@@ -677,7 +673,7 @@ export class ScopeValidator {
 
         } else if (isPrimitiveType(rightType)) {
             const opResult = util.unaryOperatorResultType(unaryExpr.tokens.operator, rightTypeToTest);
-            if (isDynamicType(opResult)) {
+            if (!opResult) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.operatorTypeMismatch(unaryExpr.tokens.operator.text, rightType.toString()),
                     location: unaryExpr.location

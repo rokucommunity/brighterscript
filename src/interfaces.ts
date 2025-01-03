@@ -983,7 +983,11 @@ export interface ExtraSymbolData {
      */
     isFromDocComment?: boolean;
     /**
-     * was this a result of a callfunc?
+     * Is this symbol built in to Brightscript?
+     */
+    isBuiltIn?: boolean;
+    /**
+     * Was this a result of a callfunc?
      */
     isFromCallFunc?: boolean;
 }

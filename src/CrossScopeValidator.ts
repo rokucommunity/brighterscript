@@ -499,7 +499,7 @@ export class CrossScopeValidator {
             const typeName = 'rosgnode' + componentName;
             const component = this.program.getComponent(componentName);
             const componentSymbol = this.program.globalScope.symbolTable.getSymbol(typeName, SymbolTypeFlag.typetime)?.[0];
-            if (componentSymbol && component && componentSymbol.type.isBuiltIn) {
+            if (componentSymbol && component && componentSymbol.data?.isBuiltIn) {
                 this.componentsMap.set(typeName, { file: component.file, symbol: componentSymbol });
             }
         }

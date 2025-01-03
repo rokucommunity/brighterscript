@@ -1,5 +1,5 @@
 import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
-import { isDynamicType } from '../astUtils/reflection';
+import { isDynamicType, isUninitializedType, isVoidType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
@@ -31,6 +31,9 @@ export class DynamicType extends BscType {
      */
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         //everything can be dynamic, so as long as a type is provided, this is true
+        if (isVoidType(targetType) || isUninitializedType(targetType)) {
+            return false;
+        }
         return !!targetType;
     }
 

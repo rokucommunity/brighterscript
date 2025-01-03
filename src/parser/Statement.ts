@@ -9,7 +9,7 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
-import { isCallExpression, isCatchStatement, isConditionalCompileStatement, isEnumMemberStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isTryCatchStatement, isTypedefProvider, isUnaryExpression, isVoidType, isWhileStatement } from '../astUtils/reflection';
+import { isCallExpression, isCatchStatement, isConditionalCompileStatement, isEnumMemberStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isTryCatchStatement, isTypedefProvider, isUnaryExpression, isUninitializedType, isVoidType, isWhileStatement } from '../astUtils/reflection';
 import { TypeChainEntry, type GetTypeOptions, type TranspileResult, type TypedefProvider } from '../interfaces';
 import { createInvalidLiteral, createMethodStatement, createToken } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
@@ -3334,7 +3334,7 @@ export class FieldStatement extends Statement implements TypedefProvider {
     getType(options: GetTypeOptions) {
         let initialValueType = this.initialValue?.getType({ ...options, flags: SymbolTypeFlag.runtime });
 
-        if (isInvalidType(initialValueType) || isVoidType(initialValueType)) {
+        if (isInvalidType(initialValueType) || isVoidType(initialValueType) || isUninitializedType(initialValueType)) {
             initialValueType = undefined;
         }
 
@@ -3376,7 +3376,7 @@ export class FieldStatement extends Statement implements TypedefProvider {
             }
 
             let type = this.getType({ flags: SymbolTypeFlag.typetime });
-            if (isInvalidType(type) || isVoidType(type)) {
+            if (isInvalidType(type) || isVoidType(type) || isUninitializedType(type)) {
                 type = new DynamicType();
             }
 

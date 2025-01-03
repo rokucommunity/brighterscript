@@ -27,7 +27,11 @@ import { TypePropertyReferenceType } from '../types/ReferenceType';
 import { UnionType } from '../types/UnionType';
 import { ArrayType } from '../types/ArrayType';
 import { AssociativeArrayType } from '../types/AssociativeArrayType';
-import { TypedFunctionType } from '../types';
+import { TypedFunctionType } from '../types/TypedFunctionType';
+import type { ComponentType } from '../types/ComponentType';
+import { createToken } from '../astUtils/creators';
+import { InvalidType } from '../types/InvalidType';
+import { UninitializedType } from '../types/UninitializedType';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { FunctionType } from '../types/FunctionType';
 import type { BaseFunctionType } from '../types/BaseFunctionType';
@@ -91,7 +95,7 @@ export class BinaryExpression extends Expression {
             return util.binaryOperatorResultType(
                 this.left.getType(options),
                 this.tokens.operator,
-                this.right.getType(options));
+                this.right.getType(options)) ?? DynamicType.instance;
         }
         return DynamicType.instance;
     }
@@ -203,6 +207,14 @@ export class CallExpression extends Expression {
             return specialCaseReturnType;
         }
         if (isCallableType(calleeType) && (!isReferenceType(calleeType.returnType) || calleeType.returnType?.isResolvable())) {
+            if (isVoidType(calleeType.returnType)) {
+                if (options.data?.isBuiltIn) {
+                    // built in functions that return `as void` will not initialize the result
+                    return UninitializedType.instance;
+                }
+                // non-built in functions with return type`as void` actually return `invalid`
+                return InvalidType.instance;
+            }
             return calleeType.returnType;
         }
         if (!isReferenceType(calleeType) && (calleeType as BaseFunctionType)?.returnType?.isResolvable()) {
