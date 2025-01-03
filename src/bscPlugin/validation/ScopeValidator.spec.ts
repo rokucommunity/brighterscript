@@ -2189,6 +2189,70 @@ describe('ScopeValidator', () => {
             expectZeroDiagnostics(program);
         });
 
+        it('allows access of properties of union with invalid', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                sub test()
+                    channel = invalid
+                    if true
+                        channel = {
+                            height: 123
+                        }
+                    end if
+
+                    height = 0
+                    if channel <> invalid then
+                        height += channel.height
+                    end if
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+
+        });
+
+        it('sets default arg of invalid as dynamic', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                sub test(channel = invalid)
+                    if true
+                        channel = {
+                            height: 123
+                        }
+                    end if
+
+                    height = 0
+                    if channel <> invalid then
+                        height += channel.height
+                    end if
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+
+        });
+
+        it('sets assignment of function returning invalid as dynamic', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                sub test()
+                    channel = noReturn()
+                    if true
+                        channel = {
+                            height: 123
+                        }
+                    end if
+
+                    height = 0
+                    if channel <> invalid then
+                        height += channel.height
+                    end if
+                end sub
+
+                sub noReturn()
+                    print "hello"
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('itemCannotBeUsedAsVariable', () => {
