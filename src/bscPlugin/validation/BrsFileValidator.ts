@@ -1,4 +1,4 @@
-import { isAliasStatement, isArrayType, isBlock, isBody, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypecastExpression, isTypecastStatement, isUnaryExpression, isVariableExpression, isWhileStatement } from '../../astUtils/reflection';
+import { isAliasStatement, isArrayType, isBlock, isBody, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypecastExpression, isTypecastStatement, isUnaryExpression, isVariableExpression, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -108,7 +108,10 @@ export class BrsFileValidator {
             AssignmentStatement: (node) => {
                 const data: ExtraSymbolData = {};
                 //register this variable
-                const nodeType = node.getType({ flags: SymbolTypeFlag.runtime, data: data });
+                let nodeType = node.getType({ flags: SymbolTypeFlag.runtime, data: data });
+                if (isInvalidType(nodeType)) {
+                    nodeType = DynamicType.instance;
+                }
                 node.parent.getSymbolTable()?.addSymbol(node.tokens.name.text, { definingNode: node, isInstance: true, isFromDocComment: data.isFromDocComment }, nodeType, SymbolTypeFlag.runtime);
             },
             DottedSetStatement: (node) => {
