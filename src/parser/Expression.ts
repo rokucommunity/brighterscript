@@ -28,8 +28,6 @@ import { UnionType } from '../types/UnionType';
 import { ArrayType } from '../types/ArrayType';
 import { AssociativeArrayType } from '../types/AssociativeArrayType';
 import { TypedFunctionType } from '../types/TypedFunctionType';
-import type { ComponentType } from '../types/ComponentType';
-import { createToken } from '../astUtils/creators';
 import { InvalidType } from '../types/InvalidType';
 import { UninitializedType } from '../types/UninitializedType';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
