@@ -1,5 +1,5 @@
 import type { Body, AssignmentStatement, Block, ExpressionStatement, ExitStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, InterfaceFieldStatement, InterfaceMethodStatement, InterfaceStatement, EnumStatement, EnumMemberStatement, TryCatchStatement, CatchStatement, ThrowStatement, MethodStatement, FieldStatement, ConstStatement, ContinueStatement, TypecastStatement, AliasStatement, ConditionalCompileStatement, ConditionalCompileConstStatement, ConditionalCompileErrorStatement, AugmentedAssignmentStatement, DimStatement } from '../parser/Statement';
-import type { LiteralExpression, BinaryExpression, CallExpression, FunctionExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression, TypecastExpression, TypeExpression, TypedArrayExpression, TernaryExpression, NullCoalescingExpression } from '../parser/Expression';
+import type { LiteralExpression, BinaryExpression, CallExpression, FunctionExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression, TypecastExpression, TypeExpression, TypedArrayExpression, TernaryExpression, NullCoalescingExpression, PrintSeparatorExpression } from '../parser/Expression';
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
 import type { BsDiagnostic, TypedefProvider } from '../interfaces';
@@ -23,7 +23,7 @@ import type { ObjectType } from '../types/ObjectType';
 import type { AstNode, Expression, Statement } from '../parser/AstNode';
 import type { AssetFile } from '../files/AssetFile';
 import { AstNodeKind } from '../parser/AstNode';
-import type { TypePropertyReferenceType, ReferenceType, BinaryOperatorReferenceType, ArrayDefaultTypeReferenceType, AnyReferenceType } from '../types/ReferenceType';
+import type { TypePropertyReferenceType, ReferenceType, BinaryOperatorReferenceType, ArrayDefaultTypeReferenceType, AnyReferenceType, ParamTypeFromValueReferenceType } from '../types/ReferenceType';
 import type { EnumMemberType, EnumType } from '../types/EnumType';
 import type { UnionType } from '../types/UnionType';
 import type { UninitializedType } from '../types/UninitializedType';
@@ -304,6 +304,9 @@ export function isTypecastExpression(element: any): element is TypecastExpressio
 export function isTypedArrayExpression(element: any): element is TypedArrayExpression {
     return element?.kind === AstNodeKind.TypedArrayExpression;
 }
+export function isPrintSeparatorExpression(element: any): element is PrintSeparatorExpression {
+    return element?.kind === AstNodeKind.PrintSeparatorExpression;
+}
 
 // BscType reflection
 export function isStringType(value: any): value is StringType {
@@ -369,6 +372,9 @@ export function isBinaryOperatorReferenceType(value: any): value is BinaryOperat
 export function isArrayDefaultTypeReferenceType(value: any): value is ArrayDefaultTypeReferenceType {
     return value?.__reflection?.name === 'ArrayDefaultTypeReferenceType';
 }
+export function isParamTypeFromValueReferenceType(value: any): value is ParamTypeFromValueReferenceType {
+    return value?.__reflection?.name === 'ParamTypeFromValueReferenceType';
+}
 export function isNamespaceType(value: any): value is NamespaceType {
     return value?.kind === BscTypeKind.NamespaceType;
 }
@@ -394,7 +400,7 @@ export function isCallableType(target): target is BaseFunctionType {
 
 export function isAnyReferenceType(target): target is AnyReferenceType {
     const name = target?.__reflection?.name;
-    return name === 'ReferenceType' || name === 'TypePropertyReferenceType' || name === 'BinaryOperatorReferenceType' || name === 'ArrayDefaultTypeReferenceType';
+    return name === 'ReferenceType' || name === 'TypePropertyReferenceType' || name === 'BinaryOperatorReferenceType' || name === 'ArrayDefaultTypeReferenceType' || name === 'ParamTypeFromValueReferenceType';
 }
 
 const numberTypeKinds = [

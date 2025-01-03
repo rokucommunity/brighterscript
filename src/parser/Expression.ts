@@ -1,5 +1,6 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
+import type { PrintSeparatorToken } from '../lexer/TokenKind';
 import { TokenKind } from '../lexer/TokenKind';
 import type { Block, NamespaceStatement } from './Statement';
 import type { Location } from 'vscode-languageserver';
@@ -10,7 +11,7 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallExpression, isCallableType, isCallfuncExpression, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isPrimitiveType, isReferenceType, isStringType, isTemplateStringExpression, isTypecastExpression, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallExpression, isCallableType, isCallfuncExpression, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isPrimitiveType, isReferenceType, isStringType, isTemplateStringExpression, isTypecastExpression, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
@@ -494,9 +495,12 @@ export class FunctionParameterExpression extends Expression {
         const docs = brsDocParser.parseNode(this.findAncestor(isFunctionStatement));
         const paramName = this.tokens.name.text;
 
-        const paramTypeFromCode = this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime, typeChain: undefined }) ??
-            this.defaultValue?.getType({ ...options, flags: SymbolTypeFlag.runtime, typeChain: undefined });
-        const paramTypeFromDoc = docs.getParamBscType(paramName, { ...options, fullName: paramName, tableProvider: () => this.getSymbolTable() });
+        let paramTypeFromCode = this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime, typeChain: undefined }) ??
+            util.getDefaultTypeFromValueType(this.defaultValue?.getType({ ...options, flags: SymbolTypeFlag.runtime, typeChain: undefined }));
+        if (isInvalidType(paramTypeFromCode) || isVoidType(paramTypeFromCode)) {
+            paramTypeFromCode = undefined;
+        }
+        const paramTypeFromDoc = docs.getParamBscType(paramName, { ...options, fullName: paramName, typeChain: undefined, tableProvider: () => this.getSymbolTable() });
 
         let paramType = util.chooseTypeFromCodeOrDocComment(paramTypeFromCode, paramTypeFromDoc, options) ?? DynamicType.instance;
         options.typeChain?.push(new TypeChainEntry({ name: paramName, type: paramType, data: options.data, astNode: this }));
@@ -960,6 +964,52 @@ export class LiteralExpression extends Expression {
         );
     }
 }
+
+/**
+ * The print statement can have a mix of expressions and separators. These separators represent actual output to the screen,
+ * so this AstNode represents those separators (comma, semicolon, and whitespace)
+ */
+export class PrintSeparatorExpression extends Expression {
+    constructor(options: {
+        separator: PrintSeparatorToken;
+    }) {
+        super();
+        this.tokens = {
+            separator: options.separator
+        };
+        this.location = this.tokens.separator.location;
+    }
+
+    public readonly tokens: {
+        readonly separator: PrintSeparatorToken;
+    };
+
+    public readonly kind = AstNodeKind.PrintSeparatorExpression;
+
+    public location: Location;
+
+    transpile(state: BrsTranspileState) {
+        return [
+            ...this.tokens.separator.leadingWhitespace ?? [],
+            ...state.transpileToken(this.tokens.separator)
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.separator.leadingTrivia;
+    }
+
+    public clone() {
+        return new PrintSeparatorExpression({
+            separator: util.cloneToken(this.tokens?.separator)
+        });
+    }
+}
+
 
 /**
  * This is a special expression only used within template strings. It exists so we can prevent producing lots of empty strings
@@ -1492,6 +1542,19 @@ export class SourceLiteralExpression extends Expression {
                 break;
             case TokenKind.SourceFunctionNameLiteral:
                 text = `"${this.getFunctionName(state, ParseMode.BrighterScript)}"`;
+                break;
+            case TokenKind.SourceNamespaceNameLiteral:
+                let namespaceParts = this.getFunctionName(state, ParseMode.BrighterScript).split('.');
+                namespaceParts.pop(); // remove the function name
+
+                text = `"${namespaceParts.join('.')}"`;
+                break;
+            case TokenKind.SourceNamespaceRootNameLiteral:
+                let namespaceRootParts = this.getFunctionName(state, ParseMode.BrighterScript).split('.');
+                namespaceRootParts.pop(); // remove the function name
+
+                let rootNamespace = namespaceRootParts.shift() ?? '';
+                text = `"${rootNamespace}"`;
                 break;
             case TokenKind.SourceLocationLiteral:
                 const locationUrl = fileUrl(state.srcPath);

@@ -1,5 +1,5 @@
 import { SymbolTable } from '../SymbolTable';
-import { isClassType, isDynamicType, isObjectType } from '../astUtils/reflection';
+import { isClassType, isDynamicType, isInvalidType, isObjectType } from '../astUtils/reflection';
 import type { TypeCompatibilityData } from '../interfaces';
 import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
@@ -19,7 +19,9 @@ export class ClassType extends InheritableType {
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         if (this.isEqual(targetType, data)) {
             return true;
-        } else if (isDynamicType(targetType) ||
+        } else if (
+            isInvalidType(targetType) ||
+            isDynamicType(targetType) ||
             isObjectType(targetType) ||
             isUnionTypeCompatible(this, targetType, data)) {
             return true;

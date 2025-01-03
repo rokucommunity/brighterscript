@@ -880,4 +880,28 @@ describe('HoverProcessor', () => {
         });
 
     });
+
+    describe('doc type definitions', () => {
+
+        it('should show correct hover for params', () => {
+            const file = program.setFile('source/test.bs', `
+                namespace alpha
+                    '@param {DataType} data
+                    sub printName(data)
+                        print data.name
+                    end sub
+
+                    interface DataType
+                        name as string
+                    end interface
+                end namespace
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+            // sub printName(da|ta)
+            let hover = program.getHover(file.srcPath, util.createPosition(3, 37))[0];
+            expect(hover?.contents).eql([fence('data as alpha.DataType')]);
+        });
+    });
 });

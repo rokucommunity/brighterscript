@@ -1,7 +1,7 @@
 import type { BscSymbol, GetSymbolTypeOptions, SymbolTableProvider } from '../SymbolTable';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { SymbolTable } from '../SymbolTable';
-import { isAnyReferenceType, isComponentType, isDynamicType, isObjectType, isPrimitiveType, isReferenceType, isTypedFunctionType } from '../astUtils/reflection';
+import { isAnyReferenceType, isComponentType, isDynamicType, isInvalidType, isObjectType, isPrimitiveType, isReferenceType, isTypedFunctionType } from '../astUtils/reflection';
 import type { ExtraSymbolData, TypeCompatibilityData } from '../interfaces';
 import type { BaseFunctionType } from './BaseFunctionType';
 import type { BscType } from './BscType';
@@ -28,7 +28,8 @@ export class ComponentType extends InheritableType {
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         if (this.isEqual(targetType)) {
             return true;
-        } else if (isDynamicType(targetType) ||
+        } else if (isInvalidType(targetType) ||
+            isDynamicType(targetType) ||
             isObjectType(targetType) ||
             isUnionTypeCompatible(this, targetType, data)) {
             return true;

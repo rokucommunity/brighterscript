@@ -4116,15 +4116,13 @@ describe('BrsFile', () => {
             it('sets invalid on empty callfunc with legacyCallfuncHandling=true', async () => {
                 program.options.legacyCallfuncHandling = true;
                 await testTranspile(`
-                    sub main()
-                        node = invalid
+                    sub main(node)
                         node@.doSomething()
                         m.top.node@.doSomething()
                         m.top.node@.doSomething(1)
                     end sub
                 `, `
-                    sub main()
-                        node = invalid
+                    sub main(node)
                         node.callfunc("doSomething", invalid)
                         m.top.node.callfunc("doSomething", invalid)
                         m.top.node.callfunc("doSomething", 1)
@@ -4134,15 +4132,13 @@ describe('BrsFile', () => {
 
             it('empty callfunc allowed by default', async () => {
                 await testTranspile(`
-                    sub main()
-                        node = invalid
+                    sub main(node)
                         node@.doSomething()
                         m.top.node@.doSomething()
                         m.top.node@.doSomething(1)
                     end sub
                 `, `
-                    sub main()
-                        node = invalid
+                    sub main(node)
                         node.callfunc("doSomething")
                         m.top.node.callfunc("doSomething")
                         m.top.node.callfunc("doSomething", 1)
@@ -4152,13 +4148,11 @@ describe('BrsFile', () => {
 
             it('includes original arguments', async () => {
                 await testTranspile(`
-                    sub main()
-                        node = invalid
+                    sub main(node)
                         node@.doSomething(1, true, m.top.someVal)
                     end sub
                 `, `
-                    sub main()
-                        node = invalid
+                    sub main(node)
                         node.callfunc("doSomething", 1, true, m.top.someVal)
                     end sub
                 `);

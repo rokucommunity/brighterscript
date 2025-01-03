@@ -1,6 +1,6 @@
 
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
-import { isArrayType, isDynamicType, isObjectType } from '../astUtils/reflection';
+import { isArrayType, isDynamicType, isEnumMemberType, isObjectType } from '../astUtils/reflection';
 import type { TypeCompatibilityData } from '../interfaces';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
@@ -10,6 +10,7 @@ import { DynamicType } from './DynamicType';
 import { IntegerType } from './IntegerType';
 import { unionTypeFactory } from './UnionType';
 import { getUniqueType, isUnionTypeCompatible } from './helpers';
+import { util } from '../util';
 
 export class ArrayType extends BscType {
     constructor(...innerTypes: BscType[]) {
@@ -22,13 +23,24 @@ export class ArrayType extends BscType {
 
     public innerTypes: BscType[] = [];
 
+    public _defaultType: BscType;
+
     public get defaultType(): BscType {
+        if (this._defaultType) {
+            return this._defaultType;
+        }
         if (this.innerTypes?.length === 0) {
             return DynamicType.instance;
-        } else if (this.innerTypes?.length === 1) {
-            return this.innerTypes[0];
         }
-        return getUniqueType(this.innerTypes, unionTypeFactory);
+        let resultType = this.innerTypes[0];
+        if (this.innerTypes?.length > 1) {
+            resultType = getUniqueType(this.innerTypes, unionTypeFactory);
+        }
+        if (isEnumMemberType(resultType)) {
+            resultType = resultType.parentEnumType ?? resultType;
+        }
+        this._defaultType = util.getDefaultTypeFromValueType(this.innerTypes);
+        return resultType;
     }
 
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
