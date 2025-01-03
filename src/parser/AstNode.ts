@@ -324,5 +324,6 @@ export enum AstNodeKind {
     ConditionalCompileStatement = 'ConditionalCompileStatement',
     ConditionalCompileConstStatement = 'ConditionalCompileConstStatement',
     ConditionalCompileErrorStatement = 'ConditionalCompileErrorStatement',
-    AugmentedAssignmentStatement = 'AugmentedAssignmentStatement'
+    AugmentedAssignmentStatement = 'AugmentedAssignmentStatement',
+    PrintSeparatorExpression = 'PrintSeparatorExpression'
 }

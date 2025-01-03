@@ -2208,6 +2208,42 @@ describe('ScopeValidator', () => {
             ]);
         });
 
+        it('validates when trying to print a namespace', () => {
+            program.setFile('source/main.bs', `
+                namespace Alpha
+                    const Name = "Alpha"
+                end namespace
+
+                sub main()
+                    print alpha
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.itemCannotBeUsedAsVariable('namespace')
+            ]);
+        });
+
+        it('validates when trying to pass a namespace as an arg', () => {
+            program.setFile('source/main.bs', `
+                namespace Alpha
+                    const Name = "Alpha"
+                end namespace
+
+                sub main()
+                    someFunc(alpha)
+                end sub
+
+                sub someFunc(arg)
+                    print sub
+                end sub
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.itemCannotBeUsedAsVariable('namespace')
+            ]);
+        });
+
         it('detects assigning to a member of a namespace inside the namespace', () => {
             program.setFile('source/main.bs', `
                 namespace Alpha
