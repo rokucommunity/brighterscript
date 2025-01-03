@@ -2,7 +2,7 @@ import type { Body, AssignmentStatement, Block, ExpressionStatement, ExitStateme
 import type { LiteralExpression, BinaryExpression, CallExpression, FunctionExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression, TypecastExpression, TypeExpression, TypedArrayExpression, TernaryExpression, NullCoalescingExpression } from '../parser/Expression';
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
-import type { BsDiagnostic, TypedefProvider } from '../interfaces';
+import type { AnnotationDeclaration, BsDiagnostic, TypedefProvider } from '../interfaces';
 import type { InvalidType } from '../types/InvalidType';
 import type { VoidType } from '../types/VoidType';
 import { InternalWalkMode } from './visitors';
@@ -461,4 +461,11 @@ export function isLiteralDouble(value: any): value is LiteralExpression & { type
 // Diagnostics
 export function isBsDiagnostic(value: any): value is BsDiagnostic {
     return value.message;
+}
+
+
+// Plugins
+
+export function isAnnotationDeclaration(value: any): value is AnnotationDeclaration {
+    return isTypedFunctionType(value.type);
 }

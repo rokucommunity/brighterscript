@@ -6,5 +6,6 @@ export const enum SymbolTypeFlag {
     private = 8,
     protected = 16,
     postTranspile = 32,
-    deprecated = 64
+    deprecated = 64,
+    annotation = 128
 }

@@ -16,7 +16,7 @@ import { globalCallables, globalFile } from './globalCallables';
 import { parseManifest, getBsConst } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
-import { isBrsFile, isXmlFile, isXmlScope, isNamespaceStatement } from './astUtils/reflection';
+import { isBrsFile, isXmlFile, isXmlScope, isNamespaceStatement, isTypedFunctionType, isAnnotationDeclaration } from './astUtils/reflection';
 import type { FunctionStatement, MethodStatement, NamespaceStatement } from './parser/Statement';
 import { BscPlugin } from './bscPlugin/BscPlugin';
 import { Editor } from './astUtils/Editor';
@@ -54,6 +54,7 @@ import { DiagnosticManager } from './DiagnosticManager';
 import { ProgramValidatorDiagnosticsTag } from './bscPlugin/validation/ProgramValidator';
 import type { ProvidedSymbolInfo, BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
+import { SymbolTable } from './SymbolTable';
 
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
@@ -123,6 +124,9 @@ export class Program {
 
         //TODO we might need to fix this because the isValidated clears stuff now
         (this.globalScope as any).isValidated = true;
+
+        // Get declarations for all annotations from all plugins
+        this.populateAnnotationSymbolTable();
     }
 
 
@@ -225,6 +229,24 @@ export class Program {
      * Plugins which can provide extra diagnostics or transform AST
      */
     public plugins: PluginInterface;
+
+    public pluginAnnotationTable = new SymbolTable('Plugin Annotations', () => this.globalScope?.symbolTable);
+
+    private populateAnnotationSymbolTable() {
+        for (const [pluginName, annotations] of this.plugins.getAnnotationMap().entries()) {
+            for (const annotation of annotations) {
+                if (isTypedFunctionType(annotation) && annotation.name) {
+                    this.pluginAnnotationTable.addSymbol(annotation.name, { pluginName: pluginName }, annotation, SymbolTypeFlag.annotation);
+                } else if (isAnnotationDeclaration(annotation)) {
+                    const annoType = annotation.type;
+                    let description = (typeof annotation.description === 'string') ? annotation.description : undefined;
+                    this.pluginAnnotationTable.addSymbol(annoType.name, { pluginName: pluginName, description: description }, annoType, SymbolTypeFlag.annotation);
+                } else if (typeof annotation === 'string') {
+                    // TODO: Do we need to parse this?
+                }
+            }
+        }
+    }
 
     private fileSymbolInformation = new Map<string, { provides: ProvidedSymbolInfo; requires: UnresolvedSymbol[] }>();
 

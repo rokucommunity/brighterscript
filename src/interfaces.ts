@@ -219,6 +219,11 @@ export interface CommentFlag {
 
 export type CompilerPluginFactory = () => CompilerPlugin;
 
+export interface AnnotationDeclaration {
+    description?: string;
+    type: TypedFunctionType;
+}
+
 export interface CompilerPlugin {
     name: string;
 
@@ -229,7 +234,7 @@ export interface CompilerPlugin {
      *   `suite(suiteConfig as object)`
      * ]
      */
-    annotations?: string[];
+    annotations?: Array<string | TypedFunctionType | AnnotationDeclaration>;
 
     /**
      * Called when plugin is initially loaded
@@ -1000,6 +1005,10 @@ export interface ExtraSymbolData {
      * Is this type as defined in a doc comment?
      */
     isFromDocComment?: boolean;
+    /**
+     * Name of plugin that defined this symbol
+     */
+    pluginName?: string;
 }
 
 export interface GetTypeOptions {

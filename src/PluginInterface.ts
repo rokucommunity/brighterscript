@@ -1,5 +1,6 @@
-import type { CompilerPlugin } from './interfaces';
+import type { AnnotationDeclaration, CompilerPlugin } from './interfaces';
 import { LogLevel, createLogger, type Logger } from './logging';
+import type { TypedFunctionType } from './types/TypedFunctionType';
 /*
  * we use `Required` everywhere here because we expect that the methods on plugin objects will
  * be optional, and we don't want to deal with `undefined`.
@@ -74,7 +75,7 @@ export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> 
     /**
      * Call `event` on plugins, but allow the plugins to return promises that will be awaited before the next plugin is notified
      */
-    public async emitAsync<K extends keyof PluginEventArgs<T> & string>(event: K, ...args: PluginEventArgs<T>[K]): Promise< PluginEventArgs<T>[K][0]> {
+    public async emitAsync<K extends keyof PluginEventArgs<T> & string>(event: K, ...args: PluginEventArgs<T>[K]): Promise<PluginEventArgs<T>[K][0]> {
         for (let plugin of this.plugins) {
             if ((plugin as any)[event]) {
                 try {
@@ -168,5 +169,21 @@ export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> 
      */
     public clear() {
         this.plugins = [];
+    }
+
+
+    private annotationMap: Map<string, Array<string | TypedFunctionType | AnnotationDeclaration>>;
+
+    public getAnnotationMap() {
+        if (this.annotationMap) {
+            return this.annotationMap;
+        }
+        this.annotationMap = new Map<string, Array<string | TypedFunctionType | AnnotationDeclaration>>();
+        for (let plugin of this.plugins) {
+            if (plugin.annotations?.length > 0) {
+                this.annotationMap.set(plugin.name, plugin.annotations);
+            }
+        }
+        return this.annotationMap;
     }
 }
