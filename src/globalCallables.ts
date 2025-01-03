@@ -223,7 +223,7 @@ let runtimeFunctions: GlobalCallable[] = [{
 }, {
     name: 'Type',
     shortDescription: 'Returns the type of a variable and/or object. See the BrightScript Component specification for a list of types.',
-    type: new TypedFunctionType(new ObjectType()),
+    type: new TypedFunctionType(new StringType()),
     file: globalFile,
     params: [{
         name: 'variable',

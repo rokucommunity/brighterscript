@@ -26,7 +26,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { LogLevel, createLogger } from './logging';
 import { isToken, type Identifier, type Locatable, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLiteralString, isLongIntegerType, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isReferenceType, isStatement, isStringType, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUnionType, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLiteralString, isLongIntegerType, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isPrimitiveType, isReferenceType, isStatement, isStringType, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import * as requireRelative from 'require-relative';
@@ -1550,6 +1550,11 @@ export class Util {
                 return this.binaryOperatorResultType(lhs, op, rhs);
             });
         }
+
+        if (isVoidType(leftType) || isVoidType(rightType) || isUninitializedType(leftType) || isUninitializedType(rightType)) {
+            return undefined;
+        }
+
         if (isEnumMemberType(leftType)) {
             leftType = leftType.underlyingType;
         }
@@ -1561,9 +1566,22 @@ export class Util {
         let hasLongInteger = isLongIntegerType(leftType) || isLongIntegerType(rightType);
         let hasInvalid = isInvalidType(leftType) || isInvalidType(rightType);
         let hasDynamic = isDynamicType(leftType) || isDynamicType(rightType);
+        let bothDynamic = isDynamicType(leftType) && isDynamicType(rightType);
         let bothNumbers = isNumberType(leftType) && isNumberType(rightType);
+        let hasNumber = isNumberType(leftType) || isNumberType(rightType);
         let bothStrings = isStringType(leftType) && isStringType(rightType);
+        let hasString = isStringType(leftType) || isStringType(rightType);
+        let hasBoolean = isBooleanType(leftType) || isBooleanType(rightType);
         let eitherBooleanOrNum = (isNumberType(leftType) || isBooleanType(leftType)) && (isNumberType(rightType) || isBooleanType(rightType));
+
+        let leftIsPrimitive = isPrimitiveType(leftType);
+        let rightIsPrimitive = isPrimitiveType(rightType);
+        let hasPrimitive = leftIsPrimitive || rightIsPrimitive;
+
+        let nonDynamicType: BscType;
+        if (hasPrimitive) {
+            nonDynamicType = leftIsPrimitive ? leftType : rightType;
+        }
 
         // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
         switch (operator.kind) {
@@ -1572,6 +1590,9 @@ export class Util {
             case TokenKind.PlusEqual:
                 if (bothStrings) {
                     // "string" + "string" is the only binary expression allowed with strings
+                    return StringType.instance;
+                } else if (hasString && hasDynamic) {
+                    // assume dynamicValue is a string
                     return StringType.instance;
                 }
             // eslint-disable-next-line no-fallthrough
@@ -1590,6 +1611,9 @@ export class Util {
                         return LongIntegerType.instance;
                     }
                     return IntegerType.instance;
+                } else if (hasNumber && hasDynamic) {
+                    // assume dynamic is a number
+                    return nonDynamicType;
                 }
                 break;
             case TokenKind.Forwardslash:
@@ -1604,6 +1628,9 @@ export class Util {
                         return LongIntegerType.instance;
                     }
                     return FloatType.instance;
+                } else if (hasNumber && hasDynamic) {
+                    // assume dynamic is a number
+                    return nonDynamicType;
                 }
                 break;
             case TokenKind.Backslash:
@@ -1612,6 +1639,9 @@ export class Util {
                     if (hasLongInteger) {
                         return LongIntegerType.instance;
                     }
+                    return IntegerType.instance;
+                } else if (hasNumber && hasDynamic) {
+                    // assume dynamic is a number
                     return IntegerType.instance;
                 }
                 break;
@@ -1622,6 +1652,9 @@ export class Util {
                     } else if (hasFloat) {
                         return FloatType.instance;
                     }
+                    return IntegerType.instance;
+                } else if (hasNumber && hasDynamic) {
+                    // assume dynamic is a number
                     return IntegerType.instance;
                 }
                 break;
@@ -1636,6 +1669,9 @@ export class Util {
                     }
                     // Bitshifts are allowed with non-integer numerics
                     // but will always truncate to ints
+                    return IntegerType.instance;
+                } else if (hasNumber && hasDynamic) {
+                    // assume dynamic is a number
                     return IntegerType.instance;
                 }
                 break;
@@ -1654,6 +1690,9 @@ export class Util {
             case TokenKind.LessEqual:
                 if (bothStrings || bothNumbers) {
                     return BooleanType.instance;
+                } else if ((hasNumber || hasString) && hasDynamic) {
+                    // assume dynamic is a valid type
+                    return BooleanType.instance;
                 }
                 break;
             // Logical or bitwise operators
@@ -1669,19 +1708,38 @@ export class Util {
                 } else if (eitherBooleanOrNum) {
                     // "and"/"or" represent logical operators
                     return BooleanType.instance;
+                } else if (hasNumber && hasDynamic) {
+                    // assume dynamic is a valid type
+                    return IntegerType.instance;
+                } else if (hasBoolean && hasDynamic) {
+                    // assume dynamic is a valid type
+                    return BooleanType.instance;
                 }
                 break;
         }
-        return DynamicType.instance;
+        if (bothDynamic) {
+            return DynamicType.instance;
+        }
+        return undefined;
     }
 
     /**
      * Return the type of the result of a binary operator
      */
     public unaryOperatorResultType(operator: Token, exprType: BscType): BscType {
+
+        if (isVoidType(exprType) || isInvalidType(exprType) || isUninitializedType(exprType)) {
+            return undefined;
+        }
+
+        if (isDynamicType(exprType)) {
+            return exprType;
+        }
+
         // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
         switch (operator.kind) {
             // Math operators
+            case TokenKind.Plus: // (`num = +num` is valid syntax)
             case TokenKind.Minus:
                 if (isNumberType(exprType)) {
                     // a negative number will be the same type, eg, double->double, int->int, etc.
@@ -1701,7 +1759,7 @@ export class Util {
                 }
                 break;
         }
-        return DynamicType.instance;
+        return undefined;
     }
 
     /**

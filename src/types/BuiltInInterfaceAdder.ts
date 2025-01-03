@@ -9,6 +9,7 @@ import { isArrayType, isAssociativeArrayType, isBooleanType, isCallableType, isC
 import type { ComponentType } from './ComponentType';
 import { util } from '../util';
 import type { UnionType } from './UnionType';
+import type { ExtraSymbolData } from '../interfaces';
 
 
 export interface BuiltInInterfaceOverride {
@@ -16,6 +17,11 @@ export interface BuiltInInterfaceOverride {
     parameterTypes?: BscType[];
     returnType?: BscType;
 }
+
+const builtInSymbolData: ExtraSymbolData = {
+    completionPriority: 1,
+    isBuiltIn: true
+};
 
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class BuiltInInterfaceAdder {
@@ -57,7 +63,7 @@ export class BuiltInInterfaceAdder {
                 if ((method as any).isDeprecated) {
                     flags |= SymbolTypeFlag.deprecated; // eslint-disable-line no-bitwise
                 }
-                builtInMemberTable.addSymbol(method.name, { description: method.description, completionPriority: 1 }, methodFuncType, flags);
+                builtInMemberTable.addSymbol(method.name, { ...builtInSymbolData, description: method.description }, methodFuncType, flags);
             }
         }
 
@@ -69,7 +75,7 @@ export class BuiltInInterfaceAdder {
                 // this type has interfaces - add them directly as members
                 const ifaceType = this.getLookupTable()?.getSymbolType(iface.name, { flags: SymbolTypeFlag.typetime });
                 if (ifaceType) {
-                    builtInMemberTable.addSymbol(iface.name, { completionPriority: 1 }, ifaceType, SymbolTypeFlag.runtime);
+                    builtInMemberTable.addSymbol(iface.name, { ...builtInSymbolData }, ifaceType, SymbolTypeFlag.runtime);
                 }
             }
 
@@ -79,11 +85,12 @@ export class BuiltInInterfaceAdder {
                     continue;
                 }
                 const methodFuncType = this.buildMethodFromDocData(method, overrides, thisType);
-                builtInMemberTable.addSymbol(method.name, { description: method.description, completionPriority: 1 }, methodFuncType, SymbolTypeFlag.runtime);
+                builtInMemberTable.addSymbol(method.name, { ...builtInSymbolData, description: method.description }, methodFuncType, SymbolTypeFlag.runtime);
             }
             for (const property of ifaceData.properties ?? []) {
                 const override = overrides?.get(property.name.toLowerCase());
-                builtInMemberTable.addSymbol(property.name, { description: property.description, completionPriority: 1 }, override?.type ?? this.getPrimitiveType(property.type) ?? this.getPrimitiveType('dynamic'), SymbolTypeFlag.runtime);
+                builtInMemberTable.addSymbol(property.name, { ...builtInSymbolData, description: property.description }, override?.type ??
+                    this.getPrimitiveType(property.type) ?? this.getPrimitiveType('dynamic'), SymbolTypeFlag.runtime);
             }
         }
     }
@@ -197,7 +204,7 @@ export class BuiltInInterfaceAdder {
         }
         const lookupTable = this.getLookupTable();
         for (const field of builtInNode.fields) {
-            memberTable.addSymbol(field.name, { description: field.description, completionPriority: 1 }, util.getNodeFieldType(field.type, lookupTable), SymbolTypeFlag.runtime);
+            memberTable.addSymbol(field.name, { ...builtInSymbolData, description: field.description }, util.getNodeFieldType(field.type, lookupTable), SymbolTypeFlag.runtime);
         }
         for (const method of builtInNode.methods ?? []) {
             const methodFuncType = this.buildMethodFromDocData(method, null, thisType);
@@ -206,7 +213,7 @@ export class BuiltInInterfaceAdder {
             if (method.isDeprecated) {
                 flags |= SymbolTypeFlag.deprecated; // eslint-disable-line no-bitwise
             }
-            memberTable.addSymbol(method.name, { description: method.description, completionPriority: 1 }, methodFuncType, flags);
+            memberTable.addSymbol(method.name, { ...builtInSymbolData, description: method.description }, methodFuncType, flags);
         }
     }
 
