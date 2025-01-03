@@ -603,7 +603,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'unterminated-string-at-end-of-file'
     }),
-    fractionalHexLiteralsAreNotSupported: () => ({
+    __unused44: () => ({
         message: `Fractional hex literals are not supported`,
         legacyCode: 1085,
         severity: DiagnosticSeverity.Error,
@@ -738,7 +738,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'local-var-same-name-as-class'
     }),
-    unnecessaryCodebehindScriptImport: () => ({
+    __unused45: () => ({
         message: `This import is unnecessary because compiler option 'autoImportComponentScript' is enabled`,
         legacyCode: 1107,
         severity: DiagnosticSeverity.Warning,

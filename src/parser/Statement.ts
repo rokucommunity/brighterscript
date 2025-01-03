@@ -3332,8 +3332,15 @@ export class FieldStatement extends Statement implements TypedefProvider {
      * Defaults to `DynamicType`
      */
     getType(options: GetTypeOptions) {
+        let initialValueType = this.initialValue?.getType({ ...options, flags: SymbolTypeFlag.runtime });
+
+        if (isInvalidType(initialValueType) || isVoidType(initialValueType)) {
+            initialValueType = undefined;
+        }
+
         return this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime }) ??
-            this.initialValue?.getType({ ...options, flags: SymbolTypeFlag.runtime }) ?? DynamicType.instance;
+            util.getDefaultTypeFromValueType(initialValueType) ??
+            DynamicType.instance;
     }
 
     public readonly location: Location | undefined;
@@ -3805,7 +3812,9 @@ export class EnumStatement extends Statement implements TypedefProvider {
         );
         resultType.pushMemberProvider(() => this.getSymbolTable());
         for (const statement of members) {
-            resultType.addMember(statement?.tokens?.name?.text, { definingNode: statement }, statement.getType(options), SymbolTypeFlag.runtime);
+            const memberType = statement.getType({ ...options, typeChain: undefined });
+            memberType.parentEnumType = resultType;
+            resultType.addMember(statement?.tokens?.name?.text, { definingNode: statement }, memberType, SymbolTypeFlag.runtime);
         }
         return resultType;
     }

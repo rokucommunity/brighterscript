@@ -174,6 +174,8 @@ export enum TokenKind {
     SourceLineNumLiteral = 'SourceLineNumLiteral',
     FunctionNameLiteral = 'FunctionNameLiteral',
     SourceFunctionNameLiteral = 'SourceFunctionNameLiteral',
+    SourceNamespaceNameLiteral = 'SourceNamespaceNameLiteral',
+    SourceNamespaceRootNameLiteral = 'SourceNamespaceRootNameLiteral',
     SourceLocationLiteral = 'SourceLocationLiteral',
     PkgPathLiteral = 'PkgPathLiteral',
     PkgLocationLiteral = 'PkgLocationLiteral',
@@ -314,6 +316,8 @@ export const Keywords: Record<string, TokenKind> = {
     'source_line_num': TokenKind.SourceLineNumLiteral,
     'function_name': TokenKind.FunctionNameLiteral,
     'source_function_name': TokenKind.SourceFunctionNameLiteral,
+    'source_namespace_name': TokenKind.SourceNamespaceNameLiteral,
+    'source_namespace_root_name': TokenKind.SourceNamespaceRootNameLiteral,
     'source_location': TokenKind.SourceLocationLiteral,
     'pkg_path': TokenKind.PkgPathLiteral,
     'pkg_location': TokenKind.PkgLocationLiteral,
@@ -457,6 +461,8 @@ export const AllowedProperties = [
     TokenKind.SourceLineNumLiteral,
     TokenKind.FunctionNameLiteral,
     TokenKind.SourceFunctionNameLiteral,
+    TokenKind.SourceNamespaceNameLiteral,
+    TokenKind.SourceNamespaceRootNameLiteral,
     TokenKind.SourceLocationLiteral,
     TokenKind.PkgPathLiteral,
     TokenKind.PkgLocationLiteral,
@@ -513,6 +519,8 @@ export const BrighterScriptSourceLiterals = [
     TokenKind.SourceLineNumLiteral,
     TokenKind.FunctionNameLiteral,
     TokenKind.SourceFunctionNameLiteral,
+    TokenKind.SourceNamespaceNameLiteral,
+    TokenKind.SourceNamespaceRootNameLiteral,
     TokenKind.SourceLocationLiteral,
     TokenKind.PkgPathLiteral,
     TokenKind.PkgLocationLiteral
@@ -569,6 +577,8 @@ export const DisallowedLocalIdentifiers = [
     TokenKind.SourceLineNumLiteral,
     TokenKind.FunctionNameLiteral,
     TokenKind.SourceFunctionNameLiteral,
+    TokenKind.SourceNamespaceNameLiteral,
+    TokenKind.SourceNamespaceRootNameLiteral,
     TokenKind.SourceLocationLiteral,
     TokenKind.PkgPathLiteral,
     TokenKind.PkgLocationLiteral,
@@ -644,7 +654,7 @@ export const DeclarableTypes = [
 
 /** List of TokenKind that will not break parsing a TypeExpression in Brighterscript*/
 export const AllowedTypeIdentifiers = [
-    ...AllowedProperties
+    ...(AllowedProperties.filter(tokenKind => tokenKind !== TokenKind.Invalid))
 ];
 
 

@@ -1,11 +1,12 @@
 import type { GetTypeOptions, TypeChainEntry, TypeCompatibilityData } from '../interfaces';
 import type { GetSymbolTypeOptions, SymbolTypeGetterProvider } from '../SymbolTable';
 import type { SymbolTypeFlag } from '../SymbolTypeFlag';
-import { isAnyReferenceType, isArrayDefaultTypeReferenceType, isArrayType, isBinaryOperatorReferenceType, isComponentType, isDynamicType, isReferenceType, isTypePropertyReferenceType } from '../astUtils/reflection';
+import { isAnyReferenceType, isArrayDefaultTypeReferenceType, isArrayType, isBinaryOperatorReferenceType, isComponentType, isDynamicType, isParamTypeFromValueReferenceType, isReferenceType, isTypePropertyReferenceType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
 import { BscTypeKind } from './BscTypeKind';
 import type { Token } from '../lexer/Token';
+import { util } from '../util';
 
 export type AnyReferenceType = ReferenceType | TypePropertyReferenceType | BinaryOperatorReferenceType | ArrayDefaultTypeReferenceType;
 
@@ -244,7 +245,7 @@ export class ReferenceType extends BscType {
                     return;
                 }
                 this.referenceChain.add(resolvedType);
-                resolvedType = (resolvedType as any).getTarget?.();
+                resolvedType = (resolvedType as any)?.getTarget?.();
             }
             this.tableProvider().setCachedType(this.memberKey, { type: resolvedType }, { flags: this.flags });
         }
@@ -461,6 +462,18 @@ export class ArrayDefaultTypeReferenceType extends BscType {
                     return objType;
                 }
 
+                if (propName === 'getTarget') {
+                    return () => {
+                        if (this.cachedType) {
+                            return this.cachedType;
+                        }
+                        if (isReferenceType(this.objType)) {
+                            (this.objType as any).getTarget();
+                        }
+                        return this.objType;
+                    };
+                }
+
                 let resultType: BscType = this.cachedType ?? DynamicType.instance;
                 if (!this.cachedType) {
                     if ((isAnyReferenceType(this.objType) && !this.objType.isResolvable())
@@ -477,6 +490,66 @@ export class ArrayDefaultTypeReferenceType extends BscType {
                         } else {
                             resultType = DynamicType.instance;
                         }
+                        this.cachedType = resultType;
+                    }
+
+                }
+                if (resultType) {
+                    const result = Reflect.get(resultType, propName, resultType);
+                    return result;
+                }
+            }
+        });
+    }
+}
+
+/**
+ * Used for when a Param's initial value is unresolved
+ * Generally, this will be resolved later *except* for Enum
+ * Enum Types will have an initial value of an EnumMemberType, but the param
+ * should be an EnumType
+ */
+export class ParamTypeFromValueReferenceType extends BscType {
+    cachedType: BscType;
+
+    constructor(public objType: BscType) {
+        super('ParamInitialValueType');
+        // eslint-disable-next-line no-constructor-return
+        return new Proxy(this, {
+            get: (target, propName, receiver) => {
+                if (propName === '__reflection') {
+                    // Cheeky way to get reflection to work
+                    return { name: 'ParamTypeFromValueReferenceType' };
+                }
+
+                if (propName === 'objType') {
+                    return objType;
+                }
+
+                if (propName === 'getTarget') {
+                    return () => {
+                        if (this.cachedType) {
+                            return this.cachedType;
+                        }
+                        if (isReferenceType(this.objType)) {
+                            (this.objType as any).getTarget();
+                        }
+                        return this.objType;
+                    };
+                }
+
+                let resultType: BscType = this.cachedType ?? DynamicType.instance;
+                if (!this.cachedType) {
+                    if ((isAnyReferenceType(this.objType) && !this.objType.isResolvable())
+                    ) {
+                        if (propName === 'isResolvable') {
+                            return () => false;
+                        }
+                        if (propName === 'getTarget') {
+                            return () => undefined;
+                        }
+                    } else {
+                        resultType = util.getDefaultTypeFromValueType(this.objType);
                         this.cachedType = resultType;
                     }
 
@@ -529,6 +602,14 @@ export function getAllRequiredSymbolNames(refType: BscType, namespaceLower?: str
 
         }
         return result;
+    }
+    if (isParamTypeFromValueReferenceType(refType)) {
+        const objType = refType.objType;
+        if (isAnyReferenceType(objType)) {
+            return getAllRequiredSymbolNames(objType);
+        } else {
+            return [];
+        }
     }
     return [];
 }

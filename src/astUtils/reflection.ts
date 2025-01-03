@@ -23,7 +23,7 @@ import type { ObjectType } from '../types/ObjectType';
 import type { AstNode, Expression, Statement } from '../parser/AstNode';
 import type { AssetFile } from '../files/AssetFile';
 import { AstNodeKind } from '../parser/AstNode';
-import type { TypePropertyReferenceType, ReferenceType, BinaryOperatorReferenceType, ArrayDefaultTypeReferenceType, AnyReferenceType } from '../types/ReferenceType';
+import type { TypePropertyReferenceType, ReferenceType, BinaryOperatorReferenceType, ArrayDefaultTypeReferenceType, AnyReferenceType, ParamTypeFromValueReferenceType } from '../types/ReferenceType';
 import type { EnumMemberType, EnumType } from '../types/EnumType';
 import type { UnionType } from '../types/UnionType';
 import type { UninitializedType } from '../types/UninitializedType';
@@ -372,6 +372,9 @@ export function isBinaryOperatorReferenceType(value: any): value is BinaryOperat
 export function isArrayDefaultTypeReferenceType(value: any): value is ArrayDefaultTypeReferenceType {
     return value?.__reflection?.name === 'ArrayDefaultTypeReferenceType';
 }
+export function isParamTypeFromValueReferenceType(value: any): value is ParamTypeFromValueReferenceType {
+    return value?.__reflection?.name === 'ParamTypeFromValueReferenceType';
+}
 export function isNamespaceType(value: any): value is NamespaceType {
     return value?.kind === BscTypeKind.NamespaceType;
 }
@@ -397,7 +400,7 @@ export function isCallableType(target): target is BaseFunctionType {
 
 export function isAnyReferenceType(target): target is AnyReferenceType {
     const name = target?.__reflection?.name;
-    return name === 'ReferenceType' || name === 'TypePropertyReferenceType' || name === 'BinaryOperatorReferenceType' || name === 'ArrayDefaultTypeReferenceType';
+    return name === 'ReferenceType' || name === 'TypePropertyReferenceType' || name === 'BinaryOperatorReferenceType' || name === 'ArrayDefaultTypeReferenceType' || name === 'ParamTypeFromValueReferenceType';
 }
 
 const numberTypeKinds = [
