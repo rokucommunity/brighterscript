@@ -1,5 +1,6 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
+import type { PrintSeparatorToken } from '../lexer/TokenKind';
 import { TokenKind } from '../lexer/TokenKind';
 import type { Block, NamespaceStatement } from './Statement';
 import type { Location } from 'vscode-languageserver';
@@ -28,7 +29,7 @@ import { ArrayType } from '../types/ArrayType';
 import { AssociativeArrayType } from '../types/AssociativeArrayType';
 import type { ComponentType } from '../types/ComponentType';
 import { createToken } from '../astUtils/creators';
-import { TypedFunctionType } from '../types';
+import { InvalidType, TypedFunctionType, UninitializedType } from '../types';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { FunctionType } from '../types/FunctionType';
 import type { BaseFunctionType } from '../types/BaseFunctionType';
@@ -92,7 +93,7 @@ export class BinaryExpression extends Expression {
             return util.binaryOperatorResultType(
                 this.left.getType(options),
                 this.tokens.operator,
-                this.right.getType(options));
+                this.right.getType(options)) ?? DynamicType.instance;
         }
         return DynamicType.instance;
     }
@@ -204,6 +205,14 @@ export class CallExpression extends Expression {
             return specialCaseReturnType;
         }
         if (isCallableType(calleeType) && (!isReferenceType(calleeType.returnType) || calleeType.returnType?.isResolvable())) {
+            if (isVoidType(calleeType.returnType)) {
+                if (options.data?.isBuiltIn) {
+                    // built in functions that return `as void` will not initialize the result
+                    return UninitializedType.instance;
+                }
+                // non-built in functions with return type`as void` actually return `invalid`
+                return InvalidType.instance;
+            }
             return calleeType.returnType;
         }
         if (!isReferenceType(calleeType) && (calleeType as BaseFunctionType)?.returnType?.isResolvable()) {
@@ -965,6 +974,52 @@ export class LiteralExpression extends Expression {
         );
     }
 }
+
+/**
+ * The print statement can have a mix of expressions and separators. These separators represent actual output to the screen,
+ * so this AstNode represents those separators (comma, semicolon, and whitespace)
+ */
+export class PrintSeparatorExpression extends Expression {
+    constructor(options: {
+        separator: PrintSeparatorToken;
+    }) {
+        super();
+        this.tokens = {
+            separator: options.separator
+        };
+        this.location = this.tokens.separator.location;
+    }
+
+    public readonly tokens: {
+        readonly separator: PrintSeparatorToken;
+    };
+
+    public readonly kind = AstNodeKind.PrintSeparatorExpression;
+
+    public location: Location;
+
+    transpile(state: BrsTranspileState) {
+        return [
+            ...this.tokens.separator.leadingWhitespace ?? [],
+            ...state.transpileToken(this.tokens.separator)
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.separator.leadingTrivia;
+    }
+
+    public clone() {
+        return new PrintSeparatorExpression({
+            separator: util.cloneToken(this.tokens?.separator)
+        });
+    }
+}
+
 
 /**
  * This is a special expression only used within template strings. It exists so we can prevent producing lots of empty strings

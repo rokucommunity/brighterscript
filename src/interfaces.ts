@@ -1006,6 +1006,10 @@ export interface ExtraSymbolData {
      */
     isFromDocComment?: boolean;
     /**
+     * Is this symbol built in to Brightscript?
+     */
+    isBuiltIn?: boolean;
+    /**
      * Name of plugin that defined this symbol
      */
     pluginName?: string;
