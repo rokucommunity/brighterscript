@@ -2374,7 +2374,7 @@ export class Util {
     public getCustomTypesInSymbolTree(setToFill: Set<BscType>, type: BscType, filter?: (t: BscSymbol) => boolean) {
         const subSymbols = type.getMemberTable()?.getAllSymbols(SymbolTypeFlag.runtime) ?? [];
         for (const subSymbol of subSymbols) {
-            if (!subSymbol.data?.isBuiltIn && !setToFill.has(subSymbol.type)) {
+            if (!subSymbol.type?.isBuiltIn && !setToFill.has(subSymbol.type)) {
                 if (filter && !filter(subSymbol)) {
                     continue;
                 }
