@@ -770,6 +770,58 @@ describe('BrsFileValidator', () => {
             expectZeroDiagnostics(program);
         });
     });
+
+    describe('types', () => {
+        it('sets assignments of invalid as dynamic', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub test()
+                    channel = invalid
+                    if true
+                        channel = {
+                            height: 123
+                        }
+                    end if
+
+                    height = 0
+                    if channel <> invalid then
+                        height += channel.height
+                    end if
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const func = file.ast.statements[0].findChild<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive });
+            const table = func.body.getSymbolTable();
+            const data = {} as ExtraSymbolData;
+            const channelType = table.getSymbolType('channel', { flags: SymbolTypeFlag.runtime, data: data });
+            expectTypeToBe(channelType, DynamicType);
+        });
+
+        it('sets default arg of invalid as dynamic', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub test(channel = invalid)
+                    if true
+                        channel = {
+                            height: 123
+                        }
+                    end if
+
+                    height = 0
+                    if channel <> invalid then
+                        height += channel.height
+                    end if
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const func = file.ast.statements[0].findChild<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive });
+            const table = func.body.getSymbolTable();
+            const data = {} as ExtraSymbolData;
+            const channelType = table.getSymbolType('channel', { flags: SymbolTypeFlag.runtime, data: data });
+            expectTypeToBe(channelType, DynamicType);
+        });
+    });
+
     describe('instances of types', () => {
         it('sets assigned variables as instances', () => {
             const file = program.setFile<BrsFile>('source/main.bs', `

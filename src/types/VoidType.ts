@@ -3,7 +3,8 @@ import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { isUnionTypeCompatible } from './helpers';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
-import type { TypeCompatibilityData } from '../interfaces';
+import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
+import { DynamicType } from './DynamicType';
 
 export class VoidType extends BscType {
     constructor(
@@ -37,6 +38,10 @@ export class VoidType extends BscType {
 
     public isEqual(targetType: BscType) {
         return isVoidType(targetType);
+    }
+
+    getMemberType(memberName: string, options: GetTypeOptions) {
+        return DynamicType.instance;
     }
 }
 
