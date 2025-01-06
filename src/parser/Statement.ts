@@ -2320,8 +2320,14 @@ export class ClassStatement extends Statement implements TypedefProvider {
      */
     private getTranspiledClassFunction(state: BrsTranspileState) {
         let result = [] as TranspileResult;
+
         const constructorFunction = this.getConstructorFunction();
-        const constructorParams = constructorFunction ? constructorFunction.func.parameters : [];
+        let constructorParams = [];
+        if (constructorFunction) {
+            constructorParams = constructorFunction.func.parameters;
+        } else {
+            constructorParams = this.getConstructorParams(this.getAncestors(state)[0]);
+        }
 
         result.push(
             state.sourceNode(this.classKeyword, 'function'),
