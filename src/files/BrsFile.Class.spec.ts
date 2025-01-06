@@ -472,18 +472,37 @@ describe('BrsFile BrighterScript classes', () => {
 
         it('inherits the parameters of the last known constructor', () => {
             testTranspile(`
-                class Bird
+                class Animal
                     sub new(p1)
                     end sub
                 end class
+                class Bird extends Animal
+                end class
                 class Duck extends Bird
+                    sub new(p1, p2)
+                        super(p1)
+                        m.p2 = p2
+                    end sub
                 end class
                 class BabyDuck extends Duck
                 end class
             `, `
-                function __Bird_builder()
+                function __Animal_builder()
                     instance = {}
                     instance.new = sub(p1)
+                    end sub
+                    return instance
+                end function
+                function Animal(p1)
+                    instance = __Animal_builder()
+                    instance.new(p1)
+                    return instance
+                end function
+                function __Bird_builder()
+                    instance = __Animal_builder()
+                    instance.super0_new = instance.new
+                    instance.new = sub(p1)
+                        m.super0_new(p1)
                     end sub
                     return instance
                 end function
@@ -494,28 +513,29 @@ describe('BrsFile BrighterScript classes', () => {
                 end function
                 function __Duck_builder()
                     instance = __Bird_builder()
-                    instance.super0_new = instance.new
-                    instance.new = sub(p1)
-                        m.super0_new(p1)
+                    instance.super1_new = instance.new
+                    instance.new = sub(p1, p2)
+                        m.super1_new(p1)
+                        m.p2 = p2
                     end sub
                     return instance
                 end function
-                function Duck(p1)
+                function Duck(p1, p2)
                     instance = __Duck_builder()
-                    instance.new(p1)
+                    instance.new(p1, p2)
                     return instance
                 end function
                 function __BabyDuck_builder()
                     instance = __Duck_builder()
-                    instance.super1_new = instance.new
-                    instance.new = sub(p1)
-                        m.super1_new(p1)
+                    instance.super2_new = instance.new
+                    instance.new = sub(p1, p2)
+                        m.super2_new(p1, p2)
                     end sub
                     return instance
                 end function
-                function BabyDuck(p1)
+                function BabyDuck(p1, p2)
                     instance = __BabyDuck_builder()
-                    instance.new(p1)
+                    instance.new(p1, p2)
                     return instance
                 end function
             `);
