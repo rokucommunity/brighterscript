@@ -493,8 +493,8 @@ describe('BrsFile BrighterScript classes', () => {
                 function __Duck_builder()
                     instance = __Bird_builder()
                     instance.super0_new = instance.new
-                    instance.new = sub()
-                        m.super0_new()
+                    instance.new = sub(p1)
+                        m.super0_new(p1)
                     end sub
                     return instance
                 end function
