@@ -1,7 +1,7 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
 import { CompoundAssignmentOperators, TokenKind } from '../lexer/TokenKind';
-import type { BinaryExpression, NamespacedVariableNameExpression, FunctionExpression, FunctionParameterExpression, LiteralExpression } from './Expression';
+import { type BinaryExpression, type NamespacedVariableNameExpression, FunctionExpression, type FunctionParameterExpression, type LiteralExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
 import type { Range } from 'vscode-languageserver';
@@ -11,7 +11,7 @@ import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
 import { isCallExpression, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFieldStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypedefProvider, isUnaryExpression, isVoidType } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
-import { createInvalidLiteral, createMethodStatement, createToken } from '../astUtils/creators';
+import { createIdentifier, createInvalidLiteral, createMethodStatement, createToken } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import type { TranspileState } from './TranspileState';
@@ -2173,6 +2173,16 @@ export class ClassStatement extends Statement implements TypedefProvider {
         }) as MethodStatement;
     }
 
+    private getConstructorParams(parentClass: ClassStatement) {
+        if (parentClass) {
+            const parentConstructor = parentClass.getConstructorFunction();
+            if (parentConstructor) {
+                return parentConstructor.func.parameters;
+            }
+        }
+        return [];
+    }
+
     /**
      * Determine if the specified field was declared in one of the ancestor classes
      */
@@ -2226,8 +2236,29 @@ export class ClassStatement extends Statement implements TypedefProvider {
         let body = this.body;
         //inject an empty "new" method if missing
         if (!this.getConstructorFunction()) {
+            const params = this.getConstructorParams(ancestors[0]);
+            const call = new ExpressionStatement(
+                new CallExpression(
+                    new VariableExpression(createToken(TokenKind.Identifier, 'super')),
+                    createToken(TokenKind.LeftParen),
+                    createToken(TokenKind.RightParen),
+                    params.map(x => new VariableExpression(x.name))
+                )
+            );
             body = [
-                createMethodStatement('new', TokenKind.Sub),
+                new MethodStatement(
+                    [],
+                    createIdentifier('new'),
+                    new FunctionExpression(
+                        params.map(x => x.clone()),
+                        new Block([call]),
+                        createToken(TokenKind.Sub),
+                        createToken(TokenKind.EndSub),
+                        createToken(TokenKind.LeftParen),
+                        createToken(TokenKind.RightParen)
+                    ),
+                    null
+                ),
                 ...this.body
             ];
         }
