@@ -451,7 +451,7 @@ describe('BrsFile BrighterScript classes', () => {
             `, undefined, 'source/main.bs');
         });
 
-        it('works for simple  class', () => {
+        it('works for simple class', () => {
             testTranspile(`
                 class Duck
                 end class
@@ -470,13 +470,15 @@ describe('BrsFile BrighterScript classes', () => {
             `, undefined, 'source/main.bs');
         });
 
-        it.only('test;lkajdsf;lkasjdf;lksajdf', () => {
+        it('inherits the parameters of the last known constructor', () => {
             testTranspile(`
                 class Bird
                     sub new(p1)
                     end sub
                 end class
                 class Duck extends Bird
+                end class
+                class BabyDuck extends Duck
                 end class
             `, `
                 function __Bird_builder()
@@ -500,6 +502,19 @@ describe('BrsFile BrighterScript classes', () => {
                 end function
                 function Duck(p1)
                     instance = __Duck_builder()
+                    instance.new(p1)
+                    return instance
+                end function
+                function __BabyDuck_builder()
+                    instance = __Duck_builder()
+                    instance.super1_new = instance.new
+                    instance.new = sub(p1)
+                        m.super1_new(p1)
+                    end sub
+                    return instance
+                end function
+                function BabyDuck(p1)
+                    instance = __BabyDuck_builder()
                     instance.new(p1)
                     return instance
                 end function

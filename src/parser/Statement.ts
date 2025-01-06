@@ -2180,9 +2180,13 @@ export class ClassStatement extends Statement implements TypedefProvider {
      */
     private getConstructorParams(ancestors: ClassStatement[]) {
         for (let ancestor of ancestors) {
-            const ctor = ancestor.getConstructorFunction();
-            if (ctor) return ctor.func.parameters;
+            // @todo: somehow, ancestors can have a list where the last element is null.
+            //        this is exposed by the test named "extending namespaced class transpiles properly".
+            if (ancestor) {
+                const ctor = ancestor.getConstructorFunction();
+                if (ctor) return ctor.func.parameters;
             }
+        }
         return [];
     }
 
@@ -2246,31 +2250,31 @@ export class ClassStatement extends Statement implements TypedefProvider {
                 ];
             } else {
                 const params = this.getConstructorParams(ancestors);
-            const call = new ExpressionStatement(
-                new CallExpression(
-                    new VariableExpression(createToken(TokenKind.Identifier, 'super')),
-                    createToken(TokenKind.LeftParen),
-                    createToken(TokenKind.RightParen),
-                    params.map(x => new VariableExpression(x.name))
-                )
-            );
-            body = [
-                new MethodStatement(
-                    [],
-                    createIdentifier('new'),
-                    new FunctionExpression(
-                        params.map(x => x.clone()),
-                        new Block([call]),
-                        createToken(TokenKind.Sub),
-                        createToken(TokenKind.EndSub),
+                const call = new ExpressionStatement(
+                    new CallExpression(
+                        new VariableExpression(createToken(TokenKind.Identifier, 'super')),
                         createToken(TokenKind.LeftParen),
-                        createToken(TokenKind.RightParen)
+                        createToken(TokenKind.RightParen),
+                        params.map(x => new VariableExpression(x.name))
+                    )
+                );
+                body = [
+                    new MethodStatement(
+                        [],
+                        createIdentifier('new'),
+                        new FunctionExpression(
+                            params.map(x => x.clone()),
+                            new Block([call]),
+                            createToken(TokenKind.Sub),
+                            createToken(TokenKind.EndSub),
+                            createToken(TokenKind.LeftParen),
+                            createToken(TokenKind.RightParen)
+                        ),
+                        null
                     ),
-                    null
-                ),
-                ...this.body
-            ];
-        }
+                    ...this.body
+                ];
+            }
         }
 
         for (let statement of body) {
