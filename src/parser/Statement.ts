@@ -2173,13 +2173,16 @@ export class ClassStatement extends Statement implements TypedefProvider {
         }) as MethodStatement;
     }
 
-    private getConstructorParams(parentClass: ClassStatement) {
-        if (parentClass) {
-            const parentConstructor = parentClass.getConstructorFunction();
-            if (parentConstructor) {
-                return parentConstructor.func.parameters;
+    /**
+     * Return the parameters for the first constructor function for this class
+     * @param ancestors The list of ancestors for this class
+     * @returns The parameters for the first constructor function for this class
+     */
+    private getConstructorParams(ancestors: ClassStatement[]) {
+        for (let ancestor of ancestors) {
+            const ctor = ancestor.getConstructorFunction();
+            if (ctor) return ctor.func.parameters;
             }
-        }
         return [];
     }
 
@@ -2236,7 +2239,13 @@ export class ClassStatement extends Statement implements TypedefProvider {
         let body = this.body;
         //inject an empty "new" method if missing
         if (!this.getConstructorFunction()) {
-            const params = this.getConstructorParams(ancestors[0]);
+            if (ancestors.length == 0) {
+                body = [
+                    createMethodStatement('new', TokenKind.Sub),
+                    ...this.body
+                ];
+            } else {
+                const params = this.getConstructorParams(ancestors);
             const call = new ExpressionStatement(
                 new CallExpression(
                     new VariableExpression(createToken(TokenKind.Identifier, 'super')),
@@ -2261,6 +2270,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
                 ),
                 ...this.body
             ];
+        }
         }
 
         for (let statement of body) {
@@ -2326,7 +2336,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         if (constructorFunction) {
             constructorParams = constructorFunction.func.parameters;
         } else {
-            constructorParams = this.getConstructorParams(this.getAncestors(state)[0]);
+            constructorParams = this.getConstructorParams(this.getAncestors(state));
         }
 
         result.push(
