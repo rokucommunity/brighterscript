@@ -4856,6 +4856,97 @@ describe('ScopeValidator', () => {
                 DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
             ]);
         });
+
+        it('respects return value of as callfunc functions', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getInt" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                sub getInt() as integer
+                    return 1
+                end sub
+            `);
+
+            program.setFile('source/test.bs', `
+                sub doCallfunc(widget as roSGNodeWidget)
+                    takesInt(widget@.getInt())
+                end sub
+
+                sub takesInt(number as integer)
+                    print number
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('respects return value of as callfunc functions - negative case', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getInt" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                sub getInt() as integer
+                    return 1
+                end sub
+            `);
+
+            program.setFile('source/test.bs', `
+                sub doCallfunc(widget as roSGNodeWidget)
+                    takesString(widget@.getInt())
+                end sub
+
+                sub takesString(word as string)
+                    print word
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('integer', 'string').message
+            ]);
+        });
+
+        it('allows return value of as void functions to be dynamic', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="noop" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                sub noop()
+                end sub
+            `);
+
+            program.setFile('source/test.bs', `
+                sub doCallfunc(widget as roSGNodeWidget)
+                    takesAny(widget@.noop())
+                end sub
+
+                sub takesAny(anything)
+                    print anything
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 });
 

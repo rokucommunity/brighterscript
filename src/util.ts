@@ -2556,6 +2556,10 @@ export class Util {
                 }
             }
         }
+        if (isVoidType(result)) {
+            // CallFunc will always return invalid, even if function called is `as void`
+            result = DynamicType.instance;
+        }
         if (options.data && !options.ignoreCall) {
             options.data.isFromCallFunc = true;
         }
