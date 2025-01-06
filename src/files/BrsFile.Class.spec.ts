@@ -470,6 +470,42 @@ describe('BrsFile BrighterScript classes', () => {
             `, undefined, 'source/main.bs');
         });
 
+        it.only('test;lkajdsf;lkasjdf;lksajdf', () => {
+            testTranspile(`
+                class Bird
+                    sub new(p1)
+                    end sub
+                end class
+                class Duck extends Bird
+                end class
+            `, `
+                function __Bird_builder()
+                    instance = {}
+                    instance.new = sub(p1)
+                    end sub
+                    return instance
+                end function
+                function Bird(p1)
+                    instance = __Bird_builder()
+                    instance.new(p1)
+                    return instance
+                end function
+                function __Duck_builder()
+                    instance = __Bird_builder()
+                    instance.super0_new = instance.new
+                    instance.new = sub()
+                        m.super0_new()
+                    end sub
+                    return instance
+                end function
+                function Duck(p1)
+                    instance = __Duck_builder()
+                    instance.new(p1)
+                    return instance
+                end function
+            `);
+        });
+
         it('registers the constructor and properly handles its parameters', () => {
             testTranspile(`
                 class Duck
