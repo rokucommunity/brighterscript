@@ -2184,7 +2184,9 @@ export class ClassStatement extends Statement implements TypedefProvider {
             //        this is exposed by the test named "extending namespaced class transpiles properly".
             if (ancestor) {
                 const ctor = ancestor.getConstructorFunction();
-                if (ctor) return ctor.func.parameters;
+                if (ctor) {
+                    return ctor.func.parameters;
+                }
             }
         }
         return [];
@@ -2243,7 +2245,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         let body = this.body;
         //inject an empty "new" method if missing
         if (!this.getConstructorFunction()) {
-            if (ancestors.length == 0) {
+            if (ancestors.length === 0) {
                 body = [
                     createMethodStatement('new', TokenKind.Sub),
                     ...this.body
