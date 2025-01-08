@@ -14,7 +14,7 @@ import { FloatType } from '../../types/FloatType';
 import { IntegerType } from '../../types/IntegerType';
 import { InterfaceType } from '../../types/InterfaceType';
 import { StringType } from '../../types/StringType';
-import { DynamicType, TypedFunctionType } from '../../types';
+import { DynamicType, TypedFunctionType, VoidType } from '../../types';
 import { ParseMode } from '../../parser/Parser';
 import type { ExtraSymbolData } from '../../interfaces';
 
@@ -1330,6 +1330,34 @@ describe('BrsFileValidator', () => {
                 end sub
             `);
             expectDiagnostics(program, []);
+        });
+    });
+
+    describe('annotations', () => {
+        it('validates when unknown annotation is used', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                @unknownAnnotation
+                sub someFunc()
+                    print "hello"
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('unknownAnnotation')
+            ]);
+        });
+
+        it('allows known annotations', () => {
+            program.pluginAnnotationTable.addSymbol('knownAnnotation', { pluginName: 'Test' }, new TypedFunctionType(VoidType.instance).setName('knownAnnotation'), SymbolTypeFlag.annotation);
+
+            program.setFile<BrsFile>('source/main.bs', `
+                @knownAnnotation
+                sub someFunc()
+                    print "hello"
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
         });
     });
 });
