@@ -1,5 +1,5 @@
 import type { TypeCompatibilityData } from '../interfaces';
-import { isAnyReferenceType, isDynamicType, isEnumMemberType, isEnumType, isInheritableType, isInterfaceType, isReferenceType, isUnionType } from '../astUtils/reflection';
+import { isAnyReferenceType, isDynamicType, isEnumMemberType, isEnumType, isInheritableType, isInterfaceType, isReferenceType, isUnionType, isVoidType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 import type { UnionType } from './UnionType';
 
@@ -126,7 +126,7 @@ export function getUniqueType(types: BscType[], unionTypeFactory: (types: BscTyp
     if (!types || types.length === 0) {
         return undefined;
     }
-    const dynType = types.find((x) => !isAnyReferenceType(x) && isDynamicType(x));
+    const dynType = types.find((x) => !isAnyReferenceType(x) && (isDynamicType(x) || isVoidType(x)));
     if (dynType) {
         return dynType;
     }
