@@ -2144,7 +2144,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         let stmt = this as ClassStatement;
         while (stmt) {
             if (stmt.parentClassName) {
-                const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+                const namespace = stmt.findAncestor<NamespaceStatement>(isNamespaceStatement);
                 stmt = state.file.getClassFileLink(
                     stmt.parentClassName.getName(ParseMode.BrighterScript),
                     namespace?.getName(ParseMode.BrighterScript)
@@ -2180,13 +2180,9 @@ export class ClassStatement extends Statement implements TypedefProvider {
      */
     private getConstructorParams(ancestors: ClassStatement[]) {
         for (let ancestor of ancestors) {
-            // @todo: somehow, ancestors can have a list where the last element is null.
-            //        this is exposed by the test named "extending namespaced class transpiles properly".
-            if (ancestor) {
-                const ctor = ancestor.getConstructorFunction();
-                if (ctor) {
-                    return ctor.func.parameters;
-                }
+            const ctor = ancestor?.getConstructorFunction();
+            if (ctor) {
+                return ctor.func.parameters;
             }
         }
         return [];
