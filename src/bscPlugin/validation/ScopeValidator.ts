@@ -13,8 +13,7 @@ import type { Token } from '../../lexer/Token';
 import { AstNodeKind } from '../../parser/AstNode';
 import type { AstNode } from '../../parser/AstNode';
 import type { Expression } from '../../parser/AstNode';
-import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression, LiteralExpression, FunctionExpression } from '../../parser/Expression';
-import { CallExpression } from '../../parser/Expression';
+import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression, LiteralExpression, FunctionExpression, CallExpression } from '../../parser/Expression';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BscType } from '../../types/BscType';
 import type { BscFile } from '../../files/BscFile';
@@ -352,23 +351,8 @@ export class ScopeValidator {
             funcType = funcType.getMemberType('new', getTypeOptions);
         }
         if (funcType?.isResolvable() && isTypedFunctionType(funcType)) {
-            //funcType.setName(expression.callee. .name);
-
             //get min/max parameter count for callable
-            let minParams = 0;
-            let maxParams = 0;
-            for (let param of funcType.params) {
-                maxParams++;
-                //optional parameters must come last, so we can assume that minParams won't increase once we hit
-                //the first isOptional
-                if (param.isOptional !== true) {
-                    minParams++;
-                }
-            }
-            if (funcType.isVariadic) {
-                // function accepts variable number of arguments
-                maxParams = CallExpression.MaximumArguments;
-            }
+            const { minParams, maxParams } = funcType.getMinMaxParamCount();
             let expCallArgCount = expression.args.length;
             if (expCallArgCount > maxParams || expCallArgCount < minParams) {
                 let minMaxParamsText = minParams === maxParams ? maxParams : `${minParams}-${maxParams}`;

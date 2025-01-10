@@ -1,4 +1,4 @@
-import { isAliasStatement, isArrayType, isBlock, isBody, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralExpression, isMethodStatement, isNamespaceStatement, isStatement, isTypecastExpression, isTypecastStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
+import { isAliasStatement, isArrayType, isBlock, isBody, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralExpression, isMethodStatement, isNamespaceStatement, isStatement, isTypecastExpression, isTypecastStatement, isTypedFunctionType, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -682,14 +682,27 @@ export class BrsFileValidator {
         const extraData: ExtraSymbolData = {};
 
         for (const annotation of statement.annotations) {
-            const annotationSymbol = symbolTable.getSymbolType(annotation.name, { flags: SymbolTypeFlag.annotation, data: extraData });
+            const annotationType = symbolTable.getSymbolType(annotation.name, { flags: SymbolTypeFlag.annotation, data: extraData });
 
-            if (!annotationSymbol) {
+            if (!annotationType || !annotationType?.isResolvable() || !isTypedFunctionType(annotationType)) {
                 this.event.program.diagnostics.register({
                     ...DiagnosticMessages.cannotFindName(annotation.name),
                     location: brsDocParser.getTypeLocationFromToken(annotation.tokens.name) ?? annotation.location
                 });
+                continue;
             }
+            const { minParams, maxParams } = annotationType.getMinMaxParamCount();
+            let expCallArgCount = annotation.call?.args.length ?? 0;
+            if (expCallArgCount > maxParams || expCallArgCount < minParams) {
+                let minMaxParamsText = minParams === maxParams ? maxParams : `${minParams}-${maxParams}`;
+                this.event.program.diagnostics.register({
+                    ...DiagnosticMessages.mismatchArgumentCount(minMaxParamsText, expCallArgCount),
+                    location: annotation.location
+                });
+            }
+
+            const argTypes = annotation.call?.args.map(arg => arg.getType({ flags: SymbolTypeFlag.runtime })) ?? [];
+
         }
     }
 

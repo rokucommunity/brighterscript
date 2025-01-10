@@ -1359,5 +1359,67 @@ describe('BrsFileValidator', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        it('checks annotation function arg count', () => {
+            program.pluginAnnotationTable.addSymbol('takesOneOrTwo', { pluginName: 'Test' },
+                new TypedFunctionType(VoidType.instance)
+                    .setName('takesOneOrTwo')
+                    .addParameter('x', DynamicType.instance)
+                    .addParameter('y', DynamicType.instance, true),
+                SymbolTypeFlag.annotation);
+
+            program.setFile<BrsFile>('source/main.bs', `
+                @takesOneOrTwo
+                sub someFunc()
+                    print "hello"
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.mismatchArgumentCount('1-2', 0)
+            ]);
+        });
+
+        it('allows valid arg counts', () => {
+            program.pluginAnnotationTable.addSymbol('takesOneOrTwo', { pluginName: 'Test' },
+                new TypedFunctionType(VoidType.instance)
+                    .setName('takesOneOrTwo')
+                    .addParameter('x', DynamicType.instance)
+                    .addParameter('y', DynamicType.instance, true),
+                SymbolTypeFlag.annotation);
+
+            program.setFile<BrsFile>('source/main.bs', `
+                @takesOneOrTwo(1)
+                sub someFunc()
+                end sub
+
+                @takesOneOrTwo(1, "test")
+                sub otherFunc()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows valid arg counts for variadic functions', () => {
+            program.pluginAnnotationTable.addSymbol('takesOneOrMore', { pluginName: 'Test' },
+                new TypedFunctionType(VoidType.instance)
+                    .setName('takesOneOrMore')
+                    .addParameter('x', DynamicType.instance)
+                    .seVariadic(true),
+                SymbolTypeFlag.annotation);
+
+            program.setFile<BrsFile>('source/main.bs', `
+                @takesOneOrMore(1)
+                sub someFunc()
+                end sub
+
+                @takesOneOrMore(1, "test", {test: 1}, [1,2,3], "more", "args")
+                sub otherFunc()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 });

@@ -5,6 +5,7 @@ import { BscTypeKind } from './BscTypeKind';
 import { isUnionTypeCompatible } from './helpers';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import type { TypeCompatibilityData } from '../interfaces';
+import { CallExpression } from '../parser/Expression';
 
 export class TypedFunctionType extends BaseFunctionType {
     constructor(
@@ -37,12 +38,17 @@ export class TypedFunctionType extends BaseFunctionType {
         return this;
     }
 
-    public addParameter(name: string, type: BscType, isOptional: boolean) {
+    public addParameter(name: string, type: BscType, isOptional = false) {
         this.params.push({
             name: name,
             type: type,
             isOptional: isOptional === true ? true : false
         });
+        return this;
+    }
+
+    public seVariadic(variadic: boolean) {
+        this.isVariadic = variadic;
         return this;
     }
 
@@ -115,6 +121,25 @@ export class TypedFunctionType extends BaseFunctionType {
         }
         //made it here, all params and return type  pass predicate
         return true;
+    }
+
+    public getMinMaxParamCount(): { minParams: number; maxParams: number } {
+        //get min/max parameter count for callable
+        let minParams = 0;
+        let maxParams = 0;
+        for (let param of this.params) {
+            maxParams++;
+            //optional parameters must come last, so we can assume that minParams won't increase once we hit
+            //the first isOptional
+            if (param.isOptional !== true) {
+                minParams++;
+            }
+        }
+        if (this.isVariadic) {
+            // function accepts variable number of arguments
+            maxParams = CallExpression.MaximumArguments;
+        }
+        return { minParams: minParams, maxParams: maxParams };
     }
 }
 
