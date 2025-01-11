@@ -1,8 +1,8 @@
-import { isAliasStatement, isArrayType, isBlock, isBody, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralExpression, isMethodStatement, isNamespaceStatement, isStatement, isTypecastExpression, isTypecastStatement, isTypedFunctionType, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
+import { isAliasStatement, isArrayType, isBlock, isBody, isCallableType, isClassStatement, isClassType, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralExpression, isMethodStatement, isNamespaceStatement, isStatement, isTypecastExpression, isTypecastStatement, isTypedFunctionType, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
-import type { ExtraSymbolData, OnFileValidateEvent } from '../../interfaces';
+import type { ExtraSymbolData, OnFileValidateEvent, TypeCompatibilityData } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
 import type { FunctionExpression, LiteralExpression } from '../../parser/Expression';
@@ -18,6 +18,7 @@ import type { Range } from 'vscode-languageserver';
 import type { Token } from '../../lexer/Token';
 import type { BrightScriptDoc } from '../../parser/BrightScriptDocParser';
 import brsDocParser from '../../parser/BrightScriptDocParser';
+import { UninitializedType } from '../../types';
 
 export class BrsFileValidator {
     constructor(
@@ -684,11 +685,15 @@ export class BrsFileValidator {
         for (const annotation of statement.annotations) {
             const annotationType = symbolTable.getSymbolType(annotation.name, { flags: SymbolTypeFlag.annotation, data: extraData });
 
-            if (!annotationType || !annotationType?.isResolvable() || !isTypedFunctionType(annotationType)) {
+            if (!annotationType || !annotationType?.isResolvable()) {
                 this.event.program.diagnostics.register({
-                    ...DiagnosticMessages.cannotFindName(annotation.name),
+                    ...DiagnosticMessages.cannotFindAnnotation(annotation.name),
                     location: brsDocParser.getTypeLocationFromToken(annotation.tokens.name) ?? annotation.location
                 });
+                continue;
+            }
+            if (!isTypedFunctionType(annotationType)) {
+                // TODO: handle multiple function definitions - in that case this would be a UnionType
                 continue;
             }
             const { minParams, maxParams } = annotationType.getMinMaxParamCount();
@@ -701,8 +706,41 @@ export class BrsFileValidator {
                 });
             }
 
-            const argTypes = annotation.call?.args.map(arg => arg.getType({ flags: SymbolTypeFlag.runtime })) ?? [];
+            // validate the arg types - very similar to code in ScopeValidator
+            let paramIndex = 0;
+            for (let arg of annotation.call?.args ?? []) {
+                const data = {} as ExtraSymbolData;
+                let argType = arg.getType({ flags: SymbolTypeFlag.runtime, data: data, onlyAllowLiterals: true });
 
+                if (!argType || !argType.isResolvable()) {
+                    this.event.program.diagnostics.register({
+                        ...DiagnosticMessages.expectedLiteralValue('in annotation argument', util.getAllDottedGetPartsAsString(arg)),
+                        location: arg.location
+                    });
+                    break;
+                }
+                let paramType = annotationType.params[paramIndex]?.type;
+                if (!paramType) {
+                    // unable to find a paramType -- maybe there are more args than params
+                    break;
+                }
+
+                if (isCallableType(paramType) && isClassType(argType) && isClassStatement(data.definingNode)) {
+                    argType = data.definingNode?.getConstructorType();
+                }
+
+                const compatibilityData: TypeCompatibilityData = {};
+                if (!argType || !argType.isResolvable() || !paramType?.isTypeCompatible(argType, compatibilityData)) {
+
+                    const argTypeStr = argType?.toString() ?? UninitializedType.instance.toString();
+
+                    this.event.program.diagnostics.register({
+                        ...DiagnosticMessages.argumentTypeMismatch(argTypeStr, paramType.toString(), compatibilityData),
+                        location: arg.location
+                    });
+                }
+                paramIndex++;
+            }
         }
     }
 

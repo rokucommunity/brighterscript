@@ -1441,7 +1441,7 @@ export class VariableExpression extends Expression {
     getType(options: GetTypeOptions) {
         let resultType: BscType = util.tokenToBscType(this.tokens.name);
         const nameKey = this.getName();
-        if (!resultType) {
+        if (!resultType || !options?.onlyAllowLiterals) {
             const symbolTable = this.getSymbolTable();
             resultType = symbolTable?.getSymbolType(nameKey, { ...options, fullName: nameKey, tableProvider: () => this.getSymbolTable() });
 

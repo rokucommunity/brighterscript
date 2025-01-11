@@ -373,7 +373,7 @@ export class ScopeValidator {
                 }
 
                 if (isCallableType(paramType) && isClassType(argType) && isClassStatement(data.definingNode)) {
-                    argType = data.definingNode.getConstructorType();
+                    argType = data.definingNode?.getConstructorType();
                 }
 
                 const compatibilityData: TypeCompatibilityData = {};

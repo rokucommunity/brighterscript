@@ -1024,6 +1024,7 @@ export interface GetTypeOptions {
     ignoreCacheForRetrieval?: boolean;
     isExistenceTest?: boolean;
     preferDocType?: boolean;
+    onlyAllowLiterals?: boolean;
 }
 
 export class TypeChainEntry {

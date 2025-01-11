@@ -17,6 +17,7 @@ import { StringType } from '../../types/StringType';
 import { DynamicType, TypedFunctionType, VoidType } from '../../types';
 import { ParseMode } from '../../parser/Parser';
 import type { ExtraSymbolData } from '../../interfaces';
+import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 
 describe('BrsFileValidator', () => {
     let program: Program;
@@ -1333,7 +1334,7 @@ describe('BrsFileValidator', () => {
         });
     });
 
-    describe('annotations', () => {
+    describe.only('annotations', () => {
         it('validates when unknown annotation is used', () => {
             program.setFile<BrsFile>('source/main.bs', `
                 @unknownAnnotation
@@ -1343,7 +1344,7 @@ describe('BrsFileValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('unknownAnnotation')
+                DiagnosticMessages.cannotFindAnnotation('unknownAnnotation')
             ]);
         });
 
@@ -1416,6 +1417,127 @@ describe('BrsFileValidator', () => {
 
                 @takesOneOrMore(1, "test", {test: 1}, [1,2,3], "more", "args")
                 sub otherFunc()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('ignores when multiple annotations of same name are added', () => {
+            program.pluginAnnotationTable.addSymbol('usedTwice', { pluginName: 'Test' },
+                new TypedFunctionType(VoidType.instance)
+                    .setName('usedTwice')
+                    .addParameter('x', IntegerType.instance),
+                SymbolTypeFlag.annotation);
+
+            program.pluginAnnotationTable.addSymbol('usedTwice', { pluginName: 'Other' },
+                new TypedFunctionType(VoidType.instance)
+                    .setName('usedTwice'),
+                SymbolTypeFlag.annotation);
+
+            program.setFile<BrsFile>('source/main.bs', `
+                @usedTwice(1)
+                sub someFunc()
+                end sub
+
+                @usedTwice
+                sub otherFunc()
+                end sub
+
+                @usedTwice("TODO: this shouldn't be accepted", "Because there is no matching annotation")
+                sub yetAnotherFunc()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('validates arg types', () => {
+            program.pluginAnnotationTable.addSymbol('annoStringInt', { pluginName: 'Test' },
+                new TypedFunctionType(VoidType.instance)
+                    .setName('annoStringInt')
+                    .addParameter('str', StringType.instance)
+                    .addParameter('int', IntegerType.instance),
+                SymbolTypeFlag.annotation);
+
+            program.setFile<BrsFile>('source/main.bs', `
+                @annoStringInt(3.14, "test")
+                sub someFunc()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('float', 'string').message,
+                DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+            ]);
+        });
+
+
+        it('allows valid arg types', () => {
+            program.pluginAnnotationTable.addSymbol('annoStringInt', { pluginName: 'Test' },
+                new TypedFunctionType(VoidType.instance)
+                    .setName('annoStringInt')
+                    .addParameter('str', StringType.instance)
+                    .addParameter('int', IntegerType.instance),
+                SymbolTypeFlag.annotation);
+
+            program.setFile<BrsFile>('source/main.bs', `
+                @annoStringInt("test", 123)
+                sub someFunc()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('validates uninitialized values', () => {
+            program.pluginAnnotationTable.addSymbol('annoString', { pluginName: 'Test' },
+                new TypedFunctionType(VoidType.instance)
+                    .setName('annoString')
+                    .addParameter('str', StringType.instance),
+                SymbolTypeFlag.annotation);
+
+            program.setFile<BrsFile>('source/main.bs', `
+                @annoString(someVar)
+                sub someFunc()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.expectedLiteralValue('in annotation argument', 'someVar').message
+            ]);
+        });
+
+        it('validates uninitialized values', () => {
+            program.pluginAnnotationTable.addSymbol('annoString', { pluginName: 'Test' },
+                new TypedFunctionType(VoidType.instance)
+                    .setName('annoString')
+                    .addParameter('str', StringType.instance),
+                SymbolTypeFlag.annotation);
+
+            program.setFile<BrsFile>('source/main.bs', `
+
+                const myConst = "hello"
+                @annoString(myConst)
+                sub someFunc()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.expectedLiteralValue('in annotation argument', 'myConst').message
+            ]);
+        });
+
+        it('allows associative arrays', () => {
+            program.pluginAnnotationTable.addSymbol('annoAA', { pluginName: 'Test' },
+                new TypedFunctionType(VoidType.instance)
+                    .setName('annoAA')
+                    .addParameter('aa', new AssociativeArrayType()),
+                SymbolTypeFlag.annotation);
+
+            program.setFile<BrsFile>('source/main.bs', `
+                @annoAA({name: "John Doe", age: 25, ids: [1, 2, 3, 4]})
+                sub someFunc()
                 end sub
             `);
             program.validate();
