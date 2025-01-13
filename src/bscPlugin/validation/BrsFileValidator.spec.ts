@@ -1334,7 +1334,7 @@ describe('BrsFileValidator', () => {
         });
     });
 
-    describe.only('annotations', () => {
+    describe('annotations', () => {
         it('validates when unknown annotation is used', () => {
             program.setFile<BrsFile>('source/main.bs', `
                 @unknownAnnotation

@@ -1,6 +1,9 @@
 import { expectZeroDiagnostics, getTestGetTypedef, getTestTranspile } from '../../../testHelpers.spec';
 import { rootDir } from '../../../testHelpers.spec';
 import { Program } from '../../../Program';
+import { TypedFunctionType } from '../../../types/TypedFunctionType';
+import { VoidType } from '../../../types/VoidType';
+import { SymbolTypeFlag } from '../../../SymbolTypeFlag';
 
 describe('InterfaceStatement', () => {
     let program: Program;
@@ -50,6 +53,9 @@ describe('InterfaceStatement', () => {
     });
 
     it('includes annotations', async () => {
+        program.pluginAnnotationTable.addSymbol('IFace', {}, new TypedFunctionType(VoidType.instance), SymbolTypeFlag.annotation);
+        program.pluginAnnotationTable.addSymbol('Method', {}, new TypedFunctionType(VoidType.instance), SymbolTypeFlag.annotation);
+        program.pluginAnnotationTable.addSymbol('Field', {}, new TypedFunctionType(VoidType.instance), SymbolTypeFlag.annotation);
         await testGetTypedef(`
             @IFace
             interface Person
