@@ -2310,6 +2310,9 @@ export class Util {
 
 
     public isInTypeExpression(expression: AstNode): boolean {
+        if (!expression) {
+            return false;
+        }
         //TODO: this is much faster than node.findAncestor(), but may need to be updated for "complicated" type expressions
         if (isTypeExpression(expression) ||
             isTypeExpression(expression.parent) ||

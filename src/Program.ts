@@ -254,6 +254,8 @@ export class Program {
     public addAnnotationSymbol(name: string, annoType: TypedFunctionType, extraData: ExtraSymbolData = {}) {
         if (name && annoType) {
             annoType.setName(name);
+            const pluginName = extraData?.pluginName ?? '';
+            this.logger.info(`Adding annotation '${name}' (${pluginName})`);
             this.pluginAnnotationTable.addSymbol(name, extraData, annoType, SymbolTypeFlag.annotation);
         }
     }
