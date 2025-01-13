@@ -451,7 +451,7 @@ describe('BrsFile BrighterScript classes', () => {
             `, undefined, 'source/main.bs');
         });
 
-        it('works for simple  class', () => {
+        it('works for simple class', () => {
             testTranspile(`
                 class Duck
                 end class
@@ -468,6 +468,77 @@ describe('BrsFile BrighterScript classes', () => {
                     return instance
                 end function
             `, undefined, 'source/main.bs');
+        });
+
+        it('inherits the parameters of the last known constructor', () => {
+            testTranspile(`
+                class Animal
+                    sub new(p1)
+                    end sub
+                end class
+                class Bird extends Animal
+                end class
+                class Duck extends Bird
+                    sub new(p1, p2)
+                        super(p1)
+                        m.p2 = p2
+                    end sub
+                end class
+                class BabyDuck extends Duck
+                end class
+            `, `
+                function __Animal_builder()
+                    instance = {}
+                    instance.new = sub(p1)
+                    end sub
+                    return instance
+                end function
+                function Animal(p1)
+                    instance = __Animal_builder()
+                    instance.new(p1)
+                    return instance
+                end function
+                function __Bird_builder()
+                    instance = __Animal_builder()
+                    instance.super0_new = instance.new
+                    instance.new = sub(p1)
+                        m.super0_new(p1)
+                    end sub
+                    return instance
+                end function
+                function Bird(p1)
+                    instance = __Bird_builder()
+                    instance.new(p1)
+                    return instance
+                end function
+                function __Duck_builder()
+                    instance = __Bird_builder()
+                    instance.super1_new = instance.new
+                    instance.new = sub(p1, p2)
+                        m.super1_new(p1)
+                        m.p2 = p2
+                    end sub
+                    return instance
+                end function
+                function Duck(p1, p2)
+                    instance = __Duck_builder()
+                    instance.new(p1, p2)
+                    return instance
+                end function
+                function __BabyDuck_builder()
+                    instance = __Duck_builder()
+                    instance.super2_new = instance.new
+                    instance.new = sub(p1, p2)
+                        m.super2_new(p1, p2)
+                    end sub
+                    return instance
+                end function
+                function BabyDuck(p1, p2)
+                    instance = __BabyDuck_builder()
+                    instance.new(p1, p2)
+                    return instance
+                end function
+            `);
         });
 
         it('registers the constructor and properly handles its parameters', () => {
@@ -569,8 +640,8 @@ describe('BrsFile BrighterScript classes', () => {
                 function __Duck_builder()
                     instance = __Creature_builder()
                     instance.super0_new = instance.new
-                    instance.new = sub()
-                        m.super0_new()
+                    instance.new = sub(name as string)
+                        m.super0_new(name)
                     end sub
                     instance.super0_sayHello = instance.sayHello
                     instance.sayHello = function(text)
@@ -581,9 +652,9 @@ describe('BrsFile BrighterScript classes', () => {
                     end function
                     return instance
                 end function
-                function Duck()
+                function Duck(name as string)
                     instance = __Duck_builder()
-                    instance.new()
+                    instance.new(name)
                     return instance
                 end function
             `, 'trim', 'source/main.bs'
@@ -774,8 +845,8 @@ describe('BrsFile BrighterScript classes', () => {
                 function __Duck_builder()
                     instance = __Animal_builder()
                     instance.super0_new = instance.new
-                    instance.new = sub()
-                        m.super0_new()
+                    instance.new = sub(name as string)
+                        m.super0_new(name)
                     end sub
                     instance.super0_move = instance.move
                     instance.move = sub(distanceInMeters as integer)
@@ -784,16 +855,16 @@ describe('BrsFile BrighterScript classes', () => {
                     end sub
                     return instance
                 end function
-                function Duck()
+                function Duck(name as string)
                     instance = __Duck_builder()
-                    instance.new()
+                    instance.new(name)
                     return instance
                 end function
                 function __BabyDuck_builder()
                     instance = __Duck_builder()
                     instance.super1_new = instance.new
-                    instance.new = sub()
-                        m.super1_new()
+                    instance.new = sub(name as string)
+                        m.super1_new(name)
                     end sub
                     instance.super1_move = instance.move
                     instance.move = sub(distanceInMeters as integer)
@@ -802,9 +873,9 @@ describe('BrsFile BrighterScript classes', () => {
                     end sub
                     return instance
                 end function
-                function BabyDuck()
+                function BabyDuck(name as string)
                     instance = __BabyDuck_builder()
-                    instance.new()
+                    instance.new(name)
                     return instance
                 end function
 
