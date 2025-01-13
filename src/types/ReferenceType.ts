@@ -426,7 +426,7 @@ export class BinaryOperatorReferenceType extends BscType {
                             return () => undefined;
                         }
                     } else {
-                        resultType = binaryOpResolver(this.leftType, this.operator, this.rightType);
+                        resultType = binaryOpResolver(this.leftType, this.operator, this.rightType) ?? DynamicType.instance;
                         this.cachedType = resultType;
                     }
 
