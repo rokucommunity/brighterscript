@@ -868,6 +868,22 @@ describe('lexer', () => {
             expect(f.text).to.eql('2.5e3');
         });
 
+        it('supports very long numbers with !', () => {
+            function doTest(number: string) {
+                let f = Lexer.scan(number).tokens[0];
+                expect(f.kind).to.equal(TokenKind.FloatLiteral);
+                expect(f.text).to.eql(number);
+            }
+            doTest('0!');
+            doTest('0!');
+            doTest('147483648!');
+            doTest('2147483648!');
+            doTest('2147483648111!');
+            doTest('2.4e-38!');
+            doTest('2.4e-32342342342342342342342342348!');
+            doTest('2.4e+32342342342342342342342342348!');
+        });
+
         it('supports larger-than-supported-precision floats to be defined with exponents', () => {
             let f = Lexer.scan('2.3659475627512424e-38').tokens[0];
             expect(f.kind).to.equal(TokenKind.FloatLiteral);
@@ -1333,13 +1349,15 @@ describe('lexer', () => {
     });
 
     it('identifies brighterscript source literals', () => {
-        let { tokens } = Lexer.scan('LINE_NUM SOURCE_FILE_PATH SOURCE_LINE_NUM FUNCTION_NAME SOURCE_FUNCTION_NAME SOURCE_LOCATION PKG_PATH PKG_LOCATION');
+        let { tokens } = Lexer.scan('LINE_NUM SOURCE_FILE_PATH SOURCE_LINE_NUM FUNCTION_NAME SOURCE_FUNCTION_NAME SOURCE_NAMESPACE_NAME SOURCE_NAMESPACE_ROOT_NAME SOURCE_LOCATION PKG_PATH PKG_LOCATION');
         expect(tokens.map(x => x.kind)).to.eql([
             TokenKind.LineNumLiteral,
             TokenKind.SourceFilePathLiteral,
             TokenKind.SourceLineNumLiteral,
             TokenKind.FunctionNameLiteral,
             TokenKind.SourceFunctionNameLiteral,
+            TokenKind.SourceNamespaceNameLiteral,
+            TokenKind.SourceNamespaceRootNameLiteral,
             TokenKind.SourceLocationLiteral,
             TokenKind.PkgPathLiteral,
             TokenKind.PkgLocationLiteral,

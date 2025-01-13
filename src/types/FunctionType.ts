@@ -76,4 +76,14 @@ export class FunctionType implements BscType {
     public toTypeString(): string {
         return 'Function';
     }
+
+    public clone() {
+        const result = new FunctionType(this.returnType);
+        for (let param of this.params) {
+            result.addParameter(param.name, param.type, param.isOptional);
+        }
+        result.isSub = this.isSub;
+        result.returnType = this.returnType?.clone();
+        return result;
+    }
 }

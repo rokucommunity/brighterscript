@@ -4,21 +4,19 @@ export * from './Scope';
 export * from './files/BrsFile';
 export * from './files/XmlFile';
 export * from './util';
-export { Watcher } from './Watcher';
+export * from './Watcher';
 export * from './interfaces';
 export * from './LanguageServer';
 export * from './XmlScope';
 export * from './lexer/TokenKind';
 export * from './lexer/Token';
-export { Lexer } from './lexer/Lexer';
+export * from './lexer/Lexer';
 export * from './parser/Parser';
 export * from './parser/AstNode';
 export * from './parser/Expression';
 export * from './parser/Statement';
 export * from './BsConfig';
 export * from './deferred';
-// convenience re-export from vscode
-export { Range, Position, CancellationToken, CancellationTokenSource, DiagnosticSeverity, DiagnosticTag, SemanticTokenTypes, CodeAction } from 'vscode-languageserver';
 export * from './astUtils/visitors';
 export * from './astUtils/stackedVisitor';
 export * from './astUtils/reflection';
@@ -27,3 +25,32 @@ export * from './astUtils/xml';
 export * from './astUtils/AstEditor';
 export * from './BusyStatusTracker';
 export * from './Logger';
+export * from './parser/SGTypes';
+export * from './parser/SGParser';
+export * from './CodeActionUtil';
+export * from './DependencyGraph';
+export * from './PluginInterface';
+
+// convenience exports from related libraries
+export {
+    Diagnostic,
+    Range,
+    Location,
+    Position,
+    CancellationToken, CancellationTokenSource,
+    DiagnosticRelatedInformation,
+    DiagnosticSeverity, DiagnosticTag,
+    SemanticTokenTypes,
+    CodeAction,
+    CodeDescription,
+    URI
+} from 'vscode-languageserver';
+export type {
+    RawSourceMap,
+    StartOfSourceMap,
+    CodeWithSourceMap
+} from 'source-map';
+export {
+    SourceNode,
+    SourceMapConsumer
+} from 'source-map';

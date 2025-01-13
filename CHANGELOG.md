@@ -6,6 +6,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.68.2](https://github.com/rokucommunity/brighterscript/compare/v0.68.1...v0.68.2) - 2024-12-06
+### Changed
+ - Add more convenience exports from vscode-languageserver ([#1359](https://github.com/rokucommunity/brighterscript/pull/1359))
+ - upgrade to [roku-deploy@3.12.3](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3123---2024-12-06). Notable changes since 3.12.2:
+     - Fix issues with detecting "check for updates required" ([roku-deploy#181](https://github.com/rokucommunity/roku-deploy/pull/181))
+     - Identify when a 577 error is thrown, send a new developer friendly message ([roku-deploy#180](https://github.com/rokucommunity/roku-deploy/pull/180))
+     - Bump dependencies to remove audit issues ([roku-deploy#178](https://github.com/rokucommunity/roku-deploy/pull/178))
+
+
+
+## [0.68.1](https://github.com/rokucommunity/brighterscript/compare/v0.68.0...v0.68.1) - 2024-11-26
+### Added
+ - Add Namespace Source Literals ([#1354](https://github.com/rokucommunity/brighterscript/pull/1354))
+ - Language server crash fix ([#1353](https://github.com/rokucommunity/brighterscript/pull/1353))
+### Fixed
+ - Fix bug with ternary transpile for indexed set ([#1357](https://github.com/rokucommunity/brighterscript/pull/1357))
+ - Enhance lexer to support long numeric literals with type designators ([#1351](https://github.com/rokucommunity/brighterscript/pull/1351))
+
+
+
+## [0.68.0](https://github.com/rokucommunity/brighterscript/compare/v0.67.8...v0.68.0) - 2024-11-21
+### Changed
+ - Fix issues with the ast walkArray function ([#1347](https://github.com/rokucommunity/brighterscript/pull/1347))
+ - Optimize ternary transpilation for assignments ([#1341](https://github.com/rokucommunity/brighterscript/pull/1341))
+
+
+
+## [0.67.8](https://github.com/rokucommunity/brighterscript/compare/v0.67.7...v0.67.8) - 2024-10-18
+### Changed
+ - upgrade to [roku-deploy@3.12.2](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3122---2024-10-18). Notable changes since 3.12.1:
+     - fixes #175 - updated regex to find a signed package on `/plugin_package` page ([roku-deploy#176](https://github.com/rokucommunity/roku-deploy/pull/176))
+### Fixed
+ - namespace-relative transpile bug for standalone file ([#1324](https://github.com/rokucommunity/brighterscript/pull/1324))
+ - Prevent crash when `ProgramBuilder.run` called with no options ([#1316](https://github.com/rokucommunity/brighterscript/pull/1316))
+
+
+
+## [0.67.7](https://github.com/rokucommunity/brighterscript/compare/v0.67.6...v0.67.7) - 2024-09-25
+### Changed
+ - Ast node clone ([#1281](https://github.com/rokucommunity/brighterscript/pull/1281))
+
+
+
+## [0.67.6](https://github.com/rokucommunity/brighterscript/compare/v0.67.5...v0.67.6) - 2024-09-05
+### Added
+ - support for `roIntrinsicDouble` ([#1291](https://github.com/rokucommunity/brighterscript/pull/1291))
+ - support for resolving `sourceRoot` at time of config load ([#1290](https://github.com/rokucommunity/brighterscript/pull/1290))
+### Changed
+ - document plugin naming convention ([#1284](https://github.com/rokucommunity/brighterscript/pull/1284))
+
+
+
 ## [0.67.5](https://github.com/rokucommunity/brighterscript/compare/v0.67.4...v0.67.5) - 2024-07-31
 ### Fixed
  - templatestring support for `annotation.getArguments()` ([#1264](https://github.com/rokucommunity/brighterscript/pull/1264))
