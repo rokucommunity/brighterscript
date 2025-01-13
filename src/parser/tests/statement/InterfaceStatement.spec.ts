@@ -3,7 +3,6 @@ import { rootDir } from '../../../testHelpers.spec';
 import { Program } from '../../../Program';
 import { TypedFunctionType } from '../../../types/TypedFunctionType';
 import { VoidType } from '../../../types/VoidType';
-import { SymbolTypeFlag } from '../../../SymbolTypeFlag';
 
 describe('InterfaceStatement', () => {
     let program: Program;
@@ -53,9 +52,9 @@ describe('InterfaceStatement', () => {
     });
 
     it('includes annotations', async () => {
-        program.pluginAnnotationTable.addSymbol('IFace', {}, new TypedFunctionType(VoidType.instance), SymbolTypeFlag.annotation);
-        program.pluginAnnotationTable.addSymbol('Method', {}, new TypedFunctionType(VoidType.instance), SymbolTypeFlag.annotation);
-        program.pluginAnnotationTable.addSymbol('Field', {}, new TypedFunctionType(VoidType.instance), SymbolTypeFlag.annotation);
+        program.addAnnotationSymbol('IFace', new TypedFunctionType(VoidType.instance));
+        program.addAnnotationSymbol('Method', new TypedFunctionType(VoidType.instance));
+        program.addAnnotationSymbol('Field', new TypedFunctionType(VoidType.instance));
         await testGetTypedef(`
             @IFace
             interface Person

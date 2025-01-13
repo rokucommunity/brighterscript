@@ -1830,7 +1830,7 @@ describe('BrsFile', () => {
             });
 
             it('works for bs content', () => {
-                program.pluginAnnotationTable.addSymbol('annotation', {}, new TypedFunctionType(VoidType.instance), SymbolTypeFlag.annotation);
+                program.addAnnotationSymbol('annotation', new TypedFunctionType(VoidType.instance));
                 program.setFile('source/lib.bs', ``);
                 doTest(`
                     import "pkg:/source/lib.bs"
@@ -2986,7 +2986,7 @@ describe('BrsFile', () => {
         });
 
         it('includes annotation comments for class', async () => {
-            program.pluginAnnotationTable.addSymbol('annotation', {}, new TypedFunctionType(VoidType.instance), SymbolTypeFlag.annotation);
+            program.addAnnotationSymbol('annotation', new TypedFunctionType(VoidType.instance));
             await testTranspile(`
                 'comment1
                 @annotation
@@ -3014,7 +3014,7 @@ describe('BrsFile', () => {
         });
 
         it('includes annotation comments for function', async () => {
-            program.pluginAnnotationTable.addSymbol('annotation', {}, new TypedFunctionType(VoidType.instance), SymbolTypeFlag.annotation);
+            program.addAnnotationSymbol('annotation', new TypedFunctionType(VoidType.instance));
             await testTranspile(`
                 'comment1
                 @annotation
@@ -3033,7 +3033,7 @@ describe('BrsFile', () => {
         });
 
         it('includes annotation comments for enum', async () => {
-            program.pluginAnnotationTable.addSymbol('annotation', {}, new TypedFunctionType(VoidType.instance), SymbolTypeFlag.annotation);
+            program.addAnnotationSymbol('annotation', new TypedFunctionType(VoidType.instance));
             await testTranspile(`
                 'comment1
                 @annotation
@@ -3051,7 +3051,7 @@ describe('BrsFile', () => {
         });
 
         it('includes annotation comments for const', async () => {
-            program.pluginAnnotationTable.addSymbol('annotation', {}, new TypedFunctionType(VoidType.instance), SymbolTypeFlag.annotation);
+            program.addAnnotationSymbol('annotation', new TypedFunctionType(VoidType.instance));
             await testTranspile(`
                 'comment1
                 @annotation
@@ -3067,7 +3067,7 @@ describe('BrsFile', () => {
         });
 
         it('includes annotation comments for empty namespaces', async () => {
-            program.pluginAnnotationTable.addSymbol('annotation', {}, new TypedFunctionType(VoidType.instance), SymbolTypeFlag.annotation);
+            program.addAnnotationSymbol('annotation', new TypedFunctionType(VoidType.instance));
             await testTranspile(`
                 'comment1
                 @annotation
@@ -4380,9 +4380,9 @@ describe('BrsFile', () => {
         });
 
         it('includes annotations', () => {
-            program.pluginAnnotationTable.addSymbol('an', {}, new TypedFunctionType(VoidType.instance), SymbolTypeFlag.annotation);
-            program.pluginAnnotationTable.addSymbol('anfunc', {}, new TypedFunctionType(VoidType.instance).addParameter('name', StringType.instance, true), SymbolTypeFlag.annotation);
-            program.pluginAnnotationTable.addSymbol('anmember', {}, new TypedFunctionType(VoidType.instance).addParameter('name', StringType.instance, true), SymbolTypeFlag.annotation);
+            program.addAnnotationSymbol('an', new TypedFunctionType(VoidType.instance));
+            program.addAnnotationSymbol('anfunc', new TypedFunctionType(VoidType.instance).addParameter('name', StringType.instance, true));
+            program.addAnnotationSymbol('anmember', new TypedFunctionType(VoidType.instance).addParameter('name', StringType.instance, true));
 
             testTypedef(`
                 namespace test

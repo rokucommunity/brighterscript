@@ -1349,7 +1349,7 @@ describe('BrsFileValidator', () => {
         });
 
         it('allows known annotations', () => {
-            program.pluginAnnotationTable.addSymbol('knownAnnotation', { pluginName: 'Test' }, new TypedFunctionType(VoidType.instance).setName('knownAnnotation'), SymbolTypeFlag.annotation);
+            program.addAnnotationSymbol('knownAnnotation', new TypedFunctionType(VoidType.instance));
 
             program.setFile<BrsFile>('source/main.bs', `
                 @knownAnnotation
@@ -1362,12 +1362,12 @@ describe('BrsFileValidator', () => {
         });
 
         it('checks annotation function arg count', () => {
-            program.pluginAnnotationTable.addSymbol('takesOneOrTwo', { pluginName: 'Test' },
+            program.addAnnotationSymbol('takesOneOrTwo',
                 new TypedFunctionType(VoidType.instance)
                     .setName('takesOneOrTwo')
                     .addParameter('x', DynamicType.instance)
                     .addParameter('y', DynamicType.instance, true),
-                SymbolTypeFlag.annotation);
+                { pluginName: 'Test' });
 
             program.setFile<BrsFile>('source/main.bs', `
                 @takesOneOrTwo
@@ -1382,12 +1382,11 @@ describe('BrsFileValidator', () => {
         });
 
         it('allows valid arg counts', () => {
-            program.pluginAnnotationTable.addSymbol('takesOneOrTwo', { pluginName: 'Test' },
+            program.addAnnotationSymbol('takesOneOrTwo',
                 new TypedFunctionType(VoidType.instance)
                     .setName('takesOneOrTwo')
                     .addParameter('x', DynamicType.instance)
-                    .addParameter('y', DynamicType.instance, true),
-                SymbolTypeFlag.annotation);
+                    .addParameter('y', DynamicType.instance, true));
 
             program.setFile<BrsFile>('source/main.bs', `
                 @takesOneOrTwo(1)
@@ -1403,12 +1402,11 @@ describe('BrsFileValidator', () => {
         });
 
         it('allows valid arg counts for variadic functions', () => {
-            program.pluginAnnotationTable.addSymbol('takesOneOrMore', { pluginName: 'Test' },
+            program.addAnnotationSymbol('takesOneOrMore',
                 new TypedFunctionType(VoidType.instance)
                     .setName('takesOneOrMore')
                     .addParameter('x', DynamicType.instance)
-                    .seVariadic(true),
-                SymbolTypeFlag.annotation);
+                    .seVariadic(true));
 
             program.setFile<BrsFile>('source/main.bs', `
                 @takesOneOrMore(1)
@@ -1424,16 +1422,14 @@ describe('BrsFileValidator', () => {
         });
 
         it('ignores when multiple annotations of same name are added', () => {
-            program.pluginAnnotationTable.addSymbol('usedTwice', { pluginName: 'Test' },
+            program.addAnnotationSymbol('usedTwice',
                 new TypedFunctionType(VoidType.instance)
                     .setName('usedTwice')
-                    .addParameter('x', IntegerType.instance),
-                SymbolTypeFlag.annotation);
+                    .addParameter('x', IntegerType.instance));
 
-            program.pluginAnnotationTable.addSymbol('usedTwice', { pluginName: 'Other' },
+            program.addAnnotationSymbol('usedTwice',
                 new TypedFunctionType(VoidType.instance)
-                    .setName('usedTwice'),
-                SymbolTypeFlag.annotation);
+                    .setName('usedTwice'));
 
             program.setFile<BrsFile>('source/main.bs', `
                 @usedTwice(1)
@@ -1453,12 +1449,10 @@ describe('BrsFileValidator', () => {
         });
 
         it('validates arg types', () => {
-            program.pluginAnnotationTable.addSymbol('annoStringInt', { pluginName: 'Test' },
+            program.addAnnotationSymbol('annoStringInt',
                 new TypedFunctionType(VoidType.instance)
-                    .setName('annoStringInt')
                     .addParameter('str', StringType.instance)
-                    .addParameter('int', IntegerType.instance),
-                SymbolTypeFlag.annotation);
+                    .addParameter('int', IntegerType.instance));
 
             program.setFile<BrsFile>('source/main.bs', `
                 @annoStringInt(3.14, "test")
@@ -1474,12 +1468,10 @@ describe('BrsFileValidator', () => {
 
 
         it('allows valid arg types', () => {
-            program.pluginAnnotationTable.addSymbol('annoStringInt', { pluginName: 'Test' },
+            program.addAnnotationSymbol('annoStringInt',
                 new TypedFunctionType(VoidType.instance)
-                    .setName('annoStringInt')
                     .addParameter('str', StringType.instance)
-                    .addParameter('int', IntegerType.instance),
-                SymbolTypeFlag.annotation);
+                    .addParameter('int', IntegerType.instance));
 
             program.setFile<BrsFile>('source/main.bs', `
                 @annoStringInt("test", 123)
@@ -1491,11 +1483,9 @@ describe('BrsFileValidator', () => {
         });
 
         it('validates uninitialized values', () => {
-            program.pluginAnnotationTable.addSymbol('annoString', { pluginName: 'Test' },
+            program.addAnnotationSymbol('annoString',
                 new TypedFunctionType(VoidType.instance)
-                    .setName('annoString')
-                    .addParameter('str', StringType.instance),
-                SymbolTypeFlag.annotation);
+                    .addParameter('str', StringType.instance));
 
             program.setFile<BrsFile>('source/main.bs', `
                 @annoString(someVar)
@@ -1509,11 +1499,9 @@ describe('BrsFileValidator', () => {
         });
 
         it('validates uninitialized values', () => {
-            program.pluginAnnotationTable.addSymbol('annoString', { pluginName: 'Test' },
+            program.addAnnotationSymbol('annoString',
                 new TypedFunctionType(VoidType.instance)
-                    .setName('annoString')
-                    .addParameter('str', StringType.instance),
-                SymbolTypeFlag.annotation);
+                    .addParameter('str', StringType.instance));
 
             program.setFile<BrsFile>('source/main.bs', `
 
@@ -1529,11 +1517,9 @@ describe('BrsFileValidator', () => {
         });
 
         it('allows associative arrays', () => {
-            program.pluginAnnotationTable.addSymbol('annoAA', { pluginName: 'Test' },
+            program.addAnnotationSymbol('annoAA',
                 new TypedFunctionType(VoidType.instance)
-                    .setName('annoAA')
-                    .addParameter('aa', new AssociativeArrayType()),
-                SymbolTypeFlag.annotation);
+                    .addParameter('aa', new AssociativeArrayType()));
 
             program.setFile<BrsFile>('source/main.bs', `
                 @annoAA({name: "John Doe", age: 25, ids: [1, 2, 3, 4]})

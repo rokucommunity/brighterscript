@@ -55,6 +55,7 @@ import { ProgramValidatorDiagnosticsTag } from './bscPlugin/validation/ProgramVa
 import type { ProvidedSymbolInfo, BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
 import { SymbolTable } from './SymbolTable';
+import type { TypedFunctionType } from './types/TypedFunctionType';
 
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
@@ -238,15 +239,22 @@ export class Program {
         for (const [pluginName, annotations] of this.plugins.getAnnotationMap().entries()) {
             for (const annotation of annotations) {
                 if (isTypedFunctionType(annotation) && annotation.name) {
-                    this.pluginAnnotationTable.addSymbol(annotation.name, { pluginName: pluginName }, annotation, SymbolTypeFlag.annotation);
+                    this.addAnnotationSymbol(annotation.name, annotation, { pluginName: pluginName });
                 } else if (isAnnotationDeclaration(annotation)) {
                     const annoType = annotation.type;
                     let description = (typeof annotation.description === 'string') ? annotation.description : undefined;
-                    this.pluginAnnotationTable.addSymbol(annoType.name, { pluginName: pluginName, description: description }, annoType, SymbolTypeFlag.annotation);
+                    this.addAnnotationSymbol(annoType.name, annoType, { pluginName: pluginName, description: description });
                 } else if (typeof annotation === 'string') {
                     // TODO: Do we need to parse this?
                 }
             }
+        }
+    }
+
+    public addAnnotationSymbol(name: string, annoType: TypedFunctionType, extraData: ExtraSymbolData = {}) {
+        if (name && annoType) {
+            annoType.setName(name);
+            this.pluginAnnotationTable.addSymbol(name, extraData, annoType, SymbolTypeFlag.annotation);
         }
     }
 
