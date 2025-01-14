@@ -26,7 +26,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { LogLevel, createLogger } from './logging';
 import { isToken, type Identifier, type Locatable, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLiteralString, isLongIntegerType, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isPrimitiveType, isReferenceType, isStatement, isStringType, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLiteralString, isLongIntegerType, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isStatement, isStringType, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import * as requireRelative from 'require-relative';
@@ -1572,6 +1572,15 @@ export class Util {
         if (isEnumMemberType(rightType)) {
             rightType = rightType.underlyingType;
         }
+
+        // treat object type like dynamic
+        if (isObjectType(leftType)) {
+            leftType = DynamicType.instance;
+        }
+        if (isObjectType(rightType)) {
+            rightType = DynamicType.instance;
+        }
+
         let hasDouble = isDoubleType(leftType) || isDoubleType(rightType);
         let hasFloat = isFloatType(leftType) || isFloatType(rightType);
         let hasLongInteger = isLongIntegerType(leftType) || isLongIntegerType(rightType);
@@ -1766,6 +1775,9 @@ export class Util {
             if (isInvalidType(type)) {
                 return type;
             }
+            if (isObjectType(type) && !isDynamicType(type)) {
+                result = type;
+            }
             if (isDynamicType(type)) {
                 result = type;
             }
@@ -1787,7 +1799,7 @@ export class Util {
         }
 
 
-        if (isDynamicType(exprType)) {
+        if (isDynamicType(exprType) || isObjectType(exprType)) {
             return exprType;
         }
 

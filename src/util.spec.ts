@@ -12,7 +12,7 @@ import { NamespaceType } from './types/NamespaceType';
 import { ClassType } from './types/ClassType';
 import { ReferenceType } from './types/ReferenceType';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
-import { BooleanType, DoubleType, DynamicType, FloatType, IntegerType, InvalidType, LongIntegerType, StringType, TypedFunctionType, UnionType, VoidType } from './types';
+import { BooleanType, DoubleType, DynamicType, FloatType, IntegerType, InvalidType, LongIntegerType, ObjectType, StringType, TypedFunctionType, UnionType, VoidType } from './types';
 import { TokenKind } from './lexer/TokenKind';
 import { createToken } from './astUtils/creators';
 import { createDottedIdentifier, createVariableExpression } from './astUtils/creators';
@@ -1121,6 +1121,10 @@ describe('util', () => {
             myUnion.addType(myUnion);
             expectTypeToBe(util.binaryOperatorResultType(myUnion, createToken(TokenKind.Plus), myUnion), DynamicType);
         });
+
+        it('handles object Types', () => {
+            expectTypeToBe(util.binaryOperatorResultType(new ObjectType(), createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
+        });
     });
 
     describe('unaryOperatorResultType', () => {
@@ -1144,6 +1148,10 @@ describe('util', () => {
             expect(util.unaryOperatorResultType(notToken, StringType.instance)).to.be.undefined;
             expectTypeToBe(util.unaryOperatorResultType(notToken, LongIntegerType.instance), LongIntegerType);
             expect(util.unaryOperatorResultType(notToken, VoidType.instance)).to.be.undefined;
+        });
+
+        it('handles object Types', () => {
+            expectTypeToBe(util.unaryOperatorResultType(createToken(TokenKind.Minus), new ObjectType()), ObjectType);
         });
     });
 
