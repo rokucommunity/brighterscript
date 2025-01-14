@@ -1556,10 +1556,10 @@ export class Util {
         rightType = getUniqueType([rightType], unionTypeFactory);
 
         if (isUnionType(leftType)) {
-            leftType = this.getHighestPriorityNumberType(leftType.types);
+            leftType = this.getHighestPriorityType(leftType.types);
         }
         if (isUnionType(rightType)) {
-            rightType = this.getHighestPriorityNumberType(rightType.types);
+            rightType = this.getHighestPriorityType(rightType.types);
         }
 
         if (isVoidType(leftType) || isVoidType(rightType) || isUninitializedType(leftType) || isUninitializedType(rightType)) {
@@ -1734,7 +1734,7 @@ export class Util {
         return undefined;
     }
 
-    public getHighestPriorityNumberType(types: BscType[], depth = 0): BscType {
+    public getHighestPriorityType(types: BscType[], depth = 0): BscType {
         let result: BscType;
         if (depth > 4) {
             // shortcut for very complicated types, or self-referencing union types
@@ -1744,7 +1744,7 @@ export class Util {
             if (isUnionType(type)) {
                 type = getUniqueType([type], unionTypeFactory);
                 if (isUnionType(type)) {
-                    type = this.getHighestPriorityNumberType(type.types, depth + 1);
+                    type = this.getHighestPriorityType(type.types, depth + 1);
                 }
             }
             if (!result) {
@@ -1778,9 +1778,14 @@ export class Util {
      */
     public unaryOperatorResultType(operator: Token, exprType: BscType): BscType {
 
+        if (isUnionType(exprType)) {
+            exprType = this.getHighestPriorityType(exprType.types);
+        }
+
         if (isVoidType(exprType) || isInvalidType(exprType) || isUninitializedType(exprType)) {
             return undefined;
         }
+
 
         if (isDynamicType(exprType)) {
             return exprType;
