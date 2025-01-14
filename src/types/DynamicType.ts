@@ -52,6 +52,8 @@ export class DynamicType extends BscType {
     getMemberType(memberName: string, options: GetTypeOptions) {
         return DynamicType.instance;
     }
+
+
 }
 
 BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('dynamic', DynamicType.instance);

@@ -44,6 +44,8 @@ export class FloatType extends BscType {
     public isEqual(targetType: BscType): boolean {
         return isFloatType(targetType);
     }
+
+    readonly binaryOpPriorityLevel = 2;
 }
 
 BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('float', FloatType.instance);

@@ -3513,6 +3513,18 @@ describe('ScopeValidator', () => {
                 DiagnosticMessages.operatorTypeMismatch('=', 'uninitialized', 'invalid').message
             ]);
         });
+
+        it('allows string comparisons with object', () => {
+            program.setFile<BrsFile>('source/main.brs', `
+                sub test(x as object)
+                    if x <> "test"
+                        print x
+                    end if
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('memberAccessibilityMismatch', () => {

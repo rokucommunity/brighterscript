@@ -27,7 +27,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { LogLevel, createLogger } from './logging';
 import { isToken, type Identifier, type Locatable, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isComponentType, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLiteralString, isLongIntegerType, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isPrimitiveType, isReferenceType, isStatement, isStringType, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isComponentType, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLiteralString, isLongIntegerType, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isStatement, isStringType, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import * as requireRelative from 'require-relative';
@@ -1552,6 +1552,17 @@ export class Util {
             });
         }
 
+        // Try to find a common value of union type
+        leftType = getUniqueType([leftType], unionTypeFactory);
+        rightType = getUniqueType([rightType], unionTypeFactory);
+
+        if (isUnionType(leftType)) {
+            leftType = this.getHighestPriorityType(leftType.types);
+        }
+        if (isUnionType(rightType)) {
+            rightType = this.getHighestPriorityType(rightType.types);
+        }
+
         if (isVoidType(leftType) || isVoidType(rightType) || isUninitializedType(leftType) || isUninitializedType(rightType)) {
             return undefined;
         }
@@ -1562,6 +1573,15 @@ export class Util {
         if (isEnumMemberType(rightType)) {
             rightType = rightType.underlyingType;
         }
+
+        // treat object type like dynamic
+        if (isObjectType(leftType)) {
+            leftType = DynamicType.instance;
+        }
+        if (isObjectType(rightType)) {
+            rightType = DynamicType.instance;
+        }
+
         let hasDouble = isDoubleType(leftType) || isDoubleType(rightType);
         let hasFloat = isFloatType(leftType) || isFloatType(rightType);
         let hasLongInteger = isLongIntegerType(leftType) || isLongIntegerType(rightType);
@@ -1724,16 +1744,63 @@ export class Util {
         return undefined;
     }
 
+    public getHighestPriorityType(types: BscType[], depth = 0): BscType {
+        let result: BscType;
+        if (depth > 4) {
+            // shortcut for very complicated types, or self-referencing union types
+            return DynamicType.instance;
+        }
+        for (let type of types) {
+            if (isUnionType(type)) {
+                type = getUniqueType([type], unionTypeFactory);
+                if (isUnionType(type)) {
+                    type = this.getHighestPriorityType(type.types, depth + 1);
+                }
+            }
+            if (!result) {
+                result = type;
+            } else {
+                if (type.binaryOpPriorityLevel < result.binaryOpPriorityLevel) {
+                    result = type;
+                } else if (type.binaryOpPriorityLevel === result.binaryOpPriorityLevel && !result.isEqual(type)) {
+                    // equal priority types, but not equal types, like Boolean and String... just be dynamic at this point
+                    result = DynamicType.instance;
+                }
+            }
+            if (isUninitializedType(type)) {
+                return type;
+            }
+            if (isVoidType(type)) {
+                return type;
+            }
+            if (isInvalidType(type)) {
+                return type;
+            }
+            if (isObjectType(type) && !isDynamicType(type)) {
+                result = type;
+            }
+            if (isDynamicType(type)) {
+                result = type;
+            }
+        }
+        return result ?? DynamicType.instance;
+    }
+
     /**
      * Return the type of the result of a binary operator
      */
     public unaryOperatorResultType(operator: Token, exprType: BscType): BscType {
 
+        if (isUnionType(exprType)) {
+            exprType = this.getHighestPriorityType(exprType.types);
+        }
+
         if (isVoidType(exprType) || isInvalidType(exprType) || isUninitializedType(exprType)) {
             return undefined;
         }
 
-        if (isDynamicType(exprType)) {
+
+        if (isDynamicType(exprType) || isObjectType(exprType)) {
             return exprType;
         }
 

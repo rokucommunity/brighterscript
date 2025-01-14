@@ -43,6 +43,8 @@ export class IntegerType extends BscType {
     isEqual(otherType: BscType) {
         return isIntegerType(otherType);
     }
+
+    readonly binaryOpPriorityLevel = 4;
 }
 
 BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('integer', IntegerType.instance);

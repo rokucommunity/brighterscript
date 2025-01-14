@@ -24,9 +24,10 @@ import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { ClassType, EnumType, FloatType, InterfaceType } from '../types';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import * as fileUrl from 'file-url';
-import { isAALiteralExpression, isBlock } from '../astUtils/reflection';
+import { isAALiteralExpression, isBlock, isFunctionExpression } from '../astUtils/reflection';
 import type { AALiteralExpression } from '../parser/Expression';
 import { CallExpression, FunctionExpression, LiteralExpression } from '../parser/Expression';
+import { Logger } from '@rokucommunity/logger';
 
 let sinon = sinonImport.createSandbox();
 
@@ -186,6 +187,42 @@ describe('BrsFile', () => {
         `);
         program.validate();
         expectDiagnostics(program, [DiagnosticMessages.itemCannotBeUsedAsVariable('enum').message]);
+    });
+
+    it('does not crazy during validation with unique binary operator', () => {
+        //monitor the logging system, if we detect an error, this test fails
+        const spy = sinon.spy(Logger.prototype, 'error');
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            namespace date
+                function timeElapsedInDay()
+                    time = 1
+                    if true then
+                        time = getInteger()
+                    end if
+                    clockSeconds = getInteger() + 1
+                    assumedMidnight = time - clockSeconds
+                    offset = assumedMidnight - 1
+                end function
+
+                function getInteger()
+                    return 1
+                end function
+            end namespace
+
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+        expect(
+            spy.getCalls().map(x => (x.args?.[0] as string)?.toString()).filter(x => x?.includes('Error when calling plugin'))
+        ).to.eql([]);
+
+        // Check the result type too
+        const sourceScope = program.getScopeByName('source');
+        sourceScope.linkSymbolTable();
+        const timeElapsedFunc = file.ast.findChild<FunctionExpression>(isFunctionExpression);
+        const symbolTable = timeElapsedFunc.body.getSymbolTable();
+        const offsetType = symbolTable.getSymbolType('offset', { flags: SymbolTypeFlag.runtime });
+        expectTypeToBe(offsetType, IntegerType);
     });
 
     it('supports the third parameter in CreateObject', () => {
