@@ -829,16 +829,16 @@ describe('HoverProcessor', () => {
                     if deviceInfo.getClockFormat() = "24h" then
                         hour = stringUtil.pad(hour)
                         ' "22:01" | "01:01"
-                        return substitute("{0}:{1}", hour, minutes as string)
+                        return substitute("{0}:{1}", hour as string, minutes as string)
                     else
                         hour = hour mod 12
                         if hour = 0 then hour = 12
                         ' "10:01 AM" | "1:01 AM"
-                        return substitute("{0}:{1} {2}", hour, minutes as string, meridiem)
+                        return substitute("{0}:{1} {2}", hour.toStr(), minutes as string, meridiem)
                     end if
                 end function
             `);
-            const expectedHourHoverStr = `hour as dynamic`;
+            const expectedHourHoverStr = `hour as integer or string`;
 
             program.validate();
             expectZeroDiagnostics(program);

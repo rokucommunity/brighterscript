@@ -12,7 +12,7 @@ import { NamespaceType } from './types/NamespaceType';
 import { ClassType } from './types/ClassType';
 import { ReferenceType } from './types/ReferenceType';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
-import { BooleanType, DoubleType, DynamicType, FloatType, IntegerType, InvalidType, LongIntegerType, StringType, TypedFunctionType, VoidType } from './types';
+import { BooleanType, DoubleType, DynamicType, FloatType, IntegerType, InvalidType, LongIntegerType, ObjectType, StringType, TypedFunctionType, UnionType, VoidType } from './types';
 import { TokenKind } from './lexer/TokenKind';
 import { createToken } from './astUtils/creators';
 import { createDottedIdentifier, createVariableExpression } from './astUtils/creators';
@@ -1100,6 +1100,31 @@ describe('util', () => {
             // "and" / "or" are bitwise operators with number
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Or), DynamicType.instance), IntegerType);
         });
+
+        it('handles union types ', () => {
+            const floatIntUnion = new UnionType([IntegerType.instance, FloatType.instance]);
+            expectTypeToBe(util.binaryOperatorResultType(floatIntUnion, createToken(TokenKind.Plus), DoubleType.instance), DoubleType);
+        });
+
+        it('handles 2 union types', () => {
+            const floatIntUnion = new UnionType([IntegerType.instance, FloatType.instance]);
+            expectTypeToBe(util.binaryOperatorResultType(floatIntUnion, createToken(TokenKind.Plus), floatIntUnion), FloatType);
+        });
+
+        it('handles union types with diverse member types', () => {
+            const myUnion = new UnionType([FloatType.instance, StringType.instance, BooleanType.instance]);
+            expectTypeToBe(util.binaryOperatorResultType(myUnion, createToken(TokenKind.Plus), myUnion), DynamicType);
+        });
+
+        it('handles union types with self-referencing unions', () => {
+            const myUnion = new UnionType([FloatType.instance, StringType.instance, DynamicType.instance]);
+            myUnion.addType(myUnion);
+            expectTypeToBe(util.binaryOperatorResultType(myUnion, createToken(TokenKind.Plus), myUnion), DynamicType);
+        });
+
+        it('handles object Types', () => {
+            expectTypeToBe(util.binaryOperatorResultType(new ObjectType(), createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
+        });
     });
 
     describe('unaryOperatorResultType', () => {
@@ -1123,6 +1148,10 @@ describe('util', () => {
             expect(util.unaryOperatorResultType(notToken, StringType.instance)).to.be.undefined;
             expectTypeToBe(util.unaryOperatorResultType(notToken, LongIntegerType.instance), LongIntegerType);
             expect(util.unaryOperatorResultType(notToken, VoidType.instance)).to.be.undefined;
+        });
+
+        it('handles object Types', () => {
+            expectTypeToBe(util.unaryOperatorResultType(createToken(TokenKind.Minus), new ObjectType()), ObjectType);
         });
     });
 

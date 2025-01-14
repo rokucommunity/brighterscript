@@ -64,7 +64,7 @@ export class UnionType extends BscType {
     }
 
     isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData): boolean {
-        if (isDynamicType(targetType) || isObjectType(targetType)) {
+        if (isDynamicType(targetType) || isObjectType(targetType) || this === targetType) {
             return true;
         }
         if (isEnumTypeCompatible(this, targetType, data)) {
@@ -86,7 +86,6 @@ export class UnionType extends BscType {
             }
         }
 
-
         return false;
     }
     toString(): string {
@@ -105,6 +104,9 @@ export class UnionType extends BscType {
     isEqual(targetType: BscType): boolean {
         if (!isUnionType(targetType)) {
             return false;
+        }
+        if (this === targetType) {
+            return true;
         }
         return this.isTypeCompatible(targetType) && targetType.isTypeCompatible(this);
     }
