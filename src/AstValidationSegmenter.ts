@@ -268,7 +268,9 @@ export class AstValidationSegmenter {
                 }
                 let addedSymbol = false;
                 for (const unresolvedMember of unresolvedMembers) {
-                    addedSymbol = this.addUnresolvedSymbol(segment, unresolvedMember?.data?.definingNode) || addedSymbol;
+                    if (unresolvedMember?.data?.definingNode) {
+                        addedSymbol = this.addUnresolvedSymbol(segment, unresolvedMember.data.definingNode) || addedSymbol;
+                    }
 
                 }
                 return addedSymbol;
