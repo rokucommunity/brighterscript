@@ -24,7 +24,7 @@ import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { ClassType, EnumType, FloatType, InterfaceType } from '../types';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import * as fileUrl from 'file-url';
-import { isAALiteralExpression, isBlock } from '../astUtils/reflection';
+import { isAALiteralExpression, isBlock, isFunctionExpression } from '../astUtils/reflection';
 import type { AALiteralExpression } from '../parser/Expression';
 import { CallExpression, FunctionExpression, LiteralExpression } from '../parser/Expression';
 import { Logger } from '@rokucommunity/logger';
@@ -192,7 +192,7 @@ describe('BrsFile', () => {
     it('does not crazy during validation with unique binary operator', () => {
         //monitor the logging system, if we detect an error, this test fails
         const spy = sinon.spy(Logger.prototype, 'error');
-        program.setFile('source/main.bs', `
+        const file = program.setFile<BrsFile>('source/main.bs', `
             namespace date
                 function timeElapsedInDay()
                     time = 1
@@ -215,6 +215,14 @@ describe('BrsFile', () => {
         expect(
             spy.getCalls().map(x => (x.args?.[0] as string)?.toString()).filter(x => x?.includes('Error when calling plugin'))
         ).to.eql([]);
+
+        // Check the result type too
+        const sourceScope = program.getScopeByName('source');
+        sourceScope.linkSymbolTable();
+        const timeElapsedFunc = file.ast.findChild<FunctionExpression>(isFunctionExpression);
+        const symbolTable = timeElapsedFunc.body.getSymbolTable();
+        const offsetType = symbolTable.getSymbolType('offset', { flags: SymbolTypeFlag.runtime });
+        expectTypeToBe(offsetType, IntegerType);
     });
 
     it('supports the third parameter in CreateObject', () => {
