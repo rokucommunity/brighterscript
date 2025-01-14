@@ -912,6 +912,7 @@ export class Program {
                 fileValidationTime: '',
                 crossScopeValidationTime: '',
                 scopesValidated: 0,
+                changedSymbols: 0,
                 totalLinkTime: '',
                 totalScopeValidationTime: '',
                 componentValidationTime: '',
@@ -1069,6 +1070,7 @@ export class Program {
                 const changedTypetime = Array.from(changedSymbols.get(SymbolTypeFlag.typetime)).sort();
                 this.logger.debug('Changed Symbols (typeTime):', changedTypetime.join(', '));
             }
+            metrics.changedSymbols = changedSymbols.get(SymbolTypeFlag.runtime).size + changedSymbols.get(SymbolTypeFlag.typetime).size;
             const filesToBeValidatedInScopeContext = new Set<BscFile>(afterValidateFiles);
 
             metrics.crossScopeValidationTime = validationStopwatch.getDurationTextFor(() => {
