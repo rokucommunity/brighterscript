@@ -139,4 +139,11 @@ export abstract class BscType {
         }
         this.hasAddedBuiltInInterfaces = true;
     }
+
+    /**
+     * The level of priority of this type when in a binary operation
+     * For example Float is higher priority than integer, so Float + Int => Float
+     * Lower numbers have higher priority
+     */
+    readonly binaryOpPriorityLevel: number = 0;
 }

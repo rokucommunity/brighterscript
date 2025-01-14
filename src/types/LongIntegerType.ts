@@ -41,6 +41,8 @@ export class LongIntegerType extends BscType {
     isEqual(targetType: BscType): boolean {
         return isLongIntegerType(targetType);
     }
+
+    readonly binaryOpPriorityLevel = 3;
 }
 
 BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('longinteger', LongIntegerType.instance);

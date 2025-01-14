@@ -1551,6 +1551,17 @@ export class Util {
             });
         }
 
+        // Try to find a common value of union type
+        leftType = getUniqueType([leftType], unionTypeFactory);
+        rightType = getUniqueType([rightType], unionTypeFactory);
+
+        if (isUnionType(leftType)) {
+            leftType = this.getHighestPriorityNumberType(leftType.types);
+        }
+        if (isUnionType(rightType)) {
+            rightType = this.getHighestPriorityNumberType(rightType.types);
+        }
+
         if (isVoidType(leftType) || isVoidType(rightType) || isUninitializedType(leftType) || isUninitializedType(rightType)) {
             return undefined;
         }
@@ -1721,6 +1732,45 @@ export class Util {
             return DynamicType.instance;
         }
         return undefined;
+    }
+
+    public getHighestPriorityNumberType(types: BscType[], depth = 0): BscType {
+        let result: BscType;
+        if (depth > 4) {
+            // shortcut for very complicated types, or self-referencing union types
+            return DynamicType.instance;
+        }
+        for (let type of types) {
+            if (isUnionType(type)) {
+                type = getUniqueType([type], unionTypeFactory);
+                if (isUnionType(type)) {
+                    type = this.getHighestPriorityNumberType(type.types, depth + 1);
+                }
+            }
+            if (!result) {
+                result = type;
+            } else {
+                if (type.binaryOpPriorityLevel < result.binaryOpPriorityLevel) {
+                    result = type;
+                } else if (type.binaryOpPriorityLevel === result.binaryOpPriorityLevel && !result.isEqual(type)) {
+                    // equal priority types, but not equal types, like Boolean and String... just be dynamic at this point
+                    result = DynamicType.instance;
+                }
+            }
+            if (isUninitializedType(type)) {
+                return type;
+            }
+            if (isVoidType(type)) {
+                return type;
+            }
+            if (isInvalidType(type)) {
+                return type;
+            }
+            if (isDynamicType(type)) {
+                result = type;
+            }
+        }
+        return result ?? DynamicType.instance;
     }
 
     /**
