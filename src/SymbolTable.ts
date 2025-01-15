@@ -49,6 +49,7 @@ export class SymbolTable implements SymbolTypeGetter {
      * Push a function that will provide a parent SymbolTable when requested
      */
     public pushParentProvider(provider: SymbolTableProvider) {
+        this.cachedCircularReferenceCheck = null;
         this.parentProviders.push(provider);
         return () => {
             this.popParentProvider();
@@ -59,6 +60,7 @@ export class SymbolTable implements SymbolTypeGetter {
      * Pop the current parentProvider
      */
     public popParentProvider() {
+        this.cachedCircularReferenceCheck = null;
         this.parentProviders.pop();
     }
 
@@ -234,6 +236,7 @@ export class SymbolTable implements SymbolTypeGetter {
             options.data.isInstance = data?.isInstance;
             options.data.isFromDocComment = data?.isFromDocComment;
             options.data.isBuiltIn = data?.isBuiltIn;
+            options.data.isFromCallFunc = data?.isFromCallFunc;
         }
         return resolvedType;
     }
@@ -304,6 +307,23 @@ export class SymbolTable implements SymbolTypeGetter {
         return symbols;
     }
 
+
+    private cachedCircularReferenceCheck: null | boolean = null;
+
+    private hasCircularReferenceWithAncestor() {
+        if (this.cachedCircularReferenceCheck === false || this.cachedCircularReferenceCheck === true) {
+            return this.cachedCircularReferenceCheck;
+        }
+        let foundCircReference = false;
+        let p = this.parent;
+        while (!foundCircReference && p) {
+            foundCircReference = p === this;
+            p = p.parent;
+        }
+        this.cachedCircularReferenceCheck = foundCircReference;
+        return foundCircReference;
+    }
+
     /**
      * Get list of all symbols declared in this SymbolTable (includes parent SymbolTable).
      */
@@ -313,7 +333,8 @@ export class SymbolTable implements SymbolTypeGetter {
         for (let sibling of this.siblings) {
             symbols = symbols.concat(sibling.getAllSymbols(bitFlags));
         }
-        if (this.parent) {
+
+        if (this.parent && !this.hasCircularReferenceWithAncestor()) {
             symbols = symbols.concat(this.parent.getAllSymbols(bitFlags));
         }
         // eslint-disable-next-line no-bitwise
@@ -411,6 +432,7 @@ export interface SymbolTypeGetter {
     name: string;
     getSymbolType(name: string, options: GetSymbolTypeOptions): BscType;
     setCachedType(name: string, cacheEntry: TypeCacheEntry, options: GetSymbolTypeOptions);
+    addSibling(symbolTable: SymbolTable);
 }
 
 /**

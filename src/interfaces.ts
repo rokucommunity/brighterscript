@@ -986,6 +986,10 @@ export interface ExtraSymbolData {
      * Is this symbol built in to Brightscript?
      */
     isBuiltIn?: boolean;
+    /**
+     * Was this a result of a callfunc?
+     */
+    isFromCallFunc?: boolean;
 }
 
 export interface GetTypeOptions {
@@ -1068,6 +1072,10 @@ export interface TypeChainProcessResult {
      * The AstNode of the item
      */
     astNode: AstNode;
+    /**
+     * Does the chain contain a type that crossed a callFunc boundary?
+     */
+    crossedCallFunc: boolean;
 }
 
 export interface TypeCompatibilityData {
@@ -1077,6 +1085,8 @@ export interface TypeCompatibilityData {
     // override for diagnostic message - useful for Arrays with different default types
     actualType?: BscType;
     expectedType?: BscType;
+    allowNameEquality?: boolean;
+    unresolveableTarget?: string;
 }
 
 export interface NamespaceContainer {

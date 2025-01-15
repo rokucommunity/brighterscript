@@ -299,7 +299,7 @@ export class XmlFile implements BscFile {
     private dependencyGraph: DependencyGraph;
 
     public onDependenciesChanged(event: DependencyChangedEvent) {
-        this.logDebug('clear cache because dependency graph changed');
+        this.logDebug('clear cache because dependency graph changed', event?.sourceKey);
         this.cache.clear();
     }
 

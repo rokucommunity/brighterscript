@@ -11,7 +11,8 @@ import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, TranspileResult, TypeChainEntry, TypeChainProcessResult, GetTypeOptions, ExtraSymbolData } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, TranspileResult, TypeChainProcessResult, GetTypeOptions, ExtraSymbolData } from './interfaces';
+import { TypeChainEntry } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -26,7 +27,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { LogLevel, createLogger } from './logging';
 import { isToken, type Identifier, type Locatable, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLiteralString, isLongIntegerType, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isStatement, isStringType, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isComponentType, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLiteralString, isLongIntegerType, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isStatement, isStringType, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import * as requireRelative from 'require-relative';
@@ -35,14 +36,14 @@ import type { XmlFile } from './files/XmlFile';
 import type { AstNode, Expression, Statement } from './parser/AstNode';
 import { AstNodeKind } from './parser/AstNode';
 import type { UnresolvedSymbol } from './AstValidationSegmenter';
-import type { SymbolTable } from './SymbolTable';
+import type { BscSymbol, GetSymbolTypeOptions, SymbolTable } from './SymbolTable';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import { createIdentifier, createToken } from './astUtils/creators';
 import { MAX_RELATED_INFOS_COUNT } from './diagnosticUtils';
 import type { BscType } from './types/BscType';
 import { unionTypeFactory } from './types/UnionType';
 import { ArrayType } from './types/ArrayType';
-import { BinaryOperatorReferenceType, ParamTypeFromValueReferenceType } from './types/ReferenceType';
+import { BinaryOperatorReferenceType, TypePropertyReferenceType, ParamTypeFromValueReferenceType } from './types/ReferenceType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { ComponentType } from './types/ComponentType';
 import { FunctionType } from './types/FunctionType';
@@ -2311,6 +2312,7 @@ export class Util {
         let errorLocation: Location;
         let containsDynamic = false;
         let continueResolvingAllItems = true;
+        let crossedCallFunc = false;
         for (let i = 0; i < typeChain.length; i++) {
             const chainItem = typeChain[i];
             const dotSep = chainItem.separatorToken?.text ?? '.';
@@ -2356,6 +2358,7 @@ export class Util {
                 itemName = chainItem.name;
                 astNode = chainItem.astNode;
                 containsDynamic = containsDynamic || (isDynamicType(chainItem.type) && !isAnyReferenceType(chainItem.type));
+                crossedCallFunc = crossedCallFunc || chainItem.data?.isFromCallFunc;
                 if (!chainItem.isResolved) {
                     errorLocation = chainItem.location;
                     continueResolvingAllItems = false;
@@ -2371,7 +2374,8 @@ export class Util {
             fullChainName: fullChainName,
             location: errorLocation,
             containsDynamic: containsDynamic,
-            astNode: astNode
+            astNode: astNode,
+            crossedCallFunc: crossedCallFunc
         };
     }
 
@@ -2379,12 +2383,12 @@ export class Util {
     public isInTypeExpression(expression: AstNode): boolean {
         //TODO: this is much faster than node.findAncestor(), but may need to be updated for "complicated" type expressions
         if (isTypeExpression(expression) ||
-            isTypeExpression(expression.parent) ||
+            isTypeExpression(expression?.parent) ||
             isTypedArrayExpression(expression) ||
-            isTypedArrayExpression(expression.parent)) {
+            isTypedArrayExpression(expression?.parent)) {
             return true;
         }
-        if (isBinaryExpression(expression.parent)) {
+        if (isBinaryExpression(expression?.parent)) {
             let currentExpr: AstNode = expression.parent;
             while (isBinaryExpression(currentExpr) && currentExpr.tokens.operator.kind === TokenKind.Or) {
                 currentExpr = currentExpr.parent;
@@ -2393,6 +2397,17 @@ export class Util {
         }
         return false;
     }
+
+    public isGenericNodeType(type: BscType) {
+        if (isComponentType(type)) {
+            const lowerName = type.toString().toLowerCase();
+            if (lowerName === 'rosgnode' || lowerName === 'rosgnodenode') {
+                return true;
+            }
+        }
+        return false;
+    }
+
 
     public hasAnyRequiredSymbolChanged(requiredSymbols: UnresolvedSymbol[], changedSymbols: Map<SymbolTypeFlag, Set<string>>) {
         if (!requiredSymbols || !changedSymbols) {
@@ -2421,6 +2436,22 @@ export class Util {
             }
         }
         return false;
+    }
+
+    public getCustomTypesInSymbolTree(setToFill: Set<BscType>, type: BscType, filter?: (t: BscSymbol) => boolean) {
+        const subSymbols = type.getMemberTable()?.getAllSymbols(SymbolTypeFlag.runtime) ?? [];
+        for (const subSymbol of subSymbols) {
+            if (!subSymbol.type?.isBuiltIn && !setToFill.has(subSymbol.type)) {
+                if (filter && !filter(subSymbol)) {
+                    continue;
+                }
+                // if this is a custom type, and we haven't added it to the types to check to see if can add it to the additional types
+                // add the type, and investigate any members
+                setToFill.add(subSymbol.type);
+                this.getCustomTypesInSymbolTree(setToFill, subSymbol.type, filter);
+            }
+
+        }
     }
 
     public truncate<T>(options: {
@@ -2513,12 +2544,19 @@ export class Util {
         return false;
     }
 
-    public getSpecialCaseCallExpressionReturnType(callExpr: CallExpression) {
+    public getSpecialCaseCallExpressionReturnType(callExpr: CallExpression, options: GetSymbolTypeOptions) {
         if (isVariableExpression(callExpr.callee) && callExpr.callee.tokens.name.text.toLowerCase() === 'createobject') {
             const componentName = isLiteralString(callExpr.args[0]) ? callExpr.args[0].tokens.value?.text?.replace(/"/g, '') : '';
             const nodeType = componentName.toLowerCase() === 'rosgnode' && isLiteralString(callExpr.args[1]) ? callExpr.args[1].tokens.value?.text?.replace(/"/g, '') : '';
             if (componentName?.toLowerCase().startsWith('ro')) {
-                const fullName = componentName + nodeType;
+                let fullName = componentName + nodeType;
+
+                if (nodeType.includes(':')) {
+                    // This node has a colon in its name, most likely from a component Library
+                    // This componentType is most likely unknown, so return `roSGNode`
+                    fullName = 'roSGNode';
+                }
+
                 const data = {};
                 const symbolTable = callExpr.getSymbolTable();
                 const foundType = symbolTable.getSymbolType(fullName, {
@@ -2531,7 +2569,68 @@ export class Util {
                     return foundType;
                 }
             }
+        } else if (isDottedGetExpression(callExpr.callee) &&
+            callExpr.callee.tokens?.name?.text?.toLowerCase() === 'callfunc' &&
+            isLiteralString(callExpr.args?.[0])) {
+            return this.getCallFuncType(callExpr, callExpr.args?.[0]?.tokens.value, options);
+        } else if (isDottedGetExpression(callExpr.callee) &&
+            callExpr.callee.tokens?.name?.text?.toLowerCase() === 'createchild' &&
+            isComponentType(callExpr.callee.obj?.getType({ flags: SymbolTypeFlag.runtime })) &&
+            isLiteralString(callExpr.args?.[0])) {
+            const fullName = `roSGNode${callExpr.args?.[0].tokens?.value?.text?.replace(/"/g, '')}`;
+            const data = {};
+            const symbolTable = callExpr.getSymbolTable();
+            return symbolTable.getSymbolType(fullName, {
+                flags: SymbolTypeFlag.typetime,
+                data: data,
+                tableProvider: () => callExpr?.getSymbolTable(),
+                fullName: fullName
+            });
         }
+    }
+
+    public getCallFuncType(callExpr: CallExpression | CallfuncExpression, methodNameToken: Token | Identifier, options: GetSymbolTypeOptions) {
+        let result: BscType;
+        let methodName = methodNameToken?.text?.replace(/"/g, ''); // remove quotes if it was the first arg of .callFunc()
+
+        // a little hacky here with checking options.ignoreCall because callFuncExpression has the method name
+        // It's nicer for CallExpression, because it's a call on any expression.
+        let calleeType: BscType;
+        if (isCallfuncExpression(callExpr)) {
+            calleeType = callExpr.callee.getType({ ...options, flags: SymbolTypeFlag.runtime, ignoreCall: false });
+        } else if (isCallExpression(callExpr) && isDottedGetExpression(callExpr.callee)) {
+            calleeType = callExpr.callee.obj.getType({ ...options, flags: SymbolTypeFlag.runtime, ignoreCall: false });
+        }
+        if (isComponentType(calleeType) || isReferenceType(calleeType)) {
+            const funcType = (calleeType as ComponentType).getCallFuncType?.(methodName, options);
+            if (funcType) {
+                options.typeChain?.push(new TypeChainEntry({
+                    name: methodName,
+                    type: funcType,
+                    data: options.data,
+                    location: methodNameToken.location,
+                    separatorToken: createToken(TokenKind.Callfunc),
+                    astNode: callExpr
+                }));
+                if (options.ignoreCall) {
+                    result = funcType;
+                } else if (isCallableType(funcType) && (!isReferenceType(funcType.returnType) || funcType.returnType.isResolvable())) {
+                    result = funcType.returnType;
+                } else if (!isReferenceType(funcType) && (funcType as any)?.returnType?.isResolvable()) {
+                    result = (funcType as any).returnType;
+                } else {
+                    result = new TypePropertyReferenceType(funcType, 'returnType');
+                }
+            }
+        }
+        if (isVoidType(result)) {
+            // CallFunc will always return invalid, even if function called is `as void`
+            result = DynamicType.instance;
+        }
+        if (options.data && !options.ignoreCall) {
+            options.data.isFromCallFunc = true;
+        }
+        return result;
     }
 
     public symbolComesFromSameNode(symbolName: string, definingNode: AstNode, symbolTable: SymbolTable) {

@@ -56,6 +56,9 @@ export class UnionType extends BscType {
                     },
                     setCachedType: (innerName: string, innerCacheEntry: TypeCacheEntry, innerOptions: GetTypeOptions) => {
                         // TODO: is this even cachable? This is a NO-OP for now, and it shouldn't hurt anything
+                    },
+                    addSibling: (symbolTable: SymbolTable) => {
+                        // TODO: I don't know what this means in this context?
                     }
                 };
             });

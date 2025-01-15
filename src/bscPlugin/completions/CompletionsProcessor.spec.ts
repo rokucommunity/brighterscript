@@ -1824,7 +1824,7 @@ describe('CompletionsProcessor', () => {
             expect(completions.length).to.eql(1);
             expectCompletionsIncludes(completions, [{
                 label: 'someFunc',
-                kind: CompletionItemKind.Function
+                kind: CompletionItemKind.Method
             }]);
         });
 
@@ -1855,9 +1855,117 @@ describe('CompletionsProcessor', () => {
             expect(completions.length).to.eql(1);
             expectCompletionsIncludes(completions, [{
                 label: 'someFunc',
-                kind: CompletionItemKind.Function,
+                kind: CompletionItemKind.Method,
                 documentation: 'This is documentation'
             }]);
+        });
+
+        it('does not include callfunc members for other components', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                     <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="someFunc" />
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/Widget.bs', `
+                function someFunc(input as string) as float
+                    return input.toFloat()
+                end function
+            `);
+            program.setFile('components/Thing.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Thing" extends="Group">
+                     <script uri="Thing.bs"/>
+                    <interface>
+                        <function name="otherFunc" />
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/Thing.bs', `
+                function otherFunc(input as string) as float
+                    return input.toFloat()
+                end function
+            `);
+
+            program.setFile('source/util.bs', `
+                sub callWidgetSomeFunc(widget as roSGNodeWidget)
+                    print widget@.
+                end sub
+            `);
+            program.validate();
+            // print widget@.|
+            let completions = program.getCompletions('source/util.bs', util.createPosition(2, 34));
+            expect(completions.length).to.eql(1);
+            expectCompletionsIncludes(completions, [{
+                label: 'someFunc',
+                kind: CompletionItemKind.Method
+            }]);
+            expectCompletionsExcludes(completions, [{
+                label: 'otherFunc',
+                kind: CompletionItemKind.Method
+            }]);
+        });
+
+        it('includes all possible callfuncs when used on a generic type', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                     <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="someFunc" />
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/Widget.bs', `
+                function someFunc(input as string) as float
+                    return input.toFloat()
+                end function
+            `);
+            program.setFile('components/Thing.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Thing" extends="Group">
+                     <script uri="Thing.bs"/>
+                    <interface>
+                        <function name="otherFunc" />
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/Thing.bs', `
+                function otherFunc(input as string) as float
+                    return input.toFloat()
+                end function
+            `);
+
+            program.setFile('source/util.bs', `
+                sub useCallfunc(dyn as dynamic, obj as object, node as roSGNode)
+                    print dyn@.
+                    print obj@.
+                    print node@.
+                end sub
+            `);
+            program.validate();
+            // print dyn@.|
+            let completions = program.getCompletions('source/util.bs', util.createPosition(2, 31));
+            const expectedCompletions = [{
+                label: 'someFunc',
+                kind: CompletionItemKind.Method
+            }, {
+                label: 'otherFunc',
+                kind: CompletionItemKind.Method
+            }];
+            expect(completions.length).to.eql(expectedCompletions.length);
+            expectCompletionsIncludes(completions, expectedCompletions);
+            // print obj@.|
+            completions = program.getCompletions('source/util.bs', util.createPosition(3, 31));
+            expect(completions.length).to.eql(expectedCompletions.length);
+            expectCompletionsIncludes(completions, expectedCompletions);
+            // print node@.|
+            completions = program.getCompletions('source/util.bs', util.createPosition(3, 32));
+            expect(completions.length).to.eql(expectedCompletions.length);
+            expectCompletionsIncludes(completions, expectedCompletions);
         });
     });
 
