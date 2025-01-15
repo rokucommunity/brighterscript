@@ -1,7 +1,8 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
-import type { DottedGetExpression, FunctionExpression, FunctionParameterExpression, LiteralExpression, TypeExpression, TypecastExpression } from './Expression';
+import type { DottedGetExpression, FunctionParameterExpression, LiteralExpression, TypecastExpression, TypeExpression } from './Expression';
+import { FunctionExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
 import type { Location } from 'vscode-languageserver';
@@ -10,8 +11,9 @@ import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
 import { isCallExpression, isCatchStatement, isConditionalCompileStatement, isEnumMemberStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isTryCatchStatement, isTypedefProvider, isUnaryExpression, isUninitializedType, isVoidType, isWhileStatement } from '../astUtils/reflection';
-import { TypeChainEntry, type GetTypeOptions, type TranspileResult, type TypedefProvider } from '../interfaces';
-import { createInvalidLiteral, createMethodStatement, createToken } from '../astUtils/creators';
+import type { GetTypeOptions } from '../interfaces';
+import { TypeChainEntry, type TranspileResult, type TypedefProvider } from '../interfaces';
+import { createIdentifier, createInvalidLiteral, createMethodStatement, createToken } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import { SymbolTable } from '../SymbolTable';
@@ -2781,7 +2783,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         let stmt = this as ClassStatement;
         while (stmt) {
             if (stmt.parentClassName) {
-                const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+                const namespace = stmt.findAncestor<NamespaceStatement>(isNamespaceStatement);
                 stmt = state.file.getClassFileLink(
                     stmt.parentClassName.getName(),
                     namespace?.getName(ParseMode.BrighterScript)
@@ -2814,6 +2816,21 @@ export class ClassStatement extends Statement implements TypedefProvider {
         return this.body.find((stmt) => {
             return (stmt as MethodStatement)?.tokens.name?.text?.toLowerCase() === 'new';
         }) as MethodStatement;
+    }
+
+    /**
+     * Return the parameters for the first constructor function for this class
+     * @param ancestors The list of ancestors for this class
+     * @returns The parameters for the first constructor function for this class
+     */
+    private getConstructorParams(ancestors: ClassStatement[]) {
+        for (let ancestor of ancestors) {
+            const ctor = ancestor?.getConstructorFunction();
+            if (ctor) {
+                return ctor.func.parameters;
+            }
+        }
+        return [];
     }
 
     /**
@@ -2869,10 +2886,42 @@ export class ClassStatement extends Statement implements TypedefProvider {
         let body = this.body;
         //inject an empty "new" method if missing
         if (!this.getConstructorFunction()) {
-            body = [
-                createMethodStatement('new', TokenKind.Sub),
-                ...this.body
-            ];
+            if (ancestors.length === 0) {
+                body = [
+                    createMethodStatement('new', TokenKind.Sub),
+                    ...this.body
+                ];
+            } else {
+                const params = this.getConstructorParams(ancestors);
+                const call = new ExpressionStatement({
+                    expression: new CallExpression({
+                        callee: new VariableExpression({
+                            name: createToken(TokenKind.Identifier, 'super')
+                        }),
+                        openingParen: createToken(TokenKind.LeftParen),
+                        args: params.map(x => new VariableExpression({
+                            name: util.cloneToken(x.tokens.name)
+                        })),
+                        closingParen: createToken(TokenKind.RightParen)
+                    })
+                });
+                body = [
+                    new MethodStatement({
+                        name: createIdentifier('new'),
+                        func: new FunctionExpression({
+                            parameters: params.map(x => x.clone()),
+                            body: new Block({
+                                statements: [call]
+                            }),
+                            functionType: createToken(TokenKind.Sub),
+                            endFunctionType: createToken(TokenKind.EndSub),
+                            leftParen: createToken(TokenKind.LeftParen),
+                            rightParen: createToken(TokenKind.RightParen)
+                        })
+                    }),
+                    ...this.body
+                ];
+            }
         }
 
         for (let statement of body) {
@@ -2942,7 +2991,12 @@ export class ClassStatement extends Statement implements TypedefProvider {
     private getTranspiledClassFunction(state: BrsTranspileState) {
         let result: TranspileResult = state.transpileAnnotations(this);
         const constructorFunction = this.getConstructorFunction();
-        const constructorParams = constructorFunction ? constructorFunction.func.parameters : [];
+        let constructorParams = [];
+        if (constructorFunction) {
+            constructorParams = constructorFunction.func.parameters;
+        } else {
+            constructorParams = this.getConstructorParams(this.getAncestors(state));
+        }
 
         result.push(
             state.transpileLeadingComments(this.tokens.class),
