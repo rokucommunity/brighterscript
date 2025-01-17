@@ -1,7 +1,8 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
 import { CompoundAssignmentOperators, TokenKind } from '../lexer/TokenKind';
-import type { BinaryExpression, NamespacedVariableNameExpression, FunctionExpression, FunctionParameterExpression, LiteralExpression } from './Expression';
+import type { BinaryExpression, NamespacedVariableNameExpression, FunctionParameterExpression, LiteralExpression } from './Expression';
+import { FunctionExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
 import type { Range } from 'vscode-languageserver';
@@ -11,7 +12,7 @@ import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
 import { isCallExpression, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFieldStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypedefProvider, isUnaryExpression, isVoidType } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
-import { createInvalidLiteral, createMethodStatement, createToken } from '../astUtils/creators';
+import { createIdentifier, createInvalidLiteral, createMethodStatement, createToken } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import type { TranspileState } from './TranspileState';
@@ -2144,7 +2145,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         let stmt = this as ClassStatement;
         while (stmt) {
             if (stmt.parentClassName) {
-                const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+                const namespace = stmt.findAncestor<NamespaceStatement>(isNamespaceStatement);
                 stmt = state.file.getClassFileLink(
                     stmt.parentClassName.getName(ParseMode.BrighterScript),
                     namespace?.getName(ParseMode.BrighterScript)
@@ -2171,6 +2172,21 @@ export class ClassStatement extends Statement implements TypedefProvider {
         return this.body.find((stmt) => {
             return (stmt as MethodStatement)?.name?.text?.toLowerCase() === 'new';
         }) as MethodStatement;
+    }
+
+    /**
+     * Return the parameters for the first constructor function for this class
+     * @param ancestors The list of ancestors for this class
+     * @returns The parameters for the first constructor function for this class
+     */
+    private getConstructorParams(ancestors: ClassStatement[]) {
+        for (let ancestor of ancestors) {
+            const ctor = ancestor?.getConstructorFunction();
+            if (ctor) {
+                return ctor.func.parameters;
+            }
+        }
+        return [];
     }
 
     /**
@@ -2226,10 +2242,38 @@ export class ClassStatement extends Statement implements TypedefProvider {
         let body = this.body;
         //inject an empty "new" method if missing
         if (!this.getConstructorFunction()) {
-            body = [
-                createMethodStatement('new', TokenKind.Sub),
-                ...this.body
-            ];
+            if (ancestors.length === 0) {
+                body = [
+                    createMethodStatement('new', TokenKind.Sub),
+                    ...this.body
+                ];
+            } else {
+                const params = this.getConstructorParams(ancestors);
+                const call = new ExpressionStatement(
+                    new CallExpression(
+                        new VariableExpression(createToken(TokenKind.Identifier, 'super')),
+                        createToken(TokenKind.LeftParen),
+                        createToken(TokenKind.RightParen),
+                        params.map(x => new VariableExpression(x.name))
+                    )
+                );
+                body = [
+                    new MethodStatement(
+                        [],
+                        createIdentifier('new'),
+                        new FunctionExpression(
+                            params.map(x => x.clone()),
+                            new Block([call]),
+                            createToken(TokenKind.Sub),
+                            createToken(TokenKind.EndSub),
+                            createToken(TokenKind.LeftParen),
+                            createToken(TokenKind.RightParen)
+                        ),
+                        null
+                    ),
+                    ...this.body
+                ];
+            }
         }
 
         for (let statement of body) {
@@ -2289,8 +2333,14 @@ export class ClassStatement extends Statement implements TypedefProvider {
      */
     private getTranspiledClassFunction(state: BrsTranspileState) {
         let result = [] as TranspileResult;
+
         const constructorFunction = this.getConstructorFunction();
-        const constructorParams = constructorFunction ? constructorFunction.func.parameters : [];
+        let constructorParams = [];
+        if (constructorFunction) {
+            constructorParams = constructorFunction.func.parameters;
+        } else {
+            constructorParams = this.getConstructorParams(this.getAncestors(state));
+        }
 
         result.push(
             state.sourceNode(this.classKeyword, 'function'),
