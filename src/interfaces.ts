@@ -526,7 +526,7 @@ export interface OnGetCodeActionsEvent<TFile extends BscFile = BscFile> {
     codeActions: CodeAction[];
 }
 
-export interface onPluginConfigureEvent {
+export interface OnPluginConfigureEvent {
     builder: ProgramBuilder;
 }
 export interface BeforeProgramCreateEvent {
