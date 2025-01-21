@@ -5,7 +5,7 @@ import type { CodeAction, Position, Range, SignatureInformation, Location, Docum
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeFileAddEvent, BeforeFileRemoveEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj, SerializeFileEvent, ExtraSymbolData } from './interfaces';
+import type { FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeFileAddEvent, BeforeFileRemoveEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj, SerializeFileEvent, ScopeValidationOptions, ExtraSymbolData } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DependencyGraph } from './DependencyGraph';
@@ -16,7 +16,7 @@ import { globalCallables, globalFile } from './globalCallables';
 import { parseManifest, getBsConst } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
-import { isBrsFile, isXmlFile, isXmlScope, isNamespaceStatement, isTypedFunctionType, isAnnotationDeclaration } from './astUtils/reflection';
+import { isBrsFile, isXmlFile, isXmlScope, isNamespaceStatement, isReferenceType, isTypedFunctionType, isAnnotationDeclaration } from './astUtils/reflection';
 import type { FunctionStatement, MethodStatement, NamespaceStatement } from './parser/Statement';
 import { BscPlugin } from './bscPlugin/BscPlugin';
 import { Editor } from './astUtils/Editor';
@@ -56,6 +56,7 @@ import type { ProvidedSymbolInfo, BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
 import { SymbolTable } from './SymbolTable';
 import type { TypedFunctionType } from './types/TypedFunctionType';
+import { ReferenceType } from './types/ReferenceType';
 
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
@@ -117,6 +118,7 @@ export class Program {
         this.scopes.global = this.globalScope;
 
         this.populateGlobalSymbolTable();
+        this.globalScope.symbolTable.addSibling(this.componentsTable);
 
         //hardcode the files list for global scope to only contain the global file
         this.globalScope.getAllFiles = () => [globalFile];
@@ -149,6 +151,7 @@ export class Program {
             }
             nodeType = new ComponentType(nodeData.name, parentNode);
             nodeType.addBuiltInInterfaces();
+            nodeType.isBuiltIn = true;
             if (nodeData.name === 'Node') {
                 // Add `roSGNode` as shorthand for `roSGNodeNode`
                 this.globalScope.symbolTable.addSymbol('roSGNode', { description: nodeData.description, isBuiltIn: true }, nodeType, SymbolTypeFlag.typetime);
@@ -188,12 +191,14 @@ export class Program {
         for (const ifaceData of Object.values(interfaces) as BRSInterfaceData[]) {
             const nodeType = new InterfaceType(ifaceData.name);
             nodeType.addBuiltInInterfaces();
+            nodeType.isBuiltIn = true;
             this.globalScope.symbolTable.addSymbol(ifaceData.name, { ...builtInSymbolData, description: ifaceData.description }, nodeType, SymbolTypeFlag.typetime);
         }
 
         for (const componentData of Object.values(components) as BRSComponentData[]) {
             const nodeType = new InterfaceType(componentData.name);
             nodeType.addBuiltInInterfaces();
+            nodeType.isBuiltIn = true;
             if (componentData.name !== 'roSGNode') {
                 // we will add `roSGNode` as shorthand for `roSGNodeNode`, since all roSgNode components are SceneGraph nodes
                 this.globalScope.symbolTable.addSymbol(componentData.name, { ...builtInSymbolData, description: componentData.description }, nodeType, SymbolTypeFlag.typetime);
@@ -207,6 +212,7 @@ export class Program {
         for (const eventData of Object.values(events) as BRSEventData[]) {
             const nodeType = new InterfaceType(eventData.name);
             nodeType.addBuiltInInterfaces();
+            nodeType.isBuiltIn = true;
             this.globalScope.symbolTable.addSymbol(eventData.name, { ...builtInSymbolData, description: eventData.description }, nodeType, SymbolTypeFlag.typetime);
         }
 
@@ -261,6 +267,22 @@ export class Program {
     }
 
     private fileSymbolInformation = new Map<string, { provides: ProvidedSymbolInfo; requires: UnresolvedSymbol[] }>();
+
+    private currentScopeValidationOptions: ScopeValidationOptions;
+
+    /**
+     *  Map of typetime symbols which depend upon the key symbol
+     */
+    private symbolDependencies = new Map<string, Set<string>>();
+
+
+    /**
+     * Symbol Table for storing custom component types
+     * This is a sibling to the global table (as Components can be used/referenced anywhere)
+     * Keeping custom components out of the global table and in a specific symbol table
+     * compartmentalizes their use
+     */
+    private componentsTable = new SymbolTable('Custom Components');
 
     public addFileSymbolInfo(file: BrsFile) {
         this.fileSymbolInformation.set(file.pkgPath, {
@@ -368,8 +390,9 @@ export class Program {
 
     /**
      * Keeps a set of all the components that need to have their types updated during the current validation cycle
+     * Map <componentKey, componentName>
      */
-    private componentSymbolsToUpdate = new Set<{ componentKey: string; componentName: string }>();
+    private componentSymbolsToUpdate = new Map<string, string>();
 
     /**
      * Register (or replace) the reference to a component in the component map
@@ -419,8 +442,12 @@ export class Program {
      * @param xmlFile XML file with <component> tag
      */
     private addDeferredComponentTypeSymbolCreation(xmlFile: XmlFile) {
-        this.componentSymbolsToUpdate.add({ componentKey: this.getComponentKey(xmlFile), componentName: xmlFile.componentName?.text });
-
+        const componentKey = this.getComponentKey(xmlFile);
+        const componentName = xmlFile.componentName?.text;
+        if (this.componentSymbolsToUpdate.has(componentKey)) {
+            return;
+        }
+        this.componentSymbolsToUpdate.set(componentKey, componentName);
     }
 
     private getComponentKey(xmlFile: XmlFile) {
@@ -428,7 +455,7 @@ export class Program {
     }
 
     /**
-     * Updates the global symbol table with the first component in this.components to have the same name as the component in the file
+     * Resolves symbol table with the first component in this.components to have the same name as the component in the file
      * @param componentKey key getting a component from `this.components`
      * @param componentName the unprefixed name of the component that will be added (e.g. 'MyLabel' NOT 'roSgNodeMyLabel')
      */
@@ -438,18 +465,56 @@ export class Program {
             return;
         }
         const components = this.components[componentKey] || [];
+        const previousComponentType = this.componentsTable.getSymbolType(symbolName, { flags: SymbolTypeFlag.typetime });
         // Remove any existing symbols that match
-        this.globalScope.symbolTable.removeSymbol(symbolName);
-        // There is a component that can be added - use it.
+        this.componentsTable.removeSymbol(symbolName);
         if (components.length > 0) {
+            // There is a component that can be added - use it.
             const componentScope = components[0].scope;
-            // TODO: May need to link symbol tables to get correct types for callfuncs
-            // componentScope.linkSymbolTable();
+
+            this.componentsTable.removeSymbol(symbolName);
+            componentScope.linkSymbolTable();
             const componentType = componentScope.getComponentType();
             if (componentType) {
-                this.globalScope.symbolTable.addSymbol(symbolName, {}, componentType, SymbolTypeFlag.typetime);
+                this.componentsTable.addSymbol(symbolName, {}, componentType, SymbolTypeFlag.typetime);
             }
-            // TODO: Remember to unlink! componentScope.unlinkSymbolTable();
+            const typeData = {};
+            const isSameAsPrevious = previousComponentType && componentType.isEqual(previousComponentType, typeData);
+            const isComponentTypeDifferent = !previousComponentType || isReferenceType(previousComponentType) || !isSameAsPrevious;
+            componentScope.unlinkSymbolTable();
+            return isComponentTypeDifferent;
+
+        }
+        // There was a previous component type, but no new one, so it's different
+        return !!previousComponentType;
+    }
+
+    /**
+     * Adds a reference type to the global symbol table with the first component in this.components to have the same name as the component in the file
+     * This is so on a first validation, these types can be resolved in teh future (eg. when the actual component is created)
+     * If we don't add reference types at this top level, they will be created at the file level, and will never get resolved
+     * @param componentKey key getting a component from `this.components`
+     * @param componentName the unprefixed name of the component that will be added (e.g. 'MyLabel' NOT 'roSgNodeMyLabel')
+     */
+    private addComponentReferenceType(componentKey: string, componentName: string) {
+        const symbolName = componentName ? util.getSgNodeTypeName(componentName) : undefined;
+        if (!symbolName) {
+            return;
+        }
+        const components = this.components[componentKey] || [];
+
+        if (components.length > 0) {
+            // There is a component that can be added,
+            if (!this.componentsTable.hasSymbol(symbolName, SymbolTypeFlag.typetime)) {
+                // it doesn't already exist in the table
+                const componentRefType = new ReferenceType(symbolName, symbolName, SymbolTypeFlag.typetime, () => this.componentsTable);
+                if (componentRefType) {
+                    this.componentsTable.addSymbol(symbolName, {}, componentRefType, SymbolTypeFlag.typetime);
+                }
+            }
+        } else {
+            // there is no component. remove from table
+            this.componentsTable.removeSymbol(symbolName);
         }
     }
 
@@ -660,7 +725,7 @@ export class Program {
                     let scope = new XmlScope(file, this);
                     this.addScope(scope);
 
-                    //register this compoent now that we have parsed it and know its component name
+                    //register this componet now that we have parsed it and know its component name
                     this.registerComponent(file, scope);
 
                     //notify plugins that the scope is created and the component is registered
@@ -806,6 +871,7 @@ export class Program {
             //if there is a scope named the same as this file's path, remove it (i.e. xml scopes)
             let scope = this.scopes[file.destPath];
             if (scope) {
+                this.logger.debug('Removing associated scope', scope.name);
                 const scopeDisposeEvent = {
                     program: this,
                     scope: scope
@@ -828,6 +894,8 @@ export class Program {
                 this.dependencyGraph.removeDependency('scope:source', file.dependencyGraphKey);
             }
             if (isBrsFile(file)) {
+                this.logger.debug('Removing file symbol info', file.srcPath);
+
                 if (!keepSymbolInformation) {
                     this.fileSymbolInformation.delete(file.pkgPath);
                 }
@@ -836,8 +904,12 @@ export class Program {
 
             //if this is a component, remove it from our components map
             if (isXmlFile(file)) {
+                this.logger.debug('Unregistering component', file.srcPath);
+
                 this.unregisterComponent(file);
             }
+            this.logger.debug('Disposing file', file.srcPath);
+
             //dispose any disposable things on the file
             for (const disposable of file?.disposables ?? []) {
                 disposable();
@@ -871,20 +943,47 @@ export class Program {
                 fileValidationTime: '',
                 crossScopeValidationTime: '',
                 scopesValidated: 0,
+                changedSymbols: 0,
                 totalLinkTime: '',
                 totalScopeValidationTime: '',
-                componentValidationTime: ''
+                componentValidationTime: '',
+                changedSymbolsTime: ''
             };
 
             const validationStopwatch = new Stopwatch();
             //validate every file
             const brsFilesValidated: BrsFile[] = [];
+            const xmlFilesValidated: XmlFile[] = [];
+
             const afterValidateFiles: BscFile[] = [];
+            const sortedFiles = Object.values(this.files).sort(firstBy(x => x.srcPath));
+            this.logger.time(LogLevel.info, ['Prebuild component types'], () => {
+                // cast a wide net for potential changes in components
+                for (const file of sortedFiles) {
+                    if (file.isValidated) {
+                        continue;
+                    }
+                    if (isXmlFile(file)) {
+                        this.addDeferredComponentTypeSymbolCreation(file);
+                    } else if (isBrsFile(file)) {
+                        for (const scope of this.getScopesForFile(file)) {
+                            if (isXmlScope(scope)) {
+                                this.addDeferredComponentTypeSymbolCreation(scope.xmlFile);
+                            }
+                        }
+                    }
+                }
+
+                // Create reference component types for any component that changes
+                for (let [componentKey, componentName] of this.componentSymbolsToUpdate.entries()) {
+                    this.addComponentReferenceType(componentKey, componentName);
+                }
+            });
+
 
             metrics.fileValidationTime = validationStopwatch.getDurationTextFor(() => {
                 //sort files by path so we get consistent results
-                const files = Object.values(this.files).sort(firstBy(x => x.srcPath));
-                for (const file of files) {
+                for (const file of sortedFiles) {
                     //for every unvalidated file, validate it
                     if (!file.isValidated) {
                         const validateFileEvent = {
@@ -897,6 +996,8 @@ export class Program {
                         file.isValidated = true;
                         if (isBrsFile(file)) {
                             brsFilesValidated.push(file);
+                        } else if (isXmlFile(file)) {
+                            xmlFilesValidated.push(file);
                         }
                         afterValidateFiles.push(file);
                     }
@@ -913,32 +1014,98 @@ export class Program {
 
             metrics.filesChanged = afterValidateFiles.length;
 
+            const changedComponentTypes: string[] = [];
+
             // Build component types for any component that changes
             this.logger.time(LogLevel.info, ['Build component types'], () => {
-                for (let { componentKey, componentName } of this.componentSymbolsToUpdate) {
-                    this.updateComponentSymbolInGlobalScope(componentKey, componentName);
+                for (let [componentKey, componentName] of this.componentSymbolsToUpdate.entries()) {
+                    if (this.updateComponentSymbolInGlobalScope(componentKey, componentName)) {
+                        changedComponentTypes.push(util.getSgNodeTypeName(componentName).toLowerCase());
+                    }
                 }
                 this.componentSymbolsToUpdate.clear();
             });
 
-
-            const changedSymbolsMapArr = brsFilesValidated?.map(f => {
-                if (isBrsFile(f)) {
-                    return f.providedSymbols.changes;
-                }
-                return null;
-            }).filter(x => x);
-
+            // get set of changed symbols
             const changedSymbols = new Map<SymbolTypeFlag, Set<string>>();
-            for (const flag of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
-                const changedSymbolsSetArr = changedSymbolsMapArr.map(symMap => symMap.get(flag));
-                changedSymbols.set(flag, new Set(...changedSymbolsSetArr));
-            }
+            metrics.changedSymbolsTime = validationStopwatch.getDurationTextFor(() => {
 
+                const changedSymbolsMapArr = [...brsFilesValidated, ...xmlFilesValidated]?.map(f => {
+                    if (isBrsFile(f)) {
+                        return f.providedSymbols.changes;
+                    }
+                    return null;
+                }).filter(x => x);
+
+                // update the map of typetime dependencies
+                for (const file of brsFilesValidated) {
+                    for (const [symbolName, provided] of file.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime).entries()) {
+                        // clear existing dependencies
+                        for (const values of this.symbolDependencies.values()) {
+                            values.delete(symbolName);
+                        }
+
+                        // map types to the set of types that depend upon them
+                        for (const dependentSymbol of provided.requiredSymbolNames?.values() ?? []) {
+                            const dependentSymbolLower = dependentSymbol.toLowerCase();
+                            if (!this.symbolDependencies.has(dependentSymbolLower)) {
+                                this.symbolDependencies.set(dependentSymbolLower, new Set<string>());
+                            }
+                            const symbolsDependentUpon = this.symbolDependencies.get(dependentSymbolLower);
+                            symbolsDependentUpon.add(symbolName);
+                        }
+                    }
+                }
+
+                for (const flag of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
+                    const changedSymbolsSetArr = changedSymbolsMapArr.map(symMap => symMap.get(flag));
+                    const changedSymbolSet = new Set<string>();
+                    for (const changeSet of changedSymbolsSetArr) {
+                        for (const change of changeSet) {
+                            changedSymbolSet.add(change);
+                        }
+                    }
+                    changedSymbols.set(flag, changedSymbolSet);
+                }
+
+                // update changed symbol set with any changed component
+                for (const changedComponentType of changedComponentTypes) {
+                    changedSymbols.get(SymbolTypeFlag.typetime).add(changedComponentType);
+                }
+
+                // Add any additional types that depend on a changed type
+                // as each iteration of the loop might add new types, need to keep checking until nothing new is added
+                const dependentTypesChanged = new Set<string>();
+                let foundDependentTypes = false;
+                const changedTypeSymbols = changedSymbols.get(SymbolTypeFlag.typetime);
+                do {
+                    foundDependentTypes = false;
+                    const allChangedTypesSofar = [...Array.from(changedTypeSymbols), ...Array.from(dependentTypesChanged)];
+                    for (const changedSymbol of allChangedTypesSofar) {
+                        const symbolsDependentUponChangedSymbol = this.symbolDependencies.get(changedSymbol) ?? [];
+                        for (const symbolName of symbolsDependentUponChangedSymbol) {
+                            if (!changedTypeSymbols.has(symbolName) && !dependentTypesChanged.has(symbolName)) {
+                                foundDependentTypes = true;
+                                dependentTypesChanged.add(symbolName);
+                            }
+                        }
+                    }
+                } while (foundDependentTypes);
+
+                changedSymbols.set(SymbolTypeFlag.typetime, new Set([...changedTypeSymbols, ...dependentTypesChanged]));
+            }).durationText;
+
+            if (this.options.logLevel === LogLevel.debug) {
+                const changedRuntime = Array.from(changedSymbols.get(SymbolTypeFlag.runtime)).sort();
+                this.logger.debug('Changed Symbols (runTime):', changedRuntime.join(', '));
+                const changedTypetime = Array.from(changedSymbols.get(SymbolTypeFlag.typetime)).sort();
+                this.logger.debug('Changed Symbols (typeTime):', changedTypetime.join(', '));
+            }
+            metrics.changedSymbols = changedSymbols.get(SymbolTypeFlag.runtime).size + changedSymbols.get(SymbolTypeFlag.typetime).size;
             const filesToBeValidatedInScopeContext = new Set<BscFile>(afterValidateFiles);
 
             metrics.crossScopeValidationTime = validationStopwatch.getDurationTextFor(() => {
-                const scopesToCheck = this.getScopesForCrossScopeValidation();
+                const scopesToCheck = this.getScopesForCrossScopeValidation(changedComponentTypes.length > 0);
                 this.crossScopeValidation.buildComponentsMap();
                 this.crossScopeValidation.addDiagnosticsForScopes(scopesToCheck);
                 const filesToRevalidate = this.crossScopeValidation.getFilesRequiringChangedSymbol(scopesToCheck, changedSymbols);
@@ -953,22 +1120,26 @@ export class Program {
             let validationTime = 0;
             let scopesValidated = 0;
             let changedFiles = new Set<BscFile>(afterValidateFiles);
+            this.currentScopeValidationOptions = {
+                filesToBeValidatedInScopeContext: filesToBeValidatedInScopeContext,
+                changedSymbols: changedSymbols,
+                changedFiles: changedFiles,
+                initialValidation: this.isFirstValidation
+            };
             this.logger.time(LogLevel.info, ['Validate all scopes'], () => {
                 //sort the scope names so we get consistent results
                 const scopeNames = this.getSortedScopeNames();
                 for (const file of filesToBeValidatedInScopeContext) {
                     if (isBrsFile(file)) {
                         file.validationSegmenter.unValidateAllSegments();
+                        for (const scope of this.getScopesForFile(file)) {
+                            scope.invalidate();
+                        }
                     }
                 }
                 for (let scopeName of scopeNames) {
                     let scope = this.scopes[scopeName];
-                    const scopeValidated = scope.validate({
-                        filesToBeValidatedInScopeContext: filesToBeValidatedInScopeContext,
-                        changedSymbols: changedSymbols,
-                        changedFiles: changedFiles,
-                        initialValidation: this.isFirstValidation
-                    });
+                    const scopeValidated = scope.validate(this.currentScopeValidationOptions);
                     if (scopeValidated) {
                         scopesValidated++;
                     }
@@ -1004,11 +1175,11 @@ export class Program {
         this.logger.info(`Validation Metrics: ${logs.join(', ')}`);
     }
 
-    private getScopesForCrossScopeValidation() {
+    private getScopesForCrossScopeValidation(someComponentTypeChanged = false) {
         const scopesForCrossScopeValidation = [];
         for (let scopeName of this.getSortedScopeNames()) {
             let scope = this.scopes[scopeName];
-            if (this.globalScope !== scope && !scope.isValidated) {
+            if (this.globalScope !== scope && (someComponentTypeChanged || !scope.isValidated)) {
                 scopesForCrossScopeValidation.push(scope);
             }
         }

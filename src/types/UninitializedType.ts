@@ -10,6 +10,7 @@ export class UninitializedType extends BscType {
 
     public readonly kind = BscTypeKind.UninitializedType;
 
+    public isBuiltIn = true;
     public static instance = new UninitializedType();
 
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {

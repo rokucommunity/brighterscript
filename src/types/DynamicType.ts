@@ -15,6 +15,8 @@ export class DynamicType extends BscType {
 
     public static readonly instance = new DynamicType();
 
+    public isBuiltIn = true;
+
     get returnType() {
         return DynamicType.instance;
     }
@@ -50,6 +52,8 @@ export class DynamicType extends BscType {
     getMemberType(memberName: string, options: GetTypeOptions) {
         return DynamicType.instance;
     }
+
+
 }
 
 BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('dynamic', DynamicType.instance);

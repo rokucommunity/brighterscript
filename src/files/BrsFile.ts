@@ -46,6 +46,7 @@ import { DefinitionProvider } from '../bscPlugin/definition/DefinitionProvider';
 export interface ProvidedSymbol {
     symbol: BscSymbol;
     duplicates: BscSymbol[];
+    requiredSymbolNames?: Set<string>;
 }
 export type ProvidedSymbolMap = Map<SymbolTypeFlag, Map<string, ProvidedSymbol>>;
 export type ChangedSymbolMap = Map<SymbolTypeFlag, Set<string>>;
@@ -985,9 +986,10 @@ export class BrsFile implements BscFile {
 
     public processSymbolInformation() {
         // Get namespaces across imported files
+        this.program.logger.debug('Processing symbol information', this.srcPath);
+
         const nsTable = this.getNamespaceSymbolTable(false);
         this.linkSymbolTableDisposables.push(this.ast.symbolTable.addSibling(nsTable));
-
         this.validationSegmenter.processTree(this.ast);
         this.program.addFileSymbolInfo(this);
         this.unlinkNamespaceSymbolTables();
@@ -1051,6 +1053,8 @@ export class BrsFile implements BscFile {
 
     public get requiredSymbols() {
         return this.cache.getOrAdd(`requiredSymbols`, () => {
+            this.program.logger.debug('Getting required symbols', this.srcPath);
+
             const allNeededSymbolSets = this.validationSegmenter.unresolvedSegmentsSymbols.values();
 
             const requiredSymbols: UnresolvedSymbol[] = [];
@@ -1065,9 +1069,12 @@ export class BrsFile implements BscFile {
                         // this catches namespaced things
                         continue;
                     }
-                    if (this.ast.getSymbolTable().hasSymbol(fullSymbolKey, flag)) {
-                        //catches aliases
-                        continue;
+                    const existingSymbol = this.ast.getSymbolTable().getSymbol(fullSymbolKey, flag);
+                    if (existingSymbol?.length > 0) {
+                        if (symbol[0]?.data?.isAlias) {
+                            //catches aliases
+                            continue;
+                        }
                     }
                     if (!addedSymbols.get(flag)?.has(fullSymbolKey)) {
                         requiredSymbols.push(symbol);
@@ -1099,6 +1106,8 @@ export class BrsFile implements BscFile {
     }
 
     private getProvidedSymbols() {
+        this.program.logger.debug('Getting provided symbols', this.srcPath);
+
         const symbolMap = new Map<SymbolTypeFlag, Map<string, ProvidedSymbol>>();
         const runTimeSymbolMap = new Map<string, ProvidedSymbol>();
         const typeTimeSymbolMap = new Map<string, ProvidedSymbol>();
@@ -1161,9 +1170,16 @@ export class BrsFile implements BscFile {
                 if (symbolNameLower === 'm') {
                     continue;
                 }
+
                 const duplicates = getAnyDuplicates(symbolNameLower, typeTimeSymbolMap, referenceTypeTimeSymbolMap);
                 if (!isAnyReferenceType(symbol.type)) {
-                    typeTimeSymbolMap.set(symbolNameLower, { symbol: symbol, duplicates: duplicates });
+                    const requiredSymbolTypes = new Set<BscType>();
+                    util.getCustomTypesInSymbolTree(requiredSymbolTypes, symbol.type);
+                    const requiredSymbolNames = new Set<string>();
+                    for (const requiredType of requiredSymbolTypes.values()) {
+                        requiredSymbolNames.add(requiredType.toString());
+                    }
+                    typeTimeSymbolMap.set(symbolNameLower, { symbol: symbol, duplicates: duplicates, requiredSymbolNames: requiredSymbolNames });
                 } else {
                     referenceTypeTimeSymbolMap.set(symbolNameLower, { symbol: symbol, duplicates: duplicates });
                 }
@@ -1183,6 +1199,7 @@ export class BrsFile implements BscFile {
         const previousSymbolsChecked = new Map<SymbolTypeFlag, Set<string>>();
         previousSymbolsChecked.set(SymbolTypeFlag.runtime, new Set<string>());
         previousSymbolsChecked.set(SymbolTypeFlag.typetime, new Set<string>());
+
         for (const flag of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
             const newSymbolMapForFlag = symbolMap.get(flag);
             const oldSymbolMapForFlag = previouslyProvidedSymbols?.get(flag);

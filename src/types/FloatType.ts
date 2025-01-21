@@ -16,6 +16,8 @@ export class FloatType extends BscType {
 
     public static instance = new FloatType('float');
 
+    public isBuiltIn = true;
+
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         return (
             isDynamicType(targetType) ||
@@ -42,6 +44,8 @@ export class FloatType extends BscType {
     public isEqual(targetType: BscType): boolean {
         return isFloatType(targetType);
     }
+
+    readonly binaryOpPriorityLevel = 2;
 }
 
 BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('float', FloatType.instance);

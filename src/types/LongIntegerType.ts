@@ -16,6 +16,8 @@ export class LongIntegerType extends BscType {
 
     public static instance = new LongIntegerType('longinteger');
 
+    public isBuiltIn = true;
+
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         return (
             isDynamicType(targetType) ||
@@ -41,6 +43,8 @@ export class LongIntegerType extends BscType {
     isEqual(targetType: BscType): boolean {
         return isLongIntegerType(targetType);
     }
+
+    readonly binaryOpPriorityLevel = 3;
 }
 
 BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('longinteger', LongIntegerType.instance);

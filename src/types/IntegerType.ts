@@ -16,6 +16,8 @@ export class IntegerType extends BscType {
 
     public static instance = new IntegerType('integer');
 
+    public isBuiltIn = true;
+
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         return (
             isDynamicType(targetType) ||
@@ -41,6 +43,8 @@ export class IntegerType extends BscType {
     isEqual(otherType: BscType) {
         return isIntegerType(otherType);
     }
+
+    readonly binaryOpPriorityLevel = 4;
 }
 
 BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('integer', IntegerType.instance);

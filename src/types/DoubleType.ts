@@ -17,6 +17,8 @@ export class DoubleType extends BscType {
 
     public static instance = new DoubleType('double');
 
+    public isBuiltIn = true;
+
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         return (
             isDynamicType(targetType) ||
@@ -41,6 +43,8 @@ export class DoubleType extends BscType {
     public isEqual(targetType: BscType): boolean {
         return isDoubleType(targetType);
     }
+
+    readonly binaryOpPriorityLevel = 1;
 }
 
 BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('double', DoubleType.instance);

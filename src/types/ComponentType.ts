@@ -1,7 +1,7 @@
-import type { GetSymbolTypeOptions } from '../SymbolTable';
-import type { SymbolTypeFlag } from '../SymbolTypeFlag';
+import type { BscSymbol, GetSymbolTypeOptions, SymbolTableProvider } from '../SymbolTable';
+import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { SymbolTable } from '../SymbolTable';
-import { isComponentType, isDynamicType, isInvalidType, isObjectType } from '../astUtils/reflection';
+import { isAnyReferenceType, isComponentType, isDynamicType, isInvalidType, isObjectType, isPrimitiveType, isReferenceType, isTypedFunctionType } from '../astUtils/reflection';
 import type { ExtraSymbolData, TypeCompatibilityData } from '../interfaces';
 import type { BaseFunctionType } from './BaseFunctionType';
 import type { BscType } from './BscType';
@@ -16,6 +16,7 @@ export class ComponentType extends InheritableType {
     constructor(public name: string, superComponent?: ComponentType) {
         super(name, superComponent);
         this.callFuncMemberTable = new SymbolTable(`${this.name}: CallFunc`, () => this.parentComponent?.callFuncMemberTable);
+        this.callFuncAssociatedTypesTable = new SymbolTable(`${this.name}: CallFuncAssociatedTypes`, () => this.parentComponent?.callFuncAssociatedTypesTable);
     }
 
     public readonly kind = BscTypeKind.ComponentType;
@@ -40,8 +41,39 @@ export class ComponentType extends InheritableType {
 
     public static instance = new ComponentType('Node');
 
-    isEqual(targetType: BscType): boolean {
-        return isComponentType(targetType) && this.name.toLowerCase() === targetType.name.toLowerCase();
+    isEqual(targetType: BscType, data: TypeCompatibilityData = {}): boolean {
+        if (isReferenceType(targetType) && targetType.isResolvable()) {
+            targetType = targetType.getTarget?.() ?? targetType;
+        }
+        if (this === targetType) {
+            return true;
+        }
+        if (!isComponentType(targetType)) {
+            return false;
+        }
+
+        const thisNameLower = this.name.toLowerCase();
+        const targetNameLower = targetType.name.toLowerCase();
+        if (thisNameLower !== targetNameLower) {
+            return false;
+        }
+        if (this.isBuiltIn && targetType.isBuiltIn) {
+            return true;
+        }
+
+        if (!this.isParentTypeEqual(targetType, data)) {
+            return false;
+        }
+        if (!this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlag.runtime, data) ||
+            !targetType.checkCompatibilityBasedOnMembers(this, SymbolTypeFlag.runtime, data)) {
+            return false;
+        }
+        if (!this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlag.runtime, data, this.callFuncMemberTable, targetType.callFuncMemberTable) ||
+            !targetType.checkCompatibilityBasedOnMembers(this, SymbolTypeFlag.runtime, data, targetType.callFuncMemberTable, this.callFuncMemberTable)) {
+            return false;
+        }
+
+        return true;
     }
 
     public toString() {
@@ -61,9 +93,11 @@ export class ComponentType extends InheritableType {
         }
     }
 
+    private hasStartedAddingBuiltInInterfaces = false;
 
     addBuiltInInterfaces() {
-        if (!this.hasAddedBuiltInInterfaces) {
+        if (!this.hasAddedBuiltInInterfaces && !this.hasStartedAddingBuiltInInterfaces) {
+            this.hasStartedAddingBuiltInInterfaces = true;
             if (this.parentType) {
                 this.parentType.addBuiltInInterfaces();
             }
@@ -74,9 +108,12 @@ export class ComponentType extends InheritableType {
     }
 
     private hasAddedBuiltInFields = false;
+    private hasStartedAddingBuiltInFields = false;
+
 
     addBuiltInFields() {
-        if (!this.hasAddedBuiltInFields) {
+        if (!this.hasAddedBuiltInFields && !this.hasStartedAddingBuiltInFields) {
+            this.hasStartedAddingBuiltInFields = true;
             if (isComponentType(this.parentType)) {
                 this.parentType.addBuiltInFields();
             }
@@ -86,9 +123,49 @@ export class ComponentType extends InheritableType {
     }
 
     public readonly callFuncMemberTable: SymbolTable;
+    public readonly callFuncAssociatedTypesTable: SymbolTable;
 
-    addCallFuncMember(name: string, data: ExtraSymbolData, type: BaseFunctionType, flags: SymbolTypeFlag) {
-        this.callFuncMemberTable.addSymbol(name, data, type, flags);
+    /**
+     * Adds a function to the call func member table
+     * Also adds any associated custom types to its own table, so they can be used through a callfunc
+     */
+    addCallFuncMember(name: string, data: ExtraSymbolData, funcType: BaseFunctionType, flags: SymbolTypeFlag, associatedTypesTableProvider?: SymbolTableProvider) {
+        const originalTypesToCheck = new Set<BscType>();
+        if (isTypedFunctionType(funcType)) {
+            const paramTypes = (funcType.params ?? []).map(p => p.type);
+            for (const paramType of paramTypes) {
+                originalTypesToCheck.add(paramType);
+            }
+        }
+        if (funcType.returnType) {
+            originalTypesToCheck.add(funcType.returnType);
+        }
+        const additionalTypesToCheck = new Set<BscType>();
+
+        for (const type of originalTypesToCheck) {
+            if (!type.isBuiltIn) {
+                util.getCustomTypesInSymbolTree(additionalTypesToCheck, type, (subSymbol: BscSymbol) => {
+                    return !originalTypesToCheck.has(subSymbol.type);
+                });
+            }
+        }
+
+        for (const type of [...originalTypesToCheck.values(), ...additionalTypesToCheck.values()]) {
+            if (!isPrimitiveType(type) && type.isResolvable()) {
+                // This type is a reference type, but was able to be resolved here
+                // add it to the table of associated types, so it can be used through a callfunc
+                const extraData = {};
+                if (associatedTypesTableProvider) {
+                    associatedTypesTableProvider().getSymbolType(type.toString(), { flags: SymbolTypeFlag.typetime, data: extraData });
+                }
+                let targetType = isAnyReferenceType(type) ? type.getTarget?.() : type;
+
+                this.callFuncAssociatedTypesTable.addSymbol(type.toString(), { ...extraData, isFromCallFunc: true }, targetType, SymbolTypeFlag.typetime);
+            }
+        }
+
+        // add this function to be available through callfunc
+        this.callFuncMemberTable.addSymbol(name, data, funcType, flags);
     }
 
     getCallFuncTable() {
@@ -96,7 +173,33 @@ export class ComponentType extends InheritableType {
     }
 
     getCallFuncType(name: string, options: GetSymbolTypeOptions) {
-        return this.callFuncMemberTable.getSymbolType(name, options);
+        const callFuncType = this.callFuncMemberTable.getSymbolType(name, options);
+
+        const addAssociatedTypesTableAsSiblingToMemberTable = (type: BscType) => {
+            if (isReferenceType(type) &&
+                !type.isResolvable()) {
+                // This param or return type is a reference - make sure the associated types are included
+                type.tableProvider().addSibling(this.callFuncAssociatedTypesTable);
+
+                // add this as a sister table to member tables too!
+                const memberTable: SymbolTable = type.getMemberTable();
+                if (memberTable.getAllSymbols) {
+                    for (const memberSymbol of memberTable.getAllSymbols(SymbolTypeFlag.runtime)) {
+                        addAssociatedTypesTableAsSiblingToMemberTable(memberSymbol?.type);
+                    }
+                }
+            }
+        };
+
+        if (isTypedFunctionType(callFuncType)) {
+            const typesToCheck = [...callFuncType.params.map(p => p.type), callFuncType.returnType];
+
+            for (const type of typesToCheck) {
+                addAssociatedTypesTableAsSiblingToMemberTable(type);
+            }
+        }
+
+        return callFuncType;
     }
 }
 

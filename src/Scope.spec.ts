@@ -3535,7 +3535,7 @@ describe('Scope', () => {
         });
 
         describe('callFunc invocations', () => {
-            it('TODO: should set correct return type', () => {
+            it('should set correct return type', () => {
 
                 program.setFile('components/Widget.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
@@ -3566,8 +3566,102 @@ describe('Scope', () => {
                 const opts = { flags: SymbolTypeFlag.runtime };
                 const sourceScope = program.getScopeByName('source');
                 sourceScope.linkSymbolTable();
-                //TODO: This *SHOULD* be float, but callfunc returns aren't inferred yet
-                expectTypeToBe(symbolTable.getSymbolType('pi', opts), DynamicType);
+                expectTypeToBe(symbolTable.getSymbolType('pi', opts), FloatType);
+                sourceScope.unlinkSymbolTable();
+            });
+
+            it('should set correct return type when using `callFunc()`', () => {
+                program.setFile('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script uri="Widget.brs"/>
+                        <interface>
+                            <function name="getFloatFromString" />
+                        </interface>
+                    </component>
+                `);
+
+                program.setFile('components/Widget.brs', `
+                    function getFloatFromString(input as string) as float
+                        return input.toFloat()
+                    end function
+                `);
+
+                let utilFile = program.setFile<BrsFile>('source/util.bs', `
+                    sub someFunc(widget as roSGNodeWidget)
+                        pi = widget.callfunc("getFloatFromString", "3.14")
+                        print pi
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = utilFile.getFunctionScopeAtPosition(util.createPosition(3, 31));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                const sourceScope = program.getScopeByName('source');
+                sourceScope.linkSymbolTable();
+                expectTypeToBe(symbolTable.getSymbolType('pi', opts), FloatType);
+                sourceScope.unlinkSymbolTable();
+            });
+
+            it('should set correct return type when using `<component>.createchild()`', () => {
+                let utilFile = program.setFile<BrsFile>('source/util.bs', `
+                    sub someFunc()
+                        rect = createObject("roSgNode", "Rectangle")
+                        label = rect.createChild("label")
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = utilFile.getFunctionScopeAtPosition(util.createPosition(3, 31));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                const sourceScope = program.getScopeByName('source');
+                sourceScope.linkSymbolTable();
+                const labelType = symbolTable.getSymbolType('label', opts) as ComponentType;
+                expectTypeToBe(labelType, ComponentType);
+                expect(labelType.toString()).to.eql('roSGNodeLabel');
+                sourceScope.unlinkSymbolTable();
+            });
+
+            it('should set correct return type with a custom type', () => {
+                program.setFile('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script uri="Widget.bs"/>
+                        <interface>
+                            <function name="getWidgetType" />
+                        </interface>
+                    </component>
+                `);
+
+                program.setFile('components/Widget.bs', `
+                    interface WidgetInternal
+                       name as string
+                    end interface
+
+                    function getWidgetType(input as string) as WidgetInternal
+                        return {name: input}
+                    end function
+                `);
+
+                let utilFile = program.setFile<BrsFile>('source/util.bs', `
+                    sub someFunc(widget as roSGNodeWidget)
+                        thing = widget@.getWidgetType("hello")
+                        print thing
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = utilFile.getFunctionScopeAtPosition(util.createPosition(3, 31));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                const sourceScope = program.getScopeByName('source');
+                sourceScope.linkSymbolTable();
+                const thingType = symbolTable.getSymbolType('thing', opts) as InterfaceType;
+
+                expectTypeToBe(thingType, InterfaceType);
+                expect(thingType.name).to.eq('WidgetInternal');
                 sourceScope.unlinkSymbolTable();
             });
         });

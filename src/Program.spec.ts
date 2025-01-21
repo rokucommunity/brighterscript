@@ -19,7 +19,7 @@ import type { SinonSpy } from 'sinon';
 import { createSandbox } from 'sinon';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import { AssetFile } from './files/AssetFile';
-import type { ProvideFileEvent, CompilerPlugin, BeforeProvideFileEvent, AfterProvideFileEvent, BeforeFileAddEvent, AfterFileAddEvent, BeforeFileRemoveEvent, AfterFileRemoveEvent } from './interfaces';
+import type { ProvideFileEvent, CompilerPlugin, BeforeProvideFileEvent, AfterProvideFileEvent, BeforeFileAddEvent, AfterFileAddEvent, BeforeFileRemoveEvent, AfterFileRemoveEvent, ScopeValidationOptions } from './interfaces';
 import { StringType, TypedFunctionType, DynamicType, FloatType, IntegerType, InterfaceType, ArrayType, BooleanType, DoubleType, UnionType } from './types';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { ComponentType } from './types/ComponentType';
@@ -584,6 +584,161 @@ describe('Program', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        describe('changed symbols', () => {
+            it('includes components when component interface changes', () => {
+                program.setFile('components/widget.xml', trim`
+                    <component name="Widget" extends="Group">
+                        <interface>
+                            <field id="foo" type="string" />
+                        </interface>
+                    </component>
+                `);
+                program.setFile('components/other.xml', trim`
+                    <component name="Other" extends="Group">
+                        <interface>
+                            <field id="foo" type="string" />
+                        </interface>
+                    </component>
+                `);
+                program.setFile('source/main.bs', `
+                    sub sourceScopeFunc()
+                    end sub
+                `);
+                program.validate();
+                let options: ScopeValidationOptions = program['currentScopeValidationOptions'];
+                expect(options.changedSymbols.get(SymbolTypeFlag.typetime).has('rosgnodewidget')).to.be.true;
+                expect(options.changedSymbols.get(SymbolTypeFlag.typetime).has('rosgnodeother')).to.be.true;
+
+                expectZeroDiagnostics(program);
+                //change widget
+                program.setFile('components/widget.xml', trim`
+                    <component name="Widget" extends="Group">
+                        <interface>
+                            <field id="foo" type="integer" />
+                        </interface>
+                    </component>
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                options = program['currentScopeValidationOptions'];
+                expect(options.changedSymbols.get(SymbolTypeFlag.typetime).has('rosgnodewidget')).to.be.true;
+                expect(options.changedSymbols.get(SymbolTypeFlag.typetime).has('rosgnodeother')).to.be.false;
+            });
+
+            it('includes components when component callfunc changes', () => {
+                program.setFile('components/widget.xml', trim`
+                    <component name="Widget" extends="Group">
+                        <script type="text/brightscript" uri="widget.bs" />
+                        <interface>
+                            <function name="foo" />
+                        </interface>
+                    </component>
+                `);
+                program.setFile('components/widget.bs', `
+                    sub foo()
+                    end sub
+                `);
+                program.setFile('components/other.xml', trim`
+                    <component name="Other" extends="Group">
+                        <interface>
+                            <field id="foo" type="string" />
+                        </interface>
+                    </component>
+                `);
+                program.setFile('source/main.bs', `
+                    sub sourceScopeFunc()
+                    end sub
+                `);
+                program.validate();
+                let options: ScopeValidationOptions = program['currentScopeValidationOptions'];
+                expect(options.changedSymbols.get(SymbolTypeFlag.typetime).has('rosgnodewidget')).to.be.true;
+                expect(options.changedSymbols.get(SymbolTypeFlag.typetime).has('rosgnodeother')).to.be.true;
+
+                expectZeroDiagnostics(program);
+                //change widget@.foo
+                program.setFile('components/widget.bs', `
+                    sub foo(input)
+                        print input
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                options = program['currentScopeValidationOptions'];
+                expect(options.changedSymbols.get(SymbolTypeFlag.typetime).has('rosgnodewidget')).to.be.true;
+                expect(options.changedSymbols.get(SymbolTypeFlag.typetime).has('rosgnodeother')).to.be.false;
+            });
+
+            it('includes types that depend on a changed component', () => {
+                program.setFile('components/widget.xml', trim`
+                    <component name="Widget" extends="Group">
+                        <script type="text/brightscript" uri="widget.bs" />
+                        <interface>
+                            <function name="foo" />
+                        </interface>
+                    </component>
+                `);
+                program.setFile('components/widget.bs', `
+                    sub foo()
+                    end sub
+                `);
+                program.setFile('components/other.xml', trim`
+                    <component name="Other" extends="Group">
+                        <interface>
+                            <field id="foo" type="string" />
+                        </interface>
+                    </component>
+                `);
+                program.setFile('source/main.bs', `
+                    interface IncludesWidget
+                        widget as roSGNodeWidget
+                    end interface
+
+                    sub sourceScopeFunc()
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                let options: ScopeValidationOptions = program['currentScopeValidationOptions'];
+                expect(options.changedSymbols.get(SymbolTypeFlag.typetime).has('rosgnodewidget')).to.be.true;
+                expect(options.changedSymbols.get(SymbolTypeFlag.typetime).has('rosgnodeother')).to.be.true;
+                expect(options.changedSymbols.get(SymbolTypeFlag.typetime).has('includeswidget')).to.be.true;
+
+                // change roSgNodeOther
+                program.setFile('components/other.xml', trim`
+                    <component name="Other" extends="Group">
+                        <interface>
+                            <field id="foo" type="integer" />
+                        </interface>
+                    </component>
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                options = program['currentScopeValidationOptions'];
+
+                // only rosgnodewidget changes
+                expect(options.changedSymbols.get(SymbolTypeFlag.typetime).has('rosgnodewidget')).to.be.false;
+                expect(options.changedSymbols.get(SymbolTypeFlag.typetime).has('rosgnodeother')).to.be.true;
+                expect(options.changedSymbols.get(SymbolTypeFlag.typetime).has('includeswidget')).to.be.false;
+
+                //change widget@.foo
+                program.setFile('components/widget.bs', `
+                    sub foo(input)
+                        print input
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                options = program['currentScopeValidationOptions'];
+
+                // has rosgnodewidget AND IncludesWidget, because it depends on roSgnodeWidget
+                expect(options.changedSymbols.get(SymbolTypeFlag.typetime).has('rosgnodewidget')).to.be.true;
+                expect(options.changedSymbols.get(SymbolTypeFlag.typetime).has('rosgnodeother')).to.be.false;
+                expect(options.changedSymbols.get(SymbolTypeFlag.typetime).has('includeswidget')).to.be.true;
+            });
+
+        });
+
     });
 
     describe('hasFile', () => {

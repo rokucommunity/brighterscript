@@ -24,9 +24,10 @@ import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { ClassType, EnumType, FloatType, InterfaceType, VoidType } from '../types';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import * as fileUrl from 'file-url';
-import { isAALiteralExpression, isBlock } from '../astUtils/reflection';
+import { isAALiteralExpression, isBlock, isFunctionExpression } from '../astUtils/reflection';
 import type { AALiteralExpression } from '../parser/Expression';
 import { CallExpression, FunctionExpression, LiteralExpression } from '../parser/Expression';
+import { Logger } from '@rokucommunity/logger';
 
 let sinon = sinonImport.createSandbox();
 
@@ -186,6 +187,42 @@ describe('BrsFile', () => {
         `);
         program.validate();
         expectDiagnostics(program, [DiagnosticMessages.itemCannotBeUsedAsVariable('enum').message]);
+    });
+
+    it('does not crazy during validation with unique binary operator', () => {
+        //monitor the logging system, if we detect an error, this test fails
+        const spy = sinon.spy(Logger.prototype, 'error');
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            namespace date
+                function timeElapsedInDay()
+                    time = 1
+                    if true then
+                        time = getInteger()
+                    end if
+                    clockSeconds = getInteger() + 1
+                    assumedMidnight = time - clockSeconds
+                    offset = assumedMidnight - 1
+                end function
+
+                function getInteger()
+                    return 1
+                end function
+            end namespace
+
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+        expect(
+            spy.getCalls().map(x => (x.args?.[0] as string)?.toString()).filter(x => x?.includes('Error when calling plugin'))
+        ).to.eql([]);
+
+        // Check the result type too
+        const sourceScope = program.getScopeByName('source');
+        sourceScope.linkSymbolTable();
+        const timeElapsedFunc = file.ast.findChild<FunctionExpression>(isFunctionExpression);
+        const symbolTable = timeElapsedFunc.body.getSymbolTable();
+        const offsetType = symbolTable.getSymbolType('offset', { flags: SymbolTypeFlag.runtime });
+        expectTypeToBe(offsetType, IntegerType);
     });
 
     it('supports the third parameter in CreateObject', () => {
@@ -1846,8 +1883,8 @@ describe('BrsFile', () => {
                         print PKG_PATH
                         print LINE_NUM
                         print new Person()
-                        m@.someCallfunc()
-                        m@.someCallfunc(1, 2)
+                        m.node@.someCallfunc()
+                        m.node@.someCallfunc(1, 2)
                         print tag\`stuff\${LINE_NUM}\${LINE_NUM}\`
                         print 1 = 1 ? 1 : 2
                         print 1 = 1 ? m.one : m.two
@@ -1900,8 +1937,8 @@ describe('BrsFile', () => {
                         print "pkg:/source/main.brs"
                         print LINE_NUM
                         print Person()
-                        m.callfunc("someCallfunc")
-                        m.callfunc("someCallfunc", 1, 2)
+                        m.node.callfunc("someCallfunc")
+                        m.node.callfunc("someCallfunc", 1, 2)
                         print tag(["stuff", "", ""], [LINE_NUM, LINE_NUM])
                         print bslib_ternary(1 = 1, 1, 2)
                         print (function(__bsCondition, m)
@@ -4108,10 +4145,10 @@ describe('BrsFile', () => {
 
     describe('callfunc operator', () => {
         describe('transpile', () => {
-            it('does not produce diagnostics', () => {
+            it('does not produce diagnostics on plain roSGNode', () => {
                 program.setFile('source/main.bs', `
                     sub test()
-                        someNode = createObject("roSGNode", "Rectangle")
+                        someNode = createObject("roSGNode", "Node")
                         someNode@.someFunction({test: "value"})
                     end sub
                 `);
@@ -4122,15 +4159,13 @@ describe('BrsFile', () => {
             it('sets invalid on empty callfunc with legacyCallfuncHandling=true', async () => {
                 program.options.legacyCallfuncHandling = true;
                 await testTranspile(`
-                    sub main()
-                        node = invalid
+                    sub main(node)
                         node@.doSomething()
                         m.top.node@.doSomething()
                         m.top.node@.doSomething(1)
                     end sub
                 `, `
-                    sub main()
-                        node = invalid
+                    sub main(node)
                         node.callfunc("doSomething", invalid)
                         m.top.node.callfunc("doSomething", invalid)
                         m.top.node.callfunc("doSomething", 1)
@@ -4140,15 +4175,13 @@ describe('BrsFile', () => {
 
             it('empty callfunc allowed by default', async () => {
                 await testTranspile(`
-                    sub main()
-                        node = invalid
+                    sub main(node)
                         node@.doSomething()
                         m.top.node@.doSomething()
                         m.top.node@.doSomething(1)
                     end sub
                 `, `
-                    sub main()
-                        node = invalid
+                    sub main(node)
                         node.callfunc("doSomething")
                         m.top.node.callfunc("doSomething")
                         m.top.node.callfunc("doSomething", 1)
@@ -4158,13 +4191,11 @@ describe('BrsFile', () => {
 
             it('includes original arguments', async () => {
                 await testTranspile(`
-                    sub main()
-                        node = invalid
+                    sub main(node)
                         node@.doSomething(1, true, m.top.someVal)
                     end sub
                 `, `
-                    sub main()
-                        node = invalid
+                    sub main(node)
                         node.callfunc("doSomething", 1, true, m.top.someVal)
                     end sub
                 `);
@@ -5088,15 +5119,22 @@ describe('BrsFile', () => {
                 end class
             `);
             validateFile(mainFile);
-
-            expect(mainFile.requiredSymbols.length).to.eq(5);
+            // 'DataKind' is there twice:
+            // - when used as a type
+            // - when DataObject.kind is used
+            expect(mainFile.requiredSymbols.length).to.eq(6);
             const requiredTypeChains = mainFile.requiredSymbols.map(x => x.typeChain.map(tc => tc.name).join('.'));
-            expect(requiredTypeChains).to.have.same.members([
-                'DataKind', 'SubData', 'BaseData', 'DataProcessor', 'ProcessedData'
+            expect(Array.from(requiredTypeChains)).to.have.same.members([
+                'DataKind', 'DataKind', 'SubData', 'BaseData', 'DataProcessor', 'ProcessedData'
             ]);
             const requiredSymbolsFlags = mainFile.requiredSymbols.map(x => x.flags);
             expect(requiredSymbolsFlags).to.have.same.members([
-                SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime
+                SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime
+            ]);
+
+            const requiredSymbolsEndFlags = mainFile.requiredSymbols.map(x => x.endChainFlags);
+            expect(requiredSymbolsEndFlags).to.have.same.members([
+                SymbolTypeFlag.typetime, SymbolTypeFlag.runtime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime
             ]);
         });
 

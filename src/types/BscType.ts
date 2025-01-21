@@ -10,6 +10,7 @@ export abstract class BscType {
     public readonly memberTable: SymbolTable;
     protected __identifier: string;
     protected hasAddedBuiltInInterfaces = false;
+    public isBuiltIn = false;
 
     constructor(name = '') {
         this.__identifier = `${this.constructor.name}${name ? ': ' + name : ''}`;
@@ -73,7 +74,7 @@ export abstract class BscType {
         throw new Error('Method not implemented.');
     }
 
-    checkCompatibilityBasedOnMembers(targetType: BscType, flags: SymbolTypeFlag, data: TypeCompatibilityData = {}) {
+    checkCompatibilityBasedOnMembers(targetType: BscType, flags: SymbolTypeFlag, data: TypeCompatibilityData = {}, memberTable?: SymbolTable, targetMemberTable?: SymbolTable) {
         if (!targetType) {
             return false;
         }
@@ -90,6 +91,7 @@ export abstract class BscType {
         }
 
         if (isReferenceType(targetType) && !targetType.isResolvable()) {
+            data.unresolveableTarget = targetType.fullName;
             // we can't resolve the other type. Assume it does not fail on member checks
             return true;
         }
@@ -98,9 +100,10 @@ export abstract class BscType {
             // some sort of circular reference
             return false;
         }
-        const mySymbols = this.getMemberTable()?.getAllSymbols(flags);
+        const mySymbols = (memberTable ?? this.getMemberTable())?.getAllSymbols(flags);
+        const targetTable = (targetMemberTable ?? targetType.getMemberTable());
         for (const memberSymbol of mySymbols) {
-            const targetTypesOfSymbol = targetType.getMemberTable()
+            const targetTypesOfSymbol = targetTable
                 .getSymbolTypes(memberSymbol.name, { flags: flags })
                 ?.map(symbol => symbol.type);
             if (!targetTypesOfSymbol || targetTypesOfSymbol.length === 0) {
@@ -139,4 +142,11 @@ export abstract class BscType {
         }
         this.hasAddedBuiltInInterfaces = true;
     }
+
+    /**
+     * The level of priority of this type when in a binary operation
+     * For example Float is higher priority than integer, so Float + Int => Float
+     * Lower numbers have higher priority
+     */
+    readonly binaryOpPriorityLevel: number = 0;
 }

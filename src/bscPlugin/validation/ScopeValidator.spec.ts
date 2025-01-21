@@ -218,14 +218,40 @@ describe('ScopeValidator', () => {
                 end sub
             `);
             program.setFile('source/util.bs', `
+                sub useCallFunc(input as roSGNodeWidget, funcToCall as string)
+                    input.callFunc(funcToCall, 1, 2, 3, {})
+                end sub
+            `);
+            program.validate();
+            // no error, because we can't know what function you're actually calling
+            expectZeroDiagnostics(program);
+        });
+
+
+        it('checks for target args count on callfunc', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.brs"/>
+                    <interface>
+                        <function name="someFunc" />
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/Widget.brs', `
+                sub someFunc(input as object)
+                    print input
+                end sub
+            `);
+            program.setFile('source/util.bs', `
                 sub useCallFunc(input as roSGNodeWidget)
                     input.callFunc("someFunc", 1, 2, 3, {})
                 end sub
             `);
             program.validate();
-            //TODO: do a better job of handling callFunc() invocations!
-            //should have an error
-            expectZeroDiagnostics(program);
+            expectDiagnostics(program, [
+                DiagnosticMessages.mismatchArgumentCount(2, 5)
+            ]);
         });
 
         it('validates against scope-defined func in inner namespace, when outer namespace has same named func', () => {
@@ -3487,6 +3513,18 @@ describe('ScopeValidator', () => {
                 DiagnosticMessages.operatorTypeMismatch('=', 'uninitialized', 'invalid').message
             ]);
         });
+
+        it('allows string comparisons with object', () => {
+            program.setFile<BrsFile>('source/main.brs', `
+                sub test(x as object)
+                    if x <> "test"
+                        print x
+                    end if
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('memberAccessibilityMismatch', () => {
@@ -4036,6 +4074,232 @@ describe('ScopeValidator', () => {
                 DiagnosticMessages.cannotFindName('missingBool2', undefined, 'MediaObject').message
             ]);
         });
+
+        it('rechecks source when member type of import changes', () => {
+            // notice that width is wrongly typed as a boolean
+            program.setFile('source/type1.bs', `
+                interface SubType
+                    value as string
+                end interface
+            `);
+
+            program.setFile('source/type2.bs', `
+                interface ParentType
+                    child as Subtype
+                end interface
+            `);
+
+            program.setFile('source/main.bs', `
+                sub foo(input as ParentType)
+                    input.child.value = 1
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.assignmentTypeMismatch('integer', 'string').message
+            ]);
+
+            // fix width field type to integer
+            program.setFile('source/type1.bs', `
+                interface SubType
+                    value as integer
+                end interface
+            `);
+            program.validate();
+
+            // there should be no more errors
+            expectZeroDiagnostics(program);
+        });
+
+        it('rechecks component source when xml changes', () => {
+            // notice that width is wrongly typed as a boolean
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <field id="width" type="boolean" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                interface IWidget
+                    top as roSGNodeWidget
+                    data as roAssociativeArray
+                end interface
+
+                sub init()
+                    (m as IWidget).top.width =  100
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.assignmentTypeMismatch('integer', 'boolean').message
+            ]);
+
+            // fix width field type to integer
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <field id="width" type="integer" />
+                    </interface>
+                </component>
+            `);
+            program.validate();
+
+            // there should be no more errors
+            expectZeroDiagnostics(program);
+        });
+
+        it('rechecks complete file when type of typecasted m changes indirectly', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <interface>
+                        <field id="width" type="boolean" />
+                    </interface>
+                </component>
+            `);
+
+
+            // notice that width is wrongly typed as a boolean
+            program.setFile('components/WidgetContainer.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="WidgetContainer" extends="Group">
+                    <script uri="WidgetContainer.bs"/>
+                </component>
+            `);
+            program.setFile('components/WidgetContainerTypes.bs', `
+                interface IWidgetContainer
+                    top as roSGNodeWidgetContainer
+                    widget as roSGNodeWidget
+                end interface
+            `);
+
+            program.setFile('components/WidgetContainer.bs', `
+                import "WidgetContainerTypes.bs"
+                typecast m as IWidgetContainer
+
+                sub init()
+                    m.widget.width =  100
+                end sub
+            `);
+
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.assignmentTypeMismatch('integer', 'boolean').message
+            ]);
+
+            // fix width field type to integer
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <interface>
+                        <field id="width" type="integer" />
+                    </interface>
+                </component>
+            `);
+            program.validate();
+
+            // there should be no more errors
+            expectZeroDiagnostics(program);
+        });
+
+        it('rechecks file using callfunc when exported function type of xml changes', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="foo" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                sub foo(input as string)
+                    print input
+                end sub
+            `);
+
+
+            program.setFile('source/callFoo.bs', `
+                sub callFoo(widget as roSGNodeWidget)
+                    widget@.foo(123) ' foo expects string
+                end sub
+            `);
+
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('integer', 'string').message
+            ]);
+
+            // fix function
+            program.setFile('components/Widget.bs', `
+                sub foo(input as integer)
+                    print input
+                end sub
+            `);
+            program.validate();
+
+            // there should be no more errors
+            expectZeroDiagnostics(program);
+        });
+
+        it('rechecks complete file when type of typecasted m  in same file changes indirectly', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <interface>
+                        <field id="width" type="boolean" />
+                    </interface>
+                </component>
+            `);
+
+
+            // notice that width is wrongly typed as a boolean
+            program.setFile('components/WidgetContainer.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="WidgetContainer" extends="Group">
+                    <script uri="WidgetContainer.bs"/>
+                </component>
+            `);
+
+            program.setFile('components/WidgetContainer.bs', `
+                typecast m as IWidgetContainer
+
+                 interface IWidgetContainer
+                    top as roSGNodeWidgetContainer
+                    widget as roSGNodeWidget
+                end interface
+
+                sub init()
+                    m.widget.width =  100
+                end sub
+            `);
+
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.assignmentTypeMismatch('integer', 'boolean').message
+            ]);
+
+            // fix width field type to integer
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <interface>
+                        <field id="width" type="integer" />
+                    </interface>
+                </component>
+            `);
+            program.validate();
+
+            // there should be no more errors
+            expectZeroDiagnostics(program);
+        });
     });
 
 
@@ -4107,4 +4371,594 @@ describe('ScopeValidator', () => {
         });
     });
 
+    describe('callFunc', () => {
+        it('allows access to member of return type when return type is custom node', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getOther" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                function getOther(name as string) as roSgNodeOther
+                    other =  createObject("roSgNode", "Other")
+                    other.myValue = name
+                    return other
+                end function
+            `);
+
+            program.setFile('components/Other.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Other" extends="Group">
+                    <interface>
+                        <field id="myValue" type="string" />
+                    </interface>
+                </component>
+            `);
+
+
+            program.setFile('components/MainScene.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MainScene" extends="Scene">
+                    <script uri="MainScene.bs"/>
+                </component>
+            `);
+
+            program.setFile('components/MainScene.bs', `
+                sub someFunc(widget as roSGNodeWidget)
+                    otherNode = widget@.getOther("3.14")
+                    print otherNode.myValue
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows access to member of return type when return type is custom type', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getOther" />
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/types.bs', `
+                interface SomeIFace
+                   myValue as string
+                end interface
+            `);
+
+            program.setFile('components/Widget.bs', `
+                import "pkg:/components/types.bs"
+
+                function getOther(name as string) as SomeIFace
+                    other = {myValue: name} as SomeIface
+                    other.myValue = name
+                    return other
+                end function
+            `);
+
+            program.setFile('components/MainScene.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MainScene" extends="Scene">
+                    <script uri="MainScene.bs"/>
+                </component>
+            `);
+
+            program.setFile('components/MainScene.bs', `
+                sub someFunc(widget as roSGNodeWidget)
+                    otherNode = widget@.getOther("3.14")
+                    print otherNode.myValue
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows access to custom type member of return type when return type is custom type', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getOther" />
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/types.bs', `
+                interface SomeIFace
+                   subFace as SubIface
+                end interface
+
+                interface SubIface
+                    myValue as string
+                end interface
+            `);
+
+            program.setFile('components/Widget.bs', `
+                import "pkg:/components/types.bs"
+
+                function getOther(name as string) as SomeIFace
+                    other = {subFace: {myValue: name}} as SomeIface
+                    return other
+                end function
+            `);
+
+            program.setFile('components/MainScene.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MainScene" extends="Scene">
+                    <script uri="MainScene.bs"/>
+                </component>
+            `);
+
+            program.setFile('components/MainScene.bs', `
+                sub someFunc(widget as roSGNodeWidget)
+                    otherNode = widget@.getOther("3.14")
+                    print otherNode.subFace.myValue
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('correctly finds error with using unknown member of callfunc return type when return type is custom type', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getOther" />
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/types.bs', `
+                interface SomeIFace
+                   subFace as SubIface
+                end interface
+
+                interface SubIface
+                    myValue as string
+                end interface
+            `);
+
+            program.setFile('components/Widget.bs', `
+                import "pkg:/components/types.bs"
+
+                function getOther(name as string) as SomeIFace
+                    other = {subFace: {myValue: name}} as SomeIface
+                    return other
+                end function
+            `);
+
+            program.setFile('components/MainScene.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MainScene" extends="Scene">
+                    <script uri="MainScene.bs"/>
+                </component>
+            `);
+
+            program.setFile('components/MainScene.bs', `
+                sub someFunc(widget as roSGNodeWidget)
+                    otherNode = widget@.getOther("3.14")
+                    print otherNode.subFace.notIncluded
+                end sub
+            `);
+
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('notIncluded', 'SubIface.notIncluded', 'SubIface').message
+            ]);
+        });
+
+        it('catches when a non-component type has callfunc invocation', () => {
+            program.setFile('source/test.bs', `
+                sub printName(widget as integer)
+                    print widget@.toStr()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindCallFuncFunction('toStr', 'integer@.toStr', 'integer').message
+            ]);
+        });
+
+        it('allows to types that reference themselves', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getList" />
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/types.bs', `
+                interface LinkedList
+                    value as integer
+                    optional data as roAssociativeArray
+                    optional next as LinkedList
+                end interface
+            `);
+
+            program.setFile('components/Widget.bs', `
+                import "pkg:/components/types.bs"
+
+                function getList() as LinkedList
+                    list  = {
+                        value: 1,
+                        next: {
+                            value: 2,
+                            next: {
+                                value: 3
+                            }
+                        }
+                    } as LinkedList
+                    return list
+                end function
+            `);
+
+            program.setFile('components/MainScene.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MainScene" extends="Scene">
+                    <script uri="MainScene.bs"/>
+                </component>
+            `);
+
+            program.setFile('components/MainScene.bs', `
+                sub someFunc(widget as roSGNodeWidget)
+                    list = widget@.getList()
+                    print list.next.next.value
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('finds invalid func name of callfunc()', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getName" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                function getName() as string
+                    return "John Doe"
+                end function
+            `);
+
+            program.setFile('source/test.bs', `
+                sub printName(widget as roSGNodeWidget)
+                    print widget.callFunc("whatever")
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindCallFuncFunction('whatever', 'roSGNodeWidget@.whatever', 'roSGNodeWidget').message
+            ]);
+        });
+
+        it('finds invalid func name of @ callfunc invocation', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getName" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                function getName() as string
+                    return "John Doe"
+                end function
+            `);
+
+            program.setFile('source/test.bs', `
+                sub printName(widget as roSGNodeWidget)
+                    print widget@.whatever()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindCallFuncFunction('whatever', 'roSGNodeWidget@.whatever', 'roSGNodeWidget').message
+            ]);
+        });
+
+        it('catches func name of callfunc() with spaces', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getName" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                function getName() as string
+                    return "John Doe"
+                end function
+            `);
+
+            program.setFile('source/test.bs', `
+                sub printName(widget as roSGNodeWidget)
+                    print widget.callFunc("whatever the name is")
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindCallFuncFunction('whatever the name is', 'roSGNodeWidget@.whatever the name is', 'roSGNodeWidget').message
+            ]);
+        });
+
+        it('validates arg type of callfunc()', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getName" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                function getName(name as string, count as integer) as string
+                    return "John Doe"
+                end function
+            `);
+
+            program.setFile('source/test.bs', `
+                sub printName(widget as roSGNodeWidget)
+                    print widget.callFunc("getName", 12, "not int")
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('integer', 'string').message,
+                DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+            ]);
+        });
+
+        it('has no error on plain roSGNode', () => {
+            program.setFile('source/test.bs', `
+                sub doCallfunc(nodeName as string)
+                    node = createObject("roSgNode", nodeName)
+                    node.callfunc("someFunc", 1, 2, 3)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('has error on regular builtIn types', () => {
+            program.setFile('source/test.bs', `
+                sub doCallfunc()
+                    node = createObject("roSgNode", "Rectangle")
+                    node.callfunc("someFunc", 1, 2, 3)
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindCallFuncFunction('someFunc', 'roSGNodeRectangle@.someFunc', 'roSGNodeRectangle')
+            ]);
+        });
+
+        it('allows callfunc on flexible types', () => {
+            program.setFile('source/test.bs', `
+                sub doCallfunc(obj as object, dyn as dynamic, node as roSGNode)
+                    obj.callfunc("testFunc")
+                    obj@.testFunc()
+
+                    dyn.callfunc("testFunc")
+                    dyn@.testFunc()
+
+                    node.callfunc("testFunc")
+                    node@.testFunc()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows callfunc on components from component library', () => {
+            program.setFile('source/test.bs', `
+                sub doCallfunc()
+                    fromComponentLibrary = CreateObject("roSGNode", "library:SomeComponent")
+                    fromComponentLibrary@.someFunc()
+                    fromComponentLibrary.callfunc("someFunc")
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows callfunc on the dynamic result of a function call', () => {
+            program.setFile('source/test.bs', `
+                sub doCallfunc(nodeName)
+                    getNode(nodeName)@.someCallFunc(1,2,3)
+                end sub
+
+                function getNode(nodeType)
+                    return CreateObject("roSGNode", nodeType)
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('validates callfunc on a known result of a function call', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getName" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                function getName(name as string, count as integer) as string
+                    return "John Doe"
+                end function
+            `);
+
+            program.setFile('source/test.bs', `
+                sub doCallfunc()
+                    getWidget()@.getName("someStr", "not an int")
+                end sub
+
+                function getWidget() as roSGNodeWidget
+                    return CreateObject("roSGNode", "Widget")
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+            ]);
+        });
+
+        it('validates callfunc on a known result of a callfunc call', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getName" />
+                        <function name="getSelf" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                function getName(name as string, count as integer) as string
+                    return "John Doe"
+                end function
+
+                function getSelf() as roSGNodeWidget
+                    return m.top
+                end function
+            `);
+
+            program.setFile('source/test.bs', `
+                sub doCallfunc(widget as roSGNodeWidget)
+                    widget@.getSelf()@.getName("someStr", "not an int")
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+            ]);
+        });
+
+        it('respects return value of as callfunc functions', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getInt" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                sub getInt() as integer
+                    return 1
+                end sub
+            `);
+
+            program.setFile('source/test.bs', `
+                sub doCallfunc(widget as roSGNodeWidget)
+                    takesInt(widget@.getInt())
+                end sub
+
+                sub takesInt(number as integer)
+                    print number
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('respects return value of as callfunc functions - negative case', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getInt" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                sub getInt() as integer
+                    return 1
+                end sub
+            `);
+
+            program.setFile('source/test.bs', `
+                sub doCallfunc(widget as roSGNodeWidget)
+                    takesString(widget@.getInt())
+                end sub
+
+                sub takesString(word as string)
+                    print word
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('integer', 'string').message
+            ]);
+        });
+
+        it('allows return value of as void functions to be dynamic', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="noop" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                sub noop()
+                end sub
+            `);
+
+            program.setFile('source/test.bs', `
+                sub doCallfunc(widget as roSGNodeWidget)
+                    takesAny(widget@.noop())
+                end sub
+
+                sub takesAny(anything)
+                    print anything
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+    });
 });
+

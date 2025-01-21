@@ -6,15 +6,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.42](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.41...v1.0.0-alpha.42) - 2025-01-17
+### Added
+ - Parser error when custom type encountered in brs file ([#1336](https://github.com/rokucommunity/brighterscript/pull/1336))
+ - Add diagnostic on using parent function var in inner func ([#1369](https://github.com/rokucommunity/brighterscript/pull/1369))
+ - Added more unit tests for namespace as variable ([#1385](https://github.com/rokucommunity/brighterscript/pull/1385))
+ - Adds Callfunc Completion and Validation ([#1352](https://github.com/rokucommunity/brighterscript/pull/1352))
+### Changed
+ - Allows more missing tokens in Transpile ([#1340](https://github.com/rokucommunity/brighterscript/pull/1340))
+ - Refine Diagnostic Filters and adds human-readable diagnostic names ([#1241](https://github.com/rokucommunity/brighterscript/pull/1241))
+ - Changes `expectedReturnStatement` to `returnTypeCoercionMismatch` ([#1370](https://github.com/rokucommunity/brighterscript/pull/1370))
+ - Properly types `invalid` as `InvalidType` ([#1378](https://github.com/rokucommunity/brighterscript/pull/1378))
+ - Eliminates unnecessary import and fractional hex diagnostics ([#1377](https://github.com/rokucommunity/brighterscript/pull/1377))
+ - Refactors `PrintStatement` so that `.values` array is all expressions ([#1296](https://github.com/rokucommunity/brighterscript/pull/1296))
+ - Augments handling of void returns ([#1380](https://github.com/rokucommunity/brighterscript/pull/1380))
+ - Assign invalid types as dynamic ([#1389](https://github.com/rokucommunity/brighterscript/pull/1389))
+### Fixed
+ - Fix Vector2DFieldInterpolator.keyValue type ([#1339](https://github.com/rokucommunity/brighterscript/pull/1339))
+ - Fix an issue with doc scraper and re-scraped docs ([#1368](https://github.com/rokucommunity/brighterscript/pull/1368))
+ - Fix type chain for looking up params with type defs from @param ([#1374](https://github.com/rokucommunity/brighterscript/pull/1374))
+ - Fix default type for ArrayLIteral with enum member inner types ([#1373](https://github.com/rokucommunity/brighterscript/pull/1373))
+ - Fix crash when unraveling complex `BinaryReferenceType` ([#1398](https://github.com/rokucommunity/brighterscript/pull/1398))
+ - Fixes How `BinaryOperators` work on Unions ([#1400](https://github.com/rokucommunity/brighterscript/pull/1400))
+
+
+
 ## [1.0.0-alpha.41](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.40...v1.0.0-alpha.41) - 2024-10-20
 ### Fixed
- - allow any node members in brs files ([#1299)](https://github.com/rokucommunity/brighterscript/pull/1333))
+ - allow any node members in brs files ([#1299](https://github.com/rokucommunity/brighterscript/pull/1333))
 
 
 
 ## [1.0.0-alpha.40](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.39...v1.0.0-alpha.40) - 2024-10-19
 ### Added
- - diagnostic if no return statement found in function ([#1299)](https://github.com/rokucommunity/brighterscript/pull/1299))
+ - diagnostic if no return statement found in function ([#1299](https://github.com/rokucommunity/brighterscript/pull/1299))
 ### Fixed
  - hide annoying log messages ([#1332](https://github.com/rokucommunity/brighterscript/pull/1332))
  - flag using outer namespaced function indirectly ([#1319)](https://github.com/rokucommunity/brighterscript/pull/1319))
@@ -358,6 +383,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.66.0-alpha.0](https://github.com/rokucommunity/brighterscript/compare/v0.65.1...v0.66.0-alpha.0) - 2023-06-09
 ### Changed
  - all the type tracking stuff!
+## [0.68.3](https://github.com/rokucommunity/brighterscript/compare/v0.68.2...v0.68.3) - 2025-01-13
+### Changed
+ - Export more items ([#1394](https://github.com/rokucommunity/brighterscript/pull/1394))
+### Fixed
+ - Fix class transpile issue with child class constructor not inherriting parent params ([#1390](https://github.com/rokucommunity/brighterscript/pull/1390))
+
+
+
 ## [0.68.2](https://github.com/rokucommunity/brighterscript/compare/v0.68.1...v0.68.2) - 2024-12-06
 ### Changed
  - Add more convenience exports from vscode-languageserver ([#1359](https://github.com/rokucommunity/brighterscript/pull/1359))

@@ -1010,6 +1010,10 @@ export interface ExtraSymbolData {
      */
     isBuiltIn?: boolean;
     /**
+     * Was this a result of a callfunc?
+     */
+    isFromCallFunc?: boolean;
+    /**
      * Name of plugin that defined this symbol
      */
     pluginName?: string;
@@ -1096,6 +1100,10 @@ export interface TypeChainProcessResult {
      * The AstNode of the item
      */
     astNode: AstNode;
+    /**
+     * Does the chain contain a type that crossed a callFunc boundary?
+     */
+    crossedCallFunc: boolean;
 }
 
 export interface TypeCompatibilityData {
@@ -1105,6 +1113,8 @@ export interface TypeCompatibilityData {
     // override for diagnostic message - useful for Arrays with different default types
     actualType?: BscType;
     expectedType?: BscType;
+    allowNameEquality?: boolean;
+    unresolveableTarget?: string;
 }
 
 export interface NamespaceContainer {

@@ -14,6 +14,7 @@ export class StringType extends BscType {
 
     public readonly kind = BscTypeKind.StringType;
 
+    public isBuiltIn = true;
     /**
      * A static instance that can be used to reduce memory and constructor costs, since there's nothing unique about this
      */
