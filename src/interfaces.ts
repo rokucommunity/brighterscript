@@ -228,13 +228,9 @@ export interface CompilerPlugin {
     name: string;
 
     /**
-     * A list of brighterscript-style function declarations of allowed annotations
-     * Eg.: [
-     *   `inline()`,
-     *   `suite(suiteConfig as object)`
-     * ]
+     * A list of function declarations of allowed annotations
      */
-    annotations?: Array<string | TypedFunctionType | AnnotationDeclaration>;
+    annotations?: Array<TypedFunctionType | AnnotationDeclaration>;
 
     /**
      * Called when plugin is initially loaded

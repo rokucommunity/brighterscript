@@ -164,18 +164,14 @@ export interface CompilerPlugin {
     name: string;
 
     /**
-     * A list of brighterscript-style function declarations of allowed annotations
-     * Eg.: [
-     *   `inline()`,
-     *   `suite(suiteConfig as object)`
-     * ]
+     * A list of function declarations of allowed annotations
      */
-    annotations?: string[];
+    annotations?: Array<TypedFunctionType | AnnotationDeclaration>;
 
     /**
      * Called when plugin is initially loaded
      */
-    onPluginConfigure?(event: onPluginConfigureEvent): any;
+    onPluginConfigure?(event: OnPluginConfigureEvent): any;
 
     /**
      * Called before a new program is created
@@ -648,14 +644,20 @@ export default function plugin() {
 
 Plugins may provide [annotations](annotations.md) that can be used to add metadata to any statement in the code.
 
-Plugins must declare the annotations they support, so they can be validated properly. To declare an annotation, it must be listed in the `annotations` property - a list of Brighterscript-style function declarations.
+Plugins must declare the annotations they support, so they can be validated properly. To declare an annotation, it must be listed in the `annotations` property - a list of instances of `TypedFunctionType`, or, if you want to include a description as well, use `AnnotationDeclaration`.
 
 For example:
 
 ```typescript
    this.annotations = [
-        'inline()',
-        'log(prefix as string, addLineNumbers = false as boolean)'
+        new TypedFunctionType(VoidType.instance).setName('inline'),
+        { 
+            description: 'Add a log message whenever this function is called',
+            type: new TypedFunctionType(VoidType.instance)
+                .setName('log')
+                .addParameter('prefix', StringType.instance)
+                .addParameter('addLineNumbers', BooleanType.instance, true)
+        }
    ];
 ```
 
@@ -669,9 +671,17 @@ import { isBrsFile, createVisitor, WalkMode, BeforePrepareFileEvent, CompilerPlu
 export default function plugin() {
     return {
         name: 'addLogging',
-        annotations: [
-            'log(prefix as string, addLineNumbers = false as boolean)'
-        ],
+        annotations: [{ 
+            description: `
+                Add a log message whenever this function is called
+                @param {string} prefix Words that appear before the regular log message
+                @param {boolean} [addLineNumbers=false] optional param to include line numbers
+            `
+            type: new TypedFunctionType(VoidType.instance)
+                .setName('log')
+                .addParameter('prefix', StringType.instance)
+                .addParameter('addLineNumbers', BooleanType.instance, true)
+        }],
         beforePrepareFile: (event: BeforePrepareFileEvent) => {
             if (isBrsFile(event.file)) {
                 event.file.ast.walk(createVisitor({
