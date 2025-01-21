@@ -13,12 +13,7 @@ import type { Token } from '../../lexer/Token';
 import { AstNodeKind } from '../../parser/AstNode';
 import type { AstNode } from '../../parser/AstNode';
 import type { Expression } from '../../parser/AstNode';
-<<<<<<< HEAD
-import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression, LiteralExpression, FunctionExpression, CallExpression } from '../../parser/Expression';
-=======
-import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression, LiteralExpression, FunctionExpression, CallfuncExpression } from '../../parser/Expression';
-import { CallExpression } from '../../parser/Expression';
->>>>>>> release-1.0.0
+import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression, LiteralExpression, FunctionExpression, CallExpression, CallfuncExpression } from '../../parser/Expression';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BscType } from '../../types/BscType';
 import type { BscFile } from '../../files/BscFile';
@@ -399,14 +394,6 @@ export class ScopeValidator {
             // We're calling a class - get the constructor
             funcType = funcType.getMemberType('new', getTypeOptions);
         }
-<<<<<<< HEAD
-        if (funcType?.isResolvable() && isTypedFunctionType(funcType)) {
-            //get min/max parameter count for callable
-            const { minParams, maxParams } = funcType.getMinMaxParamCount();
-            let expCallArgCount = expression.args.length;
-            if (expCallArgCount > maxParams || expCallArgCount < minParams) {
-                let minMaxParamsText = minParams === maxParams ? maxParams : `${minParams}-${maxParams}`;
-=======
         const callErrorLocation = expression?.callee?.location;
         return this.validateFunctionCall(file, funcType, callErrorLocation, expression.args);
 
@@ -453,20 +440,7 @@ export class ScopeValidator {
         }
 
         //get min/max parameter count for callable
-        let minParams = 0;
-        let maxParams = 0;
-        for (let param of funcType.params) {
-            maxParams++;
-            //optional parameters must come last, so we can assume that minParams won't increase once we hit
-            //the first isOptional
-            if (param.isOptional !== true) {
-                minParams++;
-            }
-        }
-        if (funcType.isVariadic) {
-            // function accepts variable number of arguments
-            maxParams = CallExpression.MaximumArguments;
-        }
+        const { minParams, maxParams } = funcType.getMinMaxParamCount();
         const argsForCall = argOffset < 1 ? args : args.slice(argOffset);
 
         let expCallArgCount = argsForCall.length;
@@ -489,48 +463,18 @@ export class ScopeValidator {
             }
 
             if (isCallableType(paramType) && isClassType(argType) && isClassStatement(data.definingNode)) {
-                argType = data.definingNode.getConstructorType();
+                argType = data.definingNode?.getConstructorType();
             }
 
             const compatibilityData: TypeCompatibilityData = {};
             const isAllowedArgConversion = this.checkAllowedArgConversions(paramType, argType);
             if (!isAllowedArgConversion && !paramType?.isTypeCompatible(argType, compatibilityData)) {
->>>>>>> release-1.0.0
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.argumentTypeMismatch(argType.toString(), paramType.toString(), compatibilityData),
                     location: arg.location
                 });
             }
-<<<<<<< HEAD
-            let paramIndex = 0;
-            for (let arg of expression.args) {
-                const data = {} as ExtraSymbolData;
-                let argType = this.getNodeTypeWrapper(file, arg, { flags: SymbolTypeFlag.runtime, data: data });
-
-                let paramType = funcType.params[paramIndex]?.type;
-                if (!paramType) {
-                    // unable to find a paramType -- maybe there are more args than params
-                    break;
-                }
-
-                if (isCallableType(paramType) && isClassType(argType) && isClassStatement(data.definingNode)) {
-                    argType = data.definingNode?.getConstructorType();
-                }
-
-                const compatibilityData: TypeCompatibilityData = {};
-                const isAllowedArgConversion = this.checkAllowedArgConversions(paramType, argType);
-                if (!isAllowedArgConversion && !paramType?.isTypeCompatible(argType, compatibilityData)) {
-                    this.addMultiScopeDiagnostic({
-                        ...DiagnosticMessages.argumentTypeMismatch(argType.toString(), paramType.toString(), compatibilityData),
-                        location: arg.location
-                    });
-                }
-                paramIndex++;
-            }
-
-=======
             paramIndex++;
->>>>>>> release-1.0.0
         }
     }
 

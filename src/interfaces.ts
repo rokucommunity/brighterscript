@@ -239,7 +239,7 @@ export interface CompilerPlugin {
     /**
      * Called when plugin is initially loaded
      */
-    onPluginConfigure?(event: onPluginConfigureEvent): any;
+    onPluginConfigure?(event: OnPluginConfigureEvent): any;
 
     /**
      * Called before a new program is created

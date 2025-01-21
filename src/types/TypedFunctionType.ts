@@ -47,7 +47,7 @@ export class TypedFunctionType extends BaseFunctionType {
         return this;
     }
 
-    public seVariadic(variadic: boolean) {
+    public setVariadic(variadic: boolean) {
         this.isVariadic = variadic;
         return this;
     }

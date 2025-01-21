@@ -1406,7 +1406,7 @@ describe('BrsFileValidator', () => {
                 new TypedFunctionType(VoidType.instance)
                     .setName('takesOneOrMore')
                     .addParameter('x', DynamicType.instance)
-                    .seVariadic(true));
+                    .setVariadic(true));
 
             program.setFile<BrsFile>('source/main.bs', `
                 @takesOneOrMore(1)
