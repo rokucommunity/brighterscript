@@ -2744,7 +2744,12 @@ export class Util {
             resultType = valueType;
         }
         if (!resultType.isResolvable()) {
-            resultType = new ParamTypeFromValueReferenceType(resultType);
+            if (isUnionType(resultType)) {
+                resultType = DynamicType.instance;
+            } else {
+                resultType = new ParamTypeFromValueReferenceType(resultType);
+            }
+
         } else if (isEnumMemberType(resultType)) {
             // the type was an enum member... Try to get the parent enum type
             resultType = resultType.parentEnumType ?? resultType;

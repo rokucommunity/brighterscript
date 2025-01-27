@@ -1,11 +1,11 @@
 import { expect } from '../../chai-config.spec';
 import type { BrsFile } from '../../files/BrsFile';
 import type { AALiteralExpression, DottedGetExpression, FunctionExpression } from '../../parser/Expression';
-import type { AssignmentStatement, ClassStatement, FunctionStatement, NamespaceStatement, PrintStatement } from '../../parser/Statement';
+import { ForEachStatement, IfStatement, type AssignmentStatement, type ClassStatement, type FunctionStatement, type NamespaceStatement, type PrintStatement } from '../../parser/Statement';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics } from '../../testHelpers.spec';
 import { Program } from '../../Program';
-import { isAssignmentStatement, isClassStatement, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isNamespaceStatement, isPrintStatement, isReturnStatement } from '../../astUtils/reflection';
+import { isAssignmentStatement, isClassStatement, isForEachStatement, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isIfStatement, isNamespaceStatement, isPrintStatement, isReturnStatement } from '../../astUtils/reflection';
 import util from '../../util';
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
@@ -17,6 +17,7 @@ import { StringType } from '../../types/StringType';
 import { DynamicType, TypedFunctionType } from '../../types';
 import { ParseMode } from '../../parser/Parser';
 import type { ExtraSymbolData } from '../../interfaces';
+import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 
 describe('BrsFileValidator', () => {
     let program: Program;
@@ -329,6 +330,50 @@ describe('BrsFileValidator', () => {
             location: { range: util.createRange(4, 20, 4, 30) }
         }]);
     });
+
+    describe('for each', () => {
+        it('handles getting default type of array of AAs with reference types', () => {
+            const mainFile = program.setFile<BrsFile>('source/main.bs', `
+                function test()
+                    settings = []
+                    screensData = [
+                        { id: "home", actions: [Actions.TrackUser1, Actions.Next], listMode: ListModes.Avatar },
+                        { id: "home", actions: [Actions.TrackUser1, Actions.Next], listMode: ListModes.Small },
+                        { id: "test", actions: [Actions.TrackUser2, Actions.Next], listMode: ListModes.Profile },
+                        { id: "autoplay", actions: [Actions.TrackUser2, Actions.Next], listMode: ListModes.Large }
+                    ]
+
+                    for each screenData in screensData
+                        if screenData.id = "test"
+                            settings.push(screenData)
+                        end if
+                    end for
+                    return settings
+                end function
+
+                enum Actions
+                    TrackUser1
+                    TrackUser2
+                    Next
+                end enum
+
+                enum ListModes
+                    Avatar
+                    Small
+                    Profile
+                    Large
+                end enum
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+            const forStmt = mainFile.ast.findChild<ForEachStatement>(isForEachStatement);
+            const insideFor = forStmt.body.statements[0];
+            const screenDataType = insideFor.getSymbolTable().getSymbolType('screenData', { flags: SymbolTypeFlag.runtime });
+            expectTypeToBe(screenDataType, AssociativeArrayType);
+        });
+    });
+
 
     describe('typecast statement', () => {
         it('allows being at start of file', () => {
