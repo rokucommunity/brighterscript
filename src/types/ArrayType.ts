@@ -24,23 +24,27 @@ export class ArrayType extends BscType {
     public innerTypes: BscType[] = [];
 
     public _defaultType: BscType;
+    private isCheckingInnerTypesForDefaultType = false;
 
     public get defaultType(): BscType {
         if (this._defaultType) {
             return this._defaultType;
         }
-        if (this.innerTypes?.length === 0) {
+        if (this.innerTypes?.length === 0 || this.isCheckingInnerTypesForDefaultType) {
             return DynamicType.instance;
         }
+        this.isCheckingInnerTypesForDefaultType = true;
+
         let resultType = this.innerTypes[0];
         if (this.innerTypes?.length > 1) {
-            resultType = getUniqueType(this.innerTypes, unionTypeFactory);
+            resultType = getUniqueType(this.innerTypes, unionTypeFactory) ?? DynamicType.instance;
         }
         if (isEnumMemberType(resultType)) {
             resultType = resultType.parentEnumType ?? resultType;
         }
-        this._defaultType = util.getDefaultTypeFromValueType(this.innerTypes);
-        return resultType;
+        this._defaultType = util.getDefaultTypeFromValueType(resultType);
+        this.isCheckingInnerTypesForDefaultType = false;
+        return this._defaultType;
     }
 
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
