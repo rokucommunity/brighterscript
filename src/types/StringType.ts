@@ -22,7 +22,7 @@ export class StringType extends BscType {
 
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         return (
-            isStringType(targetType) ||
+            isStringType(targetType, true) ||
             isDynamicType(targetType) ||
             isObjectType(targetType) ||
             isUnionTypeCompatible(this, targetType, data) ||
@@ -40,7 +40,7 @@ export class StringType extends BscType {
     }
 
     public isEqual(targetType: BscType): boolean {
-        return isStringType(targetType);
+        return isStringType(targetType, true);
     }
 }
 

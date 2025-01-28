@@ -562,7 +562,7 @@ export class ScopeValidator {
         //TODO: be more precise about which fields can actually accept strings
         //TODO: if RHS is a string literal, we can do more validation to make sure it's the correct type
         if (isComponentType(dottedSetStmt.obj?.getType({ flags: SymbolTypeFlag.runtime }))) {
-            if (isStringType(actualRHSType)) {
+            if (isStringType(actualRHSType, true)) {
                 return;
             }
         }
@@ -671,7 +671,7 @@ export class ScopeValidator {
         } else if (isDynamicType(rightTypeToTest) || isObjectType(rightTypeToTest)) {
             // operand is basically "any" type... ignore;
 
-        } else if (isPrimitiveType(rightType)) {
+        } else if (isPrimitiveType(rightType, true)) {
             const opResult = util.unaryOperatorResultType(unaryExpr.tokens.operator, rightTypeToTest);
             if (!opResult) {
                 this.addMultiScopeDiagnostic({
@@ -980,7 +980,7 @@ export class ScopeValidator {
             return;
         }
         const returns = func.body?.findChild<ReturnStatement>(isReturnStatement, { walkMode: WalkMode.visitAll });
-        if (!returns && isStringType(returnType)) {
+        if (!returns && isStringType(returnType, true)) {
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.returnTypeCoercionMismatch(returnType.toString()),
                 location: func.location

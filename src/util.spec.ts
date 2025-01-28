@@ -12,7 +12,7 @@ import { NamespaceType } from './types/NamespaceType';
 import { ClassType } from './types/ClassType';
 import { ReferenceType } from './types/ReferenceType';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
-import { BooleanType, DoubleType, DynamicType, FloatType, IntegerType, InvalidType, LongIntegerType, ObjectType, StringType, TypedFunctionType, UnionType, VoidType } from './types';
+import { BooleanType, DoubleType, DynamicType, FloatType, IntegerType, InterfaceType, InvalidType, LongIntegerType, ObjectType, StringType, TypedFunctionType, UnionType, VoidType } from './types';
 import { TokenKind } from './lexer/TokenKind';
 import { createToken } from './astUtils/creators';
 import { createDottedIdentifier, createVariableExpression } from './astUtils/creators';
@@ -1008,52 +1008,84 @@ describe('util', () => {
             // string plus anything else is an error - return dynamic
             expect(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Plus), StringType.instance)).to.be.undefined;
 
+            const boxedInt = new InterfaceType('roInt');
+            const boxedFloat = new InterfaceType('roFloat');
+
             // Plus
             expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Plus), IntegerType.instance), DoubleType);
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Plus), FloatType.instance), FloatType);
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Plus), LongIntegerType.instance), LongIntegerType);
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Plus), boxedFloat), FloatType);
+
             // Subtract
             expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Minus), IntegerType.instance), DoubleType);
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Minus), FloatType.instance), FloatType);
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Minus), LongIntegerType.instance), LongIntegerType);
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Minus), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Plus), boxedFloat), FloatType);
+
             // Multiply
             expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Star), IntegerType.instance), DoubleType);
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Star), FloatType.instance), FloatType);
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Star), LongIntegerType.instance), LongIntegerType);
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Star), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Star), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Star), boxedFloat), FloatType);
+
             // Mod
             expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Mod), IntegerType.instance), DoubleType);
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Mod), FloatType.instance), FloatType);
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Mod), LongIntegerType.instance), LongIntegerType);
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Mod), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Mod), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Mod), boxedFloat), FloatType);
+
             // Divide
             expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Forwardslash), IntegerType.instance), DoubleType);
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Forwardslash), FloatType.instance), FloatType);
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Forwardslash), LongIntegerType.instance), LongIntegerType);
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Forwardslash), IntegerType.instance), FloatType); // int/int -> float
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Plus), boxedFloat), FloatType);
+
+
             // Exponent
             expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Caret), IntegerType.instance), DoubleType);
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Caret), FloatType.instance), FloatType);
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Caret), LongIntegerType.instance), DoubleType);// long^int -> Double, int^long -> Double
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Caret), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Caret), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Caret), boxedFloat), FloatType);
         });
 
         it('returns the correct type for Bitshift operations', () => {
+            const boxedInt = new InterfaceType('roInt');
+            const boxedFloat = new InterfaceType('roFloat');
+
             // <<
             expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.LeftShift), IntegerType.instance), IntegerType);
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.LeftShift), FloatType.instance), IntegerType);
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.LeftShift), LongIntegerType.instance), LongIntegerType);
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.LeftShift), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.LeftShift), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.LeftShift), boxedFloat), IntegerType);
+
             // >>
             expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.RightShift), IntegerType.instance), IntegerType);
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.RightShift), FloatType.instance), IntegerType);
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.RightShift), LongIntegerType.instance), LongIntegerType);
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.RightShift), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.RightShift), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.RightShift), boxedFloat), IntegerType);
         });
 
         it('returns the correct type for Comparison operations', () => {
+            const boxedInt = new InterfaceType('roInt');
+            const boxedFloat = new InterfaceType('roFloat');
+
             // =
             expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Equal), IntegerType.instance), BooleanType);
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Equal), FloatType.instance), BooleanType);
@@ -1062,8 +1094,12 @@ describe('util', () => {
             expectTypeToBe(util.binaryOperatorResultType(InvalidType.instance, createToken(TokenKind.Equal), IntegerType.instance), BooleanType); // = accepts invalid
             expect(util.binaryOperatorResultType(StringType.instance, createToken(TokenKind.Equal), IntegerType.instance)).to.be.undefined; // only one string is not accepted
             expectTypeToBe(util.binaryOperatorResultType(StringType.instance, createToken(TokenKind.Equal), StringType.instance), BooleanType); // both strings is accepted
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Equal), IntegerType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Equal), boxedFloat), BooleanType);
             // <>
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.LessGreater), InvalidType.instance), BooleanType); // <> accepts invalid
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.LessGreater), InvalidType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedFloat, createToken(TokenKind.LessGreater), InvalidType.instance), BooleanType);
             // > - does not accept invalid
             expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Greater), IntegerType.instance), BooleanType);
             expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Greater), FloatType.instance), BooleanType);
@@ -1125,6 +1161,10 @@ describe('util', () => {
         it('handles object Types', () => {
             expectTypeToBe(util.binaryOperatorResultType(new ObjectType(), createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
         });
+
+        it('handles object Types', () => {
+            expectTypeToBe(util.binaryOperatorResultType(new ObjectType(), createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
+        });
     });
 
     describe('unaryOperatorResultType', () => {
@@ -1137,10 +1177,14 @@ describe('util', () => {
             expect(util.unaryOperatorResultType(minus, StringType.instance)).to.be.undefined;
             expectTypeToBe(util.unaryOperatorResultType(minus, DynamicType.instance), DynamicType);
             expect(util.unaryOperatorResultType(minus, VoidType.instance)).to.be.undefined;
+
+            const boxedFloat = new InterfaceType('roFloat');
+            expectTypeToBe(util.unaryOperatorResultType(minus, boxedFloat), FloatType);
         });
 
         it('returns the correct type for not operation', () => {
             let notToken = createToken(TokenKind.Not);
+            const boxedFloat = new InterfaceType('roFloat');
             expectTypeToBe(util.unaryOperatorResultType(notToken, IntegerType.instance), IntegerType);
             expectTypeToBe(util.unaryOperatorResultType(notToken, FloatType.instance), IntegerType);
             expectTypeToBe(util.unaryOperatorResultType(notToken, BooleanType.instance), BooleanType);
@@ -1148,6 +1192,7 @@ describe('util', () => {
             expect(util.unaryOperatorResultType(notToken, StringType.instance)).to.be.undefined;
             expectTypeToBe(util.unaryOperatorResultType(notToken, LongIntegerType.instance), LongIntegerType);
             expect(util.unaryOperatorResultType(notToken, VoidType.instance)).to.be.undefined;
+            expectTypeToBe(util.unaryOperatorResultType(notToken, boxedFloat), IntegerType);
         });
 
         it('handles object Types', () => {

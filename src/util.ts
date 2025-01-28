@@ -27,7 +27,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { LogLevel, createLogger } from './logging';
 import { isToken, type Identifier, type Locatable, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isComponentType, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLiteralString, isLongIntegerType, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isStatement, isStringType, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isComponentType, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isIntegerType, isInvalidType, isLiteralString, isLongIntegerType, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isStatement, isStringType, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import * as requireRelative from 'require-relative';
@@ -1787,7 +1787,7 @@ export class Util {
     }
 
     /**
-     * Return the type of the result of a binary operator
+     * Return the type of the result of a unary operator
      */
     public unaryOperatorResultType(operator: Token, exprType: BscType): BscType {
 
@@ -1811,7 +1811,7 @@ export class Util {
             case TokenKind.Minus:
                 if (isNumberType(exprType)) {
                     // a negative number will be the same type, eg, double->double, int->int, etc.
-                    return exprType;
+                    return this.getUnboxedType(exprType);
                 }
                 break;
             case TokenKind.Not:
@@ -1828,6 +1828,25 @@ export class Util {
                 break;
         }
         return undefined;
+    }
+
+    public getUnboxedType(boxedType: BscType): BscType {
+        if (isIntegerType(boxedType)) {
+            return IntegerType.instance;
+        } else if (isLongIntegerType(boxedType)) {
+            return LongIntegerType.instance;
+        } else if (isFloatType(boxedType)) {
+            return FloatType.instance;
+        } else if (isDoubleType(boxedType)) {
+            return DoubleType.instance;
+        } else if (isBooleanType(boxedType)) {
+            return BooleanType.instance;
+        } else if (isStringType(boxedType)) {
+            return StringType.instance;
+        } else if (isInvalidType(boxedType)) {
+            return InvalidType.instance;
+        }
+        return boxedType;
     }
 
     /**
