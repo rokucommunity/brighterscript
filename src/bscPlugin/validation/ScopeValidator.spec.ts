@@ -1768,6 +1768,29 @@ describe('ScopeValidator', () => {
             });
         });
 
+        it('allows boxed types', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                function takesBoxedLongInt(x as roLongInteger)
+                    return 123456& + x
+                end function
+
+                function takesLongInt(x as longInteger)
+                    return 123456& + x
+                end function
+
+                sub test()
+                    long = 123456&
+                    boxedLong = createObject("roLongInteger")
+                    print takesBoxedLongInt(long)
+                    print takesBoxedLongInt(boxedLong)
+                    print takesLongInt(long)
+                    print takesLongInt(boxedLong)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
     });
 
     describe('cannotFindName', () => {
@@ -2810,6 +2833,21 @@ describe('ScopeValidator', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        it('allows boxed types', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                function getBoxedLongInt() as roLongInteger
+                    return 123456&
+                end function
+
+                function getLongInt() as longInteger
+                    x = createObject("roLongInteger")
+                    return x
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('returnTypeCoercionMismatch', () => {
@@ -3521,6 +3559,45 @@ describe('ScopeValidator', () => {
                         print x
                     end if
                 end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows boxed types', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                function math(a as rolonginteger, b as longinteger)
+                    c = a + b
+                    c = a - b
+                    c = a * b
+                    c = a / b
+                    c = a \\ b
+
+                    d = a mod b
+                    d = a ^ b
+
+                    a++
+                    a--
+                    a += 1
+                    a -= 1
+                    a *= 1
+                    a /= 1
+                    a \= 1
+                    a <<= 1
+                    a >>= 1
+
+                    ? 1 << (2 as roInt)
+                    ? (1 as roInt) << 2
+                    ? a and b
+                    ? a or b
+
+                    j = a = b
+                    j = a <> b
+                    j = a < b
+                    j = a <= b
+                    j = a > b
+                    j = a >= b
+                end function
             `);
             program.validate();
             expectZeroDiagnostics(program);
