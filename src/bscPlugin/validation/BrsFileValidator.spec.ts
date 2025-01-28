@@ -1,11 +1,11 @@
 import { expect } from '../../chai-config.spec';
 import type { BrsFile } from '../../files/BrsFile';
 import type { AALiteralExpression, DottedGetExpression, FunctionExpression } from '../../parser/Expression';
-import type { AssignmentStatement, ClassStatement, FunctionStatement, NamespaceStatement, PrintStatement } from '../../parser/Statement';
+import type { AssignmentStatement, ClassStatement, ForEachStatement, FunctionStatement, NamespaceStatement, PrintStatement } from '../../parser/Statement';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics } from '../../testHelpers.spec';
 import { Program } from '../../Program';
-import { isAssignmentStatement, isClassStatement, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isNamespaceStatement, isPrintStatement, isReturnStatement } from '../../astUtils/reflection';
+import { isAssignmentStatement, isClassStatement, isForEachStatement, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isNamespaceStatement, isPrintStatement, isReturnStatement } from '../../astUtils/reflection';
 import util from '../../util';
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
@@ -14,7 +14,10 @@ import { FloatType } from '../../types/FloatType';
 import { IntegerType } from '../../types/IntegerType';
 import { InterfaceType } from '../../types/InterfaceType';
 import { StringType } from '../../types/StringType';
-import { DynamicType, TypedFunctionType, VoidType } from '../../types';
+import { ArrayType } from '../../types/ArrayType';
+import { DynamicType } from '../../types/DynamicType';
+import { TypedFunctionType } from '../../types/TypedFunctionType';
+import { VoidType } from '../../types/VoidType';
 import { ParseMode } from '../../parser/Parser';
 import type { ExtraSymbolData } from '../../interfaces';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
@@ -330,6 +333,83 @@ describe('BrsFileValidator', () => {
             location: { range: util.createRange(4, 20, 4, 30) }
         }]);
     });
+
+    describe('for each', () => {
+        it('handles getting default type of array of AAs with reference types', () => {
+            const mainFile = program.setFile<BrsFile>('source/main.bs', `
+                function test()
+                    settings = []
+                    screensData = [
+                        { id: "home", actions: [Actions.TrackUser1, Actions.Next], listMode: ListModes.Avatar },
+                        { id: "home", actions: [Actions.TrackUser1, Actions.Next], listMode: ListModes.Small },
+                        { id: "test", actions: [Actions.TrackUser2, Actions.Next], listMode: ListModes.Profile },
+                        { id: "autoplay", actions: [Actions.TrackUser2, Actions.Next], listMode: ListModes.Large }
+                    ]
+
+                    for each screenData in screensData
+                        if screenData.id = "test"
+                            settings.push(screenData)
+                        end if
+                    end for
+                    return settings
+                end function
+
+                enum Actions
+                    TrackUser1
+                    TrackUser2
+                    Next
+                end enum
+
+                enum ListModes
+                    Avatar
+                    Small
+                    Profile
+                    Large
+                end enum
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+            const forStmt = mainFile.ast.findChild<ForEachStatement>(isForEachStatement);
+            const insideFor = forStmt.body.statements[0];
+            const screensDataType = insideFor.getSymbolTable().getSymbolType('screensData', { flags: SymbolTypeFlag.runtime });
+            expectTypeToBe(screensDataType, ArrayType);
+            const screenDataType = insideFor.getSymbolTable().getSymbolType('screenData', { flags: SymbolTypeFlag.runtime });
+            expectTypeToBe(screenDataType, AssociativeArrayType);
+        });
+
+        it('handles getting default type of array of reference types', () => {
+            const mainFile = program.setFile<BrsFile>('source/main.bs', `
+                function test()
+                    result = []
+                    actions = [Actions.TrackUser1, Actions.Next2]
+
+                    for each action in actions
+                        if action = Actions.Next2
+                            actions.push(action)
+                        end if
+                    end for
+                    return result
+                end function
+
+                enum Actions
+                    TrackUser1
+                    TrackUser2
+                    Next2
+                end enum
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+            const forStmt = mainFile.ast.findChild<ForEachStatement>(isForEachStatement);
+            const insideFor = forStmt.body.statements[0];
+            const actionsType = insideFor.getSymbolTable().getSymbolType('actions', { flags: SymbolTypeFlag.runtime });
+            expectTypeToBe(actionsType, ArrayType);
+            const actionType = insideFor.getSymbolTable().getSymbolType('action', { flags: SymbolTypeFlag.runtime });
+            expectTypeToBe(actionType, DynamicType);
+        });
+    });
+
 
     describe('typecast statement', () => {
         it('allows being at start of file', () => {

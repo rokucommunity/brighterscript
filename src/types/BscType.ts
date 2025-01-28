@@ -121,9 +121,16 @@ export abstract class BscType {
                         }
                         const typesAreInheritableWithSameName = isInheritableType(memberSymbol.type) && isInheritableType(typeOfTargetSymbol) &&
                             memberSymbol.type.name.toLowerCase() === typeOfTargetSymbol.name.toLowerCase();
-                        const typesAreArraysWithSameDefault = isArrayType(memberSymbol.type) && isArrayType(typeOfTargetSymbol) &&
-                            memberSymbol.type.defaultType.isEqual(typeOfTargetSymbol.defaultType);
-                        const myMemberAllowsTargetType = typesAreInheritableWithSameName || typesAreArraysWithSameDefault || memberSymbol.type?.isTypeCompatible(typeOfTargetSymbol, { depth: data.depth });
+
+                        let typesAreArraysWithSameDefaultOrUnknownDefault = false;
+                        if (isArrayType(memberSymbol.type) && isArrayType(typeOfTargetSymbol)) {
+                            if (memberSymbol.type.defaultType.isResolvable() && typeOfTargetSymbol.defaultType.isResolvable()) {
+                                typesAreArraysWithSameDefaultOrUnknownDefault = memberSymbol.type.defaultType.isEqual(typeOfTargetSymbol.defaultType);
+                            } else {
+                                typesAreArraysWithSameDefaultOrUnknownDefault = true;
+                            }
+                        }
+                        const myMemberAllowsTargetType = typesAreInheritableWithSameName || typesAreArraysWithSameDefaultOrUnknownDefault || memberSymbol.type?.isTypeCompatible(typeOfTargetSymbol, { depth: data.depth });
                         if (!myMemberAllowsTargetType) {
                             data.fieldMismatches.push({ name: memberSymbol.name, expectedType: memberSymbol.type, actualType: targetType.getMemberType(memberSymbol.name, { flags: flags }) });
                         }

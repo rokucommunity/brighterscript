@@ -126,6 +126,7 @@ export class BrsFileValidator {
                 //register the for loop variable
                 const loopTargetType = node.target.getType({ flags: SymbolTypeFlag.runtime });
                 let loopVarType = isArrayType(loopTargetType) ? loopTargetType.defaultType : DynamicType.instance;
+
                 if (!loopTargetType.isResolvable()) {
                     loopVarType = new ArrayDefaultTypeReferenceType(loopTargetType);
                 }
