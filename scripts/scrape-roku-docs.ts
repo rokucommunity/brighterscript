@@ -1229,14 +1229,14 @@ class Runner {
                 texteditbox: {
                     fields: [
                         {
-                            accessPermission: 'READ_ONLY',
+                            accessPermission: 'READ_WRITE',
                             default: 'not specified',
                             description: 'Specifies the size of the font in points for the text shown in the box (undocumented).',
                             name: 'fontSize',
                             type: 'integer'
                         },
                         {
-                            accessPermission: 'READ_ONLY',
+                            accessPermission: 'READ_WRITE',
                             default: '""',
                             description: 'Specifies the URI of a TrueType or OpenType font file to be used for the text shown in the box (undocumented).',
                             name: 'fontUri',
