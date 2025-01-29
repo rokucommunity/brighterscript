@@ -1,5 +1,5 @@
 {
-    "generatedDate": "2025-01-29T14:02:25.799Z",
+    "generatedDate": "2025-01-29T14:25:19.271Z",
     "nodes": {
         "animation": {
             "description": "Extends [**AnimationBase**](https://developer.roku.com/docs/references/scenegraph/abstract-nodes/animationbase.md\n\nThe Animation node class provides animations of renderable nodes, by applying interpolator functions to the values in specified renderable node fields. For an animation to take effect, an Animation node definition must include a child field interpolator node ([FloatFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/floatfieldinterpolator.md\"FloatFieldInterpolator\"), [Vector2DFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/vector2dfieldinterpolator.md\"Vector2DFieldInterpolator\"), [ColorFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/colorfieldinterpolator.md\"ColorFieldInterpolator\")) definition for each renderable node field that is animated.\n\nThe Animation node class provides a simple linear interpolator function, where the animation takes place smoothly and simply from beginning to end. The Animation node class also provides several more complex interpolator functions to allow custom animation effects. For example, you can move a graphic image around the screen at differing speeds and curved trajectories at different times in the animation by specifying the appropriate function in the easeFunction field (quadratic and exponential are two examples of functions that can be specified). The interpolator functions are divided into two parts: the beginning of the animation (ease-in), and the end of the animation (ease-out). You can apply a specified interpolator function to either or both ease-in and ease-out, or specify no function for either or both (which is the linear function). You can also change the portion of the animation that is ease-in and ease-out to arbitrary fractional values for a quadratic interpolator function applied to both ease-in and ease-out.",
@@ -328,6 +328,13 @@
                     "description": "Specifies differing spaces between each list or grid row, to allow the spacing between rows to vary from row to row. The specified values override the itemSpacing field vector2d Y-value for each list or grid row corresponding to its position in the array, in top to bottom order. If the array contains fewer elements than the number of rows needed to display all the items in the list or grid, the itemSpacing field vector2d Y-value is used for any unspecified rows",
                     "name": "rowSpacings",
                     "type": "array of floats"
+                },
+                {
+                    "accessPermission": "READ_ONLY",
+                    "default": "false",
+                    "description": "When the list or grid is scrolling, is set to true (undocumented).",
+                    "name": "scrollingStatus",
+                    "type": "boolean"
                 },
                 {
                     "accessPermission": "READ_WRITE",
@@ -4607,7 +4614,7 @@
                 },
                 {
                     "accessPermission": "READ_WRITE",
-                    "default": "not sepcified",
+                    "default": "not specified",
                     "description": "A 9-patch or ordinary PNG of the track of the progress bar, which surrounds the filled and empty bars. This will be blended with the color specified by the `trackBlendColor` field, if set to a non-default value.",
                     "name": "percentage",
                     "type": "integer"
@@ -6530,6 +6537,20 @@
                     "description": "By default, this is set to the length of the text field, indicating that the next character to be entered should be appended at the end of the string. When used internal to the \\*\\*Keyboard\\*\\* and \\*\\*MiniKeyboard\\*\\* nodes, those nodes use this field to move the text insertion point.",
                     "name": "cursorPosition",
                     "type": "integer"
+                },
+                {
+                    "accessPermission": "READ_ONLY",
+                    "default": "not specified",
+                    "description": "Specifies the size of the font in points for the text shown in the box (undocumented).",
+                    "name": "fontSize",
+                    "type": "integer"
+                },
+                {
+                    "accessPermission": "READ_ONLY",
+                    "default": "\"\"",
+                    "description": "Specifies the URI of a TrueType or OpenType font file to be used for the text shown in the box (undocumented).",
+                    "name": "fontUri",
+                    "type": "string"
                 },
                 {
                     "accessPermission": "Read-Write",

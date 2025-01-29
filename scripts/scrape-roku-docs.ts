@@ -894,7 +894,7 @@ class Runner {
      * Merge hand-written overrides to the Roku docs. This is for missing items or fixing incorrect info
      */
     private mergeOverrides() {
-        this.result = deepmerge(this.result, {
+        const docMerges = {
             nodes: {
                 rsgpalette: {
                     availableSince: '9.4',
@@ -1216,7 +1216,7 @@ class Runner {
                         },
                         {
                             accessPermission: 'READ_WRITE',
-                            default: 'not sepcified',
+                            default: 'not specified',
                             description: 'A 9-patch or ordinary PNG of the track of the progress bar, which surrounds the filled and empty bars. This will be blended with the color specified by the `trackBlendColor` field, if set to a non-default value.',
                             name: 'percentage',
                             type: 'integer'
@@ -1225,6 +1225,35 @@ class Runner {
                     interfaces: [],
                     name: 'ProgressBar',
                     url: 'https://developer.roku.com/en-ca/docs/references/scenegraph/media-playback-nodes/video.md#ui-fields'
+                },
+                texteditbox: {
+                    fields: [
+                        {
+                            accessPermission: 'READ_ONLY',
+                            default: 'not specified',
+                            description: 'Specifies the size of the font in points for the text shown in the box (undocumented).',
+                            name: 'fontSize',
+                            type: 'integer'
+                        },
+                        {
+                            accessPermission: 'READ_ONLY',
+                            default: '""',
+                            description: 'Specifies the URI of a TrueType or OpenType font file to be used for the text shown in the box (undocumented).',
+                            name: 'fontUri',
+                            type: 'string'
+                        }
+                    ]
+                },
+                arraygrid: {
+                    fields: [
+                        {
+                            accessPermission: 'READ_ONLY',
+                            default: 'false',
+                            description: 'When the list or grid is scrolling, is set to true (undocumented).',
+                            name: 'scrollingStatus',
+                            type: 'boolean'
+                        }
+                    ]
                 }
             },
             components: {
@@ -1347,7 +1376,18 @@ class Runner {
                     }]
                 }
             }
-        });
+        };
+
+        const nodeChanges = Object.keys(docMerges.nodes);
+        const componentChanges = Object.keys(docMerges.components);
+        const interfaceChanges = Object.keys(docMerges.interfaces);
+        const eventChanges = Object.keys(docMerges.events);
+
+        console.log('Merging in doc changes for nodes: ', nodeChanges.join(', '));
+        console.log('Merging in doc changes for components: ', componentChanges.join(', '));
+        console.log('Merging in doc changes for interfaces: ', interfaceChanges.join(', '));
+        console.log('Merging in doc changes for events: ', eventChanges.join(', '));
+        this.result = deepmerge(this.result, docMerges);
 
         fixFieldByName(this.result.nodes.vector2dfieldinterpolator, 'keyValue', { type: 'array of vector2d' });
 
