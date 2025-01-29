@@ -27,7 +27,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { LogLevel, createLogger } from './logging';
 import { isToken, type Identifier, type Locatable, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isComponentType, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isIntegerType, isInvalidType, isLiteralString, isLongIntegerType, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isStatement, isStringType, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAnyReferenceType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isComponentType, isDottedGetExpression, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIntegerTypeLike, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import * as requireRelative from 'require-relative';
@@ -1582,18 +1582,18 @@ export class Util {
             rightType = DynamicType.instance;
         }
 
-        let hasDouble = isDoubleType(leftType) || isDoubleType(rightType);
-        let hasFloat = isFloatType(leftType) || isFloatType(rightType);
-        let hasLongInteger = isLongIntegerType(leftType) || isLongIntegerType(rightType);
-        let hasInvalid = isInvalidType(leftType) || isInvalidType(rightType);
+        let hasDouble = isDoubleTypeLike(leftType) || isDoubleTypeLike(rightType);
+        let hasFloat = isFloatTypeLike(leftType) || isFloatTypeLike(rightType);
+        let hasLongInteger = isLongIntegerTypeLike(leftType) || isLongIntegerTypeLike(rightType);
+        let hasInvalid = isInvalidTypeLike(leftType) || isInvalidTypeLike(rightType);
         let hasDynamic = isDynamicType(leftType) || isDynamicType(rightType);
         let bothDynamic = isDynamicType(leftType) && isDynamicType(rightType);
         let bothNumbers = isNumberType(leftType) && isNumberType(rightType);
         let hasNumber = isNumberType(leftType) || isNumberType(rightType);
-        let bothStrings = isStringType(leftType) && isStringType(rightType);
-        let hasString = isStringType(leftType) || isStringType(rightType);
-        let hasBoolean = isBooleanType(leftType) || isBooleanType(rightType);
-        let eitherBooleanOrNum = (isNumberType(leftType) || isBooleanType(leftType)) && (isNumberType(rightType) || isBooleanType(rightType));
+        let bothStrings = isStringTypeLike(leftType) && isStringTypeLike(rightType);
+        let hasString = isStringTypeLike(leftType) || isStringTypeLike(rightType);
+        let hasBoolean = isBooleanTypeLike(leftType) || isBooleanTypeLike(rightType);
+        let eitherBooleanOrNum = (isNumberType(leftType) || isBooleanTypeLike(leftType)) && (isNumberType(rightType) || isBooleanTypeLike(rightType));
 
         let leftIsPrimitive = isPrimitiveType(leftType);
         let rightIsPrimitive = isPrimitiveType(rightType);
@@ -1773,7 +1773,7 @@ export class Util {
             if (isVoidType(type)) {
                 return type;
             }
-            if (isInvalidType(type)) {
+            if (isInvalidTypeLike(type)) {
                 return type;
             }
             if (isObjectType(type) && !isDynamicType(type)) {
@@ -1795,7 +1795,7 @@ export class Util {
             exprType = this.getHighestPriorityType(exprType.types);
         }
 
-        if (isVoidType(exprType) || isInvalidType(exprType) || isUninitializedType(exprType)) {
+        if (isVoidType(exprType) || isInvalidTypeLike(exprType) || isUninitializedType(exprType)) {
             return undefined;
         }
 
@@ -1815,12 +1815,12 @@ export class Util {
                 }
                 break;
             case TokenKind.Not:
-                if (isBooleanType(exprType)) {
+                if (isBooleanTypeLike(exprType)) {
                     return BooleanType.instance;
                 } else if (isNumberType(exprType)) {
                     //numbers can be "notted"
                     // by default they go to ints, except longints, which stay that way
-                    if (isLongIntegerType(exprType)) {
+                    if (isLongIntegerTypeLike(exprType)) {
                         return LongIntegerType.instance;
                     }
                     return IntegerType.instance;
@@ -1831,19 +1831,19 @@ export class Util {
     }
 
     public getUnboxedType(boxedType: BscType): BscType {
-        if (isIntegerType(boxedType)) {
+        if (isIntegerTypeLike(boxedType)) {
             return IntegerType.instance;
-        } else if (isLongIntegerType(boxedType)) {
+        } else if (isLongIntegerTypeLike(boxedType)) {
             return LongIntegerType.instance;
-        } else if (isFloatType(boxedType)) {
+        } else if (isFloatTypeLike(boxedType)) {
             return FloatType.instance;
-        } else if (isDoubleType(boxedType)) {
+        } else if (isDoubleTypeLike(boxedType)) {
             return DoubleType.instance;
-        } else if (isBooleanType(boxedType)) {
+        } else if (isBooleanTypeLike(boxedType)) {
             return BooleanType.instance;
-        } else if (isStringType(boxedType)) {
+        } else if (isStringTypeLike(boxedType)) {
             return StringType.instance;
-        } else if (isInvalidType(boxedType)) {
+        } else if (isInvalidTypeLike(boxedType)) {
             return InvalidType.instance;
         }
         return boxedType;

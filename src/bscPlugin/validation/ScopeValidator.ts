@@ -1,5 +1,5 @@
 import { DiagnosticTag, type Range } from 'vscode-languageserver';
-import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isComponentType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringType, isTypedFunctionType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
+import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isComponentType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -562,7 +562,7 @@ export class ScopeValidator {
         //TODO: be more precise about which fields can actually accept strings
         //TODO: if RHS is a string literal, we can do more validation to make sure it's the correct type
         if (isComponentType(dottedSetStmt.obj?.getType({ flags: SymbolTypeFlag.runtime }))) {
-            if (isStringType(actualRHSType)) {
+            if (isStringTypeLike(actualRHSType)) {
                 return;
             }
         }
@@ -980,7 +980,7 @@ export class ScopeValidator {
             return;
         }
         const returns = func.body?.findChild<ReturnStatement>(isReturnStatement, { walkMode: WalkMode.visitAll });
-        if (!returns && isStringType(returnType)) {
+        if (!returns && isStringTypeLike(returnType)) {
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.returnTypeCoercionMismatch(returnType.toString()),
                 location: func.location

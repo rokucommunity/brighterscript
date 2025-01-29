@@ -1009,7 +1009,9 @@ describe('util', () => {
             expect(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Plus), StringType.instance)).to.be.undefined;
 
             const boxedInt = new InterfaceType('roInt');
+            boxedInt.isBuiltIn = true;
             const boxedFloat = new InterfaceType('roFloat');
+            boxedFloat.isBuiltIn = true;
 
             // Plus
             expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Plus), IntegerType.instance), DoubleType);
@@ -1063,7 +1065,9 @@ describe('util', () => {
 
         it('returns the correct type for Bitshift operations', () => {
             const boxedInt = new InterfaceType('roInt');
+            boxedInt.isBuiltIn = true;
             const boxedFloat = new InterfaceType('roFloat');
+            boxedFloat.isBuiltIn = true;
 
             // <<
             expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.LeftShift), IntegerType.instance), IntegerType);
@@ -1084,7 +1088,9 @@ describe('util', () => {
 
         it('returns the correct type for Comparison operations', () => {
             const boxedInt = new InterfaceType('roInt');
+            boxedInt.isBuiltIn = true;
             const boxedFloat = new InterfaceType('roFloat');
+            boxedFloat.isBuiltIn = true;
 
             // =
             expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Equal), IntegerType.instance), BooleanType);
@@ -1179,12 +1185,14 @@ describe('util', () => {
             expect(util.unaryOperatorResultType(minus, VoidType.instance)).to.be.undefined;
 
             const boxedFloat = new InterfaceType('roFloat');
+            boxedFloat.isBuiltIn = true;
             expectTypeToBe(util.unaryOperatorResultType(minus, boxedFloat), FloatType);
         });
 
         it('returns the correct type for not operation', () => {
             let notToken = createToken(TokenKind.Not);
             const boxedFloat = new InterfaceType('roFloat');
+            boxedFloat.isBuiltIn = true;
             expectTypeToBe(util.unaryOperatorResultType(notToken, IntegerType.instance), IntegerType);
             expectTypeToBe(util.unaryOperatorResultType(notToken, FloatType.instance), IntegerType);
             expectTypeToBe(util.unaryOperatorResultType(notToken, BooleanType.instance), BooleanType);
