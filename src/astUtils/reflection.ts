@@ -312,30 +312,88 @@ export function isPrintSeparatorExpression(element: any): element is PrintSepara
 export function isStringType(value: any): value is StringType {
     return value?.kind === BscTypeKind.StringType;
 }
+export function isRoStringType(value: any): value is InterfaceType {
+    return isBuiltInType(value, 'roString');
+}
+export function isStringTypeLike(value: any): value is StringType | InterfaceType {
+    return isStringType(value) || isRoStringType(value);
+}
+
 export function isTypedFunctionType(value: any): value is TypedFunctionType {
     return value?.kind === BscTypeKind.TypedFunctionType;
 }
+
 export function isFunctionType(value: any): value is FunctionType {
     return value?.kind === BscTypeKind.FunctionType;
 }
+export function isRoFunctionType(value: any): value is InterfaceType {
+    return isBuiltInType(value, 'roFunction');
+}
+export function isFunctionTypeLike(value: any): value is FunctionType | InterfaceType {
+    return isFunctionType(value) || isRoFunctionType(value);
+}
+
 export function isBooleanType(value: any): value is BooleanType {
     return value?.kind === BscTypeKind.BooleanType;
 }
+export function isRoBooleanType(value: any): value is InterfaceType {
+    return isBuiltInType(value, 'roBoolean');
+}
+export function isBooleanTypeLike(value: any): value is BooleanType | InterfaceType {
+    return isBooleanType(value) || isRoBooleanType(value);
+}
+
 export function isIntegerType(value: any): value is IntegerType {
     return value?.kind === BscTypeKind.IntegerType;
 }
+export function isRoIntType(value: any): value is LongIntegerType {
+    return isBuiltInType(value, 'roInt');
+}
+export function isIntegerTypeLike(value: any): value is IntegerType | InterfaceType {
+    return isIntegerType(value) || isRoIntType(value);
+}
+
 export function isLongIntegerType(value: any): value is LongIntegerType {
     return value?.kind === BscTypeKind.LongIntegerType;
 }
+export function isRoLongIntegerType(value: any): value is InterfaceType {
+    return isBuiltInType(value, 'roLongInteger');
+}
+export function isLongIntegerTypeLike(value: any): value is LongIntegerType | InterfaceType {
+    return isLongIntegerType(value) || isRoLongIntegerType(value);
+}
+
 export function isFloatType(value: any): value is FloatType {
     return value?.kind === BscTypeKind.FloatType;
 }
+export function isRoFloatType(value: any): value is InterfaceType {
+    return isBuiltInType(value, 'roFloat');
+}
+export function isFloatTypeLike(value: any): value is FloatType | InterfaceType {
+    return isFloatType(value) || isRoFloatType(value);
+}
+
+
 export function isDoubleType(value: any): value is DoubleType {
     return value?.kind === BscTypeKind.DoubleType;
 }
+export function isRoDoubleType(value: any): value is InterfaceType {
+    return isBuiltInType(value, 'roDouble');
+}
+export function isDoubleTypeLike(value: any): value is DoubleType | InterfaceType {
+    return isDoubleType(value) || isRoDoubleType(value);
+}
+
 export function isInvalidType(value: any): value is InvalidType {
     return value?.kind === BscTypeKind.InvalidType;
 }
+export function isRoInvalidType(value: any): value is InterfaceType {
+    return isBuiltInType(value, 'roInvalid');
+}
+export function isInvalidTypeLike(value: any): value is InvalidType | InterfaceType {
+    return isInvalidType(value) || isRoInvalidType(value);
+}
+
 export function isVoidType(value: any): value is VoidType {
     return value?.kind === BscTypeKind.VoidType;
 }
@@ -403,34 +461,32 @@ export function isAnyReferenceType(target): target is AnyReferenceType {
     return name === 'ReferenceType' || name === 'TypePropertyReferenceType' || name === 'BinaryOperatorReferenceType' || name === 'ArrayDefaultTypeReferenceType' || name === 'ParamTypeFromValueReferenceType';
 }
 
-const numberTypeKinds = [
-    BscTypeKind.IntegerType,
-    BscTypeKind.LongIntegerType,
-    BscTypeKind.FloatType,
-    BscTypeKind.DoubleType
-];
-export function isNumberType(value: any): value is IntegerType | LongIntegerType | FloatType | DoubleType {
-    return numberTypeKinds.includes(value?.kind);
+export function isNumberType(value: any): value is IntegerType | LongIntegerType | FloatType | DoubleType | InterfaceType {
+    return isIntegerTypeLike(value) ||
+        isLongIntegerTypeLike(value) ||
+        isFloatTypeLike(value) ||
+        isDoubleTypeLike(value);
 }
 
-const primitiveTypeKinds = [
-    ...numberTypeKinds,
-    BscTypeKind.BooleanType,
-    BscTypeKind.StringType
-];
-export function isPrimitiveType(value: any): value is IntegerType | LongIntegerType | FloatType | DoubleType | StringType | BooleanType {
-    return primitiveTypeKinds.includes(value?.kind);
+export function isPrimitiveType(value: any = false): value is IntegerType | LongIntegerType | FloatType | DoubleType | StringType | BooleanType | InterfaceType {
+    return isNumberType(value) ||
+        isBooleanTypeLike(value) ||
+        isStringTypeLike(value);
 }
+
+export function isBuiltInType(value: any, name: string): value is InterfaceType {
+    return isInterfaceType(value) && value.name.toLowerCase() === name.toLowerCase() && value.isBuiltIn;
+}
+
 
 const nativeTypeKinds = [
-    ...primitiveTypeKinds,
     BscTypeKind.DynamicType,
     BscTypeKind.ObjectType,
     BscTypeKind.VoidType,
     BscTypeKind.FunctionType
 ];
-export function isNativeType(value: any): value is IntegerType | LongIntegerType | FloatType | DoubleType | StringType | BooleanType | VoidType | DynamicType | ObjectType | FunctionType {
-    return nativeTypeKinds.includes(value?.kind);
+export function isNativeType(value: any): value is IntegerType | LongIntegerType | FloatType | DoubleType | StringType | BooleanType | VoidType | DynamicType | ObjectType | FunctionType | InterfaceType {
+    return isPrimitiveType(value) || nativeTypeKinds.includes(value?.kind);
 }
 
 

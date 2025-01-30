@@ -1,4 +1,4 @@
-import { isCallableType, isDynamicType, isFunctionType, isObjectType } from '../astUtils/reflection';
+import { isCallableType, isDynamicType, isFunctionTypeLike, isObjectType } from '../astUtils/reflection';
 import { BaseFunctionType } from './BaseFunctionType';
 import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
@@ -19,6 +19,7 @@ export class FunctionType extends BaseFunctionType {
         if (
             isDynamicType(targetType) ||
             isCallableType(targetType) ||
+            isFunctionTypeLike(targetType) ||
             isObjectType(targetType) ||
             isUnionTypeCompatible(this, targetType, data)
         ) {
@@ -37,7 +38,7 @@ export class FunctionType extends BaseFunctionType {
     }
 
     isEqual(targetType: BscType) {
-        if (isFunctionType(targetType)) {
+        if (isFunctionTypeLike(targetType)) {
             return true;
         }
         return false;

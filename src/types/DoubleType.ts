@@ -1,4 +1,4 @@
-import { isDoubleType, isDynamicType, isFloatType, isIntegerType, isLongIntegerType, isObjectType } from '../astUtils/reflection';
+import { isDoubleTypeLike, isDynamicType, isNumberType, isObjectType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { isEnumTypeCompatible, isNativeInterfaceCompatibleNumber, isUnionTypeCompatible } from './helpers';
@@ -23,10 +23,7 @@ export class DoubleType extends BscType {
         return (
             isDynamicType(targetType) ||
             isObjectType(targetType) ||
-            isIntegerType(targetType) ||
-            isFloatType(targetType) ||
-            isDoubleType(targetType) ||
-            isLongIntegerType(targetType) ||
+            isNumberType(targetType) ||
             isUnionTypeCompatible(this, targetType, data) ||
             isEnumTypeCompatible(this, targetType, data) ||
             isNativeInterfaceCompatibleNumber(this, targetType, data)
@@ -41,7 +38,7 @@ export class DoubleType extends BscType {
     }
 
     public isEqual(targetType: BscType): boolean {
-        return isDoubleType(targetType);
+        return isDoubleTypeLike(targetType);
     }
 
     readonly binaryOpPriorityLevel = 1;
