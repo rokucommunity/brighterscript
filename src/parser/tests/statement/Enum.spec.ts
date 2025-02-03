@@ -1,17 +1,16 @@
 import { expect } from '../../../chai-config.spec';
 import { LiteralExpression } from '../../Expression';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
-import { expectCompletionsExcludes, expectCompletionsIncludes, expectDiagnostics, expectInstanceOf, expectZeroDiagnostics, getTestTranspile, trim } from '../../../testHelpers.spec';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectInstanceOf, expectZeroDiagnostics, getTestTranspile, trim } from '../../../testHelpers.spec';
 import { ParseMode, Parser } from '../../Parser';
 import { util, standardizePath as s } from '../../../util';
 import { EnumStatement, InterfaceStatement } from '../../Statement';
 import { Program } from '../../../Program';
 import { createSandbox } from 'sinon';
 import type { BrsFile } from '../../../files/BrsFile';
-import { CancellationTokenSource, CompletionItemKind } from 'vscode-languageserver-protocol';
+import { CancellationTokenSource } from 'vscode-languageserver-protocol';
 import { WalkMode } from '../../../astUtils/visitors';
 import { isEnumStatement } from '../../../astUtils/reflection';
-import { URI } from 'vscode-uri';
 import { rootDir } from '../../../testHelpers.spec';
 
 const sinon = createSandbox();
@@ -100,7 +99,7 @@ describe('EnumStatement', () => {
             LiteralExpression,
             LiteralExpression
         ]);
-        expect(values.map(x => x.token.text)).to.eql([
+        expect(values.map(x => x.tokens.value.text)).to.eql([
             '1',
             '2',
             '3',
@@ -126,7 +125,7 @@ describe('EnumStatement', () => {
             LiteralExpression,
             LiteralExpression
         ]);
-        expect(values.map(x => x.token.text)).to.eql([
+        expect(values.map(x => x.tokens.value.text)).to.eql([
             '"u"',
             '"d"',
             '"l"',
@@ -160,8 +159,8 @@ describe('EnumStatement', () => {
         `, { mode: ParseMode.BrighterScript });
 
         expectZeroDiagnostics(parser);
-        expect(parser.statements[0]).instanceof(EnumStatement);
-        expect(parser.statements[1]).instanceof(InterfaceStatement);
+        expect(parser.ast.statements[0]).instanceof(EnumStatement);
+        expect(parser.ast.statements[1]).instanceof(InterfaceStatement);
     });
 
     it('allows enum at bottom of file', () => {
@@ -176,8 +175,8 @@ describe('EnumStatement', () => {
         `, { mode: ParseMode.BrighterScript });
 
         expectZeroDiagnostics(parser);
-        expect(parser.statements[0]).instanceof(InterfaceStatement);
-        expect(parser.statements[1]).instanceof(EnumStatement);
+        expect(parser.ast.statements[0]).instanceof(InterfaceStatement);
+        expect(parser.ast.statements[1]).instanceof(EnumStatement);
     });
 
     it('allows enum in namespace', () => {
@@ -195,7 +194,7 @@ describe('EnumStatement', () => {
         program.validate();
 
         expectZeroDiagnostics(program);
-        expect(file.parser.references.enumStatements.map(x => x.fullName)).to.eql([
+        expect(file.ast.findChildren<EnumStatement>(isEnumStatement).map(x => x.fullName)).to.eql([
             'entities.Person',
             'Direction'
         ]);
@@ -223,14 +222,37 @@ describe('EnumStatement', () => {
                 end enum
             `);
             program.validate();
-            expectDiagnostics(program, [{
-                ...DiagnosticMessages.duplicateEnumDeclaration('source', 'Direction'),
+            expectDiagnosticsIncludes(program, [{
+                ...DiagnosticMessages.nameCollision('Enum', 'Enum', 'Direction'),
                 relatedInformation: [{
-                    location: util.createLocation(
-                        URI.file(s`${rootDir}/source/main.bs`).toString(),
+                    location: util.createLocationFromRange(
+                        util.pathToUri(s`${rootDir}/source/main.bs`),
+                        util.createRange(5, 21, 5, 30)
+                    ),
+                    message: 'Enum declared here'
+                },
+                {
+                    location: util.createLocationFromRange(
+                        util.pathToUri(s`${rootDir}/source/main.bs`),
+                        util.createRange(1, 21, 1, 30)
+                    ),
+                    message: `In scope 'source'`
+                }]
+            }, {
+                ...DiagnosticMessages.nameCollision('Enum', 'Enum', 'Direction'),
+                relatedInformation: [{
+                    location: util.createLocationFromRange(
+                        util.pathToUri(s`${rootDir}/source/main.bs`),
                         util.createRange(1, 21, 1, 30)
                     ),
                     message: 'Enum declared here'
+                },
+                {
+                    location: util.createLocationFromRange(
+                        util.pathToUri(s`${rootDir}/source/main.bs`),
+                        util.createRange(5, 21, 5, 30)
+                    ),
+                    message: `In scope 'source'`
                 }]
             }]);
         });
@@ -247,14 +269,21 @@ describe('EnumStatement', () => {
                 end enum
             `);
             program.validate();
-            expectDiagnostics(program, [{
-                ...DiagnosticMessages.duplicateEnumDeclaration('source', 'Direction'),
+            expectDiagnosticsIncludes(program, [{
+                ...DiagnosticMessages.nameCollision('Enum', 'Enum', 'Direction'),
                 relatedInformation: [{
-                    location: util.createLocation(
-                        URI.file(s`${rootDir}/source/lib.bs`).toString(),
+                    location: util.createLocationFromRange(
+                        util.pathToUri(s`${rootDir}/source/lib.bs`),
                         util.createRange(1, 21, 1, 30)
                     ),
                     message: 'Enum declared here'
+                },
+                {
+                    location: util.createLocationFromRange(
+                        util.pathToUri(s`${rootDir}/source/main.bs`),
+                        util.createRange(1, 21, 1, 30)
+                    ),
+                    message: `In scope 'source'`
                 }]
             }]);
         });
@@ -290,7 +319,7 @@ describe('EnumStatement', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.duplicateIdentifier('name'),
-                range: util.createRange(3, 20, 3, 24)
+                location: { range: util.createRange(3, 20, 3, 24) }
             }]);
         });
 
@@ -304,7 +333,7 @@ describe('EnumStatement', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.enumValueMustBeType('integer'),
-                range: util.createRange(3, 24, 3, 27)
+                location: { range: util.createRange(3, 24, 3, 27) }
             }]);
         });
 
@@ -318,7 +347,7 @@ describe('EnumStatement', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.enumValueMustBeType('string'),
-                range: util.createRange(3, 24, 3, 25)
+                location: { range: util.createRange(3, 24, 3, 25) }
             }]);
         });
 
@@ -332,7 +361,7 @@ describe('EnumStatement', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.enumValueIsRequired('string'),
-                range: util.createRange(3, 20, 3, 21)
+                location: { range: util.createRange(3, 20, 3, 21) }
             }]);
         });
 
@@ -367,7 +396,7 @@ describe('EnumStatement', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.enumValueMustBeType('integer'),
-                range: util.createRange(2, 33, 2, 35)
+                location: { range: util.createRange(2, 33, 2, 35) }
             }]);
         });
 
@@ -392,7 +421,7 @@ describe('EnumStatement', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.enumValueIsRequired('string'),
-                range: util.createRange(2, 20, 2, 21)
+                location: { range: util.createRange(2, 20, 2, 21) }
             }]);
         });
 
@@ -410,11 +439,11 @@ describe('EnumStatement', () => {
             `);
             program.validate();
             expectDiagnostics(program, [{
-                ...DiagnosticMessages.unknownEnumValue('DOWN', 'Direction'),
-                range: util.createRange(7, 36, 7, 40)
+                ...DiagnosticMessages.cannotFindName('DOWN', 'Direction.DOWN', 'Direction', 'enum'),
+                location: { range: util.createRange(7, 36, 7, 40) }
             }, {
-                ...DiagnosticMessages.unknownEnumValue('down', 'Direction'),
-                range: util.createRange(8, 36, 8, 40)
+                ...DiagnosticMessages.cannotFindName('down', 'Direction.down', 'Direction', 'enum'),
+                location: { range: util.createRange(8, 36, 8, 40) }
             }]);
         });
 
@@ -434,11 +463,11 @@ describe('EnumStatement', () => {
             `);
             program.validate();
             expectDiagnostics(program, [{
-                ...DiagnosticMessages.unknownEnumValue('DOWN', 'Enums.Direction'),
-                range: util.createRange(2, 42, 2, 46)
+                ...DiagnosticMessages.cannotFindName('DOWN', 'Enums.Direction.DOWN', 'Enums.Direction', 'enum'),
+                location: { range: util.createRange(2, 42, 2, 46) }
             }, {
-                ...DiagnosticMessages.unknownEnumValue('down', 'Enums.Direction'),
-                range: util.createRange(3, 42, 3, 46)
+                ...DiagnosticMessages.cannotFindName('down', 'Enums.Direction.down', 'Enums.Direction', 'enum'),
+                location: { range: util.createRange(3, 42, 3, 46) }
             }]);
         });
     });
@@ -519,26 +548,8 @@ describe('EnumStatement', () => {
     });
 
     describe('transpile', () => {
-        it('supports non-namespaced enum from within a namespace', () => {
-            program.options.autoImportComponentScript = true;
-            testTranspile(`
-                namespace alpha
-                    sub test()
-                        print Direction.up
-                    end sub
-                end namespace
-                enum Direction
-                    up = "up"
-                end enum
-            `, `
-                sub alpha_test()
-                    print "up"
-                end sub
-            `);
-        });
-
-        it('transpiles negative number', () => {
-            testTranspile(`
+        it('transpiles negative number', async () => {
+            await testTranspile(`
                 sub main()
                     print Direction.up
                 end sub
@@ -552,8 +563,8 @@ describe('EnumStatement', () => {
             `, undefined, undefined, false);
         });
 
-        it('includes original value when no value could be computed', () => {
-            testTranspile(`
+        it('includes original value when no value could be computed', async () => {
+            await testTranspile(`
                 sub main()
                     print Direction.up
                 end sub
@@ -566,8 +577,8 @@ describe('EnumStatement', () => {
                 end sub
             `, undefined, undefined, false);
         });
-        it('writes all literal values as-is (even if there are errors)', () => {
-            testTranspile(`
+        it('writes all literal values as-is (even if there are errors)', async () => {
+            await testTranspile(`
                 sub main()
                     print Direction.up
                     print Direction.down
@@ -593,8 +604,8 @@ describe('EnumStatement', () => {
             `, 'trim', undefined, false);
         });
 
-        it('supports default-as-integer', () => {
-            testTranspile(`
+        it('supports default-as-integer', async () => {
+            await testTranspile(`
                 enum Direction
                     up
                     down
@@ -611,8 +622,8 @@ describe('EnumStatement', () => {
             `);
         });
 
-        it('supports string enums', () => {
-            testTranspile(`
+        it('supports string enums', async () => {
+            await testTranspile(`
                 enum Direction
                     up = "up"
                     down = "down"
@@ -637,7 +648,7 @@ describe('EnumStatement', () => {
                         val2
                     end enum
 
-                    function foo() as integer
+                    function foo() as MyEnum
                         return MyEnum.val1
                     end function
                 end namespace
@@ -646,7 +657,7 @@ describe('EnumStatement', () => {
             expectZeroDiagnostics(program);
         });
 
-        it('replaces enum values from separate file with literals', () => {
+        it('replaces enum values from separate file with literals', async () => {
             program.setFile('source/enum.bs', `
                 enum CharacterType
                     Human = "Human"
@@ -659,7 +670,7 @@ describe('EnumStatement', () => {
                     end enum
                 end namespace
             `);
-            testTranspile(`
+            await testTranspile(`
                 sub test()
                     print CharacterType.Human
                     print CharacterType.Zombie
@@ -676,8 +687,8 @@ describe('EnumStatement', () => {
             `);
         });
 
-        it('replaces enums in if statements', () => {
-            testTranspile(`
+        it('replaces enums in if statements', async () => {
+            await testTranspile(`
                 enum CharacterType
                     zombie = "zombie"
                 end enum
@@ -694,405 +705,155 @@ describe('EnumStatement', () => {
                 end sub
             `);
         });
-    });
 
-    describe('completions', () => {
-        it('does not crash when completing enum members with unsupported values', () => {
-            program.setFile('source/main.bs', `
-                sub Main()
-                    direction.obj
+        it('handles both sides of a logical expression', async () => {
+            await testTranspile(`
+                sub main()
+                    dir = m.direction = Direction.up
+                    dir = Direction.up = m.direction
                 end sub
                 enum Direction
-                    up
-                    down
-                    obj = {}
+                    up = "up"
+                    down = "down"
                 end enum
+            `, `
+                sub main()
+                    dir = m.direction = "up"
+                    dir = "up" = m.direction
+                end sub
             `);
-            //      direction.|obj
-            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 30)), [{
-                label: 'up',
-                kind: CompletionItemKind.EnumMember
-            }, {
-                label: 'down',
-                kind: CompletionItemKind.EnumMember
-            }, {
-                label: 'obj',
-                kind: CompletionItemKind.EnumMember
-            }]);
         });
 
-        it('gets enum statement completions from global enum', () => {
-            program.setFile('source/main.bs', `
-                sub Main()
-                    direction.down
+        it('handles when found in boolean expressions', async () => {
+            await testTranspile(`
+                sub main()
+                    result = Direction.up = "up" or Direction.down = "down" and Direction.up = Direction.down
                 end sub
                 enum Direction
-                    up
-                    down
+                    up = "up"
+                    down = "down"
                 end enum
+            `, `
+                sub main()
+                    result = "up" = "up" or "down" = "down" and "up" = "down"
+                end sub
             `);
-            //      |direction.down
-            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 20)), [{
-                label: 'Direction',
-                kind: CompletionItemKind.Enum
-            }]);
-            //      dire|ction.down
-            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 24)), [{
-                label: 'Direction',
-                kind: CompletionItemKind.Enum
-            }]);
-            //      direction|.down
-            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 29)), [{
-                label: 'Direction',
-                kind: CompletionItemKind.Enum
-            }]);
         });
 
-        it('gets enum member completions from global enum', () => {
-            program.setFile('source/main.bs', `
-                sub Main()
-                    direction.down
+        it('replaces enum values in if statements', async () => {
+            await testTranspile(`
+                sub main()
+                    if m.direction = Direction.up
+                        print Direction.up
+                    end if
                 end sub
                 enum Direction
-                    up
-                    down
+                    up = "up"
+                    down = "down"
                 end enum
+            `, `
+                sub main()
+                    if m.direction = "up"
+                        print "up"
+                    end if
+                end sub
             `);
-            //      direction.|down
-            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 30)), [{
-                label: 'up',
-                kind: CompletionItemKind.EnumMember
-            }, {
-                label: 'down',
-                kind: CompletionItemKind.EnumMember
-            }]);
-            //      direction.do|wn
-            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 32)), [{
-                label: 'up',
-                kind: CompletionItemKind.EnumMember
-            }, {
-                label: 'down',
-                kind: CompletionItemKind.EnumMember
-            }]);
-            //      direction.down|
-            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 34)), [{
-                label: 'up',
-                kind: CompletionItemKind.EnumMember
-            }, {
-                label: 'down',
-                kind: CompletionItemKind.EnumMember
-            }]);
         });
 
-        it('gets enum statement completions from namespaced enum', () => {
-            program.setFile('source/main.bs', `
-                sub Main()
-                    enums.direction.down
+        it('replaces enum values in function default parameter value expressions', async () => {
+            await testTranspile(`
+                sub speak(dir = Direction.up)
                 end sub
-                namespace enums
-                    enum Direction
-                        up
-                        down
+                enum Direction
+                    up = "up"
+                end enum
+            `, `
+                sub speak(dir = "up")
+                end sub
+            `);
+        });
+
+        it('replaces enum values in for loops', async () => {
+            await testTranspile(`
+                sub main()
+                    for i = Loop.start to Loop.end step Loop.step
+                    end for
+                end sub
+                enum Loop
+                    start = 0
+                    end = 10
+                    step = 1
+                end enum
+            `, `
+                sub main()
+                    for i = 0 to 10 step 1
+                    end for
+                end sub
+            `);
+        });
+
+        it('transpiles enum values when used in complex expressions', async () => {
+            await testTranspile(`
+                sub main()
+                    print Direction.up.toStr()
+                end sub
+                enum Direction
+                    up = "up"
+                    down = "down"
+                end enum
+            `, `
+                sub main()
+                    print "up".toStr()
+                end sub
+            `);
+        });
+
+        it('works when enum is in a namespace', async () => {
+            program.setFile('components/Colors.bs', `
+                namespace Colors
+                    enum Primary
+                        red = "#FF0000"
                     end enum
                 end namespace
             `);
-            //      enums.|direction.down
-            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 26)), [{
-                label: 'Direction',
-                kind: CompletionItemKind.Enum
-            }]);
-            //      enums.dire|ction.down
-            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 30)), [{
-                label: 'Direction',
-                kind: CompletionItemKind.Enum
-            }]);
-            //      enums.direction|.down
-            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 35)), [{
-                label: 'Direction',
-                kind: CompletionItemKind.Enum
-            }]);
-        });
 
-        it('gets enum member completions from namespaced enum', () => {
-            program.setFile('source/main.bs', `
-                sub Main()
-                    enums.direction.down
-                end sub
-                namespace enums
-                    enum Direction
-                        up
-                        down
-                    end enum
+            program.setFile('components/Button.xml', `
+                <component name="Button" extends="Group">
+                    <script type="text/brightscript" uri="pkg:/components/Button.bs" />
+                </component>
+            `);
+            const file = program.setFile('components/Button.bs', `
+                import "Colors.bs"
+
+                namespace alpha
+                    sub testIt()
+                        print Colors.Primary.red
+                        aa = {
+                            value: Colors.Primary.red
+                        }
+                    end sub
+                end namespace
+
+                namespace Colors
+                    sub testIt()
+                        print Primary.red
+                    end sub
                 end namespace
             `);
             program.validate();
-            //      enums.direction.|down
-            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 36)), [{
-                label: 'up',
-                kind: CompletionItemKind.EnumMember
-            }, {
-                label: 'down',
-                kind: CompletionItemKind.EnumMember
-            }]);
-            //      enums.direction.do|wn
-            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 38)), [{
-                label: 'up',
-                kind: CompletionItemKind.EnumMember
-            }, {
-                label: 'down',
-                kind: CompletionItemKind.EnumMember
-            }]);
-            //      enums.direction.down|
-            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 40)), [{
-                label: 'up',
-                kind: CompletionItemKind.EnumMember
-            }, {
-                label: 'down',
-                kind: CompletionItemKind.EnumMember
-            }]);
-        });
-
-        it('excludes enum member completions from namespace enum', () => {
-            program.setFile('source/main.bs', `
-                sub Main()
-                    direction.ba
+            expectZeroDiagnostics(program);
+            await testTranspile(file, `
+                'import "Colors.bs"
+                sub alpha_testIt()
+                    print "#FF0000"
+                    aa = {
+                        value: "#FF0000"
+                    }
                 end sub
-                namespace enums
-                    enum Direction
-                        up
-                        down
-                    end enum
-                end namespace
+                sub Colors_testIt()
+                    print "#FF0000"
+                end sub
             `);
-            program.validate();
-            //should NOT find Direction because it's not directly available at the top level (you need to go through `enums.` to get at it)
-            //      dire|ction.down
-            expectCompletionsExcludes(program.getCompletions('source/main.bs', util.createPosition(2, 24)), [{
-                label: 'Direction',
-                kind: CompletionItemKind.Enum
-            }]);
         });
-
-        it('infers namespace for enum statement completions', () => {
-            program.setFile('source/main.bs', `
-                namespace enums
-                    sub Main()
-                        direction.down
-                    end sub
-                    enum Direction
-                        up
-                        down
-                    end enum
-                end namespace
-                enum Logic
-                    yes
-                    no
-                end enum
-            `);
-            //          dire|ction.down
-            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(3, 33)), [{
-                label: 'Direction',
-                kind: CompletionItemKind.Enum
-            }, {
-                label: 'Logic',
-                kind: CompletionItemKind.Enum
-            }]);
-        });
-
-        it('infers namespace for enum member completions', () => {
-            program.setFile('source/main.bs', `
-                namespace enums
-                    sub Main()
-                        direction.down
-                    end sub
-                    enum Direction
-                        up
-                        down
-                    end enum
-                end namespace
-            `);
-            //          direction.do|wn
-            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(3, 36)), [{
-                label: 'up',
-                kind: CompletionItemKind.EnumMember
-            }, {
-                label: 'down',
-                kind: CompletionItemKind.EnumMember
-            }]);
-        });
-
-        it('supports explicit namespace for enum statement completions', () => {
-            program.setFile('source/main.bs', `
-                namespace enums
-                    sub Main()
-                        enums.direction.down
-                    end sub
-                    enum Direction
-                        up
-                        down
-                    end enum
-                end namespace
-            `);
-            //          enums.dire|ction.down
-            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(3, 38)), [{
-                label: 'Direction',
-                kind: CompletionItemKind.Enum
-            }]);
-        });
-
-        it('supports explicit namespace for enum statement completions', () => {
-            program.setFile('source/main.bs', `
-                namespace logger
-                    sub log()
-                        enums.direction.down
-                    end sub
-                end namespace
-                namespace enums
-                    enum Direction
-                        up
-                        down
-                    end enum
-                end namespace
-            `);
-            //          enums.dire|ction.down
-            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(3, 38)), [{
-                label: 'Direction',
-                kind: CompletionItemKind.Enum
-            }]);
-        });
-    });
-
-    it('transpiles simple enum in a unary expression', () => {
-        testTranspile(`
-            enum SomeEnum
-                foo = 1
-            end enum
-            sub main()
-                bar = -SomeEnum.foo
-            end sub
-        `, `
-            sub main()
-                bar = - 1
-            end sub
-        `, undefined, 'source/main.bs');
-    });
-
-    it('transpiles comples enum in a unary expression', () => {
-        testTranspile(`
-            namespace name.space
-                enum SomeEnum
-                    foo = 1
-                end enum
-            end namespace
-            sub main()
-                bar = -name.space.SomeEnum.foo
-            end sub
-        `, `
-            sub main()
-                bar = - 1
-            end sub
-        `, undefined, 'source/main.bs');
-    });
-
-    it('handles both sides of a logical expression', () => {
-        testTranspile(`
-            sub main()
-                dir = m.direction = Direction.up
-                dir = Direction.up = m.direction
-            end sub
-            enum Direction
-                up = "up"
-                down = "down"
-            end enum
-        `, `
-            sub main()
-                dir = m.direction = "up"
-                dir = "up" = m.direction
-            end sub
-        `);
-    });
-
-    it('handles when found in boolean expressions', () => {
-        testTranspile(`
-            sub main()
-                result = Direction.up = "up" or Direction.down = "down" and Direction.up = Direction.down
-            end sub
-            enum Direction
-                up = "up"
-                down = "down"
-            end enum
-        `, `
-            sub main()
-                result = "up" = "up" or "down" = "down" and "up" = "down"
-            end sub
-        `);
-    });
-
-    it('replaces enum values in if statements', () => {
-        testTranspile(`
-            sub main()
-                if m.direction = Direction.up
-                    print Direction.up
-                end if
-            end sub
-            enum Direction
-                up = "up"
-                down = "down"
-            end enum
-        `, `
-            sub main()
-                if m.direction = "up"
-                    print "up"
-                end if
-            end sub
-        `);
-    });
-
-    it('replaces enum values in function default parameter value expressions', () => {
-        testTranspile(`
-            sub speak(dir = Direction.up)
-            end sub
-            enum Direction
-                up = "up"
-            end enum
-        `, `
-            sub speak(dir = "up")
-            end sub
-        `);
-    });
-
-    it('replaces enum values in for loops', () => {
-        testTranspile(`
-            sub main()
-                for i = Loop.start to Loop.end step Loop.step
-                end for
-            end sub
-            enum Loop
-                start = 0
-                end = 10
-                step = 1
-            end enum
-        `, `
-            sub main()
-                for i = 0 to 10 step 1
-                end for
-            end sub
-        `);
-    });
-
-    it('transpiles enum values when used in complex expressions', () => {
-        testTranspile(`
-            sub main()
-                print Direction.up.toStr()
-            end sub
-            enum Direction
-                up = "up"
-                down = "down"
-            end enum
-        `, `
-            sub main()
-                print "up".toStr()
-            end sub
-        `);
     });
 });

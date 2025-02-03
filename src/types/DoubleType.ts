@@ -1,33 +1,33 @@
-import type { BscType } from './BscType';
-import { DynamicType } from './DynamicType';
-import { FloatType } from './FloatType';
-import { IntegerType } from './IntegerType';
-import { LongIntegerType } from './LongIntegerType';
+import { isDoubleTypeLike, isDynamicType, isNumberType, isObjectType } from '../astUtils/reflection';
+import { BscType } from './BscType';
+import { BscTypeKind } from './BscTypeKind';
+import { isEnumTypeCompatible, isNativeInterfaceCompatibleNumber, isUnionTypeCompatible } from './helpers';
 
-export class DoubleType implements BscType {
+import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
+import type { TypeCompatibilityData } from '../interfaces';
+
+export class DoubleType extends BscType {
     constructor(
         public typeText?: string
-    ) { }
-
-    public isAssignableTo(targetType: BscType) {
-        return (
-            targetType instanceof DoubleType ||
-            targetType instanceof DynamicType
-        );
+    ) {
+        super();
     }
 
-    public isConvertibleTo(targetType: BscType) {
-        if (
-            targetType instanceof DynamicType ||
-            targetType instanceof IntegerType ||
-            targetType instanceof FloatType ||
-            targetType instanceof DoubleType ||
-            targetType instanceof LongIntegerType
-        ) {
-            return true;
-        } else {
-            return false;
-        }
+    public readonly kind = BscTypeKind.DoubleType;
+
+    public static instance = new DoubleType('double');
+
+    public isBuiltIn = true;
+
+    public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
+        return (
+            isDynamicType(targetType) ||
+            isObjectType(targetType) ||
+            isNumberType(targetType) ||
+            isUnionTypeCompatible(this, targetType, data) ||
+            isEnumTypeCompatible(this, targetType, data) ||
+            isNativeInterfaceCompatibleNumber(this, targetType, data)
+        );
     }
     public toString() {
         return this.typeText ?? 'double';
@@ -37,7 +37,11 @@ export class DoubleType implements BscType {
         return this.toString();
     }
 
-    public clone() {
-        return new DoubleType(this.typeText);
+    public isEqual(targetType: BscType): boolean {
+        return isDoubleTypeLike(targetType);
     }
+
+    readonly binaryOpPriorityLevel = 1;
 }
+
+BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('double', DoubleType.instance);

@@ -1,33 +1,32 @@
-import type { BscType } from './BscType';
-import { DoubleType } from './DoubleType';
-import { DynamicType } from './DynamicType';
-import { FloatType } from './FloatType';
-import { LongIntegerType } from './LongIntegerType';
+import { isDynamicType, isIntegerTypeLike, isNumberType, isObjectType } from '../astUtils/reflection';
+import { BscType } from './BscType';
+import { BscTypeKind } from './BscTypeKind';
+import { isEnumTypeCompatible, isNativeInterfaceCompatibleNumber, isUnionTypeCompatible } from './helpers';
+import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
+import type { TypeCompatibilityData } from '../interfaces';
 
-export class IntegerType implements BscType {
+export class IntegerType extends BscType {
     constructor(
         public typeText?: string
-    ) { }
-
-    public isAssignableTo(targetType: BscType) {
-        return (
-            targetType instanceof IntegerType ||
-            targetType instanceof DynamicType
-        );
+    ) {
+        super();
     }
 
-    public isConvertibleTo(targetType: BscType) {
-        if (
-            targetType instanceof DynamicType ||
-            targetType instanceof IntegerType ||
-            targetType instanceof FloatType ||
-            targetType instanceof DoubleType ||
-            targetType instanceof LongIntegerType
-        ) {
-            return true;
-        } else {
-            return false;
-        }
+    public readonly kind = BscTypeKind.IntegerType;
+
+    public static instance = new IntegerType('integer');
+
+    public isBuiltIn = true;
+
+    public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
+        return (
+            isDynamicType(targetType) ||
+            isObjectType(targetType) ||
+            isNumberType(targetType) ||
+            isUnionTypeCompatible(this, targetType, data) ||
+            isEnumTypeCompatible(this, targetType, data) ||
+            isNativeInterfaceCompatibleNumber(this, targetType, data)
+        );
     }
 
     public toString() {
@@ -38,7 +37,11 @@ export class IntegerType implements BscType {
         return this.toString();
     }
 
-    public clone() {
-        return new IntegerType(this.typeText);
+    isEqual(otherType: BscType) {
+        return isIntegerTypeLike(otherType);
     }
+
+    readonly binaryOpPriorityLevel = 4;
 }
+
+BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('integer', IntegerType.instance);
