@@ -1297,7 +1297,13 @@ export class AALiteralExpression extends Expression {
         resultType.addBuiltInInterfaces();
         for (const element of this.elements) {
             if (isAAMemberExpression(element)) {
-                resultType.addMember(element.tokens.key.text, { definingNode: element }, element.getType(options), SymbolTypeFlag.runtime);
+                let memberName = element.tokens?.key?.text ?? '';
+                if (element.tokens.key.kind === TokenKind.StringLiteral) {
+                    memberName = memberName.replace(/"/g, ''); // remove quotes if it was a stringLiteral
+                }
+                if (memberName) {
+                    resultType.addMember(memberName, { definingNode: element }, element.getType(options), SymbolTypeFlag.runtime);
+                }
             }
         }
         return resultType;
