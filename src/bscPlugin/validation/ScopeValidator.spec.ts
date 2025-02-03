@@ -1791,6 +1791,46 @@ describe('ScopeValidator', () => {
             expectZeroDiagnostics(program);
         });
 
+        describe('AA args with string literal keys', () => {
+            it('finds keys with string literal names', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    interface Data
+                        id
+                    end interface
+
+                    sub takesData(datum as Data)
+                    end sub
+
+                    sub usesData()
+                    takesData({"id": 1234})
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('validates keys with string literal names, but type is incorrect', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    interface Data
+                        id as string
+                    end interface
+
+                    sub takesData(datum as Data)
+                    end sub
+
+                    sub usesData()
+                    takesData({"id": 1234})
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.argumentTypeMismatch('roAssociativeArray', 'Data', {
+                        fieldMismatches: [{ name: 'id', expectedType: StringType.instance, actualType: IntegerType.instance }]
+                    }).message
+                ]);
+            });
+        });
+
     });
 
     describe('cannotFindName', () => {
