@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.43](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.42...v1.0.0-alpha.43) - 2025-02-03
+### Fixed
+ - Fixes getting the default type of an array of AAs with reference type members ([#140](https://github.com/rokucommunity/brighterscript/pull/1402))
+ - Doc Fixes - Re-ran Scraper, and added some undocumented fields ([#1405](https://github.com/rokucommunity/brighterscript/pull/1405))
+ - Fix issues with boxed types ([#1404](https://github.com/rokucommunity/brighterscript/pull/1404))
+ - Recognize literal strings as Associative Array members ([#1408](https://github.com/rokucommunity/brighterscript/pull/1408))
+
+
+
 ## [1.0.0-alpha.42](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.41...v1.0.0-alpha.42) - 2025-01-17
 ### Added
  - Parser error when custom type encountered in brs file ([#1336](https://github.com/rokucommunity/brighterscript/pull/1336))
