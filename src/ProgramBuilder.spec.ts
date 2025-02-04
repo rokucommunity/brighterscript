@@ -222,7 +222,7 @@ describe('ProgramBuilder', () => {
                 createPackage: false,
                 deploy: false,
                 copyToStaging: false,
-                skipInitialValidation: true,
+                validate: false,
                 //both files should want to be the `source/lib.brs` file...but only the last one should win
                 files: ['source/**/*']
             });
