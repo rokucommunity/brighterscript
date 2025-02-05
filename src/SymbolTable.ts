@@ -163,6 +163,7 @@ export class SymbolTable implements SymbolTypeGetter {
             currentTable = currentTable.parent;
             memberOfAncestor = true;
         } while (currentTable);
+        return result;
     }
 
     /**

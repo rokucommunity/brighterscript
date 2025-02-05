@@ -850,7 +850,7 @@ export class LanguageServer {
     }
 
     @AddStackToErrorMessage
-    private async onDidChangeConfiguration() {
+    private async onDidChangeConfiguration(event: any) {
         if (this.hasConfigurationCapability) {
             //if the user changes any config value, just mass-reload all projects
             await this.reloadProjects(this.getProjects());

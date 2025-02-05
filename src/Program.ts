@@ -613,7 +613,7 @@ export class Program {
     public setFile<T extends BscFile>(fileParam: FileObj | string, fileData: FileData): T {
         //normalize the file paths
         const { srcPath, destPath } = this.getPaths(fileParam, this.options.rootDir);
-
+        console.log(`[Program] setFile trace:`, (new Error()).stack);
         let file = this.logger.time(LogLevel.debug, ['Program.setFile()', chalk.green(srcPath)], () => {
             //if the file is already loaded, remove it
             if (this.hasFile(srcPath)) {
@@ -898,6 +898,10 @@ export class Program {
      * Traverse the entire project, and validate all scopes
      */
     public validate() {
+        let e = new Error();
+        console.log(`[Program] validate() `, e.stack);
+
+
         this.logger.time(LogLevel.log, ['Validating project'], () => {
             this.diagnostics.clearForTag(ProgramValidatorDiagnosticsTag);
             const programValidateEvent = {
@@ -1099,6 +1103,7 @@ export class Program {
                 //sort the scope names so we get consistent results
                 const scopeNames = this.getSortedScopeNames();
                 for (const file of filesToBeValidatedInScopeContext) {
+                    this.logger.debug(`Invalidating scopes for file:`, file.srcPath);
                     if (isBrsFile(file)) {
                         file.validationSegmenter.unValidateAllSegments();
                         for (const scope of this.getScopesForFile(file)) {
@@ -1106,14 +1111,21 @@ export class Program {
                         }
                     }
                 }
+                this.logger.debug(`Revalidating scopes`);
+
                 for (let scopeName of scopeNames) {
-                    let scope = this.scopes[scopeName];
-                    const scopeValidated = scope.validate(this.currentScopeValidationOptions);
-                    if (scopeValidated) {
-                        scopesValidated++;
+                    this.logger.debug(`Revalidating scope:`, scopeName);
+                    let scope = this.scopes?.[scopeName];
+                    if (scope) {
+                        this.logger.debug(`found scope:`, scopeName);
+                        const scopeValidated = scope.validate(this.currentScopeValidationOptions);
+                        this.logger.debug(`Scope validation complete: `, scopeValidated);
+                        if (scopeValidated) {
+                            scopesValidated++;
+                        }
+                        linkTime += scope?.validationMetrics?.linkTime ?? 0;
+                        validationTime += scope?.validationMetrics?.validationTime ?? 0;
                     }
-                    linkTime += scope.validationMetrics.linkTime;
-                    validationTime += scope.validationMetrics.validationTime;
                 }
             });
             metrics.scopesValidated = scopesValidated;
