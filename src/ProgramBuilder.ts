@@ -94,7 +94,14 @@ export class ProgramBuilder {
         ];
     }
 
-    public async run(options: BsConfig) {
+    public async run(options: BsConfig & {
+        /**
+         * Should validation run? Default is `true`. You must set exlicitly to `false` to disable.
+         * @deprecated this is an experimental flag, and its behavior may change in a future release
+         * @default true
+         */
+        validate?: boolean;
+    }) {
         if (options?.logLevel) {
             this.logger.logLevel = options.logLevel;
         }
@@ -105,6 +112,7 @@ export class ProgramBuilder {
         this.isRunning = true;
         try {
             this.options = util.normalizeAndResolveConfig(options);
+            (this.options as typeof options).validate ??= true;
             if (this.options.noProject) {
                 this.logger.log(`'no-project' flag is set so bsconfig.json loading is disabled'`);
             } else if (this.options.project) {
@@ -137,10 +145,14 @@ export class ProgramBuilder {
 
         if (this.options.watch) {
             this.logger.log('Starting compilation in watch mode...');
-            await this.runOnce();
+            await this.runOnce({
+                validate: options?.validate
+            });
             this.enableWatchMode();
         } else {
-            await this.runOnce();
+            await this.runOnce({
+                validate: options?.validate
+            });
         }
     }
 
@@ -264,14 +276,17 @@ export class ProgramBuilder {
     /**
      * Run the entire process exactly one time.
      */
-    private runOnce() {
+    private runOnce(options?: { validate?: boolean }) {
         //clear the console
         this.clearConsole();
         let cancellationToken = { isCanceled: false };
         //wait for the previous run to complete
         let runPromise = this.cancelLastRun().then(() => {
             //start the new run
-            return this._runOnce(cancellationToken);
+            return this._runOnce({
+                cancellationToken: cancellationToken,
+                validate: options?.validate
+            });
         }) as any;
 
         //a function used to cancel this run
@@ -347,18 +362,20 @@ export class ProgramBuilder {
      * Run the process once, allowing cancelability.
      * NOTE: This should only be called by `runOnce`.
      */
-    private async _runOnce(cancellationToken: { isCanceled: any }) {
+    private async _runOnce(options: { cancellationToken: { isCanceled: any }; validate: boolean }) {
         let wereDiagnosticsPrinted = false;
         try {
             //maybe cancel?
-            if (cancellationToken.isCanceled === true) {
+            if (options?.cancellationToken?.isCanceled === true) {
                 return -1;
             }
-            //validate program
-            this.validateProject();
+            //validate program. false means no, everything else (including missing) means true
+            if (options?.validate !== false) {
+                this.validateProject();
+            }
 
             //maybe cancel?
-            if (cancellationToken.isCanceled === true) {
+            if (options?.cancellationToken?.isCanceled === true) {
                 return -1;
             }
 
@@ -376,7 +393,7 @@ export class ProgramBuilder {
             await this.createPackageIfEnabled();
 
             //maybe cancel?
-            if (cancellationToken.isCanceled === true) {
+            if (options?.cancellationToken?.isCanceled === true) {
                 return -1;
             }
 
