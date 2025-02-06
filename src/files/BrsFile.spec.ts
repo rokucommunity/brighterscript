@@ -21,7 +21,7 @@ import * as fsExtra from 'fs-extra';
 import undent from 'undent';
 import { tempDir, rootDir } from '../testHelpers.spec';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
-import { ClassType, EnumType, FloatType, InterfaceType } from '../types';
+import { ClassType, EnumType, FloatType, InterfaceType, VoidType } from '../types';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import * as fileUrl from 'file-url';
 import { isAALiteralExpression, isBlock, isFunctionExpression } from '../astUtils/reflection';
@@ -1867,6 +1867,7 @@ describe('BrsFile', () => {
             });
 
             it('works for bs content', () => {
+                program.addAnnotationSymbol('annotation', new TypedFunctionType(VoidType.instance));
                 program.setFile('source/lib.bs', ``);
                 doTest(`
                     import "pkg:/source/lib.bs"
@@ -3022,6 +3023,7 @@ describe('BrsFile', () => {
         });
 
         it('includes annotation comments for class', async () => {
+            program.addAnnotationSymbol('annotation', new TypedFunctionType(VoidType.instance));
             await testTranspile(`
                 'comment1
                 @annotation
@@ -3049,6 +3051,7 @@ describe('BrsFile', () => {
         });
 
         it('includes annotation comments for function', async () => {
+            program.addAnnotationSymbol('annotation', new TypedFunctionType(VoidType.instance));
             await testTranspile(`
                 'comment1
                 @annotation
@@ -3067,6 +3070,7 @@ describe('BrsFile', () => {
         });
 
         it('includes annotation comments for enum', async () => {
+            program.addAnnotationSymbol('annotation', new TypedFunctionType(VoidType.instance));
             await testTranspile(`
                 'comment1
                 @annotation
@@ -3084,6 +3088,7 @@ describe('BrsFile', () => {
         });
 
         it('includes annotation comments for const', async () => {
+            program.addAnnotationSymbol('annotation', new TypedFunctionType(VoidType.instance));
             await testTranspile(`
                 'comment1
                 @annotation
@@ -3099,6 +3104,7 @@ describe('BrsFile', () => {
         });
 
         it('includes annotation comments for empty namespaces', async () => {
+            program.addAnnotationSymbol('annotation', new TypedFunctionType(VoidType.instance));
             await testTranspile(`
                 'comment1
                 @annotation
@@ -4405,6 +4411,10 @@ describe('BrsFile', () => {
         });
 
         it('includes annotations', () => {
+            program.addAnnotationSymbol('an', new TypedFunctionType(VoidType.instance));
+            program.addAnnotationSymbol('anfunc', new TypedFunctionType(VoidType.instance).addParameter('name', StringType.instance, true));
+            program.addAnnotationSymbol('anmember', new TypedFunctionType(VoidType.instance).addParameter('name', StringType.instance, true));
+
             testTypedef(`
                 namespace test
                     @an

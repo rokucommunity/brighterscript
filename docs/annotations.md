@@ -11,7 +11,7 @@ A statement can have multiple annotations.
 
 The name of the annotation should be a valid identifier and can not be a keyword (e.g. `for`, `while`, `else`...).
 
-Annotations can have parameters - these parameters should be a list of valid BrighterScript expressions separated by commas.
+Annotations can have parameters - these parameters should be a list of valid BrighterScript literal expressions separated by commas.
 
 ```
 @<annotation_name>[(parameters)]
@@ -20,6 +20,18 @@ Annotations can have parameters - these parameters should be a list of valid Bri
 
 @<annotation_name>[(parameters)] [more annotations] <statement>
 ```
+
+## Annotation Arguments
+
+Annotations can only take literal values as arguments. That includes literal strings, numbers, arrays with literal values and associative arrays with literal values.
+
+Examples:
+
+ - literal numbers: `123`, `3.14`, `0`, `&HFF`
+ - literal strings: `"hello"`, `""`, `"any string with quotes"`
+ - literal arrays: `[1, 2, 3]`, `["array", "of", "strings"]`, `[1, {letter: "A"}, "mixed"]`
+ - literal associative arrays: `{key: "value"}`, `{translation: [200, 300], fields: {title: "Star Wars", description: "A long time ago in a galaxy far, far away..."}}`
+
 
 ## Examples
 

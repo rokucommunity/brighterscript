@@ -219,8 +219,24 @@ export interface CommentFlag {
 
 export type CompilerPluginFactory = () => CompilerPlugin;
 
+export interface AnnotationDeclaration {
+    description?: string;
+    type: TypedFunctionType;
+}
+
 export interface CompilerPlugin {
     name: string;
+
+    /**
+     * A list of function declarations of allowed annotations
+     */
+    annotations?: Array<TypedFunctionType | AnnotationDeclaration>;
+
+    /**
+     * Called when plugin is initially loaded
+     */
+    onPluginConfigure?(event: OnPluginConfigureEvent): any;
+
     /**
      * Called before a new program is created
      */
@@ -506,6 +522,9 @@ export interface OnGetCodeActionsEvent<TFile extends BscFile = BscFile> {
     codeActions: CodeAction[];
 }
 
+export interface OnPluginConfigureEvent {
+    builder: ProgramBuilder;
+}
 export interface BeforeProgramCreateEvent {
     builder: ProgramBuilder;
 }
@@ -990,6 +1009,10 @@ export interface ExtraSymbolData {
      * Was this a result of a callfunc?
      */
     isFromCallFunc?: boolean;
+    /**
+     * Name of plugin that defined this symbol
+     */
+    pluginName?: string;
 }
 
 export interface GetTypeOptions {
@@ -1001,6 +1024,7 @@ export interface GetTypeOptions {
     ignoreCacheForRetrieval?: boolean;
     isExistenceTest?: boolean;
     preferDocType?: boolean;
+    onlyAllowLiterals?: boolean;
 }
 
 export class TypeChainEntry {

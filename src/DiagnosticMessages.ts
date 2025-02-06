@@ -1042,6 +1042,19 @@ export let DiagnosticMessages = {
         },
         severity: DiagnosticSeverity.Error,
         code: 'cannot-find-callfunc'
+    }),
+    cannotFindAnnotation: (name: string) => ({
+        message: `Cannot find annotation '${name}' `,
+        data: {
+            name: name
+        },
+        severity: DiagnosticSeverity.Error,
+        code: 'cannot-find-annotation'
+    }),
+    expectedLiteralValue: (context: string, value: string) => ({
+        message: `Expected literal value ${context}, but found '${value}' `,
+        severity: DiagnosticSeverity.Error,
+        code: 'expected-literal-value'
     })
 };
 export const defaultMaximumTruncationLength = 160;

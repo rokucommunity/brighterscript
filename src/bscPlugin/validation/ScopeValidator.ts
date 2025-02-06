@@ -13,8 +13,7 @@ import type { Token } from '../../lexer/Token';
 import { AstNodeKind } from '../../parser/AstNode';
 import type { AstNode } from '../../parser/AstNode';
 import type { Expression } from '../../parser/AstNode';
-import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression, LiteralExpression, FunctionExpression, CallfuncExpression } from '../../parser/Expression';
-import { CallExpression } from '../../parser/Expression';
+import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression, LiteralExpression, FunctionExpression, CallExpression, CallfuncExpression } from '../../parser/Expression';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BscType } from '../../types/BscType';
 import type { BscFile } from '../../files/BscFile';
@@ -441,20 +440,7 @@ export class ScopeValidator {
         }
 
         //get min/max parameter count for callable
-        let minParams = 0;
-        let maxParams = 0;
-        for (let param of funcType.params) {
-            maxParams++;
-            //optional parameters must come last, so we can assume that minParams won't increase once we hit
-            //the first isOptional
-            if (param.isOptional !== true) {
-                minParams++;
-            }
-        }
-        if (funcType.isVariadic) {
-            // function accepts variable number of arguments
-            maxParams = CallExpression.MaximumArguments;
-        }
+        const { minParams, maxParams } = funcType.getMinMaxParamCount();
         const argsForCall = argOffset < 1 ? args : args.slice(argOffset);
 
         let expCallArgCount = argsForCall.length;
@@ -477,7 +463,7 @@ export class ScopeValidator {
             }
 
             if (isCallableType(paramType) && isClassType(argType) && isClassStatement(data.definingNode)) {
-                argType = data.definingNode.getConstructorType();
+                argType = data.definingNode?.getConstructorType();
             }
 
             const compatibilityData: TypeCompatibilityData = {};
