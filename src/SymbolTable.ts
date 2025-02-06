@@ -163,6 +163,7 @@ export class SymbolTable implements SymbolTypeGetter {
             currentTable = currentTable.parent;
             memberOfAncestor = true;
         } while (currentTable);
+        return result;
     }
 
     /**
@@ -213,7 +214,7 @@ export class SymbolTable implements SymbolTypeGetter {
         if (!resolvedType || originalIsReferenceType) {
             const symbolTypes = this.getSymbolTypes(name, options);
             data = symbolTypes?.[0]?.data;
-            foundFlags = symbolTypes?.[0].flags;
+            foundFlags = symbolTypes?.[0]?.flags;
             resolvedType = getUniqueType(symbolTypes?.map(symbol => symbol.type), SymbolTable.unionTypeFactory);
         }
         if (!resolvedType && options.fullName && options.tableProvider) {
