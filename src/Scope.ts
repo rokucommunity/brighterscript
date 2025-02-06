@@ -755,7 +755,7 @@ export class Scope {
     }
 
     protected logDebug(...args: any[]) {
-        this.program?.logger?.debug(this._debugLogComponentName ?? 'unknown', ...args);
+        this.program.logger.debug(this._debugLogComponentName, ...args);
     }
     private _debugLogComponentName: string;
 
@@ -770,6 +770,7 @@ export class Scope {
             linkTime: 0,
             validationTime: 0
         };
+
         //if this scope is already validated, no need to revalidate
         if (this.isValidated === true && !validationOptions.force) {
             this.logDebug('validate(): already validated');
@@ -782,9 +783,12 @@ export class Scope {
             return false;
         }
 
-        this.useFileCachesForFileLinkLookups = true;
+        this.useFileCachesForFileLinkLookups = true;//!validationOptions.initialValidation;
+
         this.program.logger.time(LogLevel.debug, [this._debugLogComponentName, 'validate()'], () => {
+
             let parentScope = this.getParentScope();
+
             //validate our parent before we validate ourself
             if (parentScope && parentScope.isValidated === false) {
                 this.logDebug('validate(): validating parent first');
@@ -795,7 +799,7 @@ export class Scope {
 
             let t0 = performance.now();
             this.linkSymbolTable();
-            this.validationMetrics.linkTime += performance.now() - t0;
+            this.validationMetrics.linkTime = performance.now() - t0;
             const scopeValidateEvent = {
                 program: this.program,
                 scope: this,
@@ -805,7 +809,7 @@ export class Scope {
             t0 = performance.now();
             this.program.plugins.emit('beforeScopeValidate', scopeValidateEvent);
             this.program.plugins.emit('onScopeValidate', scopeValidateEvent);
-            this.validationMetrics.validationTime += performance.now() - t0;
+            this.validationMetrics.validationTime = performance.now() - t0;
             this.program.plugins.emit('afterScopeValidate', scopeValidateEvent);
             //unlink all symbol tables from this scope (so they don't accidentally stick around)
             this.unlinkSymbolTable();

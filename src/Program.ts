@@ -613,6 +613,7 @@ export class Program {
     public setFile<T extends BscFile>(fileParam: FileObj | string, fileData: FileData): T {
         //normalize the file paths
         const { srcPath, destPath } = this.getPaths(fileParam, this.options.rootDir);
+
         let file = this.logger.time(LogLevel.debug, ['Program.setFile()', chalk.green(srcPath)], () => {
             //if the file is already loaded, remove it
             if (this.hasFile(srcPath)) {
@@ -1098,7 +1099,6 @@ export class Program {
                 //sort the scope names so we get consistent results
                 const scopeNames = this.getSortedScopeNames();
                 for (const file of filesToBeValidatedInScopeContext) {
-                    this.logger.debug(`Invalidating scopes for file:`, file.srcPath);
                     if (isBrsFile(file)) {
                         file.validationSegmenter.unValidateAllSegments();
                         for (const scope of this.getScopesForFile(file)) {
@@ -1106,19 +1106,14 @@ export class Program {
                         }
                     }
                 }
-                this.logger.debug(`Revalidating scopes`);
-
                 for (let scopeName of scopeNames) {
-                    this.logger.debug(`Revalidating scope:`, scopeName);
-                    let scope = this.scopes?.[scopeName];
-                    if (scope) {
-                        const scopeValidated = scope.validate(this.currentScopeValidationOptions);
-                        if (scopeValidated) {
-                            scopesValidated++;
-                        }
-                        linkTime += scope?.validationMetrics?.linkTime ?? 0;
-                        validationTime += scope?.validationMetrics?.validationTime ?? 0;
+                    let scope = this.scopes[scopeName];
+                    const scopeValidated = scope.validate(this.currentScopeValidationOptions);
+                    if (scopeValidated) {
+                        scopesValidated++;
                     }
+                    linkTime += scope.validationMetrics.linkTime;
+                    validationTime += scope.validationMetrics.validationTime;
                 }
             });
             metrics.scopesValidated = scopesValidated;
