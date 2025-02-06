@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.44](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.43...v1.0.0-alpha.44) - 2025-02-06
+### Fixed
+- Fixes `onDidChangeWatchedFiles` flow in LanguageServer ([#1410](https://github.com/rokucommunity/brighterscript/pull/1410))
+
+
+
 ## [1.0.0-alpha.43](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.42...v1.0.0-alpha.43) - 2025-02-03
 ### Fixed
  - Fixes getting the default type of an array of AAs with reference type members ([#140](https://github.com/rokucommunity/brighterscript/pull/1402))
