@@ -925,9 +925,10 @@ export class LanguageServer {
                 .filter(change => change.type === FileChangeType.Created)
                 //keep only the directories
                 .filter(change => util.isDirectorySync(change.srcPath));
-            const stagingDirs = projects.map(p => p.builder?.options?.stagingDir ?? '').filter(stagingDir => stagingDir);
-            stagingDirs.push('.roku-deploy-staging');
-            stagingDirs.push('node_modules');
+
+            //remove the created directories from the changes array (we will add back each of their files next)
+            changes = changes.filter(x => !directoryChanges.includes(x));
+
             //look up every file in each of the newly added directories
             const newFileChanges = directoryChanges
                 //take just the path
@@ -951,16 +952,6 @@ export class LanguageServer {
 
             //add the new file changes to the changes array.
             changes.push(...newFileChanges as any);
-
-            //remove the created directories from the changes array (we will add back each of their files next)
-            changes = changes.filter(x => {
-                for (const stagingDir of stagingDirs) {
-                    if (x.srcPath.includes(`/${stagingDir}/`)) {
-                        return false;
-                    }
-                }
-                return true;
-            });
 
             //give every workspace the chance to handle file changes
             await Promise.all(
