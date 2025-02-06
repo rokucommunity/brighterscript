@@ -19,7 +19,6 @@ import { tempDir, rootDir } from './testHelpers.spec';
 import { BusyStatusTracker } from './BusyStatusTracker';
 import type { BscFile } from './files/BscFile';
 import { BrsFile } from './files/BrsFile';
-import { AssetFile } from './files/AssetFile';
 
 const sinon = createSandbox();
 
