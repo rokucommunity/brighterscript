@@ -783,11 +783,8 @@ export class Scope {
         }
 
         this.useFileCachesForFileLinkLookups = true;
-        console.log('validate before timer', this._debugLogComponentName);
         this.program.logger.time(LogLevel.debug, [this._debugLogComponentName, 'validate()'], () => {
-
             let parentScope = this.getParentScope();
-
             //validate our parent before we validate ourself
             if (parentScope && parentScope.isValidated === false) {
                 this.logDebug('validate(): validating parent first');

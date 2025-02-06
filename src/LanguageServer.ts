@@ -42,11 +42,12 @@ import { standardizePath as s, util } from './util';
 import { Throttler } from './Throttler';
 import { KeyedThrottler } from './KeyedThrottler';
 import { DiagnosticCollection } from './DiagnosticCollection';
-import { isBrsFile } from './astUtils/reflection';
+import { isAssetFile, isBrsFile, isXmlFile } from './astUtils/reflection';
 import { encodeSemanticTokens, semanticTokensLegend } from './SemanticTokenUtils';
 import type { BusyStatus } from './BusyStatusTracker';
 import { BusyStatusTracker } from './BusyStatusTracker';
 import { logger } from './logging';
+import type { Program } from './Program';
 
 export class LanguageServer {
     private connection = undefined as any as Connection;
@@ -924,10 +925,9 @@ export class LanguageServer {
                 .filter(change => change.type === FileChangeType.Created)
                 //keep only the directories
                 .filter(change => util.isDirectorySync(change.srcPath));
-
-            //remove the created directories from the changes array (we will add back each of their files next)
-            changes = changes.filter(x => !directoryChanges.includes(x));
-
+            const stagingDirs = projects.map(p => p.builder?.options?.stagingDir ?? '').filter(stagingDir => stagingDir);
+            stagingDirs.push('.roku-deploy-staging');
+            stagingDirs.push('node_modules');
             //look up every file in each of the newly added directories
             const newFileChanges = directoryChanges
                 //take just the path
@@ -952,6 +952,16 @@ export class LanguageServer {
             //add the new file changes to the changes array.
             changes.push(...newFileChanges as any);
 
+            //remove the created directories from the changes array (we will add back each of their files next)
+            changes = changes.filter(x => {
+                for (const stagingDir of stagingDirs) {
+                    if (x.srcPath.includes(`/${stagingDir}/`)) {
+                        return false;
+                    }
+                }
+                return true;
+            });
+
             //give every workspace the chance to handle file changes
             await Promise.all(
                 projects.map((project) => this.handleFileChanges(project, changes))
@@ -967,13 +977,18 @@ export class LanguageServer {
     public async handleFileChanges(project: Project, changes: { type: FileChangeType; srcPath: string }[]) {
         //this loop assumes paths are both file paths and folder paths, which eliminates the need to detect.
         //All functions below can handle being given a file path AND a folder path, and will only operate on the one they are looking for
+        let handledFile = false;
         await Promise.all(changes.map(async (change) => {
             await this.keyedThrottler.run(change.srcPath, async () => {
                 if (await this.handleFileChange(project, change)) {
-                    await this.validateAllThrottled();
+                    handledFile = true;
                 }
             });
         }));
+        if (handledFile) {
+            // only validate if there was a legitimate change
+            await this.validateAllThrottled();
+        }
     }
 
     /**
@@ -1003,9 +1018,10 @@ export class LanguageServer {
 
             //get the dest path for this file.
             let destPath = rokuDeploy.getDestPath(change.srcPath, options.files, rootDir);
+            const newFileContents = await this.getChangedFileContents(project, program, change.srcPath);
 
             //if we got a dest path, then the program wants this file
-            if (destPath) {
+            if (destPath && newFileContents !== null) {
                 program.setFile(
                     {
                         src: change.srcPath,
@@ -1024,18 +1040,55 @@ export class LanguageServer {
             //sometimes "changed" events are emitted on files that were actually deleted,
             //so determine file existance and act accordingly
             if (await util.pathExists(change.srcPath)) {
+                const newFileContents = await this.getChangedFileContents(project, program, change.srcPath);
+
+                if (!newFileContents) {
+                    // file did not actually change
+                    return false;
+
+                }
                 program.setFile(
                     {
                         src: change.srcPath,
                         dest: rokuDeploy.getDestPath(change.srcPath, options.files, rootDir)
                     },
-                    await project.builder.getFileContents(change.srcPath)
+                    newFileContents
                 );
             } else {
                 program.removeFile(change.srcPath);
             }
             return true;
         }
+    }
+
+    /**
+     * Gets the current contents of a file if it has changed from the known contents.
+     * Will return null if the file doesn't exist, or if there is no change
+     *
+     */
+    private async getChangedFileContents(project: Project, program: Program, srcPath: string) {
+        if (!project || !program) {
+            return null;
+        }
+
+        let newFileContents: Buffer | string = null;
+        if (await util.pathExists(srcPath) && !util.isDirectorySync(srcPath)) {
+            newFileContents = await project.builder.getFileContents(srcPath);
+            const existingFile = program.getFile(srcPath, false);
+
+            if (isBrsFile(existingFile) || isXmlFile(existingFile)) {
+                if (existingFile.fileContents === newFileContents.toString()) {
+                    // file did not actually change
+                    return null;
+                }
+            } else if (isAssetFile(existingFile) && existingFile.data.isValueLoaded) {
+                if (existingFile.data.value.toString() === newFileContents.toString()) {
+                    // file did not actually change
+                    return null;
+                }
+            }
+        }
+        return newFileContents;
     }
 
     @AddStackToErrorMessage

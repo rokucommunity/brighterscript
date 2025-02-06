@@ -18,6 +18,8 @@ import { createVisitor, WalkMode } from './astUtils/visitors';
 import { tempDir, rootDir } from './testHelpers.spec';
 import { BusyStatusTracker } from './BusyStatusTracker';
 import type { BscFile } from './files/BscFile';
+import { BrsFile } from './files/BrsFile';
+import { AssetFile } from './files/AssetFile';
 
 const sinon = createSandbox();
 
@@ -287,8 +289,39 @@ describe('LanguageServer', () => {
     });
 
     describe('handleFileChanges', () => {
+        it('only adds files that change', async () => {
+            server.run();
+            let mainPath = s`${rootDir}/source/main.brs`;
+            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {});
+            fsExtra.outputFileSync(mainPath, '');
+            await server['syncProjects']();
+            const project = server.projects[0];
+
+            const setFileStub = sinon.stub(project.builder.program, 'setFile');
+
+            await server.handleFileChanges(project, [{
+                type: FileChangeType.Changed,
+                srcPath: mainPath
+            }]);
+
+            expect(setFileStub.getCalls()).to.eql([]);
+
+            fsExtra.outputFileSync(mainPath, 'main has changed');
+
+            await server.handleFileChanges(project, [{
+                type: FileChangeType.Changed,
+                srcPath: mainPath
+            }]);
+
+            expect(setFileStub.getCalls()[0]?.args[0]).to.eql({
+                src: mainPath,
+                dest: s`source/main.brs`
+            });
+        });
+
         it('only adds files that match the files array', async () => {
             let setFileStub = sinon.stub().returns(Promise.resolve());
+            let getFileStub = sinon.stub().returns(Promise.resolve(new BrsFile({ program: null, srcPath: '', destPath: '' })));
             const project = {
                 builder: {
                     options: {
@@ -299,13 +332,14 @@ describe('LanguageServer', () => {
                     getFileContents: sinon.stub().callsFake(() => Promise.resolve('')) as any,
                     rootDir: rootDir,
                     program: {
-                        setFile: <any>setFileStub
+                        setFile: <any>setFileStub,
+                        getFile: <any>getFileStub
                     }
                 }
             } as Project;
 
             let mainPath = s`${rootDir}/source/main.brs`;
-            // setVfsFile(mainPath, 'sub main()\nend sub');
+            fsExtra.outputFileSync(mainPath, '');
 
             await server.handleFileChanges(project, [{
                 type: FileChangeType.Created,
@@ -318,6 +352,7 @@ describe('LanguageServer', () => {
             });
 
             let libPath = s`${rootDir}/components/lib.brs`;
+            fsExtra.outputFileSync(libPath, '');
 
             expect(setFileStub.callCount).to.equal(1);
             await server.handleFileChanges(project, [{
@@ -448,7 +483,7 @@ describe('LanguageServer', () => {
     });
 
     describe('onDidChangeWatchedFiles', () => {
-        it('converts folder paths into an array of file paths', async () => {
+        it('ignores files that have not changed', async () => {
             server.run();
 
             fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {});
@@ -458,6 +493,33 @@ describe('LanguageServer', () => {
 
             const stub2 = sinon.stub(server.projects[0].builder.program, 'setFile');
 
+            await server['onDidChangeWatchedFiles']({
+                changes: [{
+                    type: FileChangeType.Created,
+                    uri: getFileProtocolPath(s`${rootDir}/source/main.brs`)
+                }, {
+                    type: FileChangeType.Changed,
+                    uri: getFileProtocolPath(s`${rootDir}/source/lib.brs`)
+                }]
+            } as DidChangeWatchedFilesParams);
+
+            expect(
+                stub2.getCalls().map(x => x.args[0].src).sort()
+            ).to.eql([]);
+        });
+
+
+        it('converts folder paths into an array of file paths', async () => {
+            server.run();
+
+            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {});
+            fsExtra.outputFileSync(s`${rootDir}/source/main.brs`, '');
+            fsExtra.outputFileSync(s`${rootDir}/source/lib.brs`, '');
+            await server['syncProjects']();
+
+            const stub2 = sinon.stub(server.projects[0].builder.program, 'setFile');
+            fsExtra.outputFileSync(s`${rootDir}/source/lib.brs`, 'rem change');
+            fsExtra.outputFileSync(s`${rootDir}/source/main.brs`, 'rem change');
             await server['onDidChangeWatchedFiles']({
                 changes: [{
                     type: FileChangeType.Created,
@@ -493,6 +555,37 @@ describe('LanguageServer', () => {
             expect(
                 stub2.getCalls()
             ).to.be.empty;
+        });
+
+        it('does not trigger revalidates when changes are in files in staging', async () => {
+            server.run();
+            server['connection'] = server['createConnection']();
+            await server['createProject'](workspacePath);
+            server.projects[0].builder.options.stagingDir = 'myStagingDir';
+            const stagingDir = s`${rootDir}/../myStagingDir`;
+            fsExtra.outputJsonSync(s`${stagingDir}/bsconfig.json`, {});
+            fsExtra.outputFileSync(s`${stagingDir}/source/main.brs`, '');
+            fsExtra.outputFileSync(s`${stagingDir}/source/lib.brs`, '');
+            fsExtra.outputFileSync(s`${rootDir}/source/lib.brs`, '');
+            await server['syncProjects']();
+
+            const stub2 = sinon.stub(server.projects[0].builder.program, 'setFile');
+            fsExtra.outputFileSync(s`${stagingDir}/source/lib.brs`, 'rem change');
+            await server['onDidChangeWatchedFiles']({
+                changes: [{
+                    type: FileChangeType.Created,
+                    uri: getFileProtocolPath(stagingDir)
+                }, {
+                    type: FileChangeType.Created,
+                    uri: getFileProtocolPath(rootDir)
+                }]
+            } as DidChangeWatchedFilesParams);
+
+            expect(
+                stub2.getCalls().map(x => x.args[0].src).sort()
+            ).to.eql([
+                s`${rootDir}/source/lib.brs`
+            ]);
         });
     });
 
