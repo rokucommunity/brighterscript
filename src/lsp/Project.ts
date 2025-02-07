@@ -76,7 +76,7 @@ export class Project implements LspProject {
             deploy: false,
             copyToStaging: false,
             showDiagnosticsInConsole: false,
-            skipInitialValidation: true
+            validate: false
         } as BsConfig;
 
         //Assign .files (mostly used for standalone projects) if available, as a dedicated assignment because `undefined` overrides the default value in the `bsconfig.json`
@@ -87,7 +87,7 @@ export class Project implements LspProject {
         //run the builder to initialize the program. Skip validation for now, we'll trigger it soon in a more cancellable way
         await this.builder.run({
             ...builderOptions,
-            skipInitialValidation: true,
+            validate: false,
             //don't show diagnostics in the console since this is run via the language server, they're presented in a different way
             showDiagnosticsInConsole: false
         });
