@@ -75,9 +75,15 @@ export class Sequencer {
                 if (this.options?.cancellationToken?.isCancellationRequested) {
                     return this.handleCancel();
                 }
+
                 await Promise.resolve(
                     action.func(...action.args)
                 );
+
+                //if the cancellation token has asked us to cancel, then stop processing now
+                if (this.options?.cancellationToken?.isCancellationRequested) {
+                    return this.handleCancel();
+                }
             }
             this.emitter.emit('success');
         } catch (e) {

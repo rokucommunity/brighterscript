@@ -666,7 +666,7 @@ export class Program {
     /**
      * How many milliseconds can pass while doing synchronous operations in validate before we register a short timeout (i.e. yield to the event loop)
      */
-    private validationMinSyncDuration = 150;
+    private validationMinSyncDuration = 75;
 
     private validatePromise: Promise<void> | undefined;
 
