@@ -579,7 +579,7 @@ describe('util', () => {
         let id = 1;
 
         beforeEach(() => {
-            // `require` caches plugins, so  generate a unique plugin name for every test
+            // `require` caches plugins, so generate a unique plugin name for every test
             pluginPath = `${tempDir}/plugin${id++}.js`;
         });
 
@@ -958,6 +958,105 @@ describe('util', () => {
                     'uri', util.createRange(2, 3, 4, 5)
                 )
             }]);
+        });
+    });
+
+    describe('promiseRaceMatch', () => {
+        async function resolveAfter<T = any>(value: T, timeout: number) {
+            await util.sleep(timeout);
+            return value;
+        }
+
+        it('returns the value from the first promise that resolves that matches the matcher', async () => {
+            expect(
+                await util.promiseRaceMatch([
+                    resolveAfter('a', 1),
+                    resolveAfter('b', 20),
+                    resolveAfter('c', 30)
+                ], x => true)
+            ).to.eql('a');
+
+            expect(
+                await util.promiseRaceMatch([
+                    resolveAfter('a', 30),
+                    resolveAfter('b', 1),
+                    resolveAfter('c', 20)
+                ], x => true)
+            ).to.eql('b');
+
+            expect(
+                await util.promiseRaceMatch([
+                    resolveAfter('a', 20),
+                    resolveAfter('b', 30),
+                    resolveAfter('c', 1)
+                ], x => true)
+            ).to.eql('c');
+        });
+
+        it('does not throw when there were zero promises', async () => {
+            expect(
+                await util.promiseRaceMatch([], x => true)
+            ).to.be.undefined;
+        });
+
+        it('returns a value even if one of the promises never resolves', async () => {
+            expect(
+                await util.promiseRaceMatch([
+                    new Promise(() => {
+                        //i will never resolve
+                    }),
+                    resolveAfter('a', 1)
+                ], x => true)
+            ).to.eql('a');
+        });
+
+        it('rejects if all the promises fail', async () => {
+            let error: Error;
+            try {
+                await util.promiseRaceMatch([
+                    Promise.reject(new Error('error 1')),
+                    Promise.reject(new Error('error 2')),
+                    Promise.reject(new Error('error 3'))
+                ], x => true);
+            } catch (e) {
+                error = e as any;
+            }
+            expect(
+                (error as AggregateError).errors.map(x => x.message)
+            ).to.eql([
+                'error 1',
+                'error 2',
+                'error 3'
+            ]);
+        });
+
+        it('returns a value when one of the promises rejects', async () => {
+            expect(
+                await util.promiseRaceMatch([
+                    Promise.reject(new Error('crash')),
+                    resolveAfter('a', 1)
+                ], x => true)
+            ).to.eql('a');
+        });
+
+        it('returns undefined if no valuees match the matcher', async () => {
+            expect(
+                await util.promiseRaceMatch([
+                    resolveAfter('a', 1),
+                    resolveAfter('b', 20),
+                    resolveAfter('c', 30)
+                ], x => false)
+            ).to.be.undefined;
+        });
+
+        it('returns undefined if no matcher is provided', async () => {
+            expect(
+                await util.promiseRaceMatch([
+                    resolveAfter('a', 1),
+                    resolveAfter('b', 20),
+                    resolveAfter('c', 30)
+                ], undefined)
+            ).to.be.undefined;
         });
     });
 });

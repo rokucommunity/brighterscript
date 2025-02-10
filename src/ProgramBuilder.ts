@@ -8,6 +8,7 @@ import { Program } from './Program';
 import { standardizePath as s, util } from './util';
 import { Watcher } from './Watcher';
 import { DiagnosticSeverity } from 'vscode-languageserver';
+import type { Logger } from './logging';
 import { LogLevel, createLogger } from './logging';
 import PluginInterface from './PluginInterface';
 import * as diagnosticUtils from './diagnosticUtils';
@@ -21,7 +22,14 @@ import { URI } from 'vscode-uri';
  */
 export class ProgramBuilder {
 
-    public constructor() {
+    public constructor(
+        options?: {
+            logger?: Logger;
+        }
+    ) {
+        this.logger = options?.logger ?? createLogger();
+        this.plugins = new PluginInterface([], { logger: this.logger });
+
         //add the default file resolver (used to load source file contents).
         this.addFileResolver((filePath) => {
             return fsExtra.readFile(filePath).then((value) => {
@@ -38,12 +46,16 @@ export class ProgramBuilder {
     private isRunning = false;
     private watcher: Watcher | undefined;
     public program: Program | undefined;
-    public logger = createLogger();
-    public plugins: PluginInterface = new PluginInterface([], { logger: this.logger });
+    public logger: Logger;
+    public plugins: PluginInterface;
     private fileResolvers = [] as FileResolver[];
 
-    public addFileResolver(fileResolver: FileResolver) {
-        this.fileResolvers.push(fileResolver);
+    /**
+     * Add file resolvers that will be able to provide file contents before loading from the file system
+     * @param fileResolvers a list of file resolvers
+     */
+    public addFileResolver(...fileResolvers: FileResolver[]) {
+        this.fileResolvers.push(...fileResolvers);
     }
 
     /**
@@ -75,7 +87,7 @@ export class ProgramBuilder {
         let file: BscFile | undefined = this.program.getFile(srcPath);
         if (!file) {
             file = {
-                pkgPath: this.program.getPkgPath(srcPath),
+                pkgPath: path.basename(srcPath),
                 pathAbsolute: srcPath, //keep this for backwards-compatibility. TODO remove in v1
                 srcPath: srcPath,
                 getDiagnostics: () => {
@@ -112,7 +124,10 @@ export class ProgramBuilder {
         this.isRunning = true;
         try {
             this.options = util.normalizeAndResolveConfig(options);
-            (this.options as typeof options).validate ??= true;
+            if (this.options?.logLevel !== undefined) {
+                this.logger.logLevel = this.options?.logLevel;
+            }
+
             if (this.options.noProject) {
                 this.logger.log(`'no-project' flag is set so bsconfig.json loading is disabled'`);
             } else if (this.options.project) {
@@ -123,6 +138,11 @@ export class ProgramBuilder {
             this.loadRequires();
             this.loadPlugins();
         } catch (e: any) {
+            //For now, just use a default options object so we have a functioning program
+            this.options = util.normalizeConfig({
+                showDiagnosticsInConsole: options?.showDiagnosticsInConsole
+            });
+
             if (e?.file && e.message && e.code) {
                 let err = e as BsDiagnostic;
                 this.staticDiagnostics.push(err);
@@ -130,11 +150,8 @@ export class ProgramBuilder {
                 //if this is not a diagnostic, something else is wrong...
                 throw e;
             }
-            this.printDiagnostics();
 
-            //we added diagnostics, so hopefully that draws attention to the underlying issues.
-            //For now, just use a default options object so we have a functioning program
-            this.options = util.normalizeConfig({});
+            this.printDiagnostics();
         }
         this.logger.logLevel = this.options.logLevel;
 
@@ -171,7 +188,7 @@ export class ProgramBuilder {
             this.options.plugins ?? [],
             (pathOrModule, err) => this.logger.error(`Error when loading plugin '${pathOrModule}':`, err)
         );
-        this.logger.log(`Loading ${this.options.plugins?.length ?? 0} plugins for cwd "${cwd}"`);
+        this.logger.log(`Loading ${this.options.plugins?.length ?? 0} plugins for cwd "${cwd}"`, this.options.plugins);
         for (let plugin of plugins) {
             this.plugins.add(plugin);
         }
@@ -359,7 +376,7 @@ export class ProgramBuilder {
     }
 
     /**
-     * Run the process once, allowing cancelability.
+     * Run the process once, allowing it to be cancelled.
      * NOTE: This should only be called by `runOnce`.
      */
     private async _runOnce(options: { cancellationToken: { isCanceled: any }; validate: boolean }) {
@@ -541,15 +558,18 @@ export class ProgramBuilder {
 
     /**
      * Remove all files from the program that are in the specified folder path
-     * @param srcPath the path to the
+     * @param srcPath the path to the folder to remove
      */
-    public removeFilesInFolder(srcPath: string) {
+    public removeFilesInFolder(srcPath: string): boolean {
+        let removedSomeFiles = false;
         for (let filePath in this.program.files) {
             //if the file path starts with the parent path and the file path does not exactly match the folder path
             if (filePath.startsWith(srcPath) && filePath !== srcPath) {
                 this.program.removeFile(filePath);
+                removedSomeFiles = true;
             }
         }
+        return removedSomeFiles;
     }
 
     /**
