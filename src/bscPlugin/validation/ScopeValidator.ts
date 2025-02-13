@@ -33,6 +33,9 @@ import brsDocParser from '../../parser/BrightScriptDocParser';
 import type { Location } from 'vscode-languageserver';
 import { InvalidType } from '../../types/InvalidType';
 import { VoidType } from '../../types/VoidType';
+import { LogLevel } from '../../Logger';
+import { Stopwatch } from '../../Stopwatch';
+import chalk from 'chalk';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -65,34 +68,64 @@ export class ScopeValidator {
      */
     private event: OnScopeValidateEvent;
 
-    private metrics = new Map<string, number>();
-
+    private segmentsMetrics = new Map<string, number>();
 
     public processEvent(event: OnScopeValidateEvent) {
         this.event = event;
         if (this.event.program.globalScope === this.event.scope) {
             return;
         }
-        this.metrics.clear();
-        this.walkFiles();
-        this.currentSegmentBeingValidated = null;
-        this.flagDuplicateFunctionDeclarations();
-        this.validateScriptImportPaths();
-        this.validateClasses();
-        if (isXmlScope(event.scope)) {
-            //detect when the child imports a script that its ancestor also imports
-            this.diagnosticDetectDuplicateAncestorScriptImports(event.scope);
-            //validate component interface
-            this.validateXmlInterface(event.scope);
-        }
+        const logger = this.event.program.logger;
+        const metrics = {
+            fileWalkTime: '',
+            flagDuplicateFunctionTime: '',
+            classValidationTime: '',
+            scriptImportValidationTime: '',
+            xmlValidationTime: ''
+        };
+        this.segmentsMetrics.clear();
+        const validationStopwatch = new Stopwatch();
 
-        this.event.program.logger.debug(this.event.scope.name, 'metrics:');
+        logger.time(LogLevel.debug, ['Validating scope', this.event.scope.name], () => {
+            metrics.fileWalkTime = validationStopwatch.getDurationTextFor(() => {
+                this.walkFiles();
+            }).durationText;
+            this.currentSegmentBeingValidated = null;
+            metrics.flagDuplicateFunctionTime = validationStopwatch.getDurationTextFor(() => {
+                this.flagDuplicateFunctionDeclarations();
+            }).durationText;
+            metrics.scriptImportValidationTime = validationStopwatch.getDurationTextFor(() => {
+                this.validateScriptImportPaths();
+            }).durationText;
+            metrics.classValidationTime = validationStopwatch.getDurationTextFor(() => {
+                this.validateClasses();
+            }).durationText;
+            metrics.xmlValidationTime = validationStopwatch.getDurationTextFor(() => {
+                if (isXmlScope(this.event.scope)) {
+                    //detect when the child imports a script that its ancestor also imports
+                    this.diagnosticDetectDuplicateAncestorScriptImports(this.event.scope);
+                    //validate component interface
+                    this.validateXmlInterface(this.event.scope);
+                }
+            }).durationText;
+        });
+        logger.debug(this.event.scope.name, 'segment metrics:');
         let total = 0;
-        for (const [filePath, num] of this.metrics) {
+        for (const [filePath, num] of this.segmentsMetrics) {
             this.event.program.logger.debug(' - ', filePath, num);
             total += num;
         }
-        this.event.program.logger.debug(this.event.scope.name, 'total segments validated', total);
+        logger.debug(this.event.scope.name, 'total segments validated', total);
+        this.logValidationMetrics(metrics);
+    }
+
+    // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
+    private logValidationMetrics(metrics: { [key: string]: number | string }) {
+        let logs = [] as string[];
+        for (const key in metrics) {
+            logs.push(`${key}=${chalk.yellow(metrics[key].toString())}`);
+        }
+        this.event.program.logger.info(`Validation Metrics: ${logs.join(', ')}`);
     }
 
     public reset() {
@@ -220,7 +253,7 @@ export class ScopeValidator {
                     file.markSegmentAsValidated(segment);
                     this.currentSegmentBeingValidated = null;
                 }
-                this.metrics.set(file.pkgPath, segmentsValidated);
+                this.segmentsMetrics.set(file.pkgPath, segmentsValidated);
             }
         });
     }

@@ -2785,6 +2785,23 @@ export class Util {
         }
         return resultType;
     }
+
+    public findCommonObjects<T>(...arrays: T[][]): T[] {
+        if (arrays.length === 0) {
+            return [];
+        }
+
+        // Start with the first array
+        let commonObjects = arrays[0];
+
+        // Iterate through the rest of the arrays
+        for (let i = 1; i < arrays.length; i++) {
+            commonObjects = commonObjects.filter(item => arrays[i].includes(item));
+        }
+
+        return commonObjects;
+    }
+
 }
 
 /**
