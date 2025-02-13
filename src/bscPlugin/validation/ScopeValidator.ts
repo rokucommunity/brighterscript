@@ -125,7 +125,7 @@ export class ScopeValidator {
         for (const key in metrics) {
             logs.push(`${key}=${chalk.yellow(metrics[key].toString())}`);
         }
-        this.event.program.logger.info(`Validation Metrics: ${logs.join(', ')}`);
+        this.event.program.logger.debug(`Validation Metrics (Scope: ${this.event.scope.name}): ${logs.join(', ')}`);
     }
 
     public reset() {
