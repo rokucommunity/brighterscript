@@ -158,40 +158,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         readonly returnTypeToken?: Token
     ) {
         super();
-
-        /**
-         * RokuOS methods can be written 5 ways:
-         * 1. Function() : return withValue
-         * 2. Function() as type : return withValue
-         * 3. Function() as void : return
-         *
-         * 4. Sub() : return
-         * 5. Sub () as void : return
-         * 6. Sub() as type : return withValue
-         *
-         * Formats (1), (2), and (6) throw a compile error if there IS NOT a return value in the function body.
-         * Formats (3), (4), and (5) throw a compile error if there IS a return value in the function body.
-         */
-
-        const isSub = this.functionType?.text.toLowerCase() === 'sub';
-
-        if (this.returnTypeToken) {
-            this.returnType = util.tokenToBscType(this.returnTypeToken);
-
-        } else if (isSub) {
-            this.returnType = new VoidType();
-
-        } else {
-            this.returnType = DynamicType.instance;
-        }
-
-        if (isSub) { // format (5) and (6)
-            this.requiresReturnType = true;
-
-        } else if (this.returnTypeToken && isVoidType(this.returnType)) { // format (3)
-            this.requiresReturnType = true;
-
-        }
+        this.setReturnType(); // set the initial return type that we parse
 
         //if there's a body, and it doesn't have a SymbolTable, assign one
         if (this.body && !this.body.symbolTable) {
@@ -296,6 +263,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             state.transpileToken(this.rightParen)
         );
         //as [Type]
+        this.setReturnType(); // check one more time before transpile
         if (this.asToken && !(state.options.removeParameterTypes && !this.requiresReturnType)) {
             results.push(
                 ' ',
@@ -396,6 +364,42 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             }
         }, { walkMode: WalkMode.visitExpressions });
         return clone;
+    }
+
+    public setReturnType() {
+        /**
+         * RokuOS methods can be written 5 ways:
+         * 1. Function() : return withValue
+         * 2. Function() as type : return withValue
+         * 3. Function() as void : return
+         *
+         * 4. Sub() : return
+         * 5. Sub () as void : return
+         * 6. Sub() as type : return withValue
+         *
+         * Formats (1), (2), and (6) throw a compile error if there IS NOT a return value in the function body.
+         * Formats (3), (4), and (5) throw a compile error if there IS a return value in the function body.
+         */
+
+        const isSub = this.functionType?.text.toLowerCase() === 'sub';
+
+        if (this.returnTypeToken) {
+            this.returnType = util.tokenToBscType(this.returnTypeToken);
+
+        } else if (isSub) {
+            this.returnType = new VoidType();
+
+        } else {
+            this.returnType = DynamicType.instance;
+        }
+
+        if (isSub) { // format (5) and (6)
+            this.requiresReturnType = true;
+
+        } else if (this.returnTypeToken && isVoidType(this.returnType)) { // format (3)
+            this.requiresReturnType = true;
+
+        }
     }
 }
 
