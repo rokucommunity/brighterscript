@@ -565,7 +565,6 @@ export class Scope {
                     }
                 }
             }
-            this.logDebug('getAllFiles', () => result.map(x => x.destPath));
             return result;
         });
     }
@@ -783,7 +782,7 @@ export class Scope {
             return false;
         }
 
-        this.useFileCachesForFileLinkLookups = true;//!validationOptions.initialValidation;
+        this.useFileCachesForFileLinkLookups = !validationOptions.initialValidation;
 
         this.program.logger.time(LogLevel.debug, [this._debugLogComponentName, 'validate()'], () => {
 
