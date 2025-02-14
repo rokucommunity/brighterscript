@@ -342,31 +342,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         return functionType;
     }
 
-    public clone() {
-        const clone = this.finalizeClone(
-            new FunctionExpression(
-                this.parameters?.map(e => e?.clone()),
-                this.body?.clone(),
-                util.cloneToken(this.functionType),
-                util.cloneToken(this.end),
-                util.cloneToken(this.leftParen),
-                util.cloneToken(this.rightParen),
-                util.cloneToken(this.asToken),
-                util.cloneToken(this.returnTypeToken)
-            ),
-            ['body']
-        );
-
-        //rebuild the .callExpressions list in the clone
-        clone.body?.walk?.((node) => {
-            if (isCallExpression(node) && !isNewExpression(node.parent)) {
-                clone.callExpressions.push(node);
-            }
-        }, { walkMode: WalkMode.visitExpressions });
-        return clone;
-    }
-
-    public setReturnType() {
+    setReturnType() {
         /**
          * RokuOS methods can be written 5 ways:
          * 1. Function() : return withValue
@@ -400,6 +376,30 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             this.requiresReturnType = true;
 
         }
+    }
+
+    public clone() {
+        const clone = this.finalizeClone(
+            new FunctionExpression(
+                this.parameters?.map(e => e?.clone()),
+                this.body?.clone(),
+                util.cloneToken(this.functionType),
+                util.cloneToken(this.end),
+                util.cloneToken(this.leftParen),
+                util.cloneToken(this.rightParen),
+                util.cloneToken(this.asToken),
+                util.cloneToken(this.returnTypeToken)
+            ),
+            ['body']
+        );
+
+        //rebuild the .callExpressions list in the clone
+        clone.body?.walk?.((node) => {
+            if (isCallExpression(node) && !isNewExpression(node.parent)) {
+                clone.callExpressions.push(node);
+            }
+        }, { walkMode: WalkMode.visitExpressions });
+        return clone;
     }
 }
 
