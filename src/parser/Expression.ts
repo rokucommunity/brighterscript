@@ -393,7 +393,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             this.returnType = DynamicType.instance;
         }
 
-        if (isSub) { // format (5) and (6)
+        if (isSub && !isVoidType(this.returnType)) { // format (6)
             this.requiresReturnType = true;
 
         } else if (this.returnTypeToken && isVoidType(this.returnType)) { // format (3)
