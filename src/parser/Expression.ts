@@ -10,7 +10,7 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isStringType, isTemplateStringExpression, isTypeCastExpression, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isStringType, isTemplateStringExpression, isTypeCastExpression, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
@@ -158,11 +158,36 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         readonly returnTypeToken?: Token
     ) {
         super();
+        const isSub = this.functionType?.text.toLowerCase() === 'sub';
+
+        /**
+         * RokuOS methods can be written 5 ways:
+         * 1. Function ()
+         * 2. Function () as type
+         * 3. Function () as void
+         * 4. Sub ()
+         * 5. Sub () as type
+         *
+         * Formats (1), (2), and (5) — these throw a compile error if there IS NOT a return value in the function body.
+         * Format (4) is a 'shortcut' to writing format (3) — these throw a compile error if there IS a return value in the function body.
+         */
+
+        this.returnType = null;
         if (this.returnTypeToken) {
             this.returnType = util.tokenToBscType(this.returnTypeToken);
-        } else if (this.functionType?.text.toLowerCase() === 'sub') {
-            this.returnType = new VoidType();
-        } else {
+        }
+
+        if (isSub) { // sub()
+            if (this.returnType) { // format (5)
+                this.requiresReturnType = true;
+            } else { // format (4)
+                this.returnType = new VoidType();
+            }
+
+        } else if (this.returnType && isVoidType(this.returnType)) { // format (3)
+            this.requiresReturnType = true;
+
+        } else { // format (1) and (2)
             this.returnType = DynamicType.instance;
         }
 
@@ -177,6 +202,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
      * The type this function returns
      */
     public returnType: BscType;
+    public requiresReturnType: boolean;
 
     /**
      * Get the name of the wrapping namespace (if it exists)
@@ -268,7 +294,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             state.transpileToken(this.rightParen)
         );
         //as [Type]
-        if (this.asToken && !state.options.removeParameterTypes) {
+        if (this.asToken && !(state.options.removeParameterTypes && !this.requiresReturnType)) {
             results.push(
                 ' ',
                 //as
