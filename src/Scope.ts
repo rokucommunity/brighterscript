@@ -565,7 +565,6 @@ export class Scope {
                     }
                 }
             }
-            this.logDebug('getAllFiles', () => result.map(x => x.destPath));
             return result;
         });
     }

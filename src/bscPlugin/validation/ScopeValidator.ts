@@ -68,7 +68,7 @@ export class ScopeValidator {
      */
     private event: OnScopeValidateEvent;
 
-    private segmentsMetrics = new Map<string, number>();
+    private segmentsMetrics = new Map<string, { segments: number; time: string }>();
 
     public processEvent(event: OnScopeValidateEvent) {
         this.event = event;
@@ -110,12 +110,12 @@ export class ScopeValidator {
             }).durationText;
         });
         logger.debug(this.event.scope.name, 'segment metrics:');
-        let total = 0;
-        for (const [filePath, num] of this.segmentsMetrics) {
-            this.event.program.logger.debug(' - ', filePath, num);
-            total += num;
+        let totalSegments = 0;
+        for (const [filePath, metric] of this.segmentsMetrics) {
+            this.event.program.logger.debug(' - ', filePath, metric.segments, metric.time);
+            totalSegments += metric.segments;
         }
-        logger.debug(this.event.scope.name, 'total segments validated', total);
+        logger.debug(this.event.scope.name, 'total segments validated', totalSegments);
         this.logValidationMetrics(metrics);
     }
 
@@ -147,9 +147,13 @@ export class ScopeValidator {
                 this.diagnosticDetectFunctionCollisions(file);
             }
         });
+        const fileWalkStopWatch = new Stopwatch();
 
         this.event.scope.enumerateOwnFiles((file) => {
             if (isBrsFile(file)) {
+
+                fileWalkStopWatch.reset();
+                fileWalkStopWatch.start();
 
                 const fileUri = util.pathToUri(file.srcPath);
                 const thisFileHasChanges = this.event.changedFiles.includes(file);
@@ -240,12 +244,22 @@ export class ScopeValidator {
                     : file.validationSegmenter.getSegmentsWithChangedSymbols(this.event.changedSymbols);
 
                 let segmentsValidated = 0;
+
+                if (thisFileHasChanges) {
+                    // clear all ScopeValidatorSegment diagnostics for this file
+                    this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, fileUri: fileUri, tag: ScopeValidatorDiagnosticTag.Segment });
+                }
+
+
                 for (const segment of segmentsToWalkForValidation) {
-                    if (!file.validationSegmenter.checkIfSegmentNeedsRevalidation(segment, this.event.changedSymbols)) {
+                    if (!thisFileHasChanges && !file.validationSegmenter.checkIfSegmentNeedsRevalidation(segment, this.event.changedSymbols)) {
                         continue;
                     }
                     this.currentSegmentBeingValidated = segment;
-                    this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, fileUri: fileUri, segment: segment, tag: ScopeValidatorDiagnosticTag.Segment });
+                    if (!thisFileHasChanges) {
+                        // just clear the affected diagnostics
+                        this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, fileUri: fileUri, segment: segment, tag: ScopeValidatorDiagnosticTag.Segment });
+                    }
                     segmentsValidated++;
                     segment.walk(validationVisitor, {
                         walkMode: InsideSegmentWalkMode
@@ -253,7 +267,9 @@ export class ScopeValidator {
                     file.markSegmentAsValidated(segment);
                     this.currentSegmentBeingValidated = null;
                 }
-                this.segmentsMetrics.set(file.pkgPath, segmentsValidated);
+                fileWalkStopWatch.stop();
+                const timeString = fileWalkStopWatch.getDurationText();
+                this.segmentsMetrics.set(file.pkgPath, { segments: segmentsValidated, time: timeString });
             }
         });
     }
