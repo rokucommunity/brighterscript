@@ -158,37 +158,37 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         readonly returnTypeToken?: Token
     ) {
         super();
-        const isSub = this.functionType?.text.toLowerCase() === 'sub';
 
         /**
          * RokuOS methods can be written 5 ways:
-         * 1. Function ()
-         * 2. Function () as type
-         * 3. Function () as void
-         * 4. Sub ()
-         * 5. Sub () as type
+         * 1. Function() : return withValue
+         * 2. Function() as type : return withValue
+         * 3. Function() as void : return
          *
-         * Formats (1), (2), and (5) — these throw a compile error if there IS NOT a return value in the function body.
-         * Format (4) is a 'shortcut' to writing format (3) — these throw a compile error if there IS a return value in the function body.
+         * 4. Sub() : return
+         * 5. Sub () as void : return
+         * 6. Sub() as type : return withValue
+         *
+         * Formats (1), (2), and (6) throw a compile error if there IS NOT a return value in the function body.
+         * Formats (3), (4), and (5) throw a compile error if there IS a return value in the function body.
          */
 
-        this.returnType = null;
+        const isSub = this.functionType?.text.toLowerCase() === 'sub';
+
         if (this.returnTypeToken) {
             this.returnType = util.tokenToBscType(this.returnTypeToken);
+        } else if (isSub) {
+            this.returnType = new VoidType();
+        } else {
+            this.returnType = DynamicType.instance;
         }
 
-        if (isSub) { // sub()
-            if (this.returnType) { // format (5)
-                this.requiresReturnType = true;
-            } else { // format (4)
-                this.returnType = new VoidType();
-            }
-
-        } else if (this.returnType && isVoidType(this.returnType)) { // format (3)
+        if (isSub) { // format (4) and (5)
             this.requiresReturnType = true;
 
-        } else { // format (1) and (2)
-            this.returnType = DynamicType.instance;
+        } else if (this.returnTypeToken && isVoidType(this.returnType)) { // format (3)
+            this.requiresReturnType = true;
+
         }
 
         //if there's a body, and it doesn't have a SymbolTable, assign one
