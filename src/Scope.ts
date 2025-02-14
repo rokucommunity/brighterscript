@@ -782,7 +782,7 @@ export class Scope {
             return false;
         }
 
-        this.useFileCachesForFileLinkLookups = true;//!validationOptions.initialValidation;
+        this.useFileCachesForFileLinkLookups = !validationOptions.initialValidation;
 
         this.program.logger.time(LogLevel.debug, [this._debugLogComponentName, 'validate()'], () => {
 
