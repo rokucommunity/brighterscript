@@ -343,6 +343,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
     }
 
     setReturnType() {
+
         /**
          * RokuOS methods can be written 5 ways:
          * 1. Function() : return withValue
@@ -355,6 +356,8 @@ export class FunctionExpression extends Expression implements TypedefProvider {
          *
          * Formats (1), (2), and (6) throw a compile error if there IS NOT a return value in the function body.
          * Formats (3), (4), and (5) throw a compile error if there IS a return value in the function body.
+         *
+         * 7. Additionally, as a special case, the OS requires that `onKeyEvent()` be defined with `as boolean`
          */
 
         const isSub = this.functionType?.text.toLowerCase() === 'sub';
@@ -369,7 +372,11 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             this.returnType = DynamicType.instance;
         }
 
-        if (isSub && !isVoidType(this.returnType)) { // format (6)
+        if ((isFunctionStatement(this.parent) || isMethodStatement(this.parent)) && this.parent.name?.text.toLowerCase() === 'onkeyevent') {
+            // onKeyEvent() requires 'asBoolean' otherwise RokuOS throws errors
+            this.requiresReturnType = true;
+
+        } else if (isSub && !isVoidType(this.returnType)) { // format (6)
             this.requiresReturnType = true;
 
         } else if (this.returnTypeToken && isVoidType(this.returnType)) { // format (3)
