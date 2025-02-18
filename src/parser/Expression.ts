@@ -364,10 +364,8 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 
         if (this.returnTypeToken) {
             this.returnType = util.tokenToBscType(this.returnTypeToken);
-
         } else if (isSub) {
             this.returnType = new VoidType();
-
         } else {
             this.returnType = DynamicType.instance;
         }
