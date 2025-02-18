@@ -373,7 +373,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
 
         if ((isFunctionStatement(this.parent) || isMethodStatement(this.parent)) && this.parent.name?.text.toLowerCase() === 'onkeyevent') {
-            // onKeyEvent() requires 'asBoolean' otherwise RokuOS throws errors
+            // onKeyEvent() requires 'as Boolean' otherwise RokuOS throws errors
             this.requiresReturnType = true;
 
         } else if (isSub && !isVoidType(this.returnType)) { // format (6)
