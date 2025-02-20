@@ -1204,7 +1204,7 @@ export class Program {
             .filter(file => file !== undefined) as T[];
     }
 
-    private getFilePathCache = new Map<string, { path: string, isDestMap?: boolean }>();
+    private getFilePathCache = new Map<string, { path: string; isDestMap?: boolean }>();
 
     /**
      * Get the file at the given path
