@@ -76,6 +76,11 @@ export class Program {
         plugins?: PluginInterface,
         diagnosticsManager?: DiagnosticManager
     ) {
+        // eslint-disable-next-line
+        global['namespaceContainersCreated'] = {};
+        // eslint-disable-next-line
+        global['namespaceContainersCreatedByScope'] = {};
+
         this.options = util.normalizeConfig(options);
         this.logger = logger ?? createLogger(options);
         this.plugins = plugins || new PluginInterface([], { logger: this.logger });
@@ -1826,6 +1831,11 @@ export class Program {
             for (const file of event.files) {
                 file.editor.undoAll();
             }
+
+            // eslint-disable-next-line
+            console.log(global['namespaceContainersCreated']);
+            // eslint-disable-next-line
+            console.log(global['namespaceContainersCreatedByScope']);
         });
     }
 

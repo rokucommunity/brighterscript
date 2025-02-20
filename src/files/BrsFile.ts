@@ -20,7 +20,7 @@ import { DynamicType } from '../types/DynamicType';
 import { standardizePath as s, util } from '../util';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { serializeError } from 'serialize-error';
-import { isClassStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isNamespaceStatement, isVariableExpression, isImportStatement, isEnumStatement, isConstStatement, isAnyReferenceType, isNamespaceType, isReferenceType, isCallableType } from '../astUtils/reflection';
+import { isDottedGetExpression, isFunctionExpression, isNamespaceStatement, isVariableExpression, isImportStatement, isAnyReferenceType, isNamespaceType, isReferenceType, isCallableType } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyChangedEvent, DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
@@ -768,7 +768,7 @@ export class BrsFile implements BscFile {
                 }
 
                 for (let scope of scopes) {
-                    if (scope.namespaceLookup.has(lowerName)) {
+                    if (scope.namespaceNameSet.has(lowerName)) {
                         return true;
                     }
                 }
@@ -1277,6 +1277,15 @@ export class BrsFile implements BscFile {
                     lowerLoopName += '.' + lowerPartName;
                 }
                 if (!namespaceLookup.has(lowerLoopName)) {
+
+                    // eslint-disable-next-line
+                    if (!global['namespaceContainersCreated'][this.srcPath]) {
+                        // eslint-disable-next-line
+                        global['namespaceContainersCreated'][this.srcPath] = 0;
+                    }
+                    // eslint-disable-next-line
+                    global['namespaceContainersCreated'][this.srcPath]++;
+
                     namespaceLookup.set(lowerLoopName, {
                         isTopLevel: i === 0,
                         file: this,
@@ -1287,32 +1296,14 @@ export class BrsFile implements BscFile {
                         nameRange: namespaceStatement.nameExpression.location?.range,
                         lastPartName: part.text,
                         lastPartNameLower: lowerPartName,
-                        functionStatements: new Map(),
                         namespaceStatements: [],
-                        namespaces: new Map(),
-                        classStatements: new Map(),
-                        enumStatements: new Map(),
-                        constStatements: new Map(),
-                        statements: [],
                         // the aggregate symbol table should have no parent. It should include just the symbols of the namespace.
-                        symbolTable: new SymbolTable(`Namespace Aggregate: '${loopName}'`)
+                        symbolTable: new SymbolTable(`Namespace File Aggregate: '${loopName}'`)
                     });
                 }
             }
             let ns = namespaceLookup.get(lowerLoopName);
             ns.namespaceStatements.push(namespaceStatement);
-            ns.statements.push(...namespaceStatement.body.statements);
-            for (let statement of namespaceStatement.body.statements) {
-                if (isClassStatement(statement) && statement.tokens.name) {
-                    ns.classStatements.set(statement.tokens.name.text.toLowerCase(), statement);
-                } else if (isFunctionStatement(statement) && statement.tokens.name) {
-                    ns.functionStatements.set(statement.tokens.name.text.toLowerCase(), statement);
-                } else if (isEnumStatement(statement) && statement.fullName) {
-                    ns.enumStatements.set(statement.fullName.toLowerCase(), statement);
-                } else if (isConstStatement(statement) && statement.fullName) {
-                    ns.constStatements.set(statement.fullName.toLowerCase(), statement);
-                }
-            }
             // Merges all the symbol tables of the namespace statements into the new symbol table created above.
             // Set those symbol tables to have this new merged table as a parent
             ns.symbolTable.mergeSymbolTable(namespaceStatement.body.getSymbolTable());
