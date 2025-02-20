@@ -6,8 +6,8 @@ import type { TypedFunctionType } from './types/TypedFunctionType';
 import type { ParseMode } from './parser/Parser';
 import type { Program } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
-import type { ClassStatement, ConstStatement, EnumStatement, FunctionStatement, NamespaceStatement } from './parser/Statement';
-import type { AstNode, Expression, Statement } from './parser/AstNode';
+import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
+import type { AstNode, Expression } from './parser/AstNode';
 import type { TranspileState } from './parser/TranspileState';
 import type { SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
@@ -1098,15 +1098,15 @@ export interface NamespaceContainer {
     nameRange: Range;
     lastPartName: string;
     lastPartNameLower: string;
-    functionStatements: Map<string, FunctionStatement>;
     isTopLevel: boolean;
     namespaceStatements?: NamespaceStatement[];
-    statements?: Statement[];
-    classStatements?: Map<string, ClassStatement>;
-    enumStatements?: Map<string, EnumStatement>;
-    constStatements?: Map<string, ConstStatement>;
-    namespaces?: Map<string, NamespaceContainer>;
     symbolTable: SymbolTable;
+}
+
+export interface ScopeNamespaceContainer {
+    namespaceContainers: NamespaceContainer[];
+    symbolTable: SymbolTable;
+    firstInstance: NamespaceContainer;
 }
 
 /**
