@@ -274,9 +274,8 @@ export class CrossScopeValidator {
     }
 
     getProvidedTree(scope: Scope) {
-        const lowerScopeName = scope.name?.toLowerCase();
-        if (this.providedTreeMap.has(lowerScopeName)) {
-            return this.providedTreeMap.get(lowerScopeName);
+        if (this.providedTreeMap.has(scope.name)) {
+            return this.providedTreeMap.get(scope.name);
         }
         const providedTree = new ProvidedNode('');
         const duplicatesMap = new Map<string, Set<FileSymbolPair>>();
@@ -377,7 +376,7 @@ export class CrossScopeValidator {
         }
 
         const result = { duplicatesMap: duplicatesMap, providedTree: providedTree };
-        this.providedTreeMap.set(lowerScopeName, result);
+        this.providedTreeMap.set(scope.name, result);
         return result;
     }
 

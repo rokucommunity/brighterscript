@@ -12,7 +12,6 @@ import chalk from 'chalk';
 import type { Logger } from './logging';
 import { LogLevel, createLogger } from './logging';
 import type { Program } from './Program';
-import { forEach } from 'benchmark';
 
 /**
  * Manages all diagnostics for a program.
