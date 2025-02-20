@@ -12,6 +12,7 @@ import chalk from 'chalk';
 import type { Logger } from './logging';
 import { LogLevel, createLogger } from './logging';
 import type { Program } from './Program';
+import { forEach } from 'benchmark';
 
 /**
  * Manages all diagnostics for a program.
@@ -281,24 +282,33 @@ export class DiagnosticManager {
             segment: !!filter.segment
         };
 
-        const searchData: Array<BsDiagnostic[]> = [];
-        if (needToMatch.tag && this.tagMap.get(filter.tag?.toLowerCase())?.size > 0) {
-            searchData.push(Array.from(this.tagMap.get(filter.tag?.toLowerCase())));
+        function getSearchIntersection(shouldMatch: boolean, searchData: Set<BsDiagnostic>, diagnosticSet: Set<BsDiagnostic>): Set<BsDiagnostic> {
+            if (shouldMatch && diagnosticSet?.size > 0) {
+                // only find intersection if we have something to intersect with
+                if (!searchData) {
+                    searchData = diagnosticSet;
+                } else {
+                    const intersection = new Set<BsDiagnostic>();
+                    for (const existingDiagnostic of searchData) {
+                        if (diagnosticSet.has(existingDiagnostic)) {
+                            intersection.add(existingDiagnostic);
+                        }
+                    }
+                    searchData = intersection;
+                }
+                // Can't use Set.intersection, because old version of node doesn't support it
+                // searchData = searchData ? searchData.intersection(diagnosticSet) : diagnosticSet;
+            }
+            return searchData;
         }
 
-        if (needToMatch.scope && this.scopeMap.get(filter.scope?.name?.toLowerCase())?.size > 0) {
-            searchData.push(Array.from(this.scopeMap.get(filter.scope?.name?.toLowerCase())));
-        }
-        if (needToMatch.fileUri && this.fileUriMap.get(filter.fileUri?.toLowerCase())?.size > 0) {
-            searchData.push(Array.from(this.fileUriMap.get(filter.fileUri?.toLowerCase())));
-        }
-        if (needToMatch.segment && this.segmentMap.get(filter.segment)?.size > 0) {
-            searchData.push(Array.from(this.segmentMap.get(filter.segment)));
-        }
-        const commonDiagnostics = util.findCommonObjects(...searchData);
+        let searchData: Set<BsDiagnostic>;
+        searchData = getSearchIntersection(needToMatch.tag, searchData, this.tagMap.get(filter.tag?.toLowerCase()));
+        searchData = getSearchIntersection(needToMatch.scope, searchData, this.scopeMap.get(filter.scope?.name?.toLowerCase()));
+        searchData = getSearchIntersection(needToMatch.fileUri, searchData, this.fileUriMap.get(filter.fileUri?.toLowerCase()));
+        searchData = getSearchIntersection(needToMatch.segment, searchData, this.segmentMap.get(filter.segment));
 
-
-        for (const diagnostic of commonDiagnostics) {
+        for (const diagnostic of searchData ?? []) {
             const key = this.getDiagnosticKey(diagnostic);
             const cachedData = this.diagnosticsCache.get(key);
             let removedContext = false;
