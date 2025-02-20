@@ -1277,15 +1277,6 @@ export class BrsFile implements BscFile {
                     lowerLoopName += '.' + lowerPartName;
                 }
                 if (!namespaceLookup.has(lowerLoopName)) {
-
-                    // eslint-disable-next-line
-                    if (!global['namespaceContainersCreated'][this.srcPath]) {
-                        // eslint-disable-next-line
-                        global['namespaceContainersCreated'][this.srcPath] = 0;
-                    }
-                    // eslint-disable-next-line
-                    global['namespaceContainersCreated'][this.srcPath]++;
-
                     namespaceLookup.set(lowerLoopName, {
                         isTopLevel: i === 0,
                         file: this,

@@ -744,15 +744,6 @@ export class Scope {
                         symbolTable: new SymbolTable(`Namespace Scope Aggregate: '${nsContainer.fullName}'`),
                         firstInstance: nsContainer
                     };
-
-                    // eslint-disable-next-line
-                    if (!global['namespaceContainersCreatedByScope'][this.name]) {
-                        // eslint-disable-next-line
-                        global['namespaceContainersCreatedByScope'][this.name] = 0;
-                    }
-                    // eslint-disable-next-line
-                    global['namespaceContainersCreatedByScope'][this.name]++;
-
                     namespaceLookup.set(lowerNamespaceName, newScopeNsContainer);
                 }
 
