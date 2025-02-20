@@ -1204,27 +1204,48 @@ export class Program {
             .filter(file => file !== undefined) as T[];
     }
 
+    private getFilePathCache = new Map<string, { path: string, isDestMap?: boolean }>();
+
     /**
      * Get the file at the given path
      * @param filePath can be a srcPath or a destPath
      * @param normalizePath should this function repair and standardize the path? Passing false should have a performance boost if you can guarantee your path is already sanitized
      */
     public getFile<T extends BscFile>(filePath: string, normalizePath = true) {
+        if (this.getFilePathCache.has(filePath)) {
+            const cachedFilePath = this.getFilePathCache.get(filePath);
+            if (cachedFilePath.isDestMap) {
+                return this.destMap.get(
+                    cachedFilePath.path
+                ) as T;
+            }
+            return this.files[
+                cachedFilePath.path
+            ] as T;
+        }
         if (typeof filePath !== 'string') {
             return undefined;
             //is the path absolute (or the `virtual:` prefix)
         } else if (/^(?:(?:virtual:[\/\\])|(?:\w:)|(?:[\/\\]))/gmi.exec(filePath)) {
+            const standardizedPath = (normalizePath ? util.standardizePath(filePath) : filePath).toLowerCase();
+            this.getFilePathCache.set(filePath, { path: standardizedPath });
+
             return this.files[
-                (normalizePath ? util.standardizePath(filePath) : filePath).toLowerCase()
+                standardizedPath
             ] as T;
         } else if (util.isUriLike(filePath)) {
             const path = URI.parse(filePath).fsPath;
+            const standardizedPath = (normalizePath ? util.standardizePath(path) : path).toLowerCase();
+            this.getFilePathCache.set(filePath, { path: standardizedPath });
+
             return this.files[
-                (normalizePath ? util.standardizePath(path) : path).toLowerCase()
+                standardizedPath
             ] as T;
         } else {
+            const standardizedPath = (normalizePath ? util.standardizePath(filePath) : filePath).toLowerCase();
+            this.getFilePathCache.set(filePath, { path: standardizedPath, isDestMap: true });
             return this.destMap.get(
-                (normalizePath ? util.standardizePath(filePath) : filePath).toLowerCase()
+                standardizedPath
             ) as T;
         }
     }
