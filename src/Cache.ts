@@ -16,11 +16,4 @@ export class Cache<TKey = any, TValue = any> extends Map<TKey, TValue> {
             return super.get(key) as R;
         }
     }
-
-    /**
-     * Get the item with the specified key.
-     */
-    public get<R extends TValue = TValue>(key: TKey) {
-        return super.get(key) as R;
-    }
 }
