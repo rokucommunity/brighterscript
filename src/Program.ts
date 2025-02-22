@@ -871,6 +871,8 @@ export class Program {
                 this.crossScopeValidation.clearResolutionsForFile(file);
             }
 
+            this.diagnostics.clearForFile(file.srcPath);
+
             //if this is a component, remove it from our components map
             if (isXmlFile(file)) {
                 this.logger.debug('Unregistering component', file.srcPath);

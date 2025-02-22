@@ -665,7 +665,7 @@ export class ScopeValidator {
             ? this.getNodeTypeWrapper(file, binaryExpr.right, getTypeOpts)
             : this.getNodeTypeWrapper(file, binaryExpr.value, getTypeOpts);
 
-        if (!leftType.isResolvable() || !rightType.isResolvable()) {
+        if (!leftType || !rightType || !leftType.isResolvable() || !rightType.isResolvable()) {
             // Can not find the type. error handled elsewhere
             return;
         }

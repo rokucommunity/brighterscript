@@ -5,7 +5,6 @@ import { CancellationTokenSource } from 'vscode-languageserver';
 import { CompletionItemKind } from 'vscode-languageserver';
 import chalk from 'chalk';
 import * as path from 'path';
-import { Scope } from '../Scope';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticLegacyCodeMap, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
 import type { Callable, CallableParam, CommentFlag, BsDiagnostic, FileReference, FileLink, SerializedCodeFile, NamespaceContainer } from '../interfaces';
@@ -755,22 +754,9 @@ export class BrsFile implements BscFile {
         if (isVariableExpression(left)) {
             const leftType = left.getType({ flags: SymbolTypeFlag.runtime });
             if (isNamespaceType(leftType)) {
-                let lowerName = left.tokens.name.text.toLowerCase();
-                //find the first scope that contains this namespace
-                let scopes = this.program.getScopesForFile(this);
-
-                //if this file does not belong to any scopes, make a temporary one to answer the question
-                if (scopes.length === 0) {
-                    const scope = new Scope(`temporary-for-${this.pkgPath}`, this.program);
-                    scope.getAllFiles = () => [this];
-                    scope.getOwnFiles = scope.getAllFiles;
-                    scopes.push(scope);
-                }
-
-                for (let scope of scopes) {
-                    if (scope.namespaceNameSet.has(lowerName)) {
-                        return true;
-                    }
+                // this is a namespace, but it might be aliased. Look it up and see if it has the same name
+                if (leftType.name.toLowerCase() === left.tokens?.name?.text?.toLowerCase()) {
+                    return true;
                 }
             }
         }
