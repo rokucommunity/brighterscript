@@ -537,7 +537,7 @@ export class ScopeValidator {
             const isAllowedArgConversion = this.checkAllowedArgConversions(paramType, argType);
             if (!isAllowedArgConversion && !paramType?.isTypeCompatible(argType, compatibilityData)) {
                 this.addMultiScopeDiagnostic({
-                    ...DiagnosticMessages.argumentTypeMismatch(argType.toString(), paramType.toString(), compatibilityData),
+                    ...DiagnosticMessages.argumentTypeMismatch(argType?.toString(), paramType?.toString(), compatibilityData),
                     location: arg.location
                 });
             }

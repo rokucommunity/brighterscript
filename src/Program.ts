@@ -1850,6 +1850,9 @@ export class Program {
                 file.editor.undoAll();
             }
         });
+
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        console.log('TYPES CREATED', global['TypesCreated']);
     }
 
     /**
