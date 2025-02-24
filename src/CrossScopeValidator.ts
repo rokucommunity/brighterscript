@@ -255,7 +255,7 @@ export class CrossScopeValidator {
     }
 
     resolutionsMap = new Map<UnresolvedSymbol, Set<{ scope: Scope; sourceFile: BscFile; providedSymbol: BscSymbol }>>();
-    providedTreeMap = new Map<Scope, { duplicatesMap: Map<string, Set<FileSymbolPair>>; providedTree: ProvidedNode }>();
+    providedTreeMap = new Map<string, { duplicatesMap: Map<string, Set<FileSymbolPair>>; providedTree: ProvidedNode }>();
 
 
     private componentsMap = new Map<string, FileSymbolPair>();
@@ -274,10 +274,10 @@ export class CrossScopeValidator {
     }
 
     getProvidedTree(scope: Scope) {
-        if (this.providedTreeMap.has(scope)) {
-            return this.providedTreeMap.get(scope);
+        if (this.providedTreeMap.has(scope.name)) {
+            return this.providedTreeMap.get(scope.name);
         }
-        const providedTree = new ProvidedNode('');//, this.componentsMap);
+        const providedTree = new ProvidedNode('');
         const duplicatesMap = new Map<string, Set<FileSymbolPair>>();
 
         const referenceTypesMap = new Map<{ symbolName: string; file: BscFile; symbolObj: ProvidedSymbol }, Array<{ name: string; namespacedName?: string }>>();
@@ -376,7 +376,7 @@ export class CrossScopeValidator {
         }
 
         const result = { duplicatesMap: duplicatesMap, providedTree: providedTree };
-        this.providedTreeMap.set(scope, result);
+        this.providedTreeMap.set(scope.name, result);
         return result;
     }
 

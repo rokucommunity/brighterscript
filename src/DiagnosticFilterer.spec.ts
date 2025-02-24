@@ -326,6 +326,39 @@ describe('DiagnosticFilterer', () => {
         ]);
     });
 
+    describe('isFileFiltered', () => {
+        it('should find files that are completely filtered by src', () => {
+            filterer.options = options;
+            expect(filterer.isFileFiltered({ srcPath: `${rootDir}/lib/some/file.brs`, destPath: `source/some/file.brs` })).true;
+            expect(filterer.isFileFiltered({ srcPath: `${rootDir}/notlib/other/file.brs`, destPath: `source/other/file.brs` })).false;
+        });
+
+        it('should find files that are completely filtered by dest', () => {
+            filterer.options = {
+                rootDir: rootDir,
+                diagnosticFilters: [
+                    { files: [{ dest: 'source/remove/**/*.*' }] }
+                ]
+            };
+            expect(filterer.isFileFiltered({ srcPath: `${rootDir}/source/some/file.brs`, destPath: `source/remove/some/file.brs` })).true;
+            expect(filterer.isFileFiltered({ srcPath: `${rootDir}/source/other/file.brs`, destPath: `source/keep/other/file.brs` })).false;
+        });
+
+        it('should find files that are completely filtered by src, with negative filtering', () => {
+            filterer.options = {
+                rootDir: rootDir,
+                diagnosticFilters: [
+                    //ignore all codes from lib
+                    { files: 'lib/**/*.brs' },
+                    //un-ignore specific errors from lib/special
+                    { files: '!lib/special/**/*.brs' }
+                ]
+            };
+            expect(filterer.isFileFiltered({ srcPath: `${rootDir}/lib/some/file.brs`, destPath: `source/some/file.brs` })).true;
+            expect(filterer.isFileFiltered({ srcPath: `${rootDir}/lib/special/file.brs`, destPath: `source/special/file.brs` })).false;
+        });
+    });
+
 });
 
 function getDiagnostic(code: number | string, srcPath: string, destPath?: string) {

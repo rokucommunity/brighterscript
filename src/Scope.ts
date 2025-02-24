@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/dot-notation */
 import * as path from 'path';
 import chalk from 'chalk';
-import type { CallableContainer, FileReference, FileLink, Callable, NamespaceContainer, ScopeValidationOptions } from './interfaces';
+import type { CallableContainer, FileReference, FileLink, Callable, NamespaceContainer, ScopeValidationOptions, ScopeNamespaceContainer } from './interfaces';
 import type { Program } from './Program';
 import { type NamespaceStatement, type ClassStatement, type EnumStatement, type InterfaceStatement, type EnumMemberStatement, type ConstStatement } from './parser/Statement';
 import { ParseMode } from './parser/Parser';
@@ -76,6 +76,25 @@ export class Scope {
         return this.cache.getOrAdd('namespaceLookup', () => this.buildNamespaceLookup());
     }
 
+    /**
+     * A dictionary of namespaces, indexed by the lower case full name of each namespace.
+     * If a namespace is declared as "NameA.NameB.NameC", there will be 3 entries in this dictionary,
+     * "namea", "namea.nameb", "namea.nameb.namec"
+     */
+    public get namespaceNameSet() {
+        return this.cache.getOrAdd('namespaceNameSet', () => {
+            const lowerNamespaceNames = new Set<string>();
+
+            this.enumerateBrsFiles((file) => {
+                const fileNamespaceLookup = file.getNamespaceLookupObject();
+                for (const [lowerNamespaceName, _] of fileNamespaceLookup) {
+                    lowerNamespaceNames.add(lowerNamespaceName);
+                }
+            });
+            return lowerNamespaceNames;
+        });
+    }
+
 
     /**
      * Get a NamespaceContainer by its name, looking for a fully qualified version first, then global version next if not found
@@ -86,11 +105,11 @@ export class Scope {
 
         let ns: NamespaceContainer;
         if (containingNamespace) {
-            ns = lookup.get(`${containingNamespace?.toLowerCase()}.${nameLower}`);
+            ns = lookup.get(`${containingNamespace?.toLowerCase()}.${nameLower}`)?.firstInstance;
         }
         //if we couldn't find the namespace by its full namespaced name, look for a global version
         if (!ns) {
-            ns = lookup.get(nameLower);
+            ns = lookup.get(nameLower)?.firstInstance;
         }
         return ns;
     }
@@ -121,7 +140,7 @@ export class Scope {
         if (containingNamespace) {
             lookupName = `${containingNamespace?.toLowerCase()}.${nameLower}`;
         }
-        return this.namespaceLookup.get(lookupName);
+        return this.namespaceLookup.get(lookupName)?.firstInstance;
     }
 
     /**
@@ -565,7 +584,6 @@ export class Scope {
                     }
                 }
             }
-            this.logDebug('getAllFiles', () => result.map(x => x.destPath));
             return result;
         });
     }
@@ -695,8 +713,6 @@ export class Scope {
      */
     public getOwnCallables(): CallableContainer[] {
         let result = [] as CallableContainer[];
-        this.logDebug('getOwnCallables() files: ', () => this.getOwnFiles().map(x => x.destPath));
-
         //get callables from own files
         this.enumerateOwnFiles((file) => {
             if (isBrsFile(file)) {
@@ -714,33 +730,24 @@ export class Scope {
     /**
      * Builds a tree of namespace objects
      */
-    public buildNamespaceLookup(options: { okToCache?: boolean } = { okToCache: true }) {
-        let namespaceLookup = new Map<string, NamespaceContainer>();
-        options.okToCache = true;
+    public buildNamespaceLookup() {
+        let namespaceLookup = new Map<string, ScopeNamespaceContainer>();
         this.enumerateBrsFiles((file) => {
-            options.okToCache = options.okToCache && file.isValidated;
             const fileNamespaceLookup = file.getNamespaceLookupObject();
 
             for (const [lowerNamespaceName, nsContainer] of fileNamespaceLookup) {
                 if (!namespaceLookup.has(lowerNamespaceName)) {
-                    const clonedNsContainer = {
-                        ...nsContainer,
-                        namespaceStatements: [...nsContainer.namespaceStatements],
-                        symbolTable: new SymbolTable(`Namespace Aggregate: '${nsContainer.fullName}'`)
+                    const newScopeNsContainer: ScopeNamespaceContainer = {
+                        namespaceContainers: [],
+                        symbolTable: new SymbolTable(`Namespace Scope Aggregate: '${nsContainer.fullName}'`),
+                        firstInstance: nsContainer
                     };
-
-                    clonedNsContainer.symbolTable.mergeSymbolTable(nsContainer.symbolTable);
-                    namespaceLookup.set(lowerNamespaceName, clonedNsContainer);
-                } else {
-                    const existingContainer = namespaceLookup.get(lowerNamespaceName);
-                    existingContainer.classStatements = new Map([...existingContainer.classStatements, ...nsContainer.classStatements]);
-                    existingContainer.constStatements = new Map([...existingContainer.constStatements, ...nsContainer.constStatements]);
-                    existingContainer.enumStatements = new Map([...existingContainer.enumStatements, ...nsContainer.enumStatements]);
-                    existingContainer.functionStatements = new Map([...existingContainer.functionStatements, ...nsContainer.functionStatements]);
-                    existingContainer.namespaces = new Map([...existingContainer.namespaces, ...nsContainer.namespaces]);
-                    existingContainer.namespaceStatements.push(...nsContainer.namespaceStatements);
-                    existingContainer.symbolTable.mergeSymbolTable(nsContainer.symbolTable);
+                    namespaceLookup.set(lowerNamespaceName, newScopeNsContainer);
                 }
+
+                const scopeNsContainer = namespaceLookup.get(lowerNamespaceName);
+                scopeNsContainer.symbolTable.mergeSymbolTable(nsContainer.symbolTable);
+                scopeNsContainer.namespaceContainers.push(nsContainer);
             }
         });
         return namespaceLookup;
@@ -783,7 +790,7 @@ export class Scope {
             return false;
         }
 
-        this.useFileCachesForFileLinkLookups = true;//!validationOptions.initialValidation;
+        this.useFileCachesForFileLinkLookups = !validationOptions.initialValidation;
 
         this.program.logger.time(LogLevel.debug, [this._debugLogComponentName, 'validate()'], () => {
 
@@ -893,11 +900,13 @@ export class Scope {
                 ...this._allNamespaceTypeTable.mergeNamespaceSymbolTables(namespaceTypes)
             );
         });
-        for (const [_, nsContainer] of this.namespaceLookup) {
-            for (let nsStmt of nsContainer.namespaceStatements) {
-                this.linkSymbolTableDisposables.push(
-                    nsStmt?.getSymbolTable().addSibling(nsContainer.symbolTable)
-                );
+        for (const [_, scopeNsContainer] of this.namespaceLookup) {
+            for (let nsContainer of scopeNsContainer.namespaceContainers) {
+                for (let nsStmt of nsContainer.namespaceStatements) {
+                    this.linkSymbolTableDisposables.push(
+                        nsStmt?.getSymbolTable().addSibling(scopeNsContainer.symbolTable)
+                    );
+                }
             }
         }
         this.linkSymbolTableDisposables.push(
@@ -914,6 +923,8 @@ export class Scope {
             dispose();
         }
         this.linkSymbolTableDisposables = [];
+
+        this.cache.delete('namespaceLookup');
     }
 
     /**

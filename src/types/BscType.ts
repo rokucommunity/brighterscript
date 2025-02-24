@@ -5,6 +5,9 @@ import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import type { ExtraSymbolData, TypeCompatibilityData } from '../interfaces';
 import { isArrayType, isInheritableType, isReferenceType } from '../astUtils/reflection';
 
+
+// eslint-disable-next-line @typescript-eslint/dot-notation
+global['TypesCreated'] = 0;
 export abstract class BscType {
 
     public readonly memberTable: SymbolTable;
@@ -15,6 +18,9 @@ export abstract class BscType {
     constructor(name = '') {
         this.__identifier = `${this.constructor.name}${name ? ': ' + name : ''}`;
         this.memberTable = new SymbolTable(this.__identifier);
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        global['TypesCreated']++;
+
     }
 
     pushMemberProvider(provider: SymbolTableProvider) {

@@ -147,7 +147,7 @@ export class CallExpressionInfo {
 
     private getNamespace(): NamespaceContainer {
         let scope = this.file.program.getFirstScopeForFile(this.file);
-        return scope.namespaceLookup.get(this.dotPart);
+        return scope.namespaceLookup.get(this.dotPart)?.firstInstance;
     }
 
     private getParameterIndex() {

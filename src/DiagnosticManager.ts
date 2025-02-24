@@ -12,6 +12,16 @@ import chalk from 'chalk';
 import type { Logger } from './logging';
 import { LogLevel, createLogger } from './logging';
 import type { Program } from './Program';
+import type { BrsFile } from './files/BrsFile';
+
+interface DiagnosticWithContexts {
+    diagnostic: BsDiagnosticWithKey;
+    contexts: Set<DiagnosticContext>;
+}
+
+interface BsDiagnosticWithKey extends BsDiagnostic {
+    key: string;
+}
 
 /**
  * Manages all diagnostics for a program.
@@ -26,7 +36,7 @@ export class DiagnosticManager {
         this.logger = options?.logger ?? createLogger();
     }
 
-    private diagnosticsCache = new Cache<string, { diagnostic: BsDiagnostic; contexts: Set<DiagnosticContext> }>();
+    private diagnosticsCache = new Cache<string, DiagnosticWithContexts>();
 
     private diagnosticFilterer = new DiagnosticFilterer();
 
@@ -37,6 +47,11 @@ export class DiagnosticManager {
     public options: FinalizedBsConfig;
 
     public program: Program;
+
+    private fileUriMap = new Map<string, Set<string>>();
+    private tagMap = new Map<string, Set<string>>();
+    private scopeMap = new Map<string, Set<string>>();
+    private segmentMap = new Map<AstNode, Set<string>>();
 
     /**
      * Registers a diagnostic (or multiple diagnostics) for a program.
@@ -58,7 +73,7 @@ export class DiagnosticManager {
                     diagnostic.relatedInformation = [];
                 }
                 fromCache = false;
-                return { diagnostic: diagnostic, contexts: new Set<DiagnosticContext>() };
+                return { diagnostic: { key: key, ...diagnostic }, contexts: new Set<DiagnosticContext>() };
             });
 
             const cachedDiagnostic = cacheData.diagnostic;
@@ -69,6 +84,41 @@ export class DiagnosticManager {
             if (diagContext) {
                 contexts.add(diagContext);
             }
+            this.addToMaps(cachedDiagnostic, diagContext);
+        }
+    }
+
+    private addToMaps(diagnostic: BsDiagnosticWithKey, context?: DiagnosticContext) {
+        const uriLower = util.pathToUri(diagnostic.location?.uri?.toLowerCase());
+        if (uriLower) {
+            if (!this.fileUriMap.has(uriLower)) {
+                this.fileUriMap.set(uriLower, new Set());
+            }
+            this.fileUriMap.get(uriLower)?.add(diagnostic.key);
+        }
+        if (context) {
+            if (context.tags) {
+                for (const tag of context.tags) {
+                    const lowerTag = tag.toLowerCase();
+                    if (!this.tagMap.has(lowerTag)) {
+                        this.tagMap.set(lowerTag, new Set());
+                    }
+                    this.tagMap.get(lowerTag)?.add(diagnostic.key);
+                }
+            }
+            if (context.scope) {
+                const scopeKey = context.scope.name.toLowerCase();
+                if (!this.scopeMap.has(scopeKey)) {
+                    this.scopeMap.set(scopeKey, new Set());
+                }
+                this.scopeMap.get(scopeKey)?.add(diagnostic.key);
+            }
+            if (context.segment) {
+                if (!this.segmentMap.has(context.segment)) {
+                    this.segmentMap.set(context.segment, new Set());
+                }
+                this.segmentMap.get(context.segment)?.add(diagnostic.key);
+            }
         }
     }
 
@@ -78,7 +128,7 @@ export class DiagnosticManager {
      */
     public getDiagnostics() {
         const doDiagnosticsGathering = () => {
-            const diagnostics = this.getNonSuppresedDiagnostics();
+            const diagnostics = this.getNonSuppressedDiagnostics();
             const filteredDiagnostics = this.logger?.time(LogLevel.debug, ['filter diagnostics'], () => {
                 return this.filterDiagnostics(diagnostics);
             }) ?? this.filterDiagnostics(diagnostics);
@@ -94,7 +144,7 @@ export class DiagnosticManager {
         return this.logger?.time(LogLevel.info, ['DiagnosticsManager.getDiagnostics()'], doDiagnosticsGathering) ?? doDiagnosticsGathering();
     }
 
-    private getNonSuppresedDiagnostics() {
+    private getNonSuppressedDiagnostics() {
         const results = [] as Array<BsDiagnostic>;
         for (const cachedDiagnostic of this.diagnosticsCache.values()) {
             const diagnostic = { ...cachedDiagnostic.diagnostic };
@@ -168,52 +218,93 @@ export class DiagnosticManager {
 
     public clearForFile(fileSrcPath: string) {
         const fileSrcPathUri = util.pathToUri(fileSrcPath)?.toLowerCase?.();
-        for (const [key, cachedData] of this.diagnosticsCache.entries()) {
-            if (cachedData.diagnostic.location?.uri?.toLowerCase?.() === fileSrcPathUri) {
-                this.diagnosticsCache.delete(key);
-            }
+        for (const key of this.fileUriMap.get(fileSrcPathUri) ?? []) {
+            const cachedData = this.diagnosticsCache.get(key);
+            this.deleteContextsFromDiagnostic(cachedData.diagnostic, Array.from(cachedData.contexts));
+            this.removeDiagnosticIfNoContexts(cachedData.diagnostic);
         }
+        this.fileUriMap.get(fileSrcPathUri)?.clear();
     }
 
     public clearForScope(scope: Scope) {
-        for (const [key, cachedData] of this.diagnosticsCache.entries()) {
-            let removedContext = false;
+        const scopeNameLower = scope.name.toLowerCase();
+        for (const key of this.scopeMap.get(scopeNameLower) ?? []) {
+            const cachedData = this.diagnosticsCache.get(key);
+            const contextsToRemove: DiagnosticContext[] = [];
+            let foundMatch = false;
             for (const context of cachedData.contexts.values()) {
                 if (context.scope === scope) {
-                    cachedData.contexts.delete(context);
-                    removedContext = true;
+                    contextsToRemove.push(context);
+                    foundMatch = true;
                 }
             }
-            if (removedContext && cachedData.contexts.size === 0) {
-                // no more contexts for this diagnostic - remove diagnostic
-                this.diagnosticsCache.delete(key);
+            this.deleteContextsFromDiagnostic(cachedData.diagnostic, contextsToRemove);
+            if (foundMatch) {
+                this.removeDiagnosticIfNoContexts(cachedData.diagnostic);
             }
         }
+        this.scopeMap.get(scopeNameLower)?.clear();
     }
 
     public clearForSegment(segment: AstNode) {
-        for (const [key, cachedData] of this.diagnosticsCache.entries()) {
-            let removedContext = false;
+        for (const key of this.segmentMap.get(segment) ?? []) {
+            const cachedData = this.diagnosticsCache.get(key);
+            const contextsToRemove: DiagnosticContext[] = [];
+            let foundMatch = false;
             for (const context of cachedData.contexts.values()) {
                 if (context.segment === segment) {
-                    cachedData.contexts.delete(context);
+                    foundMatch = true;
+                    contextsToRemove.push(context);
                 }
             }
-            if (removedContext && cachedData.contexts.size === 0) {
-                // no more contexts for this diagnostic - remove diagnostic
-                this.diagnosticsCache.delete(key);
+            this.deleteContextsFromDiagnostic(cachedData.diagnostic, contextsToRemove);
+            if (foundMatch) {
+                this.removeDiagnosticIfNoContexts(cachedData.diagnostic);
             }
         }
+        this.segmentMap.get(segment)?.clear();
     }
 
     public clearForTag(tag: string) {
-        for (const [key, cachedData] of this.diagnosticsCache.entries()) {
+        const tagLower = tag.toLowerCase();
+        for (const key of this.tagMap.get(tagLower) ?? []) {
+            const cachedData = this.diagnosticsCache.get(key);
+            const contextsToRemove: DiagnosticContext[] = [];
+            let foundMatch = false;
             for (const context of cachedData.contexts.values()) {
                 if (context.tags.includes(tag)) {
-                    this.diagnosticsCache.delete(key);
+                    foundMatch = true;
+                    contextsToRemove.push(context);
                 }
             }
+            this.deleteContextsFromDiagnostic(cachedData.diagnostic, contextsToRemove);
+            if (foundMatch) {
+                this.removeDiagnosticIfNoContexts(cachedData.diagnostic);
+            }
         }
+        this.tagMap.get(tagLower)?.clear();
+    }
+
+    /*
+     *  Filters searchData to include only those diagnostics that match the filter provided
+     *
+     * @param shouldMatch true if this is an important filter, false if it is an optional filter
+     * @param {MapIterator<DiagnosticWithContexts>} searchData Data to filter
+     * @param filteredDiagnosticKeysSet Set of keys to filter by
+     * @returns  {MapIterator<DiagnosticWithContexts>} result of intersection
+     */
+    private getSearchIntersection(shouldMatch: boolean, searchData: DiagnosticWithContexts[], filteredDiagnosticKeysSet: Set<string>, ignoreEmptyFilter = false): DiagnosticWithContexts[] {
+        if (!shouldMatch) {
+            return searchData;
+        }
+
+        if (!filteredDiagnosticKeysSet || filteredDiagnosticKeysSet.size === 0) {
+            return [];
+        }
+
+        return searchData.filter((diagnosticWithContext) => {
+            return filteredDiagnosticKeysSet.has(diagnosticWithContext.diagnostic.key);
+        });
     }
 
     /**
@@ -229,9 +320,16 @@ export class DiagnosticManager {
             segment: !!filter.segment
         };
 
-        for (const [key, cachedData] of this.diagnosticsCache.entries()) {
-            let removedContext = false;
-            for (const context of cachedData.contexts.values()) {
+        let searchData = Array.from(this.diagnosticsCache.values());
+        searchData = this.getSearchIntersection(needToMatch.tag, searchData, needToMatch.tag ? this.tagMap.get(filter.tag?.toLowerCase()) : null);
+        searchData = this.getSearchIntersection(needToMatch.scope, searchData, needToMatch.scope ? this.scopeMap.get(filter.scope?.name?.toLowerCase()) : null, true);
+        searchData = this.getSearchIntersection(needToMatch.fileUri, searchData, needToMatch.fileUri ? this.fileUriMap.get(util.pathToUri(filter.fileUri).toLowerCase()) : null);
+        searchData = this.getSearchIntersection(needToMatch.segment, searchData, needToMatch.segment ? this.segmentMap.get(filter.segment) : null);
+
+        for (const { diagnostic, contexts } of searchData ?? []) {
+            const contextsToRemove: DiagnosticContext[] = [];
+            let foundMatch = false;
+            for (const context of contexts) {
                 let isMatch = true;
                 if (isMatch && needToMatch.tag) {
                     isMatch = !!context.tags?.includes(filter.tag);
@@ -240,21 +338,76 @@ export class DiagnosticManager {
                     isMatch = context.scope?.name === filter.scope.name;
                 }
                 if (isMatch && needToMatch.fileUri) {
-                    isMatch = cachedData.diagnostic.location?.uri === filter.fileUri;
+                    isMatch = diagnostic.location?.uri === filter.fileUri;
                 }
                 if (isMatch && needToMatch.segment) {
                     isMatch = context.segment === filter.segment;
                 }
 
                 if (isMatch) {
-                    cachedData.contexts.delete(context);
-                    removedContext = true;
+                    contextsToRemove.push(context);
+                    foundMatch = true;
                 }
             }
-            if (removedContext && cachedData.contexts.size === 0) {
-                // no more contexts for this diagnostic - remove diagnostic
-                this.diagnosticsCache.delete(key);
+            this.deleteContextsFromDiagnostic(diagnostic, contextsToRemove);
+            if (foundMatch) {
+                this.removeDiagnosticIfNoContexts(diagnostic);
             }
+        }
+    }
+
+    private deleteContextsFromDiagnostic(diagnostic: BsDiagnosticWithKey, contexts: DiagnosticContext[]) {
+        const key = diagnostic.key;
+        const cachedData = this.diagnosticsCache.get(key);
+        for (const context of contexts) {
+            cachedData.contexts.delete(context);
+        }
+        for (const context of contexts) {
+            for (const tag of context.tags ?? []) {
+                let foundTagOtherContext = false;
+                for (const otherContext of cachedData.contexts) {
+                    if (otherContext.tags?.includes(tag)) {
+                        foundTagOtherContext = true;
+                        break;
+                    }
+                }
+                if (!foundTagOtherContext) {
+                    this.tagMap.get(tag.toLowerCase())?.delete(key);
+                }
+            }
+            if (context.scope) {
+                let foundScopeOtherContext = false;
+                for (const otherContext of cachedData.contexts) {
+                    if (otherContext.scope === context.scope) {
+                        foundScopeOtherContext = true;
+                        break;
+                    }
+                }
+                if (!foundScopeOtherContext) {
+                    this.scopeMap.get(context.scope.name.toLowerCase())?.delete(key);
+                }
+            }
+            if (context.segment) {
+                let foundSegmentOtherContext = false;
+                for (const otherContext of cachedData.contexts) {
+                    if (otherContext.segment === context.segment) {
+                        foundSegmentOtherContext = true;
+                        break;
+                    }
+                }
+                if (!foundSegmentOtherContext) {
+                    this.segmentMap.get(context.segment)?.delete(key);
+                }
+            }
+        }
+    }
+
+    private removeDiagnosticIfNoContexts(diagnostic: BsDiagnosticWithKey) {
+        const key = diagnostic.key;
+        const cachedData = this.diagnosticsCache.get(key);
+        if (cachedData.contexts.size === 0) {
+            this.diagnosticsCache.delete(key);
+            this.fileUriMap.get(diagnostic.location?.uri?.toLowerCase())?.delete(key);
         }
     }
 
@@ -276,6 +429,14 @@ export class DiagnosticManager {
                 target.push(ri);
             }
         }
+    }
+
+    public shouldFilterFile(file: BrsFile): boolean {
+        if (this.diagnosticFilterer.options !== this.options) {
+            this.diagnosticFilterer.options = this.options;
+        }
+        this.diagnosticFilterer.isFileFiltered(file);
+        return false;
     }
 
 }

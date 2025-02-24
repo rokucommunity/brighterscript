@@ -33,6 +33,9 @@ import brsDocParser from '../../parser/BrightScriptDocParser';
 import type { Location } from 'vscode-languageserver';
 import { InvalidType } from '../../types/InvalidType';
 import { VoidType } from '../../types/VoidType';
+import { LogLevel } from '../../Logger';
+import { Stopwatch } from '../../Stopwatch';
+import chalk from 'chalk';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -65,34 +68,64 @@ export class ScopeValidator {
      */
     private event: OnScopeValidateEvent;
 
-    private metrics = new Map<string, number>();
-
+    private segmentsMetrics = new Map<string, { segments: number; time: string }>();
 
     public processEvent(event: OnScopeValidateEvent) {
         this.event = event;
         if (this.event.program.globalScope === this.event.scope) {
             return;
         }
-        this.metrics.clear();
-        this.walkFiles();
-        this.currentSegmentBeingValidated = null;
-        this.flagDuplicateFunctionDeclarations();
-        this.validateScriptImportPaths();
-        this.validateClasses();
-        if (isXmlScope(event.scope)) {
-            //detect when the child imports a script that its ancestor also imports
-            this.diagnosticDetectDuplicateAncestorScriptImports(event.scope);
-            //validate component interface
-            this.validateXmlInterface(event.scope);
-        }
+        const logger = this.event.program.logger;
+        const metrics = {
+            fileWalkTime: '',
+            flagDuplicateFunctionTime: '',
+            classValidationTime: '',
+            scriptImportValidationTime: '',
+            xmlValidationTime: ''
+        };
+        this.segmentsMetrics.clear();
+        const validationStopwatch = new Stopwatch();
 
-        this.event.program.logger.debug(this.event.scope.name, 'metrics:');
-        let total = 0;
-        for (const [filePath, num] of this.metrics) {
-            this.event.program.logger.debug(' - ', filePath, num);
-            total += num;
+        logger.time(LogLevel.debug, ['Validating scope', this.event.scope.name], () => {
+            metrics.fileWalkTime = validationStopwatch.getDurationTextFor(() => {
+                this.walkFiles();
+            }).durationText;
+            this.currentSegmentBeingValidated = null;
+            metrics.flagDuplicateFunctionTime = validationStopwatch.getDurationTextFor(() => {
+                this.flagDuplicateFunctionDeclarations();
+            }).durationText;
+            metrics.scriptImportValidationTime = validationStopwatch.getDurationTextFor(() => {
+                this.validateScriptImportPaths();
+            }).durationText;
+            metrics.classValidationTime = validationStopwatch.getDurationTextFor(() => {
+                this.validateClasses();
+            }).durationText;
+            metrics.xmlValidationTime = validationStopwatch.getDurationTextFor(() => {
+                if (isXmlScope(this.event.scope)) {
+                    //detect when the child imports a script that its ancestor also imports
+                    this.diagnosticDetectDuplicateAncestorScriptImports(this.event.scope);
+                    //validate component interface
+                    this.validateXmlInterface(this.event.scope);
+                }
+            }).durationText;
+        });
+        logger.debug(this.event.scope.name, 'segment metrics:');
+        let totalSegments = 0;
+        for (const [filePath, metric] of this.segmentsMetrics) {
+            this.event.program.logger.debug(' - ', filePath, metric.segments, metric.time);
+            totalSegments += metric.segments;
         }
-        this.event.program.logger.debug(this.event.scope.name, 'total segments validated', total);
+        logger.debug(this.event.scope.name, 'total segments validated', totalSegments);
+        this.logValidationMetrics(metrics);
+    }
+
+    // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
+    private logValidationMetrics(metrics: { [key: string]: number | string }) {
+        let logs = [] as string[];
+        for (const key in metrics) {
+            logs.push(`${key}=${chalk.yellow(metrics[key].toString())}`);
+        }
+        this.event.program.logger.debug(`Validation Metrics (Scope: ${this.event.scope.name}): ${logs.join(', ')}`);
     }
 
     public reset() {
@@ -114,9 +147,17 @@ export class ScopeValidator {
                 this.diagnosticDetectFunctionCollisions(file);
             }
         });
+        const fileWalkStopWatch = new Stopwatch();
 
         this.event.scope.enumerateOwnFiles((file) => {
             if (isBrsFile(file)) {
+
+                if (this.event.program.diagnostics.shouldFilterFile(file)) {
+                    return;
+                }
+
+                fileWalkStopWatch.reset();
+                fileWalkStopWatch.start();
 
                 const fileUri = util.pathToUri(file.srcPath);
                 const thisFileHasChanges = this.event.changedFiles.includes(file);
@@ -207,12 +248,22 @@ export class ScopeValidator {
                     : file.validationSegmenter.getSegmentsWithChangedSymbols(this.event.changedSymbols);
 
                 let segmentsValidated = 0;
+
+                if (thisFileHasChanges) {
+                    // clear all ScopeValidatorSegment diagnostics for this file
+                    this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, fileUri: fileUri, tag: ScopeValidatorDiagnosticTag.Segment });
+                }
+
+
                 for (const segment of segmentsToWalkForValidation) {
-                    if (!file.validationSegmenter.checkIfSegmentNeedsRevalidation(segment, this.event.changedSymbols)) {
+                    if (!thisFileHasChanges && !file.validationSegmenter.checkIfSegmentNeedsRevalidation(segment, this.event.changedSymbols)) {
                         continue;
                     }
                     this.currentSegmentBeingValidated = segment;
-                    this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, fileUri: fileUri, segment: segment, tag: ScopeValidatorDiagnosticTag.Segment });
+                    if (!thisFileHasChanges) {
+                        // just clear the affected diagnostics
+                        this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, fileUri: fileUri, segment: segment, tag: ScopeValidatorDiagnosticTag.Segment });
+                    }
                     segmentsValidated++;
                     segment.walk(validationVisitor, {
                         walkMode: InsideSegmentWalkMode
@@ -220,7 +271,9 @@ export class ScopeValidator {
                     file.markSegmentAsValidated(segment);
                     this.currentSegmentBeingValidated = null;
                 }
-                this.metrics.set(file.pkgPath, segmentsValidated);
+                fileWalkStopWatch.stop();
+                const timeString = fileWalkStopWatch.getDurationText();
+                this.segmentsMetrics.set(file.pkgPath, { segments: segmentsValidated, time: timeString });
             }
         });
     }
@@ -484,7 +537,7 @@ export class ScopeValidator {
             const isAllowedArgConversion = this.checkAllowedArgConversions(paramType, argType);
             if (!isAllowedArgConversion && !paramType?.isTypeCompatible(argType, compatibilityData)) {
                 this.addMultiScopeDiagnostic({
-                    ...DiagnosticMessages.argumentTypeMismatch(argType.toString(), paramType.toString(), compatibilityData),
+                    ...DiagnosticMessages.argumentTypeMismatch(argType?.toString() ?? 'unknown', paramType?.toString() ?? 'unknown', compatibilityData),
                     location: arg.location
                 });
             }
@@ -616,7 +669,7 @@ export class ScopeValidator {
             ? this.getNodeTypeWrapper(file, binaryExpr.right, getTypeOpts)
             : this.getNodeTypeWrapper(file, binaryExpr.value, getTypeOpts);
 
-        if (!leftType.isResolvable() || !rightType.isResolvable()) {
+        if (!leftType || !rightType || !leftType.isResolvable() || !rightType.isResolvable()) {
             // Can not find the type. error handled elsewhere
             return;
         }

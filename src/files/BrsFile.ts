@@ -5,7 +5,6 @@ import { CancellationTokenSource } from 'vscode-languageserver';
 import { CompletionItemKind } from 'vscode-languageserver';
 import chalk from 'chalk';
 import * as path from 'path';
-import { Scope } from '../Scope';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticLegacyCodeMap, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
 import type { Callable, CallableParam, CommentFlag, BsDiagnostic, FileReference, FileLink, SerializedCodeFile, NamespaceContainer } from '../interfaces';
@@ -20,7 +19,7 @@ import { DynamicType } from '../types/DynamicType';
 import { standardizePath as s, util } from '../util';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { serializeError } from 'serialize-error';
-import { isClassStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isNamespaceStatement, isVariableExpression, isImportStatement, isEnumStatement, isConstStatement, isAnyReferenceType, isNamespaceType, isReferenceType, isCallableType } from '../astUtils/reflection';
+import { isDottedGetExpression, isFunctionExpression, isNamespaceStatement, isVariableExpression, isImportStatement, isAnyReferenceType, isNamespaceType, isReferenceType, isCallableType } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyChangedEvent, DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
@@ -755,22 +754,9 @@ export class BrsFile implements BscFile {
         if (isVariableExpression(left)) {
             const leftType = left.getType({ flags: SymbolTypeFlag.runtime });
             if (isNamespaceType(leftType)) {
-                let lowerName = left.tokens.name.text.toLowerCase();
-                //find the first scope that contains this namespace
-                let scopes = this.program.getScopesForFile(this);
-
-                //if this file does not belong to any scopes, make a temporary one to answer the question
-                if (scopes.length === 0) {
-                    const scope = new Scope(`temporary-for-${this.pkgPath}`, this.program);
-                    scope.getAllFiles = () => [this];
-                    scope.getOwnFiles = scope.getAllFiles;
-                    scopes.push(scope);
-                }
-
-                for (let scope of scopes) {
-                    if (scope.namespaceLookup.has(lowerName)) {
-                        return true;
-                    }
+                // this is a namespace, but it might be aliased. Look it up and see if it has the same name
+                if (leftType.name.toLowerCase() === left.tokens?.name?.text?.toLowerCase()) {
+                    return true;
                 }
             }
         }
@@ -1287,32 +1273,14 @@ export class BrsFile implements BscFile {
                         nameRange: namespaceStatement.nameExpression.location?.range,
                         lastPartName: part.text,
                         lastPartNameLower: lowerPartName,
-                        functionStatements: new Map(),
                         namespaceStatements: [],
-                        namespaces: new Map(),
-                        classStatements: new Map(),
-                        enumStatements: new Map(),
-                        constStatements: new Map(),
-                        statements: [],
                         // the aggregate symbol table should have no parent. It should include just the symbols of the namespace.
-                        symbolTable: new SymbolTable(`Namespace Aggregate: '${loopName}'`)
+                        symbolTable: new SymbolTable(`Namespace File Aggregate: '${loopName}'`)
                     });
                 }
             }
             let ns = namespaceLookup.get(lowerLoopName);
             ns.namespaceStatements.push(namespaceStatement);
-            ns.statements.push(...namespaceStatement.body.statements);
-            for (let statement of namespaceStatement.body.statements) {
-                if (isClassStatement(statement) && statement.tokens.name) {
-                    ns.classStatements.set(statement.tokens.name.text.toLowerCase(), statement);
-                } else if (isFunctionStatement(statement) && statement.tokens.name) {
-                    ns.functionStatements.set(statement.tokens.name.text.toLowerCase(), statement);
-                } else if (isEnumStatement(statement) && statement.fullName) {
-                    ns.enumStatements.set(statement.fullName.toLowerCase(), statement);
-                } else if (isConstStatement(statement) && statement.fullName) {
-                    ns.constStatements.set(statement.fullName.toLowerCase(), statement);
-                }
-            }
             // Merges all the symbol tables of the namespace statements into the new symbol table created above.
             // Set those symbol tables to have this new merged table as a parent
             ns.symbolTable.mergeSymbolTable(namespaceStatement.body.getSymbolTable());
