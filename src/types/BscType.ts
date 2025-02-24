@@ -18,6 +18,7 @@ export abstract class BscType {
     constructor(name = '') {
         this.__identifier = `${this.constructor.name}${name ? ': ' + name : ''}`;
         this.memberTable = new SymbolTable(this.__identifier);
+        // eslint-disable-next-line @typescript-eslint/dot-notation
         global['TypesCreated']++;
 
     }
