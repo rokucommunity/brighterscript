@@ -152,6 +152,10 @@ export class ScopeValidator {
         this.event.scope.enumerateOwnFiles((file) => {
             if (isBrsFile(file)) {
 
+                if (this.event.program.diagnostics.shouldFilterFile(file)) {
+                    return;
+                }
+
                 fileWalkStopWatch.reset();
                 fileWalkStopWatch.start();
 

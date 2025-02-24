@@ -21,8 +21,10 @@ interface NormalizedFilter {
 export class DiagnosticFilterer {
     private byFile: Record<string, DiagnosticWithSuppression[]>;
     private fileDestSrcUriMap: Record<string, string>;
-    private filters: NormalizedFilter[] | undefined;
+    private _filters: NormalizedFilter[] | undefined;
     private rootDir: string | undefined;
+
+    public options: BsConfig | undefined;
 
 
     constructor() {
@@ -30,12 +32,26 @@ export class DiagnosticFilterer {
         this.fileDestSrcUriMap = {};
     }
 
+    get filters() {
+        if (!this.options) {
+            return null;
+        }
+        if (!this._filters) {
+            this._filters = this.getDiagnosticFilters(this.options);
+        }
+        return this._filters;
+    }
+
+
     /**
      * Filter a list of diagnostics based on the provided filters
      */
     public filter(options: BsConfig, diagnostics: BsDiagnostic[], program?: Program) {
-        this.filters = this.getDiagnosticFilters(options);
-        this.rootDir = options.rootDir;
+        this.options = options;
+
+        delete this._filters;
+
+        this.rootDir = this.options.rootDir;
 
         this.groupByFile(diagnostics, program);
 
@@ -47,10 +63,45 @@ export class DiagnosticFilterer {
         //clean up
         this.byFile = {};
         this.fileDestSrcUriMap = {};
-        delete this.rootDir;
-        delete this.filters;
 
         return result;
+    }
+
+    /**
+     * Should this file be completely ignored?
+     * If the file diagnostics are ignored, we do not need to validate this file
+     */
+    public isFileFiltered(file: { srcPath: string; destPath: string }) {
+        if (!this.options || !this.filters) {
+            return false;
+        }
+        this.rootDir = this.options.rootDir;
+        let isMatch = false;
+        //filter each matched file
+        for (let filter of this.filters) {
+            if (filter.codes?.length > 0) {
+                continue;
+            }
+            let srcMatch = false;
+            if (filter.src) {
+                const srcUri = util.pathToUri(file.srcPath);
+                const srcFsPath = URI.parse(srcUri).fsPath;
+                srcMatch = !!(filter.src && this.matchFileSrcUris(filter, [srcFsPath])?.length > 0);
+            }
+            let destMatch = false;
+            if (filter.dest) {
+                destMatch = !!(filter.dest && this.matchFileDestUris(filter, [file.destPath])?.length > 0);
+            }
+
+            if (!filter.isNegative) {
+                isMatch = isMatch || srcMatch || destMatch;
+            } else {
+                if (srcMatch || destMatch) {
+                    isMatch = false;
+                }
+            }
+        }
+        return isMatch;
     }
 
     /**
@@ -104,33 +155,42 @@ export class DiagnosticFilterer {
         }
     }
 
+
+    private matchFileSrcUris(filter: NormalizedFilter, fileUris: string[]): string[] {
+        //prepend rootDir to src if the filter is not a relative path
+        let src = s(
+            path.isAbsolute(filter.src) ? filter.src : `${this.rootDir}/${filter.src}`
+        );
+
+        let matchedFileUris = minimatch.match(fileUris, src, {
+            nocase: true
+        }).map(src => util.pathToUri(src).toLowerCase());
+
+        return matchedFileUris;
+    }
+
+    private matchFileDestUris(filter: NormalizedFilter, fileUris: string[]): string[] {
+        let matchedFileUris = minimatch.match(fileUris, filter.dest, {
+            nocase: true
+        });
+        return matchedFileUris;
+    }
+
+
     private filterAllFiles(filter: NormalizedFilter) {
         let matchedFileUris: string[];
 
         if (filter.src) {
             //if there's a src, match against all files
-
-            //prepend rootDir to src if the filter is not a relative path
-            let src = s(
-                path.isAbsolute(filter.src) ? filter.src : `${this.rootDir}/${filter.src}`
-            );
-
             const byFileSrcs = Object.keys(this.byFile).map(uri => URI.parse(uri).fsPath);
-            matchedFileUris = minimatch.match(byFileSrcs, src, {
-                nocase: true
-            }).map(src => util.pathToUri(src).toLowerCase());
-
+            matchedFileUris = this.matchFileSrcUris(filter, byFileSrcs);
         } else if (filter.dest) {
             // applies to file dest location
-
             // search against the set of file destinations
             const byFileDests = Object.keys(this.fileDestSrcUriMap);
-            matchedFileUris = minimatch.match(byFileDests, filter.dest, {
-                nocase: true
-            }).map((destPath) => {
+            matchedFileUris = this.matchFileDestUris(filter, byFileDests).map((destPath) => {
                 return this.fileDestSrcUriMap[destPath]?.toLowerCase();
             });
-
         } else {
             matchedFileUris = Object.keys(this.byFile);
         }

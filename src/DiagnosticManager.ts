@@ -12,6 +12,7 @@ import chalk from 'chalk';
 import type { Logger } from './logging';
 import { LogLevel, createLogger } from './logging';
 import type { Program } from './Program';
+import type { BrsFile } from './files/BrsFile';
 
 interface DiagnosticWithContexts {
     diagnostic: BsDiagnosticWithKey;
@@ -127,7 +128,7 @@ export class DiagnosticManager {
      */
     public getDiagnostics() {
         const doDiagnosticsGathering = () => {
-            const diagnostics = this.getNonSuppresedDiagnostics();
+            const diagnostics = this.getNonSuppressedDiagnostics();
             const filteredDiagnostics = this.logger?.time(LogLevel.debug, ['filter diagnostics'], () => {
                 return this.filterDiagnostics(diagnostics);
             }) ?? this.filterDiagnostics(diagnostics);
@@ -143,7 +144,7 @@ export class DiagnosticManager {
         return this.logger?.time(LogLevel.info, ['DiagnosticsManager.getDiagnostics()'], doDiagnosticsGathering) ?? doDiagnosticsGathering();
     }
 
-    private getNonSuppresedDiagnostics() {
+    private getNonSuppressedDiagnostics() {
         const results = [] as Array<BsDiagnostic>;
         for (const cachedDiagnostic of this.diagnosticsCache.values()) {
             const diagnostic = { ...cachedDiagnostic.diagnostic };
@@ -428,6 +429,14 @@ export class DiagnosticManager {
                 target.push(ri);
             }
         }
+    }
+
+    public shouldFilterFile(file: BrsFile): boolean {
+        if (this.diagnosticFilterer.options !== this.options) {
+            this.diagnosticFilterer.options = this.options;
+        }
+        this.diagnosticFilterer.isFileFiltered(file);
+        return false;
     }
 
 }

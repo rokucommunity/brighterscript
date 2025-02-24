@@ -713,8 +713,6 @@ export class Scope {
      */
     public getOwnCallables(): CallableContainer[] {
         let result = [] as CallableContainer[];
-        this.logDebug('getOwnCallables() files: ', () => this.getOwnFiles().map(x => x.destPath));
-
         //get callables from own files
         this.enumerateOwnFiles((file) => {
             if (isBrsFile(file)) {
