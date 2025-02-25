@@ -2586,7 +2586,7 @@ export class MethodStatement extends FunctionStatement {
             thisQualifiedName.text = 'm.' + field.name?.text;
             if (field.initialValue) {
                 newStatements.push(
-                    new AssignmentStatement(field.equal, thisQualifiedName, field.initialValue)
+                    new AssignmentStatement(field.equal, thisQualifiedName, field.initialValue.clone())
                 );
             } else {
                 //if there is no initial value, set the initial value to `invalid`
