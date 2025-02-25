@@ -142,7 +142,7 @@ export class BsClassValidator {
                         //mismatched member type (field/method in child, opposite in ancestor)
                         if (memberType !== ancestorMemberKind) {
                             const childFieldType = member.getType({ flags: SymbolTypeFlag.typetime });
-                            let ancestorMemberType: BscType = new DynamicType();
+                            let ancestorMemberType: BscType = DynamicType.instance;
                             if (isFieldStatement(ancestorAndMember.member)) {
                                 ancestorMemberType = ancestorAndMember.member.getType({ flags: SymbolTypeFlag.typetime });
                             } else if (isMethodStatement(ancestorAndMember.member)) {
@@ -162,7 +162,7 @@ export class BsClassValidator {
 
                         //child field has same name as parent
                         if (isFieldStatement(member)) {
-                            let ancestorMemberType: BscType = new DynamicType();
+                            let ancestorMemberType: BscType = DynamicType.instance;
                             if (isFieldStatement(ancestorAndMember.member)) {
                                 ancestorMemberType = ancestorAndMember.member.getType({ flags: SymbolTypeFlag.typetime });
                             } else if (isMethodStatement(ancestorAndMember.member)) {

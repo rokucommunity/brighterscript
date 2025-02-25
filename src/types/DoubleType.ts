@@ -7,15 +7,9 @@ import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import type { TypeCompatibilityData } from '../interfaces';
 
 export class DoubleType extends BscType {
-    constructor(
-        public typeText?: string
-    ) {
-        super();
-    }
-
     public readonly kind = BscTypeKind.DoubleType;
 
-    public static instance = new DoubleType('double');
+    public static instance = new DoubleType();
 
     public isBuiltIn = true;
 
@@ -30,7 +24,7 @@ export class DoubleType extends BscType {
         );
     }
     public toString() {
-        return this.typeText ?? 'double';
+        return 'double';
     }
 
     public toTypeString(): string {

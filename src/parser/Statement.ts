@@ -3431,7 +3431,7 @@ export class FieldStatement extends Statement implements TypedefProvider {
 
             let type = this.getType({ flags: SymbolTypeFlag.typetime });
             if (isInvalidType(type) || isVoidType(type) || isUninitializedType(type)) {
-                type = new DynamicType();
+                type = DynamicType.instance;
             }
 
             result.push(

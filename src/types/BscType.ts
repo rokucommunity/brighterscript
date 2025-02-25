@@ -7,7 +7,7 @@ import { isArrayType, isInheritableType, isReferenceType } from '../astUtils/ref
 
 
 // eslint-disable-next-line @typescript-eslint/dot-notation
-global['TypesCreated'] = 0;
+global['TypesCreated'] = {};
 export abstract class BscType {
 
     public readonly memberTable: SymbolTable;
@@ -19,8 +19,12 @@ export abstract class BscType {
         this.__identifier = `${this.constructor.name}${name ? ': ' + name : ''}`;
         this.memberTable = new SymbolTable(this.__identifier);
         // eslint-disable-next-line @typescript-eslint/dot-notation
-        global['TypesCreated']++;
-
+        if (!global['TypesCreated'][this.constructor.name]) {
+            // eslint-disable-next-line @typescript-eslint/dot-notation
+            global['TypesCreated'][this.constructor.name] = 0;
+        }
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        global['TypesCreated'][this.constructor.name]++;
     }
 
     pushMemberProvider(provider: SymbolTableProvider) {

@@ -6,15 +6,9 @@ import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import type { TypeCompatibilityData } from '../interfaces';
 
 export class IntegerType extends BscType {
-    constructor(
-        public typeText?: string
-    ) {
-        super();
-    }
-
     public readonly kind = BscTypeKind.IntegerType;
 
-    public static instance = new IntegerType('integer');
+    public static instance = new IntegerType();
 
     public isBuiltIn = true;
 
@@ -30,7 +24,7 @@ export class IntegerType extends BscType {
     }
 
     public toString() {
-        return this.typeText ?? 'integer';
+        return 'integer';
     }
 
     public toTypeString(): string {

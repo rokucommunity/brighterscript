@@ -171,10 +171,10 @@ export class Program {
         this.globalScope.symbolTable.addSymbol('double', builtInSymbolData, DoubleType.instance, SymbolTypeFlag.typetime);
         this.globalScope.symbolTable.addSymbol('dynamic', builtInSymbolData, DynamicType.instance, SymbolTypeFlag.typetime);
         this.globalScope.symbolTable.addSymbol('float', builtInSymbolData, FloatType.instance, SymbolTypeFlag.typetime);
-        this.globalScope.symbolTable.addSymbol('function', builtInSymbolData, new FunctionType(), SymbolTypeFlag.typetime);
+        this.globalScope.symbolTable.addSymbol('function', builtInSymbolData, FunctionType.instance, SymbolTypeFlag.typetime);
         this.globalScope.symbolTable.addSymbol('integer', builtInSymbolData, IntegerType.instance, SymbolTypeFlag.typetime);
         this.globalScope.symbolTable.addSymbol('longinteger', builtInSymbolData, LongIntegerType.instance, SymbolTypeFlag.typetime);
-        this.globalScope.symbolTable.addSymbol('object', builtInSymbolData, new ObjectType(), SymbolTypeFlag.typetime);
+        this.globalScope.symbolTable.addSymbol('object', builtInSymbolData, ObjectType.instance, SymbolTypeFlag.typetime);
         this.globalScope.symbolTable.addSymbol('string', builtInSymbolData, StringType.instance, SymbolTypeFlag.typetime);
         this.globalScope.symbolTable.addSymbol('void', builtInSymbolData, VoidType.instance, SymbolTypeFlag.typetime);
 
@@ -1851,8 +1851,19 @@ export class Program {
             }
         });
 
-        // eslint-disable-next-line @typescript-eslint/dot-notation
-        //console.log('TYPES CREATED', global['TypesCreated']);
+        //eslint-disable-next-line @typescript-eslint/dot-notation
+        console.log('TYPES CREATED', global['TypesCreated']);
+        let totalTypesCreated = 0;
+        //eslint-disable-next-line @typescript-eslint/dot-notation
+        for (const key in global['TypesCreated']) {
+            //eslint-disable-next-line @typescript-eslint/dot-notation
+            if (Object.hasOwn(global['TypesCreated'], key)) {
+                //eslint-disable-next-line @typescript-eslint/dot-notation
+                totalTypesCreated += global['TypesCreated'][key];
+
+            }
+        }
+        console.log('TOTAL TYPES CREATED', totalTypesCreated);
     }
 
     /**
