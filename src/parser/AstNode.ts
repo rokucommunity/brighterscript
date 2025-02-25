@@ -5,12 +5,15 @@ import { CancellationTokenSource } from 'vscode-languageserver';
 import { InternalWalkMode } from '../astUtils/visitors';
 import type { SymbolTable } from '../SymbolTable';
 import type { BrsTranspileState } from './BrsTranspileState';
-import type { GetTypeOptions, TranspileResult } from '../interfaces';
+import type { GetTypeOptions, TranspileResult, TypeChainEntry } from '../interfaces';
 import type { AnnotationExpression } from './Expression';
 import util from '../util';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import type { Token } from '../lexer/Token';
+import type { Cache } from '../Cache';
+
+export type TypeCache = Cache<AstNode, { type: BscType; typeChain: TypeChainEntry[] }>;
 
 /**
  * A BrightScript AST node
@@ -63,6 +66,19 @@ export abstract class AstNode {
         //and the top-level node will always have a SymbolTable. So we'll never hit this undefined,
         //but it is not so easy to convince the typechecker of this.
         return undefined as any;
+    }
+
+    public typeCache?: TypeCache;
+
+    public getTypeCache(): TypeCache {
+        let node: AstNode = this;
+        while (node) {
+            if (node.typeCache) {
+                this.typeCache = node.typeCache;
+                return node.typeCache;
+            }
+            node = node.parent!;
+        }
     }
 
     /**

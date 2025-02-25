@@ -17,7 +17,7 @@ import { createIdentifier, createInvalidLiteral, createMethodStatement, createTo
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import { SymbolTable } from '../SymbolTable';
-import type { Expression } from './AstNode';
+import type { AstNode, Expression } from './AstNode';
 import { AstNodeKind, Statement } from './AstNode';
 import { ClassType } from '../types/ClassType';
 import { EnumMemberType, EnumType } from '../types/EnumType';
@@ -28,6 +28,7 @@ import { TypedFunctionType } from '../types/TypedFunctionType';
 import { ArrayType } from '../types/ArrayType';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import brsDocParser from './BrightScriptDocParser';
+import { Cache } from '../Cache';
 
 export class EmptyStatement extends Statement {
     constructor(options?: { range?: Location }
@@ -73,6 +74,9 @@ export class Body extends Statement implements TypedefProvider {
     public readonly kind = AstNodeKind.Body;
 
     public readonly symbolTable = new SymbolTable('Body', () => this.parent?.getSymbolTable());
+
+    public readonly typeCache = new Cache<AstNode, { type: BscType; typeChain: TypeChainEntry[] }>();
+
 
     public get location() {
         if (!this._location) {
@@ -2538,6 +2542,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
     }
 
     public getType(options: GetTypeOptions): TypedFunctionType {
+        // const result = this.getTypeCache().getOrAdd(this, () => {
         //if there's a defined return type, use that
         let returnType = this.returnTypeExpression?.getType(options);
         const isSub = this.tokens.functionType?.kind === TokenKind.Sub || !returnType;
@@ -2545,7 +2550,6 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         if (!returnType) {
             returnType = isSub ? VoidType.instance : DynamicType.instance;
         }
-
         const resultType = new TypedFunctionType(returnType);
         resultType.isSub = isSub;
         for (let param of this.params) {
@@ -2559,6 +2563,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         resultType.setName(funcName);
         options.typeChain?.push(new TypeChainEntry({ name: resultType.name, type: resultType, data: options.data, astNode: this }));
         return resultType;
+        //  });
     }
 
     public clone() {
