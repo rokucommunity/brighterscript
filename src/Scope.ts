@@ -887,7 +887,6 @@ export class Scope {
         this._allNamespaceTypeTable = new SymbolTable(`Scope NamespaceTypes ${this.name}`);
         for (const file of this.getAllFiles()) {
             if (isBrsFile(file)) {
-                file.ast?.getTypeCache().clear();
                 this.linkSymbolTableDisposables.push(
                     file.parser.symbolTable.pushParentProvider(() => this.symbolTable)
                 );

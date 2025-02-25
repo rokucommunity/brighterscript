@@ -415,7 +415,6 @@ export class FunctionExpression extends Expression implements TypedefProvider {
     }
 
     public getType(options: GetTypeOptions): TypedFunctionType {
-        //return this.getTypeCache().getOrAdd(this, () => {
         //if there's a defined return type, use that
         let returnType: BscType;
 
@@ -454,7 +453,6 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
         options.typeChain?.push(new TypeChainEntry({ name: funcName, type: resultType, data: options.data, astNode: this }));
         return resultType;
-        //  });
     }
 
     public clone() {
