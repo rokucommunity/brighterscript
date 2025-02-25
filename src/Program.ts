@@ -55,7 +55,7 @@ import { ProgramValidatorDiagnosticsTag } from './bscPlugin/validation/ProgramVa
 import type { ProvidedSymbolInfo, BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
 import { SymbolTable } from './SymbolTable';
-import { ReferenceType } from './types';
+import { ReferenceType, TypesCreated } from './types';
 
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
@@ -1851,15 +1851,11 @@ export class Program {
             }
         });
 
-        //eslint-disable-next-line @typescript-eslint/dot-notation
-        console.log('TYPES CREATED', global['TypesCreated']);
+        console.log('TYPES CREATED', TypesCreated);
         let totalTypesCreated = 0;
-        //eslint-disable-next-line @typescript-eslint/dot-notation
-        for (const key in global['TypesCreated']) {
-            //eslint-disable-next-line @typescript-eslint/dot-notation
-            if (Object.hasOwn(global['TypesCreated'], key)) {
-                //eslint-disable-next-line @typescript-eslint/dot-notation
-                totalTypesCreated += global['TypesCreated'][key];
+        for (const key in TypesCreated) {
+            if (TypesCreated.hasOwnProperty(key)) {
+                totalTypesCreated += TypesCreated[key];
 
             }
         }

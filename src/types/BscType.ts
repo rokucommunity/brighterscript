@@ -4,10 +4,8 @@ import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import type { ExtraSymbolData, TypeCompatibilityData } from '../interfaces';
 import { isArrayType, isInheritableType, isReferenceType } from '../astUtils/reflection';
+import { TypesCreated } from './helpers';
 
-
-// eslint-disable-next-line @typescript-eslint/dot-notation
-global['TypesCreated'] = {};
 export abstract class BscType {
 
     public readonly memberTable: SymbolTable;
@@ -18,13 +16,10 @@ export abstract class BscType {
     constructor(name = '') {
         this.__identifier = `${this.constructor.name}${name ? ': ' + name : ''}`;
         this.memberTable = new SymbolTable(this.__identifier);
-        // eslint-disable-next-line @typescript-eslint/dot-notation
-        if (!global['TypesCreated'][this.constructor.name]) {
-            // eslint-disable-next-line @typescript-eslint/dot-notation
-            global['TypesCreated'][this.constructor.name] = 0;
+        if (TypesCreated[this.constructor.name] === undefined) {
+            TypesCreated[this.constructor.name] = 0;
         }
-        // eslint-disable-next-line @typescript-eslint/dot-notation
-        global['TypesCreated'][this.constructor.name]++;
+        TypesCreated[this.constructor.name]++;
     }
 
     pushMemberProvider(provider: SymbolTableProvider) {
