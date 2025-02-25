@@ -17,6 +17,7 @@ import { StringType } from '../../types/StringType';
 import { ArrayType } from '../../types/ArrayType';
 import { DynamicType } from '../../types/DynamicType';
 import { TypedFunctionType } from '../../types/TypedFunctionType';
+import { VoidType } from '../../types/VoidType';
 import { ParseMode } from '../../parser/Parser';
 import type { ExtraSymbolData } from '../../interfaces';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
@@ -1410,6 +1411,203 @@ describe('BrsFileValidator', () => {
                 end sub
             `);
             expectDiagnostics(program, []);
+        });
+    });
+
+    describe('annotations', () => {
+        it('validates when unknown annotation is used', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                @unknownAnnotation
+                sub someFunc()
+                    print "hello"
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindAnnotation('unknownAnnotation')
+            ]);
+        });
+
+        it('allows known annotations', () => {
+            program.addAnnotationSymbol('knownAnnotation', new TypedFunctionType(VoidType.instance));
+
+            program.setFile<BrsFile>('source/main.bs', `
+                @knownAnnotation
+                sub someFunc()
+                    print "hello"
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('checks annotation function arg count', () => {
+            program.addAnnotationSymbol('takesOneOrTwo',
+                new TypedFunctionType(VoidType.instance)
+                    .setName('takesOneOrTwo')
+                    .addParameter('x', DynamicType.instance)
+                    .addParameter('y', DynamicType.instance, true),
+                { pluginName: 'Test' });
+
+            program.setFile<BrsFile>('source/main.bs', `
+                @takesOneOrTwo
+                sub someFunc()
+                    print "hello"
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.mismatchArgumentCount('1-2', 0)
+            ]);
+        });
+
+        it('allows valid arg counts', () => {
+            program.addAnnotationSymbol('takesOneOrTwo',
+                new TypedFunctionType(VoidType.instance)
+                    .setName('takesOneOrTwo')
+                    .addParameter('x', DynamicType.instance)
+                    .addParameter('y', DynamicType.instance, true));
+
+            program.setFile<BrsFile>('source/main.bs', `
+                @takesOneOrTwo(1)
+                sub someFunc()
+                end sub
+
+                @takesOneOrTwo(1, "test")
+                sub otherFunc()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows valid arg counts for variadic functions', () => {
+            program.addAnnotationSymbol('takesOneOrMore',
+                new TypedFunctionType(VoidType.instance)
+                    .setName('takesOneOrMore')
+                    .addParameter('x', DynamicType.instance)
+                    .setVariadic(true));
+
+            program.setFile<BrsFile>('source/main.bs', `
+                @takesOneOrMore(1)
+                sub someFunc()
+                end sub
+
+                @takesOneOrMore(1, "test", {test: 1}, [1,2,3], "more", "args")
+                sub otherFunc()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('ignores when multiple annotations of same name are added', () => {
+            program.addAnnotationSymbol('usedTwice',
+                new TypedFunctionType(VoidType.instance)
+                    .setName('usedTwice')
+                    .addParameter('x', IntegerType.instance));
+
+            program.addAnnotationSymbol('usedTwice',
+                new TypedFunctionType(VoidType.instance)
+                    .setName('usedTwice'));
+
+            program.setFile<BrsFile>('source/main.bs', `
+                @usedTwice(1)
+                sub someFunc()
+                end sub
+
+                @usedTwice
+                sub otherFunc()
+                end sub
+
+                @usedTwice("TODO: this shouldn't be accepted", "Because there is no matching annotation")
+                sub yetAnotherFunc()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('validates arg types', () => {
+            program.addAnnotationSymbol('annoStringInt',
+                new TypedFunctionType(VoidType.instance)
+                    .addParameter('str', StringType.instance)
+                    .addParameter('int', IntegerType.instance));
+
+            program.setFile<BrsFile>('source/main.bs', `
+                @annoStringInt(3.14, "test")
+                sub someFunc()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('float', 'string').message,
+                DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+            ]);
+        });
+
+
+        it('allows valid arg types', () => {
+            program.addAnnotationSymbol('annoStringInt',
+                new TypedFunctionType(VoidType.instance)
+                    .addParameter('str', StringType.instance)
+                    .addParameter('int', IntegerType.instance));
+
+            program.setFile<BrsFile>('source/main.bs', `
+                @annoStringInt("test", 123)
+                sub someFunc()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('validates uninitialized values', () => {
+            program.addAnnotationSymbol('annoString',
+                new TypedFunctionType(VoidType.instance)
+                    .addParameter('str', StringType.instance));
+
+            program.setFile<BrsFile>('source/main.bs', `
+                @annoString(someVar)
+                sub someFunc()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.expectedLiteralValue('in annotation argument', 'someVar').message
+            ]);
+        });
+
+        it('validates uninitialized values', () => {
+            program.addAnnotationSymbol('annoString',
+                new TypedFunctionType(VoidType.instance)
+                    .addParameter('str', StringType.instance));
+
+            program.setFile<BrsFile>('source/main.bs', `
+
+                const myConst = "hello"
+                @annoString(myConst)
+                sub someFunc()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.expectedLiteralValue('in annotation argument', 'myConst').message
+            ]);
+        });
+
+        it('allows associative arrays', () => {
+            program.addAnnotationSymbol('annoAA',
+                new TypedFunctionType(VoidType.instance)
+                    .addParameter('aa', new AssociativeArrayType()));
+
+            program.setFile<BrsFile>('source/main.bs', `
+                @annoAA({name: "John Doe", age: 25, ids: [1, 2, 3, 4]})
+                sub someFunc()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
         });
     });
 });

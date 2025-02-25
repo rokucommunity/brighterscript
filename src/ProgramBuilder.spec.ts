@@ -9,12 +9,14 @@ import { LogLevel, createLogger } from './logging';
 import * as diagnosticUtils from './diagnosticUtils';
 import { DiagnosticSeverity } from 'vscode-languageserver';
 import { BrsFile } from './files/BrsFile';
-import { expectZeroDiagnostics } from './testHelpers.spec';
+import { expectTypeToBe, expectZeroDiagnostics } from './testHelpers.spec';
 import type { BsConfig } from './BsConfig';
 import type { BscFile } from './files/BscFile';
 import { tempDir, rootDir, stagingDir } from './testHelpers.spec';
 import { Deferred } from './deferred';
-import type { AfterProgramCreateEvent, BsDiagnostic } from './interfaces';
+import type { AfterProgramCreateEvent, BsDiagnostic, CompilerPlugin, ExtraSymbolData } from './interfaces';
+import { StringType, TypedFunctionType, VoidType } from './types';
+import { SymbolTypeFlag } from './SymbolTypeFlag';
 
 describe('ProgramBuilder', () => {
 
@@ -311,6 +313,31 @@ describe('ProgramBuilder', () => {
         expect(afterProgramValidate.callCount).to.equal(1);
     });
 
+
+    describe('plugins', () => {
+        it('adds annotations defined in a plugin to the annotation symbol table', async () => {
+            builder = new ProgramBuilder();
+
+            const plugin: CompilerPlugin = {
+                name: 'test',
+                annotations: [{
+                    type: new TypedFunctionType(VoidType.instance)
+                        .setName('myAnnotation')
+                        .addParameter('id', StringType.instance, false),
+                    description: 'Extra description'
+                }]
+            };
+            builder.plugins.add(plugin);
+            await builder.load({});
+
+            const extraData: ExtraSymbolData = {};
+            const foundAnnotation = builder.program.pluginAnnotationTable.getSymbolType('myAnnotation', { flags: SymbolTypeFlag.annotation, data: extraData });
+
+            expectTypeToBe(foundAnnotation, TypedFunctionType);
+            expect(extraData.pluginName).to.eql('test');
+            expect(extraData.description).to.eql('Extra description');
+        });
+    });
 
     describe('printDiagnostics', () => {
 
