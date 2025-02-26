@@ -478,7 +478,6 @@ export function isBuiltInType(value: any, name: string): value is InterfaceType 
     return isInterfaceType(value) && value.name.toLowerCase() === name.toLowerCase() && value.isBuiltIn;
 }
 
-
 const nativeTypeKinds = [
     BscTypeKind.DynamicType,
     BscTypeKind.ObjectType,

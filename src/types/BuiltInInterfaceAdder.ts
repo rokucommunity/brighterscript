@@ -95,26 +95,37 @@ export class BuiltInInterfaceAdder {
         }
     }
 
+    private static builtInMethodCache = new Cache<BRSInterfaceMethodData, TypedFunctionType>();
+
     private static buildMethodFromDocData(method: BRSInterfaceMethodData, overrides?: Map<string, BuiltInInterfaceOverride>, thisType?: BscType): TypedFunctionType {
         const override = overrides?.get(method.name.toLowerCase());
-        let returnType = override?.returnType ?? this.getPrimitiveType(method.returnType);
-        if (!returnType && method.returnType.toLowerCase() === (thisType as any)?.name?.toLowerCase()) {
-            returnType = thisType;
-        }
-        const methodFuncType = this.typedFunctionFactory(returnType);
-        methodFuncType.name = method.name;
-        methodFuncType.isVariadic = method.isVariadic ?? false;
-        // eslint-disable-next-line @typescript-eslint/prefer-for-of
-        for (let i = 0; i < method.params.length; i++) {
-            const param = method.params[i];
-            let paramType = override?.parameterTypes?.[i] ?? this.getPrimitiveType(param.type);
-            if (!paramType && param.type.toLowerCase() === (thisType as any)?.name?.toLowerCase()) {
-                paramType = thisType;
+        const getMethodType = () => {
+
+            let returnType = override?.returnType ?? this.getPrimitiveType(method.returnType);
+            if (!returnType && method.returnType.toLowerCase() === (thisType as any)?.name?.toLowerCase()) {
+                returnType = thisType;
             }
-            paramType ??= this.primitiveTypeInstanceCache.get('dynamic');
-            methodFuncType.addParameter(param.name, paramType, !param.isRequired);
+            const methodFuncType = this.typedFunctionFactory(returnType);
+            methodFuncType.name = method.name;
+            methodFuncType.isVariadic = method.isVariadic ?? false;
+            // eslint-disable-next-line @typescript-eslint/prefer-for-of
+            for (let i = 0; i < method.params.length; i++) {
+                const param = method.params[i];
+                let paramType = override?.parameterTypes?.[i] ?? this.getPrimitiveType(param.type);
+                if (!paramType && param.type.toLowerCase() === (thisType as any)?.name?.toLowerCase()) {
+                    paramType = thisType;
+                }
+                paramType ??= this.primitiveTypeInstanceCache.get('dynamic');
+                methodFuncType.addParameter(param.name, paramType, !param.isRequired);
+            }
+            return methodFuncType;
+        };
+
+        if (override) {
+            return getMethodType();
         }
-        return methodFuncType;
+
+        return this.builtInMethodCache.getOrAdd(method, getMethodType);
     }
 
     private static getPrimitiveType(typeName: string): BscType {

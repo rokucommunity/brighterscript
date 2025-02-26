@@ -28,7 +28,6 @@ import { TypedFunctionType } from '../types/TypedFunctionType';
 import { ArrayType } from '../types/ArrayType';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import brsDocParser from './BrightScriptDocParser';
-
 export class EmptyStatement extends Statement {
     constructor(options?: { range?: Location }
     ) {
@@ -2545,7 +2544,6 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         if (!returnType) {
             returnType = isSub ? VoidType.instance : DynamicType.instance;
         }
-
         const resultType = new TypedFunctionType(returnType);
         resultType.isSub = isSub;
         for (let param of this.params) {
@@ -3431,7 +3429,7 @@ export class FieldStatement extends Statement implements TypedefProvider {
 
             let type = this.getType({ flags: SymbolTypeFlag.typetime });
             if (isInvalidType(type) || isVoidType(type) || isUninitializedType(type)) {
-                type = new DynamicType();
+                type = DynamicType.instance;
             }
 
             result.push(

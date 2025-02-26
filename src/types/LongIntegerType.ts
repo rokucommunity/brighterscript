@@ -6,15 +6,9 @@ import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import type { TypeCompatibilityData } from '../interfaces';
 
 export class LongIntegerType extends BscType {
-    constructor(
-        public typeText?: string
-    ) {
-        super();
-    }
-
     public readonly kind = BscTypeKind.LongIntegerType;
 
-    public static instance = new LongIntegerType('longinteger');
+    public static instance = new LongIntegerType();
 
     public isBuiltIn = true;
 
@@ -30,7 +24,7 @@ export class LongIntegerType extends BscType {
     }
 
     public toString() {
-        return this.typeText ?? 'longinteger';
+        return 'longinteger';
     }
 
     public toTypeString(): string {

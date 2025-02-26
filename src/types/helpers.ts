@@ -201,3 +201,7 @@ export function getAllTypesFromUnionType(union: UnionType): BscType[] {
     }
     return results;
 }
+/**
+ * A map of all types created in the program during its lifetime. This applies across all programs, validate runs, etc. Mostly useful for a single run to track types created.
+ */
+export const TypesCreated: Record<string, number> = {};

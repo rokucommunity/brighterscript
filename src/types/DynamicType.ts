@@ -5,11 +5,6 @@ import { BscTypeKind } from './BscTypeKind';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 
 export class DynamicType extends BscType {
-    constructor(
-        public typeText?: string
-    ) {
-        super();
-    }
 
     public readonly kind = BscTypeKind.DynamicType;
 
@@ -38,7 +33,7 @@ export class DynamicType extends BscType {
     }
 
     public toString() {
-        return this.typeText ?? 'dynamic';
+        return 'dynamic';
     }
 
     public toTypeString(): string {

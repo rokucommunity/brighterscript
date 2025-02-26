@@ -1341,67 +1341,67 @@ export class Util {
         // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
         switch (token.kind) {
             case TokenKind.Boolean:
-                return new BooleanType(token.text);
+                return BooleanType.instance;
             case TokenKind.True:
             case TokenKind.False:
                 return BooleanType.instance;
             case TokenKind.Double:
-                return new DoubleType(token.text);
+                return DoubleType.instance;
             case TokenKind.DoubleLiteral:
                 return DoubleType.instance;
             case TokenKind.Dynamic:
-                return new DynamicType(token.text);
+                return DynamicType.instance;
             case TokenKind.Float:
-                return new FloatType(token.text);
+                return FloatType.instance;
             case TokenKind.FloatLiteral:
                 return FloatType.instance;
             case TokenKind.Function:
-                return new FunctionType(token.text);
+                return FunctionType.instance;
             case TokenKind.Integer:
-                return new IntegerType(token.text);
+                return IntegerType.instance;
             case TokenKind.IntegerLiteral:
                 return IntegerType.instance;
             case TokenKind.Invalid:
-                return new InvalidType(token.text);
+                return InvalidType.instance;
             case TokenKind.LongInteger:
-                return new LongIntegerType(token.text);
+                return LongIntegerType.instance;
             case TokenKind.LongIntegerLiteral:
                 return LongIntegerType.instance;
             case TokenKind.Object:
-                return new ObjectType(token.text);
+                return ObjectType.instance;
             case TokenKind.String:
-                return new StringType(token.text);
+                return StringType.instance;
             case TokenKind.StringLiteral:
             case TokenKind.TemplateStringExpressionBegin:
             case TokenKind.TemplateStringExpressionEnd:
             case TokenKind.TemplateStringQuasi:
                 return StringType.instance;
             case TokenKind.Void:
-                return new VoidType(token.text);
+                return VoidType.instance;
             case TokenKind.Identifier:
                 switch (token.text.toLowerCase()) {
                     case 'boolean':
-                        return new BooleanType(token.text);
+                        return BooleanType.instance;
                     case 'double':
-                        return new DoubleType(token.text);
+                        return DoubleType.instance;
                     case 'dynamic':
-                        return new DynamicType(token.text);
+                        return DynamicType.instance;
                     case 'float':
-                        return new FloatType(token.text);
+                        return FloatType.instance;
                     case 'function':
-                        return new FunctionType(token.text);
+                        return FunctionType.instance;
                     case 'integer':
-                        return new IntegerType(token.text);
+                        return IntegerType.instance;
                     case 'invalid':
-                        return new InvalidType(token.text);
+                        return InvalidType.instance;
                     case 'longinteger':
-                        return new LongIntegerType(token.text);
+                        return LongIntegerType.instance;
                     case 'object':
-                        return new ObjectType(token.text);
+                        return ObjectType.instance;
                     case 'string':
-                        return new StringType(token.text);
+                        return StringType.instance;
                     case 'void':
-                        return new VoidType(token.text);
+                        return VoidType.instance;
                 }
         }
     }

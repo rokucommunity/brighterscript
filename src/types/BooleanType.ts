@@ -6,16 +6,10 @@ import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import type { TypeCompatibilityData } from '../interfaces';
 
 export class BooleanType extends BscType {
-    constructor(
-        public typeText?: string
-    ) {
-        super();
-    }
-
     public readonly kind = BscTypeKind.BooleanType;
     public isBuiltIn = true;
 
-    public static instance = new BooleanType('boolean');
+    public static instance = new BooleanType();
 
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         return (
@@ -28,7 +22,7 @@ export class BooleanType extends BscType {
     }
 
     public toString() {
-        return this.typeText ?? 'boolean';
+        return 'boolean';
     }
 
     public toTypeString(): string {

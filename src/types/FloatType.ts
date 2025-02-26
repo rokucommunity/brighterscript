@@ -6,15 +6,10 @@ import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import type { TypeCompatibilityData } from '../interfaces';
 
 export class FloatType extends BscType {
-    constructor(
-        public typeText?: string
-    ) {
-        super();
-    }
 
     public readonly kind = BscTypeKind.FloatType;
 
-    public static instance = new FloatType('float');
+    public static instance = new FloatType();
 
     public isBuiltIn = true;
 
@@ -31,7 +26,7 @@ export class FloatType extends BscType {
     }
 
     public toString() {
-        return this.typeText ?? 'float';
+        return 'float';
     }
 
     public toTypeString(): string {

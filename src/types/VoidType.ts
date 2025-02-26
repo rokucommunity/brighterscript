@@ -7,15 +7,10 @@ import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
 import { DynamicType } from './DynamicType';
 
 export class VoidType extends BscType {
-    constructor(
-        public typeText?: string
-    ) {
-        super();
-    }
 
     public readonly kind = BscTypeKind.VoidType;
 
-    public static instance = new VoidType('void');
+    public static instance = new VoidType();
 
     public isBuiltIn = true;
 
@@ -29,7 +24,7 @@ export class VoidType extends BscType {
     }
 
     public toString() {
-        return this.typeText ?? 'void';
+        return 'void';
     }
 
     public toTypeString(): string {

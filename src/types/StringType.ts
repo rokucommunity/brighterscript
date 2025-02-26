@@ -6,11 +6,6 @@ import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import type { TypeCompatibilityData } from '../interfaces';
 
 export class StringType extends BscType {
-    constructor(
-        public typeText?: string
-    ) {
-        super();
-    }
 
     public readonly kind = BscTypeKind.StringType;
 
@@ -18,7 +13,7 @@ export class StringType extends BscType {
     /**
      * A static instance that can be used to reduce memory and constructor costs, since there's nothing unique about this
      */
-    public static instance = new StringType('string');
+    public static instance = new StringType();
 
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         return (
@@ -32,7 +27,7 @@ export class StringType extends BscType {
     }
 
     public toString() {
-        return this.typeText ?? 'string';
+        return 'string';
     }
 
     public toTypeString(): string {

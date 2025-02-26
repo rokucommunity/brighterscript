@@ -55,7 +55,7 @@ import { ProgramValidatorDiagnosticsTag } from './bscPlugin/validation/ProgramVa
 import type { ProvidedSymbolInfo, BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
 import { SymbolTable } from './SymbolTable';
-import { ReferenceType } from './types';
+import { ReferenceType, TypesCreated } from './types';
 
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
@@ -171,10 +171,10 @@ export class Program {
         this.globalScope.symbolTable.addSymbol('double', builtInSymbolData, DoubleType.instance, SymbolTypeFlag.typetime);
         this.globalScope.symbolTable.addSymbol('dynamic', builtInSymbolData, DynamicType.instance, SymbolTypeFlag.typetime);
         this.globalScope.symbolTable.addSymbol('float', builtInSymbolData, FloatType.instance, SymbolTypeFlag.typetime);
-        this.globalScope.symbolTable.addSymbol('function', builtInSymbolData, new FunctionType(), SymbolTypeFlag.typetime);
+        this.globalScope.symbolTable.addSymbol('function', builtInSymbolData, FunctionType.instance, SymbolTypeFlag.typetime);
         this.globalScope.symbolTable.addSymbol('integer', builtInSymbolData, IntegerType.instance, SymbolTypeFlag.typetime);
         this.globalScope.symbolTable.addSymbol('longinteger', builtInSymbolData, LongIntegerType.instance, SymbolTypeFlag.typetime);
-        this.globalScope.symbolTable.addSymbol('object', builtInSymbolData, new ObjectType(), SymbolTypeFlag.typetime);
+        this.globalScope.symbolTable.addSymbol('object', builtInSymbolData, ObjectType.instance, SymbolTypeFlag.typetime);
         this.globalScope.symbolTable.addSymbol('string', builtInSymbolData, StringType.instance, SymbolTypeFlag.typetime);
         this.globalScope.symbolTable.addSymbol('void', builtInSymbolData, VoidType.instance, SymbolTypeFlag.typetime);
 
@@ -1851,8 +1851,15 @@ export class Program {
             }
         });
 
-        // eslint-disable-next-line @typescript-eslint/dot-notation
-        //console.log('TYPES CREATED', global['TypesCreated']);
+        console.log('TYPES CREATED', TypesCreated);
+        let totalTypesCreated = 0;
+        for (const key in TypesCreated) {
+            if (TypesCreated.hasOwnProperty(key)) {
+                totalTypesCreated += TypesCreated[key];
+
+            }
+        }
+        console.log('TOTAL TYPES CREATED', totalTypesCreated);
     }
 
     /**

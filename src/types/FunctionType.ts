@@ -7,13 +7,9 @@ import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import type { TypeCompatibilityData } from '../interfaces';
 
 export class FunctionType extends BaseFunctionType {
-    constructor(public typeText?: string) {
-        super();
-    }
-
     public readonly kind = BscTypeKind.FunctionType;
 
-    public static instance = new FunctionType('function');
+    public static instance = new FunctionType();
 
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         if (
@@ -34,7 +30,7 @@ export class FunctionType extends BaseFunctionType {
     }
 
     public toTypeString(): string {
-        return this.typeText ?? 'function';
+        return 'function';
     }
 
     isEqual(targetType: BscType) {
@@ -45,4 +41,4 @@ export class FunctionType extends BaseFunctionType {
     }
 }
 
-BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('function', new FunctionType());
+BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('function', FunctionType.instance);
