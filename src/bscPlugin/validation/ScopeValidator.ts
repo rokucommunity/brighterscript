@@ -69,6 +69,7 @@ export class ScopeValidator {
     private event: OnScopeValidateEvent;
 
     private segmentsMetrics = new Map<string, { segments: number; time: string }>();
+    private validationKindsMetrics = new Map<string, { timeMs: number; count: number }>();
 
     public processEvent(event: OnScopeValidateEvent) {
         this.event = event;
@@ -84,6 +85,7 @@ export class ScopeValidator {
             xmlValidationTime: ''
         };
         this.segmentsMetrics.clear();
+        this.validationKindsMetrics.clear();
         const validationStopwatch = new Stopwatch();
 
         logger.time(LogLevel.debug, ['Validating scope', this.event.scope.name], () => {
@@ -122,10 +124,17 @@ export class ScopeValidator {
     // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
     private logValidationMetrics(metrics: { [key: string]: number | string }) {
         let logs = [] as string[];
-        for (const key in metrics) {
+        for (let key in metrics) {
             logs.push(`${key}=${chalk.yellow(metrics[key].toString())}`);
         }
         this.event.program.logger.debug(`Validation Metrics (Scope: ${this.event.scope.name}): ${logs.join(', ')}`);
+        let kindsLogs = [] as string[];
+        const kindsArray = Array.from(this.validationKindsMetrics.keys()).sort();
+        for (let key of kindsArray) {
+            const timeData = this.validationKindsMetrics.get(key);
+            kindsLogs.push(`${key}=${chalk.yellow(timeData.timeMs.toFixed(3).toString()) + 'ms'} (${timeData.count})`);
+        }
+        this.event.program.logger.debug(`Validation Walk Metrics (Scope: ${this.event.scope.name}): ${kindsLogs.join(', ')}`);
     }
 
     public reset() {
@@ -168,77 +177,110 @@ export class ScopeValidator {
                     return;
                 }
 
+
                 const validationVisitor = createVisitor({
                     VariableExpression: (varExpr) => {
-                        this.validateVariableAndDottedGetExpressions(file, varExpr);
+                        this.addValidationKindMetric('VariableExpression', () => {
+                            this.validateVariableAndDottedGetExpressions(file, varExpr);
+                        });
                     },
                     DottedGetExpression: (dottedGet) => {
-                        this.validateVariableAndDottedGetExpressions(file, dottedGet);
+                        this.addValidationKindMetric('DottedGetExpression', () => {
+                            this.validateVariableAndDottedGetExpressions(file, dottedGet);
+                        });
                     },
                     CallExpression: (functionCall) => {
-                        this.validateCallExpression(file, functionCall);
-                        this.validateCreateObjectCall(file, functionCall);
-                        this.validateComponentMethods(file, functionCall);
+                        this.addValidationKindMetric('CallExpression', () => {
+                            this.validateCallExpression(file, functionCall);
+                            this.validateCreateObjectCall(file, functionCall);
+                            this.validateComponentMethods(file, functionCall);
+                        });
                     },
                     CallfuncExpression: (functionCall) => {
-                        this.validateCallFuncExpression(file, functionCall);
+                        this.addValidationKindMetric('CallfuncExpression', () => {
+                            this.validateCallFuncExpression(file, functionCall);
+                        });
                     },
                     ReturnStatement: (returnStatement) => {
-                        this.validateReturnStatement(file, returnStatement);
+                        this.addValidationKindMetric('ReturnStatement', () => {
+                            this.validateReturnStatement(file, returnStatement);
+                        });
                     },
                     DottedSetStatement: (dottedSetStmt) => {
-                        this.validateDottedSetStatement(file, dottedSetStmt);
+                        this.addValidationKindMetric('DottedSetStatement', () => {
+                            this.validateDottedSetStatement(file, dottedSetStmt);
+                        });
                     },
                     BinaryExpression: (binaryExpr) => {
-                        this.validateBinaryExpression(file, binaryExpr);
+                        this.addValidationKindMetric('BinaryExpression', () => {
+                            this.validateBinaryExpression(file, binaryExpr);
+                        });
                     },
                     UnaryExpression: (unaryExpr) => {
-                        this.validateUnaryExpression(file, unaryExpr);
+                        this.addValidationKindMetric('UnaryExpression', () => {
+                            this.validateUnaryExpression(file, unaryExpr);
+                        });
                     },
                     AssignmentStatement: (assignStmt) => {
-                        this.validateAssignmentStatement(file, assignStmt);
-                        // Note: this also includes For statements
-                        this.detectShadowedLocalVar(file, {
-                            expr: assignStmt,
-                            name: assignStmt.tokens.name.text,
-                            type: this.getNodeTypeWrapper(file, assignStmt, { flags: SymbolTypeFlag.runtime }),
-                            nameRange: assignStmt.tokens.name.location?.range
+                        this.addValidationKindMetric('AssignmentStatement', () => {
+                            this.validateAssignmentStatement(file, assignStmt);
+                            // Note: this also includes For statements
+                            this.detectShadowedLocalVar(file, {
+                                expr: assignStmt,
+                                name: assignStmt.tokens.name.text,
+                                type: this.getNodeTypeWrapper(file, assignStmt, { flags: SymbolTypeFlag.runtime }),
+                                nameRange: assignStmt.tokens.name.location?.range
+                            });
                         });
                     },
                     AugmentedAssignmentStatement: (binaryExpr) => {
-                        this.validateBinaryExpression(file, binaryExpr);
+                        this.addValidationKindMetric('AugmentedAssignmentStatement', () => {
+                            this.validateBinaryExpression(file, binaryExpr);
+                        });
                     },
                     IncrementStatement: (stmt) => {
-                        this.validateIncrementStatement(file, stmt);
+                        this.addValidationKindMetric('IncrementStatement', () => {
+                            this.validateIncrementStatement(file, stmt);
+                        });
                     },
                     NewExpression: (newExpr) => {
-                        this.validateNewExpression(file, newExpr);
+                        this.addValidationKindMetric('NewExpression', () => {
+                            this.validateNewExpression(file, newExpr);
+                        });
                     },
                     ForEachStatement: (forEachStmt) => {
-                        this.detectShadowedLocalVar(file, {
-                            expr: forEachStmt,
-                            name: forEachStmt.tokens.item.text,
-                            type: this.getNodeTypeWrapper(file, forEachStmt, { flags: SymbolTypeFlag.runtime }),
-                            nameRange: forEachStmt.tokens.item.location?.range
+                        this.addValidationKindMetric('ForEachStatement', () => {
+                            this.detectShadowedLocalVar(file, {
+                                expr: forEachStmt,
+                                name: forEachStmt.tokens.item.text,
+                                type: this.getNodeTypeWrapper(file, forEachStmt, { flags: SymbolTypeFlag.runtime }),
+                                nameRange: forEachStmt.tokens.item.location?.range
+                            });
                         });
                     },
                     FunctionParameterExpression: (funcParam) => {
-                        this.detectShadowedLocalVar(file, {
-                            expr: funcParam,
-                            name: funcParam.tokens.name.text,
-                            type: this.getNodeTypeWrapper(file, funcParam, { flags: SymbolTypeFlag.runtime }),
-                            nameRange: funcParam.tokens.name.location?.range
+                        this.addValidationKindMetric('FunctionParameterExpression', () => {
+                            this.detectShadowedLocalVar(file, {
+                                expr: funcParam,
+                                name: funcParam.tokens.name.text,
+                                type: this.getNodeTypeWrapper(file, funcParam, { flags: SymbolTypeFlag.runtime }),
+                                nameRange: funcParam.tokens.name.location?.range
+                            });
                         });
                     },
                     FunctionExpression: (func) => {
-                        this.validateFunctionExpressionForReturn(func);
+                        this.addValidationKindMetric('FunctionExpression', () => {
+                            this.validateFunctionExpressionForReturn(func);
+                        });
                     },
                     AstNode: (node) => {
                         //check for doc comments
                         if (!node.leadingTrivia || node.leadingTrivia.filter(triviaToken => triviaToken.kind === TokenKind.Comment).length === 0) {
                             return;
                         }
-                        this.validateDocComments(node);
+                        this.addValidationKindMetric('AstNode', () => {
+                            this.validateDocComments(node);
+                        });
                     }
                 });
                 // validate only what's needed in the file
@@ -276,6 +318,18 @@ export class ScopeValidator {
                 this.segmentsMetrics.set(file.pkgPath, { segments: segmentsValidated, time: timeString });
             }
         });
+    }
+
+    private addValidationKindMetric(name: string, funcToTime: () => void) {
+        if (!this.validationKindsMetrics.has(name)) {
+            this.validationKindsMetrics.set(name, { timeMs: 0, count: 0 });
+        }
+        const timeData = this.validationKindsMetrics.get(name);
+        const validationKindStopWatch = new Stopwatch();
+        validationKindStopWatch.start();
+        funcToTime();
+        validationKindStopWatch.stop();
+        this.validationKindsMetrics.set(name, { timeMs: timeData.timeMs + validationKindStopWatch.totalMilliseconds, count: timeData.count + 1 });
     }
 
     private doesFileProvideChangedSymbol(file: BrsFile, changedSymbols: Map<SymbolTypeFlag, Set<string>>) {
