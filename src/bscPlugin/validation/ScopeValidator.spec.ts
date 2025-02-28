@@ -4013,7 +4013,7 @@ describe('ScopeValidator', () => {
             expectDiagnosticsIncludes(program, [DiagnosticMessages.mismatchArgumentCount(1, 0).message]);
         });
 
-        it.only('validates only parts of files that need revalidation on scope validation', () => {
+        it('validates only parts of files that need revalidation on scope validation', () => {
             function validateFile(file: BrsFile) {
                 const validateFileEvent = {
                     program: program,
