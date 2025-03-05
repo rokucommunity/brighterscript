@@ -3243,3 +3243,58 @@ export class ContinueStatement extends Statement {
         );
     }
 }
+
+export class TypecastStatement extends Statement {
+    constructor(options: {
+        typecast?: Token;
+        obj: Token;
+        as?: Token;
+        type: Token;
+    }
+    ) {
+        super();
+        this.tokens = {
+            typecast: options.typecast,
+            obj: options.obj,
+            as: options.as,
+            type: options.type
+        };
+        this.range = util.createBoundingRange(
+            this.tokens.typecast,
+            this.tokens.obj,
+            this.tokens.as,
+            this.tokens.type
+        );
+    }
+
+    public readonly tokens: {
+        readonly typecast?: Token;
+        readonly obj: Token;
+        readonly as?: Token;
+        readonly type: Token;
+    };
+
+    public readonly typecastExpression: Expression;
+
+
+    public readonly range: Range;
+
+    transpile(state: BrsTranspileState) {
+        return [];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new TypecastStatement({
+                typecast: util.cloneToken(this.tokens.typecast),
+                obj: util.cloneToken(this.tokens.obj),
+                as: util.cloneToken(this.tokens.as),
+                type: util.cloneToken(this.tokens.type)
+            })
+        );
+    }
+}

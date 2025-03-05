@@ -4,11 +4,11 @@ import { ReservedWords, TokenKind } from '../lexer/TokenKind';
 import type { AAMemberExpression } from './Expression';
 import { TernaryExpression, NewExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
-import type { AssignmentStatement, ClassStatement } from './Statement';
+import type { AssignmentStatement, ClassStatement, TypecastStatement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement, isIndexedGetExpression } from '../astUtils/reflection';
+import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement, isIndexedGetExpression, isTypecastStatement } from '../astUtils/reflection';
 import { expectDiagnostics, expectZeroDiagnostics } from '../testHelpers.spec';
 import { BrsTranspileState } from './BrsTranspileState';
 import { SourceNode } from 'source-map';
@@ -1303,6 +1303,80 @@ describe('parser', () => {
             let fn = statements[0] as FunctionStatement;
             expect(fn.annotations).to.exist;
             expect(fn.annotations![0].getArguments()).to.deep.equal([-100]);
+        });
+    });
+
+    describe('typecast statement', () => {
+        it('allows typecast statement ', () => {
+            let { ast, diagnostics } = parse(`
+                typeCAST m AS roAssociativeArray
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(isTypecastStatement(ast.statements[0])).to.be.true;
+            const stmt = ast.statements[0] as TypecastStatement;
+            expect(stmt.tokens.typecast.text).to.eq('typeCAST');
+            expect(stmt.tokens.typecast).to.exist;
+        });
+
+        it('is disallowed in brightscript mode', () => {
+            let { diagnostics } = parse(`
+                typecast m AS roAssociativeArray
+            `, ParseMode.BrightScript);
+            expectDiagnostics(diagnostics, [
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('typecast statements')
+            ]);
+        });
+
+        it('allows `typecast` for function name', () => {
+            let { ast, diagnostics } = parse(`
+                function typecast() as integer
+                    return 1
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect((ast.statements[0] as FunctionStatement).name.text).to.eq('typecast');
+        });
+
+        it('allows `typecast` for variable name', () => {
+            let { ast, diagnostics } = parse(`
+                function foo() as integer
+                    typecast = 1
+                    return typecast
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(((ast.statements[0] as FunctionStatement).func.body.statements[0] as AssignmentStatement).name.text).to.eq('typecast');
+        });
+
+        it('is allowed in function', () => {
+            let { diagnostics } = parse(`
+                function foo() as integer
+                    typecast m as MyObject
+                    return m.getNum()
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('is allowed in function literal', () => {
+            let { diagnostics } = parse(`
+                interface PiGetter
+                    pi as float
+                    function getPi() as float
+                end interface
+
+                function makePiGetter() as object
+                    x = {
+                        pi: 3.14,
+                        getPi: function() as float
+                            typecast m as PiGetter
+                            return m.pi
+                        end function
+                    }
+                    return x
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
         });
     });
 });
