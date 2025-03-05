@@ -321,7 +321,13 @@ export class AstValidationSegmenter {
 
 
     hasUnvalidatedSegments() {
-        return Array.from(this.validatedSegments.values()).includes(false);
+        for (const validated of this.validatedSegments.values()) {
+            if (!validated) {
+                return true;
+            }
+
+        }
+        return false;
     }
 
 

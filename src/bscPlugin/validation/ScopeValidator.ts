@@ -177,7 +177,6 @@ export class ScopeValidator {
                     return;
                 }
 
-
                 const validationVisitor = createVisitor({
                     VariableExpression: (varExpr) => {
                         this.addValidationKindMetric('VariableExpression', () => {
