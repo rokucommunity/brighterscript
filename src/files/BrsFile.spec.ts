@@ -4256,6 +4256,20 @@ describe('BrsFile', () => {
                 end sub
             `);
         });
+
+        it('allows typecast statements', () => {
+            testTranspile(`
+                typecast m as whatever
+
+                sub foo(node as object)
+                    print node[m.keyProp]
+                end sub
+            `, `
+                sub foo(node as object)
+                    print node[m.keyProp]
+                end sub
+            `);
+        });
     });
 
     it('allows up to 63 function params', () => {
