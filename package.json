@@ -88,7 +88,7 @@
     "@types/marked": "^4.0.3",
     "@types/micromatch": "^4.0.2",
     "@types/mocha": "^5.2.5",
-    "@types/node": "^11.9.0",
+    "@types/node": "^16.11.6",
     "@types/require-relative": "^0.8.0",
     "@types/safe-json-stringify": "^1.1.5",
     "@types/sinon": "^9.0.4",
