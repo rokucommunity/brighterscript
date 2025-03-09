@@ -322,8 +322,17 @@ export class DiagnosticManager {
 
         let searchData = Array.from(this.diagnosticsCache.values());
         searchData = this.getSearchIntersection(needToMatch.tag, searchData, needToMatch.tag ? this.tagMap.get(filter.tag?.toLowerCase()) : null);
+        if (searchData.length === 0) {
+            return;
+        }
         searchData = this.getSearchIntersection(needToMatch.scope, searchData, needToMatch.scope ? this.scopeMap.get(filter.scope?.name?.toLowerCase()) : null, true);
+        if (searchData.length === 0) {
+            return;
+        }
         searchData = this.getSearchIntersection(needToMatch.fileUri, searchData, needToMatch.fileUri ? this.fileUriMap.get(util.pathToUri(filter.fileUri).toLowerCase()) : null);
+        if (searchData.length === 0) {
+            return;
+        }
         searchData = this.getSearchIntersection(needToMatch.segment, searchData, needToMatch.segment ? this.segmentMap.get(filter.segment) : null);
 
         for (const { diagnostic, contexts } of searchData ?? []) {
