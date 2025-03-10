@@ -54,7 +54,8 @@ import {
     StopStatement,
     ThrowStatement,
     TryCatchStatement,
-    WhileStatement
+    WhileStatement,
+    TypecastStatement
 } from './Statement';
 import type { DiagnosticInfo } from '../DiagnosticMessages';
 import { DiagnosticMessages } from '../DiagnosticMessages';
@@ -1098,6 +1099,10 @@ export class Parser {
             return this.importStatement();
         }
 
+        if (this.check(TokenKind.Typecast) && this.checkAnyNext(TokenKind.Identifier, ...this.allowedLocalIdentifiers)) {
+            return this.typecastStatement();
+        }
+
         if (this.check(TokenKind.Stop)) {
             return this.stopStatement();
         }
@@ -1535,6 +1540,29 @@ export class Parser {
 
         this._references.importStatements.push(importStatement);
         return importStatement;
+    }
+
+    private typecastStatement() {
+        this.warnIfNotBrighterScriptMode('typecast statements');
+        const typecastToken = this.advance();
+        const obj = this.identifier(...this.allowedLocalIdentifiers);
+        const asToken = this.advance();
+        const typeToken = this.typeToken();
+        return new TypecastStatement({
+            typecast: typecastToken,
+            obj: obj,
+            as: asToken,
+            type: typeToken
+        });
+
+        /* this.diagnostics.push({
+             ...DiagnosticMessages.expectedIdentifier('typecast'),
+             location: {
+                 uri: typecastToken.location.uri,
+                 range: util.createBoundingRange(typecastToken, this.peek())
+             }
+         });
+         throw this.lastDiagnosticAsError();*/
     }
 
     private annotationExpression() {
