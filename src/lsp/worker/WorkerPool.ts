@@ -73,7 +73,7 @@ export class WorkerPool {
     public dispose() {
         for (const worker of this.allWorkers) {
             try {
-                worker.terminate();
+                Promise.resolve(worker.terminate()).catch(e => console.error(e));
             } catch (e) {
                 console.error(e);
             }

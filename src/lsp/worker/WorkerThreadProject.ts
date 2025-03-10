@@ -21,6 +21,8 @@ export const workerPool = new WorkerPool(() => {
     return new Worker(
         __filename,
         {
+            //this needs to align with the same flag in the if statement below
+            argv: ['--run-worker-thread-project-runner'],
             //wire up ts-node if we're running in ts-node
             execArgv: /\.ts$/i.test(__filename)
                 ? ['--require', 'ts-node/register']
@@ -32,7 +34,7 @@ export const workerPool = new WorkerPool(() => {
 
 //if this script is running in a Worker, start the project runner
 /* istanbul ignore next */
-if (!isMainThread) {
+if (!isMainThread && process.argv.includes('--run-worker-thread-project-runner')) {
     const runner = new WorkerThreadProjectRunner();
     runner.run(parentPort);
 }

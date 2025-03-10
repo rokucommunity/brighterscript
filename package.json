@@ -1,6 +1,6 @@
 {
   "name": "brighterscript",
-  "version": "0.69.0",
+  "version": "0.69.1",
   "description": "A superset of Roku's BrightScript language.",
   "scripts": {
     "preversion": "npm run build && npm run lint && npm run test",
@@ -88,7 +88,7 @@
     "@types/marked": "^4.0.3",
     "@types/micromatch": "^4.0.2",
     "@types/mocha": "^5.2.5",
-    "@types/node": "^11.9.0",
+    "@types/node": "^16.11.6",
     "@types/require-relative": "^0.8.0",
     "@types/safe-json-stringify": "^1.1.5",
     "@types/sinon": "^9.0.4",
@@ -140,7 +140,7 @@
     "array-flat-polyfill": "^1.0.1",
     "chalk": "^2.4.2",
     "chevrotain": "^7.0.1",
-    "chokidar": "^3.5.1",
+    "chokidar": "^3.6.0",
     "clear": "^0.1.0",
     "cross-platform-clear-console": "^2.3.0",
     "debounce-promise": "^3.1.0",
