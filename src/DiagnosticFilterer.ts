@@ -230,6 +230,10 @@ export class DiagnosticFilterer {
     }
 
     public getDiagnosticFilters(config: BsConfig) {
+        if (config.diagnosticFiltersV0Compatibility) {
+            return this.getDiagnosticFiltersV0(config);
+        }
+
         let globalIgnoreCodes: (number | string)[] = [...config.ignoreErrorCodes ?? []];
         let diagnosticFilters = [...config.diagnosticFilters ?? []];
 
@@ -290,6 +294,76 @@ export class DiagnosticFilterer {
                             }
                         }
                     }
+                }
+            }
+        }
+        return result;
+    }
+
+    private getDiagnosticFiltersV0(config: BsConfig) {
+        let globalIgnoreCodes: (number | string)[] = [...config.ignoreErrorCodes ?? []];
+        let diagnosticFilters = [...config.diagnosticFilters ?? []];
+
+        let result: NormalizedFilter[] = [];
+
+        //include a filter for all global ignore codes
+        //this comes first, because negative patterns will override ignoreErrorCodes
+        if (globalIgnoreCodes.length > 0) {
+            result.push({
+                codes: globalIgnoreCodes,
+                isNegative: false
+            });
+        }
+
+        for (let filter of diagnosticFilters as any) {
+            if (typeof filter === 'number') {
+                result.push({
+                    codes: [filter],
+                    isNegative: false
+                });
+                continue;
+            }
+
+            if (typeof filter === 'string') {
+                const isNegative = filter.startsWith('!');
+                const trimmedFilter = isNegative ? filter.slice(1) : filter;
+
+                result.push({
+                    src: trimmedFilter,
+                    isNegative: isNegative
+                });
+                continue;
+            }
+
+            //filter out bad inputs
+            if (!filter || typeof filter !== 'object') {
+                continue;
+            }
+
+            //code-only filter
+            if ('codes' in filter && !('src' in filter) && Array.isArray(filter.codes)) {
+                result.push({
+                    codes: filter.codes,
+                    isNegative: false
+                });
+                continue;
+            }
+
+            if ('src' in filter && typeof filter.src === 'string') {
+                const isNegative = filter.src.startsWith('!');
+                const trimmedFilter = isNegative ? filter.src.slice(1) : filter.src;
+
+                if ('codes' in filter) {
+                    result.push({
+                        src: trimmedFilter,
+                        codes: filter.codes,
+                        isNegative: isNegative
+                    });
+                } else {
+                    result.push({
+                        src: trimmedFilter,
+                        isNegative: isNegative
+                    });
                 }
             }
         }

@@ -109,7 +109,7 @@
             "default": false
         },
         "deploy": {
-            "description": "If true, after a successful buld, the project will be deployed to the roku specified in host",
+            "description": "If true, after a successful build, the project will be deployed to the roku specified in host",
             "type": "boolean"
         },
         "host": {
@@ -232,6 +232,11 @@
                     }
                 ]
             }
+        },
+        "diagnosticFiltersV0Compatibility": {
+            "description": "Use the deprecated diagnosticFilters format from v0. This is useful for backwards compatibility.",
+            "type": "boolean",
+            "default": false
         },
         "plugins": {
             "description": "A list of node scripts or npm modules to add extra diagnostics or transform the AST.",

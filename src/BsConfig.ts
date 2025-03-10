@@ -131,6 +131,11 @@ export interface BsConfig {
     diagnosticFilters?: Array<string | number | { files?: string | Array<string | { src: string } | { dest: string }>; codes?: Array<number | string> }>;
 
     /**
+     * Use the deprecated diagnosticFilters format from v0. This is useful for backwards compatibility.
+     */
+    diagnosticFiltersV0Compatibility?: boolean;
+
+    /**
      * Specify what diagnostic types should be printed to the console. Defaults to 'warn'
      */
     diagnosticLevel?: 'info' | 'hint' | 'warn' | 'error';
