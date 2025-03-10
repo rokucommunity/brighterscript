@@ -315,7 +315,7 @@ export class DiagnosticFilterer {
             });
         }
 
-        for (let filter of diagnosticFilters) {
+        for (let filter of diagnosticFilters as any) {
             if (typeof filter === 'number') {
                 result.push({
                     codes: [filter],

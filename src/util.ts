@@ -378,6 +378,7 @@ export class Util {
             ignoreErrorCodes: config.ignoreErrorCodes ?? [],
             diagnosticSeverityOverrides: config.diagnosticSeverityOverrides ?? {},
             diagnosticFilters: config.diagnosticFilters ?? [],
+            diagnosticFiltersV0Compatibility: config.diagnosticFiltersV0Compatibility === true ? true : false,
             plugins: config.plugins ?? [],
             pruneEmptyCodeFiles: config.pruneEmptyCodeFiles === true ? true : false,
             autoImportComponentScript: config.autoImportComponentScript === true ? true : false,
