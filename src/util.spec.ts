@@ -1059,4 +1059,60 @@ describe('util', () => {
             ).to.be.undefined;
         });
     });
+
+    describe('standardizePath', () => {
+        let origPathSep;
+        let altPathSep;
+        beforeEach(() => {
+            origPathSep = util['pathSep'];
+            altPathSep = util['altPathSep'];
+            //for most of our tests, assume we want forward slash
+            util['pathSep'] = '/';
+            util['altPathSep'] = '\\';
+            //bust the cache
+            util['standardizePathCache'].clear();
+        });
+        afterEach(() => {
+            util['pathSep'] = origPathSep;
+            util['altPathSep'] = altPathSep;
+        });
+
+        it('formats to the current OS path.sep', () => {
+            util['pathSep'] = origPathSep;
+            util['altPathSep'] = altPathSep;
+            expect(
+                util.standardizePath('C:/one\\two/three')
+            ).to.eql(
+                `c:${path.sep}one${path.sep}two${path.sep}three`
+            );
+        });
+
+        it('formats to the forward slash', () => {
+            util['pathSep'] = '/';
+            util['altPathSep'] = '\\';
+            expect(
+                util.standardizePath('C:/one\\two/three')
+            ).to.eql(
+                `c:/one/two/three`
+            );
+        });
+
+        it('formats to the backslash', () => {
+            util['pathSep'] = '\\';
+            util['altPathSep'] = '/';
+            expect(
+                util.standardizePath('C:/one\\two/three')
+            ).to.eql(
+                `c:\\one\\two\\three`
+            );
+        });
+
+        it('lower cases the drive letter', () => {
+            expect(
+                util.standardizePath('C:/one/two/three')
+            ).to.eql(
+                `c:/one/two/three`
+            );
+        });
+    });
 });
