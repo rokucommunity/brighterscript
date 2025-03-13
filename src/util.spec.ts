@@ -1059,4 +1059,123 @@ describe('util', () => {
             ).to.be.undefined;
         });
     });
+
+    describe('standardizePath', () => {
+        let isWindowsOrig = util['isWindows'];
+        let isWindows = isWindowsOrig;
+
+        beforeEach(() => {
+            util['standardizePathCache'].clear();
+        });
+        afterEach(() => {
+            util['standardizePathCache'].clear();
+            util['isWindows'] = isWindowsOrig;
+        });
+
+        function test(incoming: string, expected: string) {
+            util['isWindows'] = isWindows;
+            expect(
+                util.standardizePath(incoming)
+            ).to.eql(
+                expected
+            );
+            util['isWindows'] = isWindowsOrig;
+        }
+
+        describe('windows paths on windows', () => {
+            beforeEach(() => {
+                isWindows = true;
+            });
+
+            it('mismatched slashes', () => {
+                test('c:/one/two/three', 'c:\\one\\two\\three');
+                test('c:\\one\\two\\three', 'c:\\one\\two\\three');
+                test('c:/one\\two/three', 'c:\\one\\two\\three');
+            });
+
+            it('trailing slashes', () => {
+                test('c:/one/two/three/', 'c:\\one\\two\\three\\');
+                test('c:/one/two/three\\', 'c:\\one\\two\\three\\');
+            });
+
+            it('drive letter case', () => {
+                test('D:/one/two/three', 'd:\\one\\two\\three');
+            });
+
+            it('consecutive slashes', () => {
+                test('c://one//two//three//', 'c:\\one\\two\\three\\');
+                test('c:\\\\one\\\\two\\\\three\\\\', 'c:\\one\\two\\three\\');
+            });
+        });
+
+        describe('windows paths on unix', () => {
+            beforeEach(() => {
+                isWindows = false;
+            });
+
+            it('mismatched slashes', () => {
+                test('c:/one/two/three', 'c:/one/two/three');
+                test('c:\\one\\two\\three', 'c:/one/two/three');
+                test('c:/one\\two/three', 'c:/one/two/three');
+            });
+
+            it('trailing slashes', () => {
+                test('c:/one/two/three/', 'c:/one/two/three/');
+                test('c:/one/two/three\\', 'c:/one/two/three/');
+            });
+
+            it('drive letter case', () => {
+                test('D:/one/two/three', 'd:/one/two/three');
+            });
+
+            it('consecutive slashes', () => {
+                test('c://one//two//three//', 'c:/one/two/three/');
+                test('c:\\\\one\\\\two\\\\three\\\\', 'c:/one/two/three/');
+            });
+        });
+
+        describe('unix paths on windows', () => {
+            beforeEach(() => {
+                isWindows = true;
+            });
+
+            it('mismatched slashes', () => {
+                test('/one/two/three', '\\one\\two\\three');
+                test('\\one\\two\\three', '\\one\\two\\three');
+                test('/one\\two/three', '\\one\\two\\three');
+            });
+
+            it('trailing slashes', () => {
+                test('/one/two/three/', '\\one\\two\\three\\');
+                test('/one/two/three\\', '\\one\\two\\three\\');
+            });
+
+            it('consecutive slashes', () => {
+                test('/one//two///three//', '\\one\\two\\three\\');
+                test('\\one\\\\two\\\\\\three\\\\', '\\one\\two\\three\\');
+            });
+        });
+
+        describe('unix paths on unix', () => {
+            beforeEach(() => {
+                isWindows = false;
+            });
+
+            it('mismatched slashes', () => {
+                test('/one/two/three', '/one/two/three');
+                test('\\one\\two\\three', '/one/two/three');
+                test('/one\\two/three', '/one/two/three');
+            });
+
+            it('trailing slashes', () => {
+                test('/one/two/three/', '/one/two/three/');
+                test('/one/two/three\\', '/one/two/three/');
+            });
+
+            it('consecutive slashes', () => {
+                test('/one//two///three//', '/one/two/three/');
+                test('\\\\one\\\\two\\\\three\\\\', '/one/two/three/');
+            });
+        });
+    });
 });

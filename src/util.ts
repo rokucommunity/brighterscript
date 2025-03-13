@@ -3,7 +3,7 @@ import * as fsExtra from 'fs-extra';
 import type { ParseError } from 'jsonc-parser';
 import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 import * as path from 'path';
-import { rokuDeploy, DefaultFiles, standardizePath as rokuDeployStandardizePath } from 'roku-deploy';
+import { rokuDeploy, DefaultFiles } from 'roku-deploy';
 import type { Diagnostic, Position, Range, Location, DiagnosticRelatedInformation } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
@@ -1337,13 +1337,46 @@ export class Util {
         } as SGAttribute;
     }
 
+    private isWindows = process.platform === 'win32';
+    private standardizePathCache = new Map<string, string>();
+
     /**
      * Converts a path into a standardized format (drive letter to lower, remove extra slashes, use single slash type, resolve relative parts, etc...)
      */
-    public standardizePath(thePath: string) {
-        return util.driveLetterToLower(
-            rokuDeployStandardizePath(thePath)
-        );
+    public standardizePath(thePath: string): string {
+        //if we have the value in cache already, return it
+        if (this.standardizePathCache.has(thePath)) {
+            return this.standardizePathCache.get(thePath);
+        }
+        const originalPath = thePath;
+
+        if (typeof thePath !== 'string') {
+            return thePath;
+        }
+
+        //windows path.normalize will convert all slashes to backslashes and remove duplicates
+        if (this.isWindows) {
+            thePath = path.win32.normalize(thePath);
+        } else {
+            //replace all windows or consecutive slashes with path.sep
+            thePath = thePath.replace(/[\/\\]+/g, '/');
+
+            // only use path.normalize if dots are present since it's expensive
+            if (thePath.includes('./')) {
+                thePath = path.posix.normalize(thePath);
+            }
+        }
+
+        // Lowercase drive letter on Windows-like paths (e.g., "C:/...")
+        if (thePath.charCodeAt(1) === 58 /* : */) {
+            // eslint-disable-next-line no-var
+            var firstChar = thePath.charCodeAt(0);
+            if (firstChar >= 65 && firstChar <= 90) {
+                thePath = String.fromCharCode(firstChar + 32) + thePath.slice(1);
+            }
+        }
+        this.standardizePathCache.set(originalPath, thePath);
+        return thePath;
     }
 
     /**
@@ -1720,10 +1753,8 @@ export function standardizePath(stringParts, ...expressions: any[]) {
     for (let i = 0; i < stringParts.length; i++) {
         result.push(stringParts[i], expressions[i]);
     }
-    return util.driveLetterToLower(
-        rokuDeployStandardizePath(
-            result.join('')
-        )
+    return util.standardizePath(
+        result.join('')
     );
 }
 
