@@ -716,7 +716,7 @@ export class Scope {
         //get callables from own files
         this.enumerateOwnFiles((file) => {
             if (isBrsFile(file)) {
-                for (let callable of file.callables) {
+                for (let callable of file?.callables ?? []) {
                     result.push({
                         callable: callable,
                         scope: this
@@ -810,7 +810,7 @@ export class Scope {
             const scopeValidateEvent = {
                 program: this.program,
                 scope: this,
-                changedFiles: new Array<BscFile>(...(validationOptions?.changedFiles?.values() ?? [])),
+                changedFiles: validationOptions?.changedFiles?.values() ?? [],
                 changedSymbols: validationOptions?.changedSymbols
             };
             t0 = performance.now();

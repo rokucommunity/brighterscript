@@ -3,15 +3,14 @@ import * as fsExtra from 'fs-extra';
 import type { ParseError } from 'jsonc-parser';
 import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 import * as path from 'path';
-import { rokuDeploy, DefaultFiles, standardizePath as rokuDeployStandardizePath } from 'roku-deploy';
-import type { DiagnosticRelatedInformation, Diagnostic, Position } from 'vscode-languageserver';
-import { Location } from 'vscode-languageserver';
-import { Range } from 'vscode-languageserver';
+import { rokuDeploy, DefaultFiles } from 'roku-deploy';
+import type { Diagnostic, Position, DiagnosticRelatedInformation } from 'vscode-languageserver';
+import { Location, Range } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, TranspileResult, TypeChainProcessResult, GetTypeOptions, ExtraSymbolData } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, TranspileResult, MaybePromise, DisposableLike, ExtraSymbolData, GetTypeOptions, TypeChainProcessResult } from './interfaces';
 import { TypeChainEntry } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
@@ -95,7 +94,24 @@ export class Util {
      * Determine if this path is a directory
      */
     public isDirectorySync(dirPath: string | undefined) {
-        return dirPath !== undefined && fs.existsSync(dirPath) && fs.lstatSync(dirPath).isDirectory();
+        try {
+            return dirPath !== undefined && fs.existsSync(dirPath) && fs.lstatSync(dirPath).isDirectory();
+        } catch (e) {
+            return false;
+        }
+    }
+
+    /**
+     * Read a file from disk. If a failure occurrs, simply return undefined
+     * @param filePath path to the file
+     * @returns the string contents, or undefined if the file doesn't exist
+     */
+    public readFileSync(filePath: string): Buffer | undefined {
+        try {
+            return fsExtra.readFileSync(filePath);
+        } catch (e) {
+            return undefined;
+        }
     }
 
     /**
@@ -1971,13 +1987,46 @@ export class Util {
         return new SourceNode(null, null, source, chunks);
     }
 
+    private isWindows = process.platform === 'win32';
+    private standardizePathCache = new Map<string, string>();
+
     /**
      * Converts a path into a standardized format (drive letter to lower, remove extra slashes, use single slash type, resolve relative parts, etc...)
      */
-    public standardizePath(thePath: string) {
-        return util.driveLetterToLower(
-            rokuDeployStandardizePath(thePath)
-        );
+    public standardizePath(thePath: string): string {
+        //if we have the value in cache already, return it
+        if (this.standardizePathCache.has(thePath)) {
+            return this.standardizePathCache.get(thePath);
+        }
+        const originalPath = thePath;
+
+        if (typeof thePath !== 'string') {
+            return thePath;
+        }
+
+        //windows path.normalize will convert all slashes to backslashes and remove duplicates
+        if (this.isWindows) {
+            thePath = path.win32.normalize(thePath);
+        } else {
+            //replace all windows or consecutive slashes with path.sep
+            thePath = thePath.replace(/[\/\\]+/g, '/');
+
+            // only use path.normalize if dots are present since it's expensive
+            if (thePath.includes('./')) {
+                thePath = path.posix.normalize(thePath);
+            }
+        }
+
+        // Lowercase drive letter on Windows-like paths (e.g., "C:/...")
+        if (thePath.charCodeAt(1) === 58 /* : */) {
+            // eslint-disable-next-line no-var
+            var firstChar = thePath.charCodeAt(0);
+            if (firstChar >= 65 && firstChar <= 90) {
+                thePath = String.fromCharCode(firstChar + 32) + thePath.slice(1);
+            }
+        }
+        this.standardizePathCache.set(originalPath, thePath);
+        return thePath;
     }
 
     /**
@@ -2046,7 +2095,7 @@ export class Util {
      */
     public sortByRange<T extends { range: Range | undefined }>(locatables: T[]) {
         //sort the tokens by range
-        return locatables.sort((a, b) => {
+        return locatables?.sort((a, b) => {
             //handle undefined tokens to prevent crashes
             if (!a?.range) {
                 return 1;
@@ -2292,6 +2341,75 @@ export class Util {
                 location: util.createLocationFromFileRange(file, this.createRange(0, 0, 0, Number.MAX_VALUE))
             });
         }
+    }
+
+    /**
+     * Execute dispose for a series of disposable items
+     * @param disposables a list of functions or disposables
+     */
+    public applyDispose(disposables: DisposableLike[]) {
+        for (const disposable of disposables ?? []) {
+            if (typeof disposable === 'function') {
+                disposable();
+            } else {
+                disposable?.dispose?.();
+            }
+        }
+    }
+
+    /**
+     * Race a series of promises, and return the first one that resolves AND matches the matcher function.
+     * If all of the promises reject, then this will emit an AggregatreError with all of the errors.
+     * If at least one promise resolves, then this will log all of the errors to the console
+     * If at least one promise resolves but none of them match the matcher, then this will return undefined.
+     * @param promises all of the promises to race
+     * @param matcher a function that should return true if this value should be kept. Returning any value other than true means `false`
+     * @returns the first resolved value that matches the matcher, or undefined if none of them match
+     */
+    public async promiseRaceMatch<T>(promises: MaybePromise<T>[], matcher: (value: T) => boolean) {
+        const workingPromises = [
+            ...promises
+        ];
+
+        const results: Array<{ value: T; index: number } | { error: Error; index: number }> = [];
+        let returnValue: T;
+
+        while (workingPromises.length > 0) {
+            //race the promises. If any of them resolve, evaluate it against the matcher. If that passes, return the value. otherwise, eliminate this promise and try again
+            const result = await Promise.race(
+                workingPromises.map((promise, i) => {
+                    return Promise.resolve(promise)
+                        .then(value => ({ value: value, index: i }))
+                        .catch(error => ({ error: error, index: i }));
+                })
+            );
+            results.push(result);
+            //if we got a value and it matches the matcher, return it
+            if ('value' in result && matcher?.(result.value) === true) {
+                returnValue = result.value;
+                break;
+            }
+
+            //remove this non-matched (or errored) promise from the list and try again
+            workingPromises.splice(result.index, 1);
+        }
+
+        const errors = (results as Array<{ error: Error }>)
+            .filter(x => 'error' in x)
+            .map(x => x.error);
+
+        //if all of them crashed, then reject
+        if (promises.length > 0 && errors.length === promises.length) {
+            throw new AggregateError(errors, 'All requests failed. First error message: ' + errors[0].message);
+        } else {
+            //log all of the errors
+            for (const error of errors) {
+                console.error(error);
+            }
+        }
+
+        //return the matched value, or undefined if there wasn't one
+        return returnValue;
     }
 
     /**
@@ -2797,10 +2915,8 @@ export function standardizePath(stringParts, ...expressions: any[]) {
     for (let i = 0; i < stringParts.length; i++) {
         result.push(stringParts[i], expressions[i]);
     }
-    return util.driveLetterToLower(
-        rokuDeployStandardizePath(
-            result.join('')
-        )
+    return util.standardizePath(
+        result.join('')
     );
 }
 
