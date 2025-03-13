@@ -1,28 +1,33 @@
 import { expect } from './chai-config.spec';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { DidChangeWatchedFilesParams, Location } from 'vscode-languageserver';
-import { FileChangeType, Range } from 'vscode-languageserver';
+import type { DidChangeWatchedFilesParams, Location, PublishDiagnosticsParams, WorkspaceFolder } from 'vscode-languageserver';
+import { FileChangeType } from 'vscode-languageserver';
 import { Deferred } from './deferred';
-import type { Project } from './LanguageServer';
 import { CustomCommands, LanguageServer } from './LanguageServer';
-import type { SinonStub } from 'sinon';
 import { createSandbox } from 'sinon';
 import { standardizePath as s, util } from './util';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import type { Program } from './Program';
 import * as assert from 'assert';
-import { expectZeroDiagnostics, trim } from './testHelpers.spec';
+import type { PartialDiagnostic } from './testHelpers.spec';
+import { createInactivityStub, expectZeroDiagnostics, normalizeDiagnostics, trim } from './testHelpers.spec';
 import { isBrsFile, isLiteralString } from './astUtils/reflection';
 import { createVisitor, WalkMode } from './astUtils/visitors';
 import { tempDir, rootDir } from './testHelpers.spec';
 import { BusyStatusTracker } from './BusyStatusTracker';
-import type { BscFile } from './files/BscFile';
-import { BrsFile } from './files/BrsFile';
+import type { BscFile, WorkspaceConfigWithExtras } from '.';
+import type { Project } from './lsp/Project';
+import { LogLevel, Logger, createLogger } from './logging';
+import { DiagnosticMessages } from './DiagnosticMessages';
+import { standardizePath } from 'roku-deploy';
+import undent from 'undent';
+import { ProjectManager } from './lsp/ProjectManager';
 
 const sinon = createSandbox();
 
 const workspacePath = rootDir;
+const enableThreadingDefault = LanguageServer.enableThreadingDefault;
 
 describe('LanguageServer', () => {
     let server: LanguageServer;
@@ -30,8 +35,6 @@ describe('LanguageServer', () => {
 
     let workspaceFolders: string[] = [];
 
-    let vfs = {} as Record<string, string>;
-    let physicalFilePaths = [] as string[];
     let connection = {
         onInitialize: () => null,
         onInitialized: () => null,
@@ -68,48 +71,39 @@ describe('LanguageServer', () => {
             },
             getConfiguration: () => {
                 return {};
-            }
+            },
+            onDidChangeWorkspaceFolders: () => { }
         },
         tracer: {
             log: () => { }
+        },
+        client: {
+            register: () => Promise.resolve()
         }
     };
 
     beforeEach(() => {
         sinon.restore();
+        fsExtra.emptyDirSync(tempDir);
+
         server = new LanguageServer();
         server['busyStatusTracker'] = new BusyStatusTracker();
         workspaceFolders = [workspacePath];
-
-        vfs = {};
-        physicalFilePaths = [];
-
-        //hijack the file resolver so we can inject in-memory files for our tests
-        let originalResolver = server['documentFileResolver'];
-        server['documentFileResolver'] = (srcPath: string) => {
-            if (vfs[srcPath]) {
-                return vfs[srcPath];
-            } else {
-                return originalResolver.call(server, srcPath);
-            }
-        };
+        LanguageServer.enableThreadingDefault = false;
 
         //mock the connection stuff
-        (server as any).createConnection = () => {
+        sinon.stub(server as any, 'establishConnection').callsFake(() => {
             return connection;
-        };
+        });
         server['hasConfigurationCapability'] = true;
     });
-    afterEach(async () => {
-        fsExtra.emptyDirSync(tempDir);
-        try {
-            await Promise.all(
-                physicalFilePaths.map(srcPath => fsExtra.unlinkSync(srcPath))
-            );
-        } catch (e) {
 
-        }
-        server.dispose();
+    afterEach(() => {
+        sinon.restore();
+        fsExtra.emptyDirSync(tempDir);
+
+        server['dispose']();
+        LanguageServer.enableThreadingDefault = enableThreadingDefault;
     });
 
     function addXmlFile(name: string, additionalXmlContents = '') {
@@ -133,233 +127,225 @@ describe('LanguageServer', () => {
         }
     }
 
-    function writeToFs(srcPath: string, contents: string) {
-        physicalFilePaths.push(srcPath);
-        fsExtra.ensureDirSync(path.dirname(srcPath));
-        fsExtra.writeFileSync(srcPath, contents);
-    }
+    it('does not cause infinite loop of project creation', async () => {
+        //add a project with a files array that includes (and then excludes) a file
+        fsExtra.outputFileSync(s`${rootDir}/bsconfig.json`, JSON.stringify({
+            files: ['source/**/*', '!source/**/*.spec.bs']
+        }));
 
-    describe('createStandaloneFileProject', () => {
-        it('never returns undefined', async () => {
-            let filePath = `${rootDir}/main.brs`;
-            writeToFs(filePath, `sub main(): return: end sub`);
-            let firstProject = await server['createStandaloneFileProject'](filePath);
-            let secondProject = await server['createStandaloneFileProject'](filePath);
-            expect(firstProject).to.equal(secondProject);
+        server['run']();
+
+        function setSyncedDocument(srcPath: string, text: string, version = 1) {
+            //force an open text document
+            const document = TextDocument.create(util.pathToUri(
+                util.standardizePath(srcPath
+                )
+            ), 'brightscript', 1, `sub main()\nend sub`);
+            (server['documents']['_syncedDocuments'] as Map<string, TextDocument>).set(document.uri, document);
+        }
+
+        //wait for the projects to finish loading up
+        await server['syncProjects']();
+
+        //this bug was causing an infinite async loop of new project creations. So monitor the creation of new projects for evaluation later
+        const { stub, promise: createProjectsSettled } = createInactivityStub(ProjectManager.prototype as any, 'constructProject', 400, sinon);
+
+        setSyncedDocument(s`${rootDir}/source/lib1.spec.bs`, 'sub lib1()\nend sub');
+        setSyncedDocument(s`${rootDir}/source/lib2.spec.bs`, 'sub lib2()\nend sub');
+
+        // open a file that is excluded by the project, so it should trigger a standalone project.
+        await server['onTextDocumentDidChangeContent']({
+            document: TextDocument.create(util.pathToUri(s`${rootDir}/source/lib1.spec.bs`), 'brightscript', 1, `sub main()\nend sub`)
         });
 
-        it('filters out certain diagnostics', async () => {
-            let filePath = `${rootDir}/main.brs`;
-            writeToFs(filePath, `sub main(): return: end sub`);
-            let firstProject: Project = await server['createStandaloneFileProject'](filePath);
-            expectZeroDiagnostics(firstProject.builder.program);
+        //wait for the "create projects" deferred debounce to settle
+        await createProjectsSettled;
+
+        //test passes if we've only made 2 new projects (one for each of the standalone projects)
+        expect(stub.callCount).to.eql(2);
+    });
+
+    describe('onDidChangeConfiguration', () => {
+        async function doTest(startingConfigs: WorkspaceConfigWithExtras[], endingConfigs: WorkspaceConfigWithExtras[]) {
+            (server as any)['connection'] = connection;
+            server['workspaceConfigsCache'] = new Map(startingConfigs.map(x => [x.workspaceFolder, x]));
+
+            const stub = sinon.stub(server as any, 'getWorkspaceConfigs').returns(Promise.resolve(endingConfigs));
+
+            await server.onDidChangeConfiguration({ settings: {} });
+            stub.restore();
+        }
+
+        it('does not reload project when: no projects are present before and after', async () => {
+            const stub = sinon.stub(server as any, 'syncProjects').callsFake(() => Promise.resolve());
+            await doTest([], []);
+            expect(stub.called).to.be.false;
         });
+
+        it('does not reload project when: 1 project is unchanged', async () => {
+            const stub = sinon.stub(server as any, 'syncProjects').callsFake(() => Promise.resolve());
+            await doTest([{
+                bsconfigPath: undefined,
+                languageServer: {
+                    enableThreading: true,
+                    logLevel: 'info'
+                },
+                workspaceFolder: workspacePath,
+                excludePatterns: []
+            }], [{
+                bsconfigPath: undefined,
+                languageServer: {
+                    enableThreading: true,
+                    logLevel: 'info'
+                },
+                workspaceFolder: workspacePath,
+                excludePatterns: []
+            }]);
+            expect(stub.called).to.be.false;
+        });
+
+        it('reloads project when adding new project', async () => {
+            const stub = sinon.stub(server as any, 'syncProjects').callsFake(() => Promise.resolve());
+            await doTest([], [{
+                bsconfigPath: undefined,
+                languageServer: {
+                    enableThreading: true,
+                    logLevel: 'info'
+                },
+                workspaceFolder: workspacePath,
+                excludePatterns: []
+            }]);
+            expect(stub.called).to.be.true;
+        });
+
+        it('reloads project when deleting a project', async () => {
+            const stub = sinon.stub(server as any, 'syncProjects').callsFake(() => Promise.resolve());
+            await doTest([{
+                bsconfigPath: undefined,
+                languageServer: {
+                    enableThreading: true,
+                    logLevel: 'info'
+                },
+                workspaceFolder: workspacePath,
+                excludePatterns: []
+            }, {
+                bsconfigPath: undefined,
+                languageServer: {
+                    enableThreading: true,
+                    logLevel: 'info'
+                },
+                workspaceFolder: s`${tempDir}/project2`,
+                excludePatterns: []
+            }], [{
+                bsconfigPath: undefined,
+                languageServer: {
+                    enableThreading: true,
+                    logLevel: 'info'
+                },
+                workspaceFolder: workspacePath,
+                excludePatterns: []
+            }]);
+            expect(stub.called).to.be.true;
+        });
+
+        it('reloads project when changing specific settings', async () => {
+            const stub = sinon.stub(server as any, 'syncProjects').callsFake(() => Promise.resolve());
+            await doTest([{
+                bsconfigPath: undefined,
+                languageServer: {
+                    enableThreading: true,
+                    logLevel: 'trace'
+                },
+                workspaceFolder: workspacePath,
+                excludePatterns: []
+            }], [{
+                bsconfigPath: undefined,
+                languageServer: {
+                    enableThreading: true,
+                    logLevel: 'info'
+                },
+                workspaceFolder: workspacePath,
+                excludePatterns: []
+            }]);
+            expect(stub.called).to.be.true;
+        });
+
     });
 
     describe('sendDiagnostics', () => {
-        it('waits for program to finish loading before sending diagnostics', async () => {
-            server.onInitialize({
-                capabilities: {
-                    workspace: {
-                        workspaceFolders: true
-                    }
-                }
-            } as any);
-            expect(server['clientHasWorkspaceFolderCapability']).to.be.true;
-            server.run();
-            let deferred = new Deferred();
-            let project: any = {
-                builder: {
-                    getDiagnostics: () => []
-                },
-                firstRunPromise: deferred.promise
-            };
-            //make a new not-completed project
-            server.projects.push(project);
-
-            //this call should wait for the builder to finish
-            let p = server['sendDiagnostics']();
-
-            await util.sleep(50);
-            //simulate the program being created
-            project.builder.program = {
-                files: {}
-            };
-            deferred.resolve();
-            await p;
-            //test passed because no exceptions were thrown
-        });
-
         it('dedupes diagnostics found at same location from multiple projects', async () => {
-            server.projects.push(<any>{
-                firstRunPromise: Promise.resolve(),
-                builder: {
-                    getDiagnostics: () => {
-                        return [{
-                            location: {
-                                uri: util.pathToUri(s`${rootDir}/source/main.brs`)
-                            },
-                            code: 1000,
-                            range: Range.create(1, 2, 3, 4)
-                        }];
-                    }
-                }
-            }, <any>{
-                firstRunPromise: Promise.resolve(),
-                builder: {
-                    getDiagnostics: () => {
-                        return [{
-                            location: {
-                                uri: util.pathToUri(s`${rootDir}/source/main.brs`)
-                            },
-                            code: 1000,
-                            range: Range.create(1, 2, 3, 4)
-                        }];
-                    }
-                }
-            });
-            server['connection'] = connection as any;
-            let stub = sinon.stub(server['connection'], 'sendDiagnostics');
-            await server['sendDiagnostics']();
-            expect(stub.getCall(0).args?.[0]?.diagnostics).to.be.lengthOf(1);
-        });
-
-        it('sends diagnostics that were triggered by the program instead of vscode', async () => {
-            server['connection'] = server['createConnection']();
-            await server['createProject'](workspacePath);
-            let stub: SinonStub | undefined;
-            const promise = new Promise((resolve) => {
-                stub = sinon.stub(connection, 'sendDiagnostics').callsFake(resolve as any);
-            });
-            const { program } = server.projects[0].builder;
-            program.setFile('source/lib.bs', `
-                sub lib()
-                    functionDoesNotExist()
+            fsExtra.outputFileSync(s`${rootDir}/common/lib.brs`, `
+                sub test()
+                    print alpha 'variable does not exist
                 end sub
             `);
-            program.validate();
-            await promise;
-            expect(stub!.called).to.be.true;
+            fsExtra.outputFileSync(s`${rootDir}/project1/bsconfig.json`, JSON.stringify({
+                rootDir: s`${rootDir}/project1`,
+                files: [{
+                    src: `../common/lib.brs`,
+                    dest: 'source/lib.brs'
+                }]
+            }));
+            fsExtra.outputFileSync(s`${rootDir}/project2/bsconfig.json`, JSON.stringify({
+                rootDir: s`${rootDir}/project2`,
+                files: [{
+                    src: `../common/lib.brs`,
+                    dest: 'source/lib.brs'
+                }]
+            }));
+
+            server['connection'] = connection as any;
+            let sendDiagnosticsDeferred = new Deferred<any>();
+            let stub = sinon.stub(server['connection'], 'sendDiagnostics').callsFake(async (arg) => {
+                sendDiagnosticsDeferred.resolve(arg);
+                return sendDiagnosticsDeferred.promise;
+            });
+
+            await server['syncProjects']();
+
+            await sendDiagnosticsDeferred.promise;
+
+            expect(stub.getCall(0).args?.[0]?.diagnostics).to.be.lengthOf(1);
         });
     });
 
-    describe('createProject', () => {
-        it('prevents creating package on first run', async () => {
-            server['connection'] = server['createConnection']();
-            await server['createProject'](workspacePath);
-            expect(server['projects'][0].builder.program.options.copyToStaging).to.be.false;
+    describe('project-activate', () => {
+        it('should sync all open document changes to all projects', async () => {
+
+            //force an open text document
+            const srcPath = s`${rootDir}/source/main.brs`;
+            const document = TextDocument.create(util.pathToUri(srcPath), 'brightscript', 1, `sub main()\nend sub`);
+            (server['documents']['_syncedDocuments'] as Map<string, TextDocument>).set(document.uri, document);
+
+            const deferred = new Deferred();
+            const stub = sinon.stub(server['projectManager'], 'handleFileChanges').callsFake(() => {
+                deferred.resolve();
+                return Promise.resolve();
+            });
+
+            server['projectManager']['emit']('project-activate', {
+                project: server['projectManager'].projects[0]
+            });
+
+            await deferred.promise;
+            expect(
+                stub.getCalls()[0].args[0].map(x => ({
+                    srcPath: x.srcPath,
+                    fileContents: x.fileContents
+                }))
+            ).to.eql([{
+                srcPath: srcPath,
+                fileContents: document.getText()
+            }]);
         });
-    });
 
-    describe('onDidChangeWatchedFiles', () => {
-        let mainPath = s`${workspacePath}/source/main.brs`;
-
-        it('picks up new files', async () => {
-            server.run();
-            server.onInitialize({
-                capabilities: {
+        it('handles when there were no open documents', () => {
+            server['projectManager']['emit']('project-activate', {
+                project: {
+                    projectNumber: 1
                 }
             } as any);
-            writeToFs(mainPath, `sub main(): return: end sub`);
-            await server['onInitialized']();
-            expect(server.projects[0].builder.program.hasFile(mainPath)).to.be.true;
-            //move a file into the directory...the program should detect it
-            let libPath = s`${workspacePath}/source/lib.brs`;
-            writeToFs(libPath, 'sub lib(): return : end sub');
-
-            server.projects[0].configFilePath = `${workspacePath}/bsconfig.json`;
-            await server['onDidChangeWatchedFiles']({
-                changes: [{
-                    uri: getFileProtocolPath(libPath),
-                    type: 1 //created
-                },
-                {
-                    uri: getFileProtocolPath(s`${workspacePath}/source`),
-                    type: 2 //changed
-                }
-                    // ,{
-                    //     uri: 'file:///c%3A/projects/PlumMediaCenter/Roku/appconfig.brs',
-                    //     type: 3 //deleted
-                    // }
-                ]
-            });
-            expect(server.projects[0].builder.program.hasFile(libPath)).to.be.true;
-        });
-    });
-
-    describe('handleFileChanges', () => {
-        it('only adds files that change', async () => {
-            server.run();
-            let mainPath = s`${rootDir}/source/main.brs`;
-            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {});
-            fsExtra.outputFileSync(mainPath, '');
-            await server['syncProjects']();
-            const project = server.projects[0];
-
-            const setFileStub = sinon.stub(project.builder.program, 'setFile');
-
-            await server.handleFileChanges(project, [{
-                type: FileChangeType.Changed,
-                srcPath: mainPath
-            }]);
-
-            expect(setFileStub.getCalls()).to.eql([]);
-
-            fsExtra.outputFileSync(mainPath, 'main has changed');
-
-            await server.handleFileChanges(project, [{
-                type: FileChangeType.Changed,
-                srcPath: mainPath
-            }]);
-
-            expect(setFileStub.getCalls()[0]?.args[0]).to.eql({
-                src: mainPath,
-                dest: s`source/main.brs`
-            });
-        });
-
-        it('only adds files that match the files array', async () => {
-            let setFileStub = sinon.stub().returns(Promise.resolve());
-            let getFileStub = sinon.stub().returns(Promise.resolve(new BrsFile({ program: null, srcPath: '', destPath: '' })));
-            const project = {
-                builder: {
-                    options: {
-                        files: [
-                            'source/**/*'
-                        ]
-                    },
-                    getFileContents: sinon.stub().callsFake(() => Promise.resolve('')) as any,
-                    rootDir: rootDir,
-                    program: {
-                        setFile: <any>setFileStub,
-                        getFile: <any>getFileStub
-                    }
-                }
-            } as Project;
-
-            let mainPath = s`${rootDir}/source/main.brs`;
-            fsExtra.outputFileSync(mainPath, '');
-
-            await server.handleFileChanges(project, [{
-                type: FileChangeType.Created,
-                srcPath: mainPath
-            }]);
-
-            expect(setFileStub.getCalls()[0]?.args[0]).to.eql({
-                src: mainPath,
-                dest: s`source/main.brs`
-            });
-
-            let libPath = s`${rootDir}/components/lib.brs`;
-            fsExtra.outputFileSync(libPath, '');
-
-            expect(setFileStub.callCount).to.equal(1);
-            await server.handleFileChanges(project, [{
-                type: FileChangeType.Created,
-                srcPath: libPath
-            }]);
-            //the function should have ignored the lib file, so no additional files were added
-            expect(setFileStub.callCount).to.equal(1);
+            //we can't really test this, but it helps with code coverage...
         });
     });
 
@@ -367,7 +353,7 @@ describe('LanguageServer', () => {
         it('loads workspace as project', async () => {
             server.run();
 
-            expect(server.projects).to.be.lengthOf(0);
+            expect(server['projectManager'].projects).to.be.lengthOf(0);
 
             fsExtra.ensureDirSync(workspacePath);
 
@@ -375,7 +361,7 @@ describe('LanguageServer', () => {
 
             //no child bsconfig.json files, use the workspacePath
             expect(
-                server.projects.map(x => x.projectPath)
+                server['projectManager'].projects.map(x => x.projectPath)
             ).to.eql([
                 workspacePath
             ]);
@@ -387,7 +373,7 @@ describe('LanguageServer', () => {
 
             //2 child bsconfig.json files. Use those folders as projects, and don't use workspacePath
             expect(
-                server.projects.map(x => x.projectPath).sort()
+                server['projectManager'].projects.map(x => x.projectPath).sort()
             ).to.eql([
                 s`${workspacePath}/project1`,
                 s`${workspacePath}/project2`
@@ -398,7 +384,7 @@ describe('LanguageServer', () => {
 
             //1 child bsconfig.json file. Still don't use workspacePath
             expect(
-                server.projects.map(x => x.projectPath)
+                server['projectManager'].projects.map(x => x.projectPath)
             ).to.eql([
                 s`${workspacePath}/project1`
             ]);
@@ -408,7 +394,7 @@ describe('LanguageServer', () => {
 
             //back to no child bsconfig.json files. use workspacePath again
             expect(
-                server.projects.map(x => x.projectPath)
+                server['projectManager'].projects.map(x => x.projectPath)
             ).to.eql([
                 workspacePath
             ]);
@@ -421,6 +407,7 @@ describe('LanguageServer', () => {
                     '**/vendor': true
                 }
             }) as any);
+            await server.onInitialized();
 
             fsExtra.outputJsonSync(s`${workspacePath}/vendor/someProject/bsconfig.json`, {});
             //it always ignores node_modules
@@ -429,7 +416,7 @@ describe('LanguageServer', () => {
 
             //no child bsconfig.json files, use the workspacePath
             expect(
-                server.projects.map(x => x.projectPath)
+                server['projectManager'].projects.map(x => x.projectPath)
             ).to.eql([
                 workspacePath
             ]);
@@ -448,7 +435,7 @@ describe('LanguageServer', () => {
             await server['syncProjects']();
 
             expect(
-                server.projects.map(x => x.projectPath).sort()
+                server['projectManager'].projects.map(x => x.projectPath).sort()
             ).to.eql([
                 s`${tempDir}/root`,
                 s`${tempDir}/root/subdir`
@@ -473,7 +460,7 @@ describe('LanguageServer', () => {
             await server['syncProjects']();
 
             expect(
-                server.projects.map(x => x.projectPath).sort()
+                server['projectManager'].projects.map(x => x.projectPath).sort()
             ).to.eql([
                 s`${tempDir}/project1`,
                 s`${tempDir}/sub/dir/project2`
@@ -481,59 +468,352 @@ describe('LanguageServer', () => {
         });
     });
 
-    describe('onDidChangeWatchedFiles', () => {
-        it('ignores files that have not changed', async () => {
-            server.run();
+    describe('onInitialize', () => {
+        it('sets capabilities', async () => {
+            server['hasConfigurationCapability'] = false;
+            server['clientHasWorkspaceFolderCapability'] = false;
 
-            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {});
-            fsExtra.outputFileSync(s`${rootDir}/source/main.brs`, '');
-            fsExtra.outputFileSync(s`${rootDir}/source/lib.brs`, '');
-            await server['syncProjects']();
+            await server.onInitialize({
+                capabilities: {
+                    workspace: {
+                        configuration: true,
+                        workspaceFolders: true
+                    }
+                }
+            } as any);
+            expect(server['hasConfigurationCapability']).to.be.true;
+            expect(server['clientHasWorkspaceFolderCapability']).to.be.true;
+        });
+    });
 
-            const stub2 = sinon.stub(server.projects[0].builder.program, 'setFile');
+    describe('onInitialized', () => {
+        it('registers workspaceFolders change listener', async () => {
 
-            await server['onDidChangeWatchedFiles']({
-                changes: [{
-                    type: FileChangeType.Created,
-                    uri: getFileProtocolPath(s`${rootDir}/source/main.brs`)
-                }, {
-                    type: FileChangeType.Changed,
-                    uri: getFileProtocolPath(s`${rootDir}/source/lib.brs`)
-                }]
-            } as DidChangeWatchedFilesParams);
+            server['connection'] = connection as any;
 
-            expect(
-                stub2.getCalls().map(x => x.args[0].src).sort()
-            ).to.eql([]);
+            const deferred = new Deferred();
+            sinon.stub(server['connection']['workspace'], 'onDidChangeWorkspaceFolders').callsFake((() => {
+                deferred.resolve();
+            }) as any);
+
+            server['hasConfigurationCapability'] = false;
+            server['clientHasWorkspaceFolderCapability'] = true;
+
+            await server.onInitialized();
+            //if the promise resolves, we know the function was called
+            await deferred.promise;
+        });
+    });
+
+    describe('syncLogLevel', () => {
+        beforeEach(() => {
+            //disable logging for these tests
+            sinon.stub(Logger.prototype, 'write').callsFake(() => { });
         });
 
+        it('uses a default value when no workspace or projects are present', async () => {
+            server.run();
+            await server['syncLogLevel']();
+            expect(server.logger.logLevel).to.eql(LogLevel.log);
+        });
 
-        it('converts folder paths into an array of file paths', async () => {
+        it('recovers when workspace sends unsupported value', async () => {
             server.run();
 
-            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {});
-            fsExtra.outputFileSync(s`${rootDir}/source/main.brs`, '');
-            fsExtra.outputFileSync(s`${rootDir}/source/lib.brs`, '');
-            await server['syncProjects']();
+            sinon.stub(server as any, 'getClientConfiguration').returns(Promise.resolve({
+                languageServer: {
+                    logLevel: 'not-valid'
+                }
+            }));
+            await server['syncLogLevel']();
+            expect(server.logger.logLevel).to.eql(LogLevel.log);
+        });
 
-            const stub2 = sinon.stub(server.projects[0].builder.program, 'setFile');
-            fsExtra.outputFileSync(s`${rootDir}/source/lib.brs`, 'rem change');
-            fsExtra.outputFileSync(s`${rootDir}/source/main.brs`, 'rem change');
-            await server['onDidChangeWatchedFiles']({
-                changes: [{
-                    type: FileChangeType.Created,
-                    uri: getFileProtocolPath(s`${rootDir}/source`)
-                }]
-            } as DidChangeWatchedFilesParams);
+        it('uses logLevel from workspace', async () => {
+            server.run();
 
+            sinon.stub(server as any, 'getClientConfiguration').returns(Promise.resolve({
+                languageServer: {
+                    logLevel: 'trace'
+                }
+            }));
+            await server['syncLogLevel']();
+            expect(server.logger.logLevel).to.eql(LogLevel.trace);
+        });
+
+        it('uses the higher-verbosity logLevel from multiple workspaces', async () => {
+            server.run();
+
+            //mock multiple workspaces
+            sinon.stub(server['connection'].workspace, 'getWorkspaceFolders').returns(Promise.resolve([
+                {
+                    name: 'workspace1',
+                    uri: getFileProtocolPath(s`${tempDir}/project1`)
+                },
+                {
+                    name: 'workspace1',
+                    uri: getFileProtocolPath(s`${tempDir}/project2`)
+                }
+            ]));
+
+            sinon.stub(server as any, 'getClientConfiguration').onFirstCall().returns(Promise.resolve({
+                languageServer: {
+                    logLevel: 'trace'
+                }
+            })).onSecondCall().returns(Promise.resolve({
+                languageServer: {
+                    logLevel: 'info'
+                }
+            }));
+            await server['syncLogLevel']();
+
+            expect(server.logger.logLevel).to.eql(LogLevel.trace);
+        });
+
+        it('uses valid workspace value when one of them is invalid', async () => {
+            server.run();
+
+            //mock multiple workspaces
+            sinon.stub(server['connection'].workspace, 'getWorkspaceFolders').returns(Promise.resolve([
+                {
+                    name: 'workspace1',
+                    uri: getFileProtocolPath(s`${tempDir}/project1`)
+                },
+                {
+                    name: 'workspace1',
+                    uri: getFileProtocolPath(s`${tempDir}/project2`)
+                }
+            ]));
+
+            sinon.stub(server as any, 'getClientConfiguration').onFirstCall().returns(Promise.resolve({
+                languageServer: {
+                    logLevel: 'trace1'
+                }
+            })).onSecondCall().returns(Promise.resolve({
+                languageServer: {
+                    logLevel: 'info'
+                }
+            }));
+            await server['syncLogLevel']();
+
+            expect(server.logger.logLevel).to.eql(LogLevel.info);
+        });
+
+        it('uses value from projects when not found in workspace', async () => {
+            server.run();
+
+            //mock multiple workspaces
+            sinon.stub(server['connection'].workspace, 'getWorkspaceFolders').returns(Promise.resolve([{
+                name: 'workspace1',
+                uri: getFileProtocolPath(s`${tempDir}/project2`)
+            }]));
+
+            server['projectManager'].projects.push({
+                logger: createLogger({
+                    logLevel: LogLevel.info
+                }),
+                projectNumber: 2
+            } as any);
+
+            await server['syncLogLevel']();
+
+            expect(server.logger.logLevel).to.eql(LogLevel.info);
+        });
+    });
+
+    describe('rebuildPathFilterer', () => {
+        let workspaceConfigs: WorkspaceConfigWithExtras[] = [];
+        beforeEach(() => {
+            workspaceConfigs = [
+                {
+                    bsconfigPath: undefined,
+                    languageServer: {
+                        enableThreading: true,
+                        logLevel: 'info'
+                    },
+                    workspaceFolder: workspacePath,
+                    excludePatterns: []
+                } as WorkspaceConfigWithExtras
+            ];
+            server['connection'] = connection as any;
+            sinon.stub(server as any, 'getWorkspaceConfigs').callsFake(() => Promise.resolve(workspaceConfigs));
+        });
+
+        it('allows files from dist by default', async () => {
+            const filterer = await server['rebuildPathFilterer']();
+            //certain files are allowed through by default
             expect(
-                stub2.getCalls().map(x => x.args[0].src).sort()
+                filterer.filter([
+                    s`${rootDir}/manifest`,
+                    s`${rootDir}/dist/file.brs`,
+                    s`${rootDir}/source/file.brs`
+                ])
             ).to.eql([
-                s`${rootDir}/source/lib.brs`,
-                s`${rootDir}/source/main.brs`
+                s`${rootDir}/manifest`,
+                s`${rootDir}/dist/file.brs`,
+                s`${rootDir}/source/file.brs`
             ]);
         });
 
+        it('filters out some standard locations by default', async () => {
+            const filterer = await server['rebuildPathFilterer']();
+
+            expect(
+                filterer.filter([
+                    s`${workspacePath}/node_modules/file.brs`,
+                    s`${workspacePath}/.git/file.brs`,
+                    s`${workspacePath}/out/file.brs`,
+                    s`${workspacePath}/.roku-deploy-staging/file.brs`
+                ])
+            ).to.eql([]);
+        });
+
+        it('properly handles a .gitignore list', async () => {
+            fsExtra.outputFileSync(s`${workspacePath}/.gitignore`, undent`
+                dist/
+            `);
+
+            const filterer = await server['rebuildPathFilterer']();
+
+            //filters files that appear in a .gitignore list
+            expect(
+                filterer.filter([
+                    s`${workspacePath}/src/source/file.brs`,
+                    //this file should be excluded
+                    s`${workspacePath}/dist/source/file.brs`
+                ])
+            ).to.eql([
+                s`${workspacePath}/src/source/file.brs`
+            ]);
+        });
+
+        it('does not crash for path outside of workspaceFolder', async () => {
+            fsExtra.outputFileSync(s`${workspacePath}/.gitignore`, undent`
+                dist/
+            `);
+
+            const filterer = await server['rebuildPathFilterer']();
+
+            //filters files that appear in a .gitignore list
+            expect(
+                filterer.filter([
+                    s`${workspacePath}/../flavor1/src/source/file.brs`
+                ])
+            ).to.eql([
+                //since the path is outside the workspace, it does not match the .gitignore patter, and thus is not excluded
+                s`${workspacePath}/../flavor1/src/source/file.brs`
+            ]);
+        });
+
+        it('a gitignore file from any workspace will apply to all workspaces', async () => {
+            workspaceConfigs = [{
+                bsconfigPath: undefined,
+                languageServer: {
+                    enableThreading: true,
+                    logLevel: 'info'
+                },
+                workspaceFolder: s`${tempDir}/flavor1`,
+                excludePatterns: []
+            }, {
+                bsconfigPath: undefined,
+                languageServer: {
+                    enableThreading: true,
+                    logLevel: 'info'
+                },
+                workspaceFolder: s`${tempDir}/flavor2`,
+                excludePatterns: []
+            }] as WorkspaceConfigWithExtras[];
+            fsExtra.outputFileSync(s`${workspaceConfigs[0].workspaceFolder}/.gitignore`, undent`
+                dist/
+            `);
+            fsExtra.outputFileSync(s`${workspaceConfigs[1].workspaceFolder}/.gitignore`, undent`
+                out/
+            `);
+
+            const filterer = await server['rebuildPathFilterer']();
+
+            //filters files that appear in a .gitignore list
+            expect(
+                filterer.filter([
+                    //included files
+                    s`${workspaceConfigs[0].workspaceFolder}/src/source/file.brs`,
+                    s`${workspaceConfigs[1].workspaceFolder}/src/source/file.brs`,
+                    //excluded files
+                    s`${workspaceConfigs[0].workspaceFolder}/dist/source/file.brs`,
+                    s`${workspaceConfigs[1].workspaceFolder}/out/source/file.brs`
+                ])
+            ).to.eql([
+                s`${workspaceConfigs[0].workspaceFolder}/src/source/file.brs`,
+                s`${workspaceConfigs[1].workspaceFolder}/src/source/file.brs`
+            ]);
+        });
+
+        it('does not erase project-specific filters', async () => {
+            let filterer = await server['rebuildPathFilterer']();
+            const files = [
+                s`${rootDir}/node_modules/one/file.xml`,
+                s`${rootDir}/node_modules/two.bs`,
+                s`${rootDir}/node_modules/three/dist/lib.bs`
+            ];
+
+            //all node_modules files are filtered out by default, unless included in an includeList
+            expect(filterer.filter(files)).to.eql([]);
+
+            //register two specific node_module folders to include
+            filterer.registerIncludeList(rootDir, ['node_modules/one/**/*', 'node_modules/two.bs']);
+
+            //unless included in an includeList
+            expect(filterer.filter(files)).to.eql([
+                s`${rootDir}/node_modules/one/file.xml`,
+                s`${rootDir}/node_modules/two.bs`
+                //three should still be excluded
+            ]);
+
+            //rebuild the path filterer, make sure the project's includeList is still retained
+            filterer = await server['rebuildPathFilterer']();
+
+            expect(filterer.filter(files)).to.eql([
+                //one and two should still make it through the filter unscathed
+                s`${rootDir}/node_modules/one/file.xml`,
+                s`${rootDir}/node_modules/two.bs`
+                //three should still be excluded
+            ]);
+        });
+
+        it('a removed project includeList gets unregistered', async () => {
+            let filterer = await server['rebuildPathFilterer']();
+            const files = [
+                s`${rootDir}/project1/node_modules/one/file.xml`,
+                s`${rootDir}/project1/node_modules/two.bs`,
+                s`${rootDir}/project1/node_modules/three/dist/lib.bs`
+            ];
+
+            //all node_modules files are filtered out by default, unless included in an includeList
+            expect(filterer.filter(files)).to.eql([]);
+
+            //register a new project that references a file from node_modules
+            fsExtra.outputFileSync(s`${rootDir}/project1/bsconfig.json`, JSON.stringify({
+                files: ['node_modules/one/file.xml']
+            }));
+
+            await server['syncProjects']();
+
+            //one should be included because the project references it
+            expect(filterer.filter(files)).to.eql([
+                s`${rootDir}/project1/node_modules/one/file.xml`
+            ]);
+
+            //delete the project's bsconfig.json and sync again (thus destroying the project)
+            fsExtra.removeSync(s`${rootDir}/project1/bsconfig.json`);
+
+            await server['syncProjects']();
+
+            //the project's pathFilterer pattern has been unregistered
+            expect(filterer.filter(files)).to.eql([]);
+        });
+    });
+
+    describe('onDidChangeWatchedFiles', () => {
         it('does not trigger revalidates when changes are in files which are not tracked', async () => {
             server.run();
             const externalDir = s`${tempDir}/not_app_dir`;
@@ -542,7 +822,7 @@ describe('LanguageServer', () => {
             fsExtra.outputFileSync(s`${externalDir}/source/lib.brs`, '');
             await server['syncProjects']();
 
-            const stub2 = sinon.stub(server.projects[0].builder.program, 'setFile');
+            const stub2 = sinon.stub((server['projectManager'].projects[0] as Project)['builder'].program, 'setFile');
 
             await server['onDidChangeWatchedFiles']({
                 changes: [{
@@ -556,35 +836,70 @@ describe('LanguageServer', () => {
             ).to.be.empty;
         });
 
-        it('does not trigger revalidates when changes are in files in staging', async () => {
-            server.run();
-            server['connection'] = server['createConnection']();
-            await server['createProject'](workspacePath);
-            server.projects[0].builder.options.stagingDir = 'myStagingDir';
-            const stagingDir = s`${rootDir}/../myStagingDir`;
-            fsExtra.outputJsonSync(s`${stagingDir}/bsconfig.json`, {});
-            fsExtra.outputFileSync(s`${stagingDir}/source/main.brs`, '');
-            fsExtra.outputFileSync(s`${stagingDir}/source/lib.brs`, '');
-            fsExtra.outputFileSync(s`${rootDir}/source/lib.brs`, '');
-            await server['syncProjects']();
+        it('rebuilds the path filterer when certain files are changed', async () => {
 
-            const stub2 = sinon.stub(server.projects[0].builder.program, 'setFile');
-            fsExtra.outputFileSync(s`${stagingDir}/source/lib.brs`, 'rem change');
+            sinon.stub(server['projectManager'], 'handleFileChanges').callsFake(() => Promise.resolve());
+            (server as any)['connection'] = connection;
+            async function test(filePath: string, expected = true) {
+                const stub = sinon.stub(server as any, 'rebuildPathFilterer');
+
+                await server['onDidChangeWatchedFiles']({
+                    changes: [{
+                        type: FileChangeType.Changed,
+                        uri: util.pathToUri(filePath)
+                    }]
+                } as DidChangeWatchedFilesParams);
+
+                expect(
+                    stub.getCalls().length
+                ).to.eql(expected ? 1 : 0);
+
+                stub.restore();
+            }
+
+            await test(s`${rootDir}/bsconfig.json`);
+            await test(s`${rootDir}/sub/dir/bsconfig.json`);
+
+            await test(s`${rootDir}/.vscode/settings.json`);
+
+            await test(s`${rootDir}/.gitignore`);
+            await test(s`${rootDir}/sub/dir/.two/.gitignore`);
+
+            await test(s`${rootDir}/source/main.brs`, false);
+        });
+
+        it('excludes explicit workspaceFolder paths', async () => {
+            (server as any).connection = connection;
+            sinon.stub(server['connection'].workspace, 'getWorkspaceFolders').returns(Promise.resolve([{
+                name: 'workspace1',
+                uri: util.pathToUri(s`${tempDir}/project1`)
+            } as WorkspaceFolder]));
+
+            const stub = sinon.stub(server['projectManager'], 'handleFileChanges').callsFake(() => Promise.resolve());
+
             await server['onDidChangeWatchedFiles']({
                 changes: [{
                     type: FileChangeType.Created,
-                    uri: getFileProtocolPath(stagingDir)
-                }, {
-                    type: FileChangeType.Created,
-                    uri: getFileProtocolPath(rootDir)
+                    uri: util.pathToUri(s`${tempDir}/project1`)
                 }]
             } as DidChangeWatchedFilesParams);
 
+            //it did not send along the workspace folder itself
             expect(
-                stub2.getCalls().map(x => x.args[0].src).sort()
-            ).to.eql([
-                s`${rootDir}/source/lib.brs`
-            ]);
+                stub.getCalls()[0].args[0]
+            ).to.eql([]);
+        });
+    });
+
+    describe('onDocumentClose', () => {
+        it('calls handleFileClose', async () => {
+            const stub = sinon.stub(server['projectManager'], 'handleFileClose').callsFake((() => { }) as any);
+            await server['onDocumentClose']({
+                document: {
+                    uri: util.pathToUri(s`${rootDir}/source/main.brs`)
+                } as any
+            });
+            expect(stub.args[0][0].srcPath).to.eql(s`${rootDir}/source/main.brs`);
         });
     });
 
@@ -594,9 +909,9 @@ describe('LanguageServer', () => {
         const functionFileBaseName = 'buildAwesome';
         const funcDefinitionLine = 'function buildAwesome(confirm = true as Boolean)';
         beforeEach(async () => {
-            server['connection'] = server['createConnection']();
-            await server['createProject'](workspacePath);
-            program = server.projects[0].builder.program;
+            server['connection'] = server['establishConnection']();
+            await server['syncProjects']();
+            program = (server['projectManager'].projects[0] as Project)['builder'].program;
 
             const name = `CallComponent`;
             callDocument = addScriptFile(name, `
@@ -695,14 +1010,31 @@ describe('LanguageServer', () => {
         });
     });
 
+    describe('onCompletion', () => {
+        it('does not crash when uri is invalid', async () => {
+            sinon.stub(server['projectManager'], 'getCompletions').callsFake(() => Promise.resolve({ items: [], isIncomplete: false }));
+            expect(
+                await (server['onCompletion'] as any)({
+                    textDocument: {
+                        uri: 'invalid'
+                    },
+                    position: util.createPosition(0, 0)
+                } as any)
+            ).to.eql({
+                items: [],
+                isIncomplete: false
+            });
+        });
+    });
+
     describe('onReferences', () => {
         let functionDocument: TextDocument;
         let referenceFileUris: string[] = [];
 
         beforeEach(async () => {
-            server['connection'] = server['createConnection']();
-            await server['createProject'](workspacePath);
-            program = server.projects[0].builder.program;
+            server['connection'] = server['establishConnection']();
+            await server['syncProjects']();
+            program = (server['projectManager'].projects[0] as Project)['builder'].program;
 
             const functionFileBaseName = 'buildAwesome';
             functionDocument = addScriptFile(functionFileBaseName, `
@@ -768,9 +1100,9 @@ describe('LanguageServer', () => {
         let referenceDocument: TextDocument;
 
         beforeEach(async () => {
-            server['connection'] = server['createConnection']();
-            await server['createProject'](workspacePath);
-            program = server.projects[0].builder.program;
+            server['connection'] = server['establishConnection']();
+            await server['syncProjects']();
+            program = (server['projectManager'].projects[0] as Project)['builder'].program;
 
             const functionFileBaseName = 'buildAwesome';
             functionDocument = addScriptFile(functionFileBaseName, `
@@ -893,9 +1225,9 @@ describe('LanguageServer', () => {
 
     describe('onDocumentSymbol', () => {
         beforeEach(async () => {
-            server['connection'] = server['createConnection']();
-            await server['createProject'](workspacePath);
-            program = server.projects[0].builder.program;
+            server['connection'] = server['establishConnection']();
+            await server['syncProjects']();
+            program = (server['projectManager'].projects[0] as Project)['builder'].program;
         });
 
         it('should return the expected symbols even if pulled from cache', async () => {
@@ -982,9 +1314,9 @@ describe('LanguageServer', () => {
 
     describe('onWorkspaceSymbol', () => {
         beforeEach(async () => {
-            server['connection'] = server['createConnection']();
-            await server['createProject'](workspacePath);
-            program = server.projects[0].builder.program;
+            server['connection'] = server['establishConnection']();
+            await server['syncProjects']();
+            program = (server['projectManager'].projects[0] as Project)['builder'].program;
         });
 
         it('should return the expected symbols even if pulled from cache', async () => {
@@ -1093,54 +1425,28 @@ describe('LanguageServer', () => {
         });
     });
 
-    describe('getConfigFilePath', () => {
-        it('honors the hasConfigurationCapability setting', async () => {
-            server.run();
-            sinon.stub(server['connection'].workspace, 'getConfiguration').returns(
-                Promise.reject(
-                    new Error('Client does not support "workspace/configuration"')
-                )
-            );
-            server['hasConfigurationCapability'] = false;
-            fsExtra.outputFileSync(`${workspacePath}/bsconfig.json`, '{}');
-            expect(
-                await server['getConfigFilePath'](workspacePath)
-            ).to.eql(
-                s`${workspacePath}/bsconfig.json`
-            );
-        });
-
+    describe('getClientConfiguration', () => {
         it('executes the connection.workspace.getConfiguration call when enabled to do so', async () => {
             server.run();
-            const bsconfigPath = `${tempDir}/bsconfig.test.json`;
-            //add a dummy bsconfig to reference for the test
-            fsExtra.outputFileSync(bsconfigPath, ``);
+            sinon.restore();
 
-            sinon.stub(server['connection'].workspace, 'getConfiguration').returns(Promise.resolve({ configFile: bsconfigPath }) as any);
+            sinon.stub(server['connection'].workspace, 'getConfiguration').returns(Promise.resolve({ configFile: 'something.json' }) as any);
             server['hasConfigurationCapability'] = true;
-            fsExtra.outputFileSync(`${workspacePath}/bsconfig.json`, '{}');
             expect(
-                s`${await server['getConfigFilePath'](workspacePath)}`
-            ).to.eql(
-                s`${bsconfigPath}`
-            );
+                await server['getClientConfiguration'](workspacePath, 'brightscript')
+            ).to.eql({
+                configFile: 'something.json'
+            });
         });
-    });
 
-    describe('getWorkspaceExcludeGlobs', () => {
-        it('honors the hasConfigurationCapability setting', async () => {
+        it('skips the connection.workspace.getConfiguration call when not supported', async () => {
             server.run();
-            sinon.stub(server['connection'].workspace, 'getConfiguration').returns(
-                Promise.reject(
-                    new Error('Client does not support "workspace/configuration"')
-                )
-            );
+            sinon.restore();
+
+            const stub = sinon.stub(server['connection'].workspace, 'getConfiguration').returns(Promise.resolve({ configFile: 'something.json' }) as any);
             server['hasConfigurationCapability'] = false;
-            expect(
-                await server['getWorkspaceExcludeGlobs'](workspaceFolders[0])
-            ).to.eql([
-                '**/node_modules/**/*'
-            ]);
+            await server['getClientConfiguration'](workspacePath, 'brightscript');
+            expect(stub.called).to.be.false;
         });
     });
 
@@ -1180,7 +1486,7 @@ describe('LanguageServer', () => {
                 await server['syncProjects']();
                 const afterSpy = sinon.spy();
                 //make a plugin that changes string text
-                server.projects[0].builder.program.plugins.add({
+                (server['projectManager'].projects[0] as Project)['builder'].program.plugins.add({
                     name: 'test-plugin',
                     beforeProgramTranspile: (event) => {
                         const { program, editor } = event;
@@ -1242,7 +1548,7 @@ describe('LanguageServer', () => {
         fsExtra.outputFileSync(s`${rootDir}/source/sgnode.bs`, getContents());
         server.run();
         await server['syncProjects']();
-        expectZeroDiagnostics(server.projects[0].builder.program);
+        expectZeroDiagnostics((server['projectManager'].projects[0] as Project)['builder'].program);
 
         fsExtra.outputFileSync(s`${rootDir}/source/sgnode.bs`, getContents());
         const changeWatchedFilesPromise = server['onDidChangeWatchedFiles']({
@@ -1263,7 +1569,188 @@ describe('LanguageServer', () => {
             changeWatchedFilesPromise,
             semanticTokensPromise
         ]);
-        expectZeroDiagnostics(server.projects[0].builder.program);
+        expectZeroDiagnostics((server['projectManager'].projects[0] as Project)['builder'].program);
+    });
+
+    describe('sendDiagnostics', () => {
+        let diagnostics = {};
+        let diagnosticsDeferred = new Deferred();
+
+        beforeEach(() => {
+            server['connection'] = connection as any;
+            sinon.stub(Logger.prototype, 'write').callsFake(() => {
+                //do nothing, logging is too noisy
+            });
+
+            diagnosticsDeferred = new Deferred();
+
+            let timer = setTimeout(() => { }, 0);
+            sinon.stub(server['connection'], 'sendDiagnostics').callsFake((params: PublishDiagnosticsParams) => {
+                clearTimeout(timer);
+                if (params.diagnostics.length === 0) {
+                    delete diagnostics[params.uri];
+                } else {
+                    diagnostics[params.uri] = params.diagnostics;
+                }
+                //debounce the promise so we get the final snapshot of diagnostics sent
+                timer = setTimeout(() => {
+                    diagnosticsDeferred.resolve();
+                    diagnosticsDeferred = new Deferred();
+                }, 100);
+                return Promise.resolve();
+            });
+        });
+
+        async function diagnosticsEquals(expectedDiagnostics: Record<string, Array<PartialDiagnostic | string | number>>) {
+            //wait for a patch
+            await diagnosticsDeferred.promise;
+
+            let actualDiagnostics = { ...diagnostics };
+
+            //normalize the keys
+            for (let collection of [actualDiagnostics, expectedDiagnostics]) {
+                //convert a URI-like string to an fsPath
+                for (let key in collection) {
+                    let keyNormalized = key.startsWith('file:') ? URI.parse(key).fsPath : key;
+                    keyNormalized = standardizePath(
+                        path.isAbsolute(keyNormalized) ? keyNormalized : s`${rootDir}/${keyNormalized}`
+                    );
+                    //if we changed the key, replace this in the collection
+                    if (keyNormalized !== key) {
+                        collection[keyNormalized] = collection[key];
+                        delete collection[key];
+                    }
+                }
+            }
+
+            //normalize the actual diagnostics so it has diagnostics in the same format as the expected
+            for (let key in actualDiagnostics) {
+                const [actual, expected] = normalizeDiagnostics(actualDiagnostics[key], expectedDiagnostics[key] ?? []);
+                actualDiagnostics[key] = actual;
+                expectedDiagnostics[key] = expected;
+            }
+            expect(actualDiagnostics).to.eql(expectedDiagnostics);
+        }
+
+        it('clears standalone file project diagnostics when that file is adopted by at least one project', async () => {
+            const projectManager = server['projectManager'];
+            const documentManager = projectManager['documentManager'];
+
+            //force instant document flushes
+            documentManager['options'].delay = 0;
+
+            //build a small functional project
+            fsExtra.outputFileSync(`${rootDir}/source/main.bs`, `
+                sub main()
+                    alpha.beta()
+                    print missing
+                end sub
+            `);
+            fsExtra.outputFileSync(`${rootDir}/source/lib.bs`, `
+                    namespace alpha
+                    sub beta()
+                    end sub
+                end namespace
+            `);
+            fsExtra.outputFileSync(`${rootDir}/bsconfig.json`, `
+                {
+                    "files": ["source/**/*.bs"],
+                    //silence the logger, it's noisy
+                    "logLevel": "error"
+                }
+            `);
+            server.run();
+
+            await server['onInitialized']();
+
+            await diagnosticsEquals({
+                'source/main.bs': [
+                    DiagnosticMessages.cannotFindName('missing').message
+                ]
+            });
+
+            const document = TextDocument.create(
+                URI.file(s`${rootDir}/source/main.bs`).toString(),
+                'brightscript',
+                0, `
+                    sub main()
+                        alpha.beta()
+                        print missing2
+                    end sub
+                `
+            );
+            //open the main.bs file so it gets reloaded in a standalone project
+            server['documents'].all = () => [document];
+
+            await server['onTextDocumentDidChangeContent']({
+                document: document
+            });
+
+            await diagnosticsEquals({
+                'source/main.bs': [
+                    DiagnosticMessages.cannotFindName('missing2').message
+                ]
+            });
+
+            //mangle the bsconfig and then sync the project. this should produce new diagnostics from the file as it's now in a standalone project
+            fsExtra.outputFileSync(`${rootDir}/bsconfig.json`, `
+                    {
+                        "files": ["source/lib.bs"]
+                //missing closing curly brace (and also have a comma, oops
+            `);
+
+            //tell the language server we've changed a bsconfig. it'll reload the file (fail cuz syntax error) and create a standalone project for the opened file
+            await server['onDidChangeWatchedFiles']({
+                changes: [{
+                    type: FileChangeType.Changed,
+                    uri: URI.file(`${rootDir}/bsconfig.json`).toString()
+                }]
+            });
+
+            //wait for the manager to settle
+            await projectManager.onIdle();
+
+            //we should get a patch clearing the diagnostics from the unloaded main project, then
+            //when the standalone project finishes loading, we should get another diagnostics patch, then
+            //when the project activates, we flush open document changes. So now the opened copy of the file is re-processed and we get the correct error message `missing2`
+            await diagnosticsEquals({
+                'source/main.bs': [
+                    DiagnosticMessages.cannotFindName('alpha').message,
+                    DiagnosticMessages.cannotFindName('missing2').message
+                ],
+                'bsconfig.json': [
+                    'Encountered syntax errors in bsconfig.json: CloseBraceExpected'
+                ]
+            });
+
+
+            //now fix the bsconfig and sync again. This should dispose the standalone project and send new diagnostics
+            fsExtra.outputFileSync(`${rootDir}/bsconfig.json`, `
+                {
+                    "files": ["source/**/*.bs"],
+                    //silence the logger, it's noisy
+                    "logLevel": "error"
+                }
+            `);
+
+            //tell the language server we've changed a bsconfig
+            await server['onDidChangeWatchedFiles']({
+                changes: [{
+                    type: FileChangeType.Changed,
+                    uri: URI.file(`${rootDir}/bsconfig.json`).toString()
+                }]
+            });
+
+            //let the manager settle
+            await projectManager.onIdle();
+
+            //and then get more diagnostics when the opened file is parsed as well
+            await diagnosticsEquals({
+                'source/main.bs': [
+                    DiagnosticMessages.cannotFindName('missing2').message
+                ]
+            });
+        });
     });
 
     describe('onCompletion', () => {
