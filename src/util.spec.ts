@@ -1061,58 +1061,121 @@ describe('util', () => {
     });
 
     describe('standardizePath', () => {
-        let origPathSep;
-        let altPathSep;
+        let isWindowsOrig = util['isWindows'];
+        let isWindows = isWindowsOrig;
+
         beforeEach(() => {
-            origPathSep = util['pathSep'];
-            altPathSep = util['altPathSep'];
-            //for most of our tests, assume we want forward slash
-            util['pathSep'] = '/';
-            util['altPathSep'] = '\\';
-            //bust the cache
             util['standardizePathCache'].clear();
         });
         afterEach(() => {
-            util['pathSep'] = origPathSep;
-            util['altPathSep'] = altPathSep;
+            util['standardizePathCache'].clear();
+            util['isWindows'] = isWindowsOrig;
         });
 
-        it('formats to the current OS path.sep', () => {
-            util['pathSep'] = origPathSep;
-            util['altPathSep'] = altPathSep;
+        function test(incoming: string, expected: string) {
+            util['isWindows'] = isWindows;
             expect(
-                util.standardizePath('C:/one\\two/three')
+                util.standardizePath(incoming)
             ).to.eql(
-                `c:${path.sep}one${path.sep}two${path.sep}three`
+                expected
             );
+            util['isWindows'] = isWindowsOrig;
+        }
+
+        describe('windows paths on windows', () => {
+            beforeEach(() => {
+                isWindows = true;
+            });
+
+            it('mismatched slashes', () => {
+                test('c:/one/two/three', 'c:\\one\\two\\three');
+                test('c:\\one\\two\\three', 'c:\\one\\two\\three');
+                test('c:/one\\two/three', 'c:\\one\\two\\three');
+            });
+
+            it('trailing slashes', () => {
+                test('c:/one/two/three/', 'c:\\one\\two\\three\\');
+                test('c:/one/two/three\\', 'c:\\one\\two\\three\\');
+            });
+
+            it('drive letter case', () => {
+                test('D:/one/two/three', 'd:\\one\\two\\three');
+            });
+
+            it('consecutive slashes', () => {
+                test('c://one//two//three//', 'c:\\one\\two\\three\\');
+                test('c:\\\\one\\\\two\\\\three\\\\', 'c:\\one\\two\\three\\');
+            });
         });
 
-        it('formats to the forward slash', () => {
-            util['pathSep'] = '/';
-            util['altPathSep'] = '\\';
-            expect(
-                util.standardizePath('C:/one\\two/three')
-            ).to.eql(
-                `c:/one/two/three`
-            );
+        describe('windows paths on unix', () => {
+            beforeEach(() => {
+                isWindows = false;
+            });
+
+            it('mismatched slashes', () => {
+                test('c:/one/two/three', 'c:/one/two/three');
+                test('c:\\one\\two\\three', 'c:/one/two/three');
+                test('c:/one\\two/three', 'c:/one/two/three');
+            });
+
+            it('trailing slashes', () => {
+                test('c:/one/two/three/', 'c:/one/two/three/');
+                test('c:/one/two/three\\', 'c:/one/two/three/');
+            });
+
+            it('drive letter case', () => {
+                test('D:/one/two/three', 'd:/one/two/three');
+            });
+
+            it('consecutive slashes', () => {
+                test('c://one//two//three//', 'c:/one/two/three/');
+                test('c:\\\\one\\\\two\\\\three\\\\', 'c:/one/two/three/');
+            });
         });
 
-        it('formats to the backslash', () => {
-            util['pathSep'] = '\\';
-            util['altPathSep'] = '/';
-            expect(
-                util.standardizePath('C:/one\\two/three')
-            ).to.eql(
-                `c:\\one\\two\\three`
-            );
+        describe('unix paths on windows', () => {
+            beforeEach(() => {
+                isWindows = true;
+            });
+
+            it('mismatched slashes', () => {
+                test('/one/two/three', '\\one\\two\\three');
+                test('\\one\\two\\three', '\\one\\two\\three');
+                test('/one\\two/three', '\\one\\two\\three');
+            });
+
+            it('trailing slashes', () => {
+                test('/one/two/three/', '\\one\\two\\three\\');
+                test('/one/two/three\\', '\\one\\two\\three\\');
+            });
+
+            it('consecutive slashes', () => {
+                test('/one//two///three//', '\\one\\two\\three\\');
+                test('\\one\\\\two\\\\\\three\\\\', '\\one\\two\\three\\');
+            });
         });
 
-        it('lower cases the drive letter', () => {
-            expect(
-                util.standardizePath('C:/one/two/three')
-            ).to.eql(
-                `c:/one/two/three`
-            );
+        describe('unix paths on unix', () => {
+            beforeEach(() => {
+                isWindows = false;
+            });
+
+            it('mismatched slashes', () => {
+                test('/one/two/three', '/one/two/three');
+                test('\\one\\two\\three', '/one/two/three');
+                test('/one\\two/three', '/one/two/three');
+            });
+
+            it('trailing slashes', () => {
+                test('/one/two/three/', '/one/two/three/');
+                test('/one/two/three\\', '/one/two/three/');
+            });
+
+            it('consecutive slashes', () => {
+                test('/one//two///three//', '/one/two/three/');
+                test('\\\\one\\\\two\\\\three\\\\', '/one/two/three/');
+            });
         });
     });
 });

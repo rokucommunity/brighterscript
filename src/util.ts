@@ -1337,41 +1337,34 @@ export class Util {
         } as SGAttribute;
     }
 
-
+    private isWindows = process.platform === 'win32';
     private standardizePathCache = new Map<string, string>();
-    private pathSep = path.sep;
-    private altPathSep = path.sep === '/' ? '\\' : '/';
-    private relativePathText = '.' + path.sep;
 
     /**
      * Converts a path into a standardized format (drive letter to lower, remove extra slashes, use single slash type, resolve relative parts, etc...)
      */
-
     public standardizePath(thePath: string): string {
+        //if we have the value in cache already, return it
         if (this.standardizePathCache.has(thePath)) {
             return this.standardizePathCache.get(thePath);
         }
-        let origPath = thePath;
+        const originalPath = thePath;
+
         if (typeof thePath !== 'string') {
             return thePath;
         }
 
-        let needsReplace = false;
-        // eslint-disable-next-line no-var, @typescript-eslint/prefer-for-of
-        for (var i = 0; i < thePath.length; i++) {
-            if (thePath[i] === this.altPathSep) {
-                needsReplace = true;
-                break;
+        //windows path.normalize will convert all slashes to backslashes and remove duplicates
+        if (this.isWindows) {
+            thePath = path.win32.normalize(thePath);
+        } else {
+            //replace all windows or consecutive slashes with path.sep
+            thePath = thePath.replace(/[\/\\]+/g, '/');
+
+            // only use path.normalize if dots are present since it's expensive
+            if (thePath.includes('./')) {
+                thePath = path.posix.normalize(thePath);
             }
-        }
-
-        if (needsReplace) {
-            thePath = thePath.replace(/[\/\\]+/g, this.pathSep);
-        }
-
-        // Simple normalization: only use path.normalize if dots are present
-        if (thePath.includes(this.relativePathText)) {
-            thePath = path.normalize(thePath);
         }
 
         // Lowercase drive letter on Windows-like paths (e.g., "C:/...")
@@ -1382,8 +1375,7 @@ export class Util {
                 thePath = String.fromCharCode(firstChar + 32) + thePath.slice(1);
             }
         }
-
-        this.standardizePathCache.set(origPath, thePath);
+        this.standardizePathCache.set(originalPath, thePath);
         return thePath;
     }
 
