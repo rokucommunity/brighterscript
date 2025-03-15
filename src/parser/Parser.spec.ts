@@ -4,11 +4,11 @@ import { ReservedWords, TokenKind } from '../lexer/TokenKind';
 import type { AAMemberExpression } from './Expression';
 import { TernaryExpression, NewExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
-import type { AssignmentStatement, ClassStatement, TypecastStatement } from './Statement';
+import type { AliasStatement, AssignmentStatement, ClassStatement, TypecastStatement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement, isIndexedGetExpression, isTypecastStatement } from '../astUtils/reflection';
+import { isAliasStatement, isBlock, isCommentStatement, isFunctionStatement, isIfStatement, isIndexedGetExpression, isTypecastStatement } from '../astUtils/reflection';
 import { expectDiagnostics, expectZeroDiagnostics } from '../testHelpers.spec';
 import { BrsTranspileState } from './BrsTranspileState';
 import { SourceNode } from 'source-map';
@@ -1377,6 +1377,49 @@ describe('parser', () => {
                 end function
             `, ParseMode.BrighterScript);
             expectZeroDiagnostics(diagnostics);
+        });
+    });
+
+    describe('alias statement', () => {
+        it('allows alias statement ', () => {
+            let { ast, diagnostics } = parse(`
+                ALIAS x = lcase
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(isAliasStatement(ast.statements[0])).to.be.true;
+            const stmt = ast.statements[0] as AliasStatement;
+            expect(stmt.tokens.alias.text).to.eq('ALIAS');
+            expect(stmt.tokens.value).to.exist;
+        });
+
+        it('is disallowed in brightscript mode', () => {
+            let { diagnostics } = parse(`
+                alias x = lcase
+            `, ParseMode.BrightScript);
+            expectDiagnostics(diagnostics, [
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('alias statements')
+            ]);
+        });
+
+        it('allows `alias` for function name', () => {
+            let { ast, diagnostics } = parse(`
+                function alias() as integer
+                    return 1
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect((ast.statements[0] as FunctionStatement).name.text).to.eq('alias');
+        });
+
+        it('allows `alias` for variable name', () => {
+            let { ast, diagnostics } = parse(`
+                function foo() as integer
+                    alias = 1
+                    return alias
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(((ast.statements[0] as FunctionStatement).func.body.statements[0] as AssignmentStatement).name.text).to.eq('alias');
         });
     });
 });
