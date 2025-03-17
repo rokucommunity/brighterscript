@@ -3276,7 +3276,6 @@ export class TypecastStatement extends Statement {
 
     public readonly typecastExpression: Expression;
 
-
     public readonly range: Range;
 
     transpile(state: BrsTranspileState) {
@@ -3298,3 +3297,57 @@ export class TypecastStatement extends Statement {
         );
     }
 }
+
+export class AliasStatement extends Statement {
+    constructor(options: {
+        alias?: Token;
+        name: Token;
+        equals?: Token;
+        value: Token;
+    }
+    ) {
+        super();
+        this.tokens = {
+            alias: options.alias,
+            name: options.name,
+            equals: options.equals,
+            value: options.value
+        };
+        this.range = util.createBoundingRange(
+            this.tokens.alias,
+            this.tokens.name,
+            this.tokens.equals,
+            this.tokens.value
+        );
+    }
+
+    public readonly tokens: {
+        readonly alias?: Token;
+        readonly name: Token;
+        readonly equals?: Token;
+        readonly value: Token;
+    };
+
+    public readonly range: Range;
+
+    transpile(state: BrsTranspileState) {
+        return [];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
+    }
+
+
+    public clone() {
+        return this.finalizeClone(
+            new AliasStatement({
+                alias: util.cloneToken(this.tokens.alias),
+                name: util.cloneToken(this.tokens.name),
+                equals: util.cloneToken(this.tokens.equals),
+                value: util.cloneToken(this.tokens.value)
+            })
+        );
+    }
+}
+
