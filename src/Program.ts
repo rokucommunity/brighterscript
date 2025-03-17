@@ -1553,10 +1553,3 @@ export interface FileTranspileResult {
     map: SourceMapGenerator;
     typedef: string;
 }
-
-export function test(foo) {
-    const bar = foo + 'Hello';
-
-
-    return bar;
-}
