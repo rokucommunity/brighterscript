@@ -282,7 +282,7 @@ describe('Program', () => {
             program.validate();
             //ensure the diagnostic is there during normal run
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('down', 'Direction').message
+                DiagnosticMessages.cannotFindName('down', 'Direction', 'Direction', 'enum').message
             ]);
 
             const cancel = new CancellationTokenSource();
@@ -324,7 +324,7 @@ describe('Program', () => {
 
             //ensure the diagnostic is there after a cancelled run (with a subsequent completed run)
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('down', 'Direction').message
+                DiagnosticMessages.cannotFindName('down', 'Direction', 'Direction', 'enum').message
             ]);
         });
 

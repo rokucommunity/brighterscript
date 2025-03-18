@@ -932,17 +932,6 @@ export class Program {
             throw new Error('Cannot run synchronous validation while an async validation is in progress');
         }
 
-        if (options?.async) {
-            //we're async, so create a new promise chain to resolve after this validation is done
-            this.validatePromise = Promise.resolve(previousValidationPromise).then(() => {
-                return deferred.promise;
-            });
-
-            //we are not async but there's a pending promise, then we cannot run this validation
-        } else if (previousValidationPromise !== undefined) {
-            throw new Error('Cannot run synchronous validation while an async validation is in progress');
-        }
-
         let beforeProgramValidateWasEmitted = false;
 
         //validate every file
@@ -951,7 +940,7 @@ export class Program {
         const changedSymbols = new Map<SymbolTypeFlag, Set<string>>();
         const changedComponentTypes: string[] = [];
 
-        let logValidateEnd: (status?: string) => void;
+        let logValidateEnd = (status?: string) => { };
 
         //will be populated later on during the correspnding sequencer event
         let filesToProcess: BscFile[];
@@ -1154,13 +1143,7 @@ export class Program {
             })
             .once(() => {
                 this.detectDuplicateComponentNames();
-
                 this.isFirstValidation = false;
-
-                this.plugins.emit('afterProgramValidate', {
-                    program: this,
-                    wasCancelled: false
-                });
             })
             .onCancel(() => {
                 logValidateEnd('cancelled');

@@ -177,12 +177,13 @@ describe('ProjectManager', () => {
             fsExtra.outputFileSync(`${rootDir}/plugin.js`, `
                 module.exports = function () {
                     return {
-                        afterProgramValidate: function(program) {
-                            var file = program.getFile('source/main.brs');
+                        afterProgramValidate: function(event) {
+                            var file = event.program.getFile('source/main.brs');
                             //add a diagnostic from a plugin
-                            file.addDiagnostic({
+                            event.program.diagnostics.register({
                                 message: 'Test diagnostic',
                                 code: 'test-123',
+                                location: {},
                                 severity: 1
                             });
                         }

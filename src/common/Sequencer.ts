@@ -41,7 +41,7 @@ export class Sequencer {
                 }
                 let primaryActionIndex = this.actions.indexOf(primaryAction);
                 //insert all of these item actions immediately after this action
-                this.actions.splice(primaryActionIndex, 0, ...actions);
+                this.actions.splice(primaryActionIndex + 1, 0, ...actions);
             }
         };
         this.actions.push(primaryAction);
