@@ -1611,7 +1611,7 @@ describe('LanguageServer', () => {
             for (let collection of [actualDiagnostics, expectedDiagnostics]) {
                 //convert a URI-like string to an fsPath
                 for (let key in collection) {
-                    let keyNormalized = key.startsWith('file:') ? URI.parse(key).fsPath : key;
+                    let keyNormalized = key.startsWith('file:') ? util.uriToPath(key) : key;
                     keyNormalized = standardizePath(
                         path.isAbsolute(keyNormalized) ? keyNormalized : s`${rootDir}/${keyNormalized}`
                     );
@@ -1670,7 +1670,7 @@ describe('LanguageServer', () => {
             });
 
             const document = TextDocument.create(
-                URI.file(s`${rootDir}/source/main.bs`).toString(),
+                util.uriToPath(s`${rootDir}/source/main.bs`),
                 'brightscript',
                 0, `
                     sub main()
@@ -1703,7 +1703,7 @@ describe('LanguageServer', () => {
             await server['onDidChangeWatchedFiles']({
                 changes: [{
                     type: FileChangeType.Changed,
-                    uri: URI.file(`${rootDir}/bsconfig.json`).toString()
+                    uri: util.uriToPath(`${rootDir}/bsconfig.json`)
                 }]
             });
 
@@ -1737,7 +1737,7 @@ describe('LanguageServer', () => {
             await server['onDidChangeWatchedFiles']({
                 changes: [{
                     type: FileChangeType.Changed,
-                    uri: URI.file(`${rootDir}/bsconfig.json`).toString()
+                    uri: util.uriToPath(`${rootDir}/bsconfig.json`)
                 }]
             });
 
@@ -1761,7 +1761,7 @@ describe('LanguageServer', () => {
             await server['createProject'](workspacePath);
             await server['createProject'](s`${workspacePath}/alpha`);
             await server['createProject'](s`${workspacePath}/beta`);
-            for (const project of server.projects) {
+            for (const project of (server['projectManager'].projects as Project[])) {
                 const filePath = s`source/file.brs`;
                 const contents = `
                     function pi()
@@ -1772,13 +1772,13 @@ describe('LanguageServer', () => {
                         return 42
                     end function
                 `;
-                const file = project.builder.program.setFile(filePath, contents);
+                const file = project['builder'].program.setFile(filePath, contents);
                 if (file) {
                     let document = TextDocument.create(util.pathToUri(file.srcPath), 'brightscript', 1, contents);
                     (server['documents']['_syncedDocuments'] as Map<string, TextDocument>).set(document.uri, document);
                     completionDocuments.push(document);
                 }
-                project.builder.program.setFile(s`${rootDir}/source/main.bs`, `
+                project['builder'].program.setFile(s`${rootDir}/source/main.bs`, `
                     sub main()
                         print   'completion here
                     end sub
@@ -1803,9 +1803,9 @@ describe('LanguageServer', () => {
                 textDocument: { uri: util.pathToUri(s`${rootDir}/source/main.bs`) },
                 position: util.createPosition(2, 26)
             });
-            expect(result.filter(compItem => compItem.label === 'buildAwesome')).to.length(1);
-            expect(result.filter(compItem => compItem.label === 'pi')).to.length(1);
-            expect(result.filter(compItem => compItem.label === 'LCase')).to.length(1);
+            expect(result.items.filter(compItem => compItem.label === 'buildAwesome')).to.length(1);
+            expect(result.items.filter(compItem => compItem.label === 'pi')).to.length(1);
+            expect(result.items.filter(compItem => compItem.label === 'LCase')).to.length(1);
         });
 
     });

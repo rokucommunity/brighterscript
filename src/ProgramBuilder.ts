@@ -91,7 +91,7 @@ export class ProgramBuilder {
         this.diagnostics.register(<any>diagnostic, { tags: ['ProgramBuilder'] });
     }
 
-    public getDiagnostics() {
+    public getDiagnostics(): BsDiagnostic[] {
         return this.diagnostics.getDiagnostics();
     }
 

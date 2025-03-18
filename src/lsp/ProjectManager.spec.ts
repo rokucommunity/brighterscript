@@ -96,7 +96,7 @@ describe('ProjectManager', () => {
             await manager.syncProjects([{
                 workspaceFolder: rootDir
             }]);
-            const project = manager.projects[0] as Project;
+            const project = manager.projects[0] as unknown as Project;
 
             //force validation to take a while
             sinon.stub(project['builder'].program, 'validate').callsFake(async () => {
@@ -381,8 +381,8 @@ describe('ProjectManager', () => {
 
             let deferred1 = new Deferred();
             let deferred2 = new Deferred();
-            const project1 = manager.projects.find(x => x.bsconfigPath.includes('project1')) as Project;
-            const project2 = manager.projects.find(x => x.bsconfigPath.includes('project2')) as Project;
+            const project1 = manager.projects.find(x => x.bsconfigPath.includes('project1')) as unknown as Project;
+            const project2 = manager.projects.find(x => x.bsconfigPath.includes('project2')) as unknown as Project;
 
             const project1Stub: SinonStub = sinon.stub(project1, 'applyFileChanges').callsFake(async (...args) => {
                 const result = await project1Stub.wrappedMethod.apply(project1, args);
@@ -528,7 +528,7 @@ describe('ProjectManager', () => {
             await onNextDiagnostics();
 
             let applyFileChangesDeferred = new Deferred<DocumentActionWithStatus[]>();
-            const project1 = manager.projects[0] as Project;
+            const project1 = manager.projects[0] as unknown as Project;
 
             const project1Stub = sinon.stub(project1, 'applyFileChanges').callsFake(async (...args) => {
                 const result = await project1Stub.wrappedMethod.apply(project1, args);

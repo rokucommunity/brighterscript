@@ -24,15 +24,27 @@ export class Sequencer {
     }
 
     // eslint-disable-next-line @typescript-eslint/ban-types
-    private actions: Array<{ args: any[]; func: Function }> = [];
+    private actions: Array<{ args: any[]; func: (...args: any[]) => any }> = [];
 
-    public forEach<T>(items: T[], func: (item: T) => any) {
-        for (const item of items) {
-            this.actions.push({
-                args: [item],
-                func: func
-            });
-        }
+    public forEach<T>(itemsOrFactory: Iterable<T> | (() => Iterable<T>), func: (item: T) => any, actionOptions?: ActionOptions) {
+        //register a single action for now, we will fetch the list later
+        const primaryAction = {
+            args: [],
+            func: (data) => {
+                const items = typeof itemsOrFactory === 'function' ? itemsOrFactory() : itemsOrFactory;
+                const actions = [];
+                for (const item of items) {
+                    actions.push({
+                        args: [item],
+                        func: func
+                    });
+                }
+                let primaryActionIndex = this.actions.indexOf(primaryAction);
+                //insert all of these item actions immediately after this action
+                this.actions.splice(primaryActionIndex, 0, ...actions);
+            }
+        };
+        this.actions.push(primaryAction);
         return this;
     }
 
@@ -53,7 +65,7 @@ export class Sequencer {
         return this;
     }
 
-    public once(func: () => any) {
+    public once(func: () => any, actionOptions?: ActionOptions) {
         this.actions.push({
             args: [],
             func: func
@@ -125,4 +137,8 @@ export class Sequencer {
     private dispose() {
         this.emitter.removeAllListeners();
     }
+}
+
+export interface ActionOptions {
+    label?: string;
 }

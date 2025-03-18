@@ -14,6 +14,7 @@ import { firstBy } from 'thenby';
 import undent from 'undent';
 import type { BscFile } from './files/BscFile';
 import type { BscType } from './types/BscType';
+import type { LspDiagnostic } from './lsp/LspProject';
 
 export const cwd = s`${__dirname}/../`;
 export const tempDir = s`${__dirname}/../.tmp`;
@@ -30,7 +31,7 @@ afterEach(() => {
     sinon.restore();
 });
 
-type DiagnosticCollection = { getDiagnostics(): Array<BsDiagnostic>; getFile?: (path: string, normalize: boolean) => BscFile } | { diagnostics?: BsDiagnostic[] } | BsDiagnostic[];
+type DiagnosticCollection = { getDiagnostics(): Array<BsDiagnostic | LspDiagnostic>; getFile?: (path: string, normalize: boolean) => BscFile } | { diagnostics?: BsDiagnostic[] } | BsDiagnostic[] | LspDiagnostic[];
 type DiagnosticCollectionAsync = DiagnosticCollection | { getDiagnostics(): Promise<Array<Diagnostic>> };
 
 function getDiagnostics(arg: DiagnosticCollection): BsDiagnostic[] {
@@ -69,7 +70,7 @@ function cloneObject<TOriginal, TTemplate>(original: TOriginal, template: TTempl
     return clone;
 }
 
-interface PartialDiagnostic {
+export interface PartialDiagnostic {
     location?: Partial<Location>;
     severity?: DiagnosticSeverity;
     code?: number | string;

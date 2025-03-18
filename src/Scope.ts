@@ -810,7 +810,7 @@ export class Scope {
             const scopeValidateEvent = {
                 program: this.program,
                 scope: this,
-                changedFiles: validationOptions?.changedFiles?.values() ?? [],
+                changedFiles: validationOptions?.changedFiles ?? [],
                 changedSymbols: validationOptions?.changedSymbols
             };
             t0 = performance.now();
