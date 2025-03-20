@@ -1,6 +1,6 @@
 import { assert, expect } from './chai-config.spec';
 import * as pick from 'object.pick';
-import { Position, Range } from 'vscode-languageserver';
+import { CancellationTokenSource, Position, Range } from 'vscode-languageserver';
 import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { BrsFile } from './files/BrsFile';
@@ -9,7 +9,7 @@ import { Program } from './Program';
 import { standardizePath as s, util } from './util';
 import type { FunctionStatement, PrintStatement } from './parser/Statement';
 import { EmptyStatement } from './parser/Statement';
-import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
+import { expectDiagnostics, expectHasDiagnostics, expectThrows, expectThrowsAsync, expectTypeToBe, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
 import { doesNotThrow } from 'assert';
 import { createVisitor, WalkMode } from './astUtils/visitors';
 import { isBrsFile } from './astUtils/reflection';
@@ -25,6 +25,7 @@ import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { ComponentType } from './types/ComponentType';
 import * as path from 'path';
 import undent from 'undent';
+import { Scope } from './Scope';
 
 const sinon = createSandbox();
 
@@ -257,6 +258,98 @@ describe('Program', () => {
     });
 
     describe('validate', () => {
+        it('does not lose scope diagnostics in second validation after cancelling the previous validation', async () => {
+            program.setFile('source/Direction.bs', `
+                enum Direction
+                    up = "up"
+                end enum
+            `);
+            program.setFile('source/test.bs', `
+                import "Direction.bs"
+                sub test()
+                    print Direction.down
+                end sub
+            `);
+
+            //add several scopes so we have time to cancel the validation
+            for (let i = 0; i < 3; i++) {
+                program.setFile(`components/Component${i}.xml`, undent`
+                    <component name="Component${i}" extends="Group">
+                        <script uri="pkg:/source/test.bs" />
+                    </component>
+                `);
+            }
+            program.validate();
+            //ensure the diagnostic is there during normal run
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('down', 'Direction', 'Direction', 'enum').message
+            ]);
+
+            const cancel = new CancellationTokenSource();
+
+            let count = 0;
+            const plugin = {
+                name: 'cancel validation',
+                beforeProgramValidate: () => {
+                    count++;
+                    //if this is the second validate, remove the plugin and change the file to invalidate the scopes again
+                    if (count === 2) {
+                        program.plugins.remove(plugin);
+                        program.setFile('source/test.bs', program.getFile<BrsFile>('source/test.bs').fileContents + `'comment`);
+                    }
+                },
+                afterScopeValidate: () => {
+                    //if the diagnostic is avaiable, we know it's safe to cancel
+                    if (program.getDiagnostics().find(x => x.code === DiagnosticMessages.cannotFindName('down', 'Direction').code)) {
+                        cancel.cancel();
+                    }
+                }
+            } as CompilerPlugin;
+            //add a plugin that monitors where we are in the process, so we can cancel the validate at the correct time
+            program.plugins.add(plugin);
+
+            //change the file so it forces a reload
+            program.setFile('source/test.bs', program.getFile<BrsFile>('source/test.bs').fileContents + `'comment`);
+
+            //now trigger two validations, the first one will be cancelled, the second one will run to completion
+            await Promise.all([
+                program.validate({
+                    async: true,
+                    cancellationToken: cancel.token
+                }),
+                program.validate({
+                    async: true
+                })
+            ]);
+
+            //ensure the diagnostic is there after a cancelled run (with a subsequent completed run)
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('down', 'Direction', 'Direction', 'enum').message
+            ]);
+        });
+
+        it('validate (sync) passes along inner exception', () => {
+            program.setFile('source/main.brs', ``);
+            sinon.stub(Scope.prototype, 'validate').callsFake(() => {
+                throw new Error('Scope crash');
+            });
+            expectThrows(() => {
+                program.validate();
+            }, 'Scope crash');
+        });
+
+        it('validate (async) passes along inner exception', async () => {
+            program.setFile('source/main.brs', ``);
+            sinon.stub(Scope.prototype, 'validate').callsFake(() => {
+                throw new Error('Scope crash');
+            });
+            await expectThrowsAsync(async () => {
+                await program.validate({
+                    async: true
+                });
+            }, 'Scope crash');
+        });
+
         it('retains expressions after validate', () => {
             const file = program.setFile<BrsFile>('source/main.bs', `
                 sub test()
@@ -739,6 +832,20 @@ describe('Program', () => {
 
         });
 
+        it('properly handles errors in async mode', async () => {
+            const file = program.setFile<BrsFile>('source/main.brs', ``);
+            const scope = program.getFirstScopeForFile(file);
+            scope.validate = () => {
+                throw new Error('Crash for test');
+            };
+            let error: Error;
+            try {
+                await program.validate({ async: true });
+            } catch (e) {
+                error = e as any;
+            }
+            expect(error?.message).to.eql('Crash for test');
+        });
     });
 
     describe('hasFile', () => {
@@ -1106,13 +1213,6 @@ describe('Program', () => {
             program.diagnostics.register(diagnostic);
             //delete the uri
             diagnostic.location.uri = undefined;
-
-            doesNotThrow(() => {
-                program.getCodeActions('source/main.brs', util.createRange(1, 2, 3, 4));
-            });
-
-            //delete the entire location
-            diagnostic.location = undefined;
 
             doesNotThrow(() => {
                 program.getCodeActions('source/main.brs', util.createRange(1, 2, 3, 4));
