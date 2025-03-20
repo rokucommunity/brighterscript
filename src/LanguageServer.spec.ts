@@ -1632,8 +1632,7 @@ describe('LanguageServer', () => {
             expect(actualDiagnostics).to.eql(expectedDiagnostics);
         }
 
-        //TODO fix this before completing the merge
-        it.skip('clears standalone file project diagnostics when that file is adopted by at least one project', async () => {
+        it('clears standalone file project diagnostics when that file is adopted by at least one project', async () => {
             const projectManager = server['projectManager'];
             const documentManager = projectManager['documentManager'];
 
@@ -1648,7 +1647,7 @@ describe('LanguageServer', () => {
                 end sub
             `);
             fsExtra.outputFileSync(`${rootDir}/source/lib.bs`, `
-                    namespace alpha
+                namespace alpha
                     sub beta()
                     end sub
                 end namespace
@@ -1671,7 +1670,7 @@ describe('LanguageServer', () => {
             });
 
             const document = TextDocument.create(
-                util.uriToPath(s`${rootDir}/source/main.bs`),
+                util.pathToUri(s`${rootDir}/source/main.bs`),
                 'brightscript',
                 0, `
                     sub main()
@@ -1720,7 +1719,7 @@ describe('LanguageServer', () => {
                     DiagnosticMessages.cannotFindName('missing2').message
                 ],
                 'bsconfig.json': [
-                    'Encountered syntax errors in bsconfig.json: CloseBraceExpected'
+                    'Syntax errors in bsconfig.json: CloseBraceExpected'
                 ]
             });
 
@@ -1755,40 +1754,18 @@ describe('LanguageServer', () => {
     });
 
     describe('onCompletion', () => {
-        let completionDocuments: TextDocument[] = [];
-
-        beforeEach(async () => {
-            server['connection'] = server['establishConnection']();
-            await server['createProject'](workspacePath);
-            await server['createProject'](s`${workspacePath}/alpha`);
-            await server['createProject'](s`${workspacePath}/beta`);
-            for (const project of (server['projectManager'].projects as Project[])) {
-                const filePath = s`source/file.brs`;
-                const contents = `
-                    function pi()
-                        return 3.141592653589793
-                    end function
-
-                    function buildAwesome()
-                        return 42
-                    end function
-                `;
-                const file = project['builder'].program.setFile(filePath, contents);
-                if (file) {
-                    let document = TextDocument.create(util.pathToUri(file.srcPath), 'brightscript', 1, contents);
-                    (server['documents']['_syncedDocuments'] as Map<string, TextDocument>).set(document.uri, document);
-                    completionDocuments.push(document);
-                }
-                project['builder'].program.setFile(s`${rootDir}/source/main.bs`, `
-                    sub main()
-                        print   'completion here
-                    end sub
-                `);
-            }
-        });
-
         it('should remove duplicate items across projects', async () => {
-            fsExtra.outputFileSync(s`${rootDir}/bsconfig.json`, '');
+            server['connection'] = server['establishConnection']();
+            fsExtra.outputFileSync(`${rootDir}/source/main.brs`, `
+                function pi()
+                    return 3.141592653589793
+                end function
+
+                function buildAwesome()
+                    return 42
+                end function
+            `);
+            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {});
             const subProjectConfig = {
                 files: [
                     '**/*',
@@ -1796,12 +1773,18 @@ describe('LanguageServer', () => {
                 ]
             };
 
-            fsExtra.outputFileSync(s`${rootDir}/alpha/bsconfig.json`, JSON.stringify(subProjectConfig));
-            fsExtra.outputFileSync(s`${rootDir}/beta/bsconfig.json`, JSON.stringify(subProjectConfig));
+            fsExtra.outputJsonSync(s`${rootDir}/alpha/bsconfig.json`, subProjectConfig);
+            fsExtra.outputJsonSync(s`${rootDir}/beta/bsconfig.json`, subProjectConfig);
             server.run();
+
+            await server['onInitialize']({ capabilities: {} } as any);
+            await server['onInitialized']();
             await server['syncProjects']();
+
             const result = await server['onCompletion']({
-                textDocument: { uri: util.pathToUri(s`${rootDir}/source/main.bs`) },
+                textDocument: {
+                    uri: util.pathToUri(s`${rootDir}/source/main.brs`)
+                },
                 position: util.createPosition(2, 26)
             });
             expect(result.items.filter(compItem => compItem.label === 'buildAwesome')).to.length(1);

@@ -791,7 +791,7 @@ export class Util {
      * Does the string appear to be a uri (i.e. does it start with `file:`)
      */
     public isUriLike(filePath: string) {
-        return filePath?.indexOf('file:') === 0;// eslint-disable-line @typescript-eslint/prefer-string-starts-ends-with
+        return filePath?.startsWith('file:');
     }
 
     /**

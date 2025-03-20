@@ -192,10 +192,10 @@ export class Project implements LspProject {
     public getDiagnostics(): LspDiagnostic[] {
         const diagnostics = this.builder.getDiagnostics();
         return diagnostics.map(x => {
-            const uri = util.uriToPath(x.location.uri);
+            const srcPath = util.uriToPath(x.location.uri);
             return {
-                ...util.toDiagnostic(x, uri),
-                uri: uri
+                ...util.toDiagnostic(x, srcPath),
+                uri: x.location.uri
             };
         });
     }
