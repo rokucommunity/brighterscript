@@ -26,6 +26,7 @@ import { URI } from 'vscode-uri';
 import undent from 'undent';
 import { tempDir, rootDir } from '../testHelpers.spec';
 import * as fileUrl from 'file-url';
+import { LiteralExpression } from '../parser/Expression';
 
 let sinon = sinonImport.createSandbox();
 
@@ -4306,6 +4307,30 @@ describe('BrsFile', () => {
             ...DiagnosticMessages.tooManyCallableParameters(65, 63),
             range: util.createRange(1, 648, 1, 651)
         }]);
+    });
+
+    describe('getClosestExpression', () => {
+        it('returns undefined for missing Position', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub Main()
+                    if true THEN
+                        print "works"
+                    end if
+                end sub
+            `);
+            expect(file.getClosestExpression(undefined)).to.be.undefined;
+        });
+
+        it('returns the closest expression at Position', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub Main()
+                    if true THEN
+                        print "works"
+                    end if
+                end sub
+            `);
+            expect(file.getClosestExpression({ line: 3, character: 34 })).to.be.instanceOf(LiteralExpression);
+        });
     });
 
 });
