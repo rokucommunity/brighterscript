@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.69.3](https://github.com/rokucommunity/brighterscript/compare/v0.69.2...v0.69.3) - 2025-03-20
+### Changed
+ - Adds `Alias` statement syntax from v1 to v0 ([#1430](https://github.com/rokucommunity/brighterscript/pull/1430))
+ - Remove temporary code that was accidentally committed ([#1432](https://github.com/rokucommunity/brighterscript/pull/1432))
+### Fixed
+ - Fixed `getClosestExpression` bug to return `undefined` when position not found ([#1433](https://github.com/rokucommunity/brighterscript/pull/1433))
+
+
+
 ## [0.69.2](https://github.com/rokucommunity/brighterscript/compare/v0.69.1...v0.69.2) - 2025-03-13
 ### Changed
  - Significantly improve the performance of standardizePath ([#1425](https://github.com/rokucommunity/brighterscript/pull/1425))
