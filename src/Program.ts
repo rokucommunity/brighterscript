@@ -1188,7 +1188,6 @@ export class Program {
                 scope.validate(this.currentScopeValidationOptions);
             })
             .forEach(() => scopesToValidate, (scope) => {
-                //sort the scope names so we get consistent results
                 this.plugins.emit('afterScopeValidate', {
                     program: this,
                     scope: scope
