@@ -26,7 +26,6 @@ import { ComponentType } from './types/ComponentType';
 import * as path from 'path';
 import undent from 'undent';
 import { Scope } from './Scope';
-import PluginInterface from './PluginInterface';
 
 const sinon = createSandbox();
 
