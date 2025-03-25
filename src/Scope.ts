@@ -772,12 +772,7 @@ export class Scope {
         validationTime: 0
     };
 
-    public validate(validationOptions: ScopeValidationOptions = { force: false }) {
-        this.validationMetrics = {
-            linkTime: 0,
-            validationTime: 0
-        };
-
+    public shouldValidate(validationOptions: ScopeValidationOptions = { force: false }) {
         //if this scope is already validated, no need to revalidate
         if (this.isValidated === true && !validationOptions.force) {
             this.logDebug('validate(): already validated');
@@ -785,6 +780,23 @@ export class Scope {
         }
 
         if (!validationOptions.initialValidation && validationOptions.filesToBeValidatedInScopeContext?.size === 0) {
+            // There was no need to validate this scope.
+            (this as any).isValidated = true;
+            return false;
+        }
+        return true;
+    }
+
+
+    public validate(validationOptions: ScopeValidationOptions = { force: false }) {
+        this.validationMetrics = {
+            linkTime: 0,
+            validationTime: 0
+        };
+
+        //if this scope is already validated, no need to revalidate
+        if (!this.shouldValidate(validationOptions)) {
+            this.logDebug('validate(): already validated');
             // There was no need to validate this scope.
             (this as any).isValidated = true;
             return false;
@@ -814,10 +826,8 @@ export class Scope {
                 changedSymbols: validationOptions?.changedSymbols
             };
             t0 = performance.now();
-            this.program.plugins.emit('beforeScopeValidate', scopeValidateEvent);
             this.program.plugins.emit('onScopeValidate', scopeValidateEvent);
             this.validationMetrics.validationTime = performance.now() - t0;
-            this.program.plugins.emit('afterScopeValidate', scopeValidateEvent);
             //unlink all symbol tables from this scope (so they don't accidentally stick around)
             this.unlinkSymbolTable();
             (this as any).isValidated = true;
