@@ -19,7 +19,7 @@ import type { SinonSpy } from 'sinon';
 import { createSandbox } from 'sinon';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import { AssetFile } from './files/AssetFile';
-import type { ProvideFileEvent, CompilerPlugin, BeforeProvideFileEvent, AfterProvideFileEvent, BeforeFileAddEvent, AfterFileAddEvent, BeforeFileRemoveEvent, AfterFileRemoveEvent, ScopeValidationOptions } from './interfaces';
+import type { ProvideFileEvent, CompilerPlugin, BeforeProvideFileEvent, AfterProvideFileEvent, BeforeFileAddEvent, AfterFileAddEvent, BeforeFileRemoveEvent, AfterFileRemoveEvent, ScopeValidationOptions, AfterFileValidateEvent, BeforeScopeValidateEvent, OnScopeValidateEvent, BeforeFileValidateEvent, OnFileValidateEvent, AfterScopeValidateEvent } from './interfaces';
 import { StringType, TypedFunctionType, DynamicType, FloatType, IntegerType, InterfaceType, ArrayType, BooleanType, DoubleType, UnionType } from './types';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { ComponentType } from './types/ComponentType';
@@ -845,6 +845,142 @@ describe('Program', () => {
                 error = e as any;
             }
             expect(error?.message).to.eql('Crash for test');
+        });
+
+        describe('cancelled', () => {
+
+            type eventName = 'beforeFileValidate' | 'onFileValidate' | 'afterFileValidate' | 'beforeScopeValidate' | 'onScopeValidate' | 'afterScopeValidate';
+            interface CancellationPluginOptions {
+                cancelOn?: eventName[];
+                eventWhenCancelled?: BeforeFileValidateEvent | OnFileValidateEvent | AfterFileValidateEvent | BeforeScopeValidateEvent | OnScopeValidateEvent | AfterScopeValidateEvent;
+                cancelTokenSource: CancellationTokenSource;
+            }
+
+            function getCancellationPlugin(option: CancellationPluginOptions): CompilerPlugin {
+                return {
+                    name: 'cancelPlugin',
+                    beforeFileValidate: (event) => {
+                        if (option?.cancelOn.includes('beforeFileValidate')) {
+                            option.eventWhenCancelled = event;
+                            option.cancelTokenSource.cancel();
+                        }
+                    },
+                    onFileValidate: (event) => {
+                        if (option?.cancelOn.includes('onFileValidate')) {
+                            option.eventWhenCancelled = event;
+                            option.cancelTokenSource.cancel();
+                        }
+                    },
+                    afterFileValidate: (event) => {
+                        if (option?.cancelOn.includes('afterFileValidate')) {
+                            option.eventWhenCancelled = event;
+                            option.cancelTokenSource.cancel();
+                        }
+                    },
+                    beforeScopeValidate: (event) => {
+                        if (option?.cancelOn.includes('beforeScopeValidate')) {
+                            option.eventWhenCancelled = event;
+                            option.cancelTokenSource.cancel();
+                        }
+                    },
+                    onScopeValidate: (event) => {
+                        if (option?.cancelOn.includes('onScopeValidate')) {
+                            option.eventWhenCancelled = event;
+                            option.cancelTokenSource.cancel();
+                        }
+                    },
+                    afterScopeValidate: (event) => {
+                        if (option?.cancelOn.includes('afterScopeValidate')) {
+                            option.eventWhenCancelled = event;
+                            option.cancelTokenSource.cancel();
+                        }
+                    }
+                };
+            }
+
+            it('should be cancellable', async () => {
+                const options: CancellationPluginOptions = { cancelOn: [], eventWhenCancelled: null, cancelTokenSource: new CancellationTokenSource() };
+                const cancelPlugin = getCancellationPlugin(options);
+                program.plugins.add(cancelPlugin);
+
+                program.setFile('source/file1.bs', `
+                    function foo() as integer
+                        return 1
+                    end function
+                `);
+                program.setFile('source/file2.bs', `
+                    function bar() as boolean
+                        return true
+                    end function
+                `);
+                // do an initial validation
+                program.validate();
+                expectZeroDiagnostics(program);
+                options.cancelOn = ['afterFileValidate'];
+
+                // change file
+                program.setFile('source/file2.bs', `
+                    function bar() as integer
+                        return true
+                    end function
+                `);
+                options.cancelTokenSource = new CancellationTokenSource();
+                await program.validate({ async: true, cancellationToken: options.cancelTokenSource.token });
+                const event = options.eventWhenCancelled as AfterFileValidateEvent;
+                expect(event).not.to.undefined;
+                expect(event.file.srcPath).includes('file2.bs');
+            });
+
+            it('scope validation should contain symbols from previous cancellations', async () => {
+                const options: CancellationPluginOptions = { cancelOn: [], eventWhenCancelled: null, cancelTokenSource: new CancellationTokenSource() };
+                const cancelPlugin = getCancellationPlugin(options);
+                program.plugins.add(cancelPlugin);
+
+                program.setFile('source/file1.bs', `
+                    function foo() as integer
+                        return 1
+                    end function
+                `);
+                program.setFile('source/file2.bs', `
+                    function bar() as boolean
+                        return true
+                    end function
+                `);
+                // do an initial validation
+                program.validate();
+                expectZeroDiagnostics(program);
+                options.cancelOn = ['beforeScopeValidate'];
+
+                // change file2
+                program.setFile('source/file2.bs', `
+                    function bar() as integer
+                        return true
+                    end function
+                `);
+                options.cancelTokenSource = new CancellationTokenSource();
+                await program.validate({ async: true, cancellationToken: options.cancelTokenSource.token });
+                //cancelled before scope validation, so source scope should be unvalidated
+                const sourceScope = program.getScopeByName('source');
+                expect(sourceScope.isValidated).to.be.false;
+
+                // change file1
+                program.setFile('source/file1.bs', `
+                    function foo(x as integer) as integer
+                        return x
+                    end function
+                `);
+
+                options.cancelOn = ['onScopeValidate'];
+                options.cancelTokenSource = new CancellationTokenSource();
+                await program.validate({ async: true, cancellationToken: options.cancelTokenSource.token });
+                const event = options.eventWhenCancelled as OnScopeValidateEvent;
+                // Event details has info from both changes at scope validation step
+                const srcPaths = event.changedFiles.map(file => file.srcPath);
+                expect(srcPaths.length).to.eq(2);
+                const changedFunctions = Array.from(event.changedSymbols.get(SymbolTypeFlag.runtime).values());
+                expect(changedFunctions).to.include('foo');
+                expect(changedFunctions).to.include('bar');
+            });
         });
     });
 

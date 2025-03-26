@@ -909,6 +909,24 @@ export class Program {
 
     private validatePromise: Promise<void> | undefined;
 
+
+    private validationDetails: {
+        brsFilesValidated: BrsFile[];
+        xmlFilesValidated: XmlFile[];
+        changedSymbols: Map<SymbolTypeFlag, Set<string>>;
+        changedComponentTypes: string[];
+        scopesToValidate: Scope[];
+        filesToBeValidatedInScopeContext: Set<BscFile>;
+
+    } = {
+            brsFilesValidated: [],
+            xmlFilesValidated: [],
+            changedSymbols: new Map<SymbolTypeFlag, Set<string>>(),
+            changedComponentTypes: [],
+            scopesToValidate: [],
+            filesToBeValidatedInScopeContext: new Set<BscFile>()
+        };
+
     /**
      * Traverse the entire project, and validate all scopes
      */
@@ -934,17 +952,19 @@ export class Program {
 
         let beforeProgramValidateWasEmitted = false;
 
+        const brsFilesValidated: BrsFile[] = this.validationDetails.brsFilesValidated;
+        const xmlFilesValidated: XmlFile[] = this.validationDetails.xmlFilesValidated;
+        const changedSymbols = this.validationDetails.changedSymbols;
+        const changedComponentTypes = this.validationDetails.changedComponentTypes;
+        const scopesToValidate = this.validationDetails.scopesToValidate;
+        const filesToBeValidatedInScopeContext = this.validationDetails.filesToBeValidatedInScopeContext;
+
         //validate every file
-        const brsFilesValidated: BrsFile[] = [];
-        const xmlFilesValidated: XmlFile[] = [];
-        const changedSymbols = new Map<SymbolTypeFlag, Set<string>>();
-        const changedComponentTypes: string[] = [];
 
         let logValidateEnd = (status?: string) => { };
 
         //will be populated later on during the correspnding sequencer event
         let filesToProcess: BscFile[];
-        let filesToBeValidatedInScopeContext: Set<BscFile>;
 
         const sequencer = new Sequencer({
             name: 'program.validate',
@@ -975,6 +995,10 @@ export class Program {
             .forEach('addDeferredComponentTypeSymbolCreation',
                 () => {
                     filesToProcess = Object.values(this.files).sort(firstBy(x => x.srcPath)).filter(x => !x.isValidated);
+                    for (const file of filesToProcess) {
+                        filesToBeValidatedInScopeContext.add(file);
+                    }
+
                     //return the list of files that need to be processed
                     return filesToProcess;
                 }, (file) => {
@@ -1069,7 +1093,11 @@ export class Program {
                             changedSymbolSet.add(change);
                         }
                     }
-                    changedSymbols.set(flag, changedSymbolSet);
+                    if (!changedSymbols.has(flag)) {
+                        changedSymbols.set(flag, changedSymbolSet);
+                    } else {
+                        changedSymbols.set(flag, new Set([...changedSymbols.get(flag), ...changedSymbolSet]));
+                    }
                 }
 
                 // update changed symbol set with any changed component
@@ -1096,7 +1124,11 @@ export class Program {
                     }
                 } while (foundDependentTypes);
 
-                changedSymbols.set(SymbolTypeFlag.typetime, new Set([...changedTypeSymbols, ...dependentTypesChanged]));
+                changedSymbols.set(SymbolTypeFlag.typetime, new Set([...changedSymbols.get(SymbolTypeFlag.typetime), ...changedTypeSymbols, ...dependentTypesChanged]));
+
+                // can reset filesValidatedList, because they are no longer needed
+                this.validationDetails.brsFilesValidated = [];
+                this.validationDetails.xmlFilesValidated = [];
             })
             .once('tracks changed symbols and prepares files and scopes for validation.', () => {
                 if (this.options.logLevel === LogLevel.debug) {
@@ -1105,7 +1137,6 @@ export class Program {
                     const changedTypetime = Array.from(changedSymbols.get(SymbolTypeFlag.typetime)).sort();
                     this.logger.debug('Changed Symbols (typeTime):', changedTypetime.join(', '));
                 }
-                filesToBeValidatedInScopeContext = new Set<BscFile>(filesToProcess);
 
                 const scopesToCheck = this.getScopesForCrossScopeValidation(changedComponentTypes.length > 0);
                 this.crossScopeValidation.buildComponentsMap();
@@ -1118,9 +1149,12 @@ export class Program {
                 this.currentScopeValidationOptions = {
                     filesToBeValidatedInScopeContext: filesToBeValidatedInScopeContext,
                     changedSymbols: changedSymbols,
-                    changedFiles: filesToProcess,
+                    changedFiles: Array.from(filesToBeValidatedInScopeContext),
                     initialValidation: this.isFirstValidation
                 };
+
+                //can reset changedComponent types
+                this.validationDetails.changedComponentTypes = [];
             })
             .forEach('invalidate affected scopes', () => filesToBeValidatedInScopeContext, (file) => {
                 if (isBrsFile(file)) {
@@ -1133,11 +1167,34 @@ export class Program {
             .forEach('validate scopes', () => this.getSortedScopeNames(), (scopeName) => {
                 //sort the scope names so we get consistent results
                 let scope = this.scopes[scopeName];
+                if (scope.shouldValidate(this.currentScopeValidationOptions)) {
+                    scopesToValidate.push(scope);
+                    this.plugins.emit('beforeScopeValidate', {
+                        program: this,
+                        scope: scope
+                    });
+                }
+            })
+            .forEach('validate scope', () => this.getSortedScopeNames(), (scopeName) => {
+                //sort the scope names so we get consistent results
+                let scope = this.scopes[scopeName];
                 scope.validate(this.currentScopeValidationOptions);
+            })
+            .forEach('afterScopeValidate', () => scopesToValidate, (scope) => {
+                this.plugins.emit('afterScopeValidate', {
+                    program: this,
+                    scope: scope
+                });
             })
             .once('detect duplicate component names', () => {
                 this.detectDuplicateComponentNames();
                 this.isFirstValidation = false;
+
+                // can reset other validation details
+                this.validationDetails.changedSymbols = new Map<SymbolTypeFlag, Set<string>>();
+                this.validationDetails.scopesToValidate = [];
+                this.validationDetails.filesToBeValidatedInScopeContext = new Set<BscFile>();
+
             })
             .onCancel(() => {
                 logValidateEnd('cancelled');
