@@ -954,13 +954,13 @@ export class Program {
         //this sequencer allows us to run in both sync and async mode, depending on whether options.async is enabled.
         //We use this to prevent starving the CPU during long validate cycles when running in a language server context
         sequencer
-            .once(() => {
+            .once('wait for previous run', () => {
                 //if running in async mode, return the previous validation promise to ensure we're only running one at a time
                 if (options?.async) {
                     return previousValidationPromise;
                 }
             })
-            .once(() => {
+            .once('before and on programValidate', () => {
                 logValidateEnd = this.logger.timeStart(LogLevel.log, `Validating project${(this.logger.logLevel as LogLevel) > LogLevel.log ? ` (run ${validationRunId})` : ''}`);
                 this.diagnostics.clearForTag(ProgramValidatorDiagnosticsTag);
                 this.plugins.emit('beforeProgramValidate', {
@@ -972,13 +972,12 @@ export class Program {
                 });
             })
             //handle some component symbol stuff
-            .forEach(
-                //return the list of files that need to be processed
+            .forEach('addDeferredComponentTypeSymbolCreation',
                 () => {
                     filesToProcess = Object.values(this.files).sort(firstBy(x => x.srcPath)).filter(x => !x.isValidated);
+                    //return the list of files that need to be processed
                     return filesToProcess;
-                },
-                (file) => {
+                }, (file) => {
                     // cast a wide net for potential changes in components
                     if (isXmlFile(file)) {
                         this.addDeferredComponentTypeSymbolCreation(file);
@@ -989,25 +988,23 @@ export class Program {
                             }
                         }
                     }
-                },
-                { label: 'Prebuild component types' }
+                }
             )
-            .once(() => {
+            .once('addComponentReferenceTypes', () => {
                 // Create reference component types for any component that changes
                 for (let [componentKey, componentName] of this.componentSymbolsToUpdate.entries()) {
                     this.addComponentReferenceType(componentKey, componentName);
                 }
-            }, { label: 'Prebuild component types' })
-
-            //run the beforeEach event for every unvalidated file
-            .forEach(() => filesToProcess, (file) => {
+            })
+            .forEach('beforeFileValidate', () => filesToProcess, (file) => {
+                //run the beforeFilevalidate event for every unvalidated file
                 this.plugins.emit('beforeFileValidate', {
                     program: this,
                     file: file
                 });
             })
-            //validate each unvalidated file
-            .forEach(() => filesToProcess, (file) => {
+            .forEach('onFileValidate', () => filesToProcess, (file) => {
+                //run the onFileValidate event for every unvalidated file
                 this.plugins.emit('onFileValidate', {
                     program: this,
                     file: file
@@ -1019,15 +1016,14 @@ export class Program {
                     xmlFilesValidated.push(file);
                 }
             })
-            //handle afterFileValidate events
-            .forEach(() => filesToProcess, (file) => {
+            .forEach('afterFileValidate', () => filesToProcess, (file) => {
+                //run the onFileValidate event for every unvalidated file
                 this.plugins.emit('afterFileValidate', {
                     program: this,
                     file: file
                 });
             })
-            .once(() => {
-                // Build component types for any component that changes
+            .once('Build component types for any component that changes', () => {
                 this.logger.time(LogLevel.info, ['Build component types'], () => {
                     for (let [componentKey, componentName] of this.componentSymbolsToUpdate.entries()) {
                         if (this.updateComponentSymbolInGlobalScope(componentKey, componentName)) {
@@ -1037,7 +1033,7 @@ export class Program {
                     this.componentSymbolsToUpdate.clear();
                 });
             })
-            .once(() => {
+            .once('track and update type-time and runtime symbol dependencies and changes', () => {
                 const changedSymbolsMapArr = [...brsFilesValidated, ...xmlFilesValidated]?.map(f => {
                     if (isBrsFile(f)) {
                         return f.providedSymbols.changes;
@@ -1102,7 +1098,7 @@ export class Program {
 
                 changedSymbols.set(SymbolTypeFlag.typetime, new Set([...changedTypeSymbols, ...dependentTypesChanged]));
             })
-            .once(() => {
+            .once('tracks changed symbols and prepares files and scopes for validation.', () => {
                 if (this.options.logLevel === LogLevel.debug) {
                     const changedRuntime = Array.from(changedSymbols.get(SymbolTypeFlag.runtime)).sort();
                     this.logger.debug('Changed Symbols (runTime):', changedRuntime.join(', '));
@@ -1126,22 +1122,20 @@ export class Program {
                     initialValidation: this.isFirstValidation
                 };
             })
-            .forEach(() => filesToBeValidatedInScopeContext, (file) => {
-                for (const file of filesToBeValidatedInScopeContext) {
-                    if (isBrsFile(file)) {
-                        file.validationSegmenter.unValidateAllSegments();
-                        for (const scope of this.getScopesForFile(file)) {
-                            scope.invalidate();
-                        }
+            .forEach('invalidate affected scopes', () => filesToBeValidatedInScopeContext, (file) => {
+                if (isBrsFile(file)) {
+                    file.validationSegmenter.unValidateAllSegments();
+                    for (const scope of this.getScopesForFile(file)) {
+                        scope.invalidate();
                     }
                 }
             })
-            .forEach(() => this.getSortedScopeNames(), (scopeName) => {
+            .forEach('validate scopes', () => this.getSortedScopeNames(), (scopeName) => {
                 //sort the scope names so we get consistent results
                 let scope = this.scopes[scopeName];
                 scope.validate(this.currentScopeValidationOptions);
             })
-            .once(() => {
+            .once('detect duplicate component names', () => {
                 this.detectDuplicateComponentNames();
                 this.isFirstValidation = false;
             })
@@ -1160,6 +1154,14 @@ export class Program {
                         wasCancelled: wasCancelled
                     });
                 }
+
+                //log all the sequencer timing metrics
+                this.logger.log(
+                    sequencer.formatMetrics({
+                        header: 'Program.validate metrics:',
+                        includeLoopIterations: this.logger.isLogLevelEnabled(LogLevel.info)
+                    })
+                );
 
                 //regardless of the success of the validation, mark this run as complete
                 deferred.resolve();
