@@ -3,7 +3,7 @@ import * as EventEmitter from 'eventemitter3';
 import util, { standardizePath as s } from '../util';
 import * as path from 'path';
 import type { ProjectConfig, ActivateResponse, LspDiagnostic, LspProject } from './LspProject';
-import type { CompilerPlugin, Hover, MaybePromise } from '../interfaces';
+import type { Plugin, Hover, MaybePromise } from '../interfaces';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { URI } from 'vscode-uri';
 import { Deferred } from '../deferred';
@@ -102,7 +102,7 @@ export class Project implements LspProject {
                     diagnostics: diagnostics
                 });
             }
-        } as CompilerPlugin);
+        } as Plugin);
 
         //if we found a deprecated brsconfig.json, add a diagnostic warning the user
         if (this.bsconfigPath && path.basename(this.bsconfigPath) === 'brsconfig.json') {

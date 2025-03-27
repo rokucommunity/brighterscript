@@ -20,7 +20,7 @@ import { isBrsFile } from './astUtils/reflection';
 import type { LiteralExpression } from './parser/Expression';
 import type { AstEditor } from './astUtils/AstEditor';
 import { tempDir, rootDir, stagingDir } from './testHelpers.spec';
-import type { BsDiagnostic, CompilerPlugin } from './interfaces';
+import type { BsDiagnostic, Plugin } from './interfaces';
 import { createLogger } from './logging';
 import { Scope } from './Scope';
 import undent from 'undent';
@@ -273,7 +273,7 @@ describe('Program', () => {
                         cancel.cancel();
                     }
                 }
-            } as CompilerPlugin;
+            } as Plugin;
             //add a plugin that monitors where we are in the process, so we can cancel the validate at the correct time
             program.plugins.add(plugin);
 
