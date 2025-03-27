@@ -1212,11 +1212,12 @@ export class Program {
                     });
                 }
 
-                //log all the sequencer timing metrics
-                this.logger.log(
+                //log all the sequencer timing metrics if `info` logging is enabled
+                this.logger.info(
                     sequencer.formatMetrics({
                         header: 'Program.validate metrics:',
-                        includeLoopIterations: this.logger.isLogLevelEnabled(LogLevel.info)
+                        //only include loop iterations if `debug` logging is enabled
+                        includeLoopIterations: this.logger.isLogLevelEnabled(LogLevel.debug)
                     })
                 );
 
