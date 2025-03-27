@@ -251,6 +251,47 @@ describe('ProgramBuilder', () => {
             expectZeroDiagnostics(builder);
             expect(builder.program.getFile(s``));
         });
+
+        it('runs initial validation by default', async () => {
+            //undo the vfs for this test
+            sinon.restore();
+            fsExtra.outputFileSync(`${rootDir}/source/lib1.brs`, 'sub doSomething()\nprint "lib1"\nend sub');
+
+            const stub = sinon.stub(builder as any, 'validateProject').callsFake(() => { });
+
+            await builder.run({
+                rootDir: rootDir,
+                createPackage: false,
+                deploy: false,
+                copyToStaging: false,
+                //both files should want to be the `source/lib.brs` file...but only the last one should win
+                files: ['source/**/*']
+            });
+            expectZeroDiagnostics(builder);
+            //validate was called
+            expect(stub.callCount).to.eql(1);
+        });
+
+        it('skips initial validation', async () => {
+            //undo the vfs for this test
+            sinon.restore();
+            fsExtra.outputFileSync(`${rootDir}/source/lib1.brs`, 'sub doSomething()\nprint "lib1"\nend sub');
+
+            const stub = sinon.stub(builder as any, 'validateProject').callsFake(() => { });
+
+            await builder.run({
+                rootDir: rootDir,
+                createPackage: false,
+                deploy: false,
+                copyToStaging: false,
+                validate: false,
+                //both files should want to be the `source/lib.brs` file...but only the last one should win
+                files: ['source/**/*']
+            });
+            expectZeroDiagnostics(builder);
+            //validate was not called
+            expect(stub.callCount).to.eql(0);
+        });
     });
 
     it('uses a unique logger for each builder', async () => {

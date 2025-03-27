@@ -126,7 +126,7 @@ export class DiagnosticManager {
      * Returns a list of all diagnostics, filtered by the in-file comment filters, filtered by BsConfig diagnostics and adjusted based on BsConfig
      * If the same diagnostic is included in multiple contexts, they are included in a single diagnostic's relatedInformation
      */
-    public getDiagnostics() {
+    public getDiagnostics(): BsDiagnostic[] {
         const doDiagnosticsGathering = () => {
             const diagnostics = this.getNonSuppressedDiagnostics();
             const filteredDiagnostics = this.logger?.time(LogLevel.debug, ['filter diagnostics'], () => {

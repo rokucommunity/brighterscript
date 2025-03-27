@@ -1,4 +1,4 @@
-import type { Range, CodeAction, Position, CompletionItem, Location, DocumentSymbol, WorkspaceSymbol, DiagnosticSeverity, CodeDescription, DiagnosticTag, DiagnosticRelatedInformation } from 'vscode-languageserver-protocol';
+import type { Range, CodeAction, Position, CompletionItem, Location, DocumentSymbol, WorkspaceSymbol, Disposable, FileChangeType, CodeDescription, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag } from 'vscode-languageserver-protocol';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -518,7 +518,12 @@ export interface BeforeProgramValidateEvent {
     program: Program;
 }
 export type OnProgramValidateEvent = BeforeProgramValidateEvent;
-export type AfterProgramValidateEvent = BeforeProgramValidateEvent;
+export interface AfterProgramValidateEvent extends BeforeProgramValidateEvent {
+    /**
+     * Was the validation cancelled? Will be false if the validation was completed
+     */
+    wasCancelled: boolean;
+}
 
 
 export interface ProvideCompletionsEvent<TFile extends BscFile = BscFile> {
@@ -701,7 +706,7 @@ export interface TranspileEntry {
 export interface ScopeValidationOptions {
     filesToBeValidatedInScopeContext?: Set<BscFile>;
     changedSymbols?: Map<SymbolTypeFlag, Set<string>>;
-    changedFiles?: Set<BscFile>;
+    changedFiles?: BscFile[];
     force?: boolean;
     initialValidation?: boolean;
 }
@@ -1115,3 +1120,25 @@ export interface ScopeNamespaceContainer {
  */
 export type Writeable<T> = { -readonly [P in keyof T]: T[P] };
 export type DeepWriteable<T> = { -readonly [P in keyof T]: DeepWriteable<T[P]> };
+export type DisposableLike = Disposable | (() => any);
+
+export type MaybePromise<T> = T | Promise<T>;
+
+export interface FileChange {
+    /**
+     * Absolute path to the source file
+     */
+    srcPath: string;
+    /**
+     * What type of change was this.
+     */
+    type: FileChangeType;
+    /**
+     * If provided, this is the new contents of the file. If not provided, the file will be read from disk
+     */
+    fileContents?: string;
+    /**
+     * If true, this file change can have a project created exclusively for it, it no other projects handled it
+     */
+    allowStandaloneProject?: boolean;
+}

@@ -742,7 +742,7 @@ export class BrsFile implements BscFile {
     }
 
     /**
-     * Find the first scope that has a namespace with this name.
+     * Finds the first scope for this file, then returns true if there's a namespace with this name.
      * Returns false if no namespace was found with that name
      */
     public calleeStartsWithNamespace(callee: Expression) {

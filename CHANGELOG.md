@@ -398,6 +398,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.66.0-alpha.0](https://github.com/rokucommunity/brighterscript/compare/v0.65.1...v0.66.0-alpha.0) - 2023-06-09
 ### Changed
  - all the type tracking stuff!
+## [0.69.2](https://github.com/rokucommunity/brighterscript/compare/v0.69.1...v0.69.2) - 2025-03-13
+### Changed
+ - Significantly improve the performance of standardizePath ([#1425](https://github.com/rokucommunity/brighterscript/pull/1425))
+ - Backport v1 typecast syntax to v0 ([#1421](https://github.com/rokucommunity/brighterscript/pull/1421))
+
+
+
+## [0.69.1](https://github.com/rokucommunity/brighterscript/compare/v0.69.0...v0.69.1) - 2025-03-10
+### Changed
+ - Prevent running the lsp project in a worker thread ([#1423](https://github.com/rokucommunity/brighterscript/pull/1423))
+
+
+
+## [0.69.0](https://github.com/rokucommunity/brighterscript/compare/v0.68.5...v0.69.0) - 2025-02-10
+### Changed
+ - Language Server Rewrite ([#993](https://github.com/rokucommunity/brighterscript/pull/993))
+
+
+
+## [0.68.5](https://github.com/rokucommunity/brighterscript/compare/v0.68.4...v0.68.5) - 2025-02-06
+### Added
+ - Add experimental `validate` flag to ProgramBuilder.run() ([#1409](https://github.com/rokucommunity/brighterscript/pull/1409))
+
+
+
 ## [0.68.4](https://github.com/rokucommunity/brighterscript/compare/v0.68.3...v0.68.4) - 2025-01-22
 ### Changed
  - upgrade to [roku-deploy@3.12.4](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3124---2025-01-22). Notable changes since 3.12.3:
