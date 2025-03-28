@@ -334,7 +334,7 @@ Here's a small example:
 
 ```typescript
 export default function (pluginOptions: PluginOptions) {
-    if(semver.major(pluginOptions.version) === '1') {
+    if(semver.major(pluginOptions?.version) === '1') {
         return {
             name: 'v1 version of your plugin!'
         };
