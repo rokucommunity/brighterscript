@@ -637,7 +637,7 @@ describe('util', () => {
             expect(stub.callCount).to.equal(0);
         });
 
-        it.only('passes factory options', () => {
+        it('passes factory options', () => {
             fsExtra.writeFileSync(pluginPath, `
                 module.exports.default = function(options) {
                     return {
