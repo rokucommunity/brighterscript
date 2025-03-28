@@ -9,7 +9,7 @@ import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, TranspileResult, MaybePromise, DisposableLike } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, Plugin, ExpressionInfo, TranspileResult, MaybePromise, DisposableLike, PluginFactory } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -40,6 +40,17 @@ import { components, events, interfaces } from './roku-types';
 export class Util {
     public clearConsole() {
         // process.stdout.write('\x1Bc');
+    }
+
+    /**
+     * Get the version of brighterscript
+     */
+    public getBrighterScriptVersion() {
+        try {
+            return fsExtra.readJsonSync(`${__dirname}/../package.json`).version;
+        } catch {
+            return undefined;
+        }
     }
 
     /**
@@ -1220,15 +1231,15 @@ export class Util {
     /**
      * Load and return the list of plugins
      */
-    public loadPlugins(cwd: string, pathOrModules: string[], onError?: (pathOrModule: string, err: Error) => void): CompilerPlugin[] {
+    public loadPlugins(cwd: string, pathOrModules: string[], onError?: (pathOrModule: string, err: Error) => void): Plugin[] {
         const logger = createLogger();
-        return pathOrModules.reduce<CompilerPlugin[]>((acc, pathOrModule) => {
+        return pathOrModules.reduce<Plugin[]>((acc, pathOrModule) => {
             if (typeof pathOrModule === 'string') {
                 try {
                     const loaded = requireRelative(pathOrModule, cwd);
-                    const theExport: CompilerPlugin | CompilerPluginFactory = loaded.default ? loaded.default : loaded;
+                    const theExport: Plugin | PluginFactory = loaded.default ? loaded.default : loaded;
 
-                    let plugin: CompilerPlugin | undefined;
+                    let plugin: Plugin | undefined;
 
                     // legacy plugins returned a plugin object. If we find that, then add a warning
                     if (typeof theExport === 'object') {
@@ -1237,7 +1248,9 @@ export class Util {
 
                         // the official plugin format is a factory function that returns a new instance of a plugin.
                     } else if (typeof theExport === 'function') {
-                        plugin = theExport();
+                        plugin = theExport({
+                            version: this.getBrighterScriptVersion()
+                        });
                     } else {
                         //this should never happen; somehow an invalid plugin has made it into here
                         throw new Error(`TILT: Encountered an invalid plugin: ${String(plugin)}`);

@@ -186,9 +186,24 @@ export interface CommentFlag {
 
 type ValidateHandler = (scope: Scope, files: BscFile[], callables: CallableContainerMap) => void;
 
-export type CompilerPluginFactory = () => CompilerPlugin;
+export interface PluginFactoryOptions {
+    /**
+     * What version of brighterscript is activating this plugin? (Useful for picking different plugins or behavior based on the version of brighterscript)
+     */
+    version: string;
+}
+export type PluginFactory = (options?: PluginFactoryOptions) => Plugin;
+/**
+ * @deprecated use `PluginFactory` instead
+ */
+export type CompilerPluginFactory = PluginFactory;
 
-export interface CompilerPlugin {
+/**
+ * @deprecated use `Plugin` instead
+ */
+export type CompilerPlugin = Plugin;
+
+export interface Plugin {
     name: string;
     //program events
     beforeProgramCreate?: (builder: ProgramBuilder) => void;

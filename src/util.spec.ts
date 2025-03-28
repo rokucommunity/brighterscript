@@ -636,6 +636,22 @@ describe('util', () => {
             //does not warn about factory pattern
             expect(stub.callCount).to.equal(0);
         });
+
+        it('passes factory options', () => {
+            fsExtra.writeFileSync(pluginPath, `
+                module.exports.default = function(options) {
+                    return {
+                        name: 'AwesomePlugin',
+                        initOptions: options
+                    };
+                };
+            `);
+            sinon.stub(console, 'warn').callThrough();
+            const plugins = util.loadPlugins(cwd, [pluginPath]);
+            expect((plugins[0] as any).initOptions).to.eql({
+                version: util.getBrighterScriptVersion()
+            });
+        });
     });
 
     describe('copyBslibToStaging', () => {

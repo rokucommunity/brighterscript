@@ -104,8 +104,8 @@ end function
 function __Duck_builder()
     instance = __Animal_builder()
     instance.super0_new = instance.new
-    instance.new = sub()
-        m.super0_new()
+    instance.new = sub(name as string)
+        m.super0_new(name)
     end sub
     instance.super0_move = instance.move
     instance.move = sub(distanceInMeters as integer)
@@ -114,16 +114,16 @@ function __Duck_builder()
     end sub
     return instance
 end function
-function Duck()
+function Duck(name as string)
     instance = __Duck_builder()
-    instance.new()
+    instance.new(name)
     return instance
 end function
 function __BabyDuck_builder()
     instance = __Duck_builder()
     instance.super1_new = instance.new
-    instance.new = sub()
-        m.super1_new()
+    instance.new = sub(name as string)
+        m.super1_new(name)
     end sub
     instance.super1_move = instance.move
     instance.move = sub(distanceInMeters as integer)
@@ -132,9 +132,9 @@ function __BabyDuck_builder()
     end sub
     return instance
 end function
-function BabyDuck()
+function BabyDuck(name as string)
     instance = __BabyDuck_builder()
-    instance.new()
+    instance.new(name)
     return instance
 end function
 
