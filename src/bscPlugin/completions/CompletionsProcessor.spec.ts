@@ -45,6 +45,43 @@ describe('CompletionsProcessor', () => {
             expect(completions).to.include('thing');
         });
 
+        it('finds enum member after dot', () => {
+            program.setFile('source/main.bs', `
+                sub test()
+                    thing = alpha.Direction.
+                end sub
+                namespace alpha
+                    enum Direction
+                        up
+                    end enum
+                end namespace
+            `);
+            program.validate();
+            const completions = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 44));
+            expect(completions.map(x => ({ kind: x.kind, label: x.label }))).to.eql([{
+                label: 'up',
+                kind: CompletionItemKind.EnumMember
+            }]);
+        });
+
+        it('finds enum member after dot in if statement', () => {
+            program.setFile('source/main.bs', `
+                sub test()
+                    if alpha.beta. then
+                    end if
+                end sub
+                namespace alpha.beta
+                    const isEnabled = true
+                end namespace
+            `);
+            program.validate();
+            const completions = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 34));
+            expect(completions.map(x => ({ kind: x.kind, label: x.label }))).to.eql([{
+                label: 'isEnabled',
+                kind: CompletionItemKind.Constant
+            }]);
+        });
+
         it('includes `for` variable', () => {
             program.setFile('source/main.brs', `
                 sub main()

@@ -1,125 +1,266 @@
-import type { BsDiagnostic } from './interfaces';
 import { DiagnosticCollection } from './DiagnosticCollection';
-import type { Project } from './LanguageServer';
-import type { ProgramBuilder } from './ProgramBuilder';
 import util from './util';
 import { expect } from './chai-config.spec';
+import type { LspDiagnostic } from './lsp/LspProject';
+import { URI } from 'vscode-uri';
+import { rootDir } from './testHelpers.spec';
+import * as path from 'path';
+import { standardizePath } from './util';
 
 describe('DiagnosticCollection', () => {
     let collection: DiagnosticCollection;
-    let diagnostics: BsDiagnostic[];
-    let projects: Project[];
+    let projectId: number;
+
     beforeEach(() => {
         collection = new DiagnosticCollection();
-        diagnostics = [];
-        //make simple mock of workspace to pass tests
-        projects = [{
-            firstRunPromise: Promise.resolve(),
-            builder: {
-                getDiagnostics: () => diagnostics
-            } as ProgramBuilder
-        }] as Project[];
+        projectId = 1;
     });
 
-    function testPatch(expected: Record<string, string[]>) {
-        const patch = collection.getPatch(projects);
+    function testPatch(options: {
+        projectId?: number;
+        diagnosticsByFile?: Record<string, Array<string | LspDiagnostic>>;
+        expected?: Record<string, string[]>;
+    }) {
+
+        const patch = collection.getPatch(options.projectId ?? projectId, createDiagnostics(options.diagnosticsByFile ?? {}));
         //convert the patch into our test structure
         const actual = {};
-        for (const fileUri in patch) {
-            actual[fileUri] = patch[fileUri].map(x => x.message);
-        }
-        const expectedWithUris = {};
-        for (const fileSrc in expected) {
-            const fileUri = util.pathToUri(fileSrc);
-            expectedWithUris[fileUri] = expected[fileSrc];
+        for (let filePath in patch) {
+            filePath = path.resolve(rootDir, filePath);
+            actual[filePath] = patch[filePath].map(x => x.message);
         }
 
-        expect(actual).to.eql(expectedWithUris);
+        //sanitize expected paths
+        let expected = {};
+        for (let key in options.expected ?? {}) {
+            const srcPath = standardizePath(
+                path.resolve(rootDir, key)
+            );
+            expected[srcPath] = options.expected[key];
+        }
+        expect(actual).to.eql(expected);
     }
 
-    it('does not crash for diagnostics with missing locations', () => {
-        const [d1] = addDiagnostics('file1.brs', ['I have no location']);
-        delete (d1 as any).range;
+    it('computes patch for empty diagnostics', () => {
+        //start with 1 diagnostic
         testPatch({
-            'file1.brs': ['I have no location']
+            diagnosticsByFile: {
+                'source/file1.brs': ['message1']
+            },
+            expected: {
+                'source/file1.brs': ['message1']
+            }
+        });
+    });
+
+    it('computes patch for specific project', () => {
+        //should be all diagnostics from project1
+        testPatch({
+            projectId: 1,
+            diagnosticsByFile: {
+                'alpha.brs': ['a1', 'a2'],
+                'beta.brs': ['b1', 'b2']
+            },
+            expected: {
+                'alpha.brs': ['a1', 'a2'],
+                'beta.brs': ['b1', 'b2']
+            }
+        });
+
+        //set project2 diagnostics that overlap a little with project1
+        testPatch({
+            projectId: 2,
+            diagnosticsByFile: {
+                'beta.brs': ['b2', 'b3'],
+                'charlie.brs': ['c1', 'c2']
+            },
+            //the patch should only include new diagnostics
+            expected: {
+                'beta.brs': ['b1', 'b2', 'b3'],
+                'charlie.brs': ['c1', 'c2']
+            }
+        });
+
+        //set project 1 diagnostics again (same diagnostics)
+        testPatch({
+            projectId: 1,
+            diagnosticsByFile: {
+                'alpha.brs': ['a1', 'a2'],
+                'beta.brs': ['b1', 'b2']
+            },
+            //patch should be empty because nothing changed
+            expected: {
+            }
+        });
+    });
+
+    it('does not crash for diagnostics with missing locations', () => {
+        const d1: LspDiagnostic = {
+            code: 123,
+            range: undefined,
+            uri: undefined,
+            message: 'I have no location'
+        };
+        testPatch({
+            diagnosticsByFile: {
+                'source/file1.brs': [d1 as any]
+            },
+            expected: {
+                'source/file1.brs': ['I have no location']
+            }
         });
     });
 
     it('returns full list of diagnostics on first call, and nothing on second call', () => {
-        addDiagnostics('file1.brs', ['message1', 'message2']);
-        addDiagnostics('file2.brs', ['message3', 'message4']);
         //first patch should return all
         testPatch({
-            'file1.brs': ['message1', 'message2'],
-            'file2.brs': ['message3', 'message4']
+            diagnosticsByFile: {
+                'file1.brs': ['message1', 'message2'],
+                'file2.brs': ['message3', 'message4']
+            },
+            expected: {
+                'file1.brs': ['message1', 'message2'],
+                'file2.brs': ['message3', 'message4']
+            }
         });
 
         //second patch should return empty (because nothing has changed)
-        testPatch({});
+        testPatch({
+            diagnosticsByFile: {
+                'file1.brs': ['message1', 'message2'],
+                'file2.brs': ['message3', 'message4']
+            },
+            expected: {
+            }
+        });
     });
 
     it('removes diagnostics in patch', () => {
-        addDiagnostics('file1.brs', ['message1', 'message2']);
-        addDiagnostics('file2.brs', ['message3', 'message4']);
         //first patch should return all
         testPatch({
-            'file1.brs': ['message1', 'message2'],
-            'file2.brs': ['message3', 'message4']
+            diagnosticsByFile: {
+                'file1.brs': ['message1', 'message2'],
+                'file2.brs': ['message3', 'message4']
+            },
+            expected: {
+                'file1.brs': ['message1', 'message2'],
+                'file2.brs': ['message3', 'message4']
+            }
         });
-        removeDiagnostic('file1.brs', 'message1');
-        removeDiagnostic('file1.brs', 'message2');
+
+        //removing the diagnostics should result in a new patch with those diagnostics removed
         testPatch({
-            'file1.brs': []
+            diagnosticsByFile: {
+                'file1.brs': [],
+                'file2.brs': ['message3', 'message4']
+            },
+            expected: {
+                'file1.brs': []
+            }
         });
     });
 
     it('adds diagnostics in patch', () => {
-        addDiagnostics('file1.brs', ['message1', 'message2']);
         testPatch({
-            'file1.brs': ['message1', 'message2']
+            diagnosticsByFile: {
+                'file1.brs': ['message1', 'message2']
+            },
+            expected: {
+                'file1.brs': ['message1', 'message2']
+            }
         });
 
-        addDiagnostics('file2.brs', ['message3', 'message4']);
         testPatch({
-            'file2.brs': ['message3', 'message4']
+            diagnosticsByFile: {
+                'file1.brs': ['message1', 'message2'],
+                'file2.brs': ['message3', 'message4']
+            },
+            expected: {
+                'file2.brs': ['message3', 'message4']
+            }
         });
     });
 
     it('sends full list when file diagnostics have changed', () => {
-        addDiagnostics('file1.brs', ['message1', 'message2']);
         testPatch({
-            'file1.brs': ['message1', 'message2']
+            diagnosticsByFile: {
+                'file1.brs': ['message1', 'message2']
+            },
+            expected: {
+                'file1.brs': ['message1', 'message2']
+            }
         });
-        addDiagnostics('file1.brs', ['message3', 'message4']);
         testPatch({
-            'file1.brs': ['message1', 'message2', 'message3', 'message4']
+            diagnosticsByFile: {
+                'file1.brs': ['message1', 'message2', 'message3', 'message4']
+            },
+            expected: {
+                'file1.brs': ['message1', 'message2', 'message3', 'message4']
+            }
         });
     });
 
-    function removeDiagnostic(srcPath: string, message: string) {
-        const fileUri = util.pathToUri(srcPath);
-        for (let i = 0; i < diagnostics.length; i++) {
-            const diagnostic = diagnostics[i];
-            if (diagnostic.location.uri === fileUri && diagnostic.message === message) {
-                diagnostics.splice(i, 1);
-                return;
+    it('handles when diagnostics.projects is already defined and already includes this project', () => {
+        testPatch({
+            diagnosticsByFile: {
+                'file1.brs': [{
+                    message: 'message1',
+                    uri: undefined,
+                    projects: [projectId]
+                } as any]
+            },
+            expected: {
+                'file1.brs': ['message1']
+            }
+        });
+    });
+
+    describe('getRemovedPatch', () => {
+        it('returns empty array for file that was removed', () => {
+            collection['previousDiagnosticsByFile'] = {
+                [`lib1.brs`]: []
+            };
+            expect(
+                collection['getRemovedPatch']({
+                    [`lib2.brs`]: []
+                })
+            ).to.eql({
+                [`lib1.brs`]: []
+            });
+        });
+    });
+
+    describe('diagnosticListsAreIdentical', () => {
+        it('returns false for different diagnostics in same-sized list', () => {
+            expect(
+                collection['diagnosticListsAreIdentical']([
+                    { key: 'one' } as any
+                ], [
+                    { key: 'two' } as any
+                ])
+            ).to.be.false;
+        });
+    });
+
+    function createDiagnostics(diagnosticsByFile: Record<string, Array<string | LspDiagnostic>>) {
+        const newDiagnostics: LspDiagnostic[] = [];
+        for (let [srcPath, diagnostics] of Object.entries(diagnosticsByFile)) {
+            srcPath = path.resolve(rootDir, srcPath);
+            for (const d of diagnostics) {
+                let diagnostic = d as LspDiagnostic;
+                if (typeof d === 'string') {
+                    diagnostic = {
+                        uri: undefined,
+                        range: util.createRange(0, 0, 0, 0),
+                        //the code doesn't matter as long as the messages are different, so just enforce unique messages for this test files
+                        code: 123,
+                        message: d
+                    };
+                }
+                diagnostic.uri = URI.file(srcPath).toString();
+                newDiagnostics.push(diagnostic);
             }
         }
-        throw new Error(`Cannot find diagnostic ${srcPath}:${message}`);
-    }
-
-    function addDiagnostics(srcPath: string, messages: string[]) {
-        const newDiagnostics: BsDiagnostic[] = [];
-        const fileUri = util.pathToUri(srcPath);
-        for (const message of messages) {
-            newDiagnostics.push({
-                location: { uri: fileUri, range: util.createRange(0, 0, 0, 0) },
-                //the code doesn't matter as long as the messages are different, so just enforce unique messages for this test files
-                code: 123,
-                message: message
-            });
-        }
-        diagnostics.push(...newDiagnostics);
         return newDiagnostics;
     }
 });

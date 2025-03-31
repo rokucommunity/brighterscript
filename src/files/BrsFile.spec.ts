@@ -94,6 +94,15 @@ describe('BrsFile', () => {
         });
     });
 
+    describe('dispose', () => {
+        it('does not crash the program after it has been disposed', () => {
+            const file = program.setFile('source/main.bs', `sub main(): end sub`);
+            file.dispose();
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+    });
+
     describe('allowBrighterScriptInBrightScript', () => {
         it('is false by default', () => {
             program.setFile('source/main.brs', `
@@ -5947,7 +5956,6 @@ describe('BrsFile', () => {
                 end sub
             `);
         });
-
 
         //fails at the specific length of statement including leading tabs and spaces
         it('allows long statements', () => {

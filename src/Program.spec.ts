@@ -1,6 +1,6 @@
 import { assert, expect } from './chai-config.spec';
 import * as pick from 'object.pick';
-import { Position, Range } from 'vscode-languageserver';
+import { CancellationTokenSource, Position, Range } from 'vscode-languageserver';
 import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { BrsFile } from './files/BrsFile';
@@ -9,7 +9,7 @@ import { Program } from './Program';
 import { standardizePath as s, util } from './util';
 import type { FunctionStatement, PrintStatement } from './parser/Statement';
 import { EmptyStatement } from './parser/Statement';
-import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
+import { expectDiagnostics, expectHasDiagnostics, expectThrows, expectThrowsAsync, expectTypeToBe, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
 import { doesNotThrow } from 'assert';
 import { createVisitor, WalkMode } from './astUtils/visitors';
 import { isBrsFile } from './astUtils/reflection';
@@ -19,12 +19,13 @@ import type { SinonSpy } from 'sinon';
 import { createSandbox } from 'sinon';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import { AssetFile } from './files/AssetFile';
-import type { ProvideFileEvent, CompilerPlugin, BeforeProvideFileEvent, AfterProvideFileEvent, BeforeFileAddEvent, AfterFileAddEvent, BeforeFileRemoveEvent, AfterFileRemoveEvent, ScopeValidationOptions } from './interfaces';
+import type { ProvideFileEvent, CompilerPlugin, BeforeProvideFileEvent, AfterProvideFileEvent, BeforeFileAddEvent, AfterFileAddEvent, BeforeFileRemoveEvent, AfterFileRemoveEvent, ScopeValidationOptions, AfterFileValidateEvent, BeforeScopeValidateEvent, OnScopeValidateEvent, BeforeFileValidateEvent, OnFileValidateEvent, AfterScopeValidateEvent } from './interfaces';
 import { StringType, TypedFunctionType, DynamicType, FloatType, IntegerType, InterfaceType, ArrayType, BooleanType, DoubleType, UnionType } from './types';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { ComponentType } from './types/ComponentType';
 import * as path from 'path';
 import undent from 'undent';
+import { Scope } from './Scope';
 
 const sinon = createSandbox();
 
@@ -257,6 +258,98 @@ describe('Program', () => {
     });
 
     describe('validate', () => {
+        it('does not lose scope diagnostics in second validation after cancelling the previous validation', async () => {
+            program.setFile('source/Direction.bs', `
+                enum Direction
+                    up = "up"
+                end enum
+            `);
+            program.setFile('source/test.bs', `
+                import "Direction.bs"
+                sub test()
+                    print Direction.down
+                end sub
+            `);
+
+            //add several scopes so we have time to cancel the validation
+            for (let i = 0; i < 3; i++) {
+                program.setFile(`components/Component${i}.xml`, undent`
+                    <component name="Component${i}" extends="Group">
+                        <script uri="pkg:/source/test.bs" />
+                    </component>
+                `);
+            }
+            program.validate();
+            //ensure the diagnostic is there during normal run
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('down', 'Direction', 'Direction', 'enum').message
+            ]);
+
+            const cancel = new CancellationTokenSource();
+
+            let count = 0;
+            const plugin = {
+                name: 'cancel validation',
+                beforeProgramValidate: () => {
+                    count++;
+                    //if this is the second validate, remove the plugin and change the file to invalidate the scopes again
+                    if (count === 2) {
+                        program.plugins.remove(plugin);
+                        program.setFile('source/test.bs', program.getFile<BrsFile>('source/test.bs').fileContents + `'comment`);
+                    }
+                },
+                afterScopeValidate: () => {
+                    //if the diagnostic is avaiable, we know it's safe to cancel
+                    if (program.getDiagnostics().find(x => x.code === DiagnosticMessages.cannotFindName('down', 'Direction').code)) {
+                        cancel.cancel();
+                    }
+                }
+            } as CompilerPlugin;
+            //add a plugin that monitors where we are in the process, so we can cancel the validate at the correct time
+            program.plugins.add(plugin);
+
+            //change the file so it forces a reload
+            program.setFile('source/test.bs', program.getFile<BrsFile>('source/test.bs').fileContents + `'comment`);
+
+            //now trigger two validations, the first one will be cancelled, the second one will run to completion
+            await Promise.all([
+                program.validate({
+                    async: true,
+                    cancellationToken: cancel.token
+                }),
+                program.validate({
+                    async: true
+                })
+            ]);
+
+            //ensure the diagnostic is there after a cancelled run (with a subsequent completed run)
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('down', 'Direction', 'Direction', 'enum').message
+            ]);
+        });
+
+        it('validate (sync) passes along inner exception', () => {
+            program.setFile('source/main.brs', ``);
+            sinon.stub(Scope.prototype, 'validate').callsFake(() => {
+                throw new Error('Scope crash');
+            });
+            expectThrows(() => {
+                program.validate();
+            }, 'Scope crash');
+        });
+
+        it('validate (async) passes along inner exception', async () => {
+            program.setFile('source/main.brs', ``);
+            sinon.stub(Scope.prototype, 'validate').callsFake(() => {
+                throw new Error('Scope crash');
+            });
+            await expectThrowsAsync(async () => {
+                await program.validate({
+                    async: true
+                });
+            }, 'Scope crash');
+        });
+
         it('retains expressions after validate', () => {
             const file = program.setFile<BrsFile>('source/main.bs', `
                 sub test()
@@ -739,6 +832,156 @@ describe('Program', () => {
 
         });
 
+        it('properly handles errors in async mode', async () => {
+            const file = program.setFile<BrsFile>('source/main.brs', ``);
+            const scope = program.getFirstScopeForFile(file);
+            scope.validate = () => {
+                throw new Error('Crash for test');
+            };
+            let error: Error;
+            try {
+                await program.validate({ async: true });
+            } catch (e) {
+                error = e as any;
+            }
+            expect(error?.message).to.eql('Crash for test');
+        });
+
+        describe('cancelled', () => {
+
+            type eventName = 'beforeFileValidate' | 'onFileValidate' | 'afterFileValidate' | 'beforeScopeValidate' | 'onScopeValidate' | 'afterScopeValidate';
+            interface CancellationPluginOptions {
+                cancelOn?: eventName[];
+                eventWhenCancelled?: BeforeFileValidateEvent | OnFileValidateEvent | AfterFileValidateEvent | BeforeScopeValidateEvent | OnScopeValidateEvent | AfterScopeValidateEvent;
+                cancelTokenSource: CancellationTokenSource;
+            }
+
+            function getCancellationPlugin(option: CancellationPluginOptions): CompilerPlugin {
+                return {
+                    name: 'cancelPlugin',
+                    beforeFileValidate: (event) => {
+                        if (option?.cancelOn.includes('beforeFileValidate')) {
+                            option.eventWhenCancelled = event;
+                            option.cancelTokenSource.cancel();
+                        }
+                    },
+                    onFileValidate: (event) => {
+                        if (option?.cancelOn.includes('onFileValidate')) {
+                            option.eventWhenCancelled = event;
+                            option.cancelTokenSource.cancel();
+                        }
+                    },
+                    afterFileValidate: (event) => {
+                        if (option?.cancelOn.includes('afterFileValidate')) {
+                            option.eventWhenCancelled = event;
+                            option.cancelTokenSource.cancel();
+                        }
+                    },
+                    beforeScopeValidate: (event) => {
+                        if (option?.cancelOn.includes('beforeScopeValidate')) {
+                            option.eventWhenCancelled = event;
+                            option.cancelTokenSource.cancel();
+                        }
+                    },
+                    onScopeValidate: (event) => {
+                        if (option?.cancelOn.includes('onScopeValidate')) {
+                            option.eventWhenCancelled = event;
+                            option.cancelTokenSource.cancel();
+                        }
+                    },
+                    afterScopeValidate: (event) => {
+                        if (option?.cancelOn.includes('afterScopeValidate')) {
+                            option.eventWhenCancelled = event;
+                            option.cancelTokenSource.cancel();
+                        }
+                    }
+                };
+            }
+
+            it('should be cancellable', async () => {
+                const options: CancellationPluginOptions = { cancelOn: [], eventWhenCancelled: null, cancelTokenSource: new CancellationTokenSource() };
+                const cancelPlugin = getCancellationPlugin(options);
+                program.plugins.add(cancelPlugin);
+
+                program.setFile('source/file1.bs', `
+                    function foo() as integer
+                        return 1
+                    end function
+                `);
+                program.setFile('source/file2.bs', `
+                    function bar() as boolean
+                        return true
+                    end function
+                `);
+                // do an initial validation
+                program.validate();
+                expectZeroDiagnostics(program);
+                options.cancelOn = ['afterFileValidate'];
+
+                // change file
+                program.setFile('source/file2.bs', `
+                    function bar() as integer
+                        return true
+                    end function
+                `);
+                options.cancelTokenSource = new CancellationTokenSource();
+                await program.validate({ async: true, cancellationToken: options.cancelTokenSource.token });
+                const event = options.eventWhenCancelled as AfterFileValidateEvent;
+                expect(event).not.to.undefined;
+                expect(event.file.srcPath).includes('file2.bs');
+            });
+
+            it('scope validation should contain symbols from previous cancellations', async () => {
+                const options: CancellationPluginOptions = { cancelOn: [], eventWhenCancelled: null, cancelTokenSource: new CancellationTokenSource() };
+                const cancelPlugin = getCancellationPlugin(options);
+                program.plugins.add(cancelPlugin);
+
+                program.setFile('source/file1.bs', `
+                    function foo() as integer
+                        return 1
+                    end function
+                `);
+                program.setFile('source/file2.bs', `
+                    function bar() as boolean
+                        return true
+                    end function
+                `);
+                // do an initial validation
+                program.validate();
+                expectZeroDiagnostics(program);
+                options.cancelOn = ['beforeScopeValidate'];
+
+                // change file2
+                program.setFile('source/file2.bs', `
+                    function bar() as integer
+                        return true
+                    end function
+                `);
+                options.cancelTokenSource = new CancellationTokenSource();
+                await program.validate({ async: true, cancellationToken: options.cancelTokenSource.token });
+                //cancelled before scope validation, so source scope should be unvalidated
+                const sourceScope = program.getScopeByName('source');
+                expect(sourceScope.isValidated).to.be.false;
+
+                // change file1
+                program.setFile('source/file1.bs', `
+                    function foo(x as integer) as integer
+                        return x
+                    end function
+                `);
+
+                options.cancelOn = ['onScopeValidate'];
+                options.cancelTokenSource = new CancellationTokenSource();
+                await program.validate({ async: true, cancellationToken: options.cancelTokenSource.token });
+                const event = options.eventWhenCancelled as OnScopeValidateEvent;
+                // Event details has info from both changes at scope validation step
+                const srcPaths = event.changedFiles.map(file => file.srcPath);
+                expect(srcPaths.length).to.eq(2);
+                const changedFunctions = Array.from(event.changedSymbols.get(SymbolTypeFlag.runtime).values());
+                expect(changedFunctions).to.include('foo');
+                expect(changedFunctions).to.include('bar');
+            });
+        });
     });
 
     describe('hasFile', () => {
@@ -1106,13 +1349,6 @@ describe('Program', () => {
             program.diagnostics.register(diagnostic);
             //delete the uri
             diagnostic.location.uri = undefined;
-
-            doesNotThrow(() => {
-                program.getCodeActions('source/main.brs', util.createRange(1, 2, 3, 4));
-            });
-
-            //delete the entire location
-            diagnostic.location = undefined;
 
             doesNotThrow(() => {
                 program.getCodeActions('source/main.brs', util.createRange(1, 2, 3, 4));

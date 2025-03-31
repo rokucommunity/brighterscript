@@ -151,7 +151,7 @@ export class Lexer {
      * @returns `true` if the lexer has read to (or past) the end of its input, otherwise `false`.
      */
     private isAtEnd() {
-        return this.current >= this.source.length;
+        return !this.source || this.current >= this.source.length;
     }
 
     /**

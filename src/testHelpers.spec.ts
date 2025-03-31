@@ -1,7 +1,7 @@
 import type { BsDiagnostic } from './interfaces';
 import * as assert from 'assert';
 import chalk from 'chalk';
-import type { CodeDescription, CompletionItem, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, Location } from 'vscode-languageserver';
+import type { CodeDescription, CompletionItem, CompletionList, Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, Location } from 'vscode-languageserver';
 import { createSandbox } from 'sinon';
 import { expect } from './chai-config.spec';
 import type { CodeActionShorthand } from './CodeActionUtil';
@@ -14,14 +14,25 @@ import { firstBy } from 'thenby';
 import undent from 'undent';
 import type { BscFile } from './files/BscFile';
 import type { BscType } from './types/BscType';
+import type { LspDiagnostic } from './lsp/LspProject';
 
+export const cwd = s`${__dirname}/../`;
 export const tempDir = s`${__dirname}/../.tmp`;
 export const rootDir = s`${tempDir}/rootDir`;
 export const stagingDir = s`${tempDir}/stagingDir`;
 
 export const trim = undent;
+const sinon = createSandbox();
 
-type DiagnosticCollection = { getDiagnostics(): Array<BsDiagnostic>; getFile?: (path: string, normalize: boolean) => BscFile } | { diagnostics?: BsDiagnostic[] } | BsDiagnostic[];
+beforeEach(() => {
+    sinon.restore();
+});
+afterEach(() => {
+    sinon.restore();
+});
+
+type DiagnosticCollection = { getDiagnostics(): Array<BsDiagnostic | LspDiagnostic>; getFile?: (path: string, normalize: boolean) => BscFile } | { diagnostics?: BsDiagnostic[] } | BsDiagnostic[] | LspDiagnostic[];
+type DiagnosticCollectionAsync = DiagnosticCollection | { getDiagnostics(): Promise<Array<Diagnostic>> };
 
 function getDiagnostics(arg: DiagnosticCollection): BsDiagnostic[] {
     if (Array.isArray(arg)) {
@@ -59,7 +70,7 @@ function cloneObject<TOriginal, TTemplate>(original: TOriginal, template: TTempl
     return clone;
 }
 
-interface PartialDiagnostic {
+export interface PartialDiagnostic {
     location?: Partial<Location>;
     severity?: DiagnosticSeverity;
     code?: number | string;
@@ -76,7 +87,7 @@ interface PartialDiagnostic {
 /**
  *  Helper function to clone a Diagnostic so it will give partial data that has the same properties as the expected
  */
-function cloneDiagnostic(actualDiagnosticInput: BsDiagnostic, expectedDiagnostic: BsDiagnostic) {
+export function cloneDiagnostic(actualDiagnosticInput: BsDiagnostic, expectedDiagnostic: BsDiagnostic) {
     const actualDiagnostic = cloneObject(
         actualDiagnosticInput,
         expectedDiagnostic,
@@ -101,18 +112,38 @@ function cloneDiagnostic(actualDiagnosticInput: BsDiagnostic, expectedDiagnostic
     return actualDiagnostic;
 }
 
-
 /**
  * Ensure the DiagnosticCollection exactly contains the data from expected list.
  * @param arg - any object that contains diagnostics (such as `Program`, `Scope`, or even an array of diagnostics)
  * @param expected an array of expected diagnostics. if it's a string, assume that's a diagnostic error message
  */
-export function expectDiagnostics(arg: DiagnosticCollection, expected: Array<PartialDiagnostic | string | number>) {
-    const actualDiagnostics = sortDiagnostics(
-        getDiagnostics(arg)
+export async function expectDiagnosticsAsync(arg: DiagnosticCollectionAsync, expected: Array<PartialDiagnostic | string | number>) {
+    expectDiagnostics(
+        await Promise.resolve(getDiagnostics(arg as any)),
+        expected
     );
-    const expectedDiagnostics = sortDiagnostics(
-        expected.map(x => {
+}
+
+/**
+ * Ensure the DiagnosticCollection exactly contains the data from expected list.
+ * @param arg - any object that contains diagnostics (such as `Program`, `Scope`, or even an array of diagnostics)
+ * @param expectedDiagnostics an array of expected diagnostics. if it's a string, assume that's a diagnostic error message
+ */
+export function expectDiagnostics(arg: DiagnosticCollection, expectedDiagnostics: Array<PartialDiagnostic | string | number>) {
+    const [actual, expected] = normalizeDiagnostics(getDiagnostics(arg), expectedDiagnostics);
+    expect(actual).to.eql(expected);
+}
+
+/**
+ * Normalizes a collection of diagnostics for comparison
+ * @param actualDiagnostics the actual diagnostics that were found
+ * @param expectedDiagnostics the diagnostics we're expecing
+ */
+export function normalizeDiagnostics(actualDiagnostics: BsDiagnostic[], expectedDiagnostics: Array<PartialDiagnostic | string | number>) {
+    actualDiagnostics = sortDiagnostics([...actualDiagnostics]);
+
+    expectedDiagnostics = sortDiagnostics(
+        expectedDiagnostics.map(x => {
             let result = x;
             if (typeof x === 'string') {
                 if (!x.includes(' ') && x.toLowerCase() === x) {
@@ -128,14 +159,13 @@ export function expectDiagnostics(arg: DiagnosticCollection, expected: Array<Par
         })
     );
 
-    const actual = [] as BsDiagnostic[];
     for (let i = 0; i < actualDiagnostics.length; i++) {
-        const expectedDiagnostic = expectedDiagnostics[i];
+        const expectedDiagnostic = expectedDiagnostics[i] as BsDiagnostic;
         const actualDiagnostic = cloneDiagnostic(actualDiagnostics[i], expectedDiagnostic);
-        actual.push(actualDiagnostic as any);
+        actualDiagnostics[i] = actualDiagnostic as any;
     }
-    const sortedActual = sortDiagnostics(actual);
-    expect(sortedActual).to.eql(expectedDiagnostics);
+    const sortedActual = sortDiagnostics(actualDiagnostics);
+    return [sortedActual, expectedDiagnostics];
 }
 
 /**
@@ -326,7 +356,9 @@ function pick<T extends Record<string, any>>(example: T, subject: Record<string,
 /**
  * Test a set of completions includes the provided items
  */
-export function expectCompletionsIncludes(completions: CompletionItem[], expectedItems: Array<string | Partial<CompletionItem>>) {
+export function expectCompletionsIncludes(collection: CompletionItem[] | CompletionList, expectedItems: Array<string | Partial<CompletionItem>>) {
+    const completions = Array.isArray(collection) ? collection : collection.items;
+
     for (const expectedItem of expectedItems) {
         if (typeof expectedItem === 'string') {
             expect(completions.map(x => x.label)).includes(expectedItem);
@@ -374,6 +406,21 @@ export function expectThrows(callback: () => any, expectedMessage: string | unde
     }
 }
 
+export async function expectThrowsAsync(callback: () => any, expectedMessage = undefined, failedTestMessage = 'Expected to throw but did not') {
+    let wasExceptionThrown = false;
+    try {
+        await Promise.resolve(callback());
+    } catch (e) {
+        wasExceptionThrown = true;
+        if (expectedMessage) {
+            expect((e as Error)?.message).to.eql(expectedMessage);
+        }
+    }
+    if (wasExceptionThrown === false) {
+        throw new Error(failedTestMessage);
+    }
+}
+
 export function objectToMap<T>(obj: Record<string, T>) {
     const result = new Map<string, T>();
     for (let key in obj) {
@@ -404,4 +451,70 @@ export function stripConsoleColors(inputString) {
 
     // Remove all occurrences of ANSI escape codes
     return inputString.replace(colorPattern, '');
+}
+
+type FunctionReturnType<T> = T extends (...args: any[]) => infer R ? R : any;
+
+/**
+ * Mock something, and get a promise when it has been called once
+ */
+export async function onCalledOnce<T, K extends keyof T>(thing: T, method: K): Promise<FunctionReturnType<T[K]>> {
+    return new Promise((resolve, reject) => {
+        const stub = sinon.stub(thing, method).callsFake(async function _(this: any, ...args: any[]) {
+            const result = await stub.wrappedMethod.apply(this, args);
+            sinon.restore();
+            resolve(result);
+            return result;
+        });
+    });
+}
+
+
+/**
+ * Create a stub that resolves a promise after the function has settled for a period of time
+ */
+export function createInactivityStub<T, K extends keyof T>(obj: T, methodName: keyof T, inactivityPeriod = 400, sinonRef = sinon) {
+    // Store reference to the original method
+    const originalMethod = obj[methodName];
+
+    // Track the timeout for inactivity
+    let inactivityTimeout;
+
+    // Create the inactivity promise
+    let inactivityPromiseResolve;
+    const inactivityPromise = new Promise((resolve) => {
+        inactivityPromiseResolve = resolve;
+    });
+
+    // Stub the method
+    const stub = sinonRef.stub(obj, methodName).callsFake(function (this: any, ...args) {
+        // Call the original method
+        const result = (originalMethod as any).apply(this, args);
+
+        // Clear previous inactivity timeout and restart the timer
+        clearTimeout(inactivityTimeout);
+        inactivityTimeout = setTimeout(() => {
+            inactivityPromiseResolve();
+        }, inactivityPeriod);
+
+        return result;
+    });
+
+    // Return the stub and inactivity promise
+    return {
+        stub: stub,
+        promise: inactivityPromise
+    };
+}
+
+export async function once<T = any>(
+    obj: { on: (event, callback) => () => void },
+    event: string
+): Promise<T[]> {
+    return new Promise<T[]>((resolve) => {
+        const off = obj.on('diagnostics', (...args) => {
+            off();
+            resolve(args);
+        });
+    });
 }

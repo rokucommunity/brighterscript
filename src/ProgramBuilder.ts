@@ -8,6 +8,7 @@ import { Program } from './Program';
 import { standardizePath as s, util } from './util';
 import { Watcher } from './Watcher';
 import { DiagnosticSeverity } from 'vscode-languageserver';
+import type { Logger } from './logging';
 import { LogLevel, createLogger } from './logging';
 import PluginInterface from './PluginInterface';
 import * as diagnosticUtils from './diagnosticUtils';
@@ -22,7 +23,14 @@ import { DiagnosticManager } from './DiagnosticManager';
  */
 export class ProgramBuilder {
 
-    public constructor() {
+    public constructor(
+        options?: {
+            logger?: Logger;
+        }
+    ) {
+        this.logger = options?.logger ?? createLogger();
+        this.plugins = new PluginInterface([], { logger: this.logger });
+
         //add the default file resolver (used to load source file contents).
         this.addFileResolver((filePath) => {
             return fsExtra.readFile(filePath);
@@ -37,12 +45,16 @@ export class ProgramBuilder {
     private isRunning = false;
     private watcher: Watcher | undefined;
     public program: Program | undefined;
-    public logger = createLogger();
-    public plugins: PluginInterface = new PluginInterface([], { logger: this.logger });
+    public logger: Logger;
+    public plugins: PluginInterface;
     private fileResolvers = [] as FileResolver[];
 
-    public addFileResolver(fileResolver: FileResolver) {
-        this.fileResolvers.push(fileResolver);
+    /**
+     * Add file resolvers that will be able to provide file contents before loading from the file system
+     * @param fileResolvers a list of file resolvers
+     */
+    public addFileResolver(...fileResolvers: FileResolver[]) {
+        this.fileResolvers.push(...fileResolvers);
     }
 
     /**
@@ -79,7 +91,7 @@ export class ProgramBuilder {
         this.diagnostics.register(<any>diagnostic, { tags: ['ProgramBuilder'] });
     }
 
-    public getDiagnostics() {
+    public getDiagnostics(): BsDiagnostic[] {
         return this.diagnostics.getDiagnostics();
     }
 
@@ -89,6 +101,10 @@ export class ProgramBuilder {
     public async load(options: BsConfig) {
         try {
             this.options = util.normalizeAndResolveConfig(options);
+            if (this.options?.logLevel !== undefined) {
+                this.logger.logLevel = this.options?.logLevel;
+            }
+
             if (this.options.noProject) {
                 this.logger.log(`'no-project' flag is set so bsconfig.json loading is disabled'`);
             } else if (this.options.project) {
@@ -99,6 +115,11 @@ export class ProgramBuilder {
             this.loadRequires();
             this.loadPlugins();
         } catch (e: any) {
+            //For now, just use a default options object so we have a functioning program
+            this.options = util.normalizeConfig({
+                showDiagnosticsInConsole: options?.showDiagnosticsInConsole
+            });
+
             if (e?.location && e.message && e.code) {
                 let err = e as BsDiagnostic;
                 this.diagnostics.register(err);
@@ -106,11 +127,8 @@ export class ProgramBuilder {
                 //if this is not a diagnostic, something else is wrong...
                 throw e;
             }
-            this.printDiagnostics();
 
-            //we added diagnostics, so hopefully that draws attention to the underlying issues.
-            //For now, just use a default options object so we have a functioning program
-            this.options = util.normalizeConfig({});
+            this.printDiagnostics();
         }
         this.logger.logLevel = this.options.logLevel;
 
@@ -120,7 +138,14 @@ export class ProgramBuilder {
         await this.loadFiles();
     }
 
-    public async run(options: BsConfig) {
+    public async run(options: BsConfig & {
+        /**
+         * Should validation run? Default is `true`. You must set exlicitly to `false` to disable.
+         * @deprecated this is an experimental flag, and its behavior may change in a future release
+         * @default true
+         */
+        validate?: boolean;
+    }) {
         if (options?.logLevel) {
             this.logger.logLevel = options.logLevel;
         }
@@ -134,10 +159,14 @@ export class ProgramBuilder {
 
         if (this.options.watch) {
             this.logger.log('Starting compilation in watch mode...');
-            await this.runOnce();
+            await this.runOnce({
+                validate: options?.validate
+            });
             this.enableWatchMode();
         } else {
-            await this.runOnce();
+            await this.runOnce({
+                validate: options?.validate
+            });
         }
     }
 
@@ -159,7 +188,7 @@ export class ProgramBuilder {
             this.options.plugins ?? [],
             (pathOrModule, err) => this.logger.error(`Error when loading plugin '${pathOrModule}':`, err)
         );
-        this.logger.log(`Loading ${this.options.plugins?.length ?? 0} plugins for cwd "${cwd}"`);
+        this.logger.log(`Loading ${this.options.plugins?.length ?? 0} plugins for cwd "${cwd}"`, this.options.plugins);
         for (let plugin of plugins) {
             this.plugins.add(plugin);
         }
@@ -266,14 +295,17 @@ export class ProgramBuilder {
     /**
      * Run the entire process exactly one time.
      */
-    private runOnce() {
+    private runOnce(options?: { validate?: boolean }) {
         //clear the console
         this.clearConsole();
         let cancellationToken = { isCanceled: false };
         //wait for the previous run to complete
         let runPromise = this.cancelLastRun().then(() => {
             //start the new run
-            return this._runOnce(cancellationToken);
+            return this._runOnce({
+                cancellationToken: cancellationToken,
+                validate: options?.validate
+            });
         }) as any;
 
         //a function used to cancel this run
@@ -347,21 +379,23 @@ export class ProgramBuilder {
     }
 
     /**
-     * Run the process once, allowing cancelability.
+     * Run the process once, allowing it to be cancelled.
      * NOTE: This should only be called by `runOnce`.
      */
-    private async _runOnce(cancellationToken: { isCanceled: any }) {
+    private async _runOnce(options: { cancellationToken: { isCanceled: any }; validate: boolean }) {
         let wereDiagnosticsPrinted = false;
         try {
             //maybe cancel?
-            if (cancellationToken.isCanceled === true) {
+            if (options?.cancellationToken?.isCanceled === true) {
                 return -1;
             }
-            //validate program
-            this.validateProject();
+            //validate program. false means no, everything else (including missing) means true
+            if (options?.validate !== false) {
+                this.validateProject();
+            }
 
             //maybe cancel?
-            if (cancellationToken.isCanceled === true) {
+            if (options?.cancellationToken?.isCanceled === true) {
                 return -1;
             }
 
@@ -379,7 +413,7 @@ export class ProgramBuilder {
             await this.createPackageIfEnabled();
 
             //maybe cancel?
-            if (cancellationToken.isCanceled === true) {
+            if (options?.cancellationToken?.isCanceled === true) {
                 return -1;
             }
 
@@ -518,15 +552,18 @@ export class ProgramBuilder {
 
     /**
      * Remove all files from the program that are in the specified folder path
-     * @param srcPath the path to the
+     * @param srcPath the path to the folder to remove
      */
-    public removeFilesInFolder(srcPath: string) {
+    public removeFilesInFolder(srcPath: string): boolean {
+        let removedSomeFiles = false;
         for (let filePath in this.program.files) {
             //if the file path starts with the parent path and the file path does not exactly match the folder path
             if (filePath.startsWith(srcPath) && filePath !== srcPath) {
                 this.program.removeFile(filePath);
+                removedSomeFiles = true;
             }
         }
+        return removedSomeFiles;
     }
 
     /**
