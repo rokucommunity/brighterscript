@@ -1,0 +1,21 @@
+name: Make Release Artifacts
+
+on:
+  pull_request:
+    types:
+      - reopened
+      - opened
+      - synchronize
+    paths:
+        - 'package.json'
+        - 'package-lock.json'
+
+jobs:
+  run:
+      if: startsWith( github.head_ref, 'release/')
+      uses: rokucommunity/workflows/.github/workflows/make-release-artifacts.yml@master
+      with:
+        branch: ${{ github.event.pull_request.head.ref }}
+        node-version: "14.18.1"
+        artifact-paths: "./*.tgz" # "*.vsix"
+      secrets: inherit
