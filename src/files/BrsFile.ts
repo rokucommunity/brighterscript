@@ -256,7 +256,7 @@ export class BrsFile implements BscFile {
         this.ast.walk((node) => {
             const latestContainer = containingNode;
             //bsc walks depth-first
-            if (util.rangeContains(node.location?.range, position)) {
+            if (node.location?.range && util.rangeContains(node.location?.range, position)) {
                 containingNode = node;
             }
             //we had a match before, and don't now. this means we've finished walking down the whole way, and found our match

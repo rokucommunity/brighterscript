@@ -133,6 +133,9 @@ export class HoverProcessor {
             return null;
         }
         const expression = file.getClosestExpression(this.event.position);
+        if (!expression) {
+            return null;
+        }
         const hoverContents: string[] = [];
         for (let scope of this.event.scopes) {
             try {

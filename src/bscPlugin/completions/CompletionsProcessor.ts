@@ -282,7 +282,7 @@ export class CompletionsProcessor {
 
         const globalCompletions: CompletionItem[] = [];
         if (!tokenIsLiteralString && notMembers && !isAfterNew && this.event.program?.globalScope) {
-            let globalSymbols: BscSymbol[] = this.event.program.globalScope.symbolTable.getOwnSymbols(symbolTableLookupFlag) ?? [];
+            let globalSymbols: BscSymbol[] = this.event.program.globalScope.symbolTable.getAllSymbols(symbolTableLookupFlag) ?? [];
             if (symbolTableLookupFlag === SymbolTypeFlag.runtime) {
                 globalSymbols.push(...this.getGlobalValues());
             }
