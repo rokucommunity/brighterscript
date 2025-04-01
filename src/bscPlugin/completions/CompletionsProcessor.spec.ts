@@ -2065,6 +2065,29 @@ describe('CompletionsProcessor', () => {
             }]);
         });
 
+        it('finds custom node types', () => {
+            program.setFile('source/main.bs', `
+                sub foo(thing as  )
+                    print thing
+                end sub
+            `);
+
+            program.setFile<XmlFile>('components/MyNode.xml',
+                trim`<?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyNode" extends="Group">
+                    <interface>
+                        <field id="text" type="string"/>
+                    </interface>
+                </component>`);
+            program.validate();
+            //  sub foo(thing as | )
+            const completions = program.getCompletions('source/main.bs', util.createPosition(1, 34));
+            expectCompletionsIncludes(completions, [{
+                label: 'roSGNodeMyNode',
+                kind: CompletionItemKind.Interface
+            }]);
+        });
+
         it('only shows intrinsic/native types in brightscript', () => {
             program.setFile('source/main.brs', `
                 sub foo(thing as  )
