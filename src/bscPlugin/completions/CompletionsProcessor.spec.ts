@@ -2529,4 +2529,27 @@ describe('CompletionsProcessor', () => {
         });
 
     });
+
+    describe('incomplete statements', () => {
+
+        it('should complete after if', () => {
+            program.setFile('source/main.bs', `
+                interface Person
+                    name as string
+                end interface
+
+                sub checkName(p as Person)
+                    if p.
+                end sub
+            `);
+            program.validate();
+            //   if p.
+            let completions = program.getCompletions('source/main.bs', util.createPosition(6, 26));
+            expectCompletionsIncludes(completions, [{
+                label: 'name',
+                kind: CompletionItemKind.Field
+            }]);
+            expect(completions.length).to.eql(1);
+        });
+    });
 });

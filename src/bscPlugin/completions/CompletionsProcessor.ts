@@ -222,7 +222,7 @@ export class CompletionsProcessor {
             symbolTableLookupFlag = SymbolTypeFlag.typetime;
         } else if (this.isTokenAdjacentTo(file, currentToken, TokenKind.Equal)) {
             expression = file.getClosestExpression(this.event.position);
-            if (expression.findAncestor<AliasStatement>(isAliasStatement)) {
+            if (expression?.findAncestor<AliasStatement>(isAliasStatement)) {
                 // allow runtime and typetime lookups in alias statements
                 // eslint-disable-next-line no-bitwise
                 symbolTableLookupFlag = SymbolTypeFlag.runtime | SymbolTypeFlag.typetime;
