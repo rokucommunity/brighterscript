@@ -24,7 +24,6 @@ import { createIdentifier } from '../../astUtils/creators';
 import type { FunctionExpression } from '../../parser/Expression';
 import { LogLevel } from '../../Logger';
 
-
 const SCOPES_FOR_COMPLETION = 3;
 
 export class CompletionsProcessor {
@@ -222,7 +221,7 @@ export class CompletionsProcessor {
             symbolTableLookupFlag = SymbolTypeFlag.typetime;
         } else if (this.isTokenAdjacentTo(file, currentToken, TokenKind.Equal)) {
             expression = file.getClosestExpression(this.event.position);
-            if (expression.findAncestor<AliasStatement>(isAliasStatement)) {
+            if (expression?.findAncestor<AliasStatement>(isAliasStatement)) {
                 // allow runtime and typetime lookups in alias statements
                 // eslint-disable-next-line no-bitwise
                 symbolTableLookupFlag = SymbolTypeFlag.runtime | SymbolTypeFlag.typetime;

@@ -157,7 +157,7 @@ The top level object is the `ProgramBuilder` which runs the overall process: pre
 Here are some important interfaces. You can view them in the code at [this link](https://github.com/rokucommunity/brighterscript/blob/ddcb7b2cd219bd9fecec93d52fbbe7f9b972816b/src/interfaces.ts#L190:~:text=export%20interface%20CompilerPlugin%20%7B).
 
 ```typescript
-export type CompilerPluginFactory = () => CompilierPlugin;
+export type CompilerPluginFactory = (options?: PluginFactoryOptions) => CompilierPlugin;
 
 export interface CompilerPlugin {
     name: string;
@@ -461,6 +461,39 @@ interface CallableContainer {
     scope: Scope;
 }
 ```
+
+### PluginFactory
+To register a plugin, you need to have a default export that returns a factory. BrighterScript will call this factory once for every instance of a program that needs the plugin. This means that you might have multiple instances of a plugin in one NodeJS process (one for each brighterscript project).
+
+```typescript
+export default function () {
+    return {
+        name: 'Name of your plugin'
+    };
+}
+```
+
+### BrighterScript v1 compatability
+There is currently a v1 rewrite of BrighterScript which includes some significant breaking changes. This has caused challenges with brighterscript plugins, as you need to maintain separate versions for v0 and v1. You can utilize the `pluginOptions.version` property in your factory to determine what brighterscript version is running your plugin, and adjust accordingly.
+
+This options object is only available starting with brighterscript `v0.69.4` and `v1.0.0-alpha.45`. It's important to support backwards compatibility that an `undefined` `version` value be treated as a v0 plugin.
+
+Here's a small example:
+
+```typescript
+export default function (pluginOptions: PluginOptions) {
+    if(semver.major(pluginOptions?.version) === '1') {
+        return {
+            name: 'v1 version of your plugin!'
+        };
+    } else {
+        return {
+            name: 'v0 version of your plugin'
+        };
+    }
+}
+```
+
 
 ## Plugin API
 

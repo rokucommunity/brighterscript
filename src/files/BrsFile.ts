@@ -248,6 +248,9 @@ export class BrsFile implements BscFile {
      * Walk the AST and find the expression that this token is most specifically contained within
      */
     public getClosestExpression(position: Position) {
+        if (typeof position?.line !== 'number') {
+            return undefined;
+        }
         const handle = new CancellationTokenSource();
         let containingNode: AstNode;
         this.ast.walk((node) => {

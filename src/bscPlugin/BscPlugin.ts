@@ -1,5 +1,5 @@
 import { isBrsFile, isXmlFile } from '../astUtils/reflection';
-import type { CompilerPlugin, OnFileValidateEvent, OnGetCodeActionsEvent, ProvideHoverEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, AfterFileValidateEvent, AfterProgramValidateEvent, AfterSerializeFileEvent, BeforeBuildProgramEvent, OnPrepareFileEvent, ProvideFileEvent, WriteFileEvent } from '../interfaces';
+import type { Plugin, OnFileValidateEvent, OnGetCodeActionsEvent, ProvideHoverEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, AfterProvideFileEvent, AfterFileValidateEvent, AfterProgramValidateEvent, AfterSerializeFileEvent, BeforeBuildProgramEvent, OnPrepareFileEvent, WriteFileEvent } from '../interfaces';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
 import { CompletionsProcessor } from './completions/CompletionsProcessor';
 import { DefinitionProvider } from './definition/DefinitionProvider';
@@ -22,10 +22,10 @@ import { BrsFilePreTranspileProcessor } from './transpile/BrsFileTranspileProces
 import { XmlFilePreTranspileProcessor } from './transpile/XmlFilePreTranspileProcessor';
 import { BrsFileAfterValidator } from './validation/BrsFileAfterValidator';
 
-export class BscPlugin implements CompilerPlugin {
+export class BscPlugin implements Plugin {
     public name = 'BscPlugin';
 
-    public afterProvideFile(event: ProvideFileEvent) {
+    public afterProvideFile(event: AfterProvideFileEvent) {
         new FileProvider(event).process();
     }
 

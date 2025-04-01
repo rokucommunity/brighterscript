@@ -3,7 +3,7 @@ import * as EventEmitter from 'eventemitter3';
 import util, { standardizePath as s } from '../util';
 import * as path from 'path';
 import type { ProjectConfig, ActivateResponse, LspDiagnostic, LspProject } from './LspProject';
-import type { CompilerPlugin, Hover, MaybePromise } from '../interfaces';
+import type { Plugin, Hover, MaybePromise } from '../interfaces';
 import { Deferred } from '../deferred';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import { rokuDeploy } from 'roku-deploy';
@@ -102,7 +102,7 @@ export class Project implements LspProject {
                     diagnostics: diagnostics
                 });
             }
-        } as CompilerPlugin);
+        } as Plugin);
 
         //trigger a validation (but don't wait for it. That way we can cancel it sooner if we get new incoming data or requests)
         void this.validate();

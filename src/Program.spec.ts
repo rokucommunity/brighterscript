@@ -1,6 +1,6 @@
 import { assert, expect } from './chai-config.spec';
 import * as pick from 'object.pick';
-import { CancellationTokenSource, Position, Range } from 'vscode-languageserver';
+import { CancellationTokenSource, CompletionItemKind, Position, Range } from 'vscode-languageserver';
 import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { BrsFile } from './files/BrsFile';
@@ -9,7 +9,7 @@ import { Program } from './Program';
 import { standardizePath as s, util } from './util';
 import type { FunctionStatement, PrintStatement } from './parser/Statement';
 import { EmptyStatement } from './parser/Statement';
-import { expectDiagnostics, expectHasDiagnostics, expectThrows, expectThrowsAsync, expectTypeToBe, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
+import { expectCompletionsExcludes, expectCompletionsIncludes, expectDiagnostics, expectHasDiagnostics, expectThrows, expectThrowsAsync, expectTypeToBe, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
 import { doesNotThrow } from 'assert';
 import { createVisitor, WalkMode } from './astUtils/visitors';
 import { isBrsFile } from './astUtils/reflection';
@@ -19,7 +19,7 @@ import type { SinonSpy } from 'sinon';
 import { createSandbox } from 'sinon';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import { AssetFile } from './files/AssetFile';
-import type { ProvideFileEvent, CompilerPlugin, BeforeProvideFileEvent, AfterProvideFileEvent, BeforeFileAddEvent, AfterFileAddEvent, BeforeFileRemoveEvent, AfterFileRemoveEvent, ScopeValidationOptions, AfterFileValidateEvent, BeforeScopeValidateEvent, OnScopeValidateEvent, BeforeFileValidateEvent, OnFileValidateEvent, AfterScopeValidateEvent } from './interfaces';
+import type { ProvideFileEvent, Plugin, BeforeProvideFileEvent, AfterProvideFileEvent, BeforeFileAddEvent, AfterFileAddEvent, BeforeFileRemoveEvent, AfterFileRemoveEvent, ScopeValidationOptions, AfterFileValidateEvent, BeforeScopeValidateEvent, OnScopeValidateEvent, BeforeFileValidateEvent, OnFileValidateEvent, AfterScopeValidateEvent, CompilerPlugin } from './interfaces';
 import { StringType, TypedFunctionType, DynamicType, FloatType, IntegerType, InterfaceType, ArrayType, BooleanType, DoubleType, UnionType } from './types';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { ComponentType } from './types/ComponentType';
@@ -48,7 +48,16 @@ describe('Program', () => {
         program.dispose();
     });
 
-    it('Does not crazy for file not referenced by any other scope', async () => {
+    it('does not throw exception after calling validate() after dispose()', () => {
+        program.setFile('source/themes/alpha.bs', `
+            sub main()
+            end sub
+        `);
+        program.dispose();
+        program.validate();
+    });
+
+    it('Does not crash for file not referenced by any other scope', async () => {
         program.setFile('tests/testFile.spec.bs', `
             function main(args as object) as object
                 return roca(args).describe("test suite", sub()
@@ -304,7 +313,7 @@ describe('Program', () => {
                         cancel.cancel();
                     }
                 }
-            } as CompilerPlugin;
+            } as Plugin;
             //add a plugin that monitors where we are in the process, so we can cancel the validate at the correct time
             program.plugins.add(plugin);
 
@@ -856,7 +865,7 @@ describe('Program', () => {
                 cancelTokenSource: CancellationTokenSource;
             }
 
-            function getCancellationPlugin(option: CancellationPluginOptions): CompilerPlugin {
+            function getCancellationPlugin(option: CancellationPluginOptions): Plugin {
                 return {
                     name: 'cancelPlugin',
                     beforeFileValidate: (event) => {
@@ -1352,6 +1361,379 @@ describe('Program', () => {
 
             doesNotThrow(() => {
                 program.getCodeActions('source/main.brs', util.createRange(1, 2, 3, 4));
+            });
+        });
+
+        it('finds enum member after dot', () => {
+            program.setFile('source/main.bs', `
+                sub test()
+                    thing = alpha.Direction.
+                end sub
+                namespace alpha
+                    enum Direction
+                        up
+                    end enum
+                end namespace
+            `);
+            program.validate();
+            const completions = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 44));
+            expect(completions.map(x => ({ kind: x.kind, label: x.label }))).to.eql([{
+                label: 'up',
+                kind: CompletionItemKind.EnumMember
+            }]);
+        });
+
+        it('finds enum member after dot in if statement', () => {
+            program.setFile('source/main.bs', `
+                sub test()
+                    if alpha.beta. then
+                    end if
+                end sub
+                namespace alpha.beta
+                    const isEnabled = true
+                end namespace
+            `);
+            program.validate();
+            const completions = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 34));
+            expect(completions.map(x => ({ kind: x.kind, label: x.label }))).to.eql([{
+                label: 'isEnabled',
+                kind: CompletionItemKind.Constant
+            }]);
+        });
+
+        it('includes `for` variable', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    for i = 0 to 10
+                        t =
+                    end for
+                end sub
+            `);
+            program.validate();
+            let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(3, 28)).map(x => x.label);
+            expect(completions).to.include('i');
+        });
+
+        it('should include first-level namespace names for brighterscript files', () => {
+            program.setFile('source/main.bs', `
+                namespace NameA.NameB.NameC
+                    sub DoSomething()
+                    end sub
+                end namespace
+                sub main()
+                    print
+                end sub
+            `);
+            expectCompletionsIncludes(program.getCompletions(`${rootDir}/source/main.bs`, Position.create(6, 25)), [{
+                label: 'NameA',
+                kind: CompletionItemKind.Module
+            }]);
+            expectCompletionsExcludes(program.getCompletions(`${rootDir}/source/main.bs`, Position.create(6, 25)), [{
+                label: 'NameB',
+                kind: CompletionItemKind.Module
+            }, {
+                label: 'NameA.NameB',
+                kind: CompletionItemKind.Module
+            }, {
+                label: 'NameA.NameB.NameC',
+                kind: CompletionItemKind.Module
+            }, {
+                label: 'NameA.NameB.NameC.DoSomething',
+                kind: CompletionItemKind.Module
+            }]);
+        });
+
+        it('resolves completions for namespaces with next namespace part for brighterscript file', () => {
+            program.setFile('source/main.bs', `
+                namespace NameA.NameB.NameC
+                    sub DoSomething()
+                    end sub
+                end namespace
+                sub main()
+                    NameA.
+                end sub
+            `);
+            let completions = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(6, 26)).map(x => x.label);
+            expect(completions).to.include('NameB');
+            expect(completions).not.to.include('NameA');
+            expect(completions).not.to.include('NameA.NameB');
+            expect(completions).not.to.include('NameA.NameB.NameC');
+            expect(completions).not.to.include('NameA.NameB.NameC.DoSomething');
+        });
+
+        it('finds namespace members for brighterscript file', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    NameA.
+                    NameA.NameB.
+                    NameA.NameB.NameC.
+                end sub
+                namespace NameA
+                    sub alertA()
+                    end sub
+                end namespace
+                namespace NameA
+                    sub info()
+                    end sub
+                end namespace
+                namespace NameA.NameB
+                    sub alertB()
+                    end sub
+                end namespace
+                namespace NameA.NameB.NameC
+                    sub alertC()
+                    end sub
+                end namespace
+            `);
+            expect(
+                program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 26)).map(x => x.label).sort()
+            ).to.eql(['NameB', 'alertA', 'info']);
+
+            expect(
+                program.getCompletions(`${rootDir}/source/main.bs`, Position.create(3, 32)).map(x => x.label).sort()
+            ).to.eql(['NameC', 'alertB']);
+
+            expect(
+                program.getCompletions(`${rootDir}/source/main.bs`, Position.create(4, 38)).map(x => x.label).sort()
+            ).to.eql(['alertC']);
+        });
+
+        it('finds namespace members for classes', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    NameA.
+                    NameA.NameB.
+                    NameA.NameB.NameC.
+                end sub
+                namespace NameA
+                    sub alertA()
+                    end sub
+                end namespace
+                namespace NameA
+                    sub info()
+                    end sub
+                    class MyClassA
+                    end class
+                end namespace
+                namespace NameA.NameB
+                    sub alertB()
+                    end sub
+                    class MyClassB
+                    end class
+                end namespace
+                namespace NameA.NameB.NameC
+                    sub alertC()
+                    end sub
+                end namespace
+            `);
+            expect(
+                program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 26)).map(x => x.label).sort()
+            ).to.eql(['MyClassA', 'NameB', 'alertA', 'info']);
+
+            expect(
+                program.getCompletions(`${rootDir}/source/main.bs`, Position.create(3, 32)).map(x => x.label).sort()
+            ).to.eql(['MyClassB', 'NameC', 'alertB']);
+
+            expect(
+                program.getCompletions(`${rootDir}/source/main.bs`, Position.create(4, 38)).map(x => x.label).sort()
+            ).to.eql(['alertC']);
+        });
+
+        it('finds only namespaces that have classes, when new keyword is used', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    a = new NameA.
+                    b = new NameA.NameB.
+                    c = new NameA.NameB.NameC.
+                end sub
+                namespace NameA
+                    sub alertA()
+                    end sub
+                end namespace
+                namespace NameA
+                    sub info()
+                    end sub
+                    class MyClassA
+                    end class
+                end namespace
+                namespace NameA.NoClassA
+                end namespace
+                namespace NameA.NoClassB
+                end namespace
+                namespace NameA.NameB
+                    sub alertB()
+                    end sub
+                    class MyClassB
+                    end class
+                end namespace
+                namespace NameA.NameB.NoClass
+                end namespace
+                namespace NameA.NameB.NameC
+                    sub alertC()
+                    end sub
+                end namespace
+            `);
+            expect(
+                program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 34)).map(x => x.label).sort()
+            ).to.eql(['MyClassA', 'NameB']);
+
+            expect(
+                program.getCompletions(`${rootDir}/source/main.bs`, Position.create(3, 40)).map(x => x.label).sort()
+            ).to.eql(['MyClassB']);
+
+            expect(
+                program.getCompletions(`${rootDir}/source/main.bs`, Position.create(4, 46)).map(x => x.label).sort()
+            ).to.be.empty;
+        });
+
+        //Bron.. pain to get this working.. do we realy need this? seems moot with ropm..
+        it.skip('should include translated namespace function names for brightscript files', () => {
+            program.setFile('source/main.bs', `
+                namespace NameA.NameB.NameC
+                    sub DoSomething()
+                    end sub
+                end namespace
+            `);
+            program.setFile('source/lib.brs', `
+                sub test()
+
+                end sub
+            `);
+            let completions = program.getCompletions(`${rootDir}/source/lib.brs`, Position.create(2, 23));
+            expect(completions.map(x => x.label)).to.include('NameA_NameB_NameC_DoSomething');
+        });
+
+        it('inlcudes global completions for file with no scope', () => {
+            program.setFile('main.brs', `
+                function Main()
+                    age = 1
+                end function
+            `);
+            let completions = program.getCompletions('main.brs', Position.create(2, 10));
+            expect(completions.filter(x => x.label.toLowerCase() === 'abs')).to.be.lengthOf(1);
+        });
+
+        it('filters out text results for top-level function statements', () => {
+            program.setFile('source/main.brs', `
+                function Main()
+                    age = 1
+                end function
+            `);
+            let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10));
+            expect(completions.filter(x => x.label === 'Main')).to.be.lengthOf(1);
+        });
+
+        it('does not filter text results for object properties used in conditional statements', () => {
+            program.setFile('source/main.brs', `
+                sub Main()
+                    p.
+                end sub
+                sub SayHello()
+                    person = {}
+                    if person.isAlive then
+                        print "Hello"
+                    end if
+                end sub
+            `);
+            let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 22));
+            expect(completions.filter(x => x.label === 'isAlive')).to.be.lengthOf(1);
+        });
+
+        it('does not filter text results for object properties used in assignments', () => {
+            program.setFile('source/main.brs', `
+                sub Main()
+                    p.
+                end sub
+                sub SayHello()
+                   person = {}
+                   localVar = person.name
+                end sub
+            `);
+            let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 22));
+            expect(completions.filter(x => x.label === 'name')).to.be.lengthOf(1);
+        });
+
+        it('does not filter text results for object properties', () => {
+            program.setFile('source/main.brs', `
+                sub Main()
+                    p.
+                end sub
+                sub SayHello()
+                   person = {}
+                   person.name = "bob"
+                end sub
+            `);
+            let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 22));
+            expect(completions.filter(x => x.label === 'name')).to.be.lengthOf(1);
+        });
+
+        it('filters out text results for local vars used in conditional statements', () => {
+            program.setFile('source/main.brs', `
+                sub Main()
+
+                end sub
+                sub SayHello()
+                    isTrue = true
+                    if isTrue then
+                        print "is true"
+                    end if
+                end sub
+            `);
+            let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10));
+            expect(completions.filter(x => x.label === 'isTrue')).to.be.lengthOf(0);
+        });
+
+        it('filters out text results for local variable assignments', () => {
+            program.setFile('source/main.brs', `
+                sub Main()
+
+                end sub
+                sub SayHello()
+                    message = "Hello"
+                end sub
+            `);
+            let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10));
+            expect(completions.filter(x => x.label === 'message')).to.be.lengthOf(0);
+        });
+
+        it('filters out text results for local variables used in assignments', () => {
+            program.setFile('source/main.brs', `
+                sub Main()
+
+                end sub
+                sub SayHello()
+                    message = "Hello"
+                    otherVar = message
+                end sub
+            `);
+            let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10));
+            expect(completions.filter(x => x.label === 'message')).to.be.lengthOf(0);
+        });
+
+        it('does not suggest local variables when initiated to the right of a period', () => {
+            program.setFile('source/main.brs', `
+                function Main()
+                    helloMessage = "jack"
+                    person.hello
+                end function
+            `);
+            let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(3, 32));
+            expect(completions.filter(x => x.kind === CompletionItemKind.Variable).map(x => x.label)).not.to.contain('helloMessage');
+        });
+
+        it('finds all file paths when initiated on xml uri', () => {
+            let xmlPath = s`${rootDir}/components/component1.xml`;
+            program.setFile('components/component1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="HeroScene" extends="Scene">
+                    <script type="text/brightscript" uri="" />
+                </component>
+            `);
+            program.setFile('components/component1.brs', '');
+            let completions = program.getCompletions(xmlPath, Position.create(2, 42));
+            expect(completions[0]).to.include({
+                kind: CompletionItemKind.File,
+                label: 'component1.brs'
             });
         });
     });
