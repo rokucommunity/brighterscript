@@ -222,7 +222,7 @@ export class CompletionsProcessor {
             symbolTableLookupFlag = SymbolTypeFlag.typetime;
         } else if (this.isTokenAdjacentTo(file, currentToken, TokenKind.Equal)) {
             expression = file.getClosestExpression(this.event.position);
-            if (expression.findAncestor<AliasStatement>(isAliasStatement)) {
+            if (expression?.findAncestor<AliasStatement>(isAliasStatement)) {
                 // allow runtime and typetime lookups in alias statements
                 // eslint-disable-next-line no-bitwise
                 symbolTableLookupFlag = SymbolTypeFlag.runtime | SymbolTypeFlag.typetime;
@@ -283,7 +283,7 @@ export class CompletionsProcessor {
 
         const globalCompletions: CompletionItem[] = [];
         if (!tokenIsLiteralString && notMembers && !isAfterNew && this.event.program?.globalScope) {
-            let globalSymbols: BscSymbol[] = this.event.program.globalScope.symbolTable.getOwnSymbols(symbolTableLookupFlag) ?? [];
+            let globalSymbols: BscSymbol[] = this.event.program.globalScope.symbolTable.getAllSymbols(symbolTableLookupFlag) ?? [];
             if (symbolTableLookupFlag === SymbolTypeFlag.runtime) {
                 globalSymbols.push(...this.getGlobalValues());
             }

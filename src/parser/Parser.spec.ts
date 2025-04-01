@@ -4,7 +4,7 @@ import { ReservedWords, TokenKind } from '../lexer/TokenKind';
 import type { AAMemberExpression, BinaryExpression, LiteralExpression, TypecastExpression, UnaryExpression } from './Expression';
 import { TernaryExpression, NewExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression, VariableExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
-import type { AliasStatement, AssignmentStatement, Block, ClassStatement, ConditionalCompileConstStatement, ConditionalCompileErrorStatement, ConditionalCompileStatement, ExitStatement, ForStatement, InterfaceStatement, ReturnStatement, TypecastStatement } from './Statement';
+import type { AliasStatement, AssignmentStatement, Block, ClassStatement, ConditionalCompileConstStatement, ConditionalCompileErrorStatement, ConditionalCompileStatement, ExitStatement, ForStatement, IfStatement, InterfaceStatement, ReturnStatement, TypecastStatement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
@@ -706,6 +706,19 @@ describe('parser', () => {
 
                 let callFunc = body.findChild<CallExpression>(isCallfuncExpression);
                 expect(callFunc).to.exist;
+            });
+
+            it('adds if statements', () => {
+                let parser = parse(`
+                    sub foo(thing)
+                        if thing.
+                    end sub
+                `, ParseMode.BrighterScript);
+                expect(parser.diagnostics[0]?.message).to.exist;
+                let body = (parser.ast.statements[0] as FunctionStatement).func.body;
+
+                let ifStmt = body.findChild<IfStatement>(isIfStatement);
+                expect(ifStmt).to.exist;
             });
         });
 
