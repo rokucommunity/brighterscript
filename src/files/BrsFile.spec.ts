@@ -4007,7 +4007,7 @@ describe('BrsFile', () => {
                     print m.name
                 end sub
             `, `
-                'typecast m as dynamic ' typecast comment
+                'typecast m as MyComponent ' typecast comment
                 'import "types.bs" ' import comment
                 'alias Person2 = Person ' alias comment
 
@@ -5979,7 +5979,13 @@ describe('BrsFile', () => {
                 sub foo(node as object)
                     print node[m.keyProp]
                 end sub
+
+                interface whatever
+                    keyProp as string
+                end interface
             `, `
+                'typecast m as whatever
+
                 sub foo(node as object)
                     print node[m.keyProp]
                 end sub

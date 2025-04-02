@@ -274,8 +274,7 @@ describe('CompletionsProcessor', () => {
             ).to.be.empty;
         });
 
-        //Bron.. pain to get this working.. do we realy need this? seems moot with ropm..
-        it.skip('should include translated namespace function names for brightscript files', () => {
+        it('should include translated namespace function names for brightscript files', () => {
             program.setFile('source/main.bs', `
                 namespace NameA.NameB.NameC
                     sub DoSomething()

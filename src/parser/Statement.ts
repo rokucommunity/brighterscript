@@ -4171,7 +4171,7 @@ export class TypecastStatement extends Statement {
             ' ',
             state.transpileToken(this.typecastExpression.tokens.as, 'as'),
             ' ',
-            this.typecastExpression.typeExpression.transpile(state)
+            this.typecastExpression.typeExpression.getName(ParseMode.BrighterScript)
         ];
     }
 
