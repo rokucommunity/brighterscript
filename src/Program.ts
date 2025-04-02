@@ -1505,16 +1505,10 @@ export class Program {
             return [];
         }
 
-        //find the scopes for this file
-        let scopes = this.getScopesForFile(file);
-
-        //if there are no scopes, include the global scope so we at least get the built-in functions
-        scopes = scopes.length > 0 ? scopes : [this.globalScope];
-
         const event: ProvideCompletionsEvent = {
             program: this,
             file: file,
-            scopes: scopes,
+            scopes: this.getScopesForFile(file),
             position: position,
             completions: []
         };

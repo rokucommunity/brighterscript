@@ -544,6 +544,10 @@ export interface AfterProgramValidateEvent extends BeforeProgramValidateEvent {
 export interface ProvideCompletionsEvent<TFile extends BscFile = BscFile> {
     program: Program;
     file: TFile;
+    /**
+     * The scopes this file is a member of. If the file is a member of no scopes, this will be an empty array.
+     * Plugins can use `event.program.globalScope` if the file is not a member of any scopes
+     */
     scopes: Scope[];
     position: Position;
     completions: CompletionItem[];
