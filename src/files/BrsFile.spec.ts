@@ -5979,7 +5979,13 @@ describe('BrsFile', () => {
                 sub foo(node as object)
                     print node[m.keyProp]
                 end sub
+
+                interface whatever
+                    keyProp as string
+                end interface
             `, `
+                'typecast m as whatever
+
                 sub foo(node as object)
                     print node[m.keyProp]
                 end sub
