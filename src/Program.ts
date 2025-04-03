@@ -1945,7 +1945,7 @@ export class Program {
             }
         });
 
-        console.log('TYPES CREATED', TypesCreated);
+        this.logger.debug('Types Created', TypesCreated);
         let totalTypesCreated = 0;
         for (const key in TypesCreated) {
             if (TypesCreated.hasOwnProperty(key)) {
@@ -1953,7 +1953,7 @@ export class Program {
 
             }
         }
-        console.log('TOTAL TYPES CREATED', totalTypesCreated);
+        this.logger.info('Total Types Created', totalTypesCreated);
     }
 
     /**
