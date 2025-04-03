@@ -1,7 +1,8 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import { type CodeAction, type Position, type Range, type SignatureInformation, type Location, type DocumentSymbol, type CancellationToken, CancellationTokenSource } from 'vscode-languageserver';
+import type { CodeAction, Position, Range, SignatureInformation, Location, DocumentSymbol, CancellationToken } from 'vscode-languageserver';
+import { CancellationTokenSource } from 'vscode-languageserver';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
@@ -20,9 +21,6 @@ import { isBrsFile, isXmlFile, isXmlScope, isNamespaceStatement, isReferenceType
 import type { FunctionStatement, MethodStatement, NamespaceStatement } from './parser/Statement';
 import { BscPlugin } from './bscPlugin/BscPlugin';
 import { Editor } from './astUtils/Editor';
-import type { Statement } from './parser/AstNode';
-import { CallExpressionInfo } from './bscPlugin/CallExpressionInfo';
-import { SignatureHelpUtil } from './bscPlugin/SignatureHelpUtil';
 import { IntegerType } from './types/IntegerType';
 import { StringType } from './types/StringType';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
@@ -55,6 +53,9 @@ import type { ProvidedSymbolInfo, BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
 import { SymbolTable } from './SymbolTable';
 import { ReferenceType, TypesCreated } from './types';
+import type { Statement } from './parser/AstNode';
+import { CallExpressionInfo } from './bscPlugin/CallExpressionInfo';
+import { SignatureHelpUtil } from './bscPlugin/SignatureHelpUtil';
 import { Sequencer } from './common/Sequencer';
 import { Deferred } from './deferred';
 
@@ -1504,16 +1505,10 @@ export class Program {
             return [];
         }
 
-        //find the scopes for this file
-        let scopes = this.getScopesForFile(file);
-
-        //if there are no scopes, include the global scope so we at least get the built-in functions
-        scopes = scopes.length > 0 ? scopes : [this.globalScope];
-
         const event: ProvideCompletionsEvent = {
             program: this,
             file: file,
-            scopes: scopes,
+            scopes: this.getScopesForFile(file),
             position: position,
             completions: []
         };
@@ -1655,8 +1650,8 @@ export class Program {
         }
     }
 
-    public getSignatureHelp(filepath: string, position: Position): SignatureInfoObj[] {
-        let file: BrsFile = this.getFile(filepath);
+    public getSignatureHelp(filePath: string, position: Position): SignatureInfoObj[] {
+        let file: BrsFile = this.getFile(filePath);
         if (!file || !isBrsFile(file)) {
             return [];
         }
@@ -1950,7 +1945,7 @@ export class Program {
             }
         });
 
-        console.log('TYPES CREATED', TypesCreated);
+        this.logger.debug('Types Created', TypesCreated);
         let totalTypesCreated = 0;
         for (const key in TypesCreated) {
             if (TypesCreated.hasOwnProperty(key)) {
@@ -1958,7 +1953,7 @@ export class Program {
 
             }
         }
-        console.log('TOTAL TYPES CREATED', totalTypesCreated);
+        this.logger.info('Total Types Created', totalTypesCreated);
     }
 
     /**

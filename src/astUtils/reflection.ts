@@ -197,6 +197,9 @@ export function isThrowStatement(element: AstNode | undefined): element is Throw
 export function isTypecastStatement(element: AstNode | undefined): element is TypecastStatement {
     return element?.kind === AstNodeKind.TypecastStatement;
 }
+export function isAliasStatement(element: AstNode | undefined): element is AliasStatement {
+    return element?.kind === AstNodeKind.AliasStatement;
+}
 export function isConditionalCompileStatement(element: AstNode | undefined): element is ConditionalCompileStatement {
     return element?.kind === AstNodeKind.ConditionalCompileStatement;
 }
@@ -205,9 +208,6 @@ export function isConditionalCompileConstStatement(element: AstNode | undefined)
 }
 export function isConditionalCompileErrorStatement(element: AstNode | undefined): element is ConditionalCompileErrorStatement {
     return element?.kind === AstNodeKind.ConditionalCompileErrorStatement;
-}
-export function isAliasStatement(element: AstNode | undefined): element is AliasStatement {
-    return element?.kind === AstNodeKind.AliasStatement;
 }
 export function isAugmentedAssignmentStatement(element: AstNode | undefined): element is AugmentedAssignmentStatement {
     return element?.kind === AstNodeKind.AugmentedAssignmentStatement;
@@ -307,6 +307,7 @@ export function isTypedArrayExpression(element: any): element is TypedArrayExpre
 export function isPrintSeparatorExpression(element: any): element is PrintSeparatorExpression {
     return element?.kind === AstNodeKind.PrintSeparatorExpression;
 }
+
 
 // BscType reflection
 export function isStringType(value: any): value is StringType {

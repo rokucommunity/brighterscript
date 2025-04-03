@@ -274,8 +274,7 @@ describe('CompletionsProcessor', () => {
             ).to.be.empty;
         });
 
-        //Bron.. pain to get this working.. do we realy need this? seems moot with ropm..
-        it.skip('should include translated namespace function names for brightscript files', () => {
+        it('should include translated namespace function names for brightscript files', () => {
             program.setFile('source/main.bs', `
                 namespace NameA.NameB.NameC
                     sub DoSomething()
@@ -737,7 +736,7 @@ describe('CompletionsProcessor', () => {
                 const processor = new CompletionsProcessor({ scopes: [] } as any);
                 expect(
                     // message = alpha|
-                    processor['getBrsFileCompletions'](util.createPosition(2, 39), file)
+                    processor['getBrsFileCompletions'](util.createPosition(2, 39), file, [])
                 ).to.eql({ global: [], scoped: [] });
             });
 
@@ -754,7 +753,7 @@ describe('CompletionsProcessor', () => {
                 const processor = new CompletionsProcessor({} as any);
                 expect(
                     // message = alpha|
-                    processor['getBrsFileCompletions'](util.createPosition(2, 39), file)
+                    processor['getBrsFileCompletions'](util.createPosition(2, 39), file, program.getScopesForFile(file))
                 ).to.eql({ global: [], scoped: [] });
             });
         });
@@ -828,7 +827,9 @@ describe('CompletionsProcessor', () => {
                 });
                 program.validate();
                 //get the name of all global completions
-                const globalCompletions = program.globalScope.getAllFiles().flatMap(x => completionProcessor.getBrsFileCompletions(position, x as BrsFile).global).map(x => x.label);
+                const globalCompletions = program.globalScope.getAllFiles().flatMap((x) => {
+                    return completionProcessor.getBrsFileCompletions(position, x as BrsFile, program.getScopesForFile(x)).global;
+                }).map(x => x.label);
                 //filter out completions from global scope
                 completions = completions.filter(x => !globalCompletions.includes(x.label));
                 expect(completions).to.be.empty;

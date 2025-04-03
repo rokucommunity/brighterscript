@@ -1,4 +1,4 @@
-import type { CompilerPlugin } from './interfaces';
+import type { Plugin } from './interfaces';
 import { LogLevel, createLogger } from './logging';
 import type { Logger } from './logging';
 /*
@@ -22,9 +22,9 @@ export type PluginEventArgs<T> = {
     Required<T>[K] extends (...args: any[]) => any ? Parameters<Required<T>[K]> : never
 };
 
-export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> {
+export default class PluginInterface<T extends Plugin = Plugin> {
     constructor(
-        plugins?: CompilerPlugin[],
+        plugins?: Plugin[],
         options?: {
             logger?: Logger;
             suppressErrors?: boolean;
@@ -43,7 +43,7 @@ export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> 
         }
     }
 
-    private plugins: CompilerPlugin[] = [];
+    private plugins: Plugin[] = [];
     private logger: Logger;
 
     /**
@@ -97,7 +97,7 @@ export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> 
     /**
      * Add a plugin to the beginning of the list of plugins
      */
-    public addFirst<T extends CompilerPlugin = CompilerPlugin>(plugin: T) {
+    public addFirst<T extends Plugin = Plugin>(plugin: T) {
         if (!this.has(plugin)) {
             this.plugins.unshift(plugin);
         }
@@ -107,7 +107,7 @@ export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> 
     /**
      * Add a plugin to the end of the list of plugins
      */
-    public add<T extends CompilerPlugin = CompilerPlugin>(plugin: T) {
+    public add<T extends Plugin = Plugin>(plugin: T) {
         if (!this.has(plugin)) {
             this.sanitizePlugin(plugin);
             this.plugins.push(plugin);
@@ -119,7 +119,7 @@ export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> 
      * Find deprecated or removed historic plugin hooks, and warn about them.
      * Some events can be forwards-converted
      */
-    private sanitizePlugin(plugin: CompilerPlugin) {
+    private sanitizePlugin(plugin: Plugin) {
         const removedHooks = [
             'beforePrepublish',
             'afterPrepublish'
@@ -155,11 +155,11 @@ export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> 
         }
     }
 
-    public has(plugin: CompilerPlugin) {
+    public has(plugin: Plugin) {
         return this.plugins.includes(plugin);
     }
 
-    public remove<T extends CompilerPlugin = CompilerPlugin>(plugin: T) {
+    public remove<T extends Plugin = Plugin>(plugin: T) {
         if (this.has(plugin)) {
             this.plugins.splice(this.plugins.indexOf(plugin), 1);
         }

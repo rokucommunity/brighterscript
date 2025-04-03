@@ -1791,7 +1791,6 @@ describe('LanguageServer', () => {
             expect(result.items.filter(compItem => compItem.label === 'pi')).to.length(1);
             expect(result.items.filter(compItem => compItem.label === 'LCase')).to.length(1);
         });
-
     });
 });
 

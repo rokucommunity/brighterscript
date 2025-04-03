@@ -24,10 +24,10 @@ import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { ClassType, EnumType, FloatType, InterfaceType } from '../types';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import * as fileUrl from 'file-url';
-import { isAALiteralExpression, isBlock, isFunctionExpression } from '../astUtils/reflection';
 import type { AALiteralExpression } from '../parser/Expression';
 import { CallExpression, FunctionExpression, LiteralExpression } from '../parser/Expression';
 import { Logger } from '@rokucommunity/logger';
+import { isFunctionExpression, isAALiteralExpression, isBlock } from '../astUtils/reflection';
 
 let sinon = sinonImport.createSandbox();
 
@@ -4007,7 +4007,7 @@ describe('BrsFile', () => {
                     print m.name
                 end sub
             `, `
-                'typecast m as dynamic ' typecast comment
+                'typecast m as MyComponent ' typecast comment
                 'import "types.bs" ' import comment
                 'alias Person2 = Person ' alias comment
 
@@ -5971,6 +5971,26 @@ describe('BrsFile', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        it('allows typecast statements', async () => {
+            await testTranspile(`
+                typecast m as whatever
+
+                sub foo(node as object)
+                    print node[m.keyProp]
+                end sub
+
+                interface whatever
+                    keyProp as string
+                end interface
+            `, `
+                'typecast m as whatever
+
+                sub foo(node as object)
+                    print node[m.keyProp]
+                end sub
+            `);
+        });
     });
 
     it('allows up to 63 function params', () => {
@@ -6025,4 +6045,29 @@ describe('BrsFile', () => {
             }
         ]);
     });
+
+    describe('getClosestExpression', () => {
+        it('returns undefined for missing Position', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub Main()
+                    if true THEN
+                        print "works"
+                    end if
+                end sub
+            `);
+            expect(file.getClosestExpression(undefined)).to.be.undefined;
+        });
+
+        it('returns the closest expression at Position', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub Main()
+                    if true THEN
+                        print "works"
+                    end if
+                end sub
+            `);
+            expect(file.getClosestExpression({ line: 3, character: 34 })).to.be.instanceOf(LiteralExpression);
+        });
+    });
+
 });

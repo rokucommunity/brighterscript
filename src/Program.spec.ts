@@ -19,7 +19,7 @@ import type { SinonSpy } from 'sinon';
 import { createSandbox } from 'sinon';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import { AssetFile } from './files/AssetFile';
-import type { ProvideFileEvent, CompilerPlugin, BeforeProvideFileEvent, AfterProvideFileEvent, BeforeFileAddEvent, AfterFileAddEvent, BeforeFileRemoveEvent, AfterFileRemoveEvent, ScopeValidationOptions, AfterFileValidateEvent, BeforeScopeValidateEvent, OnScopeValidateEvent, BeforeFileValidateEvent, OnFileValidateEvent, AfterScopeValidateEvent } from './interfaces';
+import type { ProvideFileEvent, Plugin, BeforeProvideFileEvent, AfterProvideFileEvent, BeforeFileAddEvent, AfterFileAddEvent, BeforeFileRemoveEvent, AfterFileRemoveEvent, ScopeValidationOptions, AfterFileValidateEvent, BeforeScopeValidateEvent, OnScopeValidateEvent, BeforeFileValidateEvent, OnFileValidateEvent, AfterScopeValidateEvent, CompilerPlugin } from './interfaces';
 import { StringType, TypedFunctionType, DynamicType, FloatType, IntegerType, InterfaceType, ArrayType, BooleanType, DoubleType, UnionType } from './types';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { ComponentType } from './types/ComponentType';
@@ -48,7 +48,16 @@ describe('Program', () => {
         program.dispose();
     });
 
-    it('Does not crazy for file not referenced by any other scope', async () => {
+    it('does not throw exception after calling validate() after dispose()', () => {
+        program.setFile('source/themes/alpha.bs', `
+            sub main()
+            end sub
+        `);
+        program.dispose();
+        program.validate();
+    });
+
+    it('Does not crash for file not referenced by any other scope', async () => {
         program.setFile('tests/testFile.spec.bs', `
             function main(args as object) as object
                 return roca(args).describe("test suite", sub()
@@ -304,7 +313,7 @@ describe('Program', () => {
                         cancel.cancel();
                     }
                 }
-            } as CompilerPlugin;
+            } as Plugin;
             //add a plugin that monitors where we are in the process, so we can cancel the validate at the correct time
             program.plugins.add(plugin);
 
@@ -856,7 +865,7 @@ describe('Program', () => {
                 cancelTokenSource: CancellationTokenSource;
             }
 
-            function getCancellationPlugin(option: CancellationPluginOptions): CompilerPlugin {
+            function getCancellationPlugin(option: CancellationPluginOptions): Plugin {
                 return {
                     name: 'cancelPlugin',
                     beforeFileValidate: (event) => {

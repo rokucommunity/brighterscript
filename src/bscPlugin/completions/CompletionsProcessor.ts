@@ -24,7 +24,6 @@ import { createIdentifier } from '../../astUtils/creators';
 import type { FunctionExpression } from '../../parser/Expression';
 import { LogLevel } from '../../Logger';
 
-
 const SCOPES_FOR_COMPLETION = 3;
 
 export class CompletionsProcessor {
@@ -39,7 +38,7 @@ export class CompletionsProcessor {
         this.event.program.logger.time(LogLevel.log, ['Processing completions'], () => {
 
             // Find the scopes for this file - Only process the first few scopes
-            const scopesToProcess = this.getScopesForCompletion(file);
+            const scopesToProcess = this.getScopesForCompletion();
 
             //get the completions from all scopes for this file
             let completionResults: CompletionItem[] = [];
@@ -55,16 +54,16 @@ export class CompletionsProcessor {
                     return;
                 }
 
-                const results = this.getBrsFileCompletions(this.event.position, file);
+                const results = this.getBrsFileCompletions(this.event.position, file, scopesToProcess);
                 completionResults = results.scoped;
                 globalResults = results.global;
             }
 
+            //push any global results to the completions array
             this.event.completions.push(...globalResults);
 
+            //only keep completions common to every scope for this file (the global results are not considered in this filter and will always be included)
             let allCompletions = completionResults.flat();
-
-            //only keep completions common to every scope for this file
             let keyCounts = new Map<string, number>();
             for (let completion of allCompletions) {
                 let key = `${completion.label}-${completion.kind}`;
@@ -76,14 +75,14 @@ export class CompletionsProcessor {
         });
     }
 
-    private getScopesForCompletion(file: BscFile) {
-        //find the scopes for this file
-        let scopesForFile = this.event.program?.getScopesForFile(file) ?? [];
+    private getScopesForCompletion() {
+        //the scopes for this file
+        let scopesForFile = this.event.scopes ?? [];
 
-        //if there are no scopes, include the global scope so we at least get the built-in functions
-        if (this.event.program) {
-            scopesForFile = scopesForFile.length > 0 ? scopesForFile : [this.event.program.globalScope];
-        }
+        // //if there are no scopes, include the global scope so we at least get the built-in functions
+        // if (this.event.program) {
+        //     scopesForFile = scopesForFile.length > 0 ? scopesForFile : [];
+        // }
 
         // Only process the first few scopes. This might result in missing completions,
         // but it's better than wasting TONS of cycles building essentially the same completions over and over
@@ -176,7 +175,7 @@ export class CompletionsProcessor {
     /**
      * Get completions available at the given cursor. This aggregates all values from this file and the current scope.
      */
-    public getBrsFileCompletions(position: Position, file: BrsFile): { global: CompletionItem[]; scoped: CompletionItem[] } {
+    public getBrsFileCompletions(position: Position, file: BrsFile, scopesToProcess: Scope[]): { global: CompletionItem[]; scoped: CompletionItem[] } {
         let result = [] as CompletionItem[];
         const currentTokenByFilePosition = file.getTokenAt(position);
         const currentToken = currentTokenByFilePosition ?? file.getTokenAt(file.getClosestExpression(position)?.location?.range.start);
@@ -290,7 +289,6 @@ export class CompletionsProcessor {
             globalCompletions.push(...this.getSymbolsCompletion(globalSymbols));
         }
 
-        const scopesToProcess = this.getScopesForCompletion(file);
         for (const scope of scopesToProcess) {
             if (tokenKind === TokenKind.StringLiteral || tokenKind === TokenKind.TemplateStringQuasi) {
                 result.push(...this.getStringLiteralCompletions(scope, currentToken));
