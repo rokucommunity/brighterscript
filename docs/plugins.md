@@ -473,8 +473,8 @@ export default function () {
 }
 ```
 
-### BrighterScript v1 compatability
-There is currently a v1 rewrite of BrighterScript which includes some significant breaking changes. This has caused challenges with brighterscript plugins, as you need to maintain separate versions for v0 and v1. You can utilize the `pluginOptions.version` property in your factory to determine what brighterscript version is running your plugin, and adjust accordingly.
+### BrighterScript v0 compatability
+v1 is a rewrite of BrighterScript which includes some significant breaking changes. This has caused challenges with brighterscript plugins, as you need to maintain separate versions for v0 and v1. You can utilize the `pluginOptions.version` property in your factory to determine what brighterscript version is running your plugin, and adjust accordingly.
 
 This options object is only available starting with brighterscript `v0.69.4` and `v1.0.0-alpha.45`. It's important to support backwards compatibility that an `undefined` `version` value be treated as a v0 plugin.
 
