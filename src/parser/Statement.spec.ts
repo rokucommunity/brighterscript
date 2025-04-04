@@ -6,17 +6,19 @@ import { WalkMode } from '../astUtils/visitors';
 import { isNamespaceStatement } from '../astUtils/reflection';
 import { CancellationTokenSource } from 'vscode-languageserver';
 import { Program } from '../Program';
-import { trim } from '../testHelpers.spec';
+import { expectZeroDiagnostics, trim } from '../testHelpers.spec';
 import type { BrsFile } from '../files/BrsFile';
 import { tempDir } from '../testHelpers.spec';
 
 describe('Statement', () => {
     let program: Program;
+
     beforeEach(() => {
         program = new Program({
             cwd: tempDir
         });
     });
+
     describe('EmptyStatement', () => {
         it('returns empty array for transpile', () => {
             const statement = new EmptyStatement();
@@ -104,6 +106,26 @@ describe('Statement', () => {
                 expect(stmt.getName(ParseMode.BrightScript)).to.equal('NameA_Animal');
                 expect(stmt.getName(ParseMode.BrighterScript)).to.equal('NameA.Animal');
             });
+        });
+
+        it('does not pollute the AST after validation', () => {
+            const file = program.setFile<BrsFile>('source/lib.bs', `
+                class HasPropertyInitialiser
+                    name as string = createObject("roString")
+
+                    sub new()
+                        super()
+                    end sub
+                end class
+            `);
+            program.validate();
+            file.transpile();
+            program.setFile<BrsFile>('source/another.bs', `
+                class AnotherClassJustToInvalidateScope
+                end class
+            `);
+            program.validate();
+            expectZeroDiagnostics(program.getDiagnostics());
         });
     });
 
