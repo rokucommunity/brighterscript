@@ -398,6 +398,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.66.0-alpha.0](https://github.com/rokucommunity/brighterscript/compare/v0.65.1...v0.66.0-alpha.0) - 2023-06-09
 ### Changed
  - all the type tracking stuff!
+## [0.69.5](https://github.com/rokucommunity/brighterscript/compare/v0.69.4...v0.69.5) - 2025-04-03
+### Fixed
+ - more safely wrap expressions for template string transpile ([#1445](https://github.com/rokucommunity/brighterscript/pull/1445))
+
+
+
 ## [0.69.4](https://github.com/rokucommunity/brighterscript/compare/v0.69.3...v0.69.4) - 2025-03-31
 ### Changed
  - Support plugin factory detecting brighterscript version ([#1438](https://github.com/rokucommunity/brighterscript/pull/1438))
