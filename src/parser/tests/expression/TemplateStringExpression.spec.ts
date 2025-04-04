@@ -165,7 +165,7 @@ describe('TemplateStringExpression', () => {
                 end sub
             `, `
                 sub main()
-                    a = chr(13) + chr(10) + chr(96) + chr(36)
+                    a = (chr(13) + chr(10) + chr(96) + chr(36))
                 end sub
             `);
         });
@@ -177,7 +177,7 @@ describe('TemplateStringExpression', () => {
                 end sub
             `, `
                 sub main()
-                    a = chr(2) + chr(987)
+                    a = (chr(2) + chr(987))
                 end sub
             `);
         });
@@ -189,7 +189,7 @@ describe('TemplateStringExpression', () => {
                 end sub
             `, `
                 sub main()
-                    a = "hello world" + chr(10) + "I am multiline"
+                    a = ("hello world" + chr(10) + "I am multiline")
                 end sub
             `);
         });
@@ -201,7 +201,7 @@ describe('TemplateStringExpression', () => {
                 end sub
             `, `
                 sub main()
-                    a = chr(10)
+                    a = (chr(10))
                 end sub
             `);
         });
@@ -213,7 +213,7 @@ describe('TemplateStringExpression', () => {
                 end sub
             `, `
                 sub main()
-                    a = chr(13) + chr(10)
+                    a = (chr(13) + chr(10))
                 end sub
             `);
         });
@@ -339,6 +339,56 @@ describe('TemplateStringExpression', () => {
 
                     sub main()
                         zombie = zombify(["Hello ", " I am ", " years old"], ["world", 12])
+                    end sub
+                `);
+            });
+
+            it('wraps result in parens when we have at least one expression', async () => {
+                await testTranspile(`
+                    sub main()
+                        print \`hello \${1}\`
+                    end sub
+                `, `
+                    sub main()
+                        print ("hello " + bslib_toString(1))
+                    end sub
+                `);
+            });
+
+            it('wraps result in parens when we have at least one escaped char', async () => {
+                await testTranspile(`
+                    sub main()
+                        print \`hello \\nworld\`
+                    end sub
+                `, `
+                    sub main()
+                        print ("hello " + chr(10) + "world")
+                    end sub
+                `);
+            });
+
+            it('wraps result in parens when we have an expression and at least one escaped char', async () => {
+                await testTranspile(`
+                    sub main()
+                        num = 1
+                        print \`hello \${num} \\nworld\`
+                    end sub
+                `, `
+                    sub main()
+                        num = 1
+                        print ("hello " + bslib_toString(num) + " " + chr(10) + "world")
+                    end sub
+                `);
+            });
+
+            it('does not wrap a plain string with parens', async () => {
+                await testTranspile(`
+                    sub main()
+                        print \`hello world\`
+                    end sub
+                `, `
+                    sub main()
+                        print "hello world"
                     end sub
                 `);
             });

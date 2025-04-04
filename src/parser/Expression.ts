@@ -1888,7 +1888,8 @@ export class TemplateStringExpression extends Expression {
     }
 
     transpile(state: BrsTranspileState) {
-        if (this.quasis.length === 1 && this.expressions.length === 0) {
+        //if this is essentially just a normal brightscript string but with backticks, transpile it as a normal string without parens
+        if (this.expressions.length === 0 && this.quasis.length === 1 && this.quasis[0].expressions.length === 1) {
             return this.quasis[0].transpile(state);
         }
         let result = ['('];
