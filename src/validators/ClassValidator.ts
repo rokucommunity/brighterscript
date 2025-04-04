@@ -4,15 +4,15 @@ import type { CallExpression } from '../parser/Expression';
 import { ParseMode } from '../parser/Parser';
 import type { ClassStatement, MethodStatement, NamespaceStatement } from '../parser/Statement';
 import { CancellationTokenSource } from 'vscode-languageserver';
-import { URI } from 'vscode-uri';
-import util from '../util';
-import { isCallExpression, isFieldStatement, isMethodStatement, isCustomType, isNamespaceStatement } from '../astUtils/reflection';
-import type { BscFile, BsDiagnostic } from '../interfaces';
+import { isCallExpression, isFieldStatement, isMethodStatement, isNamespaceStatement } from '../astUtils/reflection';
+import type { BsDiagnostic } from '../interfaces';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { BrsFile } from '../files/BrsFile';
 import { TokenKind } from '../lexer/TokenKind';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
+import { SymbolTypeFlag } from '../SymbolTypeFlag';
+import type { BscFile } from '../files/BscFile';
 
 export class BsClassValidator {
     private scope: Scope;
@@ -29,89 +29,12 @@ export class BsClassValidator {
 
     public validate() {
         this.findClasses();
-        this.findNamespaceNonNamespaceCollisions();
         this.linkClassesWithParents();
         this.detectCircularReferences();
         this.validateMemberCollisions();
         this.verifyChildConstructor();
-        this.verifyNewExpressions();
-        this.validateFieldTypes();
 
         this.cleanUp();
-    }
-
-    /**
-     * Given a class name optionally prefixed with a namespace name, find the class that matches
-     */
-    private getClassByName(className: string, namespaceName?: string) {
-        let fullName = util.getFullyQualifiedClassName(className, namespaceName);
-        let cls = this.classes.get(fullName.toLowerCase());
-        //if we couldn't find the class by its full namespaced name, look for a global class with that name
-        if (!cls) {
-            cls = this.classes.get(className.toLowerCase());
-        }
-        return cls;
-    }
-
-
-    /**
-     * Find all "new" statements in the program,
-     * and make sure we can find a class with that name
-     */
-    private verifyNewExpressions() {
-        this.scope.enumerateBrsFiles((file) => {
-            let newExpressions = file.parser.references.newExpressions;
-            for (let newExpression of newExpressions) {
-                let className = newExpression.className.getName(ParseMode.BrighterScript);
-                const namespaceName = newExpression.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
-                let newableClass = this.getClassByName(
-                    className,
-                    namespaceName
-                );
-
-                if (!newableClass) {
-                    //try and find functions with this name.
-                    let fullName = util.getFullyQualifiedClassName(className, namespaceName);
-                    let callable = this.scope.getCallableByName(fullName);
-                    //if we found a callable with this name, the user used a "new" keyword in front of a function. add error
-                    if (callable) {
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.expressionIsNotConstructable(callable.isSub ? 'sub' : 'function'),
-                            file: file,
-                            range: newExpression.className.range
-                        });
-
-                    } else {
-                        //could not find a class with this name (handled by ScopeValidator)
-                    }
-                }
-            }
-        });
-    }
-
-    private findNamespaceNonNamespaceCollisions() {
-        for (const [className, classStatement] of this.classes) {
-            //catch namespace class collision with global class
-            let nonNamespaceClassName = util.getTextAfterFinalDot(className)?.toLowerCase();
-            let nonNamespaceClass = this.classes.get(nonNamespaceClassName!);
-            const namespace = classStatement.findAncestor<NamespaceStatement>(isNamespaceStatement);
-            if (namespace && nonNamespaceClass) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.namespacedClassCannotShareNamewithNonNamespacedClass(
-                        nonNamespaceClass.name.text
-                    ),
-                    file: classStatement.file,
-                    range: classStatement.name.range,
-                    relatedInformation: [{
-                        location: util.createLocation(
-                            URI.file(nonNamespaceClass.file.srcPath).toString(),
-                            nonNamespaceClass.name.range
-                        ),
-                        message: 'Original class declared here'
-                    }]
-                });
-            }
-        }
     }
 
     private verifyChildConstructor() {
@@ -129,12 +52,11 @@ export class BsClassValidator {
                 let superCall: CallExpression | undefined;
                 newMethod.func.body.walk(createVisitor({
                     VariableExpression: (expression, parent) => {
-                        const expressionNameLower = expression?.name?.text.toLowerCase();
+                        const expressionNameLower = expression?.tokens.name?.text.toLowerCase();
                         if (expressionNameLower === 'm') {
                             this.diagnostics.push({
                                 ...DiagnosticMessages.classConstructorIllegalUseOfMBeforeSuperCall(),
-                                file: classStatement.file,
-                                range: expression.range
+                                location: expression.location
                             });
                         }
                         if (isCallExpression(parent) && expressionNameLower === 'super') {
@@ -152,8 +74,7 @@ export class BsClassValidator {
                 if (!superCall && !(classStatement.file as BrsFile).isTypedef) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.classConstructorMissingSuperCall(),
-                        file: classStatement.file,
-                        range: newMethod.range
+                        location: newMethod.location
                     });
                 }
             }
@@ -174,8 +95,7 @@ export class BsClassValidator {
                     this.diagnostics.push({
                         ...DiagnosticMessages.circularReferenceDetected(
                             Array.from(names.values()).concat(className), this.scope.name),
-                        file: cls.file,
-                        range: cls.name.range
+                        location: cls.tokens.name.location
                     });
                     break;
                 }
@@ -198,7 +118,7 @@ export class BsClassValidator {
             for (let statement of classStatement.body) {
                 if (isMethodStatement(statement) || isFieldStatement(statement)) {
                     let member = statement;
-                    let memberName = member.name;
+                    let memberName = member.tokens.name;
 
                     if (!memberName) {
                         continue;
@@ -210,8 +130,7 @@ export class BsClassValidator {
                     if (methods[lowerMemberName] || fields[lowerMemberName]) {
                         this.diagnostics.push({
                             ...DiagnosticMessages.duplicateIdentifier(memberName.text),
-                            file: classStatement.file,
-                            range: memberName.range
+                            location: memberName.location
                         });
                     }
 
@@ -222,27 +141,35 @@ export class BsClassValidator {
 
                         //mismatched member type (field/method in child, opposite in ancestor)
                         if (memberType !== ancestorMemberKind) {
+                            const childFieldType = member.getType({ flags: SymbolTypeFlag.typetime });
+                            let ancestorMemberType: BscType = DynamicType.instance;
+                            if (isFieldStatement(ancestorAndMember.member)) {
+                                ancestorMemberType = ancestorAndMember.member.getType({ flags: SymbolTypeFlag.typetime });
+                            } else if (isMethodStatement(ancestorAndMember.member)) {
+                                ancestorMemberType = ancestorAndMember.member.func.getType({ flags: SymbolTypeFlag.typetime });
+                            }
                             this.diagnostics.push({
-                                ...DiagnosticMessages.classChildMemberDifferentMemberTypeThanAncestor(
-                                    memberType,
-                                    ancestorMemberKind,
-                                    ancestorAndMember.classStatement.getName(ParseMode.BrighterScript)
+                                ...DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty(
+                                    classStatement.getName(ParseMode.BrighterScript) ?? '',
+                                    ancestorAndMember.classStatement.getName(ParseMode.BrighterScript),
+                                    memberName.text,
+                                    childFieldType.toString(),
+                                    ancestorMemberType.toString()
                                 ),
-                                file: classStatement.file,
-                                range: member.range
+                                location: member.location
                             });
                         }
 
                         //child field has same name as parent
                         if (isFieldStatement(member)) {
-                            let ancestorMemberType: BscType = new DynamicType();
+                            let ancestorMemberType: BscType = DynamicType.instance;
                             if (isFieldStatement(ancestorAndMember.member)) {
-                                ancestorMemberType = ancestorAndMember.member.getType() ?? new DynamicType();
+                                ancestorMemberType = ancestorAndMember.member.getType({ flags: SymbolTypeFlag.typetime });
                             } else if (isMethodStatement(ancestorAndMember.member)) {
-                                ancestorMemberType = ancestorAndMember.member.func.getFunctionType();
+                                ancestorMemberType = ancestorAndMember.member.func.getType({ flags: SymbolTypeFlag.typetime });
                             }
-                            const childFieldType = member.getType();
-                            if (childFieldType && !childFieldType.isAssignableTo(ancestorMemberType)) {
+                            const childFieldType = member.getType({ flags: SymbolTypeFlag.typetime });
+                            if (childFieldType && !ancestorMemberType.isTypeCompatible(childFieldType)) {
                                 //flag incompatible child field type to ancestor field type
                                 this.diagnostics.push({
                                     ...DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty(
@@ -252,8 +179,7 @@ export class BsClassValidator {
                                         childFieldType.toString(),
                                         ancestorMemberType.toString()
                                     ),
-                                    file: classStatement.file,
-                                    range: member.range
+                                    location: member.location
                                 });
                             }
                         }
@@ -263,16 +189,15 @@ export class BsClassValidator {
                             //is a method
                             isMethodStatement(member) &&
                             //does not have an override keyword
-                            !member.override &&
+                            !member.tokens.override &&
                             //is not the constructur function
-                            member.name.text.toLowerCase() !== 'new'
+                            member.tokens.name.text.toLowerCase() !== 'new'
                         ) {
                             this.diagnostics.push({
                                 ...DiagnosticMessages.missingOverrideKeyword(
                                     ancestorAndMember.classStatement.getName(ParseMode.BrighterScript)
                                 ),
-                                file: classStatement.file,
-                                range: member.range
+                                location: member.location
                             });
                         }
 
@@ -284,14 +209,13 @@ export class BsClassValidator {
                         ) {
                             this.diagnostics.push({
                                 ...DiagnosticMessages.mismatchedOverriddenMemberVisibility(
-                                    classStatement.name.text,
-                                    ancestorAndMember.member.name?.text,
+                                    classStatement.tokens.name.text,
+                                    ancestorAndMember.member.tokens.name?.text,
                                     member.accessModifier?.text ?? 'public',
                                     ancestorAndMember.member.accessModifier?.text || 'public',
                                     ancestorAndMember.classStatement.getName(ParseMode.BrighterScript)
                                 ),
-                                file: classStatement.file,
-                                range: member.range
+                                location: member.location
                             });
                         }
                     }
@@ -301,38 +225,6 @@ export class BsClassValidator {
 
                     } else if (isFieldStatement(member)) {
                         fields[lowerMemberName] = member;
-                    }
-                }
-            }
-        }
-    }
-
-
-    /**
-     * Check the types for fields, and validate they are valid types
-     */
-    private validateFieldTypes() {
-        for (const [, classStatement] of this.classes) {
-            for (let statement of classStatement.body) {
-                if (isFieldStatement(statement)) {
-                    let fieldType = statement.getType();
-
-                    if (isCustomType(fieldType)) {
-                        const fieldTypeName = fieldType.name;
-                        const lowerFieldTypeName = fieldTypeName?.toLowerCase();
-                        if (lowerFieldTypeName) {
-                            const namespace = classStatement.findAncestor<NamespaceStatement>(isNamespaceStatement);
-                            const currentNamespaceName = namespace?.getName(ParseMode.BrighterScript);
-                            //check if this custom type is in our class map
-                            const isBuiltInType = util.isBuiltInType(lowerFieldTypeName);
-                            if (!isBuiltInType && !this.getClassByName(lowerFieldTypeName, currentNamespaceName) && !this.scope.hasInterface(lowerFieldTypeName) && !this.scope.hasEnum(lowerFieldTypeName)) {
-                                this.diagnostics.push({
-                                    ...DiagnosticMessages.cannotFindType(fieldTypeName),
-                                    range: statement.type?.range ?? statement.range,
-                                    file: classStatement.file
-                                });
-                            }
-                        }
                     }
                 }
             }
@@ -368,7 +260,9 @@ export class BsClassValidator {
     private findClasses() {
         this.classes = new Map();
         this.scope.enumerateBrsFiles((file) => {
-            for (let x of file.parser.references.classStatements ?? []) {
+
+            // eslint-disable-next-line @typescript-eslint/dot-notation
+            for (let x of file['_cachedLookups'].classStatements ?? []) {
                 let classStatement = x as AugmentedClassStatement;
                 let name = classStatement.getName(ParseMode.BrighterScript);
                 //skip this class if it doesn't have a name
@@ -383,21 +277,6 @@ export class BsClassValidator {
                 if (!alreadyDefinedClass) {
                     this.classes.set(lowerName, classStatement);
                     classStatement.file = file;
-
-                    //add a diagnostic about this class already existing
-                } else {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.duplicateClassDeclaration(this.scope.name, name),
-                        file: file,
-                        range: classStatement.name.range,
-                        relatedInformation: [{
-                            location: util.createLocation(
-                                URI.file(alreadyDefinedClass.file.srcPath).toString(),
-                                alreadyDefinedClass.range
-                            ),
-                            message: ''
-                        }]
-                    });
                 }
             }
         });
@@ -406,7 +285,7 @@ export class BsClassValidator {
     private linkClassesWithParents() {
         //link all classes with their parents
         for (const [, classStatement] of this.classes) {
-            let parentClassName = classStatement.parentClassName?.getName(ParseMode.BrighterScript);
+            let parentClassName = classStatement.parentClassName?.getName();
             if (parentClassName) {
                 let relativeName: string;
                 let absoluteName: string;
