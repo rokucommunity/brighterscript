@@ -898,19 +898,6 @@ export class Program {
 
     private isFirstValidation = true;
 
-    /**
-     * Counter used to track which validation run is being logged
-     */
-    private validationRunSequence = 1;
-
-    /**
-     * How many milliseconds can pass while doing synchronous operations in validate before we register a short timeout (i.e. yield to the event loop)
-     */
-    private validationMinSyncDuration = 75;
-
-    private validatePromise: Promise<void> | undefined;
-
-
     private validationDetails: {
         brsFilesValidated: BrsFile[];
         xmlFilesValidated: XmlFile[];
@@ -927,6 +914,18 @@ export class Program {
             scopesToValidate: [],
             filesToBeValidatedInScopeContext: new Set<BscFile>()
         };
+
+    /**
+     * Counter used to track which validation run is being logged
+     */
+    private validationRunSequence = 1;
+
+    /**
+     * How many milliseconds can pass while doing synchronous operations in validate before we register a short timeout (i.e. yield to the event loop)
+     */
+    private validationMinSyncDuration = 75;
+
+    private validatePromise: Promise<void> | undefined;
 
     /**
      * Traverse the entire project, and validate all scopes

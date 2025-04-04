@@ -194,12 +194,6 @@ export function isCatchStatement(element: AstNode | undefined): element is Catch
 export function isThrowStatement(element: AstNode | undefined): element is ThrowStatement {
     return element?.kind === AstNodeKind.ThrowStatement;
 }
-export function isTypecastStatement(element: AstNode | undefined): element is TypecastStatement {
-    return element?.kind === AstNodeKind.TypecastStatement;
-}
-export function isAliasStatement(element: AstNode | undefined): element is AliasStatement {
-    return element?.kind === AstNodeKind.AliasStatement;
-}
 export function isConditionalCompileStatement(element: AstNode | undefined): element is ConditionalCompileStatement {
     return element?.kind === AstNodeKind.ConditionalCompileStatement;
 }
@@ -211,6 +205,12 @@ export function isConditionalCompileErrorStatement(element: AstNode | undefined)
 }
 export function isAugmentedAssignmentStatement(element: AstNode | undefined): element is AugmentedAssignmentStatement {
     return element?.kind === AstNodeKind.AugmentedAssignmentStatement;
+}
+export function isTypecastStatement(element: AstNode | undefined): element is TypecastStatement {
+    return element?.constructor?.name === 'TypecastStatement';
+}
+export function isAliasStatement(element: AstNode | undefined): element is AliasStatement {
+    return element?.constructor?.name === 'AliasStatement';
 }
 
 // Expressions reflection
