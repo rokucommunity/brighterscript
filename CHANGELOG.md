@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.45](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.44...v1.0.0-alpha.45) - 2025-04-04
+### Added
+ - new `diagnosticFiltersV0Compatibility` bsconfig.json option ([#1424](https://github.com/rokucommunity/brighterscript/pull/1424))
+### Changed
+ - Re-scraped Roku Docs (March 31 2025) ([#1439](https://github.com/rokucommunity/brighterscript/pull/1439))
+ - Merge latest `master` which includes the language server rewrite ([#1428](https://github.com/rokucommunity/brighterscript/pull/1428))
+ - more scope validation timing metrics ([#1420](https://github.com/rokucommunity/brighterscript/pull/1420))
+ - reduce `BscType` creation ([#1417](https://github.com/rokucommunity/brighterscript/pull/1417))
+ - add lookup tables to `DiagnosticsManager` to speed up diagnostic clearing ([#1411](https://github.com/rokucommunity/brighterscript/pull/1411))
+### Fixed
+ - Fixes Code Completion Issues ([#1442](https://github.com/rokucommunity/brighterscript/pull/1442))
+
+
+
 ## [1.0.0-alpha.44](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.43...v1.0.0-alpha.44) - 2025-02-06
 ### Fixed
 - Fixes `onDidChangeWatchedFiles` flow in LanguageServer ([#1410](https://github.com/rokucommunity/brighterscript/pull/1410))
