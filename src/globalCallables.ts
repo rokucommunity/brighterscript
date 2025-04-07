@@ -231,7 +231,7 @@ let runtimeFunctions: GlobalCallable[] = [{
         isOptional: false
     }, {
         name: 'version',
-        type: StringType.instance,
+        type: IntegerType.instance,
         isOptional: true
     }]
 }, {

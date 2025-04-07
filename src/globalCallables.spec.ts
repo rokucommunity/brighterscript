@@ -116,6 +116,28 @@ describe('globalCallables', () => {
         });
     });
 
+    describe('Type', () => {
+        it('allows single parameter', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    print Type(2)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows both parameters', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    print Type(2, 3)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+    });
+
     describe('StrI', () => {
         it('allows single parameter', () => {
             program.setFile('source/main.brs', `
