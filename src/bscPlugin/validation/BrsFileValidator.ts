@@ -1,4 +1,4 @@
-import { isBody, isClassStatement, isCommentStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isTypecastStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
+import { isAliasStatement, isBody, isClassStatement, isCommentStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isTypecastStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -274,7 +274,8 @@ export class BrsFileValidator {
                     !isLibraryStatement(statement) &&
                     !isImportStatement(statement) &&
                     !isConstStatement(statement) &&
-                    !isTypecastStatement(statement)
+                    !isTypecastStatement(statement) &&
+                    !isAliasStatement(statement)
                 ) {
                     this.event.file.addDiagnostic({
                         ...DiagnosticMessages.unexpectedStatementOutsideFunction(),

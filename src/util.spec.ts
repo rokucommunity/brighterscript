@@ -636,6 +636,22 @@ describe('util', () => {
             //does not warn about factory pattern
             expect(stub.callCount).to.equal(0);
         });
+
+        it('passes factory options', () => {
+            fsExtra.writeFileSync(pluginPath, `
+                module.exports.default = function(options) {
+                    return {
+                        name: 'AwesomePlugin',
+                        initOptions: options
+                    };
+                };
+            `);
+            sinon.stub(console, 'warn').callThrough();
+            const plugins = util.loadPlugins(cwd, [pluginPath]);
+            expect((plugins[0] as any).initOptions).to.eql({
+                version: util.getBrighterScriptVersion()
+            });
+        });
     });
 
     describe('copyBslibToStaging', () => {
@@ -1057,6 +1073,125 @@ describe('util', () => {
                     resolveAfter('c', 30)
                 ], undefined)
             ).to.be.undefined;
+        });
+    });
+
+    describe('standardizePath', () => {
+        let isWindowsOrig = util['isWindows'];
+        let isWindows = isWindowsOrig;
+
+        beforeEach(() => {
+            util['standardizePathCache'].clear();
+        });
+        afterEach(() => {
+            util['standardizePathCache'].clear();
+            util['isWindows'] = isWindowsOrig;
+        });
+
+        function test(incoming: string, expected: string) {
+            util['isWindows'] = isWindows;
+            expect(
+                util.standardizePath(incoming)
+            ).to.eql(
+                expected
+            );
+            util['isWindows'] = isWindowsOrig;
+        }
+
+        describe('windows paths on windows', () => {
+            beforeEach(() => {
+                isWindows = true;
+            });
+
+            it('mismatched slashes', () => {
+                test('c:/one/two/three', 'c:\\one\\two\\three');
+                test('c:\\one\\two\\three', 'c:\\one\\two\\three');
+                test('c:/one\\two/three', 'c:\\one\\two\\three');
+            });
+
+            it('trailing slashes', () => {
+                test('c:/one/two/three/', 'c:\\one\\two\\three\\');
+                test('c:/one/two/three\\', 'c:\\one\\two\\three\\');
+            });
+
+            it('drive letter case', () => {
+                test('D:/one/two/three', 'd:\\one\\two\\three');
+            });
+
+            it('consecutive slashes', () => {
+                test('c://one//two//three//', 'c:\\one\\two\\three\\');
+                test('c:\\\\one\\\\two\\\\three\\\\', 'c:\\one\\two\\three\\');
+            });
+        });
+
+        describe('windows paths on unix', () => {
+            beforeEach(() => {
+                isWindows = false;
+            });
+
+            it('mismatched slashes', () => {
+                test('c:/one/two/three', 'c:/one/two/three');
+                test('c:\\one\\two\\three', 'c:/one/two/three');
+                test('c:/one\\two/three', 'c:/one/two/three');
+            });
+
+            it('trailing slashes', () => {
+                test('c:/one/two/three/', 'c:/one/two/three/');
+                test('c:/one/two/three\\', 'c:/one/two/three/');
+            });
+
+            it('drive letter case', () => {
+                test('D:/one/two/three', 'd:/one/two/three');
+            });
+
+            it('consecutive slashes', () => {
+                test('c://one//two//three//', 'c:/one/two/three/');
+                test('c:\\\\one\\\\two\\\\three\\\\', 'c:/one/two/three/');
+            });
+        });
+
+        describe('unix paths on windows', () => {
+            beforeEach(() => {
+                isWindows = true;
+            });
+
+            it('mismatched slashes', () => {
+                test('/one/two/three', '\\one\\two\\three');
+                test('\\one\\two\\three', '\\one\\two\\three');
+                test('/one\\two/three', '\\one\\two\\three');
+            });
+
+            it('trailing slashes', () => {
+                test('/one/two/three/', '\\one\\two\\three\\');
+                test('/one/two/three\\', '\\one\\two\\three\\');
+            });
+
+            it('consecutive slashes', () => {
+                test('/one//two///three//', '\\one\\two\\three\\');
+                test('\\one\\\\two\\\\\\three\\\\', '\\one\\two\\three\\');
+            });
+        });
+
+        describe('unix paths on unix', () => {
+            beforeEach(() => {
+                isWindows = false;
+            });
+
+            it('mismatched slashes', () => {
+                test('/one/two/three', '/one/two/three');
+                test('\\one\\two\\three', '/one/two/three');
+                test('/one\\two/three', '/one/two/three');
+            });
+
+            it('trailing slashes', () => {
+                test('/one/two/three/', '/one/two/three/');
+                test('/one/two/three\\', '/one/two/three/');
+            });
+
+            it('consecutive slashes', () => {
+                test('/one//two///three//', '/one/two/three/');
+                test('\\\\one\\\\two\\\\three\\\\', '/one/two/three/');
+            });
         });
     });
 });

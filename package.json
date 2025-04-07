@@ -1,6 +1,6 @@
 {
   "name": "brighterscript",
-  "version": "0.69.1",
+  "version": "0.69.5",
   "description": "A superset of Roku's BrightScript language.",
   "scripts": {
     "preversion": "npm run build && npm run lint && npm run test",
@@ -20,7 +20,8 @@
     "scrape-roku-docs": "ts-node scripts/scrape-roku-docs.ts",
     "rescrape-roku-docs": "rm scripts/.cache.json && ts-node scripts/scrape-roku-docs.ts",
     "null-check": "tsc -p tsconfig-null-safe.json",
-    "create-test-package": "ts-node scripts/create-test-package.ts"
+    "create-test-package": "ts-node scripts/create-test-package.ts",
+    "package": "npm ci && npm run build && npm pack"
   },
   "mocha": {
     "spec": "src/**/*.spec.ts",
@@ -135,7 +136,7 @@
   },
   "dependencies": {
     "@rokucommunity/bslib": "^0.1.1",
-    "@rokucommunity/logger": "^0.3.9",
+    "@rokucommunity/logger": "^0.3.10",
     "@xml-tools/parser": "^1.0.7",
     "array-flat-polyfill": "^1.0.1",
     "chalk": "^2.4.2",
