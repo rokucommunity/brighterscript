@@ -354,7 +354,6 @@ export class CachedLookups {
         this.cache.set('expressions', expressions);
         this.cache.set('classStatements', classStatements);
         this.cache.set('namespaceStatements', namespaceStatements);
-        this.cache.set('namespaceStatements', namespaceStatements);
         this.cache.set('enumStatements', enumStatements);
         this.cache.set('constStatements', constStatements);
         this.cache.set('interfaceStatements', interfaceStatements);

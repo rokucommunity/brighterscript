@@ -880,6 +880,18 @@ describe('util', () => {
         });
     });
 
+    it('isRangeInRange', () => {
+        expect(util.isRangeInRange(
+            util.createRange(0, 1, 1, 3),
+            util.createRange(0, 0, 2, 0)
+        )).to.be.true;
+
+        expect(util.isRangeInRange(
+            util.createRange(0, 0, 2, 0),
+            util.createRange(0, 1, 1, 3)
+        )).to.be.false;
+    });
+
     it('sortByRange', () => {
         const front = {
             range: util.createRange(1, 1, 1, 2)
