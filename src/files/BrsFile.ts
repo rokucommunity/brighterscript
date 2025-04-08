@@ -634,11 +634,19 @@ export class BrsFile implements BscFile {
     public getNamespaceStatementForPosition(position: Position): NamespaceStatement {
         if (position) {
             return this.cache.getOrAdd(`namespaceStatementForPosition-${position.line}:${position.character}`, () => {
+                let mostSpecificNamespace: NamespaceStatement;
                 for (const statement of this._cachedLookups.namespaceStatements) {
                     if (util.rangeContains(statement.location?.range, position)) {
-                        return statement;
+                        if (mostSpecificNamespace) {
+                            if (util.isRangeInRange(statement.location?.range, mostSpecificNamespace.location?.range)) {
+                                mostSpecificNamespace = statement;
+                            }
+                        } else {
+                            mostSpecificNamespace = statement;
+                        }
                     }
                 }
+                return mostSpecificNamespace;
             });
         }
     }

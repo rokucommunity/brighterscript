@@ -2531,7 +2531,6 @@ describe('BrsFile', () => {
                     end function
                `);
             });
-
         });
 
         describe('shadowing', () => {
@@ -4141,6 +4140,68 @@ describe('BrsFile', () => {
                         'comment at end of function
                     end sub
                     'comment at end of file
+                `);
+            });
+        });
+
+        describe('enums', () => {
+
+            it('handles shadowed enum names', async () => {
+                await testTranspile(`
+                    sub foo()
+                        event = {}
+                        event.event.append({})
+                    end sub
+
+                    enum event
+                    end enum
+                    `, `
+                    sub foo()
+                        event = {}
+                        event.event.append({})
+                    end sub
+                `);
+            });
+
+            it('handles shadowed enum names in namespace', async () => {
+                await testTranspile(`
+                    namespace alpha
+                        sub foo()
+                            event = {}
+                            event.event.append({})
+                        end sub
+
+                        enum event
+                        end enum
+                    end namespace
+                    `, `
+                    sub alpha_foo()
+                        event = {}
+                        event.event.append({})
+                    end sub
+                `);
+            });
+
+            it('handles shadowed enum names in previous namespace', async () => {
+                await testTranspile(`
+                    namespace alpha
+                        namespace beta
+                            sub foo()
+                                event = {}
+                                event.event.append({})
+                                print 1
+                            end sub
+                        end namespace
+
+                        enum event
+                        end enum
+                    end namespace
+                    `, `
+                    sub alpha_beta_foo()
+                        event = {}
+                        event.event.append({})
+                        print 1
+                    end sub
                 `);
             });
         });

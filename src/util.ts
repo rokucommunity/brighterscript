@@ -679,6 +679,14 @@ export class Util {
     }
 
     /**
+     * Is the inner range completely enclosed in the outer range
+     */
+    public isRangeInRange(inner: Range, outer: Range) {
+        return this.comparePosition(inner.start, outer.start) === 1 &&
+            this.comparePosition(inner.end, outer.end) === -1;
+    }
+
+    /**
      * Combine all the documentation for a node - uses the AstNode's leadingTrivia property
      * @param node the node to get the documentation for
      * @param options extra options
