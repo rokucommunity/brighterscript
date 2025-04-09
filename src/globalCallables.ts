@@ -636,7 +636,7 @@ By using Chr, you can create strings containing characters which cannot be conta
         params: [{
             name: 'start',
             type: new IntegerType(),
-            isOptional: false
+            isOptional: true
         }, {
             name: 'text',
             type: new StringType(),
