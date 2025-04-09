@@ -2003,7 +2003,7 @@ describe('BrsFile', () => {
             ).to.equal([
                 '```brightscript',
                 //TODO this really shouldn't be returning the global function, but it does...so make sure it doesn't crash right now.
-                'function Instr(start? as integer, text as string, substring as string) as integer',
+                'function Instr(startOrText as dynamic, textOrSubstring as string, substring? as string) as integer',
                 '```'
             ].join('\n'));
         });

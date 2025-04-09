@@ -634,17 +634,17 @@ By using Chr, you can create strings containing characters which cannot be conta
         type: new FunctionType(new IntegerType()),
         file: globalFile,
         params: [{
-            name: 'start',
-            type: new IntegerType(),
-            isOptional: true
+            name: 'startOrText',
+            type: new DynamicType(),
+            isOptional: false
         }, {
-            name: 'text',
+            name: 'textOrSubstring',
             type: new StringType(),
             isOptional: false
         }, {
             name: 'substring',
             type: new StringType(),
-            isOptional: false
+            isOptional: true
         }]
     }, {
         name: 'Left',
