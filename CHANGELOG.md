@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.69.6](https://github.com/rokucommunity/brighterscript/compare/v0.69.5...v0.69.6) - 2025-04-09
+### Changed
+ - Updated the type definition of the `InStr` global callable ([#1456](https://github.com/rokucommunity/brighterscript/pull/1456))
+
+
+
 ## [0.69.5](https://github.com/rokucommunity/brighterscript/compare/v0.69.4...v0.69.5) - 2025-04-03
 ### Fixed
  - more safely wrap expressions for template string transpile ([#1445](https://github.com/rokucommunity/brighterscript/pull/1445))
