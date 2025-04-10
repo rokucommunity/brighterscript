@@ -1,6 +1,6 @@
 import { SemanticTokenModifiers } from 'vscode-languageserver-protocol';
 import { SemanticTokenTypes } from 'vscode-languageserver-protocol';
-import { isCallableType, isClassType, isComponentType, isConstStatement, isDottedGetExpression, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionStatement, isInterfaceType, isNamespaceType, isVariableExpression } from '../../astUtils/reflection';
+import { isCallableType, isClassType, isComponentType, isConstStatement, isDottedGetExpression, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionStatement, isInterfaceType, isNamespaceType, isPrimitiveType, isVariableExpression } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ExtraSymbolData, OnGetSemanticTokensEvent, SemanticToken, TypeChainEntry } from '../../interfaces';
 import type { Locatable, Token } from '../../lexer/Token';
@@ -145,6 +145,9 @@ export class BrsFileSemanticTokensProcessor {
             //this is separate from the checks above because we want to resolve alias lookups before turning this variable into a const
         } else if (isConstStatement(node)) {
             return { type: SemanticTokenTypes.variable, modifiers: [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static] };
+        } else if (util.isInTypeExpression(node) && isPrimitiveType(type)) {
+            // primitive types in type expressions should be already properly colored. do not add a semantic token
+            return undefined;
         } else if (isVariableExpression(node)) {
             if (/m/i.test(node.tokens?.name?.text)) {
                 //don't color `m` variables
