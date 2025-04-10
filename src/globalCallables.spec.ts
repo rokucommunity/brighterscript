@@ -21,6 +21,20 @@ describe('globalCallables', () => {
             program.setFile('source/main.brs', `
                 sub main()
                     adIface = Roku_Ads()
+                    print adIface
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+    });
+
+    describe('Roku_Event_Dispatcher', () => {
+        it('exists', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    red = Roku_Event_Dispatcher()
+                    print red
                 end sub
             `);
             program.validate();
@@ -57,14 +71,11 @@ describe('globalCallables', () => {
             end sub
         `);
         program.validate();
-        const hover = program.getHover(file.srcPath, util.createPosition(2, 25));
+        //print Mi|d("value1", 1)
+        const hover = program.getHover(file.srcPath, util.createPosition(2, 24));
         expect(
-            hover[0].contents.toString().replace('\r\n', '\n')
-        ).to.eql([
-            '```brightscript',
-            'function Mid(s as string, p as integer, n? as integer) as string',
-            '```'
-        ].join('\n'));
+            hover[0].contents.toString()
+        ).to.include('function Mid(s as string, p as integer, n? as integer) as string');
     });
 
     describe('bslCore', () => {
@@ -98,6 +109,28 @@ describe('globalCallables', () => {
             program.setFile('source/main.brs', `
                 sub main()
                     print val("1001", 10)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+    });
+
+    describe('Type', () => {
+        it('allows single parameter', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    print Type(2)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows both parameters', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    print Type(2, 3)
                 end sub
             `);
             program.validate();

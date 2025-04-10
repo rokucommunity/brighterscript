@@ -6,13 +6,15 @@ import { expect } from '../chai-config.spec';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { Range } from 'vscode-languageserver';
 import { ParseMode } from '../parser/Parser';
-import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile, trim } from '../testHelpers.spec';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics, getTestTranspile, trim } from '../testHelpers.spec';
 import { standardizePath as s } from '../util';
 import * as fsExtra from 'fs-extra';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { doesNotThrow } from 'assert';
-import type { MethodStatement } from '../parser/Statement';
+import type { ClassStatement, MethodStatement } from '../parser/Statement';
 import { tempDir, rootDir, stagingDir } from '../testHelpers.spec';
+import { isClassStatement } from '../astUtils/reflection';
+import { WalkMode } from '../astUtils/visitors';
 
 let sinon = sinonImport.createSandbox();
 
@@ -45,7 +47,8 @@ describe('BrsFile BrighterScript classes', () => {
 
             end class
         `);
-        expect(file.parser.references.classStatements.map(x => x.getName(ParseMode.BrighterScript)).sort()).to.eql(['Animal', 'Duck']);
+        const classStatements = file.ast.findChildren<ClassStatement>(isClassStatement);
+        expect(classStatements.map(x => x.getName(ParseMode.BrighterScript)).sort()).to.eql(['Animal', 'Duck']);
     });
 
     it('does not cause errors with incomplete class statement', () => {
@@ -110,7 +113,7 @@ describe('BrsFile BrighterScript classes', () => {
         `);
         program.validate();
         expectZeroDiagnostics(program);
-        let duckClass = file.parser.references.classStatements.find(x => x.name.text.toLowerCase() === 'duck');
+        let duckClass = file.ast.findChildren<ClassStatement>(isClassStatement, { walkMode: WalkMode.visitStatements }).find(x => x.tokens.name.text.toLowerCase() === 'duck');
         expect(duckClass).to.exist;
         expect(duckClass!.memberMap['move']).to.exist;
     });
@@ -178,7 +181,7 @@ describe('BrsFile BrighterScript classes', () => {
                     end sub
                 end class
                 class Duck extends Bird
-                    sub new()
+                    sub new(name)
                         thing = { m: "m"}
                         print thing.m
                         name = "Donald" + "Duck"
@@ -193,30 +196,32 @@ describe('BrsFile BrighterScript classes', () => {
         it('allows non-`m` expressions and statements before the super call', () => {
             program.setFile('source/main.bs', `
                 class Bird
-                    sub new(name)
+                    name as string
+                    sub new(name as string)
+                        m.name = name
                     end sub
                 end class
                 class Duck extends Bird
                     sub new()
                         m.name = m.name + "Duck"
-                        super()
+                        super("Flappy")
                     end sub
                 end class
             `);
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.classConstructorIllegalUseOfMBeforeSuperCall(),
-                range: Range.create(7, 24, 7, 25)
+                location: { range: Range.create(9, 24, 9, 25) }
             }, {
                 ...DiagnosticMessages.classConstructorIllegalUseOfMBeforeSuperCall(),
-                range: Range.create(7, 33, 7, 34)
+                location: { range: Range.create(9, 33, 9, 34) }
             }]);
         });
     });
 
     describe('transpile', () => {
         it('does not mess with AST when injecting `super()` call', async () => {
-            const file = program.setFile('source/classes.bs', `
+            const file = program.setFile<BrsFile>('source/classes.bs', `
                 class Parent
                 end class
 
@@ -227,27 +232,27 @@ describe('BrsFile BrighterScript classes', () => {
                 end class
             `);
             expect(
-                (file.ast as any).statements[1].body[0].func.body.statements[0].expression.callee.name.text
+                (file.ast as any).statements[1].body[0].func.body.statements[0].expression.callee.tokens.name.text
             ).to.eql('super');
-            await program.transpile([], stagingDir);
+            await program.getTranspiledFileContents(file.srcPath);
             expect(
-                (file.ast as any).statements[1].body[0].func.body.statements[0].expression.callee.name.text
+                (file.ast as any).statements[1].body[0].func.body.statements[0].expression.callee.tokens.name.text
             ).to.eql('super');
         });
 
-        it('follows correct sequence for property initializers', () => {
-            testTranspile(`
+        it('follows correct sequence for property initializers', async () => {
+            await testTranspile(`
                 class Animal
                     species1 = "Animal"
                     sub new()
-                        print "From Animal: " + m.species
+                        print "From Animal: " + m.species1
                     end sub
                 end class
                 class Duck extends Animal
                     species2 = "Duck"
                     sub new()
                         super()
-                        print "From Duck: " + m.species
+                        print "From Duck: " + m.species2
                     end sub
                 end class
             `, `
@@ -255,7 +260,7 @@ describe('BrsFile BrighterScript classes', () => {
                     instance = {}
                     instance.new = sub()
                         m.species1 = "Animal"
-                        print "From Animal: " + m.species
+                        print "From Animal: " + m.species1
                     end sub
                     return instance
                 end function
@@ -270,7 +275,7 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new = sub()
                         m.super0_new()
                         m.species2 = "Duck"
-                        print "From Duck: " + m.species
+                        print "From Duck: " + m.species2
                     end sub
                     return instance
                 end function
@@ -282,8 +287,8 @@ describe('BrsFile BrighterScript classes', () => {
             `, 'trim', 'source/main.bs');
         });
 
-        it('allows comments as first line of constructor', () => {
-            testTranspile(`
+        it('allows comments as first line of constructor', async () => {
+            await testTranspile(`
                 class Animal
                 end class
                 class Duck extends Animal
@@ -321,8 +326,8 @@ describe('BrsFile BrighterScript classes', () => {
             `);
         });
 
-        it('does not inject a call to super if one exists', () => {
-            testTranspile(`
+        it('does not inject a call to super if one exists', async () => {
+            await testTranspile(`
                 class Animal
                 end class
                 class Duck extends Animal
@@ -360,8 +365,8 @@ describe('BrsFile BrighterScript classes', () => {
             `);
         });
 
-        it('handles class inheritance inferred constructor calls', () => {
-            testTranspile(`
+        it('handles class inheritance inferred constructor calls', async () => {
+            await testTranspile(`
                 class Animal
                     className1 = "Animal"
                 end class
@@ -415,8 +420,8 @@ describe('BrsFile BrighterScript classes', () => {
             `, undefined, 'source/main.bs');
         });
 
-        it('works with namespaces', () => {
-            testTranspile(`
+        it('works with namespaces', async () => {
+            await testTranspile(`
                 namespace Birds.WaterFowl
                     class Duck
                     end class
@@ -451,8 +456,8 @@ describe('BrsFile BrighterScript classes', () => {
             `, undefined, 'source/main.bs');
         });
 
-        it('works for simple class', () => {
-            testTranspile(`
+        it('works for simple class', async () => {
+            await testTranspile(`
                 class Duck
                 end class
             `, `
@@ -470,8 +475,8 @@ describe('BrsFile BrighterScript classes', () => {
             `, undefined, 'source/main.bs');
         });
 
-        it('inherits the parameters of the last known constructor', () => {
-            testTranspile(`
+        it('inherits the parameters of the last known constructor', async () => {
+            await testTranspile(`
                 class Animal
                     sub new(p1)
                     end sub
@@ -483,6 +488,7 @@ describe('BrsFile BrighterScript classes', () => {
                         super(p1)
                         m.p2 = p2
                     end sub
+                    private p2 as dynamic
                 end class
                 class BabyDuck extends Duck
                 end class
@@ -516,6 +522,7 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.super1_new = instance.new
                     instance.new = sub(p1, p2)
                         m.super1_new(p1)
+                        m.p2 = invalid
                         m.p2 = p2
                     end sub
                     return instance
@@ -541,8 +548,8 @@ describe('BrsFile BrighterScript classes', () => {
             `);
         });
 
-        it('registers the constructor and properly handles its parameters', () => {
-            testTranspile(`
+        it('registers the constructor and properly handles its parameters', async () => {
+            await testTranspile(`
                 class Duck
                     sub new(name as string, age as integer)
                     end sub
@@ -562,10 +569,13 @@ describe('BrsFile BrighterScript classes', () => {
             `, undefined, 'source/main.bs');
         });
 
-        it('properly handles child class constructor override and super calls', () => {
-            testTranspile(`
+        it('properly handles child class constructor override and super calls', async () => {
+            await testTranspile(`
                 class Animal
                     sub new(name as string)
+                    end sub
+
+                    sub DoSomething()
                     end sub
                 end class
 
@@ -579,6 +589,8 @@ describe('BrsFile BrighterScript classes', () => {
                 function __Animal_builder()
                     instance = {}
                     instance.new = sub(name as string)
+                    end sub
+                    instance.DoSomething = sub()
                     end sub
                     return instance
                 end function
@@ -604,8 +616,8 @@ describe('BrsFile BrighterScript classes', () => {
             `, undefined, 'source/main.bs');
         });
 
-        it('transpiles super in nested blocks', () => {
-            testTranspile(`
+        it('transpiles super in nested blocks', async () => {
+            await testTranspile(`
                 class Creature
                     sub new(name as string)
                     end sub
@@ -661,7 +673,7 @@ describe('BrsFile BrighterScript classes', () => {
             );
         });
 
-        it('properly transpiles classes from outside current namespace', () => {
+        it('properly transpiles classes from outside current namespace', async () => {
             addFile('source/Animals.bs', `
                 namespace Animals
                     class Duck
@@ -670,7 +682,7 @@ describe('BrsFile BrighterScript classes', () => {
                 class Bird
                 end class
             `);
-            testTranspile(`
+            await testTranspile(`
                 namespace Animals
                     sub init()
                         donaldDuck = new Duck()
@@ -687,8 +699,8 @@ describe('BrsFile BrighterScript classes', () => {
             `, undefined, 'source/main.bs');
         });
 
-        it('properly transpiles new statement for missing class ', () => {
-            testTranspile(`
+        it('properly transpiles new statement for missing class ', async () => {
+            await testTranspile(`
                 sub main()
                     bob = new Human()
                 end sub
@@ -699,14 +711,14 @@ describe('BrsFile BrighterScript classes', () => {
             `, undefined, 'source/main.bs', false);
         });
 
-        it('new keyword transpiles correctly', () => {
+        it('new keyword transpiles correctly', async () => {
             addFile('source/Animal.bs', `
                 class Animal
                     sub new(name as string)
                     end sub
                 end class
             `);
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     a = new Animal("donald")
                 end sub
@@ -717,8 +729,8 @@ describe('BrsFile BrighterScript classes', () => {
             `, undefined, 'source/main.bs');
         });
 
-        it('calls super ', () => {
-            const { file } = testTranspile(`
+        it('calls super ', async () => {
+            const { file } = await testTranspile(`
                 class Parent
                     sub new()
                     end sub
@@ -758,8 +770,8 @@ describe('BrsFile BrighterScript classes', () => {
             expect(constructor.func.body.statements).to.be.lengthOf(0);
         });
 
-        it('adds field initializers', () => {
-            const { file } = testTranspile(`
+        it('adds field initializers', async () => {
+            const { file } = await testTranspile(`
                 class Person
                     sub new()
                     end sub
@@ -784,8 +796,8 @@ describe('BrsFile BrighterScript classes', () => {
             expect(constructor.func.body.statements).to.be.lengthOf(0);
         });
 
-        it('does not screw up local variable references', () => {
-            testTranspile(`
+        it('does not screw up local variable references', async () => {
+            await testTranspile(`
                 class Animal
                     sub new(name as string)
                         m.name = name
@@ -883,9 +895,11 @@ describe('BrsFile BrighterScript classes', () => {
                     smokey = Animal("Smokey")
                     smokey.move(1)
                     '> Bear moved 1 meters
+
                     donald = Duck("Donald")
                     donald.move(2)
                     '> Waddling...\\nDonald moved 2 meters
+
                     dewey = BabyDuck("Dewey")
                     dewey.move(3)
                     '> Waddling...\\nDewey moved 2 meters\\nFell over...I'm new at this
@@ -893,8 +907,8 @@ describe('BrsFile BrighterScript classes', () => {
             `, 'trim', 'source/main.bs');
         });
 
-        it('calculates the proper super index', () => {
-            testTranspile(`
+        it('calculates the proper super index', async () => {
+            await testTranspile(`
                 class Duck
                     public sub walk(meters as integer)
                         print "Walked " + meters.ToStr() + " meters"
@@ -943,8 +957,46 @@ describe('BrsFile BrighterScript classes', () => {
             `, 'trim', 'source/main.bs');
         });
 
-        it('works with enums as field initial values inside a namespace', () => {
-            testTranspile(`
+
+        it('adds namespacing to constructors on field definitions', async () => {
+            await testTranspile(`
+                namespace MyNS
+                    class KlassOne
+                        other = new KlassTwo()
+                    end class
+
+                    class KlassTwo
+                    end class
+                end namespace
+            `, `
+                function __MyNS_KlassOne_builder()
+                    instance = {}
+                    instance.new = sub()
+                        m.other = MyNS_KlassTwo()
+                    end sub
+                    return instance
+                end function
+                function MyNS_KlassOne()
+                    instance = __MyNS_KlassOne_builder()
+                    instance.new()
+                    return instance
+                end function
+                function __MyNS_KlassTwo_builder()
+                    instance = {}
+                    instance.new = sub()
+                    end sub
+                    return instance
+                end function
+                function MyNS_KlassTwo()
+                    instance = __MyNS_KlassTwo_builder()
+                    instance.new()
+                    return instance
+                end function
+            `, 'trim', 'source/main.bs');
+        });
+
+        it('works with enums as field initial values inside a namespace', async () => {
+            await testTranspile(`
                 namespace MyNS
                     class HasEnumKlass
                         enumValue = MyEnum.A
@@ -970,19 +1022,21 @@ describe('BrsFile BrighterScript classes', () => {
             `, 'trim', 'source/main.bs');
         });
 
-        it('allows enums as super args inside a namespace', () => {
-            testTranspile(`
+        it('allows enums as super args inside a namespace', async () => {
+            await testTranspile(`
                 namespace MyNS
                     class SubKlass extends SuperKlass
                         sub new()
                             super(MyEnum.B)
                         end sub
                     end class
+
                     class SuperKlass
-                        sub new(enumVal)
+                        sub new(enumVal as MyEnum)
                             print enumVal
                         end sub
                     end class
+
                     enum MyEnum
                         A = "A"
                         B = "B"
@@ -1004,12 +1058,12 @@ describe('BrsFile BrighterScript classes', () => {
                 end function
                 function __MyNS_SuperKlass_builder()
                     instance = {}
-                    instance.new = sub(enumVal)
+                    instance.new = sub(enumVal as dynamic)
                         print enumVal
                     end sub
                     return instance
                 end function
-                function MyNS_SuperKlass(enumVal)
+                function MyNS_SuperKlass(enumVal as dynamic)
                     instance = __MyNS_SuperKlass_builder()
                     instance.new(enumVal)
                     return instance
@@ -1017,12 +1071,11 @@ describe('BrsFile BrighterScript classes', () => {
             `, 'trim', 'source/main.bs');
         });
 
-
-        it('works with enums as values referenced in a namespace directly', () => {
-            testTranspile(`
+        it('works with enums as values referenced in a namespace directly', async () => {
+            await testTranspile(`
                 namespace MyNS
                     class HasEnumKlass
-                        myArray = [true, true]
+                        myArray = [true, true] as boolean[]
                         sub new()
                             m.myArray[MyEnum.A] = true
                             m.myArray[MyEnum.B] = false
@@ -1054,11 +1107,11 @@ describe('BrsFile BrighterScript classes', () => {
             `, 'trim', 'source/main.bs');
         });
 
-        it('works with enums as values referenced in a namespace with namespace', () => {
-            testTranspile(`
+        it('works with enums as values referenced in a namespace with namespace', async () => {
+            await testTranspile(`
                 namespace MyNS
                     class HasEnumKlass
-                        myArray = [true, true]
+                        myArray = [true, true] as boolean[]
                         sub new()
                             m.myArray[MyNS.MyEnum.A] = true
                             m.myArray[MyNS.MyEnum.B] = false
@@ -1090,6 +1143,184 @@ describe('BrsFile BrighterScript classes', () => {
             `, 'trim', 'source/main.bs');
         });
 
+        it('allows namespaced class function as function parameters', async () => {
+            await testTranspile(`
+                namespace Alpha
+                    function foo()
+                        return 1
+                    end function
+
+                    function callSomeFunc(f as function)
+                        return f()
+                    end function
+
+                    sub callFoo()
+                        callSomeFunc(foo)
+                    end sub
+                end namespace
+            `, `
+                function Alpha_foo()
+                    return 1
+                end function
+
+                function Alpha_callSomeFunc(f as function)
+                    return f()
+                end function
+
+                sub Alpha_callFoo()
+                    Alpha_callSomeFunc(Alpha_foo)
+                end sub
+            `, 'trim', 'source/main.bs');
+        });
+
+        it('allows namespaced class constructors as function parameters', async () => {
+            await testTranspile(`
+                namespace Alpha
+                    class Button
+                    end class
+
+                    function callSomeFunc(f as function)
+                        return f()
+                    end function
+
+                    sub makeButton()
+                        callSomeFunc(Button)
+                    end sub
+                end namespace
+            `, `
+                function __Alpha_Button_builder()
+                    instance = {}
+                    instance.new = sub()
+                    end sub
+                    return instance
+                end function
+                function Alpha_Button()
+                    instance = __Alpha_Button_builder()
+                    instance.new()
+                    return instance
+                end function
+
+                function Alpha_callSomeFunc(f as function)
+                    return f()
+                end function
+
+                sub Alpha_makeButton()
+                    Alpha_callSomeFunc(Alpha_Button)
+                end sub
+            `, 'trim', 'source/main.bs');
+        });
+
+        it('allows class constructors as functions in array', async () => {
+            await testTranspile(`
+                namespace Alpha
+                    class Button
+                    end class
+
+                    class ButtonContainer
+                        private button = new Alpha.Button()
+
+                        sub new()
+                            m.init()
+                        end sub
+
+                        sub init()
+                            button = new Alpha.Button()
+                            items = [m.button, button, Alpha.Button]
+                        end sub
+                    end class
+                end namespace
+            `, `
+                function __Alpha_Button_builder()
+                    instance = {}
+                    instance.new = sub()
+                    end sub
+                    return instance
+                end function
+                function Alpha_Button()
+                    instance = __Alpha_Button_builder()
+                    instance.new()
+                    return instance
+                end function
+                function __Alpha_ButtonContainer_builder()
+                    instance = {}
+                    instance.new = sub()
+                        m.button = Alpha_Button()
+                        m.init()
+                    end sub
+                    instance.init = sub()
+                        button = Alpha_Button()
+                        items = [
+                            m.button
+                            button
+                            Alpha_Button
+                        ]
+                    end sub
+                    return instance
+                end function
+                function Alpha_ButtonContainer()
+                    instance = __Alpha_ButtonContainer_builder()
+                    instance.new()
+                    return instance
+                end function
+            `, 'trim', 'source/main.bs');
+        });
+
+
+        it('puts leading comments from methods in correct place', async () => {
+            await testTranspile(`
+                    class Duck
+                        ' hatch from egg
+                        sub new()
+                        end sub
+                        ' it must be a duck
+                        sub quack()
+                            ' what does a duck say?
+                            print "quack"
+                        end sub
+                    end class
+                `, `
+                    function __Duck_builder()
+                        instance = {}
+                        ' hatch from egg
+                        instance.new = sub()
+                        end sub
+                        ' it must be a duck
+                        instance.quack = sub()
+                            ' what does a duck say?
+                            print "quack"
+                        end sub
+                        return instance
+                    end function
+                    function Duck()
+                        instance = __Duck_builder()
+                        instance.new()
+                        return instance
+                    end function
+                `, undefined, 'source/main.bs');
+        });
+
+        it('puts leading comments from fields in correct place', async () => {
+            await testTranspile(`
+                    class Duck
+                        ' what kind of duck?
+                        type as string = "mallard"
+                    end class
+                `, `
+                    function __Duck_builder()
+                        instance = {}
+                        instance.new = sub()
+                            ' what kind of duck?
+                            m.type = "mallard"
+                        end sub
+                        return instance
+                    end function
+                    function Duck()
+                        instance = __Duck_builder()
+                        instance.new()
+                        return instance
+                    end function
+                `, undefined, 'source/main.bs');
+        });
     });
 
     it('detects using `new` keyword on non-classes', () => {
@@ -1102,7 +1333,7 @@ describe('BrsFile BrighterScript classes', () => {
         `);
         program.validate();
         expectDiagnostics(program, [
-            DiagnosticMessages.expressionIsNotConstructable('sub')
+            DiagnosticMessages.expressionIsNotConstructable('quack')
         ]);
     });
 
@@ -1120,20 +1351,6 @@ describe('BrsFile BrighterScript classes', () => {
         program.validate();
         expectDiagnostics(program, [
             DiagnosticMessages.classConstructorMissingSuperCall()
-        ]);
-    });
-
-    it.skip('detects calls to unknown m methods', () => {
-        program.setFile('source/main.bs', `
-            class Animal
-                sub new()
-                    m.methodThatDoesNotExist()
-                end sub
-            end class
-        `);
-        program.validate();
-        expectDiagnostics(program, [
-            DiagnosticMessages.methodDoesNotExistOnType('methodThatDoesNotExist', 'Animal')
         ]);
     });
 
@@ -1157,7 +1374,7 @@ describe('BrsFile BrighterScript classes', () => {
 
     it('detects indirect circular extends', () => {
         //direct
-        program.addOrReplaceFile('source/Indirect.bs', `
+        program.setFile('source/Indirect.bs', `
             class Parent extends Grandchild
             end class
 
@@ -1191,9 +1408,9 @@ describe('BrsFile BrighterScript classes', () => {
                 end function
             end class
         `);
-        await program.transpile([], stagingDir);
+        await program.build({ stagingDir: stagingDir });
         fsExtra.emptyDirSync(stagingDir);
-        await program.transpile([], stagingDir);
+        await program.build({ stagingDir: stagingDir });
         expect(
             fsExtra.readFileSync(s`${stagingDir}/source/lib.brs`).toString().trimEnd()
         ).to.eql(trim`
@@ -1247,16 +1464,16 @@ describe('BrsFile BrighterScript classes', () => {
         program.validate();
         expectDiagnostics(program, [{
             ...DiagnosticMessages.duplicateIdentifier('name'),
-            range: Range.create(3, 23, 3, 27)
+            location: { range: Range.create(3, 23, 3, 27) }
         }, {
             ...DiagnosticMessages.duplicateIdentifier('name'),
-            range: Range.create(4, 27, 4, 31)
+            location: { range: Range.create(4, 27, 4, 31) }
         }, {
             ...DiagnosticMessages.duplicateIdentifier('age'),
-            range: Range.create(8, 27, 8, 30)
+            location: { range: Range.create(8, 27, 8, 30) }
         }, {
             ...DiagnosticMessages.duplicateIdentifier('age'),
-            range: Range.create(10, 23, 10, 26)
+            location: { range: Range.create(10, 23, 10, 26) }
         }]);
     });
 
@@ -1273,7 +1490,7 @@ describe('BrsFile BrighterScript classes', () => {
         `);
         program.validate();
         expectDiagnostics(program, [
-            DiagnosticMessages.classChildMemberDifferentMemberTypeThanAncestor('method', 'field', 'Animal')
+            DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty('Duck', 'Animal', 'name', 'function name() as dynamic', 'dynamic')
         ]);
     });
 
@@ -1311,15 +1528,14 @@ describe('BrsFile BrighterScript classes', () => {
                 public owner as Person
             end class
             class Duck extends Bird
-                public age = 12.2 'should be integer but is float
+                public age = 12.2 'should be integer, but a float can be assigned to an int
                 public name = 12 'should be string but is integer
                 public owner as string
             end class
         `);
         program.validate();
         expectDiagnostics(program, [
-            DiagnosticMessages.cannotFindType('Person'),
-            DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty('Duck', 'Bird', 'age', 'float', 'integer'),
+            DiagnosticMessages.cannotFindName('Person'),
             DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty('Duck', 'Bird', 'name', 'integer', 'string'),
             DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty('Duck', 'Bird', 'owner', 'string', 'Person')
         ]);
@@ -1408,7 +1624,7 @@ describe('BrsFile BrighterScript classes', () => {
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.cannotFindName('Animal'),
-                range: Range.create(1, 35, 1, 41)
+                location: { range: Range.create(1, 35, 1, 41) }
             }]);
         });
 
@@ -1459,9 +1675,9 @@ describe('BrsFile BrighterScript classes', () => {
                 end class
             `);
             program.validate();
-            expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('GroundedBird', 'Vertibrates.GroundedBird')
-            ]);
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.cannotFindName('GroundedBird', 'Vertibrates.GroundedBird', 'Vertibrates', 'namespace')
+            }]);
         });
 
         it('namespaced parent class from inside namespace', () => {
@@ -1480,12 +1696,9 @@ describe('BrsFile BrighterScript classes', () => {
                 end namespace
             `);
             program.validate();
-            expectDiagnostics(program, [{
-                ...DiagnosticMessages.cannotFindName('GroundedBird', 'Vertibrates.GroundedBird'),
-                relatedInformation: [{
-                    message: `Not defined in scope 'source'`
-                }]
-            }]);
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('GroundedBird', 'Vertibrates.GroundedBird', 'Vertibrates', 'namespace').message
+            ]);
         });
     });
 
@@ -1501,8 +1714,9 @@ describe('BrsFile BrighterScript classes', () => {
             end sub
         `);
         program.validate();
-        expectDiagnostics(program, [
-            DiagnosticMessages.cannotFindName('Duck')
+        expectDiagnosticsIncludes(program, [
+            DiagnosticMessages.cannotFindFunction('Duck').message,
+            DiagnosticMessages.expressionIsNotConstructable('Duck')
         ]);
     });
 
@@ -1531,7 +1745,7 @@ describe('BrsFile BrighterScript classes', () => {
         `);
         program.validate();
         expectDiagnostics(program, [
-            DiagnosticMessages.cannotFindName('AnimalNotDefined', 'NameA.NameB.AnimalNotDefined')
+            DiagnosticMessages.cannotFindName('AnimalNotDefined', 'NameA.NameB.AnimalNotDefined', 'NameA.NameB', 'namespace')
         ]);
     });
 
@@ -1556,8 +1770,8 @@ describe('BrsFile BrighterScript classes', () => {
             end class
         `);
         program.validate();
-        expectDiagnostics(program, [
-            DiagnosticMessages.duplicateClassDeclaration('source', 'Animal')
+        expectDiagnosticsIncludes(program, [
+            DiagnosticMessages.nameCollision('Class', 'Class', 'Animal')
         ]);
     });
 
@@ -1571,24 +1785,29 @@ describe('BrsFile BrighterScript classes', () => {
             end namespace
         `);
         program.validate();
-        expectDiagnostics(program, [
-            DiagnosticMessages.duplicateClassDeclaration('source', 'NameA.NameB.Animal')
+        expectDiagnosticsIncludes(program, [
+            DiagnosticMessages.nameCollision('Class', 'Class', 'NameA.NameB.Animal').message
         ]);
     });
 
-    it('catches namespaced class name which is the same as a global class', () => {
+    it('allows namespaced class name which is the same as a global class', () => {
         program.setFile('source/main.bs', `
             namespace NameA.NameB
                 class Animal
+                    name as string
                 end class
+
+                sub printThisAnimalName(ani as Animal) ' this refers to NameA.NameB.Animal
+                    print ani.name
+                end sub
             end namespace
+
             class Animal
+                doesNotHaveName as string
             end class
         `);
         program.validate();
-        expectDiagnostics(program, [
-            DiagnosticMessages.namespacedClassCannotShareNamewithNonNamespacedClass('Animal').message
-        ]);
+        expectZeroDiagnostics(program);
     });
 
     it('catches class with same name as function', () => {
@@ -1600,7 +1819,8 @@ describe('BrsFile BrighterScript classes', () => {
         `);
         program.validate();
         expectDiagnostics(program, [
-            DiagnosticMessages.functionCannotHaveSameNameAsClass('Animal').message
+            DiagnosticMessages.nameCollision('Class', 'Function', 'Animal').message,
+            DiagnosticMessages.nameCollision('Function', 'Class', 'Animal').message
         ]);
     });
 
@@ -1612,8 +1832,9 @@ describe('BrsFile BrighterScript classes', () => {
             end sub
         `);
         program.validate();
-        expectDiagnostics(program, [
-            DiagnosticMessages.functionCannotHaveSameNameAsClass('animal').message
+        expectDiagnosticsIncludes(program, [
+            DiagnosticMessages.nameCollision('Class', 'Function', 'animal').message,
+            DiagnosticMessages.nameCollision('Function', 'Class', 'ANIMAL').message
         ]);
     });
 
@@ -1627,7 +1848,7 @@ describe('BrsFile BrighterScript classes', () => {
         `);
         program.validate();
         expectDiagnostics(program, [
-            DiagnosticMessages.localVarSameNameAsClass('Animal').message
+            DiagnosticMessages.localVarShadowedByScopedFunction().message
         ]);
     });
 
@@ -1663,7 +1884,7 @@ describe('BrsFile BrighterScript classes', () => {
         expectZeroDiagnostics(program);
     });
 
-    it('computes correct super index for grandchild class', () => {
+    it('computes correct super index for grandchild class', async () => {
         program.setFile('source/main.bs', `
             sub Main()
                 c = new App.ClassC()
@@ -1678,7 +1899,7 @@ describe('BrsFile BrighterScript classes', () => {
             end namespace
         `);
 
-        testTranspile(`
+        await testTranspile(`
             namespace App
                 class ClassC extends ClassB
                     sub new()
@@ -1703,13 +1924,13 @@ describe('BrsFile BrighterScript classes', () => {
         `, 'trim', 'source/App.ClassC.bs');
     });
 
-    it('computes correct super index for namespaced child class and global parent class', () => {
+    it('computes correct super index for namespaced child class and global parent class', async () => {
         program.setFile('source/ClassA.bs', `
             class ClassA
             end class
         `);
 
-        testTranspile(`
+        await testTranspile(`
             namespace App
                 class ClassB extends ClassA
                 end class
@@ -1737,7 +1958,8 @@ describe('BrsFile BrighterScript classes', () => {
             end class
         `);
         doesNotThrow(() => {
-            file.parser.references.classStatements[0]['getParentClassIndex'](new BrsTranspileState(file));
+            const classStatements = file.ast.findChildren<ClassStatement>(isClassStatement);
+            classStatements[0]['getParentClassIndex'](new BrsTranspileState(file));
         });
     });
 
@@ -1767,81 +1989,7 @@ describe('BrsFile BrighterScript classes', () => {
         program.validate();
     });
 
-    it('extending namespaced class transpiles properly', () => {
-        testTranspile(`
-            namespace App
-                class CoreClass
-                    sub new()
-                        print "CoreClass.new()"
-                    end sub
-                end class
-            end namespace
-            namespace App.Logic
-                class FirstClass extends App.CoreClass
-                end class
-                class SecondClass extends FirstClass
-                end class
-            end namespace
-            namespace App.OtherLogic
-                class FinalClass extends App.Logic.SecondClass
-                end class
-            end namespace
-        `, `
-            function __App_CoreClass_builder()
-                instance = {}
-                instance.new = sub()
-                    print "CoreClass.new()"
-                end sub
-                return instance
-            end function
-            function App_CoreClass()
-                instance = __App_CoreClass_builder()
-                instance.new()
-                return instance
-            end function
-            function __App_Logic_FirstClass_builder()
-                instance = __App_CoreClass_builder()
-                instance.super0_new = instance.new
-                instance.new = sub()
-                    m.super0_new()
-                end sub
-                return instance
-            end function
-            function App_Logic_FirstClass()
-                instance = __App_Logic_FirstClass_builder()
-                instance.new()
-                return instance
-            end function
-            function __App_Logic_SecondClass_builder()
-                instance = __App_Logic_FirstClass_builder()
-                instance.super1_new = instance.new
-                instance.new = sub()
-                    m.super1_new()
-                end sub
-                return instance
-            end function
-            function App_Logic_SecondClass()
-                instance = __App_Logic_SecondClass_builder()
-                instance.new()
-                return instance
-            end function
-            function __App_OtherLogic_FinalClass_builder()
-                instance = __App_Logic_SecondClass_builder()
-                instance.super2_new = instance.new
-                instance.new = sub()
-                    m.super2_new()
-                end sub
-                return instance
-            end function
-            function App_OtherLogic_FinalClass()
-                instance = __App_OtherLogic_FinalClass_builder()
-                instance.new()
-                return instance
-            end function
-        `);
-    });
-
-    it.skip('detects calling class constructors with too many parameters', () => {
+    it('detects calling class constructors with too many parameters', () => {
         program.setFile('source/main.bs', `
             class Parameterless
                 sub new()

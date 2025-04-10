@@ -1,183 +1,30 @@
 import { expect, assert } from '../chai-config.spec';
 import { Lexer } from '../lexer/Lexer';
 import { ReservedWords, TokenKind } from '../lexer/TokenKind';
-import type { AAMemberExpression } from './Expression';
-import { TernaryExpression, NewExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression } from './Expression';
+import type { AAMemberExpression, BinaryExpression, LiteralExpression, TypecastExpression, UnaryExpression } from './Expression';
+import { TernaryExpression, NewExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression, VariableExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
-import type { AliasStatement, AssignmentStatement, ClassStatement, TypecastStatement } from './Statement';
+import type { AliasStatement, AssignmentStatement, Block, ClassStatement, ConditionalCompileConstStatement, ConditionalCompileErrorStatement, ConditionalCompileStatement, ExitStatement, ForStatement, IfStatement, InterfaceStatement, ReturnStatement, TypecastStatement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { isAliasStatement, isBlock, isCommentStatement, isFunctionStatement, isIfStatement, isIndexedGetExpression, isTypecastStatement } from '../astUtils/reflection';
-import { expectDiagnostics, expectZeroDiagnostics } from '../testHelpers.spec';
-import { BrsTranspileState } from './BrsTranspileState';
-import { SourceNode } from 'source-map';
-import { BrsFile } from '../files/BrsFile';
-import { Program } from '../Program';
+import { isAliasStatement, isAssignmentStatement, isBinaryExpression, isBlock, isBody, isCallExpression, isCallfuncExpression, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isDottedGetExpression, isExitStatement, isExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypecastExpression, isTypecastStatement, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, rootDir } from '../testHelpers.spec';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { Expression, Statement } from './AstNode';
+import { SymbolTypeFlag } from '../SymbolTypeFlag';
+import { IntegerType } from '../types/IntegerType';
+import { FloatType } from '../types/FloatType';
+import { StringType } from '../types/StringType';
+import { ArrayType, UnionType } from '../types';
+import { standardizePath as s } from '../util';
 
 describe('parser', () => {
     it('emits empty object when empty token list is provided', () => {
-        expect(Parser.parse([])).to.deep.include({
-            statements: [],
-            diagnostics: []
-        });
-    });
-
-    describe('findReferences', () => {
-        it('gets called if references are missing', () => {
-            const parser = Parser.parse(`
-                sub main()
-                end sub
-
-                sub UnusedFunction()
-                end sub
-            `);
-            expect(parser.references.functionStatements.map(x => x.name.text)).to.eql([
-                'main',
-                'UnusedFunction'
-            ]);
-            //simulate a tree-shaking plugin by removing the `UnusedFunction`
-            parser.ast.statements.splice(1);
-            //tell the parser we modified the AST and need to regenerate references
-            parser.invalidateReferences();
-            expect(parser['_references']).not.to.exist;
-            //calling `references` automatically regenerates the references
-            expect(parser.references.functionStatements.map(x => x.name.text)).to.eql([
-                'main'
-            ]);
-        });
-
-        function expressionsToStrings(expressions: Set<Expression>) {
-            return [...expressions.values()].map(x => {
-                const file = new BrsFile('', '', new Program({} as any));
-                const state = new BrsTranspileState(file);
-                return new SourceNode(null, null, null, x.transpile(state) as any).toString();
-            });
-        }
-
-        it('works for references.expressions', () => {
-            const parser = Parser.parse(`
-                b += "plus-equal"
-                a += 1 + 2
-                b += getValue1() + getValue2()
-                increment++
-                decrement--
-                some.node@.doCallfunc()
-                bravo(3 + 4).jump(callMe())
-                obj = {
-                    val1: someValue
-                }
-                arr = [
-                    one
-                ]
-                thing = alpha.bravo
-                alpha.charlie()
-                delta(alpha.delta)
-                call1().a.b.call2()
-                class Person
-                    name as string = "bob"
-                end class
-                function thing(p1 = name.space.getSomething())
-
-                end function
-            `);
-            const expected = [
-                '"plus-equal"',
-                'b',
-                'b += "plus-equal"',
-                '1',
-                '2',
-                'a',
-                'a += 1 + 2',
-                'getValue1()',
-                'getValue2()',
-                'b',
-                'b += getValue1() + getValue2()',
-                'increment++',
-                'decrement--',
-                //currently the "toString" does a transpile, so that's why this is different.
-                'some.node.callfunc("doCallfunc", invalid)',
-                '3',
-                '4',
-                '3 + 4',
-                'callMe()',
-                'bravo(3 + 4).jump(callMe())',
-                'someValue',
-                '{\n    val1: someValue\n}',
-                'one',
-                '[\n    one\n]',
-                'alpha.bravo',
-                'alpha.charlie()',
-                'alpha.delta',
-                'delta(alpha.delta)',
-                'call1().a.b.call2()',
-                '"bob"',
-                'name.space.getSomething()'
-            ];
-
-            expect(
-                expressionsToStrings(parser.references.expressions)
-            ).to.eql(expected);
-
-            //tell the parser we modified the AST and need to regenerate references
-            parser.invalidateReferences();
-
-            expect(
-                expressionsToStrings(parser.references.expressions).sort()
-            ).to.eql(expected.sort());
-        });
-
-        it('works for references.expressions', () => {
-            const parser = Parser.parse(`
-                value = true or type(true) = "something" or Enums.A.Value = "value" and Enum1.Value = Name.Space.Enum2.Value
-            `);
-            const expected = [
-                'true',
-                'type(true)',
-                '"something"',
-                'true',
-                'Enums.A.Value',
-                '"value"',
-                'Enum1.Value',
-                'Name.Space.Enum2.Value',
-                'true or type(true) = "something" or Enums.A.Value = "value" and Enum1.Value = Name.Space.Enum2.Value'
-            ];
-
-            expect(
-                expressionsToStrings(parser.references.expressions)
-            ).to.eql(expected);
-
-            //tell the parser we modified the AST and need to regenerate references
-            parser.invalidateReferences();
-
-            expect(
-                expressionsToStrings(parser.references.expressions).sort()
-            ).to.eql(expected.sort());
-        });
-
-        it('works for logical expression', () => {
-            const parser = Parser.parse(`
-                value = Enums.A.Value = "value"
-            `);
-            const expected = [
-                'Enums.A.Value',
-                '"value"',
-                'Enums.A.Value = "value"'
-            ];
-
-            expect(
-                expressionsToStrings(parser.references.expressions)
-            ).to.eql(expected);
-
-            //tell the parser we modified the AST and need to regenerate references
-            parser.invalidateReferences();
-
-            expect(
-                expressionsToStrings(parser.references.expressions).sort()
-            ).to.eql(expected.sort());
-        });
+        let { ast, diagnostics } = Parser.parse([]);
+        expect(isBody(ast)).to.be.true;
+        expect(ast.statements).to.be.empty;
+        expect(diagnostics).to.be.empty;
     });
 
     describe('callfunc operator', () => {
@@ -201,15 +48,32 @@ describe('parser', () => {
                 end sub
             `, ParseMode.BrighterScript);
             expect(parser.diagnostics[0]?.message).not.to.exist;
-            expect((parser as any).statements[0]?.func?.body?.statements[0]?.expression).to.be.instanceof(CallfuncExpression);
+            expect((parser as any).ast.statements[0]?.func?.body?.statements[0]?.expression).to.be.instanceof(CallfuncExpression);
         });
+    });
+
+    it('flags function names with invalid characters', () => {
+        const { diagnostics } = Parser.parse(`
+            function alpha$() : end function
+            function beta%() : end function
+            function charlie!() : end function
+            function delta#() : end function
+            function echo&() : end function
+        `);
+        expectDiagnostics(diagnostics, [
+            DiagnosticMessages.invalidIdentifier('alpha$', '$'),
+            DiagnosticMessages.invalidIdentifier('beta%', '%'),
+            DiagnosticMessages.invalidIdentifier('charlie!', '!'),
+            DiagnosticMessages.invalidIdentifier('delta#', '#'),
+            DiagnosticMessages.invalidIdentifier('echo&', '&')
+        ]);
     });
 
     describe('optional chaining operator', () => {
         function getExpression<T>(text: string, options?: { matcher?: any; parseMode?: ParseMode }) {
             const parser = parse(text, options?.parseMode);
             expectZeroDiagnostics(parser);
-            const expressions = [...parser.references.expressions];
+            const expressions = parser.ast.findChildren<Expression>(isExpression);
             if (options?.matcher) {
                 return expressions.find(options.matcher) as unknown as T;
             } else {
@@ -219,55 +83,55 @@ describe('parser', () => {
         it('works for ?.', () => {
             const expression = getExpression<DottedGetExpression>(`value = person?.name`);
             expect(expression).to.be.instanceOf(DottedGetExpression);
-            expect(expression.dot.kind).to.eql(TokenKind.QuestionDot);
+            expect(expression.tokens.dot.kind).to.eql(TokenKind.QuestionDot);
         });
 
         it('works for ?[', () => {
             const expression = getExpression<IndexedGetExpression>(`value = person?["name"]`, { matcher: isIndexedGetExpression });
             expect(expression).to.be.instanceOf(IndexedGetExpression);
-            expect(expression.openingSquare.kind).to.eql(TokenKind.QuestionLeftSquare);
-            expect(expression.questionDotToken).not.to.exist;
+            expect(expression.tokens.openingSquare.kind).to.eql(TokenKind.QuestionLeftSquare);
+            expect(expression.tokens.questionDot).not.to.exist;
         });
 
         it('works for ?.[', () => {
             const expression = getExpression<IndexedGetExpression>(`value = person?.["name"]`, { matcher: isIndexedGetExpression });
             expect(expression).to.be.instanceOf(IndexedGetExpression);
-            expect(expression.openingSquare.kind).to.eql(TokenKind.LeftSquareBracket);
-            expect(expression.questionDotToken?.kind).to.eql(TokenKind.QuestionDot);
+            expect(expression.tokens.openingSquare.kind).to.eql(TokenKind.LeftSquareBracket);
+            expect(expression.tokens.questionDot?.kind).to.eql(TokenKind.QuestionDot);
         });
 
         it('works for ?@', () => {
             const expression = getExpression<XmlAttributeGetExpression>(`value = someXml?@someAttr`);
             expect(expression).to.be.instanceOf(XmlAttributeGetExpression);
-            expect(expression.at.kind).to.eql(TokenKind.QuestionAt);
+            expect(expression.tokens.at.kind).to.eql(TokenKind.QuestionAt);
         });
 
         it('works for ?(', () => {
             const expression = getExpression<CallExpression>(`value = person.getName?()`);
             expect(expression).to.be.instanceOf(CallExpression);
-            expect(expression.openingParen.kind).to.eql(TokenKind.QuestionLeftParen);
+            expect(expression.tokens.openingParen.kind).to.eql(TokenKind.QuestionLeftParen);
         });
 
         it('works for print statements using question mark', () => {
-            const { statements } = parse(`
+            const { ast } = parse(`
                 ?[1]
                 ?(1+1)
             `);
-            expect(statements[0]).to.be.instanceOf(PrintStatement);
-            expect(statements[1]).to.be.instanceOf(PrintStatement);
+            expect(ast.statements[0]).to.be.instanceOf(PrintStatement);
+            expect(ast.statements[1]).to.be.instanceOf(PrintStatement);
         });
 
         //TODO enable this once we properly parse IIFEs
         it.skip('works for ?( in anonymous function', () => {
             const expression = getExpression<CallExpression>(`thing = (function() : end function)?()`);
             expect(expression).to.be.instanceOf(CallExpression);
-            expect(expression.openingParen.kind).to.eql(TokenKind.QuestionLeftParen);
+            expect(expression.tokens.openingParen.kind).to.eql(TokenKind.QuestionLeftParen);
         });
 
         it('works for ?( in new call', () => {
             const expression = getExpression<NewExpression>(`thing = new Person?()`, { parseMode: ParseMode.BrighterScript });
             expect(expression).to.be.instanceOf(NewExpression);
-            expect(expression.call.openingParen.kind).to.eql(TokenKind.QuestionLeftParen);
+            expect(expression.call.tokens.openingParen.kind).to.eql(TokenKind.QuestionLeftParen);
         });
 
         it('distinguishes between optional chaining and ternary expression', () => {
@@ -278,8 +142,9 @@ describe('parser', () => {
                     key = isTrue ? ["name"] : ["age"]
                 end sub
             `, ParseMode.BrighterScript);
-            expect(parser.references.assignmentStatements[0].value).is.instanceof(IndexedGetExpression);
-            expect(parser.references.assignmentStatements[2].value).is.instanceof(TernaryExpression);
+            const assignmentStatements = parser.ast.findChildren<AssignmentStatement>(isAssignmentStatement);
+            expect(assignmentStatements[0].value).is.instanceof(IndexedGetExpression);
+            expect(assignmentStatements[2].value).is.instanceof(TernaryExpression);
         });
 
         it('distinguishes between optional chaining and ternary expression', () => {
@@ -291,8 +156,9 @@ describe('parser', () => {
                     key = isTrue ? ["name"] : getDefault()
                 end sub
             `, ParseMode.BrighterScript);
-            expect(parser.references.assignmentStatements[0].value).is.instanceof(IndexedGetExpression);
-            expect(parser.references.assignmentStatements[1].value).is.instanceof(TernaryExpression);
+            const assignmentStatements = parser.ast.findChildren<AssignmentStatement>(isAssignmentStatement);
+            expect(assignmentStatements[0].value).is.instanceof(IndexedGetExpression);
+            expect(assignmentStatements[1].value).is.instanceof(TernaryExpression);
         });
     });
 
@@ -302,7 +168,7 @@ describe('parser', () => {
                 sub main()
                     call()a
                 end sub
-            `).diagnostics.map(x => rangeToArray(x.range))).to.eql([
+            `).diagnostics.map(x => rangeToArray(x.location.range))).to.eql([
                 [2, 26, 2, 27],
                 [2, 27, 2, 28]
             ]);
@@ -315,10 +181,10 @@ describe('parser', () => {
                 end functionasdf
             `).diagnostics;
             expect(diagnostics[0]?.message).to.exist.and.to.eql(
-                DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression().message
+                DiagnosticMessages.expectedStatement().message
             );
 
-            expect(diagnostics[0]?.range).to.eql(
+            expect(diagnostics[0]?.location.range).to.eql(
                 Range.create(3, 20, 3, 32)
             );
         });
@@ -370,13 +236,105 @@ describe('parser', () => {
             const parser = parse(`
                 sub test(param1 as unknownType)
                 end sub
-            `);
-            expectDiagnostics(parser, [{
-                ...DiagnosticMessages.functionParameterTypeIsInvalid('param1', 'unknownType')
-            }]);
+            `, ParseMode.BrighterScript);
+            // type validation happens at scope validation, not at the parser
+            expectZeroDiagnostics(parser);
             expect(
                 isFunctionStatement(parser.ast.statements[0])
             ).to.be.true;
+        });
+
+        it('does not scrap the entire function when encountering unknown parameter type in brightscript mode', () => {
+            const parser = parse(`
+                sub test(param1 as unknownType)
+                end sub
+            `, ParseMode.BrightScript);
+            // type validation happens at scope validation, not at the parser
+            expectDiagnosticsIncludes(parser, DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('custom types'));
+            expect(
+                isFunctionStatement(parser.ast.statements[0])
+            ).to.be.true;
+        });
+
+        it('adds diagnostics when missing end for statements', () => {
+            let parser = parse(`
+                sub test1(x)
+                    for each item in x
+                        print item
+                 end sub
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(parser, [
+                DiagnosticMessages.expectedEndForOrNextToTerminateForLoop('for each')
+            ]);
+
+            parser = parse(`
+                sub test2()
+                    for i = 0 to 10
+                        print i
+                 end sub
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(parser, [
+                DiagnosticMessages.expectedEndForOrNextToTerminateForLoop('for')
+            ]);
+
+            parser = parse(`
+                sub test3(x )
+                    for each item in x
+                        print item
+                    next
+
+                    for i = 0 to 10
+                        print i
+                    next ' next works the same as "end for"
+                 end sub
+            `, ParseMode.BrightScript);
+            expectZeroDiagnostics(parser);
+        });
+
+        it('does not allow return type as invalid', () => {
+            let parser = parse(`
+                function test(x) as invalid
+                    return invalid
+                 end function
+            `, ParseMode.BrighterScript);
+            expectDiagnosticsIncludes(parser, [
+                DiagnosticMessages.expectedIdentifier('as').message
+            ]);
+        });
+
+        it('does not allow param type as invalid', () => {
+            let parser = parse(`
+                function test(x as invalid)
+                    return invalid
+                 end function
+            `, ParseMode.BrighterScript);
+            expectDiagnosticsIncludes(parser, [
+                DiagnosticMessages.expectedIdentifier('as').message
+            ]);
+        });
+
+        it('validates when theres a fraction hex', () => {
+            let parser = parse(`
+                function test()
+                    x = &HFF.01234
+                    return x
+                end function
+            `);
+
+            expectDiagnostics(parser, [
+                DiagnosticMessages.expectedStatement(),
+                DiagnosticMessages.expectedNewlineOrColon()
+            ]);
+        });
+
+        it('allows print statement with hex followed by dot <number>', () => {
+            let parser = parse(`
+                function test()
+                    print  &HFF.01234
+                end function
+            `);
+
+            expectZeroDiagnostics(parser);
         });
 
         describe('namespace', () => {
@@ -391,22 +349,23 @@ describe('parser', () => {
                 `, ParseMode.BrighterScript);
                 expectZeroDiagnostics(parser);
                 // We expect these names to be "as given" in this context, because we aren't evaluating a full program.
-                expect(parser.references.namespaceStatements.map(statement => statement.getName(ParseMode.BrighterScript))).to.deep.equal([
+                const namespaceStatements = parser.ast.findChildren<NamespaceStatement>(isNamespaceStatement);
+                expect(namespaceStatements.map(statement => statement.getName(ParseMode.BrighterScript))).to.have.deep.members([
                     'Level1.Level2.Level3',
                     'Level1'
                 ]);
             });
             it('parses empty namespace', () => {
-                let { statements, diagnostics } =
+                let { ast, diagnostics } =
                     parse(`
                         namespace Name.Space
                         end namespace
                     `, ParseMode.BrighterScript);
                 expect(diagnostics[0]?.message).not.to.exist;
-                expect(statements[0]).to.be.instanceof(NamespaceStatement);
+                expect(ast.statements[0]).to.be.instanceof(NamespaceStatement);
             });
             it('includes body', () => {
-                let { statements, diagnostics } =
+                let { ast, diagnostics } =
                     parse(`
                         namespace Name.Space
                             sub main()
@@ -414,8 +373,8 @@ describe('parser', () => {
                         end namespace
                     `, ParseMode.BrighterScript);
                 expect(diagnostics[0]?.message).not.to.exist;
-                expect(statements[0]).to.be.instanceof(NamespaceStatement);
-                expect((statements[0] as NamespaceStatement).body.statements[0]).to.be.instanceof(FunctionStatement);
+                expect(ast.statements[0]).to.be.instanceof(NamespaceStatement);
+                expect((ast.statements[0] as NamespaceStatement).body.statements[0]).to.be.instanceof(FunctionStatement);
             });
             it('supports comments and newlines', () => {
                 let { diagnostics } =
@@ -441,7 +400,7 @@ describe('parser', () => {
                         end namespace
                     `, ParseMode.BrighterScript);
                 expect(diagnostics[0]?.message).to.equal(
-                    DiagnosticMessages.expectedIdentifierAfterKeyword('namespace').message
+                    DiagnosticMessages.expectedIdentifier('namespace').message
                 );
             });
 
@@ -504,18 +463,18 @@ describe('parser', () => {
             `);
             expect(parser.diagnostics[0]?.message).to.not.exist;
 
-            let statements = (parser.statements[0] as FunctionStatement).func.body.statements as AssignmentStatement[];
-            let first = statements[0].value as XmlAttributeGetExpression;
+            let assignments = (parser.ast.statements[0] as FunctionStatement).func.body.statements as AssignmentStatement[];
+            let first = assignments[0].value as XmlAttributeGetExpression;
             expect(first).to.be.instanceof(XmlAttributeGetExpression);
-            expect(first.name.text).to.equal('firstName');
-            expect(first.at.text).to.equal('@');
-            expect((first.obj as any).name.text).to.equal('personXml');
+            expect(first.tokens.name.text).to.equal('firstName');
+            expect(first.tokens.at.text).to.equal('@');
+            expect((first.obj as any).tokens.name.text).to.equal('personXml');
 
-            let second = statements[1].value as XmlAttributeGetExpression;
+            let second = assignments[1].value as XmlAttributeGetExpression;
             expect(second).to.be.instanceof(XmlAttributeGetExpression);
-            expect(second.name.text).to.equal('age');
-            expect(second.at.text).to.equal('@');
-            expect((second.obj as any).name.text).to.equal('firstChild');
+            expect(second.tokens.name.text).to.equal('age');
+            expect(second.tokens.at.text).to.equal('@');
+            expect((second.obj as any).tokens.name.text).to.equal('firstChild');
         });
 
         it('does not allow chaining of @ symbols', () => {
@@ -528,51 +487,51 @@ describe('parser', () => {
             expect(parser.diagnostics).not.to.be.empty;
         });
         it('unknown function type does not invalidate rest of function', () => {
-            let { statements, diagnostics } = parse(`
+            let { ast, diagnostics } = parse(`
                 function log() as UNKNOWN_TYPE
                 end function
             `, ParseMode.BrightScript);
-            expect(diagnostics.length).to.be.greaterThan(0);
-            expect(statements[0]).to.exist;
+            expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('custom types').message); // type validation happens at scope validation step
+            expect(ast.statements[0]).to.exist;
         });
         it('unknown function type is not a problem in Brighterscript mode', () => {
-            let { statements, diagnostics } = parse(`
+            let { ast, diagnostics } = parse(`
                 function log() as UNKNOWN_TYPE
                 end function
             `, ParseMode.BrighterScript);
-            expect(diagnostics.length).to.equal(0);
-            expect(statements[0]).to.exist;
+            expectZeroDiagnostics(diagnostics);
+            expect(ast.statements[0]).to.exist;
         });
         it('allows namespaced function type in Brighterscript mode', () => {
-            let { statements, diagnostics } = parse(`
+            let { ast, diagnostics } = parse(`
                 function log() as SOME_NAMESPACE.UNKNOWN_TYPE
                 end function
             `, ParseMode.BrighterScript);
             expect(diagnostics.length).to.equal(0);
-            expect(statements[0]).to.exist;
+            expect(ast.statements[0]).to.exist;
         });
         it('allows custom parameter types in BrighterscriptMode', () => {
-            let { statements, diagnostics } = parse(`
+            let { ast, diagnostics } = parse(`
                 sub foo(value as UNKNOWN_TYPE)
                 end sub
             `, ParseMode.BrighterScript);
             expect(diagnostics.length).to.equal(0);
-            expect(statements[0]).to.exist;
+            expect(ast.statements[0]).to.exist;
         });
-        it('does not allow custom parameter types in Brightscript Mode', () => {
+        it('does cause diagnostics when custom parameter types are used in Brightscript Mode', () => {
             let { diagnostics } = parse(`
                 sub foo(value as UNKNOWN_TYPE)
                 end sub
             `, ParseMode.BrightScript);
-            expect(diagnostics.length).not.to.equal(0);
+            expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('custom types').message);
         });
         it('allows custom namespaced parameter types in BrighterscriptMode', () => {
-            let { statements, diagnostics } = parse(`
+            let { ast, diagnostics } = parse(`
                 sub foo(value as SOME_NAMESPACE.UNKNOWN_TYPE)
                 end sub
             `, ParseMode.BrighterScript);
             expect(diagnostics.length).to.equal(0);
-            expect(statements[0]).to.exist;
+            expect(ast.statements[0]).to.exist;
         });
 
         it('works with conditionals', () => {
@@ -616,29 +575,167 @@ describe('parser', () => {
             expect(diagnostics).to.be.lengthOf(1, 'Error count should be 0');
         });
 
-        it.skip('allows printing object with trailing period', () => {
+        it('allows printing object with trailing period', () => {
             let { tokens } = Lexer.scan(`print a.`);
-            let { statements, diagnostics } = Parser.parse(tokens);
-            let printStatement = statements[0] as PrintStatement;
-            expect(diagnostics).to.be.empty;
+            let { ast, diagnostics } = Parser.parse(tokens);
+            let printStatement = ast.statements[0] as PrintStatement;
+            expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.expectedIdentifier());
+            expect(printStatement).to.be.instanceof(PrintStatement);
+            expect(printStatement.expressions[0]).to.be.instanceof(VariableExpression);
+        });
+
+        it('allows printing object with trailing period with multiple dotted gets', () => {
+            let { tokens } = Lexer.scan(`print a.b.`);
+            let { ast, diagnostics } = Parser.parse(tokens);
+            let printStatement = ast.statements[0] as PrintStatement;
+            expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.expectedIdentifier());
             expect(printStatement).to.be.instanceof(PrintStatement);
             expect(printStatement.expressions[0]).to.be.instanceof(DottedGetExpression);
         });
 
-        describe('comments', () => {
-            it('combines multi-line comments', () => {
+        describe('incomplete statements in the ast', () => {
+            it('adds variable expressions to the ast', () => {
                 let { tokens } = Lexer.scan(`
-                    'line 1
-                    'line 2
-                    'line 3
-                `);
-                let { diagnostics, statements } = Parser.parse(tokens) as any;
-                expect(diagnostics).to.be.lengthOf(0, 'Error count should be 0');
+                    function a()
+                        NameA.
+                    end function
 
-                expect(statements[0].text).to.equal(`'line 1\n'line 2\n'line 3`);
+                    namespace NameA
+                        sub noop()
+                        end sub
+                    end namespace
+                `);
+                let { ast, diagnostics } = Parser.parse(tokens) as any;
+                expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.expectedStatement());
+                let stmt = ast.statements[0].func.body.statements[0];
+
+                expect(isExpressionStatement(stmt)).to.be.true;
+                expect(isVariableExpression((stmt).expression)).to.be.true;
+                expect(stmt.expression.tokens.name.text).to.equal('NameA');
             });
 
-            it('does not combile comments separated by newlines', () => {
+            it('adds unended call statements', () => {
+                let { tokens } = Lexer.scan(`
+                    function a()
+                        lcase(
+                    end function
+                `);
+                let { ast } = Parser.parse(tokens) as any;
+                let stmt = ast.statements[0].func.body.statements[0];
+
+                expect(isExpressionStatement(stmt)).to.be.true;
+                expect(isCallExpression((stmt).expression)).to.be.true;
+                expect(stmt.expression.callee.tokens.name.text).to.equal('lcase');
+            });
+
+            it('adds unended indexed get statements', () => {
+                let { tokens } = Lexer.scan(`
+                    function a()
+                        nums[
+                    end function
+
+                    const nums = [1, 2, 3]
+                `);
+                let { ast } = Parser.parse(tokens) as any;
+                let stmt = ast.statements[0].func.body.statements[0];
+
+                expect(isExpressionStatement(stmt)).to.be.true;
+                expect(isIndexedGetExpression((stmt).expression)).to.be.true;
+                expect(stmt.expression.obj.tokens.name.text).to.equal('nums');
+            });
+
+            it('adds dotted gets', () => {
+                let { tokens } = Lexer.scan(`
+                    function foo(a as KlassA)
+                        a.b.
+                    end function
+
+                    class KlassA
+                        b as KlassB
+                    end class
+
+                    class KlassB
+                        sub noop()
+                        end sub
+                    end class
+                `);
+                let { ast } = Parser.parse(tokens) as any;
+                let stmt = ast.statements[0].func.body.statements[0];
+
+                expect(isExpressionStatement(stmt)).to.be.true;
+                expect(isDottedGetExpression((stmt).expression)).to.be.true;
+                expect(stmt.expression.obj.tokens.name.text).to.equal('a');
+                expect(stmt.expression.tokens.name.text).to.equal('b');
+            });
+
+            it('adds function statement with missing type after as', () => {
+                let parser = parse(`
+                    sub foo(thing as  )
+                        print thing
+                    end sub
+                `, ParseMode.BrighterScript);
+                expect(parser.diagnostics[0]?.message).to.exist;
+                expect(parser.ast.statements[0]).to.be.instanceof(FunctionStatement);
+            });
+
+            it('adds binary expressions to the ast', () => {
+                let { tokens } = Lexer.scan(`
+                    function a(x, y)
+                        1 or 2
+                        x * y
+                        x + y
+                        x - y
+                    end function
+                `);
+                let { ast, diagnostics } = Parser.parse(tokens) as any;
+                expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.expectedStatement());
+                for (const stmt of ast.statements[0].func.body.statements) {
+                    expect(isExpressionStatement(stmt)).to.be.true;
+                    expect(isBinaryExpression((stmt).expression)).to.be.true;
+                }
+            });
+
+            it('adds callfunc expressions', () => {
+                let parser = parse(`
+                    sub foo(thing)
+                        thing@.
+                    end sub
+                `, ParseMode.BrighterScript);
+                expect(parser.diagnostics[0]?.message).to.exist;
+                let body = (parser.ast.statements[0] as FunctionStatement).func.body;
+
+                let callFunc = body.findChild<CallExpression>(isCallfuncExpression);
+                expect(callFunc).to.exist;
+            });
+
+            it('adds if statements', () => {
+                let parser = parse(`
+                    sub foo(thing)
+                        if thing.
+                    end sub
+                `, ParseMode.BrighterScript);
+                expect(parser.diagnostics[0]?.message).to.exist;
+                let body = (parser.ast.statements[0] as FunctionStatement).func.body;
+
+                let ifStmt = body.findChild<IfStatement>(isIfStatement);
+                expect(ifStmt).to.exist;
+            });
+        });
+
+        describe('comments', () => {
+            it('does not include comments', () => {
+                let { tokens } = Lexer.scan(`
+                    'line 1
+                    'line 2
+                    'line 3
+                `);
+                let { ast, diagnostics } = Parser.parse(tokens) as any;
+                expectZeroDiagnostics(diagnostics);
+
+                expect(ast.statements.length).to.equal(0);
+            });
+
+            it('does matter if comments separated by newlines', () => {
                 let { tokens } = Lexer.scan(`
                     'line 1
 
@@ -646,14 +743,9 @@ describe('parser', () => {
 
                     'line 3
                 `);
-                let { diagnostics, statements } = Parser.parse(tokens) as any;
-                expect(diagnostics).to.be.lengthOf(0, 'Error count should be 0');
-
-                expect(statements).to.be.lengthOf(3);
-
-                expect(statements[0].text).to.equal(`'line 1`);
-                expect(statements[1].text).to.equal(`'line 2`);
-                expect(statements[2].text).to.equal(`'line 3`);
+                let { ast, diagnostics } = Parser.parse(tokens) as any;
+                expectZeroDiagnostics(diagnostics);
+                expect(ast.statements).to.be.lengthOf(0);
             });
 
             it('works after print statement', () => {
@@ -662,23 +754,22 @@ describe('parser', () => {
                         print "hi" 'comment 1
                     end sub
                 `);
-                let { diagnostics, statements } = Parser.parse(tokens);
-                expect(diagnostics).to.be.lengthOf(0, 'Error count should be 0');
+                let { ast, diagnostics } = Parser.parse(tokens);
+                expectZeroDiagnostics(diagnostics);
 
-                expect((statements as any)[0].func.body.statements[1].text).to.equal(`'comment 1`);
+                expect((ast.statements[0] as FunctionStatement).func.body.statements.length).to.equal(1);
             });
 
-            it('declaration-level', () => {
+            it('declaration-level should be set as leading trivia', () => {
                 let { tokens } = Lexer.scan(`
                     'comment 1
                     function a()
                     end function
                     'comment 2
                 `);
-                let { diagnostics, statements } = Parser.parse(tokens);
+                let { ast, diagnostics } = Parser.parse(tokens);
                 expect(diagnostics).to.be.lengthOf(0, 'Error count should be 0');
-                expect((statements as any)[0].text).to.equal(`'comment 1`);
-                expect((statements as any)[2].text).to.equal(`'comment 2`);
+                expect(ast.statements[0].leadingTrivia[2].text).to.equal(`'comment 1`);
             });
 
             it('works in aa literal as its own statement', () => {
@@ -699,10 +790,9 @@ describe('parser', () => {
                         DoSomething(name) 'comment 1
                     end sub
                 `);
-                let { diagnostics, statements } = Parser.parse(tokens) as any;
+                let { diagnostics } = Parser.parse(tokens) as any;
                 expect(diagnostics).to.be.lengthOf(0, 'Should have zero diagnostics');
 
-                expect(statements[0].func.body.statements[2].text).to.equal(`'comment 1`);
             });
 
             it('function', () => {
@@ -713,13 +803,10 @@ describe('parser', () => {
                         'comment 3
                     end function 'comment 4
                 `);
-                let { diagnostics, statements } = Parser.parse(tokens) as any;
+                let { ast, diagnostics } = Parser.parse(tokens) as any;
                 expect(diagnostics).to.be.lengthOf(0, 'Should have zero diagnostics');
 
-                expect(statements[0].func.body.statements[0].text).to.equal(`'comment 1`);
-                expect(statements[0].func.body.statements[1].text).to.equal(`'comment 2`);
-                expect(statements[0].func.body.statements[3].text).to.equal(`'comment 3`);
-                expect(statements[1].text).to.equal(`'comment 4`);
+                expect(ast.statements[0].func.body.statements[0].leadingTrivia.filter(x => x.kind === TokenKind.Comment).map(x => x.text)).members([`'comment 1`, `'comment 2`]);
             });
 
             it('if statement`', () => {
@@ -740,27 +827,21 @@ describe('parser', () => {
                         end if 'comment 10
                     end function
                 `);
-                let { diagnostics, statements } = Parser.parse(tokens);
+                let { ast, diagnostics } = Parser.parse(tokens);
                 expect(diagnostics).to.be.lengthOf(0, 'Should have zero diagnostics');
-                let fnSmt = statements[0];
+                let fnSmt = ast.statements[0];
                 if (isFunctionStatement(fnSmt)) {
                     let ifStmt = fnSmt.func.body.statements[0];
                     if (isIfStatement(ifStmt)) {
-                        expectCommentWithText(ifStmt.thenBranch.statements[0], `'comment 1`);
-                        expectCommentWithText(ifStmt.thenBranch.statements[1], `'comment 2`);
-                        expectCommentWithText(ifStmt.thenBranch.statements[3], `'comment 3`);
+                        expectCommentWithText(ifStmt.thenBranch.statements[0], `'comment 1\n'comment 2`);
 
                         let elseIfBranch = ifStmt.elseBranch!;
                         if (isIfStatement(elseIfBranch)) {
-                            expectCommentWithText(elseIfBranch.thenBranch.statements[0], `'comment 4`);
-                            expectCommentWithText(elseIfBranch.thenBranch.statements[1], `'comment 5`);
-                            expectCommentWithText(elseIfBranch.thenBranch.statements[3], `'comment 6`);
+                            expectCommentWithText(elseIfBranch.thenBranch.statements[0], `'comment 4\n'comment 5`);
 
                             let elseBranch = elseIfBranch.elseBranch!;
                             if (isBlock(elseBranch)) {
-                                expectCommentWithText(elseBranch.statements[0], `'comment 7`);
-                                expectCommentWithText(elseBranch.statements[1], `'comment 8`);
-                                expectCommentWithText(elseBranch.statements[3], `'comment 9`);
+                                expectCommentWithText(elseBranch.statements[0], `'comment 7\n'comment 8`);
                             } else {
                                 failStatementType(elseBranch, 'Block');
                             }
@@ -768,7 +849,6 @@ describe('parser', () => {
                         } else {
                             failStatementType(elseIfBranch, 'If');
                         }
-                        expectCommentWithText(fnSmt.func.body.statements[1], `'comment 10`);
                     } else {
                         failStatementType(ifStmt, 'If');
                     }
@@ -787,15 +867,11 @@ describe('parser', () => {
                         end while 'comment 4
                     end function
                 `);
-                let { diagnostics, statements } = Parser.parse(tokens) as any;
+                let { ast, diagnostics } = Parser.parse(tokens) as any;
                 expect(diagnostics).to.be.lengthOf(0, 'Error count should be zero');
-                let stmt = statements[0].func.body.statements[0];
+                let stmt = ast.statements[0].func.body.statements[0];
 
-                expect(stmt.body.statements[0].text).to.equal(`'comment 1`);
-                expect(stmt.body.statements[1].text).to.equal(`'comment 2`);
-                expect(stmt.body.statements[3].text).to.equal(`'comment 3`);
-
-                expect(statements[0].func.body.statements[1].text).to.equal(`'comment 4`);
+                expectCommentWithText(stmt.body.statements[0], `'comment 1\n'comment 2`);
             });
 
             it('for', () => {
@@ -808,15 +884,11 @@ describe('parser', () => {
                         end for 'comment 4
                     end function
                 `);
-                let { diagnostics, statements } = Parser.parse(tokens) as any;
+                let { ast, diagnostics } = Parser.parse(tokens) as any;
                 expect(diagnostics).to.be.lengthOf(0, 'Error count should be zero');
-                let stmt = statements[0].func.body.statements[0];
+                let stmt = ast.statements[0].func.body.statements[0];
 
-                expect(stmt.body.statements[0].text).to.equal(`'comment 1`);
-                expect(stmt.body.statements[1].text).to.equal(`'comment 2`);
-                expect(stmt.body.statements[3].text).to.equal(`'comment 3`);
-
-                expect(statements[0].func.body.statements[1].text).to.equal(`'comment 4`);
+                expectCommentWithText(stmt.body.statements[0], `'comment 1\n'comment 2`);
             });
 
             it('for each', () => {
@@ -829,15 +901,11 @@ describe('parser', () => {
                         end for 'comment 4
                     end function
                 `);
-                let { diagnostics, statements } = Parser.parse(tokens) as any;
+                let { ast, diagnostics } = Parser.parse(tokens) as any;
                 expect(diagnostics).to.be.lengthOf(0, 'Error count should be zero');
-                let stmt = statements[0].func.body.statements[0];
+                let stmt = ast.statements[0].func.body.statements[0];
 
-                expect(stmt.body.statements[0].text).to.equal(`'comment 1`);
-                expect(stmt.body.statements[1].text).to.equal(`'comment 2`);
-                expect(stmt.body.statements[3].text).to.equal(`'comment 3`);
-
-                expect(statements[0].func.body.statements[1].text).to.equal(`'comment 4`);
+                expectCommentWithText(stmt.body.statements[0], `'comment 1\n'comment 2`);
             });
 
         });
@@ -899,7 +967,7 @@ describe('parser', () => {
                 });
 
                 expect(
-                    elements.map(x => x.keyToken.kind)
+                    elements.map(x => x.tokens.key.kind)
                 ).to.eql(
                     [TokenKind.Identifier, TokenKind.Identifier]
                 );
@@ -933,31 +1001,31 @@ describe('parser', () => {
     describe('import keyword', () => {
 
         it('parses without errors', () => {
-            let { statements, diagnostics } = parse(`
+            let { ast, diagnostics } = parse(`
                 import "somePath"
             `, ParseMode.BrighterScript);
             expect(diagnostics[0]?.message).not.to.exist;
-            expect(statements[0]).to.be.instanceof(ImportStatement);
+            expect(ast.statements[0]).to.be.instanceof(ImportStatement);
         });
 
         it('catches import statements used in brightscript files', () => {
-            let { statements, diagnostics } = parse(`
+            let { ast, diagnostics } = parse(`
                 import "somePath"
             `, ParseMode.BrightScript);
             expect(diagnostics[0]?.message).to.eql(
                 DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('import statements').message
             );
-            expect(statements[0]).to.be.instanceof(ImportStatement);
+            expect(ast.statements[0]).to.be.instanceof(ImportStatement);
         });
 
         it('catchs missing file path', () => {
-            let { statements, diagnostics } = parse(`
+            let { ast, diagnostics } = parse(`
                 import
             `, ParseMode.BrighterScript);
             expect(diagnostics[0]?.message).to.equal(
                 DiagnosticMessages.expectedStringLiteralAfterKeyword('import').message
             );
-            expect(statements[0]).to.be.instanceof(ImportStatement);
+            expect(ast.statements[0]).to.be.instanceof(ImportStatement);
         });
     });
 
@@ -1010,7 +1078,7 @@ describe('parser', () => {
         });
 
         it('attaches an annotation to next statement', () => {
-            let { statements, diagnostics } = parse(`
+            let { ast, diagnostics } = parse(`
                 @meta1
                 function main()
                 end function
@@ -1019,29 +1087,29 @@ describe('parser', () => {
                 end sub
             `, ParseMode.BrighterScript);
             expect(diagnostics[0]?.message).not.to.exist;
-            expect(statements[0]).to.be.instanceof(FunctionStatement);
-            let fn = statements[0] as FunctionStatement;
+            expect(ast.statements[0]).to.be.instanceof(FunctionStatement);
+            let fn = ast.statements[0] as FunctionStatement;
             expect(fn.annotations).to.exist;
             expect(fn.annotations![0]).to.be.instanceof(AnnotationExpression);
-            expect(fn.annotations![0].nameToken.text).to.equal('meta1');
+            expect(fn.annotations![0].tokens.name.text).to.equal('meta1');
             expect(fn.annotations![0].name).to.equal('meta1');
 
-            expect(statements[1]).to.be.instanceof(FunctionStatement);
-            fn = statements[1] as FunctionStatement;
+            expect(ast.statements[1]).to.be.instanceof(FunctionStatement);
+            fn = ast.statements[1] as FunctionStatement;
             expect(fn.annotations).to.exist;
             expect(fn.annotations![0]).to.be.instanceof(AnnotationExpression);
-            expect(fn.annotations![0].nameToken.text).to.equal('meta2');
+            expect(fn.annotations![0].tokens.name.text).to.equal('meta2');
         });
 
         it('attaches annotations inside a function body', () => {
-            let { statements, diagnostics } = parse(`
+            let { ast, diagnostics } = parse(`
                 function main()
                     @meta1
                     print "hello"
                 end function
             `, ParseMode.BrighterScript);
             expect(diagnostics[0]?.message).not.to.exist;
-            let fn = statements[0] as FunctionStatement;
+            let fn = ast.statements[0] as FunctionStatement;
             let fnStatements = fn.func.body.statements;
             let stat = fnStatements[0];
             expect(stat).to.exist;
@@ -1050,15 +1118,15 @@ describe('parser', () => {
         });
 
         it('attaches multiple annotations to next statement', () => {
-            let { statements, diagnostics } = parse(`
+            let { ast, diagnostics } = parse(`
                 @meta1
                 @meta2 @meta3
                 function main()
                 end function
             `, ParseMode.BrighterScript);
             expect(diagnostics[0]?.message).not.to.exist;
-            expect(statements[0]).to.be.instanceof(FunctionStatement);
-            let fn = statements[0] as FunctionStatement;
+            expect(ast.statements[0]).to.be.instanceof(FunctionStatement);
+            let fn = ast.statements[0] as FunctionStatement;
             expect(fn.annotations).to.exist;
             expect(fn.annotations!.length).to.equal(3);
             expect(fn.annotations![0]).to.be.instanceof(AnnotationExpression);
@@ -1067,21 +1135,21 @@ describe('parser', () => {
         });
 
         it('allows annotations with parameters', () => {
-            let { statements, diagnostics } = parse(`
+            let { ast, diagnostics } = parse(`
                 @meta1("arg", 2, true, { prop: "value" })
                 function main()
                 end function
             `, ParseMode.BrighterScript);
             expect(diagnostics[0]?.message).not.to.exist;
-            let fn = statements[0] as FunctionStatement;
+            let fn = ast.statements[0] as FunctionStatement;
             expect(fn.annotations).to.exist;
             expect(fn.annotations![0]).to.be.instanceof(AnnotationExpression);
-            expect(fn.annotations![0].nameToken.text).to.equal('meta1');
+            expect(fn.annotations![0].tokens.name.text).to.equal('meta1');
             expect(fn.annotations![0].call).to.be.instanceof(CallExpression);
         });
 
         it('attaches annotations to a class', () => {
-            let { statements, diagnostics } = parse(`
+            let { ast, diagnostics } = parse(`
                 @meta1
                 class MyClass
                     function main()
@@ -1090,13 +1158,13 @@ describe('parser', () => {
                 end class
             `, ParseMode.BrighterScript);
             expect(diagnostics[0]?.message).not.to.exist;
-            let cs = statements[0] as ClassStatement;
+            let cs = ast.statements[0] as ClassStatement;
             expect(cs.annotations?.length).to.equal(1);
             expect(cs.annotations![0]).to.be.instanceof(AnnotationExpression);
         });
 
         it('attaches annotations to multiple clases', () => {
-            let { statements, diagnostics } = parse(`
+            let { ast, diagnostics } = parse(`
                 @meta1
                 class MyClass
                     function main()
@@ -1111,18 +1179,18 @@ describe('parser', () => {
                 end class
             `, ParseMode.BrighterScript);
             expect(diagnostics[0]?.message).not.to.exist;
-            let cs = statements[0] as ClassStatement;
+            let cs = ast.statements[0] as ClassStatement;
             expect(cs.annotations?.length).to.equal(1);
             expect(cs.annotations![0]).to.be.instanceof(AnnotationExpression);
             expect(cs.annotations![0].name).to.equal('meta1');
-            let cs2 = statements[1] as ClassStatement;
+            let cs2 = ast.statements[1] as ClassStatement;
             expect(cs2.annotations?.length).to.equal(1);
             expect(cs2.annotations![0]).to.be.instanceof(AnnotationExpression);
             expect(cs2.annotations![0].name).to.equal('meta2');
         });
 
         it('attaches annotations to a namespaced class', () => {
-            let { statements, diagnostics } = parse(`
+            let { ast, diagnostics } = parse(`
                 namespace ns
                     @meta1
                     class MyClass
@@ -1133,14 +1201,14 @@ describe('parser', () => {
                 end namespace
             `, ParseMode.BrighterScript);
             expect(diagnostics[0]?.message).not.to.exist;
-            let ns = statements[0] as NamespaceStatement;
+            let ns = ast.statements[0] as NamespaceStatement;
             let cs = ns.body.statements[0] as ClassStatement;
             expect(cs.annotations?.length).to.equal(1);
             expect(cs.annotations![0]).to.be.instanceof(AnnotationExpression);
         });
 
         it('attaches annotations to a namespaced class - multiple', () => {
-            let { statements, diagnostics } = parse(`
+            let { ast, diagnostics } = parse(`
                 namespace ns
                     @meta1
                     class MyClass
@@ -1157,7 +1225,7 @@ describe('parser', () => {
                 end namespace
             `, ParseMode.BrighterScript);
             expect(diagnostics[0]?.message).not.to.exist;
-            let ns = statements[0] as NamespaceStatement;
+            let ns = ast.statements[0] as NamespaceStatement;
             let cs = ns.body.statements[0] as ClassStatement;
             expect(cs.annotations?.length).to.equal(1);
             expect(cs.annotations![0]).to.be.instanceof(AnnotationExpression);
@@ -1170,7 +1238,7 @@ describe('parser', () => {
         });
 
         it('attaches annotations to a class constructor', () => {
-            let { statements, diagnostics } = parse(`
+            let { ast, diagnostics } = parse(`
                 class MyClass
                     @meta1
                     function new()
@@ -1182,14 +1250,14 @@ describe('parser', () => {
                 end class
             `, ParseMode.BrighterScript);
             expect(diagnostics[0]?.message).not.to.exist;
-            let cs = statements[0] as ClassStatement;
+            let cs = ast.statements[0] as ClassStatement;
             let stat = cs.body[0];
             expect(stat.annotations?.length).to.equal(1);
             expect(stat.annotations![0]).to.be.instanceof(AnnotationExpression);
         });
 
         it('attaches annotations to a class methods', () => {
-            let { statements, diagnostics } = parse(`
+            let { ast, diagnostics } = parse(`
                 class MyClass
                     function new()
                         print "hello"
@@ -1201,13 +1269,13 @@ describe('parser', () => {
                 end class
             `, ParseMode.BrighterScript);
             expect(diagnostics[0]?.message).not.to.exist;
-            let cs = statements[0] as ClassStatement;
+            let cs = ast.statements[0] as ClassStatement;
             let stat = cs.body[1];
             expect(stat.annotations?.length).to.equal(1);
             expect(stat.annotations![0]).to.be.instanceof(AnnotationExpression);
         });
         it('attaches annotations to a class methods, fields and constructor', () => {
-            let { statements, diagnostics } = parse(`
+            let { ast, diagnostics } = parse(`
                 @meta2
                 @meta1
                 class MyClass
@@ -1228,7 +1296,7 @@ describe('parser', () => {
                 end class
             `, ParseMode.BrighterScript);
             expect(diagnostics[0]?.message).not.to.exist;
-            let cs = statements[0] as ClassStatement;
+            let cs = ast.statements[0] as ClassStatement;
             expect(cs.annotations?.length).to.equal(2);
             expect(cs.annotations![0]).to.be.instanceof(AnnotationExpression);
             let stat1 = cs.body[0];
@@ -1243,7 +1311,7 @@ describe('parser', () => {
         });
 
         it('ignores annotations on commented out lines', () => {
-            let { statements, diagnostics } = parse(`
+            let { ast, diagnostics } = parse(`
                 '@meta1
                 '   @meta1
                 function new()
@@ -1251,12 +1319,12 @@ describe('parser', () => {
                 end function
             `, ParseMode.BrighterScript);
             expect(diagnostics[0]?.message).not.to.exist;
-            let cs = statements[0] as ClassStatement;
+            let cs = ast.statements[0] as ClassStatement;
             expect(cs.annotations).to.be.undefined;
         });
 
         it('can convert argument of an annotation to JS types', () => {
-            let { statements, diagnostics } = parse(`
+            let { ast, diagnostics } = parse(`
                 @meta1
                 function main()
                 end function
@@ -1271,13 +1339,13 @@ describe('parser', () => {
                 end sub
             `, ParseMode.BrighterScript);
             expect(diagnostics[0]?.message).not.to.exist;
-            expect(statements[0]).to.be.instanceof(FunctionStatement);
-            let fn = statements[0] as FunctionStatement;
+            expect(ast.statements[0]).to.be.instanceof(FunctionStatement);
+            let fn = ast.statements[0] as FunctionStatement;
             expect(fn.annotations).to.exist;
             expect(fn.annotations![0].getArguments()).to.deep.equal([]);
 
-            expect(statements[1]).to.be.instanceof(FunctionStatement);
-            fn = statements[1] as FunctionStatement;
+            expect(ast.statements[1]).to.be.instanceof(FunctionStatement);
+            fn = ast.statements[1] as FunctionStatement;
             expect(fn.annotations).to.exist;
             expect(fn.annotations![0]).to.be.instanceof(AnnotationExpression);
             expect(fn.annotations![0].getArguments()).to.deep.equal([
@@ -1290,7 +1358,7 @@ describe('parser', () => {
         });
 
         it('can handle negative numbers', () => {
-            let { statements, diagnostics } = parse(`
+            let { ast, diagnostics } = parse(`
                 @meta(-100)
                 function main()
                 end function
@@ -1299,10 +1367,655 @@ describe('parser', () => {
                 end sub
             `, ParseMode.BrighterScript);
             expect(diagnostics[0]?.message).not.to.exist;
-            expect(statements[0]).to.be.instanceof(FunctionStatement);
-            let fn = statements[0] as FunctionStatement;
+            expect(ast.statements[0]).to.be.instanceof(FunctionStatement);
+            let fn = ast.statements[0] as FunctionStatement;
             expect(fn.annotations).to.exist;
             expect(fn.annotations![0].getArguments()).to.deep.equal([-100]);
+        });
+    });
+
+    describe('type casts', () => {
+
+        it('is not allowed in brightscript mode', () => {
+            let parser = parse(`
+                sub main(node as dynamic)
+                    print lcase((node as string))
+                end sub
+            `, ParseMode.BrightScript);
+            expect(
+                parser.diagnostics[0]?.message
+            ).to.equal(
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('type cast').message
+            );
+        });
+
+        it('allows type casts after function calls', () => {
+            let { ast, diagnostics } = parse(`
+                sub main()
+                    value = getValue() as integer
+                end sub
+
+                function getValue()
+                    return 123
+                end function
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.message).not.to.exist;
+            expect(ast.statements[0]).to.be.instanceof(FunctionStatement);
+            let fn = ast.statements[0] as FunctionStatement;
+            expect(fn.func.body.statements).to.exist;
+            let assignment = fn.func.body.statements[0] as AssignmentStatement;
+            expect(isAssignmentStatement(assignment)).to.be.true;
+            expect(isTypecastExpression(assignment.value)).to.be.true;
+            expect(isCallExpression((assignment.value as TypecastExpression).obj)).to.be.true;
+            expectTypeToBe(assignment.getType({ flags: SymbolTypeFlag.typetime }), IntegerType);
+        });
+
+        it('allows type casts in the middle of expressions', () => {
+            let { ast, diagnostics } = parse(`
+                sub main()
+                    value = (getValue() as integer).toStr()
+                end sub
+
+                function getValue()
+                    return 123
+                end function
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.message).not.to.exist;
+            expect(ast.statements[0]).to.be.instanceof(FunctionStatement);
+            let fn = ast.statements[0] as FunctionStatement;
+            expect(fn.func.body.statements).to.exist;
+            let assignment = fn.func.body.statements[0] as any;
+            expect(isAssignmentStatement(assignment)).to.be.true;
+            expect(isCallExpression(assignment.value)).to.be.true;
+            expect(isDottedGetExpression(assignment.value.callee)).to.be.true;
+            expect(isGroupingExpression(assignment.value.callee.obj)).to.be.true;
+            expect(isTypecastExpression(assignment.value.callee.obj.expression)).to.be.true;
+            //grouping expression is an integer
+            expectTypeToBe(assignment.value.callee.obj.getType({ flags: SymbolTypeFlag.typetime }), IntegerType);
+        });
+
+        it('allows type casts in a function call', () => {
+            let { ast, diagnostics } = parse(`
+                sub main()
+                    print cos(getAngle() as float)
+                end sub
+
+                function getAngle()
+                    return 123
+                end function
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.message).not.to.exist;
+            expect(ast.statements[0]).to.be.instanceof(FunctionStatement);
+            let fn = ast.statements[0] as FunctionStatement;
+            expect(fn.func.body.statements).to.exist;
+            let print = fn.func.body.statements[0] as any;
+            expect(isPrintStatement(print)).to.be.true;
+            expect(isCallExpression(print.expressions[0])).to.be.true;
+            let fnCall = print.expressions[0] as CallExpression;
+            expect(isTypecastExpression(fnCall.args[0])).to.be.true;
+            let arg = fnCall.args[0] as TypecastExpression;
+            //argument type is float
+            expectTypeToBe(arg.getType({ flags: SymbolTypeFlag.typetime }), FloatType);
+        });
+
+        it('allows multiple type casts', () => {
+            let { ast, diagnostics } = parse(`
+                sub main()
+                    print getData() as dynamic as float as string
+                end sub
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.message).not.to.exist;
+            expect(ast.statements[0]).to.be.instanceof(FunctionStatement);
+            let fn = ast.statements[0] as FunctionStatement;
+            expect(fn.func.body.statements).to.exist;
+            let print = fn.func.body.statements[0] as any;
+            expect(isPrintStatement(print)).to.be.true;
+            expect(isTypecastExpression(print.expressions[0])).to.be.true;
+            //argument type is float
+            expectTypeToBe(print.expressions[0].getType({ flags: SymbolTypeFlag.typetime }), StringType);
+        });
+
+        it('flags invalid type cast syntax - multiple as', () => {
+            let { diagnostics } = parse(`
+                sub foo(key)
+                    getData(key as as string)
+                end sub
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.message).to.exist;
+        });
+
+        it('flags invalid type cast syntax - no type after as', () => {
+            let { diagnostics } = parse(`
+                sub foo(key)
+                    getData(key as)
+                end sub
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.message).to.exist;
+        });
+
+        it('allows declaring types on assignment in Brighterscript mode', () => {
+            let { diagnostics } = parse(`
+                sub foo()
+                    x as string = formatJson("some string")
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('does not allow declaring types on assignment in brightscript mode', () => {
+            let { diagnostics } = parse(`
+                sub foo()
+                    x as string = formatJson("some string")
+                end sub
+            `, ParseMode.BrightScript);
+            expect(diagnostics[0]?.message).to.exist;
+            expect(diagnostics[0]?.message).to.include('typed assignment');
+        });
+    });
+
+    describe('union types', () => {
+
+        it('is not allowed in brightscript mode', () => {
+            let parser = parse(`
+                sub main(param as string or integer)
+                    print param
+                end sub
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(parser.diagnostics, [DiagnosticMessages.expectedStatement()]);
+        });
+
+        it('allows union types in parameters', () => {
+            let { diagnostics } = parse(`
+                sub main(param as string or integer)
+                    print param
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows union types in type casts', () => {
+            let { diagnostics } = parse(`
+                sub main(val)
+                    printThing(val as string or integer)
+                end sub
+
+                sub printThing(thing as string or integer)
+                    print thing
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+    });
+
+    describe('typed arrays', () => {
+
+        it('is not allowed in brightscript mode', () => {
+            let parser = parse(`
+                sub main(things as string[])
+                    print things
+                end sub
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(parser.diagnostics,
+                [DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('typed arrays')]
+            );
+        });
+
+
+        it('is allowed in brighterscript mode', () => {
+            let { ast, diagnostics } = parse(`
+                sub main(things as string[])
+                    print things
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            const paramType = (ast.statements[0] as FunctionStatement).func.parameters[0].getType({ flags: SymbolTypeFlag.typetime });
+            expectTypeToBe(paramType, ArrayType);
+            expectTypeToBe((paramType as ArrayType).defaultType, StringType);
+        });
+
+        it('allows multi dimensional arrays', () => {
+            let { ast, diagnostics } = parse(`
+                sub main(things as string[][])
+                    print things
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            const paramType = (ast.statements[0] as FunctionStatement).func.parameters[0].getType({ flags: SymbolTypeFlag.typetime });
+            expectTypeToBe(paramType, ArrayType);
+            expectTypeToBe((paramType as ArrayType).defaultType, ArrayType);
+            expectTypeToBe(((paramType as ArrayType).defaultType as ArrayType).defaultType, StringType);
+        });
+
+        it('allows arrays as return types', () => {
+            let { ast, diagnostics } = parse(`
+                function getFourPrimes() as integer[]
+                    return [2, 3, 5, 7]
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            const paramType = (ast.statements[0] as FunctionStatement).func.returnTypeExpression.getType({ flags: SymbolTypeFlag.typetime });
+            expectTypeToBe(paramType, ArrayType);
+            expectTypeToBe((paramType as ArrayType).defaultType, IntegerType);
+        });
+
+        it('allows arrays in union types', () => {
+            let { ast, diagnostics } = parse(`
+                sub foo(x as integer or integer[] or string or string[])
+                  print x
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            const paramType = (ast.statements[0] as FunctionStatement).func.parameters[0].getType({ flags: SymbolTypeFlag.typetime });
+            expectTypeToBe(paramType, UnionType);
+            expect(paramType.toString().includes('Array<string>')).to.be.true;
+            expect(paramType.toString().includes('Array<integer>')).to.be.true;
+        });
+
+    });
+
+    describe('interfaces', () => {
+
+        it('allows fields and methods', () => {
+            let { ast, diagnostics } = parse(`
+                interface SomeIFace
+                    name as string
+                    height as integer
+                    function getValue(thing as float) as object
+                    function getMe() as SomeIFace
+                    sub noop()
+                end interface
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(ast.statements.length).to.eq(1);
+            expect(isInterfaceStatement(ast.statements[0])).to.be.true;
+        });
+
+        it('allows untyped fields', () => {
+            let { ast, diagnostics } = parse(`
+                interface HasUntyped
+                    name
+                end interface
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(ast.statements.length).to.eq(1);
+            expect(isInterfaceStatement(ast.statements[0])).to.be.true;
+        });
+
+        it('allows optional fields', () => {
+            let { ast, diagnostics } = parse(`
+                interface HasOptional
+                    optional name as string
+                    optional height
+                end interface
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(ast.statements.length).to.eq(1);
+            expect(isInterfaceStatement(ast.statements[0])).to.be.true;
+            const iface = ast.statements[0] as InterfaceStatement;
+            iface.fields.forEach(f => expect(f.isOptional).to.be.true);
+            const ifaceType = iface.getType({ flags: SymbolTypeFlag.typetime });
+            // eslint-disable-next-line no-bitwise
+            ifaceType.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime).forEach(sym => expect(sym.flags & SymbolTypeFlag.optional).to.eq(SymbolTypeFlag.optional));
+        });
+
+        it('allows fields named optional', () => {
+            let { ast, diagnostics } = parse(`
+                interface IsJustOptional
+                    optional
+                    someThingElse
+                end interface
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(ast.statements.length).to.eq(1);
+            expect(isInterfaceStatement(ast.statements[0])).to.be.true;
+            const iface = ast.statements[0] as InterfaceStatement;
+            iface.fields.forEach(f => expect(f.isOptional).to.be.false);
+            const ifaceType = iface.getType({ flags: SymbolTypeFlag.typetime });
+            const iFaceMembers = ifaceType.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime);
+            expect(iFaceMembers.length).to.eq(2);
+            // eslint-disable-next-line no-bitwise
+            iFaceMembers.forEach(sym => expect(sym.flags & SymbolTypeFlag.optional).to.eq(0));
+        });
+
+        it('allows fields named optional that are also optional', () => {
+            let { ast, diagnostics } = parse(`
+                interface IsJustOptional
+                    optional optional
+                end interface
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(ast.statements.length).to.eq(1);
+            expect(isInterfaceStatement(ast.statements[0])).to.be.true;
+            const iface = ast.statements[0] as InterfaceStatement;
+            iface.fields.forEach(f => expect(f.isOptional).to.be.true);
+            const ifaceType = iface.getType({ flags: SymbolTypeFlag.typetime });
+            const iFaceMembers = ifaceType.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime);
+            expect(iFaceMembers.length).to.eq(1);
+            // eslint-disable-next-line no-bitwise
+            iFaceMembers.forEach(sym => expect(sym.flags & SymbolTypeFlag.optional).to.eq(SymbolTypeFlag.optional));
+        });
+
+        it('allows optional methods', () => {
+            let { ast, diagnostics } = parse(`
+                interface HasOptional
+                    optional function getValue() as boolean
+                    optional sub noop()
+                    optional function process()
+                end interface
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(ast.statements.length).to.eq(1);
+            expect(isInterfaceStatement(ast.statements[0])).to.be.true;
+            const iface = ast.statements[0] as InterfaceStatement;
+            iface.methods.forEach(m => expect(m.isOptional).to.equal(true));
+            const ifaceType = iface.getType({ flags: SymbolTypeFlag.typetime });
+            // eslint-disable-next-line no-bitwise
+            ifaceType.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime).forEach(sym => expect(sym.flags & SymbolTypeFlag.optional).to.eq(SymbolTypeFlag.optional));
+        });
+
+        it('allows fields named `as` that are also optional', () => {
+            let { ast, diagnostics } = parse(`
+                interface IsJustOptional
+                    optional as
+                end interface
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(ast.statements.length).to.eq(1);
+            expect(isInterfaceStatement(ast.statements[0])).to.be.true;
+            const iface = ast.statements[0] as InterfaceStatement;
+            iface.fields.forEach(f => expect(f.isOptional).to.be.true);
+            const ifaceType = iface.getType({ flags: SymbolTypeFlag.typetime });
+            const iFaceMembers = ifaceType.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime);
+            expect(iFaceMembers.length).to.eq(1);
+            // eslint-disable-next-line no-bitwise
+            iFaceMembers.forEach(sym => expect(sym.flags & SymbolTypeFlag.optional).to.eq(SymbolTypeFlag.optional));
+        });
+
+        it('allows fields named `as` that are also typed', () => {
+            let { ast, diagnostics } = parse(`
+                interface IsJustOptional
+                    optional as as string
+                end interface
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(ast.statements.length).to.eq(1);
+            expect(isInterfaceStatement(ast.statements[0])).to.be.true;
+            const iface = ast.statements[0] as InterfaceStatement;
+            iface.fields.forEach(f => expect(f.isOptional).to.be.true);
+            const ifaceType = iface.getType({ flags: SymbolTypeFlag.typetime });
+            const iFaceMembers = ifaceType.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime);
+            expect(iFaceMembers.length).to.eq(1);
+            // eslint-disable-next-line no-bitwise
+            iFaceMembers.forEach(sym => expect(sym.flags & SymbolTypeFlag.optional).to.eq(SymbolTypeFlag.optional));
+        });
+
+        it('allows fields named `optional` that are also typed', () => {
+            let { ast, diagnostics } = parse(`
+                interface IsJustOptional
+                    optional as string
+                end interface
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(ast.statements.length).to.eq(1);
+            expect(isInterfaceStatement(ast.statements[0])).to.be.true;
+            const iface = ast.statements[0] as InterfaceStatement;
+            iface.fields.forEach(f => expect(f.isOptional).to.be.false);
+            const ifaceType = iface.getType({ flags: SymbolTypeFlag.typetime });
+            const iFaceMembers = ifaceType.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime);
+            expect(iFaceMembers.length).to.eq(1);
+            // eslint-disable-next-line no-bitwise
+            iFaceMembers.forEach(sym => expect(sym.flags & SymbolTypeFlag.optional).to.eq(0));
+        });
+    });
+
+    describe('leadingTrivia', () => {
+        it('gets leading trivia from functions', () => {
+            let { ast } = parse(`
+                ' Nice function, bro
+                function foo()
+                    return 1
+                end function
+            `);
+            const funcStatements = ast.statements.filter(isFunctionStatement);
+            const fooTrivia = funcStatements[0].leadingTrivia;
+            expect(fooTrivia.length).to.be.greaterThan(0);
+            expect(fooTrivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(1);
+        });
+
+        it('gets multiple lines of leading trivia', () => {
+            let { ast } = parse(`
+                ' Say hello to someone
+                '
+                ' @param {string} name the person you want to say hello to.
+                sub sayHello(name as string = "world")
+                end sub
+            `);
+            const funcStatements = ast.statements.filter(isFunctionStatement);
+            const helloTrivia = funcStatements[0].leadingTrivia;
+            expect(helloTrivia.length).to.be.greaterThan(0);
+            expect(helloTrivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(3);
+        });
+
+        it('gets leading trivia from classes', () => {
+            let { ast } = parse(`
+                ' hello
+                ' classes
+                class Hello
+                end class
+            `, ParseMode.BrighterScript);
+            const classStatements = ast.statements.filter(isClassStatement);
+            const trivia = classStatements[0].leadingTrivia;
+            expect(trivia.length).to.be.greaterThan(0);
+            expect(trivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(2);
+        });
+
+        it('gets leading trivia from functions with annotations', () => {
+            let { ast } = parse(`
+                ' hello comment 1
+                ' hello comment 2
+                @annotation
+                ' hello comment 3
+                @otherAnnotation
+                sub sayHello(name as string = "world")
+                end sub
+            `, ParseMode.BrighterScript);
+            const funcStatements = ast.statements.filter(isFunctionStatement);
+            const helloTrivia = funcStatements[0].leadingTrivia;
+            expect(helloTrivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(0);
+            const helloAnnotationTrivia = funcStatements[0].annotations[0].leadingTrivia;
+            expect(helloAnnotationTrivia.length).to.be.greaterThan(0);
+            expect(helloAnnotationTrivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(2);
+            const otherAnnotationTrivia = funcStatements[0].annotations[1].leadingTrivia;
+            expect(otherAnnotationTrivia.length).to.be.greaterThan(0);
+            expect(otherAnnotationTrivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(1);
+        });
+
+
+        it('gets leading trivia from class methods', () => {
+            let { ast } = parse(`
+                ' hello
+                ' classes
+                class Hello
+
+                    ' Gets the value of PI
+                    ' Not a dessert
+                    function getPi() as float
+                        return 3.14
+                    end function
+
+                    ' Gets a dessert
+                    function getPie() as string
+                        return "Apple Pie"
+                    end function
+                end class
+            `, ParseMode.BrighterScript);
+            const classStatement = ast.statements.filter(isClassStatement)[0];
+            const methodStatements = classStatement.methods;
+
+            // function getPi()
+            let trivia = methodStatements[0].leadingTrivia;
+            expect(trivia.length).to.be.greaterThan(0);
+            expect(trivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(2);
+
+            // function getPie()
+            trivia = methodStatements[1].leadingTrivia;
+            expect(trivia.length).to.be.greaterThan(0);
+            expect(trivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(1);
+        });
+
+        it('gets leading trivia from class fields', () => {
+            let { ast } = parse(`
+                ' hello
+                ' classes
+                class Thing
+                    ' like the sky
+                    ' or a blueberry, evn though that's purple
+                    color = "blue"
+
+                    ' My name
+                    public name as string
+
+                    ' Only I know how old I am
+                    private age = 42
+                end class
+            `, ParseMode.BrighterScript);
+            const classStatement = ast.statements.filter(isClassStatement)[0];
+            const fieldStatements = classStatement.fields;
+
+            // color = "blue"
+            let trivia = fieldStatements[0].leadingTrivia;
+            expect(trivia.length).to.be.greaterThan(0);
+            expect(trivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(2);
+
+            // public name as string
+            trivia = fieldStatements[1].leadingTrivia;
+            expect(trivia.length).to.be.greaterThan(0);
+            expect(trivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(1);
+
+            // private age = 42
+            trivia = fieldStatements[2].leadingTrivia;
+            expect(trivia.length).to.be.greaterThan(0);
+            expect(trivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(1);
+        });
+
+        it('gets leading trivia from interfaces', () => {
+            let { ast } = parse(`
+                ' Description of interface
+                interface myIface
+                    ' comment
+                    someField as integer
+
+                    'comment
+                    function someFunc() as string
+                end interface
+            `, ParseMode.BrighterScript);
+            const ifaceStatement = ast.statements.filter(isInterfaceStatement)[0];
+            const fieldStatements = ifaceStatement.fields;
+            const methodStatements = ifaceStatement.methods;
+
+            // interface myIface
+            let trivia = ifaceStatement.leadingTrivia;
+            expect(trivia.length).to.be.greaterThan(0);
+            expect(trivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(1);
+
+            // someField as integer
+            trivia = fieldStatements[0].leadingTrivia;
+            expect(trivia.length).to.be.greaterThan(0);
+            expect(trivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(1);
+
+            // function someFunc() as string
+            trivia = methodStatements[0].leadingTrivia;
+            expect(trivia.length).to.be.greaterThan(0);
+            expect(trivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(1);
+        });
+
+
+        it('gets leading trivia from namespaces', () => {
+            let { ast } = parse(`
+                ' Description of interface
+                namespace Nested.Name.Space
+
+                end  namespace
+            `, ParseMode.BrighterScript);
+            const nameSpaceStatement = ast.statements.filter(isNamespaceStatement)[0];
+
+            // namespace Nested.Name.Space
+            let trivia = nameSpaceStatement.leadingTrivia;
+            expect(trivia.length).to.be.greaterThan(0);
+            expect(trivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(1);
+        });
+    });
+
+    describe('unary/binary ordering', () => {
+        it('creates the correct operator order for `not x = x` code', () => {
+            let { ast, diagnostics } = parse(`
+                function isStrNotEmpty(myStr as string) as boolean
+                    return not myStr = ""
+                end function
+            `);
+            expectZeroDiagnostics(diagnostics);
+            expect(isFunctionStatement(ast.statements[0])).to.be.true;
+            const insideReturn = ((ast.statements[0] as FunctionStatement).func.body.statements[0] as ReturnStatement).value;
+            expect(isUnaryExpression(insideReturn)).to.be.true;
+            expect(isBinaryExpression((insideReturn as UnaryExpression).right)).to.be.true;
+        });
+
+        it('creates the correct operator order for `not x + x` code', () => {
+            let { ast, diagnostics } = parse(`
+                function tryStuff() as integer
+                    return not 1 + 3 ' same as "not (3)" ... eg. the "flipped bits" of 3 (0000 0011) -> 1111 1100, or -4
+                end function
+            `);
+            expectZeroDiagnostics(diagnostics);
+            expect(isFunctionStatement(ast.statements[0])).to.be.true;
+            const insideReturn = ((ast.statements[0] as FunctionStatement).func.body.statements[0] as ReturnStatement).value;
+            expect(isUnaryExpression(insideReturn)).to.be.true;
+            expect(isBinaryExpression((insideReturn as UnaryExpression).right)).to.be.true;
+        });
+
+        it('creates the correct operator order for `x = not x` code', () => {
+            let { ast, diagnostics } = parse(`
+                function tryStuff() as boolean
+                    return 4 = not -5 ' same as "4 = 4"
+                end function
+            `);
+            expectZeroDiagnostics(diagnostics);
+            expect(isFunctionStatement(ast.statements[0])).to.be.true;
+            const insideReturn = ((ast.statements[0] as FunctionStatement).func.body.statements[0] as ReturnStatement).value;
+            expect(isBinaryExpression(insideReturn)).to.be.true;
+            expect(isLiteralExpression((insideReturn as BinaryExpression).left)).to.be.true;
+
+            const right = (insideReturn as BinaryExpression).right as UnaryExpression;
+            expect(isUnaryExpression(right)).to.be.true;
+            expect(isUnaryExpression(right.right)).to.be.true; // not ( - ( 5))
+        });
+
+        it('allows multiple nots', () => {
+            let { ast, diagnostics } = parse(`
+                function tryStuff() as integer
+                    return not not not 4
+                end function
+            `);
+            expectZeroDiagnostics(diagnostics);
+            expect(isFunctionStatement(ast.statements[0])).to.be.true;
+            const insideReturn = ((ast.statements[0] as FunctionStatement).func.body.statements[0] as ReturnStatement).value;
+            expect(isUnaryExpression(insideReturn)).to.be.true;
+            expect(isUnaryExpression((insideReturn as UnaryExpression).right)).to.be.true;
+            expect(isUnaryExpression(((insideReturn as UnaryExpression).right as UnaryExpression).right)).to.be.true;
+        });
+
+        it('allows multiple -', () => {
+            let { ast, diagnostics } = parse(`
+                function tryStuff() as integer
+                    return - - - 4
+                end function
+            `);
+            expectZeroDiagnostics(diagnostics);
+            expect(isFunctionStatement(ast.statements[0])).to.be.true;
+            const insideReturn = ((ast.statements[0] as FunctionStatement).func.body.statements[0] as ReturnStatement).value;
+            expect(isUnaryExpression(insideReturn)).to.be.true;
+            expect(isUnaryExpression((insideReturn as UnaryExpression).right)).to.be.true;
+            expect(isUnaryExpression(((insideReturn as UnaryExpression).right as UnaryExpression).right)).to.be.true;
         });
     });
 
@@ -1315,14 +2028,14 @@ describe('parser', () => {
             expect(isTypecastStatement(ast.statements[0])).to.be.true;
             const stmt = ast.statements[0] as TypecastStatement;
             expect(stmt.tokens.typecast.text).to.eq('typeCAST');
-            expect(stmt.tokens.typecast).to.exist;
+            expect(stmt.typecastExpression).to.exist;
         });
 
         it('is disallowed in brightscript mode', () => {
             let { diagnostics } = parse(`
                 typecast m AS roAssociativeArray
             `, ParseMode.BrightScript);
-            expectDiagnostics(diagnostics, [
+            expectDiagnosticsIncludes(diagnostics, [
                 DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('typecast statements')
             ]);
         });
@@ -1334,7 +2047,7 @@ describe('parser', () => {
                 end function
             `, ParseMode.BrighterScript);
             expectZeroDiagnostics(diagnostics);
-            expect((ast.statements[0] as FunctionStatement).name.text).to.eq('typecast');
+            expect((ast.statements[0] as FunctionStatement).tokens.name.text).to.eq('typecast');
         });
 
         it('allows `typecast` for variable name', () => {
@@ -1345,7 +2058,7 @@ describe('parser', () => {
                 end function
             `, ParseMode.BrighterScript);
             expectZeroDiagnostics(diagnostics);
-            expect(((ast.statements[0] as FunctionStatement).func.body.statements[0] as AssignmentStatement).name.text).to.eq('typecast');
+            expect(((ast.statements[0] as FunctionStatement).func.body.statements[0] as AssignmentStatement).tokens.name.text).to.eq('typecast');
         });
 
         it('is allowed in function', () => {
@@ -1380,6 +2093,316 @@ describe('parser', () => {
         });
     });
 
+    describe('conditional compilation', () => {
+
+        it('contains code from conditional compile blocks', () => {
+            let { ast, diagnostics } = parse(`
+                sub foo()
+                #if DEBUG
+                    print "hello"
+                #end if
+                end sub
+            `, ParseMode.BrighterScript, { debug: true });
+            expectZeroDiagnostics(diagnostics);
+            const funcBlock = (ast.statements[0] as FunctionStatement).func.body;
+            expect(funcBlock.statements.length).to.eq(1);
+            const ccStmt = funcBlock.statements[0] as ConditionalCompileStatement;
+            expect(isConditionalCompileStatement(ccStmt)).to.true;
+            const printStmt = ccStmt.thenBranch.statements[0];
+            expect(isPrintStatement(printStmt)).to.true;
+        });
+
+        it('contains code from conditional compile else blocks', () => {
+            let { ast, diagnostics } = parse(`
+                sub foo()
+                #if DEBUG
+                    m.pi = 3.14
+                #else
+                    print "hello"
+                #end if
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            const funcBlock = (ast.statements[0] as FunctionStatement).func.body;
+            const ccStmt = funcBlock.statements[0] as ConditionalCompileStatement;
+            expect(isConditionalCompileStatement(ccStmt)).to.true;
+            expect(ccStmt.elseBranch).to.exist;
+            expect(isBlock(ccStmt.elseBranch)).to.true;
+            const printStmt = (ccStmt.elseBranch as Block).statements[0];
+            expect(isPrintStatement(printStmt)).to.true;
+        });
+
+        it('contains code from conditional compile else if blocks', () => {
+            let { ast, diagnostics } = parse(`
+                sub foo()
+                #if DEBUG
+                    m.pi = 3.14
+                #else if PROD
+                    print "hello"
+                #end if
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            const funcBlock = (ast.statements[0] as FunctionStatement).func.body;
+            const ccStmt = funcBlock.statements[0] as ConditionalCompileStatement;
+            expect(isConditionalCompileStatement(ccStmt)).to.true;
+            expect(ccStmt.elseBranch).to.exist;
+            const elseBranch = ccStmt.elseBranch as ConditionalCompileStatement;
+            expect(isConditionalCompileStatement(elseBranch)).to.true;
+            expect(elseBranch.tokens.condition.text).to.eq('PROD');
+            const printStmt = elseBranch.thenBranch.statements[0];
+            expect(isPrintStatement(printStmt)).to.true;
+        });
+
+        it('contains code from multiple conditional compile else if blocks', () => {
+            let { ast, diagnostics } = parse(`
+                sub foo()
+                #if DEBUG
+                    m.pi = 3.14
+                #else if PROD
+                    print "hello"
+                #else if ABC
+                    print "hello"
+                #else if DEF
+                    print "hello"
+                #else if HIJ
+                    print "hello"
+                #else
+                    x = 78
+                #end if
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            const funcBlock = (ast.statements[0] as FunctionStatement).func.body;
+            const ccStmt = funcBlock.statements[0] as ConditionalCompileStatement;
+            expect(isConditionalCompileStatement(ccStmt)).to.true;
+            expect(ccStmt.elseBranch).to.exist;
+            let elseBranch = ccStmt.elseBranch as ConditionalCompileStatement;
+            expect(isConditionalCompileStatement(elseBranch)).to.true;
+            expect(elseBranch.tokens.condition.text).to.eq('PROD');
+            elseBranch = elseBranch.elseBranch as ConditionalCompileStatement;
+            expect(isConditionalCompileStatement(elseBranch)).to.true;
+            expect(elseBranch.tokens.condition.text).to.eq('ABC');
+            elseBranch = elseBranch.elseBranch as ConditionalCompileStatement;
+            expect(isConditionalCompileStatement(elseBranch)).to.true;
+            expect(elseBranch.tokens.condition.text).to.eq('DEF');
+            elseBranch = elseBranch.elseBranch as ConditionalCompileStatement;
+            expect(isConditionalCompileStatement(elseBranch)).to.true;
+            expect(elseBranch.tokens.condition.text).to.eq('HIJ');
+            let lastElse = elseBranch.elseBranch as Block;
+            expect(isBlock(lastElse)).to.true;
+            expect(isAssignmentStatement(lastElse.statements[0])).to.true;
+        });
+
+        it('allows empty conditional compilation blocks', () => {
+            let { ast, diagnostics } = parse(`
+                #if DEBUG
+                #else if PROD
+                #else
+                #end if
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            const ccStmt = ast.statements[0] as ConditionalCompileStatement;
+            expect(isConditionalCompileStatement(ccStmt)).to.true;
+            expect(ccStmt.thenBranch.statements.length).to.eq(0);
+            expect((ccStmt.elseBranch as ConditionalCompileStatement).thenBranch.statements.length).to.eq(0);
+            expect(((ccStmt.elseBranch as ConditionalCompileStatement).elseBranch as Block).statements.length).to.eq(0);
+        });
+
+        it('allows only comments in compilation blocks', () => {
+            let { ast, diagnostics } = parse(`
+                ' before if
+                #if DEBUG
+                    ' this is debug
+                #else if PROD
+                    ' this is prod
+                #else
+                    ' this is neither
+                #end if
+                ' after if
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            const ccStmt = ast.statements[0] as ConditionalCompileStatement;
+            expect(isConditionalCompileStatement(ccStmt)).to.true;
+            expect(ccStmt.thenBranch.statements.length).to.eq(0);
+            expect((ccStmt.elseBranch as ConditionalCompileStatement).thenBranch.statements.length).to.eq(0);
+            expect(((ccStmt.elseBranch as ConditionalCompileStatement).elseBranch as Block).statements.length).to.eq(0);
+        });
+
+        it('has no error when safely closing block', () => {
+            let { diagnostics } = parse(`
+                sub foo()
+                #if DEBUG
+                    if m.enabled
+                        print "hello"
+                    end if
+                #end if
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('has error when unsafely closing block', () => {
+            let { diagnostics } = parse(`
+                sub foo()
+                    if m.enabled
+                #if DEBUG
+                        print "hello"
+                    end if
+                #end if
+                end sub
+            `, ParseMode.BrighterScript);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.unsafeUnmatchedTerminatorInConditionalCompileBlock('end if').message
+            ]);
+        });
+
+
+        it('has error when unsafely opening block', () => {
+            let { diagnostics } = parse(`
+                sub foo()
+                #if DEBUG
+                    if m.enabled
+                        print "hello"
+                #end if
+                    end if
+                end sub
+            `, ParseMode.BrighterScript, { debug: true });
+            expectDiagnostics(diagnostics, [
+                DiagnosticMessages.expectedTerminator('end if', 'if').message,
+                DiagnosticMessages.unexpectedToken('end if').message
+            ]);
+        });
+
+        it('has no diagnostics from false blocks', () => {
+            let { diagnostics } = parse(`
+                sub foo()
+                #if DEBUG
+                    blah blah blah
+                #end if
+
+                #if false
+                    there are no diagnostics here
+                #end if
+                end sub
+            `, ParseMode.BrighterScript, { debug: false });
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows #if not bs_const', () => {
+            let { diagnostics } = parse(`
+                sub foo()
+                #if not DEBUG
+                    print "not debug"
+                #end if
+                end sub
+            `, ParseMode.BrighterScript, { debug: false });
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows #elseif not bs_const', () => {
+            let { diagnostics } = parse(`
+                sub foo()
+                #if DEBUG
+                    print "debug"
+                #else if not STAGING
+                    print "not debug and not staging"
+                #end if
+                end sub
+            `, ParseMode.BrighterScript, { debug: false, staging: false });
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        describe('#const', () => {
+            it('parses #const', () => {
+                let { ast, diagnostics } = parse(`
+                    #const test = true
+                    sub foo()
+                        #const debug = test
+                    end sub
+                    #    const spaces = false
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(diagnostics);
+                //#const test = true
+                let ccc = ast.statements[0] as ConditionalCompileConstStatement;
+                expect(isConditionalCompileConstStatement(ccc)).to.be.true;
+                expect(ccc.assignment.tokens.name.text).to.eq('test');
+                expect(isLiteralExpression(ccc.assignment.value)).to.be.true;
+                expect((ccc.assignment.value as LiteralExpression).tokens.value.text).to.eq('true');
+                //#const debug = test
+                ccc = (ast.statements[1] as FunctionStatement).func.body.statements[0] as ConditionalCompileConstStatement;
+                expect(isConditionalCompileConstStatement(ccc)).to.be.true;
+                expect(ccc.assignment.tokens.name.text).to.eq('debug');
+                expect(isVariableExpression(ccc.assignment.value)).to.be.true;
+                expect((ccc.assignment.value as VariableExpression).tokens.name.text).to.eq('test');
+                //#    const spaces = false
+                ccc = ast.statements[2] as ConditionalCompileConstStatement;
+                expect(isConditionalCompileConstStatement(ccc)).to.be.true;
+                expect(ccc.assignment.tokens.name.text).to.eq('spaces');
+                expect(isLiteralExpression(ccc.assignment.value)).to.be.true;
+                expect((ccc.assignment.value as LiteralExpression).tokens.value.text).to.eq('false');
+            });
+
+            it('has diagnostic if no lhs', () => {
+                let { diagnostics } = parse(`
+                    #const test
+                `, ParseMode.BrighterScript);
+                expectDiagnostics(diagnostics, [
+                    DiagnosticMessages.expectedOperator([TokenKind.Equal], 'test').message
+                ]);
+            });
+
+            it('has diagnostic if invalid operator', () => {
+                let { diagnostics } = parse(`
+                    #const test += other
+                `, ParseMode.BrighterScript);
+                expectDiagnostics(diagnostics, [
+                    DiagnosticMessages.expectedOperator([TokenKind.Equal], 'test').message
+                ]);
+            });
+
+            it('has diagnostic if invalid lhs', () => {
+                let { diagnostics } = parse(`
+                    #const test = 4
+                `, ParseMode.BrighterScript);
+                expectDiagnostics(diagnostics, [
+                    DiagnosticMessages.invalidHashConstValue().message
+                ]);
+            });
+        });
+
+        describe('#error', () => {
+            it('parses #error', () => {
+                let { ast, diagnostics } = parse(`
+                    #error
+                    sub foo()
+                        #error this is a LONG "message" :: with colons, etc.
+                    end sub
+                    #    error this one has spaces
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(diagnostics);
+
+                //#error
+                let cce = ast.statements[0] as ConditionalCompileErrorStatement;
+                expect(isConditionalCompileErrorStatement(cce)).to.be.true;
+                expect(cce.tokens.message.kind).to.eq(TokenKind.HashErrorMessage);
+                expect(cce.tokens.message.text).to.eq('');
+
+                //#error this is a long "message" :: with colons, etc.
+                cce = (ast.statements[1] as FunctionStatement).func.body.statements[0] as ConditionalCompileErrorStatement;
+                expect(isConditionalCompileErrorStatement(cce)).to.be.true;
+                expect(cce.tokens.message.kind).to.eq(TokenKind.HashErrorMessage);
+                expect(cce.tokens.message.text).to.eq('this is a LONG "message" :: with colons, etc.');
+
+                //#    error this one has spaces
+                cce = ast.statements[2] as ConditionalCompileErrorStatement;
+                expect(isConditionalCompileErrorStatement(cce)).to.be.true;
+                expect(cce.tokens.message.kind).to.eq(TokenKind.HashErrorMessage);
+                expect(cce.tokens.message.text).to.eq('this one has spaces');
+            });
+        });
+    });
+
     describe('alias statement', () => {
         it('allows alias statement ', () => {
             let { ast, diagnostics } = parse(`
@@ -1389,14 +2412,14 @@ describe('parser', () => {
             expect(isAliasStatement(ast.statements[0])).to.be.true;
             const stmt = ast.statements[0] as AliasStatement;
             expect(stmt.tokens.alias.text).to.eq('ALIAS');
-            expect(stmt.tokens.value).to.exist;
+            expect(stmt.value).to.exist;
         });
 
         it('is disallowed in brightscript mode', () => {
             let { diagnostics } = parse(`
                 alias x = lcase
             `, ParseMode.BrightScript);
-            expectDiagnostics(diagnostics, [
+            expectDiagnosticsIncludes(diagnostics, [
                 DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('alias statements')
             ]);
         });
@@ -1408,7 +2431,7 @@ describe('parser', () => {
                 end function
             `, ParseMode.BrighterScript);
             expectZeroDiagnostics(diagnostics);
-            expect((ast.statements[0] as FunctionStatement).name.text).to.eq('alias');
+            expect((ast.statements[0] as FunctionStatement).tokens.name.text).to.eq('alias');
         });
 
         it('allows `alias` for variable name', () => {
@@ -1419,15 +2442,170 @@ describe('parser', () => {
                 end function
             `, ParseMode.BrighterScript);
             expectZeroDiagnostics(diagnostics);
-            expect(((ast.statements[0] as FunctionStatement).func.body.statements[0] as AssignmentStatement).name.text).to.eq('alias');
+            expect(((ast.statements[0] as FunctionStatement).func.body.statements[0] as AssignmentStatement).tokens.name.text).to.eq('alias');
+        });
+    });
+
+    describe('jump statements', () => {
+        it('should recognize `exit for`', () => {
+            let { ast, diagnostics } = parse(`
+                sub main()
+                    for i = 1 to 10
+                        exit for
+                    end for
+                end sub
+            `);
+            expectZeroDiagnostics(diagnostics);
+            let loop = (ast.statements[0] as FunctionStatement).func.body.statements[0] as ForStatement;
+            let exitStmt = loop.body.statements[0] as ExitStatement;
+            expect(isExitStatement(exitStmt)).to.be.true;
+            expect(exitStmt.tokens.loopType.text).to.eq('for');
+        });
+
+        it('should recognize `exit while`', () => {
+            let { ast, diagnostics } = parse(`
+                sub main(i)
+                    while i < 10
+                        exit while
+                        i++
+                    end while
+                end sub
+            `);
+            expectZeroDiagnostics(diagnostics);
+            let loop = (ast.statements[0] as FunctionStatement).func.body.statements[0] as ForStatement;
+            let exitStmt = loop.body.statements[0] as ExitStatement;
+            expect(isExitStatement(exitStmt)).to.be.true;
+            expect(exitStmt.tokens.loopType.text).to.eq('while');
+        });
+
+        it('should recognize `exitwhile` (one word)', () => {
+            let { ast, diagnostics } = parse(`
+                sub main(i)
+                    while i < 10
+                        exitwhile
+                        i++
+                    end while
+                end sub
+            `);
+            expectZeroDiagnostics(diagnostics);
+            let loop = (ast.statements[0] as FunctionStatement).func.body.statements[0] as ForStatement;
+            let exitStmt = loop.body.statements[0] as ExitStatement;
+            expect(isExitStatement(exitStmt)).to.be.true;
+            expect(exitStmt.tokens.loopType.text).to.eq('while');
+        });
+
+        it('should allow identifiers named `exitfor` (one word)', () => {
+            let { ast, diagnostics } = parse(`
+                sub main()
+                    for i = 1 to 10
+                        exitfor = 1
+                        exit for
+                    end for
+                end sub
+            `);
+            expectZeroDiagnostics(diagnostics);
+            let loop = (ast.statements[0] as FunctionStatement).func.body.statements[0] as ForStatement;
+            let assignment = loop.body.statements[0] as AssignmentStatement;
+            expect(assignment.tokens.name.text).to.eq('exitfor');
+            let exitStmt = loop.body.statements[1] as ExitStatement;
+            expect(isExitStatement(exitStmt)).to.be.true;
+            expect(exitStmt.tokens.loopType.text).to.eq('for');
+        });
+    });
+
+    describe('custom types', () => {
+        it('built-in interface param types disallowed in brightscript mode', () => {
+            let { diagnostics } = parse(`
+                sub test(foo as roAssociativeArray)
+                    print foo.x
+                end sub
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('custom types')
+            ]);
+        });
+
+        it('built-in interface types disallowed in brightscript mode', () => {
+            let { diagnostics } = parse(`
+                function test(foo) as roAssociativeArray
+                    return foo.x
+                end function
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('custom types')
+            ]);
+        });
+
+        it('custom param types disallowed in brightscript mode', () => {
+            let { diagnostics } = parse(`
+                sub test(foo as Whatever)
+                    print foo.x
+                end sub
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('custom types')
+            ]);
+        });
+
+        it('custom return types disallowed in brightscript mode', () => {
+            let { diagnostics } = parse(`
+                function test(foo) as Whatever
+                    return foo.x
+                end function
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('custom types')
+            ]);
+        });
+
+        it('built-in interface param types allowed in brighterscript mode', () => {
+            let { diagnostics } = parse(`
+                sub test(foo as roAssociativeArray)
+                    print foo.x
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('built-in interface types allowed in brighterscript mode', () => {
+            let { diagnostics } = parse(`
+                function test(foo) as roAssociativeArray
+                    return foo.x
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('custom param types allowed in brighterscript mode', () => {
+            let { diagnostics } = parse(`
+                sub test(foo as Whatever)
+                    print foo.x
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('custom return types allowed in brighterscript mode', () => {
+            let { diagnostics } = parse(`
+                function test(foo) as Whatever
+                    return foo.x
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
         });
     });
 });
 
-function parse(text: string, mode?: ParseMode) {
+export function parse(text: string, mode?: ParseMode, bsConsts: Record<string, boolean> = {}) {
     let { tokens } = Lexer.scan(text);
+    const bsConstMap = new Map<string, boolean>();
+    for (const constName in bsConsts) {
+        bsConstMap.set(constName.toLowerCase(), bsConsts[constName]);
+    }
     return Parser.parse(tokens, {
-        mode: mode!
+        srcPath: s`${rootDir}/source/main.brs`,
+        mode: mode!,
+        bsConsts: bsConstMap
     });
 }
 
@@ -1441,13 +2619,14 @@ export function rangeToArray(range: Range) {
 }
 
 function expectCommentWithText(stat: Statement, text: string) {
-    if (isCommentStatement(stat)) {
-        expect(stat.text).to.equal(text);
+    const trivia = stat.leadingTrivia;
+    if (trivia) {
+        expect(trivia.filter(tok => tok.kind === TokenKind.Comment).map(t => t.text).join('\n')).to.equal(text);
     } else {
         failStatementType(stat, 'Comment');
     }
 }
 
 export function failStatementType(stat: Statement, type: string) {
-    assert.fail(`Statement ${stat.constructor.name} line ${stat.range.start.line} is not a ${type}`);
+    assert.fail(`Statement ${stat.constructor.name} line ${stat.location?.range.start.line} is not a ${type}`);
 }
