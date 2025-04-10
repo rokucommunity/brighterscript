@@ -10,7 +10,7 @@ import { ObjectType } from './types/ObjectType';
 import { StringType } from './types/StringType';
 import { VoidType } from './types/VoidType';
 import { util } from './util';
-import { UnionType } from './types/UnionType';
+import { UnionType, unionTypeFactory } from './types/UnionType';
 
 export let globalFile = new BrsFile({ srcPath: 'global', destPath: 'global', program: null });
 globalFile.parse('');
@@ -635,17 +635,17 @@ By using Chr, you can create strings containing characters which cannot be conta
         type: new TypedFunctionType(IntegerType.instance),
         file: globalFile,
         params: [{
-            name: 'start',
-            type: IntegerType.instance,
+            name: 'startOrText',
+            type: unionTypeFactory([IntegerType.instance, StringType.instance]),
             isOptional: false
         }, {
-            name: 'text',
+            name: 'textOrSubstring',
             type: StringType.instance,
             isOptional: false
         }, {
             name: 'substring',
             type: StringType.instance,
-            isOptional: false
+            isOptional: true
         }]
     }, {
         name: 'Left',

@@ -101,6 +101,24 @@ describe('HoverProcessor', () => {
             expect(hover.contents).to.eql([fence('function Main(count? as integer) as dynamic')]);
         });
 
+        it('finds declared namespace function', () => {
+            let file = program.setFile('source/main.brs', `
+            namespace mySpace
+                function Main(count = 1)
+                    firstName = "bob"
+                    age = 21
+                    shoeSize = 10
+                end function
+            end namespace
+            `);
+
+            let hover = program.getHover(file.srcPath, util.createPosition(2, 28))[0];
+            expect(hover).to.exist;
+
+            expect(hover.range).to.eql(util.createRange(2, 25, 2, 29));
+            expect(hover.contents).to.eql([fence('function mySpace.Main(count? as integer) as dynamic')]);
+        });
+
         it('finds variable function hover in same scope', () => {
             let file = program.setFile('source/main.brs', `
                 sub Main()
@@ -115,6 +133,38 @@ describe('HoverProcessor', () => {
 
             expect(hover.range).to.eql(util.createRange(5, 20, 5, 29));
             expect(hover.contents).to.eql([fence('sub sayMyName(name as string) as void')]);
+        });
+
+        it('does not crash when hovering on built-in functions', () => {
+            let file = program.setFile('source/main.brs', `
+                function doUcase(text)
+                    return ucase(text)
+                end function
+            `);
+            let commentSep = `\n***\n`;
+            let hover = program.getHover(file.srcPath, util.createPosition(2, 30))[0];
+            expect(hover.contents).to.eql([`${fence('function ucase(s as string) as string')}${commentSep}Converts the string to all upper case.`]);
+        });
+
+        it('does not crash when hovering on object method call', () => {
+            let file = program.setFile('source/main.brs', `
+                function getInstr(url, text)
+                    return url.instr(text)
+                end function
+
+                function getInstrTyped(urlStr as string, text)
+                    return urlStr.instr(text)
+                end function
+            `);
+            program.validate();
+            // return url.ins|tr(text)
+            let hover = program.getHover(file.srcPath, util.createPosition(2, 35))[0];
+            expect(hover.contents).to.eql(['```brightscript\ninstr as dynamic\n```']);
+
+            // return urlStr.ins|tr(text)
+            hover = program.getHover(file.srcPath, util.createPosition(6, 38))[0];
+            expect(hover.contents[0]).to.include('```brightscript\nfunction string.instr(substringOrStart_index as string or integer, substring? as string) as integer\n```');
+            expect(hover.contents[0]).to.include('OVERLOADED METHOD');
         });
 
         it('finds function hover in file scope', () => {
