@@ -557,4 +557,22 @@ describe('BrsFileSemanticTokensProcessor', () => {
             [SemanticTokenTypes.method, 7, 21, 7, 26]
         ]);
     });
+
+    it('ignores primitive types in type expressions', () => {
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            sub test(data as string)
+                x as string = data
+            end sub
+        `);
+        expectSemanticTokens(file, [
+            // sub |test|(data as string)
+            [SemanticTokenTypes.function, 1, 16, 1, 20],
+            // sub test(|data| as string)
+            [SemanticTokenTypes.parameter, 1, 21, 1, 25],
+            // |x| as string = data
+            [SemanticTokenTypes.variable, 2, 16, 2, 17],
+            // x as string = |data|
+            [SemanticTokenTypes.variable, 2, 30, 2, 34]
+        ]);
+    });
 });
