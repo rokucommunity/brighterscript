@@ -3025,6 +3025,15 @@ describe('ScopeValidator', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        it('ignores .d.bs files', () => {
+            program.setFile('source/util.d.bs', `
+                function doSomething() as string
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('assignmentTypeMismatch', () => {

@@ -268,6 +268,9 @@ export class ScopeValidator {
                         });
                     },
                     FunctionExpression: (func) => {
+                        if (file.isTypedef) {
+                            return;
+                        }
                         this.addValidationKindMetric('FunctionExpression', () => {
                             this.validateFunctionExpressionForReturn(func);
                         });
