@@ -21,7 +21,7 @@
     "rescrape-roku-docs": "rm scripts/.cache.json && ts-node scripts/scrape-roku-docs.ts",
     "null-check": "tsc -p tsconfig-null-safe.json",
     "create-test-package": "ts-node scripts/create-test-package.ts",
-    "package": "npm ci && npm run build && npm pack"
+    "package": "npm run build && npm pack"
   },
   "mocha": {
     "spec": "src/**/*.spec.ts",
