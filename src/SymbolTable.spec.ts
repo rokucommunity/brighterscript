@@ -8,7 +8,9 @@ import { SymbolTypeFlag } from './SymbolTypeFlag';
 import { expectTypeToBe } from './testHelpers.spec';
 import { NamespaceType } from './types/NamespaceType';
 import { TypedFunctionType } from './types/TypedFunctionType';
-import { DynamicType } from './types';
+import { DynamicType, FloatType, UnionType } from './types';
+import { util } from './util';
+import type { AstNode } from './parser/AstNode';
 
 
 describe('SymbolTable', () => {
@@ -212,6 +214,139 @@ describe('SymbolTable', () => {
 
             expectTypeToBe(charlieType, NamespaceType);
             expectTypeToBe(charlieType.getMemberType('XYZ', { flags: SymbolTypeFlag.runtime }), IntegerType);
+        });
+
+    });
+
+    describe.only('statementIndex and pocketTables', () => {
+
+        function mockNodeWithIndex(index: number): AstNode {
+            const fakeNode = { statementIndex: index } as AstNode;
+            return fakeNode;
+        }
+
+        it('uses only the preceding assignment type', () => {
+            const st = new SymbolTable('test');
+            st.addSymbol('someVar', { definingNode: mockNodeWithIndex(1) }, StringType.instance, SymbolTypeFlag.runtime);
+            st.addSymbol('someVar', { definingNode: mockNodeWithIndex(3) }, FloatType.instance, SymbolTypeFlag.runtime);
+            st.addSymbol('someVar', { definingNode: mockNodeWithIndex(5) }, DynamicType.instance, SymbolTypeFlag.runtime);
+            st.addSymbol('someVar', { definingNode: mockNodeWithIndex(7) }, BooleanType.instance, SymbolTypeFlag.runtime);
+            let result = st.getSymbolType('someVar', { flags: SymbolTypeFlag.runtime, statementIndex: 2 });//last assignment is index 1, string
+            expectTypeToBe(result, StringType);
+            result = st.getSymbolType('someVar', { flags: SymbolTypeFlag.runtime, statementIndex: 4 });//last assignment is index 3, float
+            expectTypeToBe(result, FloatType);
+            result = st.getSymbolType('someVar', { flags: SymbolTypeFlag.runtime, statementIndex: 6 }); //last assignment is index 5, dynamic
+            expectTypeToBe(result, DynamicType);
+            result = st.getSymbolType('someVar', { flags: SymbolTypeFlag.runtime, statementIndex: 8 }); //last assignment is index 7, boolean
+            expectTypeToBe(result, BooleanType);
+        });
+
+        it('order of types added to table doesnt matter - it still finds the correct index', () => {
+            const st = new SymbolTable('test');
+            st.addSymbol('someVar', { definingNode: mockNodeWithIndex(7) }, BooleanType.instance, SymbolTypeFlag.runtime);
+            st.addSymbol('someVar', { definingNode: mockNodeWithIndex(3) }, FloatType.instance, SymbolTypeFlag.runtime);
+            st.addSymbol('someVar', { definingNode: mockNodeWithIndex(5) }, DynamicType.instance, SymbolTypeFlag.runtime);
+            st.addSymbol('someVar', { definingNode: mockNodeWithIndex(1) }, StringType.instance, SymbolTypeFlag.runtime);
+            let result = st.getSymbolType('someVar', { flags: SymbolTypeFlag.runtime, statementIndex: 2 });//last assignment is index 1, string
+            expectTypeToBe(result, StringType);
+            result = st.getSymbolType('someVar', { flags: SymbolTypeFlag.runtime, statementIndex: 4 });//last assignment is index 3, float
+            expectTypeToBe(result, FloatType);
+            result = st.getSymbolType('someVar', { flags: SymbolTypeFlag.runtime, statementIndex: 6 }); //last assignment is index 5, dynamic
+            expectTypeToBe(result, DynamicType);
+            result = st.getSymbolType('someVar', { flags: SymbolTypeFlag.runtime, statementIndex: 8 }); //last assignment is index 7, boolean
+            expectTypeToBe(result, BooleanType);
+        });
+
+        it('adds pocket tables', () => {
+            const st = new SymbolTable('test');
+            expect(st['pocketTables'].length).to.eq(0);
+            const pt1 = new SymbolTable('pt1', () => st);
+            st.addPocketTable({ index: 1, table: pt1 });
+            expect(st['pocketTables'].length).to.eq(1);
+        });
+
+        it('searches pocket tables for a symbol', () => {
+            const st = new SymbolTable('test');
+            st.addSymbol('someVar', { definingNode: mockNodeWithIndex(1) }, StringType.instance, SymbolTypeFlag.runtime);
+            const pt1 = new SymbolTable('pocket1', () => st);
+            pt1.addSymbol('someVar', { definingNode: mockNodeWithIndex(1) }, StringType.instance, SymbolTypeFlag.runtime);
+            st.addPocketTable({ index: 2, table: pt1 });
+            let result = st.getSymbolType('someVar', { flags: SymbolTypeFlag.runtime, statementIndex: 3 });
+            expectTypeToBe(result, StringType);
+        });
+
+        it('does not search pocket tables before the preceding assignment for a symbol', () => {
+            const st = new SymbolTable('test');
+            st.addSymbol('someVar', { definingNode: mockNodeWithIndex(3) }, StringType.instance, SymbolTypeFlag.runtime);
+            const pt1 = new SymbolTable('pocket1');
+            pt1.addSymbol('someVar', { definingNode: mockNodeWithIndex(1) }, IntegerType.instance, SymbolTypeFlag.runtime);
+            st.addPocketTable({ index: 1, table: pt1 });
+            let result = st.getSymbolType('someVar', { flags: SymbolTypeFlag.runtime, statementIndex: 5 });
+            expectTypeToBe(result, StringType); // the pocket table is before the assignment, so it is not an integer
+        });
+
+        it('includes pocket tables results as a union type', () => {
+            const st = new SymbolTable('test');
+            st.addSymbol('someVar', { definingNode: mockNodeWithIndex(1) }, StringType.instance, SymbolTypeFlag.runtime);
+            const pt1 = new SymbolTable('pocket1', () => st);
+            pt1.addSymbol('someVar', { definingNode: mockNodeWithIndex(1) }, IntegerType.instance, SymbolTypeFlag.runtime);
+            st.addPocketTable({ index: 2, table: pt1 });
+            const pt2 = new SymbolTable('pocket2', () => st);
+            pt2.addSymbol('someVar', { definingNode: mockNodeWithIndex(1) }, BooleanType.instance, SymbolTypeFlag.runtime);
+            st.addPocketTable({ index: 3, table: pt2 });
+            let result = st.getSymbolType('someVar', { flags: SymbolTypeFlag.runtime, statementIndex: 8 });
+            expectTypeToBe(result, UnionType);
+            expect((result as UnionType).types.length).to.eq(3);
+            expect((result as UnionType).types).include(StringType.instance);
+            expect((result as UnionType).types).include(BooleanType.instance);
+            expect((result as UnionType).types).include(IntegerType.instance);
+        });
+
+        it('includes only last pocket tables results', () => {
+            const st = new SymbolTable('test');
+            st.addSymbol('someVar', { definingNode: mockNodeWithIndex(1) }, StringType.instance, SymbolTypeFlag.runtime);
+            const pt1 = new SymbolTable('pocket1', () => st);
+            pt1.addSymbol('someVar', { definingNode: mockNodeWithIndex(1) }, IntegerType.instance, SymbolTypeFlag.runtime); // ignored
+            pt1.addSymbol('someVar', { definingNode: mockNodeWithIndex(2) }, StringType.instance, SymbolTypeFlag.runtime);
+            st.addPocketTable({ index: 2, table: pt1 });
+            const pt2 = new SymbolTable('pocket2', () => st);
+            pt2.addSymbol('someVar', { definingNode: mockNodeWithIndex(1) }, BooleanType.instance, SymbolTypeFlag.runtime); // ignored
+            pt2.addSymbol('someVar', { definingNode: mockNodeWithIndex(2) }, FloatType.instance, SymbolTypeFlag.runtime); // ignored
+            pt2.addSymbol('someVar', { definingNode: mockNodeWithIndex(3) }, DynamicType.instance, SymbolTypeFlag.runtime); // ignored
+            pt2.addSymbol('someVar', { definingNode: mockNodeWithIndex(4) }, StringType.instance, SymbolTypeFlag.runtime);
+            st.addPocketTable({ index: 3, table: pt2 });
+            let result = st.getSymbolType('someVar', { flags: SymbolTypeFlag.runtime, statementIndex: 8 });
+            expectTypeToBe(result, StringType);
+        });
+
+        it('type in a pocket table takes into account only preceding assignments in the parent table', () => {
+            const st = new SymbolTable('test');
+            st.addSymbol('someVar', { definingNode: mockNodeWithIndex(1) }, FloatType.instance, SymbolTypeFlag.runtime);
+            st.addSymbol('someVar', { definingNode: mockNodeWithIndex(2) }, StringType.instance, SymbolTypeFlag.runtime);
+            const pt1 = new SymbolTable('pocket1', () => st);
+            pt1.addSymbol('someVar', { definingNode: mockNodeWithIndex(2) }, DynamicType.instance, SymbolTypeFlag.runtime);
+            pt1.addSymbol('someVar', { definingNode: mockNodeWithIndex(4) }, IntegerType.instance, SymbolTypeFlag.runtime);
+            st.addPocketTable({ index: 3, table: pt1 });
+            st.addSymbol('someVar', { definingNode: mockNodeWithIndex(4) }, BooleanType.instance, SymbolTypeFlag.runtime);
+
+            // type as it enters the pocket table
+            let result = pt1.getSymbolType('someVar', { flags: SymbolTypeFlag.runtime, statementIndex: 0 });
+            expectTypeToBe(result, StringType);
+
+            // type after first assignment in the the pocket table
+            result = pt1.getSymbolType('someVar', { flags: SymbolTypeFlag.runtime, statementIndex: 3 });
+            expectTypeToBe(result, DynamicType);
+
+            // type after second assignment in the the pocket table
+            result = pt1.getSymbolType('someVar', { flags: SymbolTypeFlag.runtime, statementIndex: 5 });
+            expectTypeToBe(result, IntegerType);
+
+            // type in main table after the pocket table - union of before pocket table and end of pocket table
+            result = st.getSymbolType('someVar', { flags: SymbolTypeFlag.runtime, statementIndex: 4 });
+            expectTypeToBe(result, UnionType);
+            expect((result as UnionType).types.length).to.eq(2);
+            expect((result as UnionType).types).include(StringType.instance);
+            expect((result as UnionType).types).include(IntegerType.instance);
         });
 
     });

@@ -824,6 +824,15 @@ export class IfStatement extends Statement {
             ['condition', 'thenBranch', 'elseBranch']
         );
     }
+
+    public getBranchStatementIndex(stmt: Statement) {
+        if (this.thenBranch === stmt) {
+            return 0;
+        } else if (this.elseBranch === stmt) {
+            return 1;
+        }
+        return -1;
+    }
 }
 
 export class IncrementStatement extends Statement {
@@ -4474,6 +4483,15 @@ export class ConditionalCompileStatement extends Statement {
             }),
             ['thenBranch', 'elseBranch']
         );
+    }
+
+    public getBranchStatementIndex(stmt: Statement) {
+        if (this.thenBranch === stmt) {
+            return 0;
+        } else if (this.elseBranch === stmt) {
+            return 1;
+        }
+        return -1;
     }
 }
 

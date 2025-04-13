@@ -34,6 +34,8 @@ export class SymbolTable implements SymbolTypeGetter {
 
     private typeCache: Array<Map<string, TypeCacheEntry>>;
 
+    private pocketTables = new Array<PocketTable>();
+
     /**
      * Used to invalidate the cache for all symbol tables.
      *
@@ -91,6 +93,14 @@ export class SymbolTable implements SymbolTypeGetter {
     }
 
 
+    public addPocketTable(pocketTable: PocketTable) {
+        this.pocketTables.push(pocketTable);
+    }
+
+    public getStatementIndexOfPocketTable(symbolTable: SymbolTable) {
+        return this.pocketTables.find(pt => pt.table === symbolTable)?.index ?? -1;
+    }
+
     public clearSymbols() {
         this.symbolMap.clear();
     }
@@ -138,20 +148,39 @@ export class SymbolTable implements SymbolTypeGetter {
      * @param bitFlags flags to match
      * @returns An array of BscSymbols - one for each time this symbol had a type implicitly defined
      */
-    getSymbol(name: string, bitFlags: SymbolTypeFlag): BscSymbol[] {
+    getSymbol(name: string, bitFlags: SymbolTypeFlag, additionalOptions: { ignoreParentsAndSiblings?: boolean; beforeStatementIndex?: number } = {}): BscSymbol[] {
         let currentTable: SymbolTable = this;
+        let previousTable: SymbolTable;
         const key = name?.toLowerCase();
         let result: BscSymbol[];
         let memberOfAncestor = false;
         const addAncestorInfo = (symbol: BscSymbol) => ({ ...symbol, data: { ...symbol.data, memberOfAncestor: memberOfAncestor } });
+        let beforeStatementIndex = Number.isInteger(additionalOptions?.beforeStatementIndex) ? additionalOptions.beforeStatementIndex : -1;
+        const filterByStatementIndex = (t: BscSymbol) => {
+            if (beforeStatementIndex >= 0) {
+                return t.data?.definingNode ? t.data.definingNode.statementIndex < beforeStatementIndex : true;
+
+            }
+            return true;
+        };
+
         do {
+
+            if (previousTable) {
+                beforeStatementIndex = currentTable.getStatementIndexOfPocketTable(previousTable);
+            }
+
             // look in our map first
             if ((result = currentTable.symbolMap.get(key))) {
                 // eslint-disable-next-line no-bitwise
-                result = result.filter(symbol => symbol.flags & bitFlags);
+                result = result.filter(symbol => symbol.flags & bitFlags).filter(filterByStatementIndex);
                 if (result.length > 0) {
                     return result.map(addAncestorInfo);
                 }
+            }
+
+            if (additionalOptions?.ignoreParentsAndSiblings) {
+                break;
             }
             //look through any sibling maps next
             for (let sibling of currentTable.siblings) {
@@ -160,6 +189,7 @@ export class SymbolTable implements SymbolTypeGetter {
                     return result.map(addAncestorInfo);
                 }
             }
+            previousTable = currentTable;
             currentTable = currentTable.parent;
             memberOfAncestor = true;
         } while (currentTable);
@@ -196,12 +226,31 @@ export class SymbolTable implements SymbolTypeGetter {
         this.symbolMap.delete(key);
     }
 
-    public getSymbolTypes(name: string, options: GetSymbolTypeOptions): TypeCacheEntry[] {
-        const symbolArray = this.getSymbol(name, options.flags);
+    public getSymbolTypes(name: string, options: GetSymbolTypeOptions, sortByStatementIndex = false): TypeCacheEntry[] {
+        const symbolArray = this.getSymbol(name, options.flags, { ignoreParentsAndSiblings: options.ignoreParentTables, beforeStatementIndex: Number.isInteger(options.statementIndex) ? options.statementIndex as number : -1 });
         if (!symbolArray) {
             return undefined;
         }
-        return symbolArray?.map(symbol => ({ type: symbol.type, data: symbol.data, flags: symbol.flags }));
+        const symbols = symbolArray?.map(symbol => ({ type: symbol.type, data: symbol.data, flags: symbol.flags }));
+
+        if (sortByStatementIndex) {
+            symbols.sort((a, b) => {
+                if (!Number.isInteger(a.data?.definingNode?.statementIndex)) {
+                    return -1;
+                }
+                if (!Number.isInteger(b.data?.definingNode?.statementIndex)) {
+                    return 1;
+                }
+                if (b.data.definingNode.statementIndex > a.data.definingNode.statementIndex) {
+                    return -1;
+                }
+                if (b.data.definingNode.statementIndex < a.data.definingNode.statementIndex) {
+                    return 1;
+                }
+                return -1;
+            });
+        }
+        return symbols;
     }
 
     getSymbolType(name: string, options: GetSymbolTypeOptions): BscType {
@@ -212,7 +261,14 @@ export class SymbolTable implements SymbolTypeGetter {
         let data = cacheEntry?.data || {} as ExtraSymbolData;
         let foundFlags: SymbolTypeFlag = cacheEntry?.flags;
         if (!resolvedType || originalIsReferenceType) {
-            const symbolTypes = this.getSymbolTypes(name, options);
+            let symbolTypes: TypeCacheEntry[];
+            // eslint-disable-next-line no-bitwise
+            if (this.hasValidStatementIndex(options) && (options.flags & SymbolTypeFlag.runtime)) {
+                symbolTypes = this.getPossibleTypesByStatement(name, { ...options, statementIndex: options.statementIndex });
+                doSetCache = false;
+            } else {
+                symbolTypes = this.getSymbolTypes(name, options);
+            }
             data = symbolTypes?.[0]?.data;
             foundFlags = symbolTypes?.[0]?.flags;
             resolvedType = getUniqueType(symbolTypes?.map(symbol => symbol.type), SymbolTable.unionTypeFactory);
@@ -416,6 +472,44 @@ export class SymbolTable implements SymbolTypeGetter {
             ]
         };
     }
+
+    private hasValidStatementIndex(options: GetSymbolTypeOptions) {
+        return options.statementIndex === 'end' || (Number.isInteger(options.statementIndex) && options.statementIndex > -1);
+    }
+
+    public getPossibleTypesByStatement(name: string, options: { statementIndex: number | 'end' } & GetSymbolTypeOptions, depth = 0): TypeCacheEntry[] {
+        const symbolTypes = this.getSymbolTypes(name, { ...options, ignoreParentTables: (depth > 0) }, true) ?? [];
+
+        const precedingAssignmentType = symbolTypes[symbolTypes.length - 1];
+        //options.statementIndex === 'end'
+        //  ? symbolTypes[symbolTypes.length - 1]
+        // : symbolTypes.findLast(st => {
+        //    const nodeIndex = st.data?.definingNode?.statementIndex ?? -1;
+        //    return (options.statementIndex as number) > nodeIndex;
+        // });
+        if (!precedingAssignmentType) {
+            // uh-oh, potential use of uninitialized variable!
+        }
+        const result = precedingAssignmentType ? [
+            precedingAssignmentType
+        ] : [];
+
+        const pocketTablesBetweenAssignmentAndPosition = this.pocketTables.filter(pt => {
+            const isBeforePosition = options.statementIndex === 'end' ? true : options.statementIndex > pt.index;
+            let isAfterPrecedingAssignment = true;
+            if (precedingAssignmentType) {
+                isAfterPrecedingAssignment = precedingAssignmentType.data.definingNode.statementIndex < pt.index;
+            }
+            return isAfterPrecedingAssignment && isBeforePosition;
+        });
+
+        for (const pocketTable of pocketTablesBetweenAssignmentAndPosition) {
+            const pocketTableTypes = pocketTable.table.getPossibleTypesByStatement(name, { ...options, statementIndex: 'end' }, depth + 1);
+            result.push(...pocketTableTypes);
+        }
+
+        return result;
+    }
 }
 
 export interface BscSymbol {
@@ -456,4 +550,12 @@ export interface TypeCacheEntry {
     type: BscType;
     data?: ExtraSymbolData;
     flags?: SymbolTypeFlag;
+}
+
+export interface PocketTable {
+    table: SymbolTable;
+    /**
+     * The index of the statement that contains this table within its parent block
+     */
+    index: number;
 }

@@ -11,6 +11,7 @@ import util from '../util';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import type { Token } from '../lexer/Token';
+import { isBlock, isBody, isConditionalCompileStatement, isIfStatement, isStatement } from '../astUtils/reflection';
 
 /**
  * A BrightScript AST node
@@ -227,6 +228,46 @@ export abstract class AstNode {
             clone.location = util.cloneLocation(this.location);
         }
         return clone;
+    }
+
+    private _statementIndex: number;
+
+    /**
+     * The index of the statement containing this node (or in the case of a statement, itself) within the containing block.
+     */
+    public get statementIndex(): number {
+        if (this._statementIndex) {
+            return this._statementIndex;
+        }
+        if (isBody(this)) {
+            return 0;
+        }
+        if (!this.parent) {
+            return -1;
+        }
+        let containingStatement: Statement;
+        let currentNode: AstNode = this;
+        while (currentNode && !isStatement(currentNode)) {
+            currentNode = this.parent;
+        }
+        if (isStatement(currentNode)) {
+            containingStatement = currentNode;
+        } else {
+            return -1;
+        }
+        if (!containingStatement.parent) {
+            return -1;
+        }
+        if (!(isBlock(containingStatement.parent) || isBody(containingStatement.parent))) {
+            // this is a block inside an if statement, for example
+            if (isIfStatement(containingStatement.parent) || isConditionalCompileStatement(containingStatement.parent)) {
+                this._statementIndex = containingStatement.parent.getBranchStatementIndex(containingStatement);
+                return this._statementIndex;
+            }
+            return 0;
+        }
+        this._statementIndex = containingStatement.parent.statements.indexOf(containingStatement);
+        return this._statementIndex;
     }
 }
 

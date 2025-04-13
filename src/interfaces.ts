@@ -1020,11 +1020,19 @@ export interface GetTypeOptions {
     flags: SymbolTypeFlag;
     typeChain?: TypeChainEntry[];
     data?: ExtraSymbolData;
-    ignoreCall?: boolean; // get the type of this expression, NOT it's return type
+    /**
+     * get the type of this expression, NOT its return type
+     */
+    ignoreCall?: boolean;
     onlyCacheResolvedTypes?: boolean;
     ignoreCacheForRetrieval?: boolean;
     isExistenceTest?: boolean;
     preferDocType?: boolean;
+    /**
+     * For narrowing the type, which statement are we concerned with in the current block?
+     */
+    statementIndex?: number | 'end';
+    ignoreParentTables?: boolean;
 }
 
 export class TypeChainEntry {
