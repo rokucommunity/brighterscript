@@ -83,6 +83,7 @@ describe('Project', () => {
                 //each of these needs to take about 1ms to complete
                 const startTime = Date.now();
                 while (Date.now() - startTime < 2) { }
+                return true;
             });
 
             //validate 3 times in quick succession
@@ -234,18 +235,6 @@ describe('Project', () => {
             } as any);
             expect(project.projectNumber).to.eql(123);
         });
-
-        it('warns about deprecated brsconfig.json', async () => {
-            fsExtra.outputFileSync(`${rootDir}/subdir1/brsconfig.json`, '');
-            await project.activate({
-                projectPath: rootDir,
-                workspaceFolder: rootDir,
-                configFilePath: 'subdir1/brsconfig.json'
-            } as any);
-            await expectDiagnosticsAsync(project, [
-                DiagnosticMessages.brsConfigJsonIsDeprecated()
-            ]);
-        });
     });
 
     describe('getConfigPath', () => {
@@ -261,15 +250,6 @@ describe('Project', () => {
             expect(
                 (await deferred.promise).startsWith('Cannot find config file')
             ).to.be.true;
-        });
-
-        it('finds brsconfig.json', async () => {
-            fsExtra.outputFileSync(`${rootDir}/brsconfig.json`, '');
-            expect(
-                await project['getConfigFilePath']({
-                    projectPath: rootDir
-                })
-            ).to.eql(s`${rootDir}/brsconfig.json`);
         });
 
         it('does not crash on undefined', async () => {

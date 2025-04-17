@@ -3,10 +3,14 @@ import { Position, Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { XmlFile } from './files/XmlFile';
 import { Program } from './Program';
-import { expectDiagnostics, trim } from './testHelpers.spec';
+import { expectDiagnostics, expectTypeToBe, expectZeroDiagnostics, trim } from './testHelpers.spec';
 import { standardizePath as s, util } from './util';
 let rootDir = s`${process.cwd()}/rootDir`;
 import { createSandbox } from 'sinon';
+import { ComponentType } from './types/ComponentType';
+import { SymbolTypeFlag } from './SymbolTypeFlag';
+import { AssociativeArrayType } from './types/AssociativeArrayType';
+import { ArrayType, BooleanType, DoubleType, DynamicType, FloatType, IntegerType, StringType, TypedFunctionType, UnionType } from './types';
 const sinon = createSandbox();
 
 describe('XmlScope', () => {
@@ -30,7 +34,7 @@ describe('XmlScope', () => {
                 <component name="Parent" extends="Scene">
                 </component>
             `);
-            let scope = program.getScopeByName(parentXmlFile.pkgPath);
+            let scope = program.getScopeByName(parentXmlFile.destPath);
 
             //should default to global scope
             expect(scope.getParentScope()).to.equal(program.globalScope);
@@ -112,24 +116,23 @@ describe('XmlScope', () => {
                 end sub
             `);
             program.validate();
-            let childScope = program.getComponentScope('child')!;
-            expectDiagnostics(childScope, [{
+            expectDiagnostics(program, [{
                 ...DiagnosticMessages.xmlFunctionNotFound('func2'),
-                range: Range.create(4, 24, 4, 29)
+                location: { range: Range.create(4, 24, 4, 29) }
             }, {
                 ...DiagnosticMessages.xmlTagMissingAttribute('function', 'name'),
-                range: Range.create(5, 9, 5, 17)
+                location: { range: Range.create(5, 9, 5, 17) }
             }, {
                 ...DiagnosticMessages.xmlTagMissingAttribute('function', 'name'),
-                range: Range.create(6, 9, 6, 17)
+                location: { range: Range.create(6, 9, 6, 17) }
             }, {
                 ...DiagnosticMessages.xmlTagMissingAttribute('function', 'name'),
-                range: Range.create(7, 9, 7, 17)
+                location: { range: Range.create(7, 9, 7, 17) }
             }, { // syntax error expecting '=' but found '/>'
-                code: DiagnosticMessages.xmlGenericParseError('').code
+                code: DiagnosticMessages.syntaxError('').code
             }, { // onChange function
                 ...DiagnosticMessages.xmlFunctionNotFound('func4'),
-                range: Range.create(8, 51, 8, 56)
+                location: { range: Range.create(8, 51, 8, 56) }
             }]);
         });
 
@@ -156,27 +159,161 @@ describe('XmlScope', () => {
                 end sub
             `);
             program.validate();
-            expectDiagnostics(program.getComponentScope('child')!, [{
+            expectDiagnostics(program, [{
                 ...DiagnosticMessages.xmlInvalidFieldType('no'),
-                range: Range.create(4, 33, 4, 35)
+                location: { range: Range.create(4, 33, 4, 35) }
             }, {
                 ...DiagnosticMessages.xmlTagMissingAttribute('field', 'type'),
-                range: Range.create(5, 9, 5, 14)
+                location: { range: Range.create(5, 9, 5, 14) }
             }, {
                 ...DiagnosticMessages.xmlTagMissingAttribute('field', 'id'),
-                range: Range.create(6, 9, 6, 14)
+                location: { range: Range.create(6, 9, 6, 14) }
             }, {
                 ...DiagnosticMessages.xmlTagMissingAttribute('field', 'id'),
-                range: Range.create(8, 9, 8, 14)
+                location: { range: Range.create(8, 9, 8, 14) }
             }, {
                 ...DiagnosticMessages.xmlTagMissingAttribute('field', 'id'),
-                range: Range.create(9, 9, 9, 14)
+                location: { range: Range.create(9, 9, 9, 14) }
             }, {
                 ...DiagnosticMessages.xmlTagMissingAttribute('field', 'type'),
-                range: Range.create(9, 9, 9, 14)
+                location: { range: Range.create(9, 9, 9, 14) }
             }, { // syntax error expecting '=' but found '/>'
-                code: DiagnosticMessages.xmlGenericParseError('').code
+                code: DiagnosticMessages.syntaxError('').code
             }]);
         });
+    });
+
+    describe('symbols and types', () => {
+        it('adds the component type to the global symbol table', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <interface>
+                    </interface>
+                </component>
+            `);
+            program.validate();
+            expectTypeToBe(program.globalScope.symbolTable.getSymbolType('roSGNodeWidget', { flags: SymbolTypeFlag.typetime }), ComponentType);
+        });
+
+        it('adds the fields as members to its type', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <interface>
+                        <field id="isAA" type="assocArray" />
+                        <field id="isFloat" type="float" />
+                        <field id="isNodeArray" type="nodeArray" />
+                        <field id="isArray" type="array" />
+                        <field id="isStringArray" type="stringarray" />
+                        <field id="isIntArray" type="intarray" />
+                        <field id="isUri" type="uri" />
+                        <field id="isBool" type="boolean" />
+                        <field id="isColor" type="color" />
+                        <field id="isColorArray" type="colorarray" />
+                        <field id="isVector2d" type="vector2d" />
+                        <field id="isTime" type="time" />
+                        <field id="isRect2d" type="rect2D" />
+                        <field id="isRect2dArray" type="rect2Darray" />
+                    </interface>
+                </component>
+            `);
+            program.validate();
+            const widgetType = program.globalScope.symbolTable.getSymbolType('roSGNodeWidget', { flags: SymbolTypeFlag.typetime });
+
+            expectTypeToBe(widgetType.getMemberType('isAA', { flags: SymbolTypeFlag.runtime }), AssociativeArrayType);
+            expectTypeToBe(widgetType.getMemberType('isFloat', { flags: SymbolTypeFlag.runtime }), FloatType);
+            expectTypeToBe(widgetType.getMemberType('isNodeArray', { flags: SymbolTypeFlag.runtime }), ArrayType);
+            expectTypeToBe((widgetType.getMemberType('isNodeArray', { flags: SymbolTypeFlag.runtime }) as ArrayType).defaultType, ComponentType);
+
+            expectTypeToBe(widgetType.getMemberType('isArray', { flags: SymbolTypeFlag.runtime }), ArrayType);
+            expectTypeToBe((widgetType.getMemberType('isArray', { flags: SymbolTypeFlag.runtime }) as ArrayType).defaultType, DynamicType);
+
+            expectTypeToBe(widgetType.getMemberType('isStringArray', { flags: SymbolTypeFlag.runtime }), ArrayType);
+            expectTypeToBe((widgetType.getMemberType('isStringArray', { flags: SymbolTypeFlag.runtime }) as ArrayType).defaultType, StringType);
+
+            expectTypeToBe(widgetType.getMemberType('isIntArray', { flags: SymbolTypeFlag.runtime }), ArrayType);
+            expectTypeToBe((widgetType.getMemberType('isIntArray', { flags: SymbolTypeFlag.runtime }) as ArrayType).defaultType, IntegerType);
+
+            expectTypeToBe(widgetType.getMemberType('isBool', { flags: SymbolTypeFlag.runtime }), BooleanType);
+
+            expectTypeToBe(widgetType.getMemberType('isColor', { flags: SymbolTypeFlag.runtime }), UnionType);
+            let colorType = widgetType.getMemberType('isColor', { flags: SymbolTypeFlag.runtime }) as UnionType;
+            expect(colorType.types).to.include(StringType.instance);
+            expect(colorType.types).to.include(IntegerType.instance);
+
+            expectTypeToBe(widgetType.getMemberType('isColorArray', { flags: SymbolTypeFlag.runtime }), ArrayType);
+            expectTypeToBe((widgetType.getMemberType('isColorArray', { flags: SymbolTypeFlag.runtime }) as ArrayType).defaultType, UnionType);
+
+            expectTypeToBe(widgetType.getMemberType('isVector2d', { flags: SymbolTypeFlag.runtime }), ArrayType);
+            expectTypeToBe((widgetType.getMemberType('isVector2d', { flags: SymbolTypeFlag.runtime }) as ArrayType).defaultType, FloatType);
+
+            expectTypeToBe(widgetType.getMemberType('isTime', { flags: SymbolTypeFlag.runtime }), DoubleType);
+
+            expectTypeToBe(widgetType.getMemberType('isRect2d', { flags: SymbolTypeFlag.runtime }), AssociativeArrayType);
+            let rect2dtype = (widgetType.getMemberType('isRect2d', { flags: SymbolTypeFlag.runtime }) as AssociativeArrayType);
+            expectTypeToBe(rect2dtype.getMemberType('height', { flags: SymbolTypeFlag.runtime }), FloatType);
+            expectTypeToBe(rect2dtype.getMemberType('width', { flags: SymbolTypeFlag.runtime }), FloatType);
+            expectTypeToBe(rect2dtype.getMemberType('x', { flags: SymbolTypeFlag.runtime }), FloatType);
+            expectTypeToBe(rect2dtype.getMemberType('y', { flags: SymbolTypeFlag.runtime }), FloatType);
+
+            expectTypeToBe(widgetType.getMemberType('isRect2dArray', { flags: SymbolTypeFlag.runtime }), ArrayType);
+            expectTypeToBe((widgetType.getMemberType('isRect2dArray', { flags: SymbolTypeFlag.runtime }) as ArrayType).defaultType, AssociativeArrayType);
+            let rect2dArrayDefault = (widgetType.getMemberType('isRect2dArray', { flags: SymbolTypeFlag.runtime }) as ArrayType).defaultType as AssociativeArrayType;
+            expectTypeToBe(rect2dArrayDefault.getMemberType('height', { flags: SymbolTypeFlag.runtime }), FloatType);
+            expectTypeToBe(rect2dArrayDefault.getMemberType('width', { flags: SymbolTypeFlag.runtime }), FloatType);
+            expectTypeToBe(rect2dArrayDefault.getMemberType('x', { flags: SymbolTypeFlag.runtime }), FloatType);
+            expectTypeToBe(rect2dArrayDefault.getMemberType('y', { flags: SymbolTypeFlag.runtime }), FloatType);
+        });
+
+
+        it('adds function as callFunc members to its type', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.brs"/>
+                    <interface>
+                        <function name="someFunc" />
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/Widget.brs', trim`
+                function someFunc(input as string) as float
+                    return input.toFloat()
+                end function
+            `);
+            program.validate();
+            const widgetTypeResult = program.globalScope.symbolTable.getSymbolType('roSGNodeWidget', { flags: SymbolTypeFlag.typetime });
+            expectTypeToBe(widgetTypeResult, ComponentType);
+            const widgetType = widgetTypeResult as ComponentType;
+            // 'someFunc' isn't a regular member
+            expect(widgetType.getMemberType('someFunc', { flags: SymbolTypeFlag.runtime }).isResolvable()).to.be.false;
+            expectTypeToBe(widgetType.getCallFuncType('someFunc', { flags: SymbolTypeFlag.runtime }), TypedFunctionType);
+        });
+
+        it('allows .callFunc() on components', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.brs"/>
+                    <interface>
+                        <function name="someFunc" />
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/Widget.brs', `
+                sub someFunc(input as object)
+                    print input
+                end sub
+            `);
+            program.setFile('source/util.bs', `
+                sub useCallFunc(input as roSGNodeWidget)
+                    input.callFunc("someFunc", {hello: "world"})
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
     });
 });
