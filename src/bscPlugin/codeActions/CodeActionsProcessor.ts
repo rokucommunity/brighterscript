@@ -8,6 +8,9 @@ import type { XmlFile } from '../../files/XmlFile';
 import type { BscFile, OnGetCodeActionsEvent } from '../../interfaces';
 import { ParseMode } from '../../parser/Parser';
 import { util } from '../../util';
+import { isBrsFile, isFunctionExpression } from '../../astUtils/reflection';
+import type { FunctionExpression } from '../../parser/Expression';
+import { TokenKind } from '../../lexer/TokenKind';
 
 export class CodeActionsProcessor {
     public constructor(
@@ -163,6 +166,43 @@ export class CodeActionsProcessor {
                 }]
             })
         );
+        if (isBrsFile(this.event.file)) {
+            const expression = this.event.file.getClosestExpression(diagnostic.range.start);
+            const func = expression.findAncestor<FunctionExpression>(isFunctionExpression);
+
+            //if we're in a sub and we do not have a return type, suggest converting to a function
+            if (func.functionType.kind === TokenKind.Sub && !func.returnTypeToken) {
+                //find the first function in a file that uses the `function` keyword
+                const referenceFunction = this.event.file.parser.ast.findChild<FunctionExpression>((node) => {
+                    return isFunctionExpression(node) && node.functionType.kind === TokenKind.Function;
+                });
+                const functionTypeText = referenceFunction?.functionType.text ?? 'function';
+                const endFunctionTypeText = referenceFunction?.end?.text ?? 'end function';
+                this.event.codeActions.push(
+                    codeActionUtil.createCodeAction({
+                        title: `Convert ${func.functionType.text} to ${functionTypeText}`,
+                        diagnostics: [diagnostic],
+                        kind: CodeActionKind.QuickFix,
+                        changes: [
+                            //function
+                            {
+                                type: 'replace',
+                                filePath: this.event.file.srcPath,
+                                range: func.functionType.range,
+                                newText: functionTypeText
+                            },
+                            //end function
+                            {
+                                type: 'replace',
+                                filePath: this.event.file.srcPath,
+                                range: func.end.range,
+                                newText: endFunctionTypeText
+                            }
+                        ]
+                    })
+                );
+            }
+        }
     }
 
 }

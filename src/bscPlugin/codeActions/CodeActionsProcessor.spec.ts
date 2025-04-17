@@ -317,8 +317,7 @@ describe('CodeActionsProcessor', () => {
     });
 
     describe('void function return value', () => {
-
-        it('suggests deleting the return value', () => {
+        it('suggests deleting the return value and converting the sub to a function', () => {
             const file = program.setFile('source/main.brs', `
                 sub test()
                     'should not have a return value here...
@@ -327,7 +326,7 @@ describe('CodeActionsProcessor', () => {
             `);
 
             // return tr|ue
-            testGetCodeActions(file, util.createRange(3, 29, 3, 29), [`Remove return value`]);
+            testGetCodeActions(file, util.createRange(3, 29, 3, 29), [`Convert sub to function`, `Remove return value`]);
         });
     });
 });
