@@ -632,9 +632,9 @@ describe('Program', () => {
         it('supports using `m` vars in parameter default values', () => {
             //call a function that doesn't exist
             program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
-                sub findNode(nodeId as string, parentNode = m.top as object)
+                function findNode(nodeId as string, parentNode = m.top as object)
                     return parentNode.findNode(nodeId)
-                end sub
+                end function
             `);
 
             program.validate();
