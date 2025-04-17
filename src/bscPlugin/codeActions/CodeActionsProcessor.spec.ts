@@ -328,5 +328,17 @@ describe('CodeActionsProcessor', () => {
             // return tr|ue
             testGetCodeActions(file, util.createRange(3, 29, 3, 29), [`Convert sub to function`, `Remove return value`]);
         });
+
+        it('suggests deleting the return type from void function', () => {
+            const file = program.setFile('source/main.brs', `
+                function test() as void
+                    'should not have a return value here...
+                    return true
+                end function
+            `);
+
+            // return tr|ue
+            testGetCodeActions(file, util.createRange(3, 29, 3, 29), [`Remove return type from function declaration`, `Remove return value`]);
+        });
     });
 });

@@ -202,7 +202,28 @@ export class CodeActionsProcessor {
                     })
                 );
             }
+
+            //function `as void` return type. Suggest removing the return type
+            if (func.functionType.kind === TokenKind.Function && func.returnTypeToken.kind === TokenKind.Void) {
+                this.event.codeActions.push(
+                    codeActionUtil.createCodeAction({
+                        title: `Remove return type from function declaration`,
+                        diagnostics: [diagnostic],
+                        kind: CodeActionKind.QuickFix,
+                        changes: [{
+                            type: 'delete',
+                            filePath: this.event.file.srcPath,
+                            // )| as void|
+                            range: util.createRange(
+                                func.rightParen.range.start.line,
+                                func.rightParen.range.start.character + 1,
+                                func.returnTypeToken.range.end.line,
+                                func.returnTypeToken.range.end.character
+                            )
+                        }]
+                    })
+                );
+            }
         }
     }
-
 }
