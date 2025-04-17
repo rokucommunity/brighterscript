@@ -24,6 +24,8 @@ export class CodeActionsProcessor {
                 this.suggestClassImports(diagnostic as any);
             } else if (diagnostic.code === DiagnosticCodeMap.xmlComponentMissingExtendsAttribute) {
                 this.addMissingExtends(diagnostic as any);
+            } else if (diagnostic.code === DiagnosticCodeMap.voidFunctionMayNotReturnValue) {
+                this.addVoidFunctionReturnSuggestions(diagnostic);
             }
         }
     }
@@ -142,4 +144,25 @@ export class CodeActionsProcessor {
             })
         );
     }
+
+    private addVoidFunctionReturnSuggestions(diagnostic: Diagnostic) {
+        this.event.codeActions.push(
+            codeActionUtil.createCodeAction({
+                title: `Remove return value`,
+                diagnostics: [diagnostic],
+                kind: CodeActionKind.QuickFix,
+                changes: [{
+                    type: 'delete',
+                    filePath: this.event.file.srcPath,
+                    range: util.createRange(
+                        diagnostic.range.start.line,
+                        diagnostic.range.start.character + 'return'.length,
+                        diagnostic.range.end.line,
+                        diagnostic.range.end.character
+                    )
+                }]
+            })
+        );
+    }
+
 }

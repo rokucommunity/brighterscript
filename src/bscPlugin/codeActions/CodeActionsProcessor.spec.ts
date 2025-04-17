@@ -315,4 +315,19 @@ describe('CodeActionsProcessor', () => {
         // print alpha|.firstAction()
         testGetCodeActions(file, util.createRange(2, 27, 2, 27), [`import "pkg:/source/first.bs"`]);
     });
+
+    describe('void function return value', () => {
+
+        it('suggests deleting the return value', () => {
+            const file = program.setFile('source/main.brs', `
+                sub test()
+                    'should not have a return value here...
+                    return true
+                end sub
+            `);
+
+            // return tr|ue
+            testGetCodeActions(file, util.createRange(3, 29, 3, 29), [`Remove return value`]);
+        });
+    });
 });
