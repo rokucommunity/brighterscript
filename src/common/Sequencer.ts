@@ -2,6 +2,7 @@ import type { CancellationToken } from 'vscode-languageserver-protocol';
 import { util } from '../util';
 import { EventEmitter } from 'eventemitter3';
 import * as parseMilliseconds from 'parse-ms';
+import { performance } from 'perf_hooks';
 
 /**
  * Supports running a series of actions in sequence, either synchronously or asynchronously
