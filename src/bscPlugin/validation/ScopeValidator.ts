@@ -678,7 +678,7 @@ export class ScopeValidator {
 
         if (accessibilityIsOk && !expectedLHSType?.isTypeCompatible(actualRHSType, compatibilityData)) {
             this.addMultiScopeDiagnostic({
-                ...DiagnosticMessages.assignmentTypeMismatch(actualRHSType.toString(), expectedLHSType.toString(), compatibilityData),
+                ...DiagnosticMessages.assignmentTypeMismatch(actualRHSType?.toString() ?? 'unknown', expectedLHSType?.toString() ?? 'unknown', compatibilityData),
                 location: dottedSetStmt.location
             });
         }
