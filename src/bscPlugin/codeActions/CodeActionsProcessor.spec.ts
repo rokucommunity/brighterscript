@@ -341,4 +341,30 @@ describe('CodeActionsProcessor', () => {
             testGetCodeActions(file, util.createRange(3, 29, 3, 29), [`Remove return type from function declaration`, `Remove return value`]);
         });
     });
+
+    describe('typed function/sub empty return', () => {
+        it('suggests deleting the return value and converting the sub to a function', () => {
+            const file = program.setFile('source/main.brs', `
+                function test()
+                    'need a return value here...
+                    return
+                end function
+            `);
+
+            // ret|urn
+            testGetCodeActions(file, util.createRange(3, 23, 3, 23), [`Add void return type to function declaration`, `Convert function to sub`]);
+        });
+
+        it('suggests deleting the return type from void function', () => {
+            const file = program.setFile('source/main.brs', `
+                sub test() as integer
+                    'need a return value here...
+                    return
+                end sub
+            `);
+
+            // ret|urn
+            testGetCodeActions(file, util.createRange(3, 23, 3, 23), [`Remove return type from sub declaration`]);
+        });
+    });
 });
