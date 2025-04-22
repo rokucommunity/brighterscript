@@ -726,7 +726,6 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error
     }),
     /**
-     *
      * @param name for function calls where we can't find the name of the function
      * @param fullName if a namespaced name, this is the full name `alpha.beta.charlie`, otherwise it's the same as `name`
      */
@@ -737,6 +736,16 @@ export let DiagnosticMessages = {
             name: name,
             fullName: fullName ?? name
         },
+        severity: DiagnosticSeverity.Error
+    }),
+    voidFunctionMayNotReturnValue: (functionType = 'function') => ({
+        message: `Void ${functionType} may not return a value`,
+        code: 1141,
+        severity: DiagnosticSeverity.Error
+    }),
+    nonVoidFunctionMustReturnValue: (functionType = 'function') => ({
+        message: `Non-void ${functionType} must return a value`,
+        code: 1142,
         severity: DiagnosticSeverity.Error
     })
 };
