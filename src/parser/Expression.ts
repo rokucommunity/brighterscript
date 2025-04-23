@@ -1716,6 +1716,11 @@ export class TernaryExpression extends Expression {
 
         //get all unique variable names used in the consequent and alternate, and sort them alphabetically so the output is consistent
         let allUniqueVarNames = [...new Set([...consequentInfo.uniqueVarNames, ...alternateInfo.uniqueVarNames])].sort();
+        //discard names of global functions that cannot be passed by reference
+        allUniqueVarNames = allUniqueVarNames.filter(name => {
+            return !nonReferenceableFunctions.includes(name.toLowerCase());
+        });
+
         let mutatingExpressions = [
             ...consequentInfo.expressions,
             ...alternateInfo.expressions
@@ -1812,6 +1817,11 @@ export class NullCoalescingExpression extends Expression {
 
         //get all unique variable names used in the consequent and alternate, and sort them alphabetically so the output is consistent
         let allUniqueVarNames = [...new Set([...consequentInfo.uniqueVarNames, ...alternateInfo.uniqueVarNames])].sort();
+        //discard names of global functions that cannot be passed by reference
+        allUniqueVarNames = allUniqueVarNames.filter(name => {
+            return !nonReferenceableFunctions.includes(name.toLowerCase());
+        });
+
         let hasMutatingExpression = [
             ...consequentInfo.expressions,
             ...alternateInfo.expressions
@@ -2023,3 +2033,21 @@ function numberExpressionToValue(expr: LiteralExpression, operator = '') {
         return parseFloat(operator + expr.token.text);
     }
 }
+
+/**
+ * A list of names of functions that are restricted from being stored to a
+ * variable, property, or passed as an argument. (i.e. `type` or `createobject`).
+ * Names are stored in lower case.
+ */
+const nonReferenceableFunctions = [
+    'createobject',
+    'type',
+    'getglobalaa',
+    'box',
+    'run',
+    'eval',
+    'getlastruncompileerror',
+    'getlastrunruntimeerror',
+    'tab',
+    'pos'
+];
