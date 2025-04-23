@@ -232,26 +232,46 @@ class Runner {
     public sortInternalData() {
         const nameComparer = (a: { name: string }, b: { name: string }) => (a.name.localeCompare(b.name));
         for (let component of Object.values(this.result.components)) {
+            component.constructors ??= [];
             component.constructors.sort((a, b) => b.params.length - a.params.length);
+
+            component.events ??= [];
             component.events.sort(nameComparer);
+
+            component.interfaces.sort(nameComparer);
             component.interfaces.sort(nameComparer);
         }
 
         for (let evt of Object.values(this.result.events)) {
+            evt.implementers ??= [];
             evt.implementers.sort(nameComparer);
+
+            evt.properties ??= [];
             evt.properties.sort(nameComparer);
+
+            evt.methods ??= [];
             evt.methods.sort(nameComparer);
         }
 
         for (let iface of Object.values(this.result.interfaces)) {
+            iface.implementers ??= [];
             iface.implementers.sort(nameComparer);
+
+            iface.properties ??= [];
             iface.properties.sort(nameComparer);
+
+            iface.methods ??= [];
             iface.methods.sort(nameComparer);
         }
 
         for (let node of Object.values(this.result.nodes)) {
+            node.events ??= [];
             node.events.sort(nameComparer);
+
+            node.fields ??= [];
             node.fields.sort(nameComparer);
+
+            node.interfaces ??= [];
             node.interfaces.sort(nameComparer);
         }
     }
@@ -1244,6 +1264,86 @@ class Runner {
                         }
                     ]
                 },
+                dialogbase: {
+                    name: 'DialogBase',
+                    description: 'The base dialog component....blablabla',
+                    extends: {
+                        name: 'Group',
+                        url: 'https://developer.roku.com/docs/references/scenegraph/layout-group-nodes/group.md'
+                    },
+                    fields: [
+                        {
+                            name: 'backExitsDialog',
+                            accessPermission: 'READ_WRITE',
+                            type: 'boolean',
+                            default: 'true',
+                            description: 'When set to `true`, dialog will close on back button press'
+                        },
+                        {
+                            name: 'buttonFocused',
+                            type: 'int',
+                            accessPermission: 'READ_ONLY',
+                            default: '0',
+                            description: 'Indicates the index of the button that gained focus when the user moved the focus onto one of the buttons in the button area.'
+                        },
+                        {
+                            name: 'buttonSelected',
+                            accessPermission: 'READ_ONLY',
+                            default: '0',
+                            description: 'Indicates the index of the selected button when the user selects one of the buttons in the button area.',
+                            type: 'int'
+                        },
+                        {
+                            name: 'close',
+                            accessPermission: 'WRITE_ONLY',
+                            default: 'false',
+                            description: 'Dismisses the dialog. The dialog is dismissed whenever the close field is set, regardless of whether the field is set to true or false.',
+                            type: 'boolean'
+                        },
+                        {
+                            name: 'homeExitsDialog',
+                            accessPermission: 'READ_WRITE',
+                            type: 'boolean',
+                            default: 'true',
+                            description: 'When set to `true`, dialog will close on back button press'
+                        },
+                        {
+                            name: 'optionsDialog',
+                            accessPermission: 'READ_WRITE',
+                            default: 'false',
+                            description: 'If set to true, the dialog is automatically dismissed when the Options key is pressed',
+                            type: 'Boolean'
+                        },
+                        {
+                            name: 'palette',
+                            accessPermission: 'READ_WRITE',
+                            default: 'not set',
+                            description: 'Sets the color palette for the dialog\'s background, text, buttons, and other elements. By default, no palette is specified; therefore, the dialog inherits the color palette from the nodes higher in the scene graph (typically, from the dialog\'s \\[Scene\\](https://developer.roku.com/docs/references/scenegraph/scene.md node, which has a \\*\\*palette\\*\\* field that can be used to consistently color the standard dialogs and keyboards in the app). The RSGPalette color values used by the StandardDialog node are as follows:\n\n| Palette Color Name | Usages |\n| --- | --- |\n| DialogBackgroundColor | Blend color for dialog\'s background bitmap. |\n| DialogItemColor | Blend color for the following items:    *   [StdDlgProgressItem\'s](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-progress-item.md spinner bitmap *   [StdDlgDeterminateProgressItem\'s](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-determinate-progress-item.md graphic   |\n| DialogTextColor | Color for the text in the following items:    *   [StdDlgTextItem](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-text-item.md and [StdDlgGraphicItem](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-graphic-item.md if the **namedTextStyle** field is set to "normal" or "bold". *   All [content area items](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md, except for [StdDlgTextItem](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-text-item.md and [StdDlgGraphicItem](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-graphic-item.md. *   [Title area](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-title-area.mdfields). Unfocused button.   |\n| DialogFocusColor | Blend color for the following:    *   The [button area](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-button-area.mdfields) focus bitmap. *   The focused scrollbar thumb.   |\n| DialogFocusItemColor | Color for the text of the focused button. |\n| DialogSecondaryTextColor | Color for the text of in the following items:    *   [StdDlgTextItem](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-text-item.md and [StdDlgGraphicItem](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-graphic-item.md if the **namedTextStyle** field is set to "secondary". *   Disabled button.   |\n| DialogSecondaryItemColor | Color for the following items:    *   The divider displayed below the title area. *   The unfilled portion of the [StdDlgDeterminateProgressItem\'s](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-determinate-progress-item.md graphic.   |\n| DialogInputFieldColor | The blend color for the text edit box background bitmap for keyboards used inside dialogs. |\n| DialogKeyboardColor | The blend color for the keyboard background bitmap for keyboards used inside dialogs |\n| DialogFootprintColor | The blend color for the following items:    *   The button focus footprint bitmap that is displayed when the [button area](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-button-area.mdfields) does not have focus. *   Unfocused scrollbar thumb and scrollbar track.   |',
+                            type: 'RSGPalette node'
+                        },
+                        {
+                            name: 'title',
+                            accessPermission: 'READ_WRITE',
+                            default: '""',
+                            description: 'The title to be displayed at the top of the dialog.',
+                            type: 'string'
+                        },
+                        {
+                            name: 'wasClosed',
+                            accessPermission: 'READ_WRITE',
+                            default: 'N/A',
+                            description: 'Set when the dialog has been closed. The field is set when the dialog close field is set, when the Back or Home key has been pressed, when the Options key has been pressed if the optionsDialog field is set to true, and when the dialog is dismissed because another dialog was displayed',
+                            type: 'Event'
+                        },
+                        {
+                            name: 'width',
+                            accessPermission: 'READ_WRITE',
+                            default: '-1.0',
+                            description: 'Specifies the width of the dialog. By default, this value is pulled from the system theme',
+                            type: 'float'
+                        }
+                    ]
+                },
                 arraygrid: {
                     fields: [
                         {
@@ -1254,6 +1354,16 @@ class Runner {
                             type: 'boolean'
                         }
                     ]
+                },
+                dialog: {
+                    extends: {
+                        name: 'DialogBase'
+                    }
+                },
+                standarddialog: {
+                    extends: {
+                        name: 'DialogBase'
+                    }
                 }
             },
             components: {
