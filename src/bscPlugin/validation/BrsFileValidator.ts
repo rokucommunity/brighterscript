@@ -1,4 +1,4 @@
-import { isAliasStatement, isBody, isClassStatement, isCommentStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isTypecastStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
+import { isAliasStatement, isBody, isClassStatement, isCommentStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isTypecastStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -133,6 +133,33 @@ export class BrsFileValidator {
             DimStatement: (node) => {
                 if (node.identifier) {
                     node.parent.getSymbolTable().addSymbol(node.identifier.text, node.identifier.range, DynamicType.instance);
+                }
+            },
+            ReturnStatement: (node) => {
+                const func = node.findAncestor<FunctionExpression>(isFunctionExpression);
+                //these situations cannot have a value next to `return`
+                if (
+                    //`function as void`, `sub as void`
+                    func?.returnTypeToken?.kind === TokenKind.Void ||
+                    //`sub` <without return value>
+                    (func.functionType?.kind === TokenKind.Sub && !func.returnTypeToken)
+                ) {
+                    //there may not be a return value
+                    if (node.value) {
+                        this.event.file.addDiagnostic({
+                            ...DiagnosticMessages.voidFunctionMayNotReturnValue(func.functionType?.text),
+                            range: node.range
+                        });
+                    }
+
+                } else {
+                    //there MUST be a return value
+                    if (!node.value) {
+                        this.event.file.addDiagnostic({
+                            ...DiagnosticMessages.nonVoidFunctionMustReturnValue(func?.functionType?.text),
+                            range: node.range
+                        });
+                    }
                 }
             },
             ContinueStatement: (node) => {

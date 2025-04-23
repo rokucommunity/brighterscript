@@ -2003,7 +2003,7 @@ describe('BrsFile', () => {
             ).to.equal([
                 '```brightscript',
                 //TODO this really shouldn't be returning the global function, but it does...so make sure it doesn't crash right now.
-                'function Instr(start as integer, text as string, substring as string) as integer',
+                'function Instr(startOrText as dynamic, textOrSubstring as string, substring? as string) as integer',
                 '```'
             ].join('\n'));
         });
@@ -2274,9 +2274,9 @@ describe('BrsFile', () => {
                         print (1 + 2)
                     end sub
 
-                    sub test(p1)
+                    function test(p1)
                         return p1
-                    end sub
+                    end function
                 `);
             });
 
@@ -2532,7 +2532,7 @@ describe('BrsFile', () => {
 
         it('handles when only some of the statements have `then`', () => {
             testTranspile(`
-                sub main()
+                function main()
                     if true
                     else if true then
                     else if true
@@ -2541,7 +2541,7 @@ describe('BrsFile', () => {
                             return true
                         end if
                     end if
-                end sub
+                end function
             `);
         });
 
