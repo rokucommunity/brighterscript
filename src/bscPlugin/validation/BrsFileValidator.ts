@@ -7,7 +7,7 @@ import { TokenKind } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
 import { CallExpression, type FunctionExpression, type LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
-import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, Body, WhileStatement, TypecastStatement, Block, AliasStatement } from '../../parser/Statement';
+import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, Body, WhileStatement, TypecastStatement, Block, AliasStatement, IfStatement, ConditionalCompileStatement } from '../../parser/Statement';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { ArrayDefaultTypeReferenceType } from '../../types/ReferenceType';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
@@ -261,14 +261,7 @@ export class BrsFileValidator {
                 }
             },
             ConditionalCompileStatement: (node) => {
-                if (isBlock(node.elseBranch)) {
-                    const elseTable = node.elseBranch.symbolTable;
-                    let currentNode: AstNode = node;
-                    while (isConditionalCompileStatement(currentNode)) {
-                        elseTable.complementOtherTable(currentNode.thenBranch.symbolTable);
-                        currentNode = currentNode.parent;
-                    }
-                }
+                this.setUpComplementSymbolTables(node, isConditionalCompileStatement);
                 this.validateConditionalCompileConst(node.tokens.condition);
             },
             ConditionalCompileErrorStatement: (node) => {
@@ -286,14 +279,7 @@ export class BrsFileValidator {
 
             },
             IfStatement: (node) => {
-                if (isBlock(node.elseBranch)) {
-                    const elseTable = node.elseBranch.symbolTable;
-                    let currentNode: AstNode = node;
-                    while (isIfStatement(currentNode)) {
-                        elseTable.complementOtherTable(currentNode.thenBranch.symbolTable);
-                        currentNode = currentNode.parent;
-                    }
-                }
+                this.setUpComplementSymbolTables(node, isIfStatement);
             },
             Block: (node) => {
                 const blockSymbolTable = node.symbolTable;
@@ -690,6 +676,18 @@ export class BrsFileValidator {
                 break;
             } else {
                 nodes.push(node.parent);
+            }
+        }
+    }
+
+    private setUpComplementSymbolTables(node: IfStatement | ConditionalCompileStatement, predicate: (node: AstNode) => boolean) {
+        if (isBlock(node.elseBranch)) {
+            const elseTable = node.elseBranch.symbolTable;
+            let currentNode = node;
+            while (predicate(currentNode)) {
+                const thenBranch = (currentNode as IfStatement | ConditionalCompileStatement).thenBranch;
+                elseTable.complementOtherTable(thenBranch.symbolTable);
+                currentNode = currentNode.parent as IfStatement | ConditionalCompileStatement;
             }
         }
     }
