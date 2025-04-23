@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.69.7](https://github.com/rokucommunity/brighterscript/compare/0.69.6...v0.69.7) - 2025-04-23
+### Changed
+ - Shared CI Support Prerelease ([#1475](https://github.com/rokucommunity/brighterscript/pull/1475))
+ - Prevent runtime crash for non-referencable funcs in ternary and null coalescing ([#1474](https://github.com/rokucommunity/brighterscript/pull/1474))
+ - Fix `removeParameterTypes` compile errors for return types ([#1414](https://github.com/rokucommunity/brighterscript/pull/1414))
+ - Remove `npm ci` from the `package` npm script since it's redundant ([#1461](https://github.com/rokucommunity/brighterscript/pull/1461))
+ - Flag incorrect return statements in functions and subs ([#1463](https://github.com/rokucommunity/brighterscript/pull/1463))
+
+
+
 ## [0.69.6](https://github.com/rokucommunity/brighterscript/compare/v0.69.5...v0.69.6) - 2025-04-09
 ### Changed
  - Updated the type definition of the `InStr` global callable ([#1456](https://github.com/rokucommunity/brighterscript/pull/1456))
