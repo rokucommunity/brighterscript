@@ -2781,7 +2781,7 @@ describe('BrsFile', () => {
             program.options.removeParameterTypes = true;
             testTranspile(`
                 function onKeyEvent(p1) as boolean
-                    return
+                    return true
                 end function
 
                 function somethingElse() as string
@@ -2789,7 +2789,7 @@ describe('BrsFile', () => {
                 end function
             `, `
                 function onKeyEvent(p1) as boolean
-                    return
+                    return true
                 end function
 
                 function somethingElse()
