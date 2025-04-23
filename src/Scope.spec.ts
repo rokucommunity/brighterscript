@@ -7,7 +7,7 @@ import { Program } from './Program';
 import PluginInterface from './PluginInterface';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, trim } from './testHelpers.spec';
 import type { BrsFile } from './files/BrsFile';
-import type { AssignmentStatement, ForEachStatement, NamespaceStatement } from './parser/Statement';
+import type { AssignmentStatement, ForEachStatement, NamespaceStatement, PrintStatement } from './parser/Statement';
 import type { CompilerPlugin, OnScopeValidateEvent } from './interfaces';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import { EnumMemberType, EnumType } from './types/EnumType';
@@ -20,7 +20,7 @@ import { FloatType } from './types/FloatType';
 import { NamespaceType } from './types/NamespaceType';
 import { DoubleType } from './types/DoubleType';
 import { UnionType } from './types/UnionType';
-import { isBlock, isCallExpression, isForEachStatement, isFunctionExpression, isFunctionStatement, isNamespaceStatement } from './astUtils/reflection';
+import { isBlock, isCallExpression, isForEachStatement, isFunctionExpression, isFunctionStatement, isNamespaceStatement, isPrintStatement } from './astUtils/reflection';
 import { ArrayType } from './types/ArrayType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { InterfaceType } from './types/InterfaceType';
@@ -28,6 +28,8 @@ import { ComponentType } from './types/ComponentType';
 import { WalkMode, createVisitor } from './astUtils/visitors';
 import type { CallExpression, FunctionExpression } from './parser/Expression';
 import { ObjectType } from './types';
+import undent from 'undent';
+import * as fsExtra from 'fs-extra';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -2787,6 +2789,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
+                program.getScopeByName('source').linkSymbolTable();
                 const getDataFnScope = utilFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
                 const symbolTable = getDataFnScope.symbolTable;
                 const getTypeOptions = { flags: SymbolTypeFlag.runtime };
@@ -3165,9 +3168,12 @@ describe('Scope', () => {
                 expectTypeToBe(symbolTable.getSymbolType('b', opts), DoubleType);
                 expectTypeToBe(symbolTable.getSymbolType('c', opts), StringType);
                 const dType = symbolTable.getSymbolType('d', opts);
-                expectTypeToBe(dType, UnionType);
+                expectTypeToBe(dType, UnionType); // this is a union because we didn't supply a statementIndex
                 expect((dType as UnionType).types).to.include(FloatType.instance);
                 expect((dType as UnionType).types).to.include(IntegerType.instance);
+                const lastStatement = processFnScope.func.body.statements[processFnScope.func.body.statements.length - 1] as AssignmentStatement;
+                const dTypeAtEnd = lastStatement.getType(opts);
+                expectTypeToBe(dTypeAtEnd, IntegerType); // this is an int because we got the type at the final statement
             });
 
             it('should set correct type on compound equals with function call', () => {
@@ -3856,7 +3862,7 @@ describe('Scope', () => {
             const file2 = program.setFile<BrsFile>('source/two.bs', `
                 namespace Alpha.Beta
                     sub method2()
-                        x = m.value
+                        x = m.whatever
                         print x
                     end sub
                 end namespace
@@ -3874,6 +3880,7 @@ describe('Scope', () => {
             });
             file1.ast.walk(assignmentVisitor, { walkMode: WalkMode.visitAllRecursive });
             file2.ast.walk(assignmentVisitor, { walkMode: WalkMode.visitAllRecursive });
+            program.getScopeByName('source').linkSymbolTable();
 
             // method1 - uses Thing1 'm'
             expectTypeToBe(assigns[0].getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime }), InterfaceType);
@@ -3883,6 +3890,177 @@ describe('Scope', () => {
             // method1 - uses untypecast 'm'
             expectTypeToBe(assigns[1].getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime }), AssociativeArrayType);
             expectTypeToBe(assigns[1].getSymbolTable().getSymbolType('x', { flags: SymbolTypeFlag.runtime }), DynamicType);
+        });
+    });
+
+    describe('symbol tables with pocket tables', () => {
+        it('should understand type changes throughout a function', () => {
+            const testFile = program.setFile<BrsFile>('source/test.bs', `
+                sub test()
+                    x = "hello"
+                    print x
+                    x = 123
+                    print x
+                    x = true
+                    print x
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const printStmts = testFile.ast.findChildren<PrintStatement>(isPrintStatement);
+            let xVar = printStmts[0].expressions[0];
+            expectTypeToBe(xVar.getType({ flags: SymbolTypeFlag.runtime }), StringType);
+            xVar = printStmts[1].expressions[0];
+            expectTypeToBe(xVar.getType({ flags: SymbolTypeFlag.runtime }), IntegerType);
+            xVar = printStmts[2].expressions[0];
+            expectTypeToBe(xVar.getType({ flags: SymbolTypeFlag.runtime }), BooleanType);
+        });
+
+        it('should understand type changes with conditional paths', () => {
+            const testFile = program.setFile<BrsFile>('source/test.bs', `
+                sub test(toggle as boolean)
+                    x = "hello"
+                    print x ' printStmt 0 - should be string
+                    if toggle
+                      x = 123
+                      print x ' printStmt 1 - should be int
+                    end if
+                    print x ' printStmt 2 - should be (string or int)
+                    x = true
+                    print x ' printStmt 3 - should be bool
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const printStmts = testFile.ast.findChildren<PrintStatement>(isPrintStatement);
+            let xVar = printStmts[0].expressions[0];
+            expectTypeToBe(xVar.getType({ flags: SymbolTypeFlag.runtime }), StringType);
+            xVar = printStmts[1].expressions[0];
+            expectTypeToBe(xVar.getType({ flags: SymbolTypeFlag.runtime }), IntegerType);
+            xVar = printStmts[2].expressions[0];
+            let xVarType = xVar.getType({ flags: SymbolTypeFlag.runtime });
+            expectTypeToBe(xVarType, UnionType);
+            expect((xVarType as UnionType).types).to.include(StringType.instance);
+            expect((xVarType as UnionType).types).to.include(IntegerType.instance);
+            xVar = printStmts[3].expressions[0];
+            expectTypeToBe(xVar.getType({ flags: SymbolTypeFlag.runtime }), BooleanType);
+        });
+
+        it('should understand type changes with loops', () => {
+            const testFile = program.setFile<BrsFile>('source/test.bs', `
+                sub test()
+                    x = "hello"
+                    print x ' printStmt 0 - should be string
+                    while(rnd(0) > 0.5)
+                        x = 1
+                        print x ' printStmt 1 - should be int
+                    end while
+                    print x ' printStmt 2 - should be (string or int)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const printStmts = testFile.ast.findChildren<PrintStatement>(isPrintStatement);
+            let xVar = printStmts[0].expressions[0];
+            expectTypeToBe(xVar.getType({ flags: SymbolTypeFlag.runtime }), StringType);
+            xVar = printStmts[1].expressions[0];
+            expectTypeToBe(xVar.getType({ flags: SymbolTypeFlag.runtime }), IntegerType);
+            xVar = printStmts[2].expressions[0];
+            let xVarType = xVar.getType({ flags: SymbolTypeFlag.runtime });
+            expectTypeToBe(xVarType, UnionType);
+            expect((xVarType as UnionType).types).to.include(StringType.instance);
+            expect((xVarType as UnionType).types).to.include(IntegerType.instance);
+        });
+
+
+        it('should understand type changes in conditional compile blocks', () => {
+            fsExtra.outputFileSync(`${rootDir}/manifest`, undent`
+                bs_const=DEBUG=true
+            `);
+
+            const testFile = program.setFile<BrsFile>('source/test.bs', `
+                sub main()
+                    dbg = 0
+                    #if DEBUG
+                        dbg = "DEBUG"
+                        print dbg ' string
+                    #end if
+                    print dbg ' union
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const printStmts = testFile.ast.findChildren<PrintStatement>(isPrintStatement);
+            let dbgVar = printStmts[0].expressions[0];
+            expectTypeToBe(dbgVar.getType({ flags: SymbolTypeFlag.runtime }), StringType);
+            dbgVar = printStmts[1].expressions[0];
+            expectTypeToBe(dbgVar.getType({ flags: SymbolTypeFlag.runtime }), UnionType);
+            expect((dbgVar.getType({ flags: SymbolTypeFlag.runtime }) as UnionType).types).to.include(StringType.instance);
+            expect((dbgVar.getType({ flags: SymbolTypeFlag.runtime }) as UnionType).types).to.include(IntegerType.instance);
+        });
+
+        it('should understand type changes in deep if statements', () => {
+            const testFile = program.setFile<BrsFile>('source/test.bs', `
+                sub main(x as integer)
+                    data = "hello"
+
+                    if x > 1
+                        if x > 2
+                            if x > 3
+                                if x > 4
+                                    data = x
+                                    print data
+                                end if
+                            end if
+                        end if
+                    end if
+
+                    print data
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const printStmts = testFile.ast.findChildren<PrintStatement>(isPrintStatement);
+            let dbgVar = printStmts[0].expressions[0];
+            expectTypeToBe(dbgVar.getType({ flags: SymbolTypeFlag.runtime }), IntegerType);
+            dbgVar = printStmts[1].expressions[0];
+            expectTypeToBe(dbgVar.getType({ flags: SymbolTypeFlag.runtime }), UnionType);
+            expect((dbgVar.getType({ flags: SymbolTypeFlag.runtime }) as UnionType).types).to.include(StringType.instance);
+            expect((dbgVar.getType({ flags: SymbolTypeFlag.runtime }) as UnionType).types).to.include(IntegerType.instance);
+        });
+
+        it('should understand type changes in deep if/else statements', () => {
+            const testFile = program.setFile<BrsFile>('source/test.bs', `
+                sub main(x as integer)
+                    data = "hello"
+
+                    if x > 1
+                      print data ' string
+                    else if x > 2
+                        data = false
+                        print data ' boolean
+                    else
+                       data = 123
+                       print data ' int
+                    end if
+
+                    print data ' union
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const printStmts = testFile.ast.findChildren<PrintStatement>(isPrintStatement);
+            let dataVar = printStmts[0].expressions[0];
+            expectTypeToBe(dataVar.getType({ flags: SymbolTypeFlag.runtime }), StringType);
+            dataVar = printStmts[1].expressions[0];
+            expectTypeToBe(dataVar.getType({ flags: SymbolTypeFlag.runtime }), BooleanType);
+            dataVar = printStmts[2].expressions[0];
+            expectTypeToBe(dataVar.getType({ flags: SymbolTypeFlag.runtime }), IntegerType);
+            dataVar = printStmts[3].expressions[0];
+            expectTypeToBe(dataVar.getType({ flags: SymbolTypeFlag.runtime }), UnionType);
+            expect((dataVar.getType({ flags: SymbolTypeFlag.runtime }) as UnionType).types).to.include(StringType.instance);
+            expect((dataVar.getType({ flags: SymbolTypeFlag.runtime }) as UnionType).types).to.include(IntegerType.instance);
+            expect((dataVar.getType({ flags: SymbolTypeFlag.runtime }) as UnionType).types).to.include(BooleanType.instance);
         });
     });
 

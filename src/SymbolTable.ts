@@ -6,6 +6,7 @@ import type { UnionType } from './types/UnionType';
 import { getUniqueType } from './types/helpers';
 import { isAnyReferenceType, isNamespaceType, isReferenceType } from './astUtils/reflection';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
+import type { UninitializedType } from './types/UninitializedType';
 
 /**
  * Stores the types associated with variables and functions in the Brighterscript code
@@ -34,8 +35,6 @@ export class SymbolTable implements SymbolTypeGetter {
 
     private typeCache: Array<Map<string, TypeCacheEntry>>;
 
-    private pocketTables = new Array<PocketTable>();
-
     /**
      * Used to invalidate the cache for all symbol tables.
      *
@@ -46,6 +45,7 @@ export class SymbolTable implements SymbolTypeGetter {
 
     static referenceTypeFactory: (memberKey: string, fullName, flags: SymbolTypeFlag, tableProvider: SymbolTypeGetterProvider) => ReferenceType;
     static unionTypeFactory: (types: BscType[]) => UnionType;
+    static uninitializedTypeFactory: () => UninitializedType;
 
     /**
      * Push a function that will provide a parent SymbolTable when requested
@@ -92,13 +92,36 @@ export class SymbolTable implements SymbolTypeGetter {
         this.siblings.delete(sibling);
     }
 
+    /**
+     * Does the order of symbols in this symbol table matter?
+     * Normally, this would only be for symbol tables referencing symbols declared within a function
+     */
+    public isOrdered = false;
+
+    public pocketTables = new Array<PocketTable>();
 
     public addPocketTable(pocketTable: PocketTable) {
         this.pocketTables.push(pocketTable);
+        return () => {
+            const index = this.pocketTables.findIndex(pt => pt === pocketTable);
+            if (index >= 0) {
+                this.pocketTables.splice(index, 1);
+            }
+        };
     }
 
     public getStatementIndexOfPocketTable(symbolTable: SymbolTable) {
         return this.pocketTables.find(pt => pt.table === symbolTable)?.index ?? -1;
+    }
+
+    private complementsTables = new Set<SymbolTable>();
+
+    /**
+     * This table complements this other table
+     * Eg. This is an else branch, it complements a then branch
+     */
+    public complementOtherTable(otherTable: SymbolTable) {
+        this.complementsTables.add(otherTable);
     }
 
     public clearSymbols() {
@@ -119,6 +142,22 @@ export class SymbolTable implements SymbolTypeGetter {
         let result: BscSymbol[];
         do {
             // look in our map first
+            if ((result = currentTable.symbolMap.get(key))) {
+                // eslint-disable-next-line no-bitwise
+                if (result.find(symbol => symbol.flags & bitFlags)) {
+                    return true;
+                }
+            }
+
+            //look in pocket tables
+            for (let pocket of this.pocketTables) {
+                if ((result = pocket.table.symbolMap.get(key))) {
+                    // eslint-disable-next-line no-bitwise
+                    if (result.find(symbol => symbol.flags & bitFlags)) {
+                        return true;
+                    }
+                }
+            }
             if ((result = currentTable.symbolMap.get(key))) {
                 // eslint-disable-next-line no-bitwise
                 if (result.find(symbol => symbol.flags & bitFlags)) {
@@ -148,35 +187,115 @@ export class SymbolTable implements SymbolTypeGetter {
      * @param bitFlags flags to match
      * @returns An array of BscSymbols - one for each time this symbol had a type implicitly defined
      */
-    getSymbol(name: string, bitFlags: SymbolTypeFlag, additionalOptions: { ignoreParentsAndSiblings?: boolean; beforeStatementIndex?: number } = {}): BscSymbol[] {
+    getSymbol(name: string, bitFlags: SymbolTypeFlag, additionalOptions: { ignoreParentsAndSiblings?: boolean; maxStatementIndex?: number; depth?: number } = {}): BscSymbol[] {
         let currentTable: SymbolTable = this;
         let previousTable: SymbolTable;
         const key = name?.toLowerCase();
         let result: BscSymbol[];
         let memberOfAncestor = false;
         const addAncestorInfo = (symbol: BscSymbol) => ({ ...symbol, data: { ...symbol.data, memberOfAncestor: memberOfAncestor } });
-        let beforeStatementIndex = Number.isInteger(additionalOptions?.beforeStatementIndex) ? additionalOptions.beforeStatementIndex : -1;
-        const filterByStatementIndex = (t: BscSymbol) => {
-            if (beforeStatementIndex >= 0) {
-                return t.data?.definingNode ? t.data.definingNode.statementIndex < beforeStatementIndex : true;
-
-            }
-            return true;
-        };
-
+        let maxStatementIndex = Number.isInteger(additionalOptions?.maxStatementIndex) ? additionalOptions.maxStatementIndex : Number.MAX_SAFE_INTEGER;
+        const depth = additionalOptions.depth ?? 0;
         do {
 
             if (previousTable) {
-                beforeStatementIndex = currentTable.getStatementIndexOfPocketTable(previousTable);
+                maxStatementIndex = currentTable.isOrdered ? currentTable.getStatementIndexOfPocketTable(previousTable) : Number.MAX_SAFE_INTEGER;
             }
 
             // look in our map first
-            if ((result = currentTable.symbolMap.get(key))) {
+            result = currentTable.symbolMap.get(key);
+            if (result) {
                 // eslint-disable-next-line no-bitwise
-                result = result.filter(symbol => symbol.flags & bitFlags).filter(filterByStatementIndex);
-                if (result.length > 0) {
-                    return result.map(addAncestorInfo);
+                result = result.filter(symbol => symbol.flags & bitFlags).filter(this.getSymbolLookupFilter(currentTable, maxStatementIndex, memberOfAncestor));
+            }
+
+            let precedingAssignmentIndex = -1;
+            if (result?.length > 0 && currentTable.isOrdered && maxStatementIndex >= 0) {
+                this.sortSymbolsByAssignmentOrderInPlace(result);
+                const lastResult = result[result.length - 1];
+                result = [lastResult];
+                precedingAssignmentIndex = lastResult.data?.definingNode?.statementIndex ?? -1;
+            }
+            const possiblePocketTables = currentTable.getPossiblePocketTables({ statementIndex: maxStatementIndex }, precedingAssignmentIndex);
+            let pocketTablesAreExhaustive = false;
+
+
+            const pocketTablesWeFoundSomethingIn = new Array<{ table: SymbolTable; results: BscSymbol[] }>();
+            for (const pocketTable of possiblePocketTables) {
+                const pocketTableTypes = pocketTable.table.getSymbol(name, bitFlags, {
+                    ignoreParentsAndSiblings: true,
+                    maxStatementIndex: Number.MAX_SAFE_INTEGER,
+                    depth: depth + 1
+                });
+                if (pocketTableTypes?.length > 0) {
+                    if (pocketTable.table.isOrdered) {
+                        const lastResult = pocketTableTypes[pocketTableTypes.length - 1];
+                        pocketTablesWeFoundSomethingIn.push({ table: pocketTable.table, results: [lastResult] });
+                    } else {
+                        pocketTablesWeFoundSomethingIn.push({ table: pocketTable.table, results: pocketTableTypes });
+                    }
                 }
+            }
+
+            let pocketTableResults: BscSymbol[] = [];
+
+            for (let i = 0; i < pocketTablesWeFoundSomethingIn.length; i++) {
+                let tableData = pocketTablesWeFoundSomethingIn[i];
+                pocketTableResults.push(...tableData.results);
+                if (i === 0) {
+                    continue;
+                }
+                if (tableData.table.complementsTables?.size > 0) {
+                    let tableSatisfied = true;
+                    let allPossibleSatisfiedResults: BscSymbol[] = [];
+                    // need to check if all tables this complements are satisfied
+                    for (const otherTable of tableData.table.complementsTables) {
+                        const foundTableData = pocketTablesWeFoundSomethingIn.find((ptd => {
+                            return otherTable === ptd.table;
+                        }));
+                        if (foundTableData) {
+                            allPossibleSatisfiedResults.push(...foundTableData.results);
+                        } else {
+                            tableSatisfied = false;
+                            break;
+                        }
+
+                    }
+                    if (tableSatisfied) {
+                        // remove all results before this
+                        pocketTableResults = [...allPossibleSatisfiedResults, ...tableData.results];
+                        pocketTablesAreExhaustive = true;
+                    }
+                }
+            }
+
+            if (pocketTablesAreExhaustive) {
+                result = pocketTableResults;
+            } else {
+                // we need to take into account the types before the pocket tables
+                if (!result) {
+                    // there was no result before the pocket tables
+                    if (pocketTableResults.length > 0) {
+                        if (depth === 0) {
+                            // we got pocket tables results, and this is the top recursion
+                            // add uninitialized
+                            result = [{ name: name, type: SymbolTable.uninitializedTypeFactory(), data: {}, flags: bitFlags }, ...pocketTableResults];
+                        } else {
+                            //just return pocket table results:
+                            result = pocketTableResults;
+                        }
+                    } else {
+                        // result should be undefined
+                    }
+                } else {
+                    // just add any pocket table results....
+                    result.push(...pocketTableResults);
+                }
+            }
+
+            if (result?.length > 0) {
+                result = result.map(addAncestorInfo);
+                break;
             }
 
             if (additionalOptions?.ignoreParentsAndSiblings) {
@@ -227,28 +346,14 @@ export class SymbolTable implements SymbolTypeGetter {
     }
 
     public getSymbolTypes(name: string, options: GetSymbolTypeOptions, sortByStatementIndex = false): TypeCacheEntry[] {
-        const symbolArray = this.getSymbol(name, options.flags, { ignoreParentsAndSiblings: options.ignoreParentTables, beforeStatementIndex: Number.isInteger(options.statementIndex) ? options.statementIndex as number : -1 });
+        const symbolArray = this.getSymbol(name, options.flags, { ignoreParentsAndSiblings: options.ignoreParentTables, maxStatementIndex: Number.isInteger(options.statementIndex) ? options.statementIndex as number : -1 });
         if (!symbolArray) {
             return undefined;
         }
-        const symbols = symbolArray?.map(symbol => ({ type: symbol.type, data: symbol.data, flags: symbol.flags }));
+        let symbols: TypeCacheEntry[] = symbolArray?.map(symbol => ({ type: symbol.type, data: symbol.data, flags: symbol.flags }));
 
         if (sortByStatementIndex) {
-            symbols.sort((a, b) => {
-                if (!Number.isInteger(a.data?.definingNode?.statementIndex)) {
-                    return -1;
-                }
-                if (!Number.isInteger(b.data?.definingNode?.statementIndex)) {
-                    return 1;
-                }
-                if (b.data.definingNode.statementIndex > a.data.definingNode.statementIndex) {
-                    return -1;
-                }
-                if (b.data.definingNode.statementIndex < a.data.definingNode.statementIndex) {
-                    return 1;
-                }
-                return -1;
-            });
+            this.sortSymbolsByAssignmentOrderInPlace(symbols);
         }
         return symbols;
     }
@@ -263,12 +368,12 @@ export class SymbolTable implements SymbolTypeGetter {
         if (!resolvedType || originalIsReferenceType) {
             let symbolTypes: TypeCacheEntry[];
             // eslint-disable-next-line no-bitwise
-            if (this.hasValidStatementIndex(options) && (options.flags & SymbolTypeFlag.runtime)) {
-                symbolTypes = this.getPossibleTypesByStatement(name, { ...options, statementIndex: options.statementIndex });
-                doSetCache = false;
-            } else {
-                symbolTypes = this.getSymbolTypes(name, options);
-            }
+            //  if (this.hasValidStatementIndex(options) && (options.flags & SymbolTypeFlag.runtime)) {
+            symbolTypes = this.getSymbolTypes(name, { ...options, statementIndex: options.statementIndex });
+            //     doSetCache = false;
+            // } else {
+            //   symbolTypes = this.getSymbolTypes(name, options);
+            //  }
             data = symbolTypes?.[0]?.data;
             foundFlags = symbolTypes?.[0]?.flags;
             resolvedType = getUniqueType(symbolTypes?.map(symbol => symbol.type), SymbolTable.unionTypeFactory);
@@ -309,18 +414,25 @@ export class SymbolTable implements SymbolTypeGetter {
      * It will overwrite any existing symbols in this table
      */
     mergeSymbolTable(symbolTable: SymbolTable) {
-        for (let [, value] of symbolTable.symbolMap) {
-            for (const symbol of value) {
-                if (symbol.data?.doNotMerge) {
-                    continue;
+        function mergeTables(intoTable: SymbolTable, fromTable: SymbolTable) {
+            for (let [, value] of fromTable.symbolMap) {
+                for (const symbol of value) {
+                    if (symbol.data?.doNotMerge) {
+                        continue;
+                    }
+                    intoTable.addSymbol(
+                        symbol.name,
+                        symbol.data,
+                        symbol.type,
+                        symbol.flags
+                    );
                 }
-                this.addSymbol(
-                    symbol.name,
-                    symbol.data,
-                    symbol.type,
-                    symbol.flags
-                );
             }
+        }
+
+        mergeTables(this, symbolTable);
+        for (let pocketTable of symbolTable.pocketTables) {
+            mergeTables(this, pocketTable.table);
         }
     }
 
@@ -429,7 +541,8 @@ export class SymbolTable implements SymbolTypeGetter {
             // no cache verifier
             return;
         }
-        return this.typeCache[options.flags]?.get(name.toLowerCase());
+        const cacheKey = this.getCacheKey(name, options);
+        return this.typeCache[options.flags]?.get(cacheKey);
     }
 
     setCachedType(name: string, cacheEntry: TypeCacheEntry, options: GetTypeOptions) {
@@ -445,12 +558,17 @@ export class SymbolTable implements SymbolTypeGetter {
             // no cache verifier
             return;
         }
-        let existingCachedValue = this.typeCache[options.flags]?.get(name.toLowerCase());
+        const cacheKey = this.getCacheKey(name, options);
+        let existingCachedValue = this.typeCache[options.flags]?.get(cacheKey);
         if (isReferenceType(cacheEntry.type) && !isReferenceType(existingCachedValue)) {
             // No need to overwrite a non-referenceType with a referenceType
             return;
         }
-        return this.typeCache[options.flags]?.set(name.toLowerCase(), cacheEntry);
+        return this.typeCache[options.flags]?.set(cacheKey, cacheEntry);
+    }
+
+    private getCacheKey(name: string, options?: { statementIndex?: number | 'end' }) {
+        return this.isOrdered ? `${name.toLowerCase()}_${options.statementIndex ?? 'x'}` : `${name.toLowerCase()}`;
     }
 
     /**
@@ -473,42 +591,60 @@ export class SymbolTable implements SymbolTypeGetter {
         };
     }
 
-    private hasValidStatementIndex(options: GetSymbolTypeOptions) {
-        return options.statementIndex === 'end' || (Number.isInteger(options.statementIndex) && options.statementIndex > -1);
+
+    private sortSymbolsByAssignmentOrderInPlace(symbols: { data?: ExtraSymbolData }[]) {
+        symbols.sort((a, b) => {
+            if (!Number.isInteger(a.data?.definingNode?.statementIndex)) {
+                return -1;
+            }
+            if (!Number.isInteger(b.data?.definingNode?.statementIndex)) {
+                return 1;
+            }
+            if (b.data.definingNode.statementIndex > a.data.definingNode.statementIndex) {
+                return -1;
+            }
+            if (b.data.definingNode.statementIndex < a.data.definingNode.statementIndex) {
+                return 1;
+            }
+            return -1;
+        });
+        return symbols;
     }
 
-    public getPossibleTypesByStatement(name: string, options: { statementIndex: number | 'end' } & GetSymbolTypeOptions, depth = 0): TypeCacheEntry[] {
-        const symbolTypes = this.getSymbolTypes(name, { ...options, ignoreParentTables: (depth > 0) }, true) ?? [];
 
-        const precedingAssignmentType = symbolTypes[symbolTypes.length - 1];
-        //options.statementIndex === 'end'
-        //  ? symbolTypes[symbolTypes.length - 1]
-        // : symbolTypes.findLast(st => {
-        //    const nodeIndex = st.data?.definingNode?.statementIndex ?? -1;
-        //    return (options.statementIndex as number) > nodeIndex;
-        // });
-        if (!precedingAssignmentType) {
-            // uh-oh, potential use of uninitialized variable!
+    private getPossiblePocketTables(options: { statementIndex?: number | 'end' }, precedingAssignmentIndex = -1) {
+        if (!this.isOrdered) {
+            return this.pocketTables;
         }
-        const result = precedingAssignmentType ? [
-            precedingAssignmentType
-        ] : [];
-
         const pocketTablesBetweenAssignmentAndPosition = this.pocketTables.filter(pt => {
             const isBeforePosition = options.statementIndex === 'end' ? true : options.statementIndex > pt.index;
             let isAfterPrecedingAssignment = true;
-            if (precedingAssignmentType) {
-                isAfterPrecedingAssignment = precedingAssignmentType.data.definingNode.statementIndex < pt.index;
+            if (Number.isInteger(precedingAssignmentIndex)) {
+                isAfterPrecedingAssignment = precedingAssignmentIndex < pt.index;
             }
             return isAfterPrecedingAssignment && isBeforePosition;
         });
+        return pocketTablesBetweenAssignmentAndPosition;
+    }
 
-        for (const pocketTable of pocketTablesBetweenAssignmentAndPosition) {
-            const pocketTableTypes = pocketTable.table.getPossibleTypesByStatement(name, { ...options, statementIndex: 'end' }, depth + 1);
-            result.push(...pocketTableTypes);
-        }
+    private getSymbolLookupFilter(currentTable: SymbolTable, maxAllowedStatementIndex: number, memberOfAncestor: boolean) {
+        return (t: BscSymbol) => {
+            if (!currentTable.isOrdered) {
+                // order doesn't matter for current table
+                return true;
+            }
+            if (maxAllowedStatementIndex >= 0 && t.data?.definingNode) {
+                if (memberOfAncestor || t.data.canUseInDefinedNode) {
+                    // if we've already gone up a level, it's possible to have a variable assigned and used
+                    // in the same statement, eg. for loop
+                    return t.data.definingNode.statementIndex <= maxAllowedStatementIndex;
 
-        return result;
+                } else {
+                    return t.data.definingNode.statementIndex < maxAllowedStatementIndex;
+                }
+            }
+            return true;
+        };
     }
 }
 

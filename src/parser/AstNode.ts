@@ -248,7 +248,7 @@ export abstract class AstNode {
         let containingStatement: Statement;
         let currentNode: AstNode = this;
         while (currentNode && !isStatement(currentNode)) {
-            currentNode = this.parent;
+            currentNode = currentNode.parent;
         }
         if (isStatement(currentNode)) {
             containingStatement = currentNode;

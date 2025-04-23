@@ -1014,6 +1014,11 @@ export interface ExtraSymbolData {
      * Was this a result of a callfunc?
      */
     isFromCallFunc?: boolean;
+    /**
+     * Some symbols can be used in the same node they are defined in
+     * For example, loop variables in for loops
+     */
+    canUseInDefinedNode?: boolean;
 }
 
 export interface GetTypeOptions {

@@ -844,32 +844,48 @@ describe('HoverProcessor', () => {
 
     describe('multiple definition locations', () => {
 
+        it('gets hover on assignment node', () => {
+            const file = program.setFile('source/util.bs', `
+                sub test(obj as Data)
+                    myVar = obj.name ' setting type to string
+                end sub
+
+                interface Data
+                    name as string
+                end interface
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            //  my|Var = obj.name
+            let hover = program.getHover(file.srcPath, util.createPosition(2, 22))[0];
+            expect(hover?.contents).eql([fence(`myVar as string`)]);
+        });
+
         it('shows correct type in all locations', () => {
             const file = program.setFile('source/util.bs', `
                 sub test()
                     myVar = "hello" ' setting type to string
                     print 1; myVar
                     myVar = "hello".len()  ' setting type to integer
-                    myVar = sqr(33)  ' setting type to float
                     print 2; myVar
+                    myVar = sqr(33)  ' setting type to float
+                    print 3; myVar
                 end sub
             `);
-
-            const expectedHoverStr = `myVar as string or integer or float`;
 
             program.validate();
             expectZeroDiagnostics(program);
             // print 1; my|Var
             let hover = program.getHover(file.srcPath, util.createPosition(3, 31))[0];
-            expect(hover?.contents).eql([fence(expectedHoverStr)]);
+            expect(hover?.contents).eql([fence(`myVar as string`)]);
 
             // my|Var = "hello".len()
             hover = program.getHover(file.srcPath, util.createPosition(4, 23))[0];
-            expect(hover?.contents).eql([fence(expectedHoverStr)]);
+            expect(hover?.contents).eql([fence(`myVar as integer`)]);
 
             // print 2; my|Var
-            hover = program.getHover(file.srcPath, util.createPosition(6, 31))[0];
-            expect(hover?.contents).eql([fence(expectedHoverStr)]);
+            hover = program.getHover(file.srcPath, util.createPosition(7, 31))[0];
+            expect(hover?.contents).eql([fence(`myVar as float`)]);
         });
 
         it('reusing same variable for multiple types', () => {
@@ -916,17 +932,68 @@ describe('HoverProcessor', () => {
                     end if
                 end function
             `);
-            const expectedHourHoverStr = `hour as integer or string`;
-
             program.validate();
             expectZeroDiagnostics(program);
             // ho|ur = stringUtil.pad(hour)
             let hover = program.getHover(file.srcPath, util.createPosition(32, 27))[0];
-            expect(hover?.contents).eql([fence(expectedHourHoverStr)]);
+            expect(hover?.contents).eql([fence(`hour as string`)]);
 
             // ho|ur = hour mod 12
             hover = program.getHover(file.srcPath, util.createPosition(36, 27))[0];
-            expect(hover?.contents).eql([fence(expectedHourHoverStr)]);
+            expect(hover?.contents).eql([fence(`hour as integer`)]);
+        });
+
+        it('reusing same variable for multiple types - multiple hovers', () => {
+            const file = program.setFile('source/util.bs', `
+                function foo(toggle as boolean) as string
+                    someVar = "hello"
+                    print someVar; 1
+                    if toggle
+                        print someVar; 2
+                        someVar = 1
+                        print someVar; 3
+                    else
+                        print someVar; 4
+                        someVar = 0
+                        print someVar; 5
+                    end if
+                    print someVar; 6
+                    return someVar.toStr()
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            // some|Var = "hello"
+            let hover = program.getHover(file.srcPath, util.createPosition(2, 25))[0];
+            expect(hover?.contents).eql([fence(`someVar as string`)]);
+
+            // print some|Var; 1
+            hover = program.getHover(file.srcPath, util.createPosition(3, 31))[0];
+            expect(hover?.contents).eql([fence(`someVar as string`)]);
+            // print some|Var; 2
+            hover = program.getHover(file.srcPath, util.createPosition(5, 35))[0];
+            expect(hover?.contents).eql([fence(`someVar as string`)]);
+            // some|Var = 1
+            hover = program.getHover(file.srcPath, util.createPosition(6, 29))[0];
+            expect(hover?.contents).eql([fence(`someVar as integer`)]);
+            // print some|Var; 3
+            hover = program.getHover(file.srcPath, util.createPosition(7, 35))[0];
+            expect(hover?.contents).eql([fence(`someVar as integer`)]);
+            // print some|Var; 4
+            hover = program.getHover(file.srcPath, util.createPosition(9, 35))[0];
+            expect(hover?.contents).eql([fence(`someVar as string`)]);
+            // some|Var = 0
+            hover = program.getHover(file.srcPath, util.createPosition(10, 29))[0];
+            expect(hover?.contents).eql([fence(`someVar as integer`)]);
+            // print some|Var; 5
+            hover = program.getHover(file.srcPath, util.createPosition(11, 35))[0];
+            expect(hover?.contents).eql([fence(`someVar as integer`)]);
+            // print some|Var; 6
+            hover = program.getHover(file.srcPath, util.createPosition(13, 31))[0];
+            expect(hover?.contents).eql([fence(`someVar as integer`)]);
+            // return some|Var.toStr()
+            hover = program.getHover(file.srcPath, util.createPosition(14, 32))[0];
+            expect(hover?.contents).eql([fence(`someVar as integer`)]);
         });
 
     });

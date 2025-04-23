@@ -308,6 +308,7 @@ export class Block extends Statement {
     }) {
         super();
         this.statements = options.statements;
+        this.symbolTable = new SymbolTable('Block', () => this.parent.getSymbolTable());
     }
 
     public readonly statements: Statement[];
@@ -1508,7 +1509,7 @@ export class ForEachStatement extends Statement {
     }
 
     getType(options: GetTypeOptions): BscType {
-        return this.getSymbolTable().getSymbolType(this.tokens.item.text, options);
+        return this.getSymbolTable().getSymbolType(this.tokens.item.text, { ...options, statementIndex: this.statementIndex });
     }
 
     get leadingTrivia(): Token[] {

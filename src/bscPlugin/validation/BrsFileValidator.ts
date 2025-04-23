@@ -1,4 +1,4 @@
-import { isAliasStatement, isArrayType, isBlock, isBody, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypecastExpression, isTypecastStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
+import { isAliasStatement, isArrayType, isBlock, isBody, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypecastExpression, isTypecastStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -128,7 +128,7 @@ export class BrsFileValidator {
                 if (!loopTargetType.isResolvable()) {
                     loopVarType = new ArrayDefaultTypeReferenceType(loopTargetType);
                 }
-                node.parent.getSymbolTable()?.addSymbol(node.tokens.item.text, { definingNode: node, isInstance: true }, loopVarType, SymbolTypeFlag.runtime);
+                node.parent.getSymbolTable()?.addSymbol(node.tokens.item.text, { definingNode: node, isInstance: true, canUseInDefinedNode: true }, loopVarType, SymbolTypeFlag.runtime);
             },
             NamespaceStatement: (node) => {
                 this.validateDeclarationLocations(node, 'namespace', () => util.createBoundingRange(node.tokens.namespace, node.nameExpression));
@@ -261,6 +261,14 @@ export class BrsFileValidator {
                 }
             },
             ConditionalCompileStatement: (node) => {
+                if (isBlock(node.elseBranch)) {
+                    const elseTable = node.elseBranch.symbolTable;
+                    let currentNode: AstNode = node;
+                    while (isConditionalCompileStatement(currentNode)) {
+                        elseTable.complementOtherTable(currentNode.thenBranch.symbolTable);
+                        currentNode = currentNode.parent;
+                    }
+                }
                 this.validateConditionalCompileConst(node.tokens.condition);
             },
             ConditionalCompileErrorStatement: (node) => {
@@ -276,6 +284,27 @@ export class BrsFileValidator {
                 // eslint-disable-next-line no-bitwise
                 node.parent.getSymbolTable().addSymbol(node.tokens.name.text, { definingNode: node, doNotMerge: true, isAlias: true }, targetType, SymbolTypeFlag.runtime | SymbolTypeFlag.typetime);
 
+            },
+            IfStatement: (node) => {
+                if (isBlock(node.elseBranch)) {
+                    const elseTable = node.elseBranch.symbolTable;
+                    let currentNode: AstNode = node;
+                    while (isIfStatement(currentNode)) {
+                        elseTable.complementOtherTable(currentNode.thenBranch.symbolTable);
+                        currentNode = currentNode.parent;
+                    }
+                }
+            },
+            Block: (node) => {
+                const blockSymbolTable = node.symbolTable;
+                if (node.findAncestor<Block>(isFunctionExpression)) {
+                    // this block is in a function. order matters!
+                    blockSymbolTable.isOrdered = true;
+                }
+                if (!isFunctionExpression(node.parent)) {
+                    // we're a block inside another block (or body). This block is a pocket in the bigger block
+                    node.parent.getSymbolTable().addPocketTable({ index: node.parent.statementIndex, table: node.symbolTable });
+                }
             },
             AstNode: (node) => {
                 //check for doc comments

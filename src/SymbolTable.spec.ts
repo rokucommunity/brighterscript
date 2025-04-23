@@ -8,8 +8,7 @@ import { SymbolTypeFlag } from './SymbolTypeFlag';
 import { expectTypeToBe } from './testHelpers.spec';
 import { NamespaceType } from './types/NamespaceType';
 import { TypedFunctionType } from './types/TypedFunctionType';
-import { DynamicType, FloatType, UnionType } from './types';
-import { util } from './util';
+import { DynamicType, FloatType, UninitializedType, UnionType } from './types';
 import type { AstNode } from './parser/AstNode';
 
 
@@ -218,7 +217,7 @@ describe('SymbolTable', () => {
 
     });
 
-    describe.only('statementIndex and pocketTables', () => {
+    describe('statementIndex and pocketTables', () => {
 
         function mockNodeWithIndex(index: number): AstNode {
             const fakeNode = { statementIndex: index } as AstNode;
@@ -227,6 +226,7 @@ describe('SymbolTable', () => {
 
         it('uses only the preceding assignment type', () => {
             const st = new SymbolTable('test');
+            st.isOrdered = true;
             st.addSymbol('someVar', { definingNode: mockNodeWithIndex(1) }, StringType.instance, SymbolTypeFlag.runtime);
             st.addSymbol('someVar', { definingNode: mockNodeWithIndex(3) }, FloatType.instance, SymbolTypeFlag.runtime);
             st.addSymbol('someVar', { definingNode: mockNodeWithIndex(5) }, DynamicType.instance, SymbolTypeFlag.runtime);
@@ -243,6 +243,7 @@ describe('SymbolTable', () => {
 
         it('order of types added to table doesnt matter - it still finds the correct index', () => {
             const st = new SymbolTable('test');
+            st.isOrdered = true;
             st.addSymbol('someVar', { definingNode: mockNodeWithIndex(7) }, BooleanType.instance, SymbolTypeFlag.runtime);
             st.addSymbol('someVar', { definingNode: mockNodeWithIndex(3) }, FloatType.instance, SymbolTypeFlag.runtime);
             st.addSymbol('someVar', { definingNode: mockNodeWithIndex(5) }, DynamicType.instance, SymbolTypeFlag.runtime);
@@ -267,6 +268,7 @@ describe('SymbolTable', () => {
 
         it('searches pocket tables for a symbol', () => {
             const st = new SymbolTable('test');
+            st.isOrdered = true;
             st.addSymbol('someVar', { definingNode: mockNodeWithIndex(1) }, StringType.instance, SymbolTypeFlag.runtime);
             const pt1 = new SymbolTable('pocket1', () => st);
             pt1.addSymbol('someVar', { definingNode: mockNodeWithIndex(1) }, StringType.instance, SymbolTypeFlag.runtime);
@@ -277,6 +279,7 @@ describe('SymbolTable', () => {
 
         it('does not search pocket tables before the preceding assignment for a symbol', () => {
             const st = new SymbolTable('test');
+            st.isOrdered = true;
             st.addSymbol('someVar', { definingNode: mockNodeWithIndex(3) }, StringType.instance, SymbolTypeFlag.runtime);
             const pt1 = new SymbolTable('pocket1');
             pt1.addSymbol('someVar', { definingNode: mockNodeWithIndex(1) }, IntegerType.instance, SymbolTypeFlag.runtime);
@@ -287,6 +290,7 @@ describe('SymbolTable', () => {
 
         it('includes pocket tables results as a union type', () => {
             const st = new SymbolTable('test');
+            st.isOrdered = true;
             st.addSymbol('someVar', { definingNode: mockNodeWithIndex(1) }, StringType.instance, SymbolTypeFlag.runtime);
             const pt1 = new SymbolTable('pocket1', () => st);
             pt1.addSymbol('someVar', { definingNode: mockNodeWithIndex(1) }, IntegerType.instance, SymbolTypeFlag.runtime);
@@ -304,12 +308,15 @@ describe('SymbolTable', () => {
 
         it('includes only last pocket tables results', () => {
             const st = new SymbolTable('test');
+            st.isOrdered = true;
             st.addSymbol('someVar', { definingNode: mockNodeWithIndex(1) }, StringType.instance, SymbolTypeFlag.runtime);
             const pt1 = new SymbolTable('pocket1', () => st);
+            pt1.isOrdered = true;
             pt1.addSymbol('someVar', { definingNode: mockNodeWithIndex(1) }, IntegerType.instance, SymbolTypeFlag.runtime); // ignored
             pt1.addSymbol('someVar', { definingNode: mockNodeWithIndex(2) }, StringType.instance, SymbolTypeFlag.runtime);
             st.addPocketTable({ index: 2, table: pt1 });
             const pt2 = new SymbolTable('pocket2', () => st);
+            pt2.isOrdered = true;
             pt2.addSymbol('someVar', { definingNode: mockNodeWithIndex(1) }, BooleanType.instance, SymbolTypeFlag.runtime); // ignored
             pt2.addSymbol('someVar', { definingNode: mockNodeWithIndex(2) }, FloatType.instance, SymbolTypeFlag.runtime); // ignored
             pt2.addSymbol('someVar', { definingNode: mockNodeWithIndex(3) }, DynamicType.instance, SymbolTypeFlag.runtime); // ignored
@@ -321,9 +328,11 @@ describe('SymbolTable', () => {
 
         it('type in a pocket table takes into account only preceding assignments in the parent table', () => {
             const st = new SymbolTable('test');
+            st.isOrdered = true;
             st.addSymbol('someVar', { definingNode: mockNodeWithIndex(1) }, FloatType.instance, SymbolTypeFlag.runtime);
             st.addSymbol('someVar', { definingNode: mockNodeWithIndex(2) }, StringType.instance, SymbolTypeFlag.runtime);
             const pt1 = new SymbolTable('pocket1', () => st);
+            pt1.isOrdered = true;
             pt1.addSymbol('someVar', { definingNode: mockNodeWithIndex(2) }, DynamicType.instance, SymbolTypeFlag.runtime);
             pt1.addSymbol('someVar', { definingNode: mockNodeWithIndex(4) }, IntegerType.instance, SymbolTypeFlag.runtime);
             st.addPocketTable({ index: 3, table: pt1 });
@@ -349,5 +358,275 @@ describe('SymbolTable', () => {
             expect((result as UnionType).types).include(IntegerType.instance);
         });
 
+        it('handles when a symbol is potentially uninitialized', () => {
+            const st = new SymbolTable('test');
+            st.isOrdered = true;
+            const pt1 = new SymbolTable('pocket1', () => st);
+            pt1.isOrdered = true;
+            pt1.addSymbol('someVar', { definingNode: mockNodeWithIndex(0) }, IntegerType.instance, SymbolTypeFlag.runtime);
+            st.addPocketTable({ index: 0, table: pt1 });
+
+            const typeAfterPockets = st.getSymbolType('someVar', { flags: SymbolTypeFlag.runtime, statementIndex: 3 });
+            expectTypeToBe(typeAfterPockets, UnionType);
+            expect((typeAfterPockets as UnionType).types.length).to.eq(2);
+            expect((typeAfterPockets as UnionType).types).include(UninitializedType.instance);
+            expect((typeAfterPockets as UnionType).types).include(IntegerType.instance);
+        });
+
+        describe('complement tables', () => {
+
+            it('add  uninitialized type as a possibility if a symbol is defined in 2 pocket tables that do not complement', () => {
+                const st = new SymbolTable('test');
+                st.isOrdered = true;
+                const pt1 = new SymbolTable('pocket1', () => st);
+                pt1.isOrdered = true;
+                pt1.addSymbol('someVar', { definingNode: mockNodeWithIndex(0) }, IntegerType.instance, SymbolTypeFlag.runtime);
+                st.addPocketTable({ index: 0, table: pt1 });
+                const pt2 = new SymbolTable('pocket2', () => st);
+                pt2.isOrdered = true;
+                pt2.addSymbol('someVar', { definingNode: mockNodeWithIndex(0) }, IntegerType.instance, SymbolTypeFlag.runtime);
+
+                st.addPocketTable({ index: 1, table: pt2 });
+
+                const typeAfterPockets = st.getSymbolType('someVar', { flags: SymbolTypeFlag.runtime, statementIndex: 3 }) as UnionType;
+                expectTypeToBe(typeAfterPockets, UnionType);
+                expect(typeAfterPockets.types.length).to.eq(2);
+                expect(typeAfterPockets.types).to.include(UninitializedType.instance);
+                expect(typeAfterPockets.types).to.include(IntegerType.instance);
+            });
+
+            it('handles when a symbol is defined in both complement tables and main table', () => {
+                const st = new SymbolTable('test');
+                st.isOrdered = true;
+                st.addSymbol('someVar', { definingNode: mockNodeWithIndex(0) }, StringType.instance, SymbolTypeFlag.runtime);
+                const pt1 = new SymbolTable('pocket1', () => st);
+                pt1.isOrdered = true;
+                pt1.addSymbol('someVar', { definingNode: mockNodeWithIndex(0) }, IntegerType.instance, SymbolTypeFlag.runtime);
+                st.addPocketTable({ index: 1, table: pt1 });
+                const pt2 = new SymbolTable('pocket2', () => st);
+                pt2.isOrdered = true;
+                pt2.addSymbol('someVar', { definingNode: mockNodeWithIndex(0) }, IntegerType.instance, SymbolTypeFlag.runtime);
+                pt2.complementOtherTable(pt1);
+
+                st.addPocketTable({ index: 2, table: pt2 });
+
+                const typeAfterPockets = st.getSymbolType('someVar', { flags: SymbolTypeFlag.runtime, statementIndex: 3 });
+                expectTypeToBe(typeAfterPockets, IntegerType); // no string type!
+            });
+
+            it('handles when a symbol is defined in both complement tables and previous pocket tables', () => {
+                const st = new SymbolTable('test');
+                st.isOrdered = true;
+                st.addSymbol('someVar', { definingNode: mockNodeWithIndex(0) }, StringType.instance, SymbolTypeFlag.runtime);
+                const pt0 = new SymbolTable('pocket0', () => st);
+                pt0.isOrdered = true;
+                pt0.addSymbol('someVar', { definingNode: mockNodeWithIndex(0) }, BooleanType.instance, SymbolTypeFlag.runtime);
+                st.addPocketTable({ index: 1, table: pt0 });
+
+                const pt1 = new SymbolTable('pocket1', () => st);
+                pt1.isOrdered = true;
+                pt1.addSymbol('someVar', { definingNode: mockNodeWithIndex(0) }, IntegerType.instance, SymbolTypeFlag.runtime);
+                st.addPocketTable({ index: 1, table: pt1 });
+                const pt2 = new SymbolTable('pocket2', () => st);
+                pt2.isOrdered = true;
+                pt2.addSymbol('someVar', { definingNode: mockNodeWithIndex(0) }, IntegerType.instance, SymbolTypeFlag.runtime);
+                pt2.complementOtherTable(pt1);
+
+                st.addPocketTable({ index: 2, table: pt2 });
+
+                const typeAfterPockets = st.getSymbolType('someVar', { flags: SymbolTypeFlag.runtime, statementIndex: 3 });
+                expectTypeToBe(typeAfterPockets, IntegerType); // no string type!
+            });
+
+
+            it('handles when a symbol is defined in both complement tables and subsequent pocket tables', () => {
+                const st = new SymbolTable('test');
+                st.isOrdered = true;
+                st.addSymbol('someVar', { definingNode: mockNodeWithIndex(0) }, StringType.instance, SymbolTypeFlag.runtime);
+
+                const pt1 = new SymbolTable('pocket1', () => st);
+                pt1.isOrdered = true;
+                pt1.addSymbol('someVar', { definingNode: mockNodeWithIndex(0) }, IntegerType.instance, SymbolTypeFlag.runtime);
+                st.addPocketTable({ index: 1, table: pt1 });
+                const pt2 = new SymbolTable('pocket2', () => st);
+                pt2.isOrdered = true;
+                pt2.addSymbol('someVar', { definingNode: mockNodeWithIndex(0) }, IntegerType.instance, SymbolTypeFlag.runtime);
+                pt2.complementOtherTable(pt1);
+
+                st.addPocketTable({ index: 2, table: pt2 });
+
+                const pt3 = new SymbolTable('pocket0', () => st);
+                pt3.isOrdered = true;
+                pt3.addSymbol('someVar', { definingNode: mockNodeWithIndex(0) }, BooleanType.instance, SymbolTypeFlag.runtime);
+                st.addPocketTable({ index: 3, table: pt3 });
+
+                const typeAfterPockets = st.getSymbolType('someVar', { flags: SymbolTypeFlag.runtime, statementIndex: 4 }) as UnionType;
+                expectTypeToBe(typeAfterPockets, UnionType); // no string type!
+                expect(typeAfterPockets.types).to.include(IntegerType.instance); // type from complement pockets
+                expect(typeAfterPockets.types).to.include(BooleanType.instance); // type from subsequent pocket
+            });
+
+            it('handles when a symbol is defined in both complement tables and not main table', () => {
+                const st = new SymbolTable('test');
+                st.isOrdered = true;
+                const pt1 = new SymbolTable('pocket1', () => st);
+                pt1.isOrdered = true;
+                pt1.addSymbol('someVar', { definingNode: mockNodeWithIndex(0) }, IntegerType.instance, SymbolTypeFlag.runtime);
+                st.addPocketTable({ index: 1, table: pt1 });
+                const pt2 = new SymbolTable('pocket2', () => st);
+                pt2.isOrdered = true;
+                pt2.addSymbol('someVar', { definingNode: mockNodeWithIndex(0) }, IntegerType.instance, SymbolTypeFlag.runtime);
+                pt2.complementOtherTable(pt1);
+
+                st.addPocketTable({ index: 2, table: pt2 });
+
+                const typeAfterPockets = st.getSymbolType('someVar', { flags: SymbolTypeFlag.runtime, statementIndex: 3 });
+                expectTypeToBe(typeAfterPockets, IntegerType); // no string type!
+            });
+
+            it('handles when a symbol is defined in one complement tables', () => {
+                const st = new SymbolTable('test');
+                st.isOrdered = true;
+                st.addSymbol('someVar', { definingNode: mockNodeWithIndex(0) }, StringType.instance, SymbolTypeFlag.runtime);
+                const pt1 = new SymbolTable('pocket1', () => st);
+                pt1.isOrdered = true;
+                pt1.addSymbol('notSomeVar', { definingNode: mockNodeWithIndex(0) }, IntegerType.instance, SymbolTypeFlag.runtime);
+                st.addPocketTable({ index: 1, table: pt1 });
+                const pt2 = new SymbolTable('pocket2', () => st);
+                pt2.isOrdered = true;
+                pt2.addSymbol('someVar', { definingNode: mockNodeWithIndex(0) }, IntegerType.instance, SymbolTypeFlag.runtime);
+                pt2.complementOtherTable(pt1);
+
+                st.addPocketTable({ index: 2, table: pt2 });
+
+                const typeAfterPockets = st.getSymbolType('someVar', { flags: SymbolTypeFlag.runtime, statementIndex: 4 }) as UnionType;
+                expectTypeToBe(typeAfterPockets, UnionType);
+                expect(typeAfterPockets.types.length).to.eq(2);
+                expect(typeAfterPockets.types).to.include(StringType.instance); // type from before pockets
+                expect(typeAfterPockets.types).to.include(IntegerType.instance); // type from 2nd pocket
+            });
+
+            it('handles when a symbol is defined in one complement tables, and not in main table', () => {
+                const st = new SymbolTable('test');
+                st.isOrdered = true;
+                const pt1 = new SymbolTable('pocket1', () => st);
+                pt1.isOrdered = true;
+                pt1.addSymbol('notSomeVar', { definingNode: mockNodeWithIndex(0) }, IntegerType.instance, SymbolTypeFlag.runtime);
+                st.addPocketTable({ index: 1, table: pt1 });
+                const pt2 = new SymbolTable('pocket2', () => st);
+                pt2.isOrdered = true;
+                pt2.addSymbol('someVar', { definingNode: mockNodeWithIndex(0) }, IntegerType.instance, SymbolTypeFlag.runtime);
+                pt2.complementOtherTable(pt1);
+
+                st.addPocketTable({ index: 2, table: pt2 });
+
+                const typeAfterPockets = st.getSymbolType('someVar', { flags: SymbolTypeFlag.runtime, statementIndex: 4 }) as UnionType;
+                expectTypeToBe(typeAfterPockets, UnionType);
+                expect(typeAfterPockets.types.length).to.eq(2);
+                expect(typeAfterPockets.types).to.include(UninitializedType.instance); // type from before pockets
+                expect(typeAfterPockets.types).to.include(IntegerType.instance); // type from 2nd pocket
+            });
+
+
+            it('handles multiple tables to complement', () => {
+                const st = new SymbolTable('test');
+                st.isOrdered = true;
+                const pt1 = new SymbolTable('pocket1', () => st);
+                pt1.isOrdered = true;
+                pt1.addSymbol('someVar', { definingNode: mockNodeWithIndex(0) }, IntegerType.instance, SymbolTypeFlag.runtime);
+                st.addPocketTable({ index: 1, table: pt1 });
+                const pt2 = new SymbolTable('pocket2', () => st);
+                pt2.isOrdered = true;
+                pt2.addSymbol('someVar', { definingNode: mockNodeWithIndex(0) }, IntegerType.instance, SymbolTypeFlag.runtime);
+                st.addPocketTable({ index: 2, table: pt2 });
+                const pt3 = new SymbolTable('pocket3', () => st);
+                pt3.isOrdered = true;
+                pt3.addSymbol('someVar', { definingNode: mockNodeWithIndex(0) }, IntegerType.instance, SymbolTypeFlag.runtime);
+                st.addPocketTable({ index: 3, table: pt3 });
+                const pt4 = new SymbolTable('pocket4', () => st);
+                pt4.isOrdered = true;
+                pt4.addSymbol('someVar', { definingNode: mockNodeWithIndex(0) }, IntegerType.instance, SymbolTypeFlag.runtime);
+                st.addPocketTable({ index: 4, table: pt4 });
+
+                pt4.complementOtherTable(pt1);
+                pt4.complementOtherTable(pt2);
+                pt4.complementOtherTable(pt3);
+
+                const typeAfterPockets = st.getSymbolType('someVar', { flags: SymbolTypeFlag.runtime, statementIndex: 5 });
+                expectTypeToBe(typeAfterPockets, IntegerType);
+            });
+
+            it('handles multiple tables to complement, when one doesnt have the symbol', () => {
+                const st = new SymbolTable('test');
+                st.isOrdered = true;
+                const pt1 = new SymbolTable('pocket1', () => st);
+                pt1.isOrdered = true;
+                pt1.addSymbol('someVar', { definingNode: mockNodeWithIndex(0) }, IntegerType.instance, SymbolTypeFlag.runtime);
+                st.addPocketTable({ index: 1, table: pt1 });
+                const pt2 = new SymbolTable('pocket2', () => st);
+                pt2.isOrdered = true;
+                pt2.addSymbol('NOTsomeVar', { definingNode: mockNodeWithIndex(0) }, IntegerType.instance, SymbolTypeFlag.runtime);
+                st.addPocketTable({ index: 2, table: pt2 });
+                const pt3 = new SymbolTable('pocket3', () => st);
+                pt3.isOrdered = true;
+                pt3.addSymbol('someVar', { definingNode: mockNodeWithIndex(0) }, IntegerType.instance, SymbolTypeFlag.runtime);
+                st.addPocketTable({ index: 3, table: pt3 });
+                const pt4 = new SymbolTable('pocket4', () => st);
+                pt4.isOrdered = true;
+                pt4.addSymbol('someVar', { definingNode: mockNodeWithIndex(0) }, IntegerType.instance, SymbolTypeFlag.runtime);
+                st.addPocketTable({ index: 4, table: pt4 });
+
+                pt4.complementOtherTable(pt1);
+                pt4.complementOtherTable(pt2);
+                pt4.complementOtherTable(pt3);
+
+                const typeAfterPockets = st.getSymbolType('someVar', { flags: SymbolTypeFlag.runtime, statementIndex: 5 }) as UnionType;
+                expectTypeToBe(typeAfterPockets, UnionType);
+                expect(typeAfterPockets.types.length).to.eq(2);
+                expect(typeAfterPockets.types).to.include(UninitializedType.instance); // type from before pockets
+                expect(typeAfterPockets.types).to.include(IntegerType.instance); // type from some pockets
+            });
+
+            it('handles multiple tables to complement, followed by an independent pocket table', () => {
+                const st = new SymbolTable('test');
+                st.isOrdered = true;
+                const pt1 = new SymbolTable('pocket1', () => st);
+                pt1.isOrdered = true;
+                pt1.addSymbol('someVar', { definingNode: mockNodeWithIndex(0) }, IntegerType.instance, SymbolTypeFlag.runtime);
+                st.addPocketTable({ index: 1, table: pt1 });
+                const pt2 = new SymbolTable('pocket2', () => st);
+                pt2.isOrdered = true;
+                pt2.addSymbol('someVar', { definingNode: mockNodeWithIndex(0) }, IntegerType.instance, SymbolTypeFlag.runtime);
+                st.addPocketTable({ index: 2, table: pt2 });
+                const pt3 = new SymbolTable('pocket3', () => st);
+                pt3.isOrdered = true;
+                pt3.addSymbol('someVar', { definingNode: mockNodeWithIndex(0) }, IntegerType.instance, SymbolTypeFlag.runtime);
+                st.addPocketTable({ index: 3, table: pt3 });
+                const pt4 = new SymbolTable('pocket4', () => st);
+                pt4.isOrdered = true;
+                pt4.addSymbol('someVar', { definingNode: mockNodeWithIndex(0) }, IntegerType.instance, SymbolTypeFlag.runtime);
+                st.addPocketTable({ index: 4, table: pt4 });
+
+                const pt5 = new SymbolTable('pocket5', () => st);
+                pt5.isOrdered = true;
+                pt5.addSymbol('someVar', { definingNode: mockNodeWithIndex(0) }, StringType.instance, SymbolTypeFlag.runtime);
+                st.addPocketTable({ index: 4, table: pt5 });
+
+
+                pt4.complementOtherTable(pt1);
+                pt4.complementOtherTable(pt2);
+                pt4.complementOtherTable(pt3);
+                // pt5 is not associated with this complement business!
+
+                const typeAfterPockets = st.getSymbolType('someVar', { flags: SymbolTypeFlag.runtime, statementIndex: 5 }) as UnionType;
+                expectTypeToBe(typeAfterPockets, UnionType);
+                expect(typeAfterPockets.types.length).to.eq(2);
+                expect(typeAfterPockets.types).to.include(IntegerType.instance); // type from complementary pockets
+                expect(typeAfterPockets.types).to.include(StringType.instance); // type from pt5
+            });
+
+        });
     });
+
+
 });

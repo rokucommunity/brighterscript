@@ -262,11 +262,11 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         this.returnTypeExpression = options.returnTypeExpression;
         //if there's a body, and it doesn't have a SymbolTable, assign one
         if (this.body) {
-            if (!this.body.symbolTable) {
+            /*if (!this.body.symbolTable) {
                 this.body.symbolTable = new SymbolTable(`Block`, () => this.getSymbolTable());
             } else {
                 this.body.symbolTable.pushParentProvider(() => this.getSymbolTable());
-            }
+            }*/
             this.body.parent = this;
         }
         this.symbolTable = new SymbolTable('FunctionExpression', () => this.parent?.getSymbolTable());
@@ -1449,7 +1449,7 @@ export class VariableExpression extends Expression {
         const nameKey = this.getName();
         if (!resultType) {
             const symbolTable = this.getSymbolTable();
-            resultType = symbolTable?.getSymbolType(nameKey, { ...options, fullName: nameKey, tableProvider: () => this.getSymbolTable() });
+            resultType = symbolTable?.getSymbolType(nameKey, { ...options, statementIndex: this.statementIndex, fullName: nameKey, tableProvider: () => this.getSymbolTable() });
 
             if (util.isClassUsedAsFunction(resultType, this, options)) {
                 resultType = FunctionType.instance;
