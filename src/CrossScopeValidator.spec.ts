@@ -23,6 +23,24 @@ describe('CrossScopeValidator', () => {
         program.dispose();
     });
 
+    it('handles prop access from component interface when inside a typecast', () => {
+        program.options.autoImportComponentScript = true;
+        program.setFile('components/CustomButton.xml', trim`
+            <component name="CustomButton" extends="Group">
+                <interface>
+                    <field id="buttonProp" type="string" />
+                </interface>
+            </component>
+        `);
+        program.setFile('components/CustomButton.bs', `
+            sub test()
+                thing = (m.button as roSGNodeCustomButton).buttonProp
+            end sub
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
     describe('providedNodes', () => {
         it('builds a tree', () => {
             program.setFile<BrsFile>('source/file1.bs', `

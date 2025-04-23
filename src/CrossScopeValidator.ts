@@ -277,7 +277,7 @@ export class CrossScopeValidator {
         if (this.providedTreeMap.has(scope.name)) {
             return this.providedTreeMap.get(scope.name);
         }
-        const providedTree = new ProvidedNode('');
+        const providedTree = new ProvidedNode('', this.componentsMap);
         const duplicatesMap = new Map<string, Set<FileSymbolPair>>();
 
         const referenceTypesMap = new Map<{ symbolName: string; file: BscFile; symbolObj: ProvidedSymbol }, Array<{ name: string; namespacedName?: string }>>();
@@ -499,7 +499,7 @@ export class CrossScopeValidator {
             const typeName = 'rosgnode' + componentName;
             const component = this.program.getComponent(componentName);
             const componentSymbol = this.program.globalScope.symbolTable.getSymbol(typeName, SymbolTypeFlag.typetime)?.[0];
-            if (componentSymbol && component && componentSymbol.type?.isBuiltIn) {
+            if (componentSymbol && component) {
                 this.componentsMap.set(typeName, { file: component.file, symbol: componentSymbol });
             }
         }
