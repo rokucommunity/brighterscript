@@ -171,7 +171,11 @@ export class FunctionExpression extends Expression implements TypedefProvider {
      * The type this function returns
      */
     public returnType: BscType;
-    public requiresReturnType: boolean;
+
+    /**
+     * Does this method require the return type to be present after transpile (useful for `as void` or the `as boolean` in `onKeyEvent`)
+     */
+    private requiresReturnType: boolean;
 
     /**
      * Get the name of the wrapping namespace (if it exists)
@@ -342,10 +346,10 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         return functionType;
     }
 
-    setReturnType() {
+    private setReturnType() {
 
         /**
-         * RokuOS methods can be written 5 ways:
+         * RokuOS methods can be written several different ways:
          * 1. Function() : return withValue
          * 2. Function() as type : return withValue
          * 3. Function() as void : return
@@ -370,7 +374,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             this.returnType = DynamicType.instance;
         }
 
-        if ((isFunctionStatement(this.parent) || isMethodStatement(this.parent)) && this.parent.name?.text.toLowerCase() === 'onkeyevent') {
+        if ((isFunctionStatement(this.parent) || isMethodStatement(this.parent)) && this.parent?.name?.text.toLowerCase() === 'onkeyevent') {
             // onKeyEvent() requires 'as Boolean' otherwise RokuOS throws errors
             this.requiresReturnType = true;
         } else if (isSub && !isVoidType(this.returnType)) { // format (6)
