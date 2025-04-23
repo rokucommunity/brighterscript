@@ -2751,6 +2751,53 @@ describe('BrsFile', () => {
             `);
         });
 
+        it('does not remove `as void` when removeParameterTypes is true', () => {
+            program.options.removeParameterTypes = true;
+            testTranspile(`
+                function one() as void
+                    return
+                end function
+            `, `
+                function one() as void
+                    return
+                end function
+            `);
+        });
+
+        it('does not remove `as <type>` for sub when removeParameterTypes is true', () => {
+            program.options.removeParameterTypes = true;
+            testTranspile(`
+                sub one() as string
+                    return "hello"
+                end sub
+            `, `
+                sub one() as string
+                    return "hello"
+                end sub
+            `);
+        });
+
+        it('does not remove `as boolean` from onKeyEvent when removeParameterTypes is true', () => {
+            program.options.removeParameterTypes = true;
+            testTranspile(`
+                function onKeyEvent(p1) as boolean
+                    return
+                end function
+
+                function somethingElse() as string
+                    return "hello"
+                end function
+            `, `
+                function onKeyEvent(p1) as boolean
+                    return
+                end function
+
+                function somethingElse()
+                    return "hello"
+                end function
+            `);
+        });
+
         it('transpiles local var assignment operators', () => {
             testTranspile(`
                 sub main()
