@@ -187,7 +187,7 @@ export class SymbolTable implements SymbolTypeGetter {
      * @param bitFlags flags to match
      * @returns An array of BscSymbols - one for each time this symbol had a type implicitly defined
      */
-    getSymbol(name: string, bitFlags: SymbolTypeFlag, additionalOptions: { ignoreParentsAndSiblings?: boolean; maxStatementIndex?: number; depth?: number } = {}): BscSymbol[] {
+    getSymbol(name: string, bitFlags: SymbolTypeFlag, additionalOptions: GetSymbolAdditionalOptions = {}): BscSymbol[] {
         let currentTable: SymbolTable = this;
         let previousTable: SymbolTable;
         const key = name?.toLowerCase();
@@ -195,7 +195,6 @@ export class SymbolTable implements SymbolTypeGetter {
         let memberOfAncestor = false;
         const addAncestorInfo = (symbol: BscSymbol) => ({ ...symbol, data: { ...symbol.data, memberOfAncestor: memberOfAncestor } });
         let maxStatementIndex = Number.isInteger(additionalOptions?.maxStatementIndex) ? additionalOptions.maxStatementIndex : Number.MAX_SAFE_INTEGER;
-        const depth = additionalOptions.depth ?? 0;
         do {
 
             if (previousTable) {
@@ -216,82 +215,12 @@ export class SymbolTable implements SymbolTypeGetter {
                 result = [lastResult];
                 precedingAssignmentIndex = lastResult.data?.definingNode?.statementIndex ?? -1;
             }
-            const possiblePocketTables = currentTable.getPossiblePocketTables({ statementIndex: maxStatementIndex }, precedingAssignmentIndex);
-            let pocketTablesAreExhaustive = false;
 
-
-            const pocketTablesWeFoundSomethingIn = new Array<{ table: SymbolTable; results: BscSymbol[] }>();
-            for (const pocketTable of possiblePocketTables) {
-                const pocketTableTypes = pocketTable.table.getSymbol(name, bitFlags, {
-                    ignoreParentsAndSiblings: true,
-                    maxStatementIndex: Number.MAX_SAFE_INTEGER,
-                    depth: depth + 1
-                });
-                if (pocketTableTypes?.length > 0) {
-                    if (pocketTable.table.isOrdered) {
-                        const lastResult = pocketTableTypes[pocketTableTypes.length - 1];
-                        pocketTablesWeFoundSomethingIn.push({ table: pocketTable.table, results: [lastResult] });
-                    } else {
-                        pocketTablesWeFoundSomethingIn.push({ table: pocketTable.table, results: pocketTableTypes });
-                    }
-                }
-            }
-
-            let pocketTableResults: BscSymbol[] = [];
-
-            for (let i = 0; i < pocketTablesWeFoundSomethingIn.length; i++) {
-                let tableData = pocketTablesWeFoundSomethingIn[i];
-                pocketTableResults.push(...tableData.results);
-                if (i === 0) {
-                    continue;
-                }
-                if (tableData.table.complementsTables?.size > 0) {
-                    let tableSatisfied = true;
-                    let allPossibleSatisfiedResults: BscSymbol[] = [];
-                    // need to check if all tables this complements are satisfied
-                    for (const otherTable of tableData.table.complementsTables) {
-                        const foundTableData = pocketTablesWeFoundSomethingIn.find((ptd => {
-                            return otherTable === ptd.table;
-                        }));
-                        if (foundTableData) {
-                            allPossibleSatisfiedResults.push(...foundTableData.results);
-                        } else {
-                            tableSatisfied = false;
-                            break;
-                        }
-
-                    }
-                    if (tableSatisfied) {
-                        // remove all results before this
-                        pocketTableResults = [...allPossibleSatisfiedResults, ...tableData.results];
-                        pocketTablesAreExhaustive = true;
-                    }
-                }
-            }
-
-            if (pocketTablesAreExhaustive) {
-                result = pocketTableResults;
-            } else {
-                // we need to take into account the types before the pocket tables
-                if (!result) {
-                    // there was no result before the pocket tables
-                    if (pocketTableResults.length > 0) {
-                        if (depth === 0) {
-                            // we got pocket tables results, and this is the top recursion
-                            // add uninitialized
-                            result = [{ name: name, type: SymbolTable.uninitializedTypeFactory(), data: {}, flags: bitFlags }, ...pocketTableResults];
-                        } else {
-                            //just return pocket table results:
-                            result = pocketTableResults;
-                        }
-                    } else {
-                        // result should be undefined
-                    }
-                } else {
-                    // just add any pocket table results....
-                    result.push(...pocketTableResults);
-                }
-            }
+            result = currentTable.augmentSymbolResultsWithPocketTableResults(name, bitFlags, result, {
+                ...additionalOptions,
+                maxStatementIndex: maxStatementIndex,
+                precedingAssignmentIndex: precedingAssignmentIndex
+            });
 
             if (result?.length > 0) {
                 result = result.map(addAncestorInfo);
@@ -314,6 +243,90 @@ export class SymbolTable implements SymbolTypeGetter {
         } while (currentTable);
         return result;
     }
+
+    private augmentSymbolResultsWithPocketTableResults(name: string, bitFlags: SymbolTypeFlag, result: BscSymbol[], additionalOptions: { precedingAssignmentIndex?: number } & GetSymbolAdditionalOptions = {}): BscSymbol[] {
+        let pocketTableResults: BscSymbol[] = [];
+        let pocketTablesWeFoundSomethingIn = this.getSymbolDataFromPocketTables(name, bitFlags, additionalOptions);
+        let pocketTablesAreExhaustive = false;
+        const depth = additionalOptions.depth ?? 0;
+        for (let i = 0; i < pocketTablesWeFoundSomethingIn.length; i++) {
+            let tableData = pocketTablesWeFoundSomethingIn[i];
+            pocketTableResults.push(...tableData.results);
+            if (i === 0) {
+                continue;
+            }
+            if (tableData.table.complementsTables?.size > 0) {
+                let tableSatisfied = true;
+                let allPossibleSatisfiedResults: BscSymbol[] = [];
+                // need to check if all tables this complements are satisfied
+                for (const otherTable of tableData.table.complementsTables) {
+                    const foundTableData = pocketTablesWeFoundSomethingIn.find((ptd => {
+                        return otherTable === ptd.table;
+                    }));
+                    if (foundTableData) {
+                        allPossibleSatisfiedResults.push(...foundTableData.results);
+                    } else {
+                        tableSatisfied = false;
+                        break;
+                    }
+                }
+                if (tableSatisfied) {
+                    // remove all results before this
+                    pocketTableResults = [...allPossibleSatisfiedResults, ...tableData.results];
+                    pocketTablesAreExhaustive = true;
+                }
+            }
+        }
+
+        if (pocketTablesAreExhaustive) {
+            result = pocketTableResults;
+        } else {
+            // we need to take into account the types before the pocket tables
+            if (!result) {
+                // there was no result before the pocket tables
+                if (pocketTableResults.length > 0) {
+                    if (depth === 0) {
+                        // we got pocket tables results, and this is the top recursion
+                        // add uninitialized
+                        result = [{ name: name, type: SymbolTable.uninitializedTypeFactory(), data: {}, flags: bitFlags }, ...pocketTableResults];
+                    } else {
+                        //just return pocket table results:
+                        result = pocketTableResults;
+                    }
+                } else {
+                    // result should be undefined
+                }
+            } else {
+                // just add any pocket table results....
+                result.push(...pocketTableResults);
+            }
+        }
+        return result;
+    }
+
+    private getSymbolDataFromPocketTables(name: string, bitFlags: SymbolTypeFlag, additionalOptions: { precedingAssignmentIndex?: number } & GetSymbolAdditionalOptions = {}): Array<{ table: SymbolTable; results: BscSymbol[] }> {
+        const possiblePocketTables = this.getPossiblePocketTables({ statementIndex: additionalOptions.maxStatementIndex }, additionalOptions.precedingAssignmentIndex);
+        const depth = additionalOptions.depth ?? 0;
+
+        const pocketTablesWeFoundSomethingIn = new Array<{ table: SymbolTable; results: BscSymbol[] }>();
+        for (const pocketTable of possiblePocketTables) {
+            const pocketTableTypes = pocketTable.table.getSymbol(name, bitFlags, {
+                ignoreParentsAndSiblings: true,
+                maxStatementIndex: Number.MAX_SAFE_INTEGER,
+                depth: depth + 1
+            });
+            if (pocketTableTypes?.length > 0) {
+                if (pocketTable.table.isOrdered) {
+                    const lastResult = pocketTableTypes[pocketTableTypes.length - 1];
+                    pocketTablesWeFoundSomethingIn.push({ table: pocketTable.table, results: [lastResult] });
+                } else {
+                    pocketTablesWeFoundSomethingIn.push({ table: pocketTable.table, results: pocketTableTypes });
+                }
+            }
+        }
+        return pocketTablesWeFoundSomethingIn;
+    }
+
 
     /**
      * Adds a new symbol to the table
@@ -367,13 +380,7 @@ export class SymbolTable implements SymbolTypeGetter {
         let foundFlags: SymbolTypeFlag = cacheEntry?.flags;
         if (!resolvedType || originalIsReferenceType) {
             let symbolTypes: TypeCacheEntry[];
-            // eslint-disable-next-line no-bitwise
-            //  if (this.hasValidStatementIndex(options) && (options.flags & SymbolTypeFlag.runtime)) {
             symbolTypes = this.getSymbolTypes(name, { ...options, statementIndex: options.statementIndex });
-            //     doSetCache = false;
-            // } else {
-            //   symbolTypes = this.getSymbolTypes(name, options);
-            //  }
             data = symbolTypes?.[0]?.data;
             foundFlags = symbolTypes?.[0]?.flags;
             resolvedType = getUniqueType(symbolTypes?.map(symbol => symbol.type), SymbolTable.unionTypeFactory);
@@ -568,7 +575,7 @@ export class SymbolTable implements SymbolTypeGetter {
     }
 
     private getCacheKey(name: string, options?: { statementIndex?: number | 'end' }) {
-        return this.isOrdered ? `${name.toLowerCase()}_${options.statementIndex ?? 'x'}` : `${name.toLowerCase()}`;
+        return this.isOrdered ? `${name.toLowerCase()}@${options.statementIndex ?? '*'}` : `${name.toLowerCase()}`;
     }
 
     /**
@@ -694,4 +701,11 @@ export interface PocketTable {
      * The index of the statement that contains this table within its parent block
      */
     index: number;
+}
+
+export interface GetSymbolAdditionalOptions {
+    ignoreParentsAndSiblings?: boolean;
+    precedingAssignmentIndex?: number;
+    maxStatementIndex?: number;
+    depth?: number;
 }
