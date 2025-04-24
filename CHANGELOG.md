@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.46](https://github.com/rokucommunity/brighterscript/compare/1.0.0-alpha.45...v1.0.0-alpha.46) - 2025-04-24
+### Changed
+ - Dedupe hover results ([#1480](https://github.com/rokucommunity/brighterscript/pull/1480))
+ - Add missing content node fields ([#1481](https://github.com/rokucommunity/brighterscript/pull/1481))
+ - Merge branch 'master' of https://github.com/rokucommunity/brighterscript into release-1.0.0 ([28a22bf2](https://github.com/rokucommunity/brighterscript/commit/28a22bf2))
+ - Fix erroneous diagnostic for component name on first validation ([#1477](https://github.com/rokucommunity/brighterscript/pull/1477))
+ - Add `DialogBase` to types ([#1470](https://github.com/rokucommunity/brighterscript/pull/1470))
+ - Fix ScopeValidator crash ([#1465](https://github.com/rokucommunity/brighterscript/pull/1465))
+ - Import `performance` from `perf_hooks` to work on node <16 ([#1462](https://github.com/rokucommunity/brighterscript/pull/1462))
+ - Do not provide semantic tokens for primitive types ([#1460](https://github.com/rokucommunity/brighterscript/pull/1460))
+ - Do not validate typedef files for return type mismatch ([#1459](https://github.com/rokucommunity/brighterscript/pull/1459))
+ - Merge master@2b6cc17a into Release-v1 ([#1458](https://github.com/rokucommunity/brighterscript/pull/1458))
+ - Fixes transpilation bug with enums and nested namespaces ([#1454](https://github.com/rokucommunity/brighterscript/pull/1454))
+ - Change type of 'version' parameter from String to Integer in the Type ([#1453](https://github.com/rokucommunity/brighterscript/pull/1453))
+
+
+
 ## [1.0.0-alpha.45](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.44...v1.0.0-alpha.45) - 2025-04-04
 ### Added
  - new `diagnosticFiltersV0Compatibility` bsconfig.json option ([#1424](https://github.com/rokucommunity/brighterscript/pull/1424))
