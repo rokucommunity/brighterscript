@@ -1,5 +1,5 @@
 {
-    "generatedDate": "2025-03-31T16:44:02.516Z",
+    "generatedDate": "2025-04-24T15:48:08.626Z",
     "nodes": {
         "animation": {
             "description": "Extends [**AnimationBase**](https://developer.roku.com/docs/references/scenegraph/abstract-nodes/animationbase.md\n\nThe Animation node class provides animations of renderable nodes, by applying interpolator functions to the values in specified renderable node fields. For an animation to take effect, an Animation node definition must include a child field interpolator node ([FloatFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/floatfieldinterpolator.md\"FloatFieldInterpolator\"), [Vector2DFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/vector2dfieldinterpolator.md\"Vector2DFieldInterpolator\"), [ColorFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/colorfieldinterpolator.md\"ColorFieldInterpolator\")) definition for each renderable node field that is animated.\n\nThe Animation node class provides a simple linear interpolator function, where the animation takes place smoothly and simply from beginning to end. The Animation node class also provides several more complex interpolator functions to allow custom animation effects. For example, you can move a graphic image around the screen at differing speeds and curved trajectories at different times in the animation by specifying the appropriate function in the easeFunction field (quadratic and exponential are two examples of functions that can be specified). The interpolator functions are divided into two parts: the beginning of the animation (ease-in), and the end of the animation (ease-out). You can apply a specified interpolator function to either or both ease-in and ease-out, or specify no function for either or both (which is the linear function). You can also change the portion of the animation that is ease-in and ease-out to arbitrary fractional values for a quadratic interpolator function applied to both ease-in and ease-out.",
@@ -1189,6 +1189,13 @@
             "fields": [
                 {
                     "accessPermission": "READ_WRITE",
+                    "default": "",
+                    "description": "For upgrades/downgrades only. Set this to \"Upgrade\" or \"Downgrade\" to change the subscription plan from a previous purchase (for example, myOrder.action = \"Upgrade\"). The required values are case-sensitive; do not pass \"upgrade\" or \"downgrade\". See On-device upgrade and downgrade for more information.",
+                    "name": "action",
+                    "type": "string"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
                     "default": "not specified",
                     "description": "List of Actor Names or Individual Actor Name",
                     "name": "Actors",
@@ -1315,10 +1322,24 @@
                 },
                 {
                     "accessPermission": "READ_WRITE",
+                    "default": "",
+                    "description": "The publisher-specific SKU (or other unique identifier) for the product.",
+                    "name": "contentKey",
+                    "type": "string"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
                     "default": "not specified",
                     "description": "Although ContentType accepts type String, the return value is of type \\[roInt\\](https://developer.roku.com/docs/references/brightscript/components/roint.md. See table below.\n\n| Content Type | Return Value |\n| --- | --- |\n| audio | 5 |\n| episode | 4 |\n| movie | 1 |\n| not set or not supported | 0 |\n| season | 3 |\n| series | 2 |",
                     "name": "ContentType",
                     "type": "String"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "",
+                    "description": "An alphanumeric string entered by the customer to receive a discounted price on the product.",
+                    "name": "couponCode",
+                    "type": "string"
                 },
                 {
                     "accessPermission": "READ_WRITE",
@@ -1333,6 +1354,13 @@
                     "description": "List of Director Names",
                     "name": "Directors",
                     "type": "roArray"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "invalid",
+                    "description": "The original price of the product. Do not include a currency symbol (for example, set this to \"3.99\" instead of \"$3.99\").",
+                    "name": "drmParams",
+                    "type": "string"
                 },
                 {
                     "accessPermission": "READ_WRITE",
@@ -1553,6 +1581,13 @@
                 },
                 {
                     "accessPermission": "READ_WRITE",
+                    "default": "",
+                    "description": "The orderID returned by Roku in the RequestPartnerOrderStatus content node.",
+                    "name": "orderId",
+                    "type": "string"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
                     "default": "not specified",
                     "description": "PlayStart defines the start position of the content, in seconds. Starting from Roku OS 8.0, content metadata supports negative PlayStart values. This feature allows the media players to start playbacks distanced from the edge of the live stream",
                     "name": "PlayStart",
@@ -1564,6 +1599,20 @@
                     "description": "Specifies the audio codec that should be used during playback. The Media Player will select and report to the app only those audio renditions that are encoded with the specified codec. Renditions that are encoded with a different codec are ignored. Possible values of this attribute are \"aac\", \"ac3\" and \"eac3\".",
                     "name": "PreferredAudioCodec",
                     "type": "String"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "",
+                    "description": "The original price of the product. Do not include a currency symbol (for example, set this to \"3.99\" instead of \"$3.99\").",
+                    "name": "price",
+                    "type": "string"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "",
+                    "description": "The original price of the product. Do not include a currency symbol (for example, set this to \"3.99\" instead of \"$3.99\").",
+                    "name": "priceDisplay",
+                    "type": "string"
                 },
                 {
                     "accessPermission": "READ_WRITE",
@@ -1875,7 +1924,7 @@
             "description": "> Roku OS 10.0 introduced a new [StandardDialog node](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/standard-dialog.md\"**Standard Dialog**\"), which features updated graphics and color palette support. This enables developers to provide a consistent user experience across the dialogs in their app. Developers should replace the legacy Dialog nodes in their app with the new [StandardDialog nodes](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/standard-dialog.md\"**Standard Dialog**\").\n\nExtends [**Group**](https://developer.roku.com/docs/references/scenegraph/layout-group-nodes/group.md\"**Group**\")\n\nThe Dialog node class defines a modal pop-up dialog used to present the user with information requiring their immediate attention.\n\nSetting the dialog field of the current Scene node to a Dialog node causes the dialog to be displayed.\n\nThe Dialog node is configured to have up to five regions: the title, message, bullet text, graphic, and button regions. All of these are optional except for the title.\n\n*   The title region consists of a an icon and a title label, along with a horizontal divider that visually separates the title from the rest of the dialog.\n    \n*   The message region consist of a string that is displayed below the title divider.\n    \n*   The bullet text region contains a set of zero or more bullet points. It is displayed below the message.\n    \n*   The graphic region consists of a single bitmap displayed center-aligned below the message and bullet text and above the button region.\n    \n*   The button region contains a ButtonGroup node that contains zero or more Button nodes, arranged vertically.\n    \n\nDialogs are modal and intercept all key events except pressing the Home key. Dialogs are closed automatically when the user presses the Home key or the Back key. If the optionsDialog field is set to true, pressing the Options key also closes the dialog.\n\nOnly a single dialog may appear at any time. If a second dialog is shown, the previous dialog is closed automatically.",
             "events": [],
             "extends": {
-                "name": "Group",
+                "name": "DialogBase",
                 "url": "https://developer.roku.com/docs/references/scenegraph/layout-group-nodes/group.md"
             },
             "fields": [
@@ -2065,6 +2114,88 @@
             "interfaces": [],
             "name": "Dialog",
             "url": "https://developer.roku.com/docs/references/scenegraph/dialog-nodes/dialog.md"
+        },
+        "dialogbase": {
+            "description": "The base dialog component....blablabla",
+            "events": [],
+            "extends": {
+                "name": "Group",
+                "url": "https://developer.roku.com/docs/references/scenegraph/layout-group-nodes/group.md"
+            },
+            "fields": [
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "true",
+                    "description": "When set to `true`, dialog will close on back button press",
+                    "name": "backExitsDialog",
+                    "type": "boolean"
+                },
+                {
+                    "accessPermission": "READ_ONLY",
+                    "default": "0",
+                    "description": "Indicates the index of the button that gained focus when the user moved the focus onto one of the buttons in the button area.",
+                    "name": "buttonFocused",
+                    "type": "int"
+                },
+                {
+                    "accessPermission": "READ_ONLY",
+                    "default": "0",
+                    "description": "Indicates the index of the selected button when the user selects one of the buttons in the button area.",
+                    "name": "buttonSelected",
+                    "type": "int"
+                },
+                {
+                    "accessPermission": "WRITE_ONLY",
+                    "default": "false",
+                    "description": "Dismisses the dialog. The dialog is dismissed whenever the close field is set, regardless of whether the field is set to true or false.",
+                    "name": "close",
+                    "type": "boolean"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "true",
+                    "description": "When set to `true`, dialog will close on back button press",
+                    "name": "homeExitsDialog",
+                    "type": "boolean"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "false",
+                    "description": "If set to true, the dialog is automatically dismissed when the Options key is pressed",
+                    "name": "optionsDialog",
+                    "type": "Boolean"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "not set",
+                    "description": "Sets the color palette for the dialog's background, text, buttons, and other elements. By default, no palette is specified; therefore, the dialog inherits the color palette from the nodes higher in the scene graph (typically, from the dialog's \\[Scene\\](https://developer.roku.com/docs/references/scenegraph/scene.md node, which has a \\*\\*palette\\*\\* field that can be used to consistently color the standard dialogs and keyboards in the app). The RSGPalette color values used by the StandardDialog node are as follows:\n\n| Palette Color Name | Usages |\n| --- | --- |\n| DialogBackgroundColor | Blend color for dialog's background bitmap. |\n| DialogItemColor | Blend color for the following items:    *   [StdDlgProgressItem's](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-progress-item.md spinner bitmap *   [StdDlgDeterminateProgressItem's](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-determinate-progress-item.md graphic   |\n| DialogTextColor | Color for the text in the following items:    *   [StdDlgTextItem](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-text-item.md and [StdDlgGraphicItem](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-graphic-item.md if the **namedTextStyle** field is set to \"normal\" or \"bold\". *   All [content area items](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md, except for [StdDlgTextItem](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-text-item.md and [StdDlgGraphicItem](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-graphic-item.md. *   [Title area](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-title-area.mdfields). Unfocused button.   |\n| DialogFocusColor | Blend color for the following:    *   The [button area](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-button-area.mdfields) focus bitmap. *   The focused scrollbar thumb.   |\n| DialogFocusItemColor | Color for the text of the focused button. |\n| DialogSecondaryTextColor | Color for the text of in the following items:    *   [StdDlgTextItem](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-text-item.md and [StdDlgGraphicItem](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-graphic-item.md if the **namedTextStyle** field is set to \"secondary\". *   Disabled button.   |\n| DialogSecondaryItemColor | Color for the following items:    *   The divider displayed below the title area. *   The unfilled portion of the [StdDlgDeterminateProgressItem's](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-determinate-progress-item.md graphic.   |\n| DialogInputFieldColor | The blend color for the text edit box background bitmap for keyboards used inside dialogs. |\n| DialogKeyboardColor | The blend color for the keyboard background bitmap for keyboards used inside dialogs |\n| DialogFootprintColor | The blend color for the following items:    *   The button focus footprint bitmap that is displayed when the [button area](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-button-area.mdfields) does not have focus. *   Unfocused scrollbar thumb and scrollbar track.   |",
+                    "name": "palette",
+                    "type": "RSGPalette node"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "\"\"",
+                    "description": "The title to be displayed at the top of the dialog.",
+                    "name": "title",
+                    "type": "string"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "N/A",
+                    "description": "Set when the dialog has been closed. The field is set when the dialog close field is set, when the Back or Home key has been pressed, when the Options key has been pressed if the optionsDialog field is set to true, and when the dialog is dismissed because another dialog was displayed",
+                    "name": "wasClosed",
+                    "type": "Event"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "-1.0",
+                    "description": "Specifies the width of the dialog. By default, this value is pulled from the system theme",
+                    "name": "width",
+                    "type": "float"
+                }
+            ],
+            "interfaces": [],
+            "name": "DialogBase"
         },
         "dynamiccustomkeyboard": {
             "description": "Extends [DynamicKeyboardBase](https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/dynamic-keyboard-base.md\"DynamicKeyboardBase\")\n\nThe **DynamicCustomKeyboard** node enables developers to create a voice-enabled keyboard that has a custom layout. As specified in its parent [DynamicKeyboardBase](https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/dynamic-keyboard-base.md\"DynamicKeyboardBase\") class, the **DynamicCustomKeyboard** node has a built-in [**VoiceTextEditBox**](https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/voice-text-edit-box.md node for displaying the string of characters provided via text or voice entry, and it has a [**DynamicKeyGrid**](https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/dynamic-key-grid.md node that provides keyboard functionality.\n\nThe layout of the keyboard is customized based on a JSON-formatted Key Definition File. In the Key Definition File, the developer labels the individual keys and groups them into sections and rows. The key labels support the characters in the Basic Latin, Latin 1 Supplement, Latin Extended-A, and Latin Extended-B blocks. This provides support for most Western European languages, including English, French, German, Italian, Portuguese, and Spanish.\n\n![roku815px - address-keyboard-voice](https://image.roku.com/ZHZscHItMTc2/address-keyboard-voice.jpg)",
@@ -3380,7 +3511,7 @@
                 },
                 {
                     "accessPermission": "READ_WRITE",
-                    "default": "false",
+                    "default": "true",
                     "description": "Specifies whether the focus indicator bitmap is drawn below or on top of the list items",
                     "name": "drawFocusFeedbackOnTop",
                     "type": "Boolean"
@@ -5541,7 +5672,7 @@
             "description": "Extends [Group](https://developer.roku.com/docs/references/scenegraph/layout-group-nodes/group.md\"**Group**\")\n\nThe **StandardDialog** node is the base for Roku's pre-built standard message, keyboard, pinpad, and progress dialogs. It can also be used directly with a custom dialog structure built with the **StdDialogItem** nodes.",
             "events": [],
             "extends": {
-                "name": "Group",
+                "name": "DialogBase",
                 "url": "https://developer.roku.com/docs/references/scenegraph/layout-group-nodes/group.md"
             },
             "fields": [
@@ -7965,7 +8096,7 @@
         },
         "roevpcipher": {
             "constructors": [],
-            "description": "The EVP Cipher component provides an interface to the OpenSSL EVP library of symmetric cipher commands. The EVP library provides a high-level interface to cryptographic functions to implement digital \"envelopes\".\n\nThese commands allow data to be encrypted or decrypted using various block and stream ciphers using keys based on passwords or explicitly provided.\n\nSome of the ciphers do not have large keys and others have security implications if not used correctly. A beginner is advised to just use a strong block cipher in CBC mode such as bf or des3. All the block ciphers normally use PKCS#5 padding also known as standard block padding. If padding is disabled then the input data must be a multiple of the cipher block length.\n\n> For additional information on the OpenSSL library of symmetric ciphers see: [https://www.openssl.org/docs/manmaster/man1/enc.html](https://www.openssl.org/docs/manmaster/man1/enc.html).\n\n**List of supported ciphers**\n\n| Name | Cipher | Key size (bits) | Block size (bits) |\n| --- | --- | --- | --- |\n| bf-cbc | Blowfish in CBC mode | 128 | 64 |\n| bf | Alias for bf-cbc | 128 | 64 |\n| bf-cfb | Blowfish in CFB mode | 128 | 64 |\n| bf-ecb | Blowfish in ECB mode | 128 | 64 |\n| bf-ofb | Blowfish in OFB mode | 128 | 64 |\n| des-cbc | DES in CBC mode | 56 | 64 |\n| des | Alias for des-cbc | 56 | 64 |\n| des-cfb | DES in CBC mode | 56 | 64 |\n| des-ecb | DES in ECB mode | 56 | 64 |\n| des-ofb | DES in OFB mode | 56 | 64 |\n| des-ede-cbc | Two key triple DES EDE in CBC mode | 80 | 64 |\n| des-ede | Two key triple DES EDE in ECB mode | 80 | 64 |\n| des-ede-cfb | Two key triple DES EDE in CFB mode | 80 | 64 |\n| des-ede-ofb | Two key triple DES EDE in OFB mode | 80 | 64 |\n| des-ede3-cbc | Three key triple DES EDE in CBC mode | 112 | 64 |\n| des-ede3 | Three key triple DES EDE in ECB mode | 112 | 64 |\n| des3 | Alias for des-ede3-cbc | 112 | 64 |\n| des-ede3-cfb | Three key triple DES EDE in CFB mode | 112 | 64 |\n| des-ede3-ofb | Three key triple DES EDE in OFB mode | 112 | 64 |\n| desx | DESX algorithm | approx. 119 | 64 |\n| desx-cbc | DESX in CBC mode | approx. 119 | 64 |\n| aes-\\[128/192/256\\]-cbc | 128/192/256 bit AES in CBC mode | 128,192,256 | 128 |\n| aes-\\[128/192/256\\] | Alias for aes-\\[128/192/256\\]-cbc | 128,192,256 | 128 |\n| aes-\\[128/192/256\\]-cfb | 128/192/256 bit AES in 128 bit CFB mode | 128,192,256 | 128 |\n| aes-\\[128/192/256\\]-cfb1 | 128/192/256 bit AES in 1 bit CFB mode | 128,192,256 | 128 |\n| aes-\\[128/192/256\\]-cfb8 | 128/192/256 bit AES in 8 bit CFB mode | 128,192,256 | 128 |\n| aes-\\[128/192/256\\]-ecb | 128/192/256 bit AES in ECB mode | 128,192,256 | 128 |\n| aes-\\[128/192/256\\]-ofb | 128/192/256 bit AES in OFB mode | 128,192,256 | 128 |",
+            "description": "The EVP Cipher component provides an interface to the OpenSSL EVP library of symmetric cipher commands. The EVP library provides a high-level interface to cryptographic functions to implement digital \"envelopes\".\n\nThese commands allow data to be encrypted or decrypted using various block and stream ciphers using keys based on passwords or explicitly provided.\n\nSome of the ciphers do not have large keys and others have security implications if not used correctly. A beginner is advised to just use a strong block cipher in CBC mode such as aes-128-cbc. All the block ciphers normally use PKCS#5 padding also known as standard block padding. If padding is disabled then the input data must be a multiple of the cipher block length.\n\n> For additional information on the OpenSSL library of symmetric ciphers see: [https://www.openssl.org/docs/manmaster/man1/enc.html](https://www.openssl.org/docs/manmaster/man1/enc.html).\n\n**List of supported ciphers**\n\n| Name | Cipher | Key size (bits) | Block size (bits) |\n| --- | --- | --- | --- |\n| aes-\\[128/192/256\\]-cbc | 128/192/256 bit AES in CBC mode | 128,192,256 | 128 |\n| aes-\\[128/192/256\\] | Alias for aes-\\[128/192/256\\]-cbc | 128,192,256 | 128 |\n| aes-\\[128/192/256\\]-cfb | 128/192/256 bit AES in 128 bit CFB mode | 128,192,256 | 128 |\n| aes-\\[128/192/256\\]-cfb1 | 128/192/256 bit AES in 1 bit CFB mode | 128,192,256 | 128 |\n| aes-\\[128/192/256\\]-cfb8 | 128/192/256 bit AES in 8 bit CFB mode | 128,192,256 | 128 |\n| aes-\\[128/192/256\\]-ecb | 128/192/256 bit AES in ECB mode | 128,192,256 | 128 |\n| aes-\\[128/192/256\\]-ofb | 128/192/256 bit AES in OFB mode | 128,192,256 | 128 |\n| bf-cbc | Blowfish in CBC mode    > Blowfish (bf\\*) ciphers are obsolete. Support for these ciphers may be removed in future Roku OS releases.   | 128 | 64 |\n| bf | Alias for bf-cbc | 128 | 64 |\n| bf-cfb | Blowfish in CFB mode | 128 | 64 |\n| bf-ecb | Blowfish in ECB mode | 128 | 64 |\n| bf-ofb | Blowfish in OFB mode | 128 | 64 |\n| des-cbc | DES in CBC mode | 56 | 64 |\n| des | Alias for des-cbc | 56 | 64 |\n| des-cfb | DES in CBC mode | 56 | 64 |\n| des-ecb | DES in ECB mode | 56 | 64 |\n| des-ofb | DES in OFB mode | 56 | 64 |\n| des-ede-cbc | Two key triple DES EDE in CBC mode | 80 | 64 |\n| des-ede | Two key triple DES EDE in ECB mode | 80 | 64 |\n| des-ede-cfb | Two key triple DES EDE in CFB mode | 80 | 64 |\n| des-ede-ofb | Two key triple DES EDE in OFB mode | 80 | 64 |\n| des-ede3-cbc | Three key triple DES EDE in CBC mode | 112 | 64 |\n| des-ede3 | Three key triple DES EDE in ECB mode | 112 | 64 |\n| des3 | Alias for des-ede3-cbc | 112 | 64 |\n| des-ede3-cfb | Three key triple DES EDE in CFB mode | 112 | 64 |\n| des-ede3-ofb | Three key triple DES EDE in OFB mode | 112 | 64 |\n| desx | DESX algorithm | approx. 119 | 64 |\n| desx-cbc | DESX in CBC mode | approx. 119 | 64 |",
             "events": [],
             "interfaces": [
                 {
@@ -9698,8 +9829,7 @@
                             "type": "Object"
                         }
                     ],
-                    "returnDescription": "The function returns `invalid`.",
-                    "returnType": "object"
+                    "returnType": "void"
                 },
                 {
                     "description": "Remove all key/values from the associative array.",

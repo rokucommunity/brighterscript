@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.46](https://github.com/rokucommunity/brighterscript/compare/1.0.0-alpha.45...v1.0.0-alpha.46) - 2025-04-24
+### Added
+ - Add missing content node fields ([#1481](https://github.com/rokucommunity/brighterscript/pull/1481))
+ - Add `DialogBase` to types ([#1470](https://github.com/rokucommunity/brighterscript/pull/1470))
+### Changed
+ - Do not validate typedef files for return type mismatch ([#1459](https://github.com/rokucommunity/brighterscript/pull/1459))
+ - Dedupe hover results ([#1480](https://github.com/rokucommunity/brighterscript/pull/1480))
+ - Do not provide semantic tokens for primitive types ([#1460](https://github.com/rokucommunity/brighterscript/pull/1460))
+### Fixed
+ - Fix erroneous diagnostic for component name on first validation ([#1477](https://github.com/rokucommunity/brighterscript/pull/1477))
+ - Fix ScopeValidator crash ([#1465](https://github.com/rokucommunity/brighterscript/pull/1465))
+ - Import `performance` from `perf_hooks` to work on node <16 ([#1462](https://github.com/rokucommunity/brighterscript/pull/1462))
+ - Fixes transpilation bug with enums and nested namespaces ([#1454](https://github.com/rokucommunity/brighterscript/pull/1454))
+ - Change type of 'version' parameter from String to Integer in the Type ([#1453](https://github.com/rokucommunity/brighterscript/pull/1453))
+
+
 ## [1.0.0-alpha.45](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.44...v1.0.0-alpha.45) - 2025-04-04
 ### Added
  - new `diagnosticFiltersV0Compatibility` bsconfig.json option ([#1424](https://github.com/rokucommunity/brighterscript/pull/1424))
@@ -413,7 +429,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
  - all the type tracking stuff!
 
- 
+
+## [0.69.7](https://github.com/rokucommunity/brighterscript/compare/0.69.6...v0.69.7) - 2025-04-23
+### Added
+ - flag incorrect return statements in functions and subs ([#1463](https://github.com/rokucommunity/brighterscript/pull/1463))
+### Fixed
+ - prevent runtime crash for non-referencable funcs in ternary and null coalescing ([#1474](https://github.com/rokucommunity/brighterscript/pull/1474))
+ - fix `removeParameterTypes` compile errors for return types ([#1414](https://github.com/rokucommunity/brighterscript/pull/1414))
+
+
+
 ## [0.69.6](https://github.com/rokucommunity/brighterscript/compare/v0.69.5...v0.69.6) - 2025-04-09
 ### Changed
  - Updated the type definition of the `InStr` global callable ([#1456](https://github.com/rokucommunity/brighterscript/pull/1456))

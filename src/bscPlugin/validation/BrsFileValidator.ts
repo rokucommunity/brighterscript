@@ -242,6 +242,33 @@ export class BrsFileValidator {
                     node.parent.getSymbolTable().addSymbol(node.tokens.name.text, { definingNode: node, isInstance: true }, node.getType({ flags: SymbolTypeFlag.runtime }), SymbolTypeFlag.runtime);
                 }
             },
+            ReturnStatement: (node) => {
+                const func = node.findAncestor<FunctionExpression>(isFunctionExpression);
+                //these situations cannot have a value next to `return`
+                if (
+                    //`function as void`, `sub as void`
+                    (isVariableExpression(func?.returnTypeExpression?.expression) && func.returnTypeExpression.expression.tokens.name.text?.toLowerCase() === 'void') ||
+                    //`sub` <without return value>
+                    (func.tokens.functionType?.kind === TokenKind.Sub && !func.returnTypeExpression)
+                ) {
+                    //there may not be a return value
+                    if (node.value) {
+                        this.event.program.diagnostics.register({
+                            ...DiagnosticMessages.voidFunctionMayNotReturnValue(func.tokens.functionType?.text),
+                            location: node.location
+                        });
+                    }
+
+                } else {
+                    //there MUST be a return value
+                    if (!node.value) {
+                        this.event.program.diagnostics.register({
+                            ...DiagnosticMessages.nonVoidFunctionMustReturnValue(func?.tokens.functionType?.text),
+                            location: node.location
+                        });
+                    }
+                }
+            },
             ContinueStatement: (node) => {
                 this.validateContinueStatement(node);
             },

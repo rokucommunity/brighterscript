@@ -931,7 +931,6 @@ export let DiagnosticMessages = {
         code: 'unexpected-optional-chain'
     }),
     /**
-     *
      * @param name for function calls where we can't find the name of the function
      * @param fullName if a namespaced name, this is the full name `alpha.beta.charlie`, otherwise it's the same as `name`
      * @param typeName if 'name' refers to a member, what is the the type it is a member of?
@@ -948,19 +947,17 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'cannot-find-function'
     }),
-    argumentTypeMismatch: (actualTypeString: string, expectedTypeString: string, data?: TypeCompatibilityData) => ({
-        message: `Argument of type '${actualTypeString}' is not compatible with parameter of type '${expectedTypeString}'${typeCompatibilityMessage(actualTypeString, expectedTypeString, data)} `,
-        data: data,
+    voidFunctionMayNotReturnValue: (functionType = 'function') => ({
+        message: `Void ${functionType} may not return a value`,
         legacyCode: 1141,
         severity: DiagnosticSeverity.Error,
-        code: 'argument-type-mismatch'
+        code: 'unexpected-return-value'
     }),
-    returnTypeMismatch: (actualTypeString: string, expectedTypeString: string, data?: TypeCompatibilityData) => ({
-        message: `Type '${actualTypeString}' is not compatible with declared return type '${expectedTypeString}'${typeCompatibilityMessage(actualTypeString, expectedTypeString, data)} '`,
-        data: data,
+    nonVoidFunctionMustReturnValue: (functionType = 'function') => ({
+        message: `Non-void ${functionType} must return a value`,
         legacyCode: 1142,
         severity: DiagnosticSeverity.Error,
-        code: 'return-type-mismatch'
+        code: 'missing-return-value'
     }),
     assignmentTypeMismatch: (actualTypeString: string, expectedTypeString: string, data?: TypeCompatibilityData) => ({
         message: `Type '${actualTypeString}' is not compatible with type '${expectedTypeString}'${typeCompatibilityMessage(actualTypeString, expectedTypeString, data)}`,
@@ -1032,6 +1029,20 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'return-type-coercion-mismatch'
     }),
+    argumentTypeMismatch: (actualTypeString: string, expectedTypeString: string, data?: TypeCompatibilityData) => ({
+        message: `Argument of type '${actualTypeString}' is not compatible with parameter of type '${expectedTypeString}'${typeCompatibilityMessage(actualTypeString, expectedTypeString, data)} `,
+        data: data,
+        legacyCode: 1152,
+        severity: DiagnosticSeverity.Error,
+        code: 'argument-type-mismatch'
+    }),
+    returnTypeMismatch: (actualTypeString: string, expectedTypeString: string, data?: TypeCompatibilityData) => ({
+        message: `Type '${actualTypeString}' is not compatible with declared return type '${expectedTypeString}'${typeCompatibilityMessage(actualTypeString, expectedTypeString, data)} '`,
+        data: data,
+        legacyCode: 1153,
+        severity: DiagnosticSeverity.Error,
+        code: 'return-type-mismatch'
+    }),
     cannotFindCallFuncFunction: (name: string, fullName: string, typeName: string) => ({
         message: `Cannot find callfunc function '${name}' for type '${typeName}'`,
         data: {
@@ -1040,6 +1051,7 @@ export let DiagnosticMessages = {
             typeName: typeName,
             isCallfunc: true
         },
+        legacyCode: 1154,
         severity: DiagnosticSeverity.Error,
         code: 'cannot-find-callfunc'
     })

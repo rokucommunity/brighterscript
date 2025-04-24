@@ -2624,6 +2624,7 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
+                DiagnosticMessages.voidFunctionMayNotReturnValue('sub').message,
                 DiagnosticMessages.returnTypeMismatch('string', 'void').message
             ]);
         });
@@ -2636,7 +2637,8 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.returnTypeMismatch('string', 'void').message
+                DiagnosticMessages.returnTypeMismatch('string', 'void').message,
+                DiagnosticMessages.voidFunctionMayNotReturnValue('function').message
             ]);
         });
 
@@ -2811,7 +2813,9 @@ describe('ScopeValidator', () => {
                 end function
             `);
             program.validate();
-            expectZeroDiagnostics(program);
+            expectDiagnostics(program, [
+                DiagnosticMessages.nonVoidFunctionMustReturnValue('function').message
+            ]);
         });
 
         it('allows function with dynamic return types with void return value ', () => {
@@ -2821,7 +2825,9 @@ describe('ScopeValidator', () => {
                 end function
             `);
             program.validate();
-            expectZeroDiagnostics(program);
+            expectDiagnostics(program, [
+                DiagnosticMessages.nonVoidFunctionMustReturnValue('function').message
+            ]);
         });
 
 
@@ -2833,7 +2839,8 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.returnTypeMismatch('void', 'integer').message
+                DiagnosticMessages.returnTypeMismatch('void', 'integer').message,
+                DiagnosticMessages.nonVoidFunctionMustReturnValue('sub').message
             ]);
         });
 
@@ -2845,7 +2852,8 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.returnTypeMismatch('integer', 'void').message
+                DiagnosticMessages.returnTypeMismatch('integer', 'void').message,
+                DiagnosticMessages.voidFunctionMayNotReturnValue('function').message
             ]);
         });
 
@@ -2865,10 +2873,6 @@ describe('ScopeValidator', () => {
                 sub doNothing4()
                     return
                 end sub
-
-                function doNothing5()
-                    return
-                end function
             `);
             program.validate();
             expectZeroDiagnostics(program);
@@ -5107,4 +5111,3 @@ describe('ScopeValidator', () => {
         });
     });
 });
-
