@@ -120,6 +120,33 @@ describe('ProjectManager', () => {
         });
     });
 
+    describe('getHover', () => {
+        it('dedupes identical hover contents', async () => {
+            fsExtra.outputFileSync(`${rootDir}/source/main.brs`, `
+                sub main()
+                end sub
+            `);
+            await manager.syncProjects([{
+                workspaceFolder: rootDir
+            }]);
+            sinon.stub(manager.projects[0], 'getHover').returns(Promise.resolve([{
+                contents: ['one', 'two', 'three'],
+                range: util.createRange(1, 1, 1, 1)
+            }, {
+                contents: ['two', 'three', 'four'],
+                range: util.createRange(2, 2, 2, 2)
+            }]));
+            const hover = await manager.getHover({
+                srcPath: s`${rootDir}/source/main.brs`,
+                position: util.createPosition(1, 23)
+            });
+            expect(hover).to.eql({
+                contents: ['one', 'two', 'three', 'four'],
+                range: util.createRange(1, 1, 2, 2)
+            });
+        });
+    });
+
     describe('syncProjects', () => {
         it('does not crash on zero projects', async () => {
             await manager.syncProjects([]);
