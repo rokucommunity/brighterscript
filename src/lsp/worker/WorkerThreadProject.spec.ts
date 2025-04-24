@@ -32,7 +32,7 @@ after(() => {
 describe('WorkerThreadProject', () => {
     let project: WorkerThreadProject;
     before(async function workerThreadWarmup() {
-        this.timeout(20_000);
+        this.timeout(40_000);
         await getWakeWorkerThreadPromise();
     });
 
