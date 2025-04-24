@@ -3,10 +3,10 @@ import type { BrsFile } from '../../files/BrsFile';
 import type { AALiteralExpression, DottedGetExpression, FunctionExpression } from '../../parser/Expression';
 import type { AssignmentStatement, ClassStatement, ForEachStatement, FunctionStatement, NamespaceStatement, PrintStatement } from '../../parser/Statement';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
-import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics } from '../../testHelpers.spec';
+import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, rootDir } from '../../testHelpers.spec';
 import { Program } from '../../Program';
 import { isAssignmentStatement, isClassStatement, isForEachStatement, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isNamespaceStatement, isPrintStatement, isReturnStatement } from '../../astUtils/reflection';
-import util from '../../util';
+import { util, standardizePath as s } from '../../util';
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { ClassType } from '../../types/ClassType';
@@ -24,7 +24,9 @@ import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 describe('BrsFileValidator', () => {
     let program: Program;
     beforeEach(() => {
-        program = new Program({});
+        program = new Program({
+            rootDir: rootDir
+        });
     });
 
     it('links dotted get expression parents', () => {
@@ -1410,6 +1412,206 @@ describe('BrsFileValidator', () => {
                 end sub
             `);
             expectDiagnostics(program, []);
+        });
+    });
+
+    describe('function return values', () => {
+        it('catches sub with return value', () => {
+            program.setFile('source/main.brs', `
+                sub test()
+                    return true
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                {
+                    ...DiagnosticMessages.voidFunctionMayNotReturnValue('sub'),
+                    location: util.createLocation(2, 20, 2, 31, s`${rootDir}/source/main.brs`)
+                },
+                DiagnosticMessages.returnTypeMismatch('boolean', 'void', {})
+            ]);
+        });
+
+        it('catches sub as void with return value', () => {
+            program.setFile('source/main.brs', `
+                sub test() as void
+                    return true
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                {
+                    ...DiagnosticMessages.voidFunctionMayNotReturnValue('sub'),
+                    location: util.createLocation(2, 20, 2, 31, s`${rootDir}/source/main.brs`)
+                },
+                DiagnosticMessages.returnTypeMismatch('boolean', 'void', {})
+            ]);
+        });
+
+        it('catches function as void with return value', () => {
+            program.setFile('source/main.brs', `
+                function test() as void
+                    return true
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                {
+                    ...DiagnosticMessages.voidFunctionMayNotReturnValue('function'),
+                    location: util.createLocation(2, 20, 2, 31, s`${rootDir}/source/main.brs`)
+                },
+                DiagnosticMessages.returnTypeMismatch('boolean', 'void', {})
+            ]);
+        });
+
+        it('catches sub as <type> without return value', () => {
+            program.setFile('source/main.brs', `
+                sub test() as integer
+                    return
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                {
+                    ...DiagnosticMessages.nonVoidFunctionMustReturnValue('sub'),
+                    location: util.createLocation(2, 20, 2, 26, s`${rootDir}/source/main.brs`)
+                },
+                DiagnosticMessages.returnTypeMismatch('void', 'integer', {})
+            ]);
+        });
+
+        it('catches function without return value', () => {
+            program.setFile('source/main.brs', `
+                function test()
+                    return
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.nonVoidFunctionMustReturnValue('function'),
+                location: util.createLocation(2, 20, 2, 26, s`${rootDir}/source/main.brs`)
+            }]);
+        });
+
+        it('catches function as <type> without return value', () => {
+            program.setFile('source/main.brs', `
+                function test() as integer
+                    return
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                {
+                    ...DiagnosticMessages.nonVoidFunctionMustReturnValue('function'),
+                    location: util.createLocation(2, 20, 2, 26, s`${rootDir}/source/main.brs`)
+                },
+                DiagnosticMessages.returnTypeMismatch('void', 'integer', {})
+            ]);
+        });
+
+        it('catches anon sub with return value', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    test = sub()
+                        return true
+                    end sub
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                {
+                    ...DiagnosticMessages.voidFunctionMayNotReturnValue('sub'),
+                    location: util.createLocation(3, 24, 3, 35, s`${rootDir}/source/main.brs`)
+                },
+                DiagnosticMessages.returnTypeMismatch('boolean', 'void', {})]
+            );
+        });
+
+        it('catches sub as void with return value', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    test = sub() as void
+                        return true
+                    end sub
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                {
+                    ...DiagnosticMessages.voidFunctionMayNotReturnValue('sub'),
+                    location: util.createLocation(3, 24, 3, 35, s`${rootDir}/source/main.brs`)
+                },
+                DiagnosticMessages.returnTypeMismatch('boolean', 'void', {})
+            ]);
+        });
+
+        it('catches function as void with return value', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    test = function() as void
+                        return true
+                    end function
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                {
+                    ...DiagnosticMessages.voidFunctionMayNotReturnValue('function'),
+                    location: util.createLocation(3, 24, 3, 35, s`${rootDir}/source/main.brs`)
+                },
+                DiagnosticMessages.returnTypeMismatch('boolean', 'void', {})
+            ]);
+        });
+
+        it('catches sub as <type> without return value', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    test = sub() as integer
+                        return
+                    end sub
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                {
+                    ...DiagnosticMessages.nonVoidFunctionMustReturnValue('sub'),
+                    location: util.createLocation(3, 24, 3, 30, s`${rootDir}/source/main.brs`)
+                },
+                DiagnosticMessages.returnTypeMismatch('void', 'integer', {})
+            ]);
+        });
+
+        it('catches function without return value', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    test = function()
+                        return
+                    end function
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.nonVoidFunctionMustReturnValue('function'),
+                location: util.createLocation(3, 24, 3, 30, s`${rootDir}/source/main.brs`)
+            }]);
+        });
+
+        it('catches function as <type> without return value', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    test = function() as integer
+                        return
+                    end function
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                {
+                    ...DiagnosticMessages.nonVoidFunctionMustReturnValue('function'),
+                    location: util.createLocation(3, 24, 3, 30, s`${rootDir}/source/main.brs`)
+                },
+                DiagnosticMessages.returnTypeMismatch('void', 'integer', {})
+            ]);
         });
     });
 });

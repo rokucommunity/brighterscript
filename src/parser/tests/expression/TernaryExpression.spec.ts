@@ -558,6 +558,51 @@ describe('ternary expressions', () => {
             `);
         });
 
+        it('does not capture restricted OS functions', async () => {
+            await testTranspile(`
+                sub main()
+                    test(true ? invalid : [
+                        createObject("roDeviceInfo")
+                        type(true)
+                        GetGlobalAA()
+                        box(1)
+                        run("file.brs", invalid)
+                        eval("print 1")
+                        GetLastRunCompileError()
+                        GetLastRunRuntimeError()
+                        Tab(1)
+                        Pos(0)
+                    ])
+                end sub
+                sub test(p1)
+                end sub
+            `, `
+                sub main()
+                    test((function(__bsCondition)
+                            if __bsCondition then
+                                return invalid
+                            else
+                                return [
+                                    createObject("roDeviceInfo")
+                                    type(true)
+                                    GetGlobalAA()
+                                    box(1)
+                                    run("file.brs", invalid)
+                                    eval("print 1")
+                                    GetLastRunCompileError()
+                                    GetLastRunRuntimeError()
+                                    Tab(1)
+                                    Pos(0)
+                                ]
+                            end if
+                        end function)(true))
+                end sub
+
+                sub test(p1)
+                end sub
+            `);
+        });
+
         it('complex conditions do not cause scope capture', async () => {
             await testTranspile(`
                 sub main()

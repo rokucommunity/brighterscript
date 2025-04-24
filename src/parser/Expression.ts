@@ -11,7 +11,7 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallExpression, isCallableType, isCallfuncExpression, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isStringType, isTemplateStringExpression, isTypecastExpression, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
+import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallableType, isCallExpression, isCallfuncExpression, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isStringType, isTemplateStringExpression, isTypecastExpression, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
@@ -260,6 +260,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         this.parameters = options.parameters ?? [];
         this.body = options.body;
         this.returnTypeExpression = options.returnTypeExpression;
+
         //if there's a body, and it doesn't have a SymbolTable, assign one
         if (this.body) {
             if (!this.body.symbolTable) {
@@ -342,7 +343,8 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             state.transpileToken(this.tokens.rightParen, ')')
         );
         //as [Type]
-        if (!state.options.removeParameterTypes && this.returnTypeExpression) {
+
+        if (this.tokens.as && this.returnTypeExpression && (this.requiresReturnType || !state.options.removeParameterTypes)) {
             results.push(
                 ' ',
                 //as
@@ -453,6 +455,42 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
         options.typeChain?.push(new TypeChainEntry({ name: funcName, type: resultType, data: options.data, astNode: this }));
         return resultType;
+    }
+
+    private get requiresReturnType() {
+        /**
+         * RokuOS methods can be written several different ways:
+         * 1. Function() : return withValue
+         * 2. Function() as type : return withValue
+         * 3. Function() as void : return
+         *
+         * 4. Sub() : return
+         * 5. Sub () as void : return
+         * 6. Sub() as type : return withValue
+         *
+         * Formats (1), (2), and (6) throw a compile error if there IS NOT a return value in the function body.
+         * Formats (3), (4), and (5) throw a compile error if there IS a return value in the function body.
+         *
+         * 7. Additionally, as a special case, the OS requires that `onKeyEvent()` be defined with `as boolean`
+         */
+
+
+        if ((isFunctionStatement(this.parent) || isMethodStatement(this.parent)) && this.parent?.tokens?.name?.text.toLowerCase() === 'onkeyevent') {
+            // onKeyEvent() requires 'as Boolean' otherwise RokuOS throws errors
+            return true;
+        }
+        const isSub = this.tokens.functionType?.text.toLowerCase() === 'sub';
+        const returnType = this.returnTypeExpression?.getType({ flags: SymbolTypeFlag.typetime });
+        const isVoidReturnType = isVoidType(returnType);
+
+
+        if (isSub && !isVoidReturnType) { // format (6)
+            return true;
+        } else if (isVoidReturnType) { // format (3)
+            return true;
+        }
+
+        return false;
     }
 
     public clone() {
@@ -2199,6 +2237,11 @@ export class TernaryExpression extends Expression {
 
         //get all unique variable names used in the consequent and alternate, and sort them alphabetically so the output is consistent
         let allUniqueVarNames = [...new Set([...consequentInfo.uniqueVarNames, ...alternateInfo.uniqueVarNames])].sort();
+        //discard names of global functions that cannot be passed by reference
+        allUniqueVarNames = allUniqueVarNames.filter(name => {
+            return !nonReferenceableFunctions.includes(name.toLowerCase());
+        });
+
         let mutatingExpressions = [
             ...consequentInfo.expressions,
             ...alternateInfo.expressions
@@ -2314,6 +2357,11 @@ export class NullCoalescingExpression extends Expression {
 
         //get all unique variable names used in the consequent and alternate, and sort them alphabetically so the output is consistent
         let allUniqueVarNames = [...new Set([...consequentInfo.uniqueVarNames, ...alternateInfo.uniqueVarNames])].sort();
+        //discard names of global functions that cannot be passed by reference
+        allUniqueVarNames = allUniqueVarNames.filter(name => {
+            return !nonReferenceableFunctions.includes(name.toLowerCase());
+        });
+
         let hasMutatingExpression = [
             ...consequentInfo.expressions,
             ...alternateInfo.expressions
@@ -2682,3 +2730,21 @@ export class TypedArrayExpression extends Expression {
         );
     }
 }
+
+/**
+ * A list of names of functions that are restricted from being stored to a
+ * variable, property, or passed as an argument. (i.e. `type` or `createobject`).
+ * Names are stored in lower case.
+ */
+const nonReferenceableFunctions = [
+    'createobject',
+    'type',
+    'getglobalaa',
+    'box',
+    'run',
+    'eval',
+    'getlastruncompileerror',
+    'getlastrunruntimeerror',
+    'tab',
+    'pos'
+];

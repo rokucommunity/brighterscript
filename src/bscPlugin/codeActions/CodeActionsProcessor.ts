@@ -8,7 +8,10 @@ import type { XmlFile } from '../../files/XmlFile';
 import type { BsDiagnostic, OnGetCodeActionsEvent } from '../../interfaces';
 import { ParseMode } from '../../parser/Parser';
 import { util } from '../../util';
-import { isBrsFile } from '../../astUtils/reflection';
+import { isBrsFile, isFunctionExpression, isVariableExpression, isVoidType } from '../../astUtils/reflection';
+import type { FunctionExpression } from '../../parser/Expression';
+import { TokenKind } from '../../lexer/TokenKind';
+import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 
 export class CodeActionsProcessor {
     public constructor(
@@ -23,6 +26,10 @@ export class CodeActionsProcessor {
                 this.suggestCannotFindName(diagnostic as any);
             } else if (diagnostic.code === DiagnosticCodeMap.xmlComponentMissingExtendsAttribute) {
                 this.addMissingExtends(diagnostic as any);
+            } else if (diagnostic.code === DiagnosticCodeMap.voidFunctionMayNotReturnValue) {
+                this.addVoidFunctionReturnActions(diagnostic);
+            } else if (diagnostic.code === DiagnosticCodeMap.nonVoidFunctionMustReturnValue) {
+                this.addNonVoidFunctionReturnActions(diagnostic);
             }
         }
     }
@@ -129,5 +136,176 @@ export class CodeActionsProcessor {
                 }]
             })
         );
+    }
+
+    private addVoidFunctionReturnActions(diagnostic: BsDiagnostic) {
+        this.event.codeActions.push(
+            codeActionUtil.createCodeAction({
+                title: `Remove return value`,
+                diagnostics: [diagnostic],
+                kind: CodeActionKind.QuickFix,
+                changes: [{
+                    type: 'delete',
+                    filePath: this.event.file.srcPath,
+                    range: util.createRange(
+                        diagnostic.location.range.start.line,
+                        diagnostic.location.range.start.character + 'return'.length,
+                        diagnostic.location.range.end.line,
+                        diagnostic.location.range.end.character
+                    )
+                }]
+            })
+        );
+        if (isBrsFile(this.event.file)) {
+            const expression = this.event.file.getClosestExpression(diagnostic.location.range.start);
+            const func = expression.findAncestor<FunctionExpression>(isFunctionExpression);
+
+            //if we're in a sub and we do not have a return type, suggest converting to a function
+            if (func.tokens.functionType.kind === TokenKind.Sub && !func.returnTypeExpression) {
+                //find the first function in a file that uses the `function` keyword
+                const referenceFunction = this.event.file.parser.ast.findChild<FunctionExpression>((node) => {
+                    return isFunctionExpression(node) && node.tokens.functionType.kind === TokenKind.Function;
+                });
+                const functionTypeText = referenceFunction?.tokens.functionType.text ?? 'function';
+                const endFunctionTypeText = referenceFunction?.tokens.endFunctionType?.text ?? 'end function';
+                this.event.codeActions.push(
+                    codeActionUtil.createCodeAction({
+                        title: `Convert ${func.tokens.functionType.text} to ${functionTypeText}`,
+                        diagnostics: [diagnostic],
+                        kind: CodeActionKind.QuickFix,
+                        changes: [
+                            //function
+                            {
+                                type: 'replace',
+                                filePath: this.event.file.srcPath,
+                                range: func.tokens.functionType.location.range,
+                                newText: functionTypeText
+                            },
+                            //end function
+                            {
+                                type: 'replace',
+                                filePath: this.event.file.srcPath,
+                                range: func.tokens.endFunctionType.location.range,
+                                newText: endFunctionTypeText
+                            }
+                        ]
+                    })
+                );
+            }
+
+            //function `as void` return type. Suggest removing the return type
+            if (func.tokens.functionType.kind === TokenKind.Function && isVoidType(func.returnTypeExpression.getType({ flags: SymbolTypeFlag.typetime }))) {
+                this.event.codeActions.push(
+                    codeActionUtil.createCodeAction({
+                        title: `Remove return type from function declaration`,
+                        diagnostics: [diagnostic],
+                        kind: CodeActionKind.QuickFix,
+                        changes: [{
+                            type: 'delete',
+                            filePath: this.event.file.srcPath,
+                            // )| as void|
+                            range: util.createRange(
+                                func.tokens.rightParen.location.range.start.line,
+                                func.tokens.rightParen.location.range.start.character + 1,
+                                func.returnTypeExpression.location.range.end.line,
+                                func.returnTypeExpression.location.range.end.character
+                            )
+                        }]
+                    })
+                );
+            }
+        }
+    }
+
+    private addNonVoidFunctionReturnActions(diagnostic: BsDiagnostic) {
+        if (isBrsFile(this.event.file)) {
+            const expression = this.event.file.getClosestExpression(diagnostic.location.range.start);
+            const func = expression.findAncestor<FunctionExpression>(isFunctionExpression);
+
+            //`sub as <non-void type>`, suggest removing the return type
+            if (
+                func.tokens.functionType.kind === TokenKind.Sub &&
+                //has a return type
+                func.returnTypeExpression &&
+                //is not `as void`
+                !(isVariableExpression(func.returnTypeExpression.expression) && func.returnTypeExpression.expression.tokens.name.text?.toLowerCase() === 'void')
+            ) {
+                this.event.codeActions.push(
+                    codeActionUtil.createCodeAction({
+                        title: `Remove return type from sub declaration`,
+                        diagnostics: [diagnostic],
+                        kind: CodeActionKind.QuickFix,
+                        changes: [{
+                            type: 'delete',
+                            filePath: this.event.file.srcPath,
+                            // )| as void|
+                            range: util.createRange(
+                                func.tokens.rightParen.location.range.start.line,
+                                func.tokens.rightParen.location.range.start.character + 1,
+                                func.returnTypeExpression.location.range.end.line,
+                                func.returnTypeExpression.location.range.end.character
+                            )
+                        }]
+                    })
+                );
+            }
+
+            //function with no return type.
+            if (func.tokens.functionType.kind === TokenKind.Function && !func.returnTypeExpression) {
+                //find tokens for `as` and `void` in the file if possible
+                let asText: string;
+                let voidText: string;
+                let subText: string;
+                let endSubText: string;
+                for (const token of this.event.file.parser.tokens) {
+                    if (asText && voidText && subText && endSubText) {
+                        break;
+                    }
+                    if (token?.kind === TokenKind.As) {
+                        asText = token?.text;
+                    } else if (token?.kind === TokenKind.Void) {
+                        voidText = token?.text;
+                    } else if (token?.kind === TokenKind.Sub) {
+                        subText = token?.text;
+                    } else if (token?.kind === TokenKind.EndSub) {
+                        endSubText = token?.text;
+                    }
+                }
+
+                //suggest converting to `as void`
+                this.event.codeActions.push(
+                    codeActionUtil.createCodeAction({
+                        title: `Add void return type to function declaration`,
+                        diagnostics: [diagnostic],
+                        kind: CodeActionKind.QuickFix,
+                        changes: [{
+                            type: 'insert',
+                            filePath: this.event.file.srcPath,
+                            position: func.tokens.rightParen.location.range.end,
+                            newText: ` ${asText ?? 'as'} ${voidText ?? 'void'}`
+                        }]
+                    })
+                );
+                //suggest converting to sub
+                this.event.codeActions.push(
+                    codeActionUtil.createCodeAction({
+                        title: `Convert function to sub`,
+                        diagnostics: [diagnostic],
+                        kind: CodeActionKind.QuickFix,
+                        changes: [{
+                            type: 'replace',
+                            filePath: this.event.file.srcPath,
+                            range: func.tokens.functionType.location.range,
+                            newText: subText ?? 'sub'
+                        }, {
+                            type: 'replace',
+                            filePath: this.event.file.srcPath,
+                            range: func.tokens.endFunctionType.location.range,
+                            newText: endSubText ?? 'end sub'
+                        }]
+                    })
+                );
+            }
+        }
     }
 }

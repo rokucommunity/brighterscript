@@ -1869,9 +1869,9 @@ describe('BrsFile', () => {
                         print (1 + 2)
                     end sub
 
-                    sub test(p1)
+                    function test(p1)
                         return p1
-                    end sub
+                    end function
                 `);
             });
 
@@ -2837,6 +2837,53 @@ describe('BrsFile', () => {
             `, `
                 function one()
                     return ""
+                end function
+            `);
+        });
+
+        it('does not remove `as void` when removeParameterTypes is true', async () => {
+            program.options.removeParameterTypes = true;
+            await testTranspile(`
+                function one() as void
+                    return
+                end function
+            `, `
+                function one() as void
+                    return
+                end function
+            `);
+        });
+
+        it('does not remove `as <type>` for sub when removeParameterTypes is true', async () => {
+            program.options.removeParameterTypes = true;
+            await testTranspile(`
+                sub one() as string
+                    return "hello"
+                end sub
+            `, `
+                sub one() as string
+                    return "hello"
+                end sub
+            `);
+        });
+
+        it('does not remove `as boolean` from onKeyEvent when removeParameterTypes is true', async () => {
+            program.options.removeParameterTypes = true;
+            await testTranspile(`
+                function onKeyEvent(p1) as boolean
+                    return true
+                end function
+
+                function somethingElse() as string
+                    return "hello"
+                end function
+            `, `
+                function onKeyEvent(p1) as boolean
+                    return true
+                end function
+
+                function somethingElse()
+                    return "hello"
                 end function
             `);
         });

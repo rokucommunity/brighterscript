@@ -257,6 +257,54 @@ describe('NullCoalescingExpression', () => {
             `);
         });
 
+        it('does not capture restricted OS functions', async () => {
+            await testTranspile(`
+                sub main()
+                    num = 1
+                    test(num.ToStr() = "1" ?? [
+                        createObject("roDeviceInfo")
+                        type(true)
+                        GetGlobalAA()
+                        box(1)
+                        run("file.brs", invalid)
+                        eval("print 1")
+                        GetLastRunCompileError()
+                        GetLastRunRuntimeError()
+                        Tab(1)
+                        Pos(0)
+                    ])
+                end sub
+                sub test(p1)
+                end sub
+            `, `
+                sub main()
+                    num = 1
+                    test((function(num)
+                            __bsConsequent = num.ToStr() = "1"
+                            if __bsConsequent <> invalid then
+                                return __bsConsequent
+                            else
+                                return [
+                                    createObject("roDeviceInfo")
+                                    type(true)
+                                    GetGlobalAA()
+                                    box(1)
+                                    run("file.brs", invalid)
+                                    eval("print 1")
+                                    GetLastRunCompileError()
+                                    GetLastRunRuntimeError()
+                                    Tab(1)
+                                    Pos(0)
+                                ]
+                            end if
+                        end function)(num))
+                end sub
+
+                sub test(p1)
+                end sub
+            `);
+        });
+
         it('properly transpiles null coalesence assignments - complex alternate', async () => {
             await testTranspile(`
                 sub main()
