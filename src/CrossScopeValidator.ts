@@ -461,10 +461,10 @@ export class CrossScopeValidator {
     }
 
     clearResolutionsForScopes(scopes: Scope[]) {
-        const lowerScopeNames = scopes.map(scope => scope.name.toLowerCase());
+        const lowerScopeNames = new Set(scopes.map(scope => scope.name.toLowerCase()));
         for (const [symbol, resolutionInfos] of this.resolutionsMap.entries()) {
             for (const info of resolutionInfos.values()) {
-                if (lowerScopeNames.includes(info.scope.name.toLowerCase())) {
+                if (lowerScopeNames.has(info.scope.name.toLowerCase())) {
                     resolutionInfos.delete(info);
                 }
             }
