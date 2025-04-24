@@ -664,12 +664,12 @@ class Runner {
     }
 
     /**
-     * ContentNode fields are a special case becuase the fields are listed in a different markdown file:
+     * ContentNode fields are a special case because the fields are listed in a different markdown file:
      * https://developer.roku.com/docs/developer-program/getting-started/architecture/content-metadata.md
      */
     private async buildContentNodeFields() {
         const manager = await new TokenManager().process(this.getContentNodeDocApiUrl());
-        let keepGoing = true;
+
         const fields: SceneGraphNodeField[] = [
             ...this.getContentNodeFields(manager, ['attributes', 'type', 'values', 'example'], 2),
             ...this.getContentNodeFields(manager, ['attribute', 'type', 'values', 'example'], 2),
@@ -677,6 +677,60 @@ class Runner {
 
         ];
         this.result.nodes['contentnode'].fields = fields;
+
+        //add any missing fields
+        function addIfMissing(newFields: SceneGraphNodeField[]) {
+            for (const field of newFields) {
+                const existingField = fields.find(x => x.name === field.name);
+                if (!existingField) {
+                    fields.push(field);
+                }
+            }
+        }
+
+        addIfMissing([{
+            name: 'action',
+            type: 'string',
+            accessPermission: 'READ_WRITE',
+            default: '',
+            description: 'For upgrades/downgrades only. Set this to "Upgrade" or "Downgrade" to change the subscription plan from a previous purchase (for example, myOrder.action = "Upgrade"). The required values are case-sensitive; do not pass "upgrade" or "downgrade". See On-device upgrade and downgrade for more information.'
+        }, {
+            name: 'priceDisplay',
+            type: 'string',
+            accessPermission: 'READ_WRITE',
+            default: '',
+            description: 'The original price of the product. Do not include a currency symbol (for example, set this to "3.99" instead of "$3.99").'
+        }, {
+            name: 'price',
+            type: 'string',
+            accessPermission: 'READ_WRITE',
+            default: '',
+            description: 'The original price of the product. Do not include a currency symbol (for example, set this to "3.99" instead of "$3.99").'
+        }, {
+            name: 'couponCode',
+            type: 'string',
+            accessPermission: 'READ_WRITE',
+            default: '',
+            description: 'An alphanumeric string entered by the customer to receive a discounted price on the product.'
+        }, {
+            name: 'contentKey',
+            type: 'string',
+            accessPermission: 'READ_WRITE',
+            default: '',
+            description: 'The publisher-specific SKU (or other unique identifier) for the product.'
+        }, {
+            name: 'orderId',
+            type: 'string',
+            accessPermission: 'READ_WRITE',
+            default: '',
+            description: 'The orderID returned by Roku in the RequestPartnerOrderStatus content node.'
+        }, {
+            name: 'drmParams',
+            type: 'string',
+            accessPermission: 'READ_WRITE',
+            default: 'invalid',
+            description: 'The original price of the product. Do not include a currency symbol (for example, set this to "3.99" instead of "$3.99").'
+        }]);
     }
 
     private getContentNodeFields(manager: TokenManager, searchHeaders: string[], descriptionIndex: number, propertyMap?: { name?: string; type?: string }) {
