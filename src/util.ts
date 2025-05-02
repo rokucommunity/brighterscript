@@ -2760,28 +2760,28 @@ export class Util {
         } else if (isCallExpression(callExpr) && isDottedGetExpression(callExpr.callee)) {
             calleeType = callExpr.callee.obj.getType({ ...options, flags: SymbolTypeFlag.runtime, ignoreCall: false });
         }
-        if (isComponentType(calleeType) || isReferenceType(calleeType)) {
-            const funcType = (calleeType as ComponentType).getCallFuncType?.(methodName, options);
-            if (funcType) {
-                options.typeChain?.push(new TypeChainEntry({
-                    name: methodName,
-                    type: funcType,
-                    data: options.data,
-                    location: methodNameToken.location,
-                    separatorToken: createToken(TokenKind.Callfunc),
-                    astNode: callExpr
-                }));
-                if (options.ignoreCall) {
-                    result = funcType;
-                } else if (isCallableType(funcType) && (!isReferenceType(funcType.returnType) || funcType.returnType.isResolvable())) {
-                    result = funcType.returnType;
-                } else if (!isReferenceType(funcType) && (funcType as any)?.returnType?.isResolvable()) {
-                    result = (funcType as any).returnType;
-                } else {
-                    result = new TypePropertyReferenceType(funcType, 'returnType');
-                }
+        //if (isComponentType(calleeType) || isReferenceType(calleeType)) {
+        const funcType = (calleeType as ComponentType).getCallFuncType?.(methodName, options);
+        if (funcType) {
+            options.typeChain?.push(new TypeChainEntry({
+                name: methodName,
+                type: funcType,
+                data: options.data,
+                location: methodNameToken.location,
+                separatorToken: createToken(TokenKind.Callfunc),
+                astNode: callExpr
+            }));
+            if (options.ignoreCall) {
+                result = funcType;
+            } else if (isCallableType(funcType) && (!isReferenceType(funcType.returnType) || funcType.returnType.isResolvable())) {
+                result = funcType.returnType;
+            } else if (!isReferenceType(funcType) && (funcType as any)?.returnType?.isResolvable()) {
+                result = (funcType as any).returnType;
+            } else {
+                result = new TypePropertyReferenceType(funcType, 'returnType');
             }
         }
+        // }
         if (isVoidType(result)) {
             // CallFunc will always return invalid, even if function called is `as void`
             result = DynamicType.instance;

@@ -2,6 +2,8 @@ import type { TypeCompatibilityData } from '../interfaces';
 import { isAnyReferenceType, isDynamicType, isEnumMemberType, isEnumType, isInheritableType, isInterfaceType, isReferenceType, isUnionType, isVoidType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 import type { UnionType } from './UnionType';
+import type { SymbolTable } from '../SymbolTable';
+import type { SymbolTypeFlag } from '../SymbolTypeFlag';
 
 export function findTypeIntersection(typesArr1: BscType[], typesArr2: BscType[]) {
     if (!typesArr1 || !typesArr2) {
@@ -200,6 +202,22 @@ export function getAllTypesFromUnionType(union: UnionType): BscType[] {
         }
     }
     return results;
+}
+
+export function addAssociatedTypesTableAsSiblingToMemberTable(type: BscType, associatedTypesTable: SymbolTable, bitFlags: SymbolTypeFlag) {
+    if (isReferenceType(type) &&
+        !type.isResolvable()) {
+        // This param or return type is a reference - make sure the associated types are included
+        type.tableProvider().addSibling(associatedTypesTable);
+
+        // add this as a sister table to member tables too!
+        const memberTable: SymbolTable = type.getMemberTable();
+        if (memberTable.getAllSymbols) {
+            for (const memberSymbol of memberTable.getAllSymbols(bitFlags)) {
+                addAssociatedTypesTableAsSiblingToMemberTable(memberSymbol?.type, associatedTypesTable, bitFlags);
+            }
+        }
+    }
 }
 /**
  * A map of all types created in the program during its lifetime. This applies across all programs, validate runs, etc. Mostly useful for a single run to track types created.
