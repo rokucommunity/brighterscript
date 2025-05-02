@@ -1,5 +1,5 @@
 import { DiagnosticTag, type Range } from 'vscode-languageserver';
-import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isComponentType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
+import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isComponentType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isFunctionTypeLike, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -523,14 +523,6 @@ export class ScopeValidator {
             return;
         }
 
-        if (!isComponentType(callerType)) {
-            this.addMultiScopeDiagnostic({
-                ...DiagnosticMessages.cannotFindCallFuncFunction(methodName, functionFullname, callerType.toString()),
-                location: callErrorLocation
-            });
-            return;
-        }
-
         const funcType = util.getCallFuncType(expression, methodToken, { flags: SymbolTypeFlag.runtime, ignoreCall: true });
         if (!funcType?.isResolvable()) {
             this.addMultiScopeDiagnostic({
@@ -545,7 +537,14 @@ export class ScopeValidator {
      * Detect calls to functions with the incorrect number of parameters, or wrong types of arguments
      */
     private validateFunctionCall(file: BrsFile, funcType: BscType, callErrorLocation: Location, args: Expression[], argOffset = 0) {
-        if (!funcType?.isResolvable() || !isTypedFunctionType(funcType)) {
+        if (!funcType?.isResolvable() || !isCallableType(funcType)) {
+            if (isUnionType(funcType)) {
+
+            }
+            return;
+        }
+
+        if (!isTypedFunctionType(funcType)) {
             return;
         }
 

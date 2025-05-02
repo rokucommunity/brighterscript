@@ -48,6 +48,22 @@ export abstract class BscType {
         return this.memberTable;
     }
 
+    addCallFuncMember(name: string, data: ExtraSymbolData, type: BscType, flags: SymbolTypeFlag) {
+        throw new Error('Method not implemented.');
+    }
+
+    getCallFuncMemberType(name: string, options: GetSymbolTypeOptions) {
+        throw new Error('Method not implemented.');
+    }
+
+    getCallFuncMemberTable() {
+        throw new Error('Method not implemented.');
+    }
+
+    getCallFuncType(name: string, options: GetSymbolTypeOptions) {
+        return undefined;
+    }
+
     isResolvable(): boolean {
         return true;
     }

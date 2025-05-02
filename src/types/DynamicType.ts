@@ -1,8 +1,9 @@
-import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
+import type { TypeCompatibilityData } from '../interfaces';
 import { isDynamicType, isUninitializedType, isVoidType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
+import type { GetSymbolTypeOptions } from '../SymbolTable';
 
 export class DynamicType extends BscType {
 
@@ -44,7 +45,11 @@ export class DynamicType extends BscType {
         return isDynamicType(targetType);
     }
 
-    getMemberType(memberName: string, options: GetTypeOptions) {
+    getMemberType(memberName: string, options: GetSymbolTypeOptions) {
+        return DynamicType.instance;
+    }
+
+    getCallFuncType(name: string, options: GetSymbolTypeOptions) {
         return DynamicType.instance;
     }
 
