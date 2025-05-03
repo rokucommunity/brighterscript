@@ -1,5 +1,5 @@
 import { DiagnosticTag, type Range } from 'vscode-languageserver';
-import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isComponentType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
+import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -541,20 +541,20 @@ export class ScopeValidator {
      */
     private validateFunctionCall(file: BrsFile, callee: Expression, funcType: BscType, callErrorLocation: Location, args: Expression[], argOffset = 0) {
         if (!funcType?.isResolvable() || !isCallableType(funcType)) {
+            const funcName = util.getAllDottedGetPartsAsString(callee, ParseMode.BrighterScript, isCallfuncExpression(callee) ? '@.' : '.');
             if (isUnionType(funcType)) {
-                const callablesInUnion = funcType.types.filter(isCallableType);
-
-                if (callablesInUnion.length !== funcType.types.length || callablesInUnion.length < 1) {
+                if (!util.isUnionOfFunctions(funcType)) {
                     // union of func and non func. not callable
                     this.addMultiScopeDiagnostic({
-                        ...DiagnosticMessages.notCallable(util.getAllDottedGetPartsAsString(callee)),
+                        ...DiagnosticMessages.notCallable(funcName),
                         location: callErrorLocation
                     });
                     return;
                 }
+                const callablesInUnion = funcType.types.filter(isCallableType);
                 const funcsInUnion = callablesInUnion.filter(isTypedFunctionType);
                 if (funcsInUnion.length < callablesInUnion.length) {
-                    //potentially a non-typed func in union
+                    // potentially a non-typed func in union
                     // cannot validate
                     return;
                 }
@@ -566,7 +566,7 @@ export class ScopeValidator {
                             // param differences!
                             this.addMultiScopeDiagnostic({
                                 ...DiagnosticMessages.incompatibleSymbolDefinition(
-                                    util.getAllDottedGetPartsAsString(callee),
+                                    funcName,
                                     { isUnion: true, data: compatibilityData }),
                                 location: callErrorLocation
                             });
@@ -575,13 +575,10 @@ export class ScopeValidator {
                     }
                 }
                 // The only thing different was return type
-                funcType = funcsInUnion[0];
-                if (isTypedFunctionType(funcType)) {
-                    funcType.returnType = getUniqueType(funcsInUnion.map(f => f.returnType), (types) => new UnionType(types));
-                }
+                funcType = util.getFunctionTypeFromUnion(funcType);
+
             }
             if (funcType && !isCallableType(funcType) && !isReferenceType(funcType)) {
-                const funcName = util.getAllDottedGetPartsAsString(callee);
                 const globalFuncWithVarName = globalCallableMap.get(funcName.toLowerCase());
                 if (globalFuncWithVarName) {
                     funcType = globalFuncWithVarName.type;

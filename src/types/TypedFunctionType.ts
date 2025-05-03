@@ -86,12 +86,13 @@ export class TypedFunctionType extends BaseFunctionType {
 
     isEqual(targetType: BscType, data: TypeCompatibilityData = {}) {
         if (isTypedFunctionType(targetType)) {
-            if (this.toString().toLowerCase() === targetType.toString().toLowerCase()) {
+            const checkNames = data?.allowNameEquality ?? true;
+            if (checkNames && this.toString().toLowerCase() === targetType.toString().toLowerCase()) {
                 // this function has the same param names and types and return type as the target
                 return true;
             }
             return this.checkParamsAndReturnValue(targetType, false, (t1, t2, predData = {}) => {
-                return t1.isEqual(t2, { ...predData, allowNameEquality: true });
+                return t1.isEqual(t2, { ...predData, allowNameEquality: checkNames });
             }, data);
         }
         return false;

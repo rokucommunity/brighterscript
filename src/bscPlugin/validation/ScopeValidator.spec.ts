@@ -4522,7 +4522,6 @@ describe('ScopeValidator', () => {
     });
 
     describe('notCallable', () => {
-
         it('finds when trying to call on a non-function', () => {
             program.setFile('source/test.bs', `
                 sub someFunc(widget as roSGNodePoster)
@@ -5441,12 +5440,74 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.incompatibleSymbolDefinition('node.doStuff', {
+                DiagnosticMessages.incompatibleSymbolDefinition('node@.doStuff', {
                     isUnion: true,
                     data: {
                         expectedType: new TypedFunctionType(VoidType.instance).setName('doStuff').setSub(true).addParameter('input', FloatType.instance, false),
                         actualType: new TypedFunctionType(VoidType.instance).setName('doStuff').setSub(true).addParameter('input', FloatType.instance, false),
                         parameterMismatches: [{ index: 0, data: { expectedType: StringType.instance, actualType: FloatType.instance } }]
+                    }
+                }).message
+            ]);
+        });
+
+        it('disallows callfunc on union with incompatible func types, that have the same signature', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="doStuff" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                interface MyStuff
+                    data as boolean
+                end interface
+
+                sub doStuff(input as MyStuff)
+                    print "hello " + input.data.toStr()
+                end sub
+            `);
+
+            program.setFile('components/Widget2.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget2" extends="Group">
+                    <script uri="Widget2.bs"/>
+                    <interface>
+                        <function name="doStuff" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget2.bs', `
+                interface MyStuff
+                    data as integer
+                end interface
+
+                sub doStuff(input as MyStuff)
+                    print input.data + 3.14
+                end sub
+            `);
+
+            program.setFile('source/test.bs', `
+                sub doCallfunc(node as roSGNodeWidget or roSGNodeWidget2, input)
+                    node@.doStuff(input)
+                end sub
+            `);
+            program.validate();
+            const stuff1IFace = new InterfaceType('MyStuff');
+            const stuff2IFace = new InterfaceType('MyStuff');
+
+            expectDiagnostics(program, [
+                DiagnosticMessages.incompatibleSymbolDefinition('node@.doStuff', {
+                    isUnion: true,
+                    data: {
+                        expectedType: new TypedFunctionType(VoidType.instance).setName('doStuff').setSub(true).addParameter('input', stuff1IFace, false),
+                        actualType: new TypedFunctionType(VoidType.instance).setName('doStuff').setSub(true).addParameter('input', stuff2IFace, false),
+                        parameterMismatches: [{ index: 0, data: { expectedType: stuff1IFace, actualType: stuff2IFace } }]
                     }
                 }).message
             ]);

@@ -2,7 +2,7 @@ import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
 import { isDynamicType, isObjectType, isTypedFunctionType, isUnionType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { ReferenceType } from './ReferenceType';
-import { addAssociatedTypesTableAsSiblingToMemberTable, findTypeUnion, getUniqueType, isEnumTypeCompatible } from './helpers';
+import { addAssociatedTypesTableAsSiblingToMemberTable, findTypeUnion, findTypeUnionDeepCheck, getUniqueType, isEnumTypeCompatible } from './helpers';
 import { BscTypeKind } from './BscTypeKind';
 import type { TypeCacheEntry } from '../SymbolTable';
 import { SymbolTable } from '../SymbolTable';
@@ -86,7 +86,7 @@ export class UnionType extends BscType {
                         if (!innerTypesMemberTypes || innerTypesMemberTypes.includes(undefined)) {
                             return undefined;
                         }
-                        return getUniqueType(findTypeUnion(referenceTypeInnerMemberTypes), unionTypeFactory);
+                        return getUniqueType(findTypeUnionDeepCheck(referenceTypeInnerMemberTypes), unionTypeFactory);
                     },
                     setCachedType: (innerName: string, innerCacheEntry: TypeCacheEntry, innerOptions: GetTypeOptions) => {
                         // TODO: is this even cachable? This is a NO-OP for now, and it shouldn't hurt anything
@@ -97,7 +97,7 @@ export class UnionType extends BscType {
                 };
             });
         }
-        const resultCallFuncType = getUniqueType(findTypeUnion(innerTypesMemberTypes), unionTypeFactory);
+        const resultCallFuncType = getUniqueType(findTypeUnionDeepCheck(innerTypesMemberTypes), unionTypeFactory, false);
 
 
         if (isTypedFunctionType(resultCallFuncType)) {
