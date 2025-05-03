@@ -51,6 +51,7 @@ import type { BscFile } from './files/BscFile';
 import type { NamespaceType } from './types/NamespaceType';
 import { getUniqueType } from './types/helpers';
 import { InvalidType } from './types/InvalidType';
+import { TypedFunctionType } from './types';
 
 export class Util {
     public clearConsole() {
@@ -2242,14 +2243,15 @@ export class Util {
      * Given an expression, return all the DottedGet name parts as a string.
      * Mostly used to convert namespaced item full names to a strings
      */
-    public getAllDottedGetPartsAsString(node: Expression | Statement, parseMode = ParseMode.BrighterScript): string {
+    public getAllDottedGetPartsAsString(node: Expression | Statement, parseMode = ParseMode.BrighterScript, lastSep = '.'): string {
         //this is a hot function and has been optimized. Don't rewrite unless necessary
         /* eslint-disable no-var */
         var sep = parseMode === ParseMode.BrighterScript ? '.' : '_';
+
         const parts = this.getAllDottedGetParts(node) ?? [];
         var result = parts[0]?.text;
         for (var i = 1; i < parts.length; i++) {
-            result += sep + parts[i].text;
+            result += (i === parts.length - 1 && parseMode === ParseMode.BrighterScript ? lastSep : sep) + parts[i].text;
         }
         return result;
         /* eslint-enable no-var */
@@ -2764,7 +2766,7 @@ export class Util {
         } else if (isCallExpression(callExpr) && isDottedGetExpression(callExpr.callee)) {
             calleeType = callExpr.callee.obj.getType({ ...options, flags: SymbolTypeFlag.runtime, ignoreCall: false });
         }
-        const funcType = (calleeType as ComponentType).getCallFuncType?.(methodName, options);
+        const funcType = calleeType.getCallFuncType?.(methodName, options);
         if (funcType) {
             options.typeChain?.push(new TypeChainEntry({
                 name: methodName,
@@ -2799,9 +2801,28 @@ export class Util {
     public isUnionOfFunctions(type: BscType): type is UnionType {
         if (isUnionType(type)) {
             const callablesInUnion = type.types.filter(isCallableType);
-            return callablesInUnion.length === type.types.length;
+            return callablesInUnion.length === type.types.length && callablesInUnion.length > 0;
         }
         return false;
+    }
+
+    public getFunctionTypeFromUnion(type: BscType): BscType {
+        if (this.isUnionOfFunctions(type)) {
+            const typedFuncsInUnion = type.types.filter(isTypedFunctionType);
+            if (typedFuncsInUnion.length < type.types.length) {
+                // has non-typedFuncs in union
+                return FunctionType.instance;
+            }
+            const exampleFunc = typedFuncsInUnion[0];
+            const cumulativeFunction = new TypedFunctionType(getUniqueType(typedFuncsInUnion.map(f => f.returnType), (types) => new UnionType(types)))
+                .setName(exampleFunc.name)
+                .setSub(exampleFunc.isSub);
+            for (const param of exampleFunc.params) {
+                cumulativeFunction.addParameter(param.name, param.type, param.isOptional);
+            }
+            return cumulativeFunction;
+        }
+        return undefined;
     }
 
     public getReturnTypeOfUnionOfFunctions(type: UnionType): BscType {

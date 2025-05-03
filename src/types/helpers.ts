@@ -24,7 +24,15 @@ export function findTypeUnion(...typesArr: BscType[][]) {
     return getUniqueTypesFromArray([].concat(...typesArr));
 }
 
-export function getUniqueTypesFromArray(types: BscType[]) {
+/**
+ * Same as findTypeUnion, but does not allow short cutting by just checking names
+ * Useful for checking types between callfuncs, as the parameter types may have the same name, but mean different things
+ */
+export function findTypeUnionDeepCheck(...typesArr: BscType[][]) {
+    return getUniqueTypesFromArray([].concat(...typesArr), false);
+}
+
+export function getUniqueTypesFromArray(types: BscType[], allowNameEquality = true) {
     if (!types) {
         return undefined;
     }
@@ -33,7 +41,7 @@ export function getUniqueTypesFromArray(types: BscType[]) {
             return false;
         }
         const latestIndex = types.findIndex((checkType) => {
-            return currentType.isEqual(checkType);
+            return currentType.isEqual(checkType, { allowNameEquality: allowNameEquality });
         });
         // the index that was found is the index we're checking --- there are no equal types after this
         return latestIndex === currentIndex;
@@ -48,7 +56,7 @@ export function getUniqueTypesFromArray(types: BscType[]) {
  * @param types array of types
  * @returns an array of the most general types
  */
-export function reduceTypesToMostGeneric(types: BscType[]): BscType[] {
+export function reduceTypesToMostGeneric(types: BscType[], allowNameEquality = true): BscType[] {
     if (!types || types?.length === 0) {
         return undefined;
     }
@@ -66,7 +74,7 @@ export function reduceTypesToMostGeneric(types: BscType[]): BscType[] {
     });
 
     // Get a list of unique types, based on the `isEqual()` method
-    const uniqueTypes = getUniqueTypesFromArray(types).map(t => {
+    const uniqueTypes = getUniqueTypesFromArray(types, allowNameEquality).map(t => {
         // map to object with `shouldIgnore` flag
         return { type: t, shouldIgnore: false };
     });
@@ -97,7 +105,7 @@ export function reduceTypesToMostGeneric(types: BscType[]): BscType[] {
             }
             const checkType = uniqueTypes[j].type;
 
-            if (currentType.isEqual(uniqueTypes[j].type)) {
+            if (currentType.isEqual(uniqueTypes[j].type, { allowNameEquality: allowNameEquality })) {
                 uniqueTypes[j].shouldIgnore = true;
             } else if (isInheritableType(currentType) && isInheritableType(checkType)) {
                 if (currentType.isTypeDescendent(checkType)) {
@@ -124,7 +132,7 @@ export function reduceTypesToMostGeneric(types: BscType[]): BscType[] {
  * @param types array of types
  * @returns either the singular most general type, if there is one, otherwise a UnionType of the most general types
  */
-export function getUniqueType(types: BscType[], unionTypeFactory: (types: BscType[]) => BscType): BscType {
+export function getUniqueType(types: BscType[], unionTypeFactory: (types: BscType[]) => BscType, allowNameEquality = true): BscType {
     if (!types || types.length === 0) {
         return undefined;
     }
@@ -138,7 +146,7 @@ export function getUniqueType(types: BscType[], unionTypeFactory: (types: BscTyp
         }
         return type;
     }).flat();
-    const generalizedTypes = reduceTypesToMostGeneric(types);
+    const generalizedTypes = reduceTypesToMostGeneric(types, allowNameEquality);
     if (!generalizedTypes || generalizedTypes.length === 0) {
         return undefined;
     }
