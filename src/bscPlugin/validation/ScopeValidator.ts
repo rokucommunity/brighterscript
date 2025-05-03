@@ -36,8 +36,6 @@ import { VoidType } from '../../types/VoidType';
 import { LogLevel } from '../../Logger';
 import { Stopwatch } from '../../Stopwatch';
 import chalk from 'chalk';
-import { UnionType } from '../../types/UnionType';
-import { getUniqueType } from '../../types/helpers';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
