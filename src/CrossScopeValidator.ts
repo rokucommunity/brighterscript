@@ -629,9 +629,9 @@ export class CrossScopeValidator {
             const incompatibleScopes = resolution.incompatibleScopes;
             if (incompatibleScopes.size > 1) {
                 const typeChainResult = util.processTypeChain(symbol.typeChain);
-                const scopeListName = [...incompatibleScopes.values()].map(s => s.name).join(', ');
+                const scopeList = [...incompatibleScopes.values()].map(s => s.name);
                 this.program.diagnostics.register({
-                    ...DiagnosticMessages.incompatibleSymbolDefinition(typeChainResult.fullChainName, scopeListName),
+                    ...DiagnosticMessages.incompatibleSymbolDefinition(typeChainResult.fullChainName, { scopes: scopeList }),
                     location: typeChainResult.location
                 }, {
                     tags: [CrossScopeValidatorDiagnosticTag]

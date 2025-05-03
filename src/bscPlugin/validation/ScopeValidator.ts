@@ -1,5 +1,5 @@
 import { DiagnosticTag, type Range } from 'vscode-languageserver';
-import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isComponentType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isFunctionTypeLike, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
+import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isClassStatement, isClassType, isComponentType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -36,6 +36,8 @@ import { VoidType } from '../../types/VoidType';
 import { LogLevel } from '../../Logger';
 import { Stopwatch } from '../../Stopwatch';
 import chalk from 'chalk';
+import { UnionType } from '../../types/UnionType';
+import { getUniqueType } from '../../types/helpers';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -491,7 +493,7 @@ export class ScopeValidator {
                     location: firstArgToken?.location
                 });
             } else {
-                this.validateFunctionCall(file, funcType, firstArgToken.location, call.args, 1);
+                this.validateFunctionCall(file, call, funcType, firstArgToken.location, call.args, 1);
             }
         }
     }
@@ -505,7 +507,7 @@ export class ScopeValidator {
             funcType = funcType.getMemberType('new', getTypeOptions);
         }
         const callErrorLocation = expression?.callee?.location;
-        return this.validateFunctionCall(file, funcType, callErrorLocation, expression.args);
+        return this.validateFunctionCall(file, expression.callee, funcType, callErrorLocation, expression.args);
 
     }
 
@@ -530,21 +532,72 @@ export class ScopeValidator {
                 location: callErrorLocation
             });
         }
-        return this.validateFunctionCall(file, funcType, callErrorLocation, expression.args);
+
+        return this.validateFunctionCall(file, expression, funcType, callErrorLocation, expression.args);
     }
 
     /**
      * Detect calls to functions with the incorrect number of parameters, or wrong types of arguments
      */
-    private validateFunctionCall(file: BrsFile, funcType: BscType, callErrorLocation: Location, args: Expression[], argOffset = 0) {
+    private validateFunctionCall(file: BrsFile, callee: Expression, funcType: BscType, callErrorLocation: Location, args: Expression[], argOffset = 0) {
         if (!funcType?.isResolvable() || !isCallableType(funcType)) {
             if (isUnionType(funcType)) {
+                const callablesInUnion = funcType.types.filter(isCallableType);
+
+                if (callablesInUnion.length !== funcType.types.length || callablesInUnion.length < 1) {
+                    // union of func and non func. not callable
+                    this.addMultiScopeDiagnostic({
+                        ...DiagnosticMessages.notCallable(util.getAllDottedGetPartsAsString(callee)),
+                        location: callErrorLocation
+                    });
+                    return;
+                }
+                const funcsInUnion = callablesInUnion.filter(isTypedFunctionType);
+                if (funcsInUnion.length < callablesInUnion.length) {
+                    //potentially a non-typed func in union
+                    // cannot validate
+                    return;
+                }
+                // check all funcs to see if they work
+                for (let i = 1; i < funcsInUnion.length; i++) {
+                    const compatibilityData: TypeCompatibilityData = {};
+                    if (!funcsInUnion[0].isTypeCompatible(funcsInUnion[i], compatibilityData)) {
+                        if (!compatibilityData.returnTypeMismatch) {
+                            // param differences!
+                            this.addMultiScopeDiagnostic({
+                                ...DiagnosticMessages.incompatibleSymbolDefinition(
+                                    util.getAllDottedGetPartsAsString(callee),
+                                    { isUnion: true, data: compatibilityData }),
+                                location: callErrorLocation
+                            });
+                            return;
+                        }
+                    }
+                }
+                // The only thing different was return type
+                funcType = funcsInUnion[0];
+                if (isTypedFunctionType(funcType)) {
+                    funcType.returnType = getUniqueType(funcsInUnion.map(f => f.returnType), (types) => new UnionType(types));
+                }
+            }
+            if (funcType && !isCallableType(funcType) && !isReferenceType(funcType)) {
+                const funcName = util.getAllDottedGetPartsAsString(callee);
+                const globalFuncWithVarName = globalCallableMap.get(funcName.toLowerCase());
+                if (globalFuncWithVarName) {
+                    funcType = globalFuncWithVarName.type;
+                } else {
+                    this.addMultiScopeDiagnostic({
+                        ...DiagnosticMessages.notCallable(funcName),
+                        location: callErrorLocation
+                    });
+                    return;
+                }
 
             }
-            return;
         }
 
         if (!isTypedFunctionType(funcType)) {
+            // non typed function. nothing to check
             return;
         }
 
@@ -1261,7 +1314,7 @@ export class ScopeValidator {
         const localVarIsInNamespace = util.isVariableMemberOfNamespace(varDeclaration.name, varDeclaration.expr, containingNamespace);
 
         const varIsFunction = () => {
-            return isCallableType(varDeclaration.type);
+            return isCallableType(varDeclaration.type) && !isDynamicType(varDeclaration.type);
         };
 
         if (

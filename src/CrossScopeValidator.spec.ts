@@ -369,7 +369,7 @@ describe('CrossScopeValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.incompatibleSymbolDefinition('otherFunc', `source, components${path.sep}Widget.xml`).message
+                DiagnosticMessages.incompatibleSymbolDefinition('otherFunc', { scopes: ['source', `components${path.sep}Widget.xml`] }).message
             ]);
         });
 
@@ -408,7 +408,7 @@ describe('CrossScopeValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.incompatibleSymbolDefinition('alpha.beta.otherFunc', `source, components${path.sep}Widget.xml`).message
+                DiagnosticMessages.incompatibleSymbolDefinition('alpha.beta.otherFunc', { scopes: ['source', `components${path.sep}Widget.xml`] }).message
             ]);
         });
 
@@ -449,7 +449,7 @@ describe('CrossScopeValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.incompatibleSymbolDefinition('otherFunc', `source, components${path.sep}Widget.xml`).message
+                DiagnosticMessages.incompatibleSymbolDefinition('otherFunc', { scopes: ['source', `components${path.sep}Widget.xml`] }).message
             ]);
         });
 
@@ -495,7 +495,7 @@ describe('CrossScopeValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.incompatibleSymbolDefinition('iface2', `source, components${path.sep}Widget.xml`).message
+                DiagnosticMessages.incompatibleSymbolDefinition('iface2', { scopes: ['source', `components${path.sep}Widget.xml`] }).message
             ]);
         });
     });

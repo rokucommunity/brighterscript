@@ -4,6 +4,7 @@ import type { BsDiagnostic, TypeCompatibilityData } from './interfaces';
 import { TokenKind } from './lexer/TokenKind';
 import util from './util';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
+import type { BscType } from './types/BscType';
 
 
 export const DiagnosticCodeRegex = /^[a-z](?:[a-z0-9]*(?:-[a-z0-9]+)*)*$/;
@@ -972,8 +973,8 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'operator-type-mismatch'
     }),
-    incompatibleSymbolDefinition: (symbol: string, scopeName: string) => ({
-        message: `'${symbol}' is incompatible across these scopes: ${scopeName}`,
+    incompatibleSymbolDefinition: (symbol: string, options: { scopes?: string[]; isUnion?: boolean; types?: BscType[]; data?: TypeCompatibilityData } = {}) => ({
+        message: `'${symbol}' is incompatible${incompatibleSymbolMessage(symbol, options)}`,
         legacyCode: 1145,
         severity: DiagnosticSeverity.Error,
         code: 'incompatible-definition'
@@ -1054,6 +1055,11 @@ export let DiagnosticMessages = {
         legacyCode: 1154,
         severity: DiagnosticSeverity.Error,
         code: 'cannot-find-callfunc'
+    }),
+    notCallable: (name: string) => ({
+        message: `'${name}' is not callable'`,
+        severity: DiagnosticSeverity.Error,
+        code: 'not-callable'
     })
 };
 export const defaultMaximumTruncationLength = 160;
@@ -1080,6 +1086,29 @@ export function typeCompatibilityMessage(actualTypeString: string, expectedTypeS
             partBuilder: (x) => `\n    member "${x.name}" should be '${x.expectedType}' but is '${x.actualType}'`,
             maxLength: defaultMaximumTruncationLength
         });
+    } else if (data?.parameterMismatches?.length > 0) {
+        message = '. ' + util.truncate({
+            leadingText: `Type '${actualTypeString}' has incompatible parameters:`,
+            items: data.parameterMismatches,
+            itemSeparator: '',
+            partBuilder: (x) => {
+                let pExpected = x.data?.expectedType.toString() ?? 'dynamic';
+                let pActual = x.data?.actualType.toString() ?? 'dynamic';
+
+                if (x.expectedOptional !== x.actualOptional) {
+                    pExpected += x.expectedOptional ? '?' : '';
+                    pActual += x.actualOptional ? '?' : '';
+                }
+                return `\n    parameter ${x.index + 1} should be '${pExpected}' but is '${pActual}'`;
+            },
+            maxLength: defaultMaximumTruncationLength
+        });
+    } else if (data?.returnTypeMismatch?.actualType && data.returnTypeMismatch?.expectedType) {
+        message = `. Type '${actualTypeString}' has incompatible return type:`;
+        message += `\n    return type should be '${data.returnTypeMismatch?.expectedType}' but is '${data?.returnTypeMismatch?.actualType}'`;
+    } else if (data?.expectedVariadic !== data?.actualVariadic) {
+        const shouldMsg = data.expectedVariadic ? 'should' : 'should not';
+        message = `. Type '${actualTypeString}' ${shouldMsg} be variadic`;
     }
     return message;
 }
@@ -1102,6 +1131,23 @@ function getPossibilitiesString(possibilities: string[] | string) {
         }
     }
     return result;
+}
+
+export function incompatibleSymbolMessage(symbolName: string, options: { scopes?: string[]; isUnion?: boolean; data?: TypeCompatibilityData }) {
+    let message = '';
+    const data = options.data;
+    if (options.scopes?.length > 0) {
+        message += ` across these scopes: ${options.scopes.join(', ')}`;
+    }
+    if (options.isUnion) {
+        message += ` in union`;
+    }
+    const actualTypeString = data?.actualType?.toString();
+    const expectedTypeString = data?.expectedType?.toString();
+    if (data && actualTypeString && expectedTypeString) {
+        message += typeCompatibilityMessage(actualTypeString, expectedTypeString, data);
+    }
+    return message;
 }
 
 export const DiagnosticCodeMap = {} as Record<keyof (typeof DiagnosticMessages), string>;

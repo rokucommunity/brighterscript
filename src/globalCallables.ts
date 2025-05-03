@@ -252,27 +252,13 @@ let runtimeFunctions: GlobalCallable[] = [{
     }]
 }, {
     name: 'Run',
-    shortDescription: `The Run function can be used to compile and run a script dynamically.\nThe file specified by that path is compiled and run.\nArguments may be passed to the script's Main function, and that script may return a result value.'`,
-    type: new TypedFunctionType(DynamicType.instance),
-    file: globalFile,
-    params: [{
-        name: 'filename',
-        type: StringType.instance,
-        isOptional: false
-    }, {
-        name: 'arg',
-        type: DynamicType.instance,
-        isRestArgument: true,
-        isOptional: false
-    }]
-}, {
-    name: 'Run',
     shortDescription: `The Run function can be used to compile and run a script dynamically.\nAll files specified are compiled together, then run.\nArguments may be passed to the script's Main function, and that script may return a result value.'`,
     type: new TypedFunctionType(DynamicType.instance),
     file: globalFile,
+    isDeprecated: true,
     params: [{
         name: 'filename',
-        type: new ArrayType(StringType.instance),
+        type: new UnionType([new ArrayType(StringType.instance), StringType.instance]),
         isOptional: false
     }, {
         name: 'arg',
