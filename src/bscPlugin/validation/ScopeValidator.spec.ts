@@ -7,7 +7,7 @@ import type { TypeCompatibilityData } from '../../interfaces';
 import { IntegerType } from '../../types/IntegerType';
 import { StringType } from '../../types/StringType';
 import type { BrsFile } from '../../files/BrsFile';
-import { FloatType, InterfaceType } from '../../types';
+import { FloatType, InterfaceType, TypedFunctionType, VoidType } from '../../types';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import undent from 'undent';
@@ -4521,7 +4521,63 @@ describe('ScopeValidator', () => {
         });
     });
 
-    describe.only('callFunc', () => {
+    describe('notCallable', () => {
+
+        it('finds when trying to call on a non-function', () => {
+            program.setFile('source/test.bs', `
+                sub someFunc(widget as roSGNodePoster)
+                    print widget.width()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.notCallable('widget.width').message
+            ]);
+        });
+
+        it('allows trying to call a dynamic', () => {
+            program.setFile('source/test.bs', `
+                sub someFunc(widget)
+                    print widget()
+                    print widget.whatever()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows trying to call a function param', () => {
+            program.setFile('source/test.bs', `
+                sub someFunc(widget as function)
+                    print widget()
+                    print widget().whatever()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('finds other non-callables', () => {
+            program.setFile('source/test.bs', `
+                sub someFunc(input as float)
+                    print input()
+                    a = "hello"
+                    print a()
+                    print 12345()
+                    print "string"()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.notCallable('input').message,
+                DiagnosticMessages.notCallable('a').message,
+                DiagnosticMessages.notCallable('12345').message,
+                DiagnosticMessages.notCallable('"string"').message
+            ]);
+        });
+    });
+
+    describe('callFunc', () => {
         it('allows access to member of return type when return type is custom node', () => {
             program.setFile('components/Widget.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -5168,7 +5224,7 @@ describe('ScopeValidator', () => {
             program.setFile('source/test.bs', `
                 sub doCallfunc()
                     u = invalid
-                    if rnd() > 0.5
+                    if rnd(0) > 0.5
                         u = getComponent1()
                     else
                         u = getComponent2()
@@ -5196,7 +5252,7 @@ describe('ScopeValidator', () => {
         it('disallows callfunc operator on union of non-callfuncable types', () => {
             program.setFile('source/test.bs', `
                 sub doCallfunc()
-                    if rnd() > 0.5
+                    if rnd(0) > 0.5
                         u = 1
                     else
                         u = "hello"
@@ -5297,7 +5353,7 @@ describe('ScopeValidator', () => {
             ]);
         });
 
-        it.only('uses the returns types of a callfunc on a union type', () => {
+        it('uses return type of union of functions', () => {
             program.setFile('components/Widget.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Widget" extends="Group">
@@ -5341,7 +5397,58 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.incompatibleSymbolDefinition('getData', 'roSGNodeWidget or roSGNodeWidget2').message
+                DiagnosticMessages.argumentTypeMismatch('string or float', 'float').message
+            ]);
+        });
+
+        it('disallows callfunc on union with incompatible func types', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="doStuff" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                sub doStuff(input as string)
+                    print "hello " + input
+                end sub
+            `);
+
+            program.setFile('components/Widget2.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget2" extends="Group">
+                    <script uri="Widget2.bs"/>
+                    <interface>
+                        <function name="doStuff" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget2.bs', `
+                sub doStuff(input as float)
+                    print input + 3.14
+                end sub
+            `);
+
+            program.setFile('source/test.bs', `
+                sub doCallfunc(node as roSGNodeWidget or roSGNodeWidget2, input)
+                    node@.doStuff(input)
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.incompatibleSymbolDefinition('node.doStuff', {
+                    isUnion: true,
+                    data: {
+                        expectedType: new TypedFunctionType(VoidType.instance).setName('doStuff').setSub(true).addParameter('input', FloatType.instance, false),
+                        actualType: new TypedFunctionType(VoidType.instance).setName('doStuff').setSub(true).addParameter('input', FloatType.instance, false),
+                        parameterMismatches: [{ index: 0, data: { expectedType: StringType.instance, actualType: FloatType.instance } }]
+                    }
+                }).message
             ]);
         });
     });

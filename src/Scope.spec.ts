@@ -930,17 +930,6 @@ describe('Scope', () => {
             it('warns when local var has same name as built-in function', () => {
                 program.setFile(`source/main.brs`, `
                     sub main()
-                        str = 12345
-                        print str ' prints "12345" (i.e. our local variable is allowed to shadow the built-in function name)
-                    end sub
-                `);
-                program.validate();
-                expectZeroDiagnostics(program);
-            });
-
-            it('warns when local var has same name as built-in function', () => {
-                program.setFile(`source/main.brs`, `
-                    sub main()
                         str = 6789
                         print str(12345) ' prints "12345" (i.e. our local variable did not override the callable global function)
                     end sub

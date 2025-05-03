@@ -40,7 +40,7 @@ import { SymbolTypeFlag } from './SymbolTypeFlag';
 import { createIdentifier, createToken } from './astUtils/creators';
 import { MAX_RELATED_INFOS_COUNT } from './diagnosticUtils';
 import type { BscType } from './types/BscType';
-import { unionTypeFactory } from './types/UnionType';
+import { UnionType, unionTypeFactory } from './types/UnionType';
 import { ArrayType } from './types/ArrayType';
 import { BinaryOperatorReferenceType, TypePropertyReferenceType, ParamTypeFromValueReferenceType } from './types/ReferenceType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
@@ -2209,6 +2209,10 @@ export class Util {
                 case AstNodeKind.CallExpression:
                     nextPart = (nextPart as CallExpression).callee;
                     continue;
+                case AstNodeKind.CallfuncExpression:
+                    parts.push((nextPart as CallfuncExpression)?.tokens.methodName);
+                    nextPart = (nextPart as CallfuncExpression).callee;
+                    continue;
                 case AstNodeKind.TypeExpression:
                     nextPart = (nextPart as TypeExpression).expression;
                     continue;
@@ -2760,7 +2764,6 @@ export class Util {
         } else if (isCallExpression(callExpr) && isDottedGetExpression(callExpr.callee)) {
             calleeType = callExpr.callee.obj.getType({ ...options, flags: SymbolTypeFlag.runtime, ignoreCall: false });
         }
-        //if (isComponentType(calleeType) || isReferenceType(calleeType)) {
         const funcType = (calleeType as ComponentType).getCallFuncType?.(methodName, options);
         if (funcType) {
             options.typeChain?.push(new TypeChainEntry({
@@ -2777,11 +2780,12 @@ export class Util {
                 result = funcType.returnType;
             } else if (!isReferenceType(funcType) && (funcType as any)?.returnType?.isResolvable()) {
                 result = (funcType as any).returnType;
+            } else if (this.isUnionOfFunctions(funcType)) {
+                result = this.getReturnTypeOfUnionOfFunctions(funcType);
             } else {
                 result = new TypePropertyReferenceType(funcType, 'returnType');
             }
         }
-        // }
         if (isVoidType(result)) {
             // CallFunc will always return invalid, even if function called is `as void`
             result = DynamicType.instance;
@@ -2790,6 +2794,26 @@ export class Util {
             options.data.isFromCallFunc = true;
         }
         return result;
+    }
+
+    public isUnionOfFunctions(type: BscType): type is UnionType {
+        if (isUnionType(type)) {
+            const callablesInUnion = type.types.filter(isCallableType);
+            return callablesInUnion.length === type.types.length;
+        }
+        return false;
+    }
+
+    public getReturnTypeOfUnionOfFunctions(type: UnionType): BscType {
+        if (this.isUnionOfFunctions(type)) {
+            const typedFuncsInUnion = type.types.filter(isTypedFunctionType);
+            if (typedFuncsInUnion.length < type.types.length) {
+                // is non-typedFuncs in union
+                return DynamicType.instance;
+            }
+            return getUniqueType(typedFuncsInUnion.map(f => f.returnType), (types) => new UnionType(types));
+        }
+        return InvalidType.instance;
     }
 
     public symbolComesFromSameNode(symbolName: string, definingNode: AstNode, symbolTable: SymbolTable) {
