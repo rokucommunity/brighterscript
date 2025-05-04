@@ -7,7 +7,10 @@ import { InterfaceType } from './InterfaceType';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { BooleanType } from './BooleanType';
 import { expectTypeToBe } from '../testHelpers.spec';
-import { isReferenceType } from '../astUtils/reflection';
+import { isReferenceType, isTypePropertyReferenceType, isUnionType } from '../astUtils/reflection';
+import { TypedFunctionType } from './TypedFunctionType';
+import { SymbolTable } from '../SymbolTable';
+import { ReferenceType } from './ReferenceType';
 
 
 describe('UnionType', () => {
@@ -152,5 +155,39 @@ describe('UnionType', () => {
 
         });
 
+    });
+
+    describe('unions of functions', () => {
+        it('gets union of return types', () => {
+            const func1 = new TypedFunctionType(StringType.instance);
+            const func2 = new TypedFunctionType(IntegerType.instance);
+            const funcUnion = new UnionType([func1, func2]);
+            const returnType = funcUnion.returnType as UnionType;
+            expectTypeToBe(returnType, UnionType);
+            expect(returnType.types).includes(StringType.instance);
+            expect(returnType.types).includes(IntegerType.instance);
+        });
+
+        it('handles reference types that resolve to functions', () => {
+            const table1 = new SymbolTable('test1');
+            const table2 = new SymbolTable('test2');
+            const func1Ref = new ReferenceType('func', 'iface1.func', SymbolTypeFlag.runtime, () => table1);
+            const func2Ref = new ReferenceType('func', 'iface2.func', SymbolTypeFlag.runtime, () => table2);
+
+            const funcUnion = new UnionType([func1Ref, func2Ref]);
+            let returnType1 = funcUnion.returnType as UnionType;
+            expect(isUnionType(returnType1)).to.be.true;
+            expect(isTypePropertyReferenceType(returnType1.types[0])).to.be.true;
+            expect(isTypePropertyReferenceType(returnType1.types[1])).to.be.true;
+            const func1 = new TypedFunctionType(StringType.instance);
+            const func2 = new TypedFunctionType(IntegerType.instance);
+            table1.addSymbol('func', {}, func1, SymbolTypeFlag.runtime);
+            table2.addSymbol('func', {}, func2, SymbolTypeFlag.runtime);
+
+            let returnType = funcUnion.returnType;
+            expectTypeToBe(returnType, UnionType);
+            expect((returnType as UnionType).types).includes(StringType.instance);
+            expect((returnType as UnionType).types).includes(IntegerType.instance);
+        });
     });
 });

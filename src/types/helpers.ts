@@ -1,5 +1,5 @@
 import type { TypeCompatibilityData } from '../interfaces';
-import { isAnyReferenceType, isDynamicType, isEnumMemberType, isEnumType, isInheritableType, isInterfaceType, isReferenceType, isUnionType, isVoidType } from '../astUtils/reflection';
+import { isAnyReferenceType, isArrayDefaultTypeReferenceType, isDynamicType, isEnumMemberType, isEnumType, isInheritableType, isInterfaceType, isReferenceType, isTypePropertyReferenceType, isUnionType, isVoidType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 import type { UnionType } from './UnionType';
 import type { SymbolTable } from '../SymbolTable';
@@ -39,6 +39,9 @@ export function getUniqueTypesFromArray(types: BscType[], allowNameEquality = tr
     return types?.filter((currentType, currentIndex) => {
         if (!currentType) {
             return false;
+        }
+        if ((isTypePropertyReferenceType(currentType) || isArrayDefaultTypeReferenceType(currentType)) && !currentType.isResolvable()) {
+            return true;
         }
         const latestIndex = types.findIndex((checkType) => {
             return currentType.isEqual(checkType, { allowNameEquality: allowNameEquality });
@@ -105,7 +108,7 @@ export function reduceTypesToMostGeneric(types: BscType[], allowNameEquality = t
             }
             const checkType = uniqueTypes[j].type;
 
-            if (currentType.isEqual(uniqueTypes[j].type, { allowNameEquality: allowNameEquality })) {
+            if (currentType.isResolvable() && currentType.isEqual(uniqueTypes[j].type, { allowNameEquality: allowNameEquality })) {
                 uniqueTypes[j].shouldIgnore = true;
             } else if (isInheritableType(currentType) && isInheritableType(checkType)) {
                 if (currentType.isTypeDescendent(checkType)) {
