@@ -8,6 +8,7 @@ import type { TypeCacheEntry } from '../SymbolTable';
 import { SymbolTable } from '../SymbolTable';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
+import { util } from '../util';
 
 export function unionTypeFactory(types: BscType[]) {
     return new UnionType(types);
@@ -108,6 +109,10 @@ export class UnionType extends BscType {
             }
         }
         return resultCallFuncType;
+    }
+
+    get returnType() {
+        return util.getReturnTypeOfUnionOfFunctions(this);
     }
 
 

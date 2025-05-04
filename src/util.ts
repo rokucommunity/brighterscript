@@ -2798,9 +2798,9 @@ export class Util {
         return result;
     }
 
-    public isUnionOfFunctions(type: BscType): type is UnionType {
+    public isUnionOfFunctions(type: BscType, allowReferenceTypes = false): type is UnionType {
         if (isUnionType(type)) {
-            const callablesInUnion = type.types.filter(isCallableType);
+            const callablesInUnion = type.types.filter(t => isCallableType(t) || (allowReferenceTypes && isReferenceType(t)));
             return callablesInUnion.length === type.types.length && callablesInUnion.length > 0;
         }
         return false;
@@ -2826,13 +2826,14 @@ export class Util {
     }
 
     public getReturnTypeOfUnionOfFunctions(type: UnionType): BscType {
-        if (this.isUnionOfFunctions(type)) {
-            const typedFuncsInUnion = type.types.filter(isTypedFunctionType);
+        if (this.isUnionOfFunctions(type, true)) {
+            const typedFuncsInUnion = type.types.filter(t => isTypedFunctionType(t) || isReferenceType(t)) as TypedFunctionType[];
             if (typedFuncsInUnion.length < type.types.length) {
                 // is non-typedFuncs in union
                 return DynamicType.instance;
             }
-            return getUniqueType(typedFuncsInUnion.map(f => f.returnType), (types) => new UnionType(types));
+            const funcReturns = typedFuncsInUnion.map(f => f.returnType);
+            return getUniqueType(funcReturns, (types) => new UnionType(types));
         }
         return InvalidType.instance;
     }

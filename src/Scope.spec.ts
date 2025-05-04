@@ -2719,6 +2719,64 @@ describe('Scope', () => {
                 expect(mainFnScope).to.exist;
             });
 
+            it('should use the union of types in union of interfaces', () => {
+                const mainFile = program.setFile<BrsFile>('source/main.bs', `
+                    sub unionOfFuncs(thing as IfaceA or IfaceB)
+                        data = thing.data
+                        print data
+                    end sub
+
+                    interface IfaceA
+                        data as string
+                    end interface
+
+                    interface IfaceB
+                        data as integer
+                    end interface
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const sourceScope = program.getScopeByName('source');
+                expect(sourceScope).to.exist;
+                sourceScope.linkSymbolTable();
+                expect(mainFnScope).to.exist;
+                const mainSymbolTable = mainFnScope.symbolTable;
+                const dataType = mainSymbolTable.getSymbolType('data', { flags: SymbolTypeFlag.runtime }) as UnionType;
+                expectTypeToBe(dataType, UnionType);
+                expect(dataType.types).includes(StringType.instance);
+                expect(dataType.types).includes(IntegerType.instance);
+            });
+
+            it('should use the union of return types of a union of functions', () => {
+                const mainFile = program.setFile<BrsFile>('source/main.bs', `
+                    sub unionOfFuncs(thing as IfaceA or IfaceB)
+                        result = thing.getData()
+                        print result
+                    end sub
+
+                    interface IfaceA
+                        function getData() as string
+                    end interface
+
+                    interface IfaceB
+                        function getData() as integer
+                    end interface
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const sourceScope = program.getScopeByName('source');
+                expect(sourceScope).to.exist;
+                sourceScope.linkSymbolTable();
+                expect(mainFnScope).to.exist;
+                const mainSymbolTable = mainFnScope.symbolTable;
+                const resultType = mainSymbolTable.getSymbolType('result', { flags: SymbolTypeFlag.runtime }) as UnionType;
+                expectTypeToBe(resultType, UnionType);
+                expect(resultType.types.map(t => t.toString())).includes(StringType.instance.toString());
+                expect(resultType.types.map(t => t.toString())).includes(IntegerType.instance.toString());
+            });
+
         });
 
         describe('type casts', () => {

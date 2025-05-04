@@ -215,6 +215,9 @@ export class CallExpression extends Expression {
             }
             return calleeType.returnType;
         }
+        if (util.isUnionOfFunctions(calleeType, true)) {
+            return util.getReturnTypeOfUnionOfFunctions(calleeType);
+        }
         if (!isReferenceType(calleeType) && (calleeType as BaseFunctionType)?.returnType?.isResolvable()) {
             return (calleeType as BaseFunctionType).returnType;
         }

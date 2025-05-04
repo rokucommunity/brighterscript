@@ -7,12 +7,14 @@ import { FloatType } from './FloatType';
 import { IntegerType } from './IntegerType';
 import { StringType } from './StringType';
 import { UnionType, unionTypeFactory } from './UnionType';
-import { findTypeIntersection, findTypeUnion, getUniqueType, getUniqueTypesFromArray } from './helpers';
+import { findTypeIntersection, findTypeUnion, getUniqueType, getUniqueTypesFromArray, reduceTypesToMostGeneric } from './helpers';
 import { InterfaceType } from './InterfaceType';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { DoubleType } from './DoubleType';
 import { BooleanType } from './BooleanType';
 import { EnumType, EnumMemberType } from './EnumType';
+import { ReferenceType, TypePropertyReferenceType } from './ReferenceType';
+import { SymbolTable } from '../SymbolTable';
 
 
 describe('findTypeIntersection', () => {
@@ -86,6 +88,16 @@ describe('getUniqueTypesFromArray', () => {
         expect(intersection.length).to.eq(2);
         expect(intersection).to.include(klass);
         expect(intersection).to.include(subklass);
+    });
+
+    it('should not reduce TypePropertyReferenceTypes', () => {
+        const table = new SymbolTable('test');
+        const refType1 = new ReferenceType('func1', 'func1', SymbolTypeFlag.runtime, () => table);
+        const retRefType1 = new TypePropertyReferenceType(refType1, 'returnType');
+        const refType2 = new ReferenceType('func2', 'func2', SymbolTypeFlag.runtime, () => table);
+        const retRefType2 = new TypePropertyReferenceType(refType2, 'returnType');
+        const uniqueTypes = getUniqueTypesFromArray([retRefType1, retRefType2]);
+        expect(uniqueTypes.length).to.eq(2);
     });
 });
 
@@ -171,4 +183,17 @@ describe('isEnumTypeCompatible', () => {
     });
 
 
+});
+
+describe('reduceTypesToMostGeneric', () => {
+
+    it('should not reduce TypePropertyReferenceTypes', () => {
+        const table = new SymbolTable('test');
+        const refType1 = new ReferenceType('func1', 'func1', SymbolTypeFlag.runtime, () => table);
+        const retRefType1 = new TypePropertyReferenceType(refType1, 'returnType');
+        const refType2 = new ReferenceType('func2', 'func2', SymbolTypeFlag.runtime, () => table);
+        const retRefType2 = new TypePropertyReferenceType(refType2, 'returnType');
+        const genericTypes = reduceTypesToMostGeneric([retRefType1, retRefType2]);
+        expect(genericTypes.length).to.eq(2);
+    });
 });
