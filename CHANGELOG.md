@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - Change type of 'version' parameter from String to Integer in the Type ([#1453](https://github.com/rokucommunity/brighterscript/pull/1453))
 
 
+
 ## [1.0.0-alpha.45](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.44...v1.0.0-alpha.45) - 2025-04-04
 ### Added
  - new `diagnosticFiltersV0Compatibility` bsconfig.json option ([#1424](https://github.com/rokucommunity/brighterscript/pull/1424))
@@ -428,6 +429,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.66.0-alpha.0](https://github.com/rokucommunity/brighterscript/compare/v0.65.1...v0.66.0-alpha.0) - 2023-06-09
 ### Changed
  - all the type tracking stuff!
+
+## [0.69.8](https://github.com/rokucommunity/brighterscript/compare/0.69.7...v0.69.8) - 2025-05-05
+### Changed
+ - upgrade to [@rokucommunity/logger@0.3.11](https://github.com/rokucommunity/logger/blob/master/CHANGELOG.md#0311---2025-05-05). Notable changes since 0.3.10:
+ - upgrade to [roku-deploy@3.12.5](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3125---2025-05-05). Notable changes since 3.12.4:
+
 
 
 ## [0.69.7](https://github.com/rokucommunity/brighterscript/compare/0.69.6...v0.69.7) - 2025-04-23
