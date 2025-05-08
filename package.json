@@ -43,7 +43,8 @@
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
   "bin": {
-    "bsc": "dist/cli.js"
+    "bsc": "dist/cli.js",
+    "bscv0": "dist/cli.js"
   },
   "repository": {
     "type": "git",
