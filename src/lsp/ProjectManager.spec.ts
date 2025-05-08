@@ -234,7 +234,7 @@ describe('ProjectManager', () => {
             }]);
             expectDiagnostics(await onNextDiagnostics(), [
                 DiagnosticMessages.cannotFindName('nameNotDefined').message,
-                'Test diagnostic'
+                'Test diagnostic (location unknown, added here for visibility)'
             ]);
         });
 

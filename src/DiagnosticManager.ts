@@ -184,7 +184,7 @@ export class DiagnosticManager {
 
             }
             diagnostic.relatedInformation = relatedInformation;
-            if (!diagnostic.location) {
+            if (!diagnostic.location?.uri) {
                 diagnostic.location = this.locationResolver?.(cachedDiagnostic);
                 if (diagnostic.location) {
                     //if we found a location, tweak the message a bit to let devs know this was not the original location
