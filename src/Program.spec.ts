@@ -1573,6 +1573,33 @@ describe('Program', () => {
                 DiagnosticMessages.cannotFindFunction('C')
             ]);
         });
+
+        it('attaches locationless diagnostic to the nearest xml file', () => {
+            const xmlFile = program.setFile('components/MainScene.xml', trim`
+                <component name="MainScene" extends="Scene">
+                </component>
+            `);
+            program.diagnostics.register({
+                message: 'test'
+            } as any, {
+                scope: program.getFirstScopeForFile(xmlFile)
+            });
+            expectDiagnostics(program, [{
+                message: 'test (location unknown, added here for visibility)',
+                location: util.createLocation(0, 0, 0, 100, xmlFile.srcPath)
+            }]);
+        });
+
+        it('attaches locationless diagnostic to the nearest manifest file', () => {
+            const manifestFile = program.setFile('manifest', trim``);
+            program.diagnostics.register({
+                message: 'test'
+            } as any);
+            expectDiagnostics(program, [{
+                message: 'test (location unknown, added here for visibility)',
+                location: util.createLocation(0, 0, 0, 100, manifestFile.srcPath)
+            }]);
+        });
     });
 
     describe('getCompletions', () => {

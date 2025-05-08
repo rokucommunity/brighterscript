@@ -36,6 +36,8 @@ import type { BscFile } from '../files/BscFile';
 import type { ComponentType } from '../types/ComponentType';
 import type { AssociativeArrayType } from '../types/AssociativeArrayType';
 import { TokenKind } from '../lexer/TokenKind';
+import type { Program } from '../Program';
+import type { Project } from '../lsp/Project';
 
 // File reflection
 export function isBrsFile(file: BscFile | undefined): file is BrsFile {
@@ -57,6 +59,15 @@ export function isBscFile(file: (BscFile | BscFile | XmlFile | AssetFile | undef
 
 export function isXmlScope(scope: (Scope | undefined)): scope is XmlScope {
     return scope?.constructor.name === 'XmlScope';
+}
+
+
+export function isProgram(arg: any): arg is Program {
+    return arg?.constructor.name === 'Program';
+}
+
+export function isProject(arg: any): arg is Project {
+    return arg?.constructor.name === 'Project';
 }
 
 
