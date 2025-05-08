@@ -15,6 +15,8 @@ import undent from 'undent';
 import type { BscFile } from './files/BscFile';
 import type { BscType } from './types/BscType';
 import type { LspDiagnostic } from './lsp/LspProject';
+import { Project } from './lsp/Project';
+import { isProgram, isProject } from './astUtils/reflection';
 
 export const cwd = s`${__dirname}/../`;
 export const tempDir = s`${__dirname}/../.tmp`;
@@ -37,6 +39,19 @@ type DiagnosticCollectionAsync = DiagnosticCollection | { getDiagnostics(): Prom
 function getDiagnostics(arg: DiagnosticCollection): BsDiagnostic[] {
     if (Array.isArray(arg)) {
         return arg as BsDiagnostic[];
+
+        //project.getDiagnostics() returns LspDiagonstics
+    } else if (arg instanceof Project) {
+        const diagnostics = arg.getDiagnostics();
+        return diagnostics.map(diagnostic => {
+            return {
+                ...diagnostic,
+                location: {
+                    uri: diagnostic.uri,
+                    range: diagnostic.range
+                }
+            } as BsDiagnostic;
+        });
     } else if ((arg as any).getDiagnostics) {
         return (arg as any).getDiagnostics();
     } else if ((arg as any).diagnostics) {
@@ -218,11 +233,18 @@ export function expectZeroDiagnostics(arg: DiagnosticCollection) {
             //escape any newlines
             diagnostic.message = diagnostic.message.replace(/\r/g, '\\r').replace(/\n/g, '\\n');
             message += `\n        • bs:${diagnostic.code} "${diagnostic.message}" at ${diagnostic.location?.uri ?? ''}#(${diagnostic.location?.range?.start.line}:${diagnostic.location?.range?.start.character})-(${diagnostic.location?.range?.end.line}:${diagnostic.location?.range?.end.character})`;
-            //print the line containing the error (if we can find it)srcPath
-            if (arg instanceof Program) {
-                const file = arg.getFile(diagnostic.location.uri);
 
+            let program: Program;
+            if (isProject(arg)) {
+                program = arg['builder'].program;
+            } else if (isProgram(arg)) {
+                program = arg;
+            }
+
+            if (program) {
+                const file = program.getFile(diagnostic.location.uri);
                 const line = (file as BrsFile)?.fileContents?.split(/\r?\n/g)?.[diagnostic.location.range?.start.line];
+                //print the line containing the error (if we can find it)
                 if (line) {
                     message += '\n' + getDiagnosticLine(diagnostic, line, chalk.red);
                 }

@@ -190,14 +190,21 @@ export class Project implements LspProject {
     }
 
     public getDiagnostics(): LspDiagnostic[] {
-        const diagnostics = this.builder.getDiagnostics();
-        return diagnostics.map(x => {
-            const srcPath = util.uriToPath(x.location.uri);
-            return {
-                ...util.toDiagnostic(x, srcPath),
-                uri: x.location.uri
-            };
-        });
+        const result: LspDiagnostic[] = [];
+        for (const diagnostic of this.builder.getDiagnostics()) {
+            //skip diagnostics that have no location
+            if (!diagnostic?.location?.uri) {
+                this.logger.debug('Skipping diagnostic that has no location', diagnostic);
+                continue;
+            }
+
+            const srcPath = util.uriToPath(diagnostic.location.uri);
+            result.push({
+                ...util.toDiagnostic(diagnostic, srcPath),
+                uri: diagnostic.location.uri
+            });
+        }
+        return result;
     }
 
     /**

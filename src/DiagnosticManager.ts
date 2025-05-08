@@ -4,7 +4,7 @@ import type { Scope } from './Scope';
 import { util } from './util';
 import { Cache } from './Cache';
 import { isBsDiagnostic, isXmlScope } from './astUtils/reflection';
-import type { DiagnosticRelatedInformation } from 'vscode-languageserver-protocol';
+import type { DiagnosticRelatedInformation, Location } from 'vscode-languageserver-protocol';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
 import { DiagnosticSeverityAdjuster } from './DiagnosticSeverityAdjuster';
 import type { FinalizedBsConfig } from './BsConfig';
@@ -23,6 +23,13 @@ interface BsDiagnosticWithKey extends BsDiagnostic {
     key: string;
 }
 
+export interface LocationResolverArgs {
+    diagnostic: BsDiagnosticWithKey;
+    contexts: Set<DiagnosticContext>;
+}
+
+type LocationResolver = (options: LocationResolverArgs) => Location | undefined;
+
 /**
  * Manages all diagnostics for a program.
  * Diagnostics can be added specific to a certain file/range and optionally scope or an AST node
@@ -32,8 +39,9 @@ interface BsDiagnosticWithKey extends BsDiagnostic {
  */
 export class DiagnosticManager {
 
-    constructor(options?: { logger?: Logger }) {
+    constructor(options?: { logger?: Logger; locationResolver: LocationResolver }) {
         this.logger = options?.logger ?? createLogger();
+        this.locationResolver = options?.locationResolver ?? ((x) => x?.diagnostic?.location);
     }
 
     private diagnosticsCache = new Cache<string, DiagnosticWithContexts>();
@@ -43,6 +51,8 @@ export class DiagnosticManager {
     private diagnosticAdjuster = new DiagnosticSeverityAdjuster();
 
     public logger: Logger;
+
+    public locationResolver: LocationResolver;
 
     public options: FinalizedBsConfig;
 
@@ -138,6 +148,7 @@ export class DiagnosticManager {
             });
 
             this.logger?.info(`diagnostic counts: total=${chalk.yellow(diagnostics.length.toString())}, after filter=${chalk.yellow(filteredDiagnostics.length.toString())}`);
+
             return filteredDiagnostics;
         };
 
@@ -173,6 +184,13 @@ export class DiagnosticManager {
 
             }
             diagnostic.relatedInformation = relatedInformation;
+            if (!diagnostic.location) {
+                diagnostic.location = this.locationResolver?.(cachedDiagnostic);
+                if (diagnostic.location) {
+                    //if we found a location, tweak the message a bit to let devs know this was not the original location
+                    diagnostic.message = `${diagnostic.message} (location unknown, added here for visibility)`;
+                }
+            }
             results.push(diagnostic);
         }
         const filteredResults = results.filter((x) => {

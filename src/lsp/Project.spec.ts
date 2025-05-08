@@ -256,4 +256,22 @@ describe('Project', () => {
             await project['getConfigFilePath'](undefined);
         });
     });
+
+    describe('getDiagnostics', () => {
+        it('does not crash when diagnostic is missing location', async () => {
+            await project.activate({
+                projectPath: rootDir
+            } as any);
+            await project.validate();
+
+            //register a diagnostic with no location
+            project['builder'].diagnostics.register({
+                message: 'test diagnostic',
+                location: undefined
+            });
+
+            //this should not throw
+            project.getDiagnostics();
+        });
+    });
 });
