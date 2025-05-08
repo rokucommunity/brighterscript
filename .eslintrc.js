@@ -64,7 +64,6 @@ module.exports = {
         '@typescript-eslint/no-shadow': 'off',
         '@typescript-eslint/no-this-alias': 'off',
         //possibly disable this once we have converted all throw statements to actual errors
-        '@typescript-eslint/no-throw-literal': 'off',
         '@typescript-eslint/no-invalid-void': 'off',
         '@typescript-eslint/no-invalid-void-type': 'off',
         '@typescript-eslint/no-type-alias': 'off',
