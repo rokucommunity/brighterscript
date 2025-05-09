@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.69.9](https://github.com/rokucommunity/brighterscript/compare/0.69.8...v0.69.9) - 2025-05-09
+### Added
+ - Add `bsc0` cli binary name ([#1490](https://github.com/rokucommunity/brighterscript/pull/1490))
+
+
+
 ## [0.69.8](https://github.com/rokucommunity/brighterscript/compare/0.69.7...v0.69.8) - 2025-05-05
 ### Changed
  - upgrade to [@rokucommunity/logger@0.3.11](https://github.com/rokucommunity/logger/blob/master/CHANGELOG.md#0311---2025-05-05). Notable changes since 0.3.10:
