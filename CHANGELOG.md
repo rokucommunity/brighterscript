@@ -7,8 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [0.69.9](https://github.com/rokucommunity/brighterscript/compare/0.69.8...v0.69.9) - 2025-05-09
-### Changed
- - removed no-throw-literal lint rule ([#1489](https://github.com/rokucommunity/brighterscript/pull/1489))
+### Added
  - Add `bsc0` cli binary name ([#1490](https://github.com/rokucommunity/brighterscript/pull/1490))
 
 
