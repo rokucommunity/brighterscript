@@ -1,6 +1,6 @@
 /* eslint-disable no-multi-spaces */
 import type { CancellationToken } from 'vscode-languageserver';
-import { CancellationTokenSource, Range } from 'vscode-languageserver';
+import { CancellationTokenSource } from 'vscode-languageserver';
 import { expect } from '../chai-config.spec';
 import * as sinon from 'sinon';
 import { Program } from '../Program';
@@ -8,16 +8,16 @@ import type { BrsFile } from '../files/BrsFile';
 import type { FunctionStatement } from '../parser/Statement';
 import { PrintStatement, Block, ReturnStatement, ExpressionStatement } from '../parser/Statement';
 import { TokenKind } from '../lexer/TokenKind';
-import { createVisitor, walkArray, WalkMode, walkStatements } from './visitors';
-import { isBlock, isLiteralExpression, isPrintStatement } from './reflection';
+import { ChildrenSkipper, createVisitor, InternalWalkMode, walkArray, WalkMode, walkStatements } from './visitors';
+import { isBlock, isFunctionExpression, isLiteralExpression, isPrintStatement } from './reflection';
 import { createCall, createIntegerLiteral, createToken, createVariableExpression } from './creators';
 import { createStackedVisitor } from './stackedVisitor';
-import { AstEditor } from './AstEditor';
-import { Parser } from '../parser/Parser';
+import { Editor } from './Editor';
+import { ParseMode, Parser } from '../parser/Parser';
 import type { Statement, Expression, AstNode } from '../parser/AstNode';
 import { expectZeroDiagnostics } from '../testHelpers.spec';
-import type { LiteralExpression, VariableExpression } from '../parser/Expression';
-import { BinaryExpression } from '../parser/Expression';
+import type { VariableExpression } from '../parser/Expression';
+import { BinaryExpression, type FunctionExpression, type LiteralExpression } from '../parser/Expression';
 
 describe('astUtils visitors', () => {
     const rootDir = process.cwd();
@@ -87,13 +87,49 @@ describe('astUtils visitors', () => {
 
     function functionsWalker(visitor: (statement: Statement, parent: Statement) => void, cancel?: CancellationToken) {
         return (file: BrsFile) => {
-            file.parser.references.functionExpressions.some(functionExpression => {
+            const funcExpressions = file.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitExpressionsRecursive });
+            funcExpressions.some(functionExpression => {
                 visitor(functionExpression.body, undefined);
                 walkStatements(functionExpression.body, (statement, parent) => visitor(statement, parent), cancel);
                 return cancel?.isCancellationRequested;
             });
         };
     }
+
+    describe('createVisitor', () => {
+        it(`calls the 'AstNode' event for every node`, () => {
+            const file = program.setFile<BrsFile>('source/main.brs', `
+                sub Main()
+                    print "Hello"
+                end sub
+            `);
+            const nodes: AstNode[] = [];
+            function track(node: AstNode) {
+                nodes.push(node);
+            }
+            const visitor = createVisitor({
+                AstNode: track,
+                FunctionStatement: track,
+                FunctionExpression: track,
+                PrintStatement: track,
+                Block: track,
+                LiteralExpression: track
+            });
+            file.ast.walk(visitor, { walkMode: WalkMode.visitAllRecursive });
+            expect(nodes.map(x => x.constructor.name)).to.eql([
+                'FunctionStatement',
+                'FunctionStatement',
+                'FunctionExpression',
+                'FunctionExpression',
+                'Block',
+                'Block',
+                'PrintStatement',
+                'PrintStatement',
+                'LiteralExpression',
+                'LiteralExpression'
+            ]);
+        });
+    });
 
     describe('Statements', () => {
         it('Walks through all the statements with depth', () => {
@@ -105,7 +141,7 @@ describe('astUtils visitors', () => {
             const walker = functionsWalker(visitor);
             program.plugins.add({
                 name: 'walker',
-                afterFileParse: file => walker(file as BrsFile)
+                afterProvideFile: event => walker(event.files[0] as BrsFile)
             });
             program.setFile('source/main.brs', PRINTS_SRC);
             expect(actual).to.deep.equal([
@@ -142,7 +178,7 @@ describe('astUtils visitors', () => {
             const walker = functionsWalker(s => actual.push(s.constructor.name), cancel.token);
             program.plugins.add({
                 name: 'walker',
-                afterFileParse: file => walker(file as BrsFile)
+                afterProvideFile: event => walker(event.files[0] as BrsFile)
             });
             program.setFile('source/main.brs', PRINTS_SRC);
             expect(actual).to.deep.equal([
@@ -187,7 +223,7 @@ describe('astUtils visitors', () => {
             }, cancel.token);
             program.plugins.add({
                 name: 'walker',
-                afterFileParse: file => walker(file as BrsFile)
+                afterProvideFile: event => walker(event.files[0] as BrsFile)
             });
             program.setFile('source/main.brs', PRINTS_SRC);
             expect(actual).to.deep.equal([
@@ -215,9 +251,10 @@ describe('astUtils visitors', () => {
                 Block: blockHandler
             });
             const printStatement = new PrintStatement({
-                print: createToken(TokenKind.Print)
-            }, []);
-            const blockStatement = new Block([], Range.create(0, 0, 0, 0));
+                print: createToken(TokenKind.Print),
+                expressions: []
+            });
+            const blockStatement = new Block({ statements: [] });
             visitor(printStatement, undefined);
             visitor(blockStatement, undefined);
             expect(printHandler.callCount).to.equal(1);
@@ -230,15 +267,19 @@ describe('astUtils visitors', () => {
     describe('Statement editor', () => {
         it('allows replacing statements', () => {
             const printStatement1 = new PrintStatement({
-                print: createToken(TokenKind.Print)
-            }, []);
+                print: createToken(TokenKind.Print),
+                expressions: []
+            });
             const printStatement2 = new PrintStatement({
-                print: createToken(TokenKind.Print)
-            }, []);
-            const block = new Block([
-                printStatement1,
-                new ReturnStatement({ return: createToken(TokenKind.Return) })
-            ], Range.create(0, 0, 0, 0));
+                print: createToken(TokenKind.Print),
+                expressions: []
+            });
+            const block = new Block({
+                statements: [
+                    printStatement1,
+                    new ReturnStatement({ return: createToken(TokenKind.Return) })
+                ]
+            });
             const visitor = createVisitor({
                 PrintStatement: () => printStatement2
             });
@@ -246,21 +287,22 @@ describe('astUtils visitors', () => {
             expect(block.statements[0]).to.equal(printStatement2);
         });
 
-        it('uses the AstEditor for replacement when provided', () => {
-            const editor = new AstEditor();
+        it('uses the Editor for replacement when provided', () => {
+            const editor = new Editor();
 
             const printStatement1 = new PrintStatement({
-                print: createToken(TokenKind.Print)
-            }, []);
+                print: createToken(TokenKind.Print),
+                expressions: []
+            });
 
             const printStatement2 = new PrintStatement({
-                print: createToken(TokenKind.Print)
-            }, []);
+                print: createToken(TokenKind.Print),
+                expressions: []
+            });
 
-            const block = new Block([
-                printStatement1
-            ], Range.create(0, 0, 0, 0));
-
+            const block = new Block({
+                statements: [printStatement1]
+            });
 
             block.walk(createVisitor({
                 PrintStatement: () => printStatement2
@@ -293,14 +335,13 @@ describe('astUtils visitors', () => {
             });
             program.plugins.add({
                 name: 'walker',
-                afterFileParse: (file) => walker(file as BrsFile)
+                afterProvideFile: (event) => walker(event.files[0] as BrsFile)
             });
 
             program.setFile('source/main.brs', EXPRESSIONS_SRC);
             expect(actual).to.deep.equal([
-                //The comment statement is weird because it can't be both a statement and expression, but is treated that way. Just ignore it for now until we refactor comments.
-                //'CommentStatement:1:CommentStatement',          // '<comment>
                 'PrintStatement:1:LiteralExpression',             // print <"msg">; 3
+                'PrintStatement:1:PrintSeparatorExpression',      // print "msg"<;> 3
                 'PrintStatement:1:LiteralExpression',             // print "msg"; <3>
                 'PrintStatement:1:TemplateStringExpression',      // print <`expand ${var}`>
                 'PrintStatement:1:TemplateStringQuasiExpression', // print `<expand >${var}`
@@ -647,7 +688,6 @@ describe('astUtils visitors', () => {
                end namespace
             `, [
                 'NamespaceStatement',
-                'NamespacedVariableNameExpression',
                 'DottedGetExpression',
                 'VariableExpression'
             ]);
@@ -812,7 +852,6 @@ describe('astUtils visitors', () => {
                 'Block',
                 'AssignmentStatement',
                 'AALiteralExpression',
-                'CommentStatement',
                 'AAMemberExpression',
                 'LiteralExpression'
             ]);
@@ -887,8 +926,7 @@ describe('astUtils visitors', () => {
                 'LiteralExpression',
                 //else
                 'Block',
-                'ReturnStatement',
-                'CommentStatement'
+                'ReturnStatement'
             ]);
         });
 
@@ -941,7 +979,6 @@ describe('astUtils visitors', () => {
                 'AssignmentStatement',
                 'NewExpression',
                 'CallExpression',
-                'NamespacedVariableNameExpression',
                 'VariableExpression'
             ]);
         });
@@ -974,7 +1011,11 @@ describe('astUtils visitors', () => {
             `, [
                 'ClassStatement',
                 'FieldStatement',
+                'TypeExpression',
+                'VariableExpression',
                 'FieldStatement',
+                'TypeExpression',
+                'VariableExpression',
                 'LiteralExpression',
                 'MethodStatement',
                 'FunctionExpression',
@@ -1167,19 +1208,19 @@ describe('astUtils visitors', () => {
                 PrintStatement: (astNode, parent, owner: Statement[], key) => {
                     printStatementCount++;
                     //add another expression to the list every time. This should result in 1 the first time, 2 the second, 3 the third.
-                    calls.push(new ExpressionStatement(
-                        createCall(
+                    calls.push(new ExpressionStatement({
+                        expression: createCall(
                             createVariableExpression('doSomethingBeforePrint'),
                             [
                                 createIntegerLiteral(callExpressionCount.toString())
                             ]
                         )
-                    ));
+                    }));
                     owner.splice(key + 1, 0, ...calls.map(x => x.clone()));
                 },
                 CallExpression: (call) => {
                     callExpressionCount++;
-                    console.log('call visitor for', (call.args[0] as LiteralExpression).token.text);
+                    console.log('call visitor for', (call.args[0] as LiteralExpression).tokens.value.text);
                 }
             }), {
                 walkMode: WalkMode.visitAllRecursive
@@ -1193,6 +1234,112 @@ describe('astUtils visitors', () => {
             ).to.be.lengthOf(9);
         });
 
+        it('skips children when requested', () => {
+            const file: BrsFile = program.setFile('source/main.bs', `
+                sub test()
+                    print 1 + 1
+                    print "hello"
+                end sub
+
+                sub test2()
+                    i = 2
+                    while i > 0
+                        print createObject("roDateTime").ToISOString()
+                        i--
+                    end while
+                end sub
+            `);
+            const actual = new Array<string>();
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            // do not walk into print statements
+            const skipper = new ChildrenSkipper();
+            file.ast.walk((node) => {
+                actual.push(node.kind);
+                if (isPrintStatement(node)) {
+                    skipper.skip();
+                }
+            }, {
+                walkMode: WalkMode.visitAllRecursive,
+                skipChildren: skipper
+            });
+
+            // Does not walk into print statements
+            expect(actual).to.deep.equal([
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'PrintStatement',
+                'PrintStatement',
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'AssignmentStatement',
+                'LiteralExpression',
+                'WhileStatement',
+                'BinaryExpression',
+                'VariableExpression',
+                'LiteralExpression',
+                'Block',
+                'PrintStatement',
+                'IncrementStatement',
+                'VariableExpression'
+            ]);
+        });
+
+        it('can get end trivia of any kind of block type node', () => {
+            const file: BrsFile = program.setFile('source/main.bs', `
+                sub test()
+                    x = {
+                        val: [123],
+                        count: 4
+                        ' end comment in literal AA 1
+                    }
+                    for each y in x.val
+                        print y
+                        ' end comment in for 2
+                    end for
+
+                    if x.count > 2
+                        print "hi"
+                        ' end comment in if 3
+                    end if
+
+                    while x.count > 3
+                        x.count--
+                        ' end comment in while 4
+                    end while
+
+                    try
+                        print "in try"
+                    catch e
+                        ' end comment in try 5
+                    end try
+
+                    array = [
+                        1,
+                        2,
+                        ' end comment in array 6
+                    ]
+
+                    ' end comment in function 7
+                end sub
+            `);
+            const comments = [];
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            file.ast.walk(createVisitor({
+                AstNode: (node) => {
+                    const endNodeComments = node.endTrivia.filter(t => t.kind === TokenKind.Comment);
+                    comments.push(...endNodeComments);
+                }
+            }), {
+                walkMode: WalkMode.visitAllRecursive
+            });
+        });
+
         it('walks a new child when returned from a visitor', () => {
             let walkedLiterals: string[] = [];
 
@@ -1203,22 +1350,108 @@ describe('astUtils visitors', () => {
             `).ast.walk(createVisitor({
                 BinaryExpression: (node, parent, owner: Statement[], key) => {
                     //replace the `1 + 2` binary expression with a new binary expression
-                    if (isLiteralExpression(node.left) && node.left.token.text === '1') {
-                        return new BinaryExpression(
-                            createIntegerLiteral('3'),
-                            createToken(TokenKind.Plus),
-                            createIntegerLiteral('4')
-                        );
+                    if (isLiteralExpression(node.left) && node.left.tokens.value.text === '1') {
+                        return new BinaryExpression({
+                            left: createIntegerLiteral('3'),
+                            operator: createToken(TokenKind.Plus),
+                            right: createIntegerLiteral('4')
+                        });
                     }
                 },
                 LiteralExpression: (node) => {
-                    walkedLiterals.push(node.token.text);
+                    walkedLiterals.push(node.tokens.value.text);
                 }
             }), {
                 walkMode: WalkMode.visitAllRecursive
             });
 
             expect(walkedLiterals).to.eql(['3', '4']);
+        });
+
+        it('can set bsConst in walk', () => {
+            const { ast } = program.setFile<BrsFile>('source/main.brs', `
+                #if DEBUG
+                sub main()
+                end sub
+                #end if
+            `);
+            const bsConsts = new Map<string, boolean>();
+            let foundMainFunc = false;
+            const visitor = createVisitor({
+                FunctionStatement: (func) => {
+                    foundMainFunc ||= func.getName(ParseMode.BrighterScript) === 'main';
+                }
+            });
+            ast.walk(visitor, {
+                walkMode: WalkMode.visitStatements,
+                bsConsts: bsConsts
+            });
+            // did not walk false block
+            expect(foundMainFunc).to.be.false;
+            bsConsts.set('debug', true);
+            ast.walk(visitor, {
+                walkMode: WalkMode.visitStatements,
+                bsConsts: bsConsts
+            });
+            // debug is true, so it did walk block
+            expect(foundMainFunc).to.be.true;
+        });
+
+        it('can walk false cc blocks', () => {
+            const { ast } = program.setFile<BrsFile>('source/main.brs', `
+                #if false
+                sub main()
+                end sub
+                #end if
+            `);
+            const bsConsts = new Map<string, boolean>();
+            let foundMainFunc = false;
+            const visitor = createVisitor({
+                FunctionStatement: (func) => {
+                    foundMainFunc ||= func.getName(ParseMode.BrighterScript) === 'main';
+                }
+            });
+            ast.walk(visitor, {
+                walkMode: WalkMode.visitStatements,
+                bsConsts: bsConsts
+            });
+            // did not walk false block
+            expect(foundMainFunc).to.be.false;
+            ast.walk(visitor, {
+                // eslint-disable-next-line no-bitwise
+                walkMode: WalkMode.visitStatements | InternalWalkMode.visitFalseConditionalCompilationBlocks,
+                bsConsts: bsConsts
+            });
+            // did walk false block
+            expect(foundMainFunc).to.be.true;
+        });
+
+        it('will correctly walk `not condition` cc blocks', () => {
+            const { ast } = program.setFile<BrsFile>('source/main.brs', `
+                #const DEBUG = false
+                #if not DEBUG
+                sub notDebug()
+                end sub
+                #end if
+                #if not false
+                sub notFalse()
+                end sub
+                #end if
+            `);
+            const bsConsts = new Map<string, boolean>();
+            let functionsFound = new Set<string>();
+            const visitor = createVisitor({
+                FunctionStatement: (func) => {
+                    functionsFound.add(func.getName(ParseMode.BrighterScript));
+                }
+            });
+            ast.walk(visitor, {
+                walkMode: WalkMode.visitStatements,
+                bsConsts: bsConsts
+            });
+            // did walk 'not' block
+            expect(functionsFound.has('notDebug')).to.be.true;
+            expect(functionsFound.has('notFalse')).to.be.true;
         });
 
         it('walks a new child when returned from a visitor and using an AstEditor', () => {
@@ -1231,20 +1464,20 @@ describe('astUtils visitors', () => {
             `).ast.walk(createVisitor({
                 BinaryExpression: (node, parent, owner: Statement[], key) => {
                     //replace the `1 + 2` binary expression with a new binary expression
-                    if (isLiteralExpression(node.left) && node.left.token.text === '1') {
-                        return new BinaryExpression(
-                            createIntegerLiteral('3'),
-                            createToken(TokenKind.Plus),
-                            createIntegerLiteral('4')
-                        );
+                    if (isLiteralExpression(node.left) && node.left.tokens.value.text === '1') {
+                        return new BinaryExpression({
+                            left: createIntegerLiteral('3'),
+                            operator: createToken(TokenKind.Plus),
+                            right: createIntegerLiteral('4')
+                        });
                     }
                 },
                 LiteralExpression: (node) => {
-                    walkedLiterals.push(node.token.text);
+                    walkedLiterals.push(node.tokens.value.text);
                 }
             }), {
                 walkMode: WalkMode.visitAllRecursive,
-                editor: new AstEditor()
+                editor: new Editor()
             });
 
             expect(walkedLiterals).to.eql(['3', '4']);
@@ -1265,9 +1498,9 @@ describe('astUtils visitors', () => {
                 return visitor?.(item, parent, owner, key);
             }, { walkMode: WalkMode.visitAllRecursive });
             expect(
-                visitedItems.map(x => x.name.text)
+                visitedItems.map(x => x.tokens.name.text)
             ).to.eql(
-                expected.map(x => x.name.text)
+                expected.map(x => x.tokens.name.text)
             );
         }
 

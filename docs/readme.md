@@ -50,6 +50,15 @@ enum RemoteButton
 end enum
 ```
 
+## [Exceptions](exceptions.md)
+```brighterscript
+try
+    somethingDangerous()
+catch 'look, no exception variable!
+    print "Living on the edge!"
+end try
+```
+
 ## [Namespaces](namespaces.md)
 ```brighterscript
 namespace util
@@ -108,3 +117,29 @@ second line text`
 ```brighterscript
 authStatus = user <> invalid ? "logged in" : "not logged in"
 ```
+
+## [Typecasts](typecasts.md)
+```BrighterScript
+nodeId = (node as roSgNode).id
+```
+
+## [Typed Arrays](typed-arrays.md)
+```brighterscript
+function getY(translation as float[]) as float
+    yValue = -1
+    if translation.count() > 1
+        yValue = translation[1] ' yValue is known to be of type float
+    end if
+    yValue
+end function
+```
+
+## [Union Types](union-types.md)
+```brighterscript
+sub logData(data as string or number)
+    print data.toStr()
+end sub
+```
+
+## [Variable Shadowing](variable-shadowing.md)
+Name resolution rules for various types of shadowing.

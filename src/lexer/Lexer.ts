@@ -1,10 +1,11 @@
 /* eslint-disable func-names */
-import { TokenKind, ReservedWords, Keywords, PreceedingRegexTypes } from './TokenKind';
+import { TokenKind, ReservedWords, Keywords, PreceedingRegexTypes, AllowedTriviaTokens } from './TokenKind';
 import type { Token } from './Token';
 import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Characters';
-import type { Range, Diagnostic } from 'vscode-languageserver';
+import type { Location } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import util from '../util';
+import type { BsDiagnostic } from '../interfaces';
 
 /**
  * Numeric type designators can only be one of these characters
@@ -55,7 +56,7 @@ export class Lexer {
     /**
      * The errors produced from `source.`
      */
-    public diagnostics: Diagnostic[];
+    public diagnostics: BsDiagnostic[];
 
     /**
      * The options used to scan this file
@@ -66,6 +67,16 @@ export class Lexer {
      * Contains all of the leading whitespace that has not yet been consumed by a token
      */
     private leadingWhitespace = '';
+
+    /**
+     * Contains trivia/comments, etc. before this line
+     */
+    private leadingTrivia: Token[] = [];
+
+    /**
+     * URI of the file being scanned (if available)
+     */
+    private uri?: string;
 
     /**
      * A convenience function, equivalent to `new Lexer().scan(toScan)`, that converts a string
@@ -99,6 +110,7 @@ export class Lexer {
         this.columnEnd = 0;
         this.tokens = [];
         this.diagnostics = [];
+        this.uri = util.pathToUri(options?.srcPath);
         while (!this.isAtEnd()) {
             this.scanToken();
         }
@@ -107,13 +119,21 @@ export class Lexer {
             kind: TokenKind.Eof,
             isReserved: false,
             text: '',
-            range: this.options.trackLocations
-                ? util.createRange(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd + 1)
+            location: this.options.trackLocations
+                ? util.createLocation(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd + 1, this.uri)
                 : undefined,
-            leadingWhitespace: this.leadingWhitespace
+            leadingWhitespace: this.leadingWhitespace,
+            leadingTrivia: this.leadingTrivia ?? []
         });
         this.leadingWhitespace = '';
         return this;
+    }
+
+    /**
+     * Pushes a token into the leadingTrivia list
+     */
+    private pushTrivia(token: Token) {
+        this.leadingTrivia.push(token);
     }
 
     /**
@@ -375,7 +395,7 @@ export class Lexer {
         } else {
             this.diagnostics.push({
                 ...DiagnosticMessages.unexpectedCharacter(c),
-                range: this.rangeOf()
+                location: this.locationOf()
             });
         }
     }
@@ -488,8 +508,8 @@ export class Lexer {
             if (this.peekNext() === '\n' || this.peekNext() === '\r') {
                 // BrightScript doesn't support multi-line strings
                 this.diagnostics.push({
-                    ...DiagnosticMessages.unterminatedStringAtEndOfLine(),
-                    range: this.rangeOf()
+                    ...DiagnosticMessages.unterminatedString(),
+                    location: this.locationOf()
                 });
                 isUnterminated = true;
                 break;
@@ -501,8 +521,8 @@ export class Lexer {
         if (this.isAtEnd()) {
             // terminating a string with EOF is also not allowed
             this.diagnostics.push({
-                ...DiagnosticMessages.unterminatedStringAtEndOfFile(),
-                range: this.rangeOf()
+                ...DiagnosticMessages.unterminatedString(),
+                location: this.locationOf()
             });
             isUnterminated = true;
         }
@@ -623,7 +643,7 @@ export class Lexer {
 
                     this.diagnostics.push({
                         ...DiagnosticMessages.unexpectedConditionalCompilationString(),
-                        range: this.rangeOf()
+                        location: this.locationOf()
                     });
                 }
 
@@ -764,16 +784,6 @@ export class Lexer {
     private hexadecimalNumber() {
         while (isHexDigit(this.peek())) {
             this.advance();
-        }
-
-        // fractional hex literals aren't valid
-        if (this.peek() === '.' && isHexDigit(this.peekNext())) {
-            this.advance(); // consume the "."
-            this.diagnostics.push({
-                ...DiagnosticMessages.fractionalHexLiteralsAreNotSupported(),
-                range: this.rangeOf()
-            });
-            return;
         }
 
         if (this.peek() === '&') {
@@ -987,7 +997,7 @@ export class Lexer {
             default:
                 this.diagnostics.push({
                     ...DiagnosticMessages.unexpectedConditionalCompilationString(),
-                    range: this.rangeOf()
+                    location: this.locationOf()
                 });
         }
     }
@@ -1051,6 +1061,13 @@ export class Lexer {
     }
 
     /**
+     * Determine if this token is a trivia token
+     */
+    private isTrivia(token: Token) {
+        return AllowedTriviaTokens.includes(token.kind);
+    }
+
+    /**
      * Creates a `Token` and adds it to the `tokens` array.
      * @param kind the type of token to produce.
      */
@@ -1060,11 +1077,21 @@ export class Lexer {
             kind: kind,
             text: text,
             isReserved: ReservedWords.has(text.toLowerCase()),
-            range: this.rangeOf(),
-            leadingWhitespace: this.leadingWhitespace
+            location: this.locationOf(),
+            leadingWhitespace: this.leadingWhitespace,
+            leadingTrivia: []
         };
+
+        if (this.isTrivia(token)) {
+            this.pushTrivia(token);
+        } else {
+            token.leadingTrivia.push(...this.leadingTrivia);
+            this.leadingTrivia = [];
+        }
         this.leadingWhitespace = '';
-        this.tokens.push(token);
+        if (kind !== TokenKind.Comment) {
+            this.tokens.push(token);
+        }
         this.sync();
         return token;
     }
@@ -1079,12 +1106,12 @@ export class Lexer {
     }
 
     /**
-     * Creates a `Range` at the lexer's current position
-     * @returns the range of `text`
+     * Creates a `Location` at the lexer's current position
+     * @returns the location of `text`
      */
-    private rangeOf(): Range {
+    private locationOf(): Location {
         if (this.options.trackLocations) {
-            return util.createRange(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd);
+            return util.createLocation(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd, this.uri);
         } else {
             return undefined;
         }
@@ -1102,4 +1129,8 @@ export interface ScanOptions {
      * @default true
      */
     trackLocations?: boolean;
+    /**
+     * Path to the file where this source code originated
+     */
+    srcPath?: string;
 }

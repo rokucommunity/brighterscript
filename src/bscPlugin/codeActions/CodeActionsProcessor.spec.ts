@@ -1,10 +1,9 @@
 import { expect } from '../../chai-config.spec';
-import { URI } from 'vscode-uri';
 import type { Range } from 'vscode-languageserver';
-import type { BscFile } from '../../interfaces';
 import { Program } from '../../Program';
 import { expectCodeActions, trim } from '../../testHelpers.spec';
 import { standardizePath as s, util } from '../../util';
+import type { BscFile } from '../../files/BscFile';
 import { rootDir } from '../../testHelpers.spec';
 
 describe('CodeActionsProcessor', () => {
@@ -93,7 +92,7 @@ describe('CodeActionsProcessor', () => {
                 util.createRange(1, 5, 1, 5)
             );
             expect(
-                codeActions[0].edit!.changes![URI.file(s`${rootDir}/components/comp1.xml`).toString()][0].range
+                codeActions[0].edit!.changes![util.pathToUri(s`${rootDir}/components/comp1.xml`)][0].range
             ).to.eql(
                 util.createRange(1, 51, 1, 51)
             );
@@ -213,7 +212,7 @@ describe('CodeActionsProcessor', () => {
             //import the file in two scopes
             program.setFile('components/comp1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
-                <component name="ChildScene">
+                <component name="ChildScene" extends="Group">
                     <script uri="comp1.bs" />
                 </component>
             `);
@@ -256,7 +255,7 @@ describe('CodeActionsProcessor', () => {
                     end function
                 end namespace
             `);
-            program.setFile('components/MainScene.xml', trim`<component name="MainScene"></component>`);
+            program.setFile('components/MainScene.xml', trim`<component name="MainScene" extends="Scene"></component>`);
             const file = program.setFile('components/MainScene.bs', `
                 sub init()
                     print alpha.secondAction()
@@ -283,7 +282,7 @@ describe('CodeActionsProcessor', () => {
                     end function
                 end namespace
             `);
-            program.setFile('components/MainScene.xml', trim`<component name="MainScene"></component>`);
+            program.setFile('components/MainScene.xml', trim`<component name="MainScene" extends="Scene"></component>`);
             const file = program.setFile('components/MainScene.bs', `
                 import "pkg:/source/first.bs"
                 sub init()
@@ -303,7 +302,7 @@ describe('CodeActionsProcessor', () => {
                 end function
             end namespace
         `);
-        program.setFile('components/MainScene.xml', trim`<component name="MainScene"></component>`);
+        program.setFile('components/MainScene.xml', trim`<component name="MainScene" extends="Scene"></component>`);
         const file = program.setFile('components/MainScene.bs', `
             sub init()
                 print alpha.firstAction()
@@ -343,7 +342,7 @@ describe('CodeActionsProcessor', () => {
     });
 
     describe('typed function/sub empty return', () => {
-        it('suggests deleting the return value and converting the sub to a function', () => {
+        it('suggests adding `as void` to function declaration or converting to sub', () => {
             const file = program.setFile('source/main.brs', `
                 function test()
                     'need a return value here...
@@ -355,7 +354,7 @@ describe('CodeActionsProcessor', () => {
             testGetCodeActions(file, util.createRange(3, 23, 3, 23), [`Add void return type to function declaration`, `Convert function to sub`]);
         });
 
-        it('suggests deleting the return type from void function', () => {
+        it('suggests removing the return type from sub with return type', () => {
             const file = program.setFile('source/main.brs', `
                 sub test() as integer
                     'need a return value here...

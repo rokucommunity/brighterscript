@@ -1,51 +1,116 @@
-import type { BscType } from './BscType';
-import { DynamicType } from './DynamicType';
 
-export class ArrayType implements BscType {
+import { SymbolTypeFlag } from '../SymbolTypeFlag';
+import { isArrayType, isDynamicType, isEnumMemberType, isObjectType } from '../astUtils/reflection';
+import type { TypeCompatibilityData } from '../interfaces';
+import { BscType } from './BscType';
+import { BscTypeKind } from './BscTypeKind';
+import type { BuiltInInterfaceOverride } from './BuiltInInterfaceAdder';
+import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
+import { DynamicType } from './DynamicType';
+import { IntegerType } from './IntegerType';
+import { unionTypeFactory } from './UnionType';
+import { getUniqueType, isUnionTypeCompatible } from './helpers';
+import { util } from '../util';
+
+export class ArrayType extends BscType {
     constructor(...innerTypes: BscType[]) {
+        super();
         this.innerTypes = innerTypes;
     }
+
+    public readonly kind = BscTypeKind.ArrayType;
+    public isBuiltIn = true;
+
     public innerTypes: BscType[] = [];
 
-    public isAssignableTo(targetType: BscType) {
-        if (targetType instanceof DynamicType) {
-            return true;
-        } else if (!(targetType instanceof ArrayType)) {
-            return false;
+    public _defaultType: BscType;
+    private isCheckingInnerTypesForDefaultType = false;
+
+    public get defaultType(): BscType {
+        if (this._defaultType) {
+            return this._defaultType;
         }
-        //this array type is assignable to the target IF
-        //1. all of the types in this array are present in the target
-        outer: for (let innerType of this.innerTypes) {
-            //find this inner type in the target
-
-            // eslint-disable-next-line no-unreachable-loop
-            for (let targetInnerType of targetType.innerTypes) {
-                //TODO is this loop correct? It ends after 1 iteration but we might need to do more iterations
-
-                if (innerType.isAssignableTo(targetInnerType)) {
-                    continue outer;
-                }
-
-                //our array contains a type that the target array does not...so these arrays are different
-                return false;
-            }
+        if (this.innerTypes?.length === 0 || this.isCheckingInnerTypesForDefaultType) {
+            return DynamicType.instance;
         }
-        return true;
+        this.isCheckingInnerTypesForDefaultType = true;
+
+        let resultType = this.innerTypes[0];
+        if (this.innerTypes?.length > 1) {
+            resultType = getUniqueType(this.innerTypes, unionTypeFactory) ?? DynamicType.instance;
+        }
+        if (isEnumMemberType(resultType)) {
+            resultType = resultType.parentEnumType ?? resultType;
+        }
+        this._defaultType = util.getDefaultTypeFromValueType(resultType);
+        this.isCheckingInnerTypesForDefaultType = false;
+        return this._defaultType;
     }
 
-    public isConvertibleTo(targetType: BscType) {
-        return this.isAssignableTo(targetType);
+    public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
+
+        if (isDynamicType(targetType)) {
+            return true;
+        } else if (isObjectType(targetType)) {
+            return true;
+        } else if (isUnionTypeCompatible(this, targetType)) {
+            return true;
+        } else if (isArrayType(targetType)) {
+            const compatible = this.defaultType.isTypeCompatible(targetType.defaultType, data);
+            if (data) {
+                data.actualType = targetType.defaultType;
+                data.expectedType = this.defaultType;
+            }
+            return compatible;
+        } else if (this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlag.runtime, data)) {
+            return true;
+        }
+        return false;
     }
 
     public toString() {
-        return `Array<${this.innerTypes.map((x) => x.toString()).join(' | ')}>`;
+        return `Array<${this.defaultType.toString()}>`;
     }
 
     public toTypeString(): string {
         return 'object';
     }
 
-    public clone() {
-        return new ArrayType(...this.innerTypes?.map(x => x?.clone()) ?? []);
+    public isEqual(targetType: BscType): boolean {
+        if (isArrayType(targetType)) {
+            if (targetType.innerTypes.length !== this.innerTypes.length) {
+                return false;
+            }
+            for (let i = 0; i < this.innerTypes.length; i++) {
+                if (!this.innerTypes[i].isEqual(targetType.innerTypes[i])) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
+    addBuiltInInterfaces() {
+        if (!this.hasAddedBuiltInInterfaces) {
+            const overrideMap = new Map<string, BuiltInInterfaceOverride>();
+            const defaultType = this.defaultType;
+            overrideMap
+                // ifArray
+                .set('peek', { returnType: defaultType })
+                .set('pop', { returnType: defaultType })
+                .set('push', { parameterTypes: [defaultType] })
+                .set('shift', { returnType: defaultType })
+                .set('unshift', { parameterTypes: [defaultType] })
+                .set('append', { parameterTypes: [this] })
+                // ifArrayGet
+                .set('get', { returnType: defaultType })
+                // ifArraySet
+                .set('get', { parameterTypes: [IntegerType.instance, defaultType] })
+                //ifEnum
+                .set('next', { returnType: defaultType });
+            BuiltInInterfaceAdder.addBuiltInInterfacesToType(this, overrideMap);
+        }
+        this.hasAddedBuiltInInterfaces = true;
     }
 }

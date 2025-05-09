@@ -96,7 +96,7 @@ describe('ProjectManager', () => {
             await manager.syncProjects([{
                 workspaceFolder: rootDir
             }]);
-            const project = manager.projects[0] as Project;
+            const project = manager.projects[0] as unknown as Project;
 
             //force validation to take a while
             sinon.stub(project['builder'].program, 'validate').callsFake(async () => {
@@ -117,6 +117,33 @@ describe('ProjectManager', () => {
 
             //busy status should be active
             expect(manager.busyStatusTracker.status).to.eql('busy');
+        });
+    });
+
+    describe('getHover', () => {
+        it('dedupes identical hover contents', async () => {
+            fsExtra.outputFileSync(`${rootDir}/source/main.brs`, `
+                sub main()
+                end sub
+            `);
+            await manager.syncProjects([{
+                workspaceFolder: rootDir
+            }]);
+            sinon.stub(manager.projects[0], 'getHover').returns(Promise.resolve([{
+                contents: ['one', 'two', 'three'],
+                range: util.createRange(1, 1, 1, 1)
+            }, {
+                contents: ['two', 'three', 'four'],
+                range: util.createRange(2, 2, 2, 2)
+            }]));
+            const hover = await manager.getHover({
+                srcPath: s`${rootDir}/source/main.brs`,
+                position: util.createPosition(1, 23)
+            });
+            expect(hover).to.eql({
+                contents: ['one', 'two', 'three', 'four'],
+                range: util.createRange(1, 1, 2, 2)
+            });
         });
     });
 
@@ -177,12 +204,13 @@ describe('ProjectManager', () => {
             fsExtra.outputFileSync(`${rootDir}/plugin.js`, `
                 module.exports = function () {
                     return {
-                        afterProgramValidate: function(program) {
-                            var file = program.getFile('source/main.brs');
+                        afterProgramValidate: function(event) {
+                            var file = event.program.getFile('source/main.brs');
                             //add a diagnostic from a plugin
-                            file.addDiagnostic({
+                            event.program.diagnostics.register({
                                 message: 'Test diagnostic',
                                 code: 'test-123',
+                                location: {},
                                 severity: 1
                             });
                         }
@@ -206,7 +234,7 @@ describe('ProjectManager', () => {
             }]);
             expectDiagnostics(await onNextDiagnostics(), [
                 DiagnosticMessages.cannotFindName('nameNotDefined').message,
-                'Test diagnostic'
+                'Test diagnostic (location unknown, added here for visibility)'
             ]);
         });
 
@@ -381,8 +409,8 @@ describe('ProjectManager', () => {
 
             let deferred1 = new Deferred();
             let deferred2 = new Deferred();
-            const project1 = manager.projects.find(x => x.bsconfigPath.includes('project1')) as Project;
-            const project2 = manager.projects.find(x => x.bsconfigPath.includes('project2')) as Project;
+            const project1 = manager.projects.find(x => x.bsconfigPath.includes('project1')) as unknown as Project;
+            const project2 = manager.projects.find(x => x.bsconfigPath.includes('project2')) as unknown as Project;
 
             const project1Stub: SinonStub = sinon.stub(project1, 'applyFileChanges').callsFake(async (...args) => {
                 const result = await project1Stub.wrappedMethod.apply(project1, args);
@@ -528,7 +556,7 @@ describe('ProjectManager', () => {
             await onNextDiagnostics();
 
             let applyFileChangesDeferred = new Deferred<DocumentActionWithStatus[]>();
-            const project1 = manager.projects[0] as Project;
+            const project1 = manager.projects[0] as unknown as Project;
 
             const project1Stub = sinon.stub(project1, 'applyFileChanges').callsFake(async (...args) => {
                 const result = await project1Stub.wrappedMethod.apply(project1, args);

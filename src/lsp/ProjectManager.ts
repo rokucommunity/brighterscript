@@ -514,12 +514,34 @@ export class ProjectManager {
         await this.onIdle();
 
         //Ask every project for hover info, keep whichever one responds first that has a valid response
-        let hover = await util.promiseRaceMatch(
+        let hovers = await util.promiseRaceMatch(
             this.projects.map(x => x.getHover(options)),
             //keep the first set of non-empty results
             (result) => result?.length > 0
         );
-        return hover?.[0];
+
+        let result = {
+            contents: [],
+            range: undefined as Range | undefined
+        };
+
+        //consolidate all hover results into a single hover
+        for (const hover of hovers ?? []) {
+            if (typeof hover?.contents === 'string') {
+                result.contents.push(hover.contents);
+            } else if (Array.isArray(hover?.contents)) {
+                result.contents.push(...hover.contents);
+            }
+
+            if (!result.range && hover.range) {
+                result.range = hover.range;
+            }
+            result.range = util.createBoundingRange(result.range, hover.range);
+        }
+
+        //now only keep unique hovers
+        result.contents = [...new Set(result.contents)];
+        return result;
     }
 
     /**
