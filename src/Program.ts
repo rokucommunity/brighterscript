@@ -83,6 +83,35 @@ export class Program {
         this.plugins = plugins || new PluginInterface([], { logger: this.logger });
         this.diagnostics = diagnosticsManager || new DiagnosticManager();
 
+        //try to find a location for the diagnostic if it doesn't have one
+        this.diagnostics.locationResolver = (args) => {
+
+            //find the first xml scope for this diagnostic
+            for (let context of args.contexts) {
+                if (isXmlScope(context.scope) && isXmlFile(context.scope.xmlFile)) {
+                    return util.createLocation(0, 0, 0, 100, context.scope.xmlFile.srcPath);
+                }
+            }
+
+            //we couldn't find an xml scope for this, so try to find the manifest file instead
+            const manifest = this.getFile('manifest', false);
+            if (manifest) {
+                return util.createLocation(0, 0, 0, 100, manifest.srcPath);
+            }
+
+            //if we still don't have a manifest, try to find the first file in the program
+            for (const key in this.files) {
+                if (isBrsFile(this.files[key]) || isXmlFile(this.files[key])) {
+                    return util.createLocation(0, 0, 0, 100, this.files[key].srcPath);
+                }
+            }
+
+            this.logger.warn(`Unable to find a location for the diagnostic.`, args);
+
+            //we couldn't find any locations for the file, so just return undefined
+            return undefined;
+        };
+
         // initialize the diagnostics Manager
         this.diagnostics.logger = this.logger;
         this.diagnostics.options = this.options;
