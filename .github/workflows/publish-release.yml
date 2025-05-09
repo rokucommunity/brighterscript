@@ -10,7 +10,7 @@ on:
 
 jobs:
   run:
-    if: startsWith( github.head_ref, 'release/') && (github.event.pull_request.merged == true)
+    if: startsWith( github.head_ref, 'release/')
     uses: rokucommunity/workflows/.github/workflows/publish-release.yml@master
     with:
       release-type: "npm" # "vsce"
