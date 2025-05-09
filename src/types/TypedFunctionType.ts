@@ -37,6 +37,11 @@ export class TypedFunctionType extends BaseFunctionType {
         return this;
     }
 
+    public setSub(isSub: boolean) {
+        this.isSub = isSub;
+        return this;
+    }
+
     public addParameter(name: string, type: BscType, isOptional: boolean) {
         this.params.push({
             name: name,
@@ -81,12 +86,13 @@ export class TypedFunctionType extends BaseFunctionType {
 
     isEqual(targetType: BscType, data: TypeCompatibilityData = {}) {
         if (isTypedFunctionType(targetType)) {
-            if (this.toString().toLowerCase() === targetType.toString().toLowerCase()) {
+            const checkNames = data?.allowNameEquality ?? true;
+            if (checkNames && this.toString().toLowerCase() === targetType.toString().toLowerCase()) {
                 // this function has the same param names and types and return type as the target
                 return true;
             }
             return this.checkParamsAndReturnValue(targetType, false, (t1, t2, predData = {}) => {
-                return t1.isEqual(t2, { ...predData, allowNameEquality: true });
+                return t1.isEqual(t2, { ...predData, allowNameEquality: checkNames });
             }, data);
         }
         return false;
@@ -98,28 +104,57 @@ export class TypedFunctionType extends BaseFunctionType {
         for (let i = 0; i < len; i++) {
             let myParam = this.params[i];
             let targetParam = targetType.params[i];
+            const paramTypeData: TypeCompatibilityData = {};
             if (allowOptionalParamDifferences && !myParam && targetParam.isOptional) {
                 // target func has MORE (optional) params... that's ok
                 break;
             }
 
-            if (!myParam || !targetParam || !predicate(targetParam.type, myParam.type, data)) {
+            if (!myParam || !targetParam || !predicate(myParam.type, targetParam.type, paramTypeData)) {
+                data = data ?? {};
+                data.parameterMismatches = data.parameterMismatches ?? [];
+                paramTypeData.expectedType = paramTypeData.expectedType ?? myParam?.type;
+                paramTypeData.actualType = paramTypeData.actualType ?? targetParam?.type;
+                if (!targetParam || !myParam) {
+                    data.expectedParamCount = this.params.filter(p => !p.isOptional).length;
+                    data.actualParamCount = targetType.params.filter(p => !p.isOptional).length;
+                }
+                data.parameterMismatches.push({ index: i, data: paramTypeData });
+                data.expectedType = this;
+                data.actualType = targetType;
                 return false;
             }
-            if (!allowOptionalParamDifferences && myParam.isOptional !== targetParam.isOptional) {
-                return false;
-            } else if (!myParam.isOptional && targetParam.isOptional) {
+            if ((!allowOptionalParamDifferences && myParam.isOptional !== targetParam.isOptional) ||
+                (!myParam.isOptional && targetParam.isOptional)) {
+                data = data ?? {};
+                data.parameterMismatches = data.parameterMismatches ?? [];
+                data.parameterMismatches.push({ index: i, expectedOptional: myParam.isOptional, actualOptional: targetParam.isOptional, data: paramTypeData });
+                data.expectedType = this;
+                data.actualType = targetType;
                 return false;
             }
         }
         //compare return type
+        const returnTypeData: TypeCompatibilityData = {};
         if (!this.returnType || !targetType.returnType || !predicate(this.returnType, targetType.returnType, data)) {
+            data = data ?? {};
+            returnTypeData.expectedType = returnTypeData.expectedType ?? this.returnType;
+            returnTypeData.actualType = returnTypeData.actualType ?? targetType.returnType;
+            data.returnTypeMismatch = returnTypeData;
+            data.expectedType = this;
+            data.actualType = targetType;
             return false;
         }
+        //compare Variadic
         if (this.isVariadic !== targetType.isVariadic) {
+            data = data ?? {};
+            data.expectedVariadic = this.isVariadic;
+            data.actualVariadic = targetType.isVariadic;
+            data.expectedType = this;
+            data.actualType = targetType;
             return false;
         }
-        //made it here, all params and return type  pass predicate
+        //made it here, all params and return type pass predicate
         return true;
     }
 }

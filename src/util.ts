@@ -40,7 +40,7 @@ import { SymbolTypeFlag } from './SymbolTypeFlag';
 import { createIdentifier, createToken } from './astUtils/creators';
 import { MAX_RELATED_INFOS_COUNT } from './diagnosticUtils';
 import type { BscType } from './types/BscType';
-import { unionTypeFactory } from './types/UnionType';
+import { UnionType, unionTypeFactory } from './types/UnionType';
 import { ArrayType } from './types/ArrayType';
 import { BinaryOperatorReferenceType, TypePropertyReferenceType, ParamTypeFromValueReferenceType } from './types/ReferenceType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
@@ -51,6 +51,7 @@ import type { BscFile } from './files/BscFile';
 import type { NamespaceType } from './types/NamespaceType';
 import { getUniqueType } from './types/helpers';
 import { InvalidType } from './types/InvalidType';
+import { TypedFunctionType } from './types';
 
 export class Util {
     public clearConsole() {
@@ -2209,6 +2210,10 @@ export class Util {
                 case AstNodeKind.CallExpression:
                     nextPart = (nextPart as CallExpression).callee;
                     continue;
+                case AstNodeKind.CallfuncExpression:
+                    parts.push((nextPart as CallfuncExpression)?.tokens.methodName);
+                    nextPart = (nextPart as CallfuncExpression).callee;
+                    continue;
                 case AstNodeKind.TypeExpression:
                     nextPart = (nextPart as TypeExpression).expression;
                     continue;
@@ -2238,14 +2243,15 @@ export class Util {
      * Given an expression, return all the DottedGet name parts as a string.
      * Mostly used to convert namespaced item full names to a strings
      */
-    public getAllDottedGetPartsAsString(node: Expression | Statement, parseMode = ParseMode.BrighterScript): string {
+    public getAllDottedGetPartsAsString(node: Expression | Statement, parseMode = ParseMode.BrighterScript, lastSep = '.'): string {
         //this is a hot function and has been optimized. Don't rewrite unless necessary
         /* eslint-disable no-var */
         var sep = parseMode === ParseMode.BrighterScript ? '.' : '_';
+
         const parts = this.getAllDottedGetParts(node) ?? [];
         var result = parts[0]?.text;
         for (var i = 1; i < parts.length; i++) {
-            result += sep + parts[i].text;
+            result += (i === parts.length - 1 && parseMode === ParseMode.BrighterScript ? lastSep : sep) + parts[i].text;
         }
         return result;
         /* eslint-enable no-var */
@@ -2760,26 +2766,26 @@ export class Util {
         } else if (isCallExpression(callExpr) && isDottedGetExpression(callExpr.callee)) {
             calleeType = callExpr.callee.obj.getType({ ...options, flags: SymbolTypeFlag.runtime, ignoreCall: false });
         }
-        if (isComponentType(calleeType) || isReferenceType(calleeType)) {
-            const funcType = (calleeType as ComponentType).getCallFuncType?.(methodName, options);
-            if (funcType) {
-                options.typeChain?.push(new TypeChainEntry({
-                    name: methodName,
-                    type: funcType,
-                    data: options.data,
-                    location: methodNameToken.location,
-                    separatorToken: createToken(TokenKind.Callfunc),
-                    astNode: callExpr
-                }));
-                if (options.ignoreCall) {
-                    result = funcType;
-                } else if (isCallableType(funcType) && (!isReferenceType(funcType.returnType) || funcType.returnType.isResolvable())) {
-                    result = funcType.returnType;
-                } else if (!isReferenceType(funcType) && (funcType as any)?.returnType?.isResolvable()) {
-                    result = (funcType as any).returnType;
-                } else {
-                    result = new TypePropertyReferenceType(funcType, 'returnType');
-                }
+        const funcType = calleeType.getCallFuncType?.(methodName, options);
+        if (funcType) {
+            options.typeChain?.push(new TypeChainEntry({
+                name: methodName,
+                type: funcType,
+                data: options.data,
+                location: methodNameToken.location,
+                separatorToken: createToken(TokenKind.Callfunc),
+                astNode: callExpr
+            }));
+            if (options.ignoreCall) {
+                result = funcType;
+            } else if (isCallableType(funcType) && (!isReferenceType(funcType.returnType) || funcType.returnType.isResolvable())) {
+                result = funcType.returnType;
+            } else if (!isReferenceType(funcType) && (funcType as any)?.returnType?.isResolvable()) {
+                result = (funcType as any).returnType;
+            } else if (this.isUnionOfFunctions(funcType)) {
+                result = this.getReturnTypeOfUnionOfFunctions(funcType);
+            } else {
+                result = new TypePropertyReferenceType(funcType, 'returnType');
             }
         }
         if (isVoidType(result)) {
@@ -2790,6 +2796,46 @@ export class Util {
             options.data.isFromCallFunc = true;
         }
         return result;
+    }
+
+    public isUnionOfFunctions(type: BscType, allowReferenceTypes = false): type is UnionType {
+        if (isUnionType(type)) {
+            const callablesInUnion = type.types.filter(t => isCallableType(t) || (allowReferenceTypes && isReferenceType(t)));
+            return callablesInUnion.length === type.types.length && callablesInUnion.length > 0;
+        }
+        return false;
+    }
+
+    public getFunctionTypeFromUnion(type: BscType): BscType {
+        if (this.isUnionOfFunctions(type)) {
+            const typedFuncsInUnion = type.types.filter(isTypedFunctionType);
+            if (typedFuncsInUnion.length < type.types.length) {
+                // has non-typedFuncs in union
+                return FunctionType.instance;
+            }
+            const exampleFunc = typedFuncsInUnion[0];
+            const cumulativeFunction = new TypedFunctionType(getUniqueType(typedFuncsInUnion.map(f => f.returnType), (types) => new UnionType(types)))
+                .setName(exampleFunc.name)
+                .setSub(exampleFunc.isSub);
+            for (const param of exampleFunc.params) {
+                cumulativeFunction.addParameter(param.name, param.type, param.isOptional);
+            }
+            return cumulativeFunction;
+        }
+        return undefined;
+    }
+
+    public getReturnTypeOfUnionOfFunctions(type: UnionType): BscType {
+        if (this.isUnionOfFunctions(type, true)) {
+            const typedFuncsInUnion = type.types.filter(t => isTypedFunctionType(t) || isReferenceType(t)) as TypedFunctionType[];
+            if (typedFuncsInUnion.length < type.types.length) {
+                // is non-typedFuncs in union
+                return DynamicType.instance;
+            }
+            const funcReturns = typedFuncsInUnion.map(f => f.returnType);
+            return getUniqueType(funcReturns, (types) => new UnionType(types));
+        }
+        return InvalidType.instance;
     }
 
     public symbolComesFromSameNode(symbolName: string, definingNode: AstNode, symbolTable: SymbolTable) {

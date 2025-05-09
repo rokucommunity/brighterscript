@@ -1,7 +1,9 @@
 import type { TypeCompatibilityData } from '../interfaces';
-import { isAnyReferenceType, isDynamicType, isEnumMemberType, isEnumType, isInheritableType, isInterfaceType, isReferenceType, isUnionType, isVoidType } from '../astUtils/reflection';
+import { isAnyReferenceType, isArrayDefaultTypeReferenceType, isDynamicType, isEnumMemberType, isEnumType, isInheritableType, isInterfaceType, isReferenceType, isTypePropertyReferenceType, isUnionType, isVoidType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 import type { UnionType } from './UnionType';
+import type { SymbolTable } from '../SymbolTable';
+import type { SymbolTypeFlag } from '../SymbolTypeFlag';
 
 export function findTypeIntersection(typesArr1: BscType[], typesArr2: BscType[]) {
     if (!typesArr1 || !typesArr2) {
@@ -22,7 +24,15 @@ export function findTypeUnion(...typesArr: BscType[][]) {
     return getUniqueTypesFromArray([].concat(...typesArr));
 }
 
-export function getUniqueTypesFromArray(types: BscType[]) {
+/**
+ * Same as findTypeUnion, but does not allow short cutting by just checking names
+ * Useful for checking types between callfuncs, as the parameter types may have the same name, but mean different things
+ */
+export function findTypeUnionDeepCheck(...typesArr: BscType[][]) {
+    return getUniqueTypesFromArray([].concat(...typesArr), false);
+}
+
+export function getUniqueTypesFromArray(types: BscType[], allowNameEquality = true) {
     if (!types) {
         return undefined;
     }
@@ -30,8 +40,11 @@ export function getUniqueTypesFromArray(types: BscType[]) {
         if (!currentType) {
             return false;
         }
+        if ((isTypePropertyReferenceType(currentType) || isArrayDefaultTypeReferenceType(currentType)) && !currentType.isResolvable()) {
+            return true;
+        }
         const latestIndex = types.findIndex((checkType) => {
-            return currentType.isEqual(checkType);
+            return currentType.isEqual(checkType, { allowNameEquality: allowNameEquality });
         });
         // the index that was found is the index we're checking --- there are no equal types after this
         return latestIndex === currentIndex;
@@ -46,7 +59,7 @@ export function getUniqueTypesFromArray(types: BscType[]) {
  * @param types array of types
  * @returns an array of the most general types
  */
-export function reduceTypesToMostGeneric(types: BscType[]): BscType[] {
+export function reduceTypesToMostGeneric(types: BscType[], allowNameEquality = true): BscType[] {
     if (!types || types?.length === 0) {
         return undefined;
     }
@@ -64,7 +77,7 @@ export function reduceTypesToMostGeneric(types: BscType[]): BscType[] {
     });
 
     // Get a list of unique types, based on the `isEqual()` method
-    const uniqueTypes = getUniqueTypesFromArray(types).map(t => {
+    const uniqueTypes = getUniqueTypesFromArray(types, allowNameEquality).map(t => {
         // map to object with `shouldIgnore` flag
         return { type: t, shouldIgnore: false };
     });
@@ -95,7 +108,7 @@ export function reduceTypesToMostGeneric(types: BscType[]): BscType[] {
             }
             const checkType = uniqueTypes[j].type;
 
-            if (currentType.isEqual(uniqueTypes[j].type)) {
+            if (currentType.isResolvable() && currentType.isEqual(uniqueTypes[j].type, { allowNameEquality: allowNameEquality })) {
                 uniqueTypes[j].shouldIgnore = true;
             } else if (isInheritableType(currentType) && isInheritableType(checkType)) {
                 if (currentType.isTypeDescendent(checkType)) {
@@ -122,7 +135,7 @@ export function reduceTypesToMostGeneric(types: BscType[]): BscType[] {
  * @param types array of types
  * @returns either the singular most general type, if there is one, otherwise a UnionType of the most general types
  */
-export function getUniqueType(types: BscType[], unionTypeFactory: (types: BscType[]) => BscType): BscType {
+export function getUniqueType(types: BscType[], unionTypeFactory: (types: BscType[]) => BscType, allowNameEquality = true): BscType {
     if (!types || types.length === 0) {
         return undefined;
     }
@@ -136,7 +149,7 @@ export function getUniqueType(types: BscType[], unionTypeFactory: (types: BscTyp
         }
         return type;
     }).flat();
-    const generalizedTypes = reduceTypesToMostGeneric(types);
+    const generalizedTypes = reduceTypesToMostGeneric(types, allowNameEquality);
     if (!generalizedTypes || generalizedTypes.length === 0) {
         return undefined;
     }
@@ -200,6 +213,22 @@ export function getAllTypesFromUnionType(union: UnionType): BscType[] {
         }
     }
     return results;
+}
+
+export function addAssociatedTypesTableAsSiblingToMemberTable(type: BscType, associatedTypesTable: SymbolTable, bitFlags: SymbolTypeFlag) {
+    if (isReferenceType(type) &&
+        !type.isResolvable()) {
+        // This param or return type is a reference - make sure the associated types are included
+        type.tableProvider().addSibling(associatedTypesTable);
+
+        // add this as a sister table to member tables too!
+        const memberTable: SymbolTable = type.getMemberTable();
+        if (memberTable.getAllSymbols) {
+            for (const memberSymbol of memberTable.getAllSymbols(bitFlags)) {
+                addAssociatedTypesTableAsSiblingToMemberTable(memberSymbol?.type, associatedTypesTable, bitFlags);
+            }
+        }
+    }
 }
 /**
  * A map of all types created in the program during its lifetime. This applies across all programs, validate runs, etc. Mostly useful for a single run to track types created.

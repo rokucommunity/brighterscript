@@ -8,7 +8,7 @@ import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import { InheritableType } from './InheritableType';
-import { isUnionTypeCompatible } from './helpers';
+import { addAssociatedTypesTableAsSiblingToMemberTable, isUnionTypeCompatible } from './helpers';
 import util from '../util';
 
 export class ComponentType extends InheritableType {
@@ -175,27 +175,11 @@ export class ComponentType extends InheritableType {
     getCallFuncType(name: string, options: GetSymbolTypeOptions) {
         const callFuncType = this.callFuncMemberTable.getSymbolType(name, options);
 
-        const addAssociatedTypesTableAsSiblingToMemberTable = (type: BscType) => {
-            if (isReferenceType(type) &&
-                !type.isResolvable()) {
-                // This param or return type is a reference - make sure the associated types are included
-                type.tableProvider().addSibling(this.callFuncAssociatedTypesTable);
-
-                // add this as a sister table to member tables too!
-                const memberTable: SymbolTable = type.getMemberTable();
-                if (memberTable.getAllSymbols) {
-                    for (const memberSymbol of memberTable.getAllSymbols(SymbolTypeFlag.runtime)) {
-                        addAssociatedTypesTableAsSiblingToMemberTable(memberSymbol?.type);
-                    }
-                }
-            }
-        };
-
         if (isTypedFunctionType(callFuncType)) {
             const typesToCheck = [...callFuncType.params.map(p => p.type), callFuncType.returnType];
 
             for (const type of typesToCheck) {
-                addAssociatedTypesTableAsSiblingToMemberTable(type);
+                addAssociatedTypesTableAsSiblingToMemberTable(type, this.callFuncAssociatedTypesTable, SymbolTypeFlag.runtime);
             }
         }
 

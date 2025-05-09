@@ -209,8 +209,12 @@ export class ReferenceType extends BscType {
 
                 // Look for circular references
                 if (!innerType || this.referenceChain.has(innerType)) {
+                    if (name === 'hasAddedBuiltInInterfaces') {
+                        // ignore this
+                        return true;
+                    }
                     console.log(`Proxy set error`, name, value, innerType);
-                    const error = new Error();
+                    const error = new Error(`Reference Type Proxy set error: ${{ memberKey: memberKey, name: name, value: value }}`);
                     console.log(error.stack);
                     return false;
                 }
@@ -223,7 +227,9 @@ export class ReferenceType extends BscType {
 
     public readonly kind = BscTypeKind.ReferenceType;
 
-    getTarget: () => BscType;
+    getTarget() {
+        return this.resolve();
+    }
 
     /**
      * Resolves the type based on the original name and the table provider
@@ -356,6 +362,12 @@ export class TypePropertyReferenceType extends BscType {
                     return outerType;
                 }
 
+                if (propName === 'isResolvable') {
+                    return () => {
+                        return !!(isAnyReferenceType(this.outerType) ? (this.outerType as any).getTarget() : this.outerType?.isResolvable());
+                    };
+                }
+
                 if (isAnyReferenceType(this.outerType) && !this.outerType.isResolvable()) {
                     if (propName === 'getMemberType') {
                         //If we're calling `getMemberType()`, we need it to proxy to using the actual symbol table
@@ -382,7 +394,7 @@ export class TypePropertyReferenceType extends BscType {
                         return () => false;
                     }
                 }
-                let inner = this.outerType?.[this.propertyName];
+                let inner = (isAnyReferenceType(this.outerType) ? (this.outerType as ReferenceType).getTarget() : this.outerType)?.[this.propertyName];
 
                 if (!inner) {
                     inner = DynamicType.instance;

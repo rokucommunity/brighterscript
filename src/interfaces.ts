@@ -1105,6 +1105,12 @@ export interface TypeChainProcessResult {
 export interface TypeCompatibilityData {
     missingFields?: { name: string; expectedType: BscType }[];
     fieldMismatches?: { name: string; expectedType: BscType; actualType: BscType }[];
+    parameterMismatches?: { index: number; expectedOptional?: boolean; actualOptional?: boolean; data: TypeCompatibilityData }[];
+    returnTypeMismatch?: TypeCompatibilityData;
+    expectedParamCount?: number;
+    actualParamCount?: number;
+    expectedVariadic?: boolean;
+    actualVariadic?: boolean;
     depth?: number;
     // override for diagnostic message - useful for Arrays with different default types
     actualType?: BscType;

@@ -7,7 +7,7 @@ import type { TypeCompatibilityData } from '../../interfaces';
 import { IntegerType } from '../../types/IntegerType';
 import { StringType } from '../../types/StringType';
 import type { BrsFile } from '../../files/BrsFile';
-import { FloatType, InterfaceType } from '../../types';
+import { FloatType, InterfaceType, TypedFunctionType, VoidType } from '../../types';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import undent from 'undent';
@@ -4501,6 +4501,61 @@ describe('ScopeValidator', () => {
         });
     });
 
+    describe('notCallable', () => {
+        it('finds when trying to call on a non-function', () => {
+            program.setFile('source/test.bs', `
+                sub someFunc(widget as roSGNodePoster)
+                    print widget.width()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.notCallable('widget.width').message
+            ]);
+        });
+
+        it('allows trying to call a dynamic', () => {
+            program.setFile('source/test.bs', `
+                sub someFunc(widget)
+                    print widget()
+                    print widget.whatever()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows trying to call a function param', () => {
+            program.setFile('source/test.bs', `
+                sub someFunc(widget as function)
+                    print widget()
+                    print widget().whatever()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('finds other non-callables', () => {
+            program.setFile('source/test.bs', `
+                sub someFunc(input as float)
+                    print input()
+                    a = "hello"
+                    print a()
+                    print 12345()
+                    print "string"()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.notCallable('input').message,
+                DiagnosticMessages.notCallable('a').message,
+                DiagnosticMessages.notCallable('12345').message,
+                DiagnosticMessages.notCallable('"string"').message
+            ]);
+        });
+    });
+
     describe('callFunc', () => {
         it('allows access to member of return type when return type is custom node', () => {
             program.setFile('components/Widget.xml', trim`
@@ -5088,6 +5143,354 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
+        });
+
+        it('allows callfunc operator on dynamic type', () => {
+            program.setFile('source/test.bs', `
+                sub doCallfunc(anything)
+                    anything@.someFunc()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows callfunc operator on roSGNode type', () => {
+            program.setFile('source/test.bs', `
+                sub doCallfunc(node as roSGNode)
+                    node@.someFunc()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+
+        it('disallows callfunc operator on non-callfuncable type', () => {
+            program.setFile('source/test.bs', `
+                sub doCallfunc(i as integer, s as string, b as boolean)
+                    i@.someFunc()
+                    s@.someFunc()
+                    b@.someFunc()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindCallFuncFunction('someFunc', null, 'integer').message,
+                DiagnosticMessages.cannotFindCallFuncFunction('someFunc', null, 'string').message,
+                DiagnosticMessages.cannotFindCallFuncFunction('someFunc', null, 'boolean').message
+            ]);
+        });
+
+
+        it('disallows callfunc operator on non-callfuncable type', () => {
+            program.setFile('source/test.bs', `
+                sub doCallfunc(i as integer, s as string, b as boolean)
+                    i@.someFunc()
+                    s@.someFunc()
+                    b@.someFunc()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindCallFuncFunction('someFunc', null, 'integer').message,
+                DiagnosticMessages.cannotFindCallFuncFunction('someFunc', null, 'string').message,
+                DiagnosticMessages.cannotFindCallFuncFunction('someFunc', null, 'boolean').message
+            ]);
+        });
+
+        it('allows callfunc operator on union of dynamic types', () => {
+            program.setFile('source/test.bs', `
+                sub doCallfunc()
+                    u = invalid
+                    if rnd(0) > 0.5
+                        u = getComponent1()
+                    else
+                        u = getComponent2()
+                    end if
+
+                    u@.someFunc()
+                end sub
+            `);
+
+            program.setFile('source/test2.bs', `
+                function getComponent1() as dynamic
+                    return 2 ' unknown to be integer outside of function
+                end function
+            `);
+
+            program.setFile('source/test3.bs', `
+                function getComponent2() as dynamic
+                    return 3 ' unknown to be integer outside of function
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('disallows callfunc operator on union of non-callfuncable types', () => {
+            program.setFile('source/test.bs', `
+                sub doCallfunc()
+                    if rnd(0) > 0.5
+                        u = 1
+                    else
+                        u = "hello"
+                    end if
+
+                    u@.someFunc()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindCallFuncFunction('someFunc', null, 'integer or string').message
+            ]);
+        });
+
+        it('allows callfunc on union of known components, with valid func', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getName" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                function getName() as string
+                    return "John Doe"
+                end function
+            `);
+
+            program.setFile('components/Widget2.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget2" extends="Group">
+                    <script uri="Widget2.bs"/>
+                    <interface>
+                        <function name="getName" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget2.bs', `
+                function getName() as string
+                    return "John Doe"
+                end function
+            `);
+
+            program.setFile('source/test.bs', `
+                sub doCallfunc(node as roSGNodeWidget or roSGNodeWidget2)
+                    node@.getName()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('disallows callfunc on union of known components, with invalid func', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getName" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                function getName() as string
+                    return "John Doe"
+                end function
+            `);
+
+            program.setFile('components/Widget2.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget2" extends="Group">
+                    <script uri="Widget2.bs"/>
+                    <interface>
+                        <function name="getNumber" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget2.bs', `
+                function getNumber() as float
+                    return 3.14
+                end function
+            `);
+
+            program.setFile('source/test.bs', `
+                sub doCallfunc(node as roSGNodeWidget or roSGNodeWidget2)
+                    node@.getName()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindCallFuncFunction('getName', '', 'roSGNodeWidget or roSGNodeWidget2').message
+            ]);
+        });
+
+        it('uses return type of union of functions', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getData" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                function getData() as string
+                    return "John Doe"
+                end function
+            `);
+
+            program.setFile('components/Widget2.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget2" extends="Group">
+                    <script uri="Widget2.bs"/>
+                    <interface>
+                        <function name="getData" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget2.bs', `
+                function getData() as float
+                    return 3.14
+                end function
+            `);
+
+            program.setFile('source/test.bs', `
+                sub doCallfunc(node as roSGNodeWidget or roSGNodeWidget2)
+                    takesFloat(node@.getData())
+                end sub
+
+                sub takesFloat(x as float)
+                    print x
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('string or float', 'float').message
+            ]);
+        });
+
+        it('disallows callfunc on union with incompatible func types', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="doStuff" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                sub doStuff(input as string)
+                    print "hello " + input
+                end sub
+            `);
+
+            program.setFile('components/Widget2.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget2" extends="Group">
+                    <script uri="Widget2.bs"/>
+                    <interface>
+                        <function name="doStuff" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget2.bs', `
+                sub doStuff(input as float)
+                    print input + 3.14
+                end sub
+            `);
+
+            program.setFile('source/test.bs', `
+                sub doCallfunc(node as roSGNodeWidget or roSGNodeWidget2, input)
+                    node@.doStuff(input)
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.incompatibleSymbolDefinition('node@.doStuff', {
+                    isUnion: true,
+                    data: {
+                        expectedType: new TypedFunctionType(VoidType.instance).setName('doStuff').setSub(true).addParameter('input', FloatType.instance, false),
+                        actualType: new TypedFunctionType(VoidType.instance).setName('doStuff').setSub(true).addParameter('input', FloatType.instance, false),
+                        parameterMismatches: [{ index: 0, data: { expectedType: StringType.instance, actualType: FloatType.instance } }]
+                    }
+                }).message
+            ]);
+        });
+
+        it('disallows callfunc on union with incompatible func types, that have the same signature', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="doStuff" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                interface MyStuff
+                    data as boolean
+                end interface
+
+                sub doStuff(input as MyStuff)
+                    print "hello " + input.data.toStr()
+                end sub
+            `);
+
+            program.setFile('components/Widget2.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget2" extends="Group">
+                    <script uri="Widget2.bs"/>
+                    <interface>
+                        <function name="doStuff" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget2.bs', `
+                interface MyStuff
+                    data as integer
+                end interface
+
+                sub doStuff(input as MyStuff)
+                    print input.data + 3.14
+                end sub
+            `);
+
+            program.setFile('source/test.bs', `
+                sub doCallfunc(node as roSGNodeWidget or roSGNodeWidget2, input)
+                    node@.doStuff(input)
+                end sub
+            `);
+            program.validate();
+            const stuff1IFace = new InterfaceType('MyStuff');
+            const stuff2IFace = new InterfaceType('MyStuff');
+
+            expectDiagnostics(program, [
+                DiagnosticMessages.incompatibleSymbolDefinition('node@.doStuff', {
+                    isUnion: true,
+                    data: {
+                        expectedType: new TypedFunctionType(VoidType.instance).setName('doStuff').setSub(true).addParameter('input', stuff1IFace, false),
+                        actualType: new TypedFunctionType(VoidType.instance).setName('doStuff').setSub(true).addParameter('input', stuff2IFace, false),
+                        parameterMismatches: [{ index: 0, data: { expectedType: stuff1IFace, actualType: stuff2IFace } }]
+                    }
+                }).message
+            ]);
         });
     });
 });
