@@ -6,8 +6,8 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import { Program } from './Program';
 import PluginInterface from './PluginInterface';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, trim } from './testHelpers.spec';
-import type { BrsFile } from './files/BrsFile';
-import type { AssignmentStatement, ForEachStatement, NamespaceStatement, PrintStatement } from './parser/Statement';
+import { BrsFile } from './files/BrsFile';
+import type { AssignmentStatement, ForEachStatement, IfStatement, NamespaceStatement, PrintStatement } from './parser/Statement';
 import type { CompilerPlugin, OnScopeValidateEvent } from './interfaces';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import { EnumMemberType, EnumType } from './types/EnumType';
@@ -20,13 +20,13 @@ import { FloatType } from './types/FloatType';
 import { NamespaceType } from './types/NamespaceType';
 import { DoubleType } from './types/DoubleType';
 import { UnionType } from './types/UnionType';
-import { isBlock, isCallExpression, isForEachStatement, isFunctionExpression, isFunctionStatement, isNamespaceStatement, isPrintStatement } from './astUtils/reflection';
+import { isBlock, isCallExpression, isForEachStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isNamespaceStatement, isPrintStatement } from './astUtils/reflection';
 import { ArrayType } from './types/ArrayType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { InterfaceType } from './types/InterfaceType';
 import { ComponentType } from './types/ComponentType';
 import { WalkMode, createVisitor } from './astUtils/visitors';
-import type { CallExpression, FunctionExpression } from './parser/Expression';
+import type { BinaryExpression, CallExpression, DottedGetExpression, FunctionExpression } from './parser/Expression';
 import { ObjectType } from './types';
 import undent from 'undent';
 import * as fsExtra from 'fs-extra';
@@ -4109,6 +4109,31 @@ describe('Scope', () => {
             expect((dataVar.getType({ flags: SymbolTypeFlag.runtime }) as UnionType).types).to.include(StringType.instance);
             expect((dataVar.getType({ flags: SymbolTypeFlag.runtime }) as UnionType).types).to.include(IntegerType.instance);
             expect((dataVar.getType({ flags: SymbolTypeFlag.runtime }) as UnionType).types).to.include(BooleanType.instance);
+        });
+
+        it('deals with reference type conditions in else if stmts', () => {
+            const file = program.setFile<BrsFile>('source/lib.bs', `
+                function testIfStmt(id as string)
+                    x = "data is not the first line"
+                    data = getData2()
+
+                    if data.type = "Movie"
+                        print "movie"
+                    else if data.type = "Series"
+                        print "series"
+                    end if
+                end function
+
+
+                function getData2() as object
+                    return invalid
+                end function
+                `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const ifStmts = file.ast.findChildren<IfStatement>(isIfStatement);
+            let lhs2 = (ifStmts[1].condition as BinaryExpression).left as DottedGetExpression;
+            expectTypeToBe(lhs2.obj.getType({ flags: SymbolTypeFlag.runtime }), ObjectType);
         });
     });
 
