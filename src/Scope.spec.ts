@@ -4028,22 +4028,23 @@ describe('Scope', () => {
             const testFile = program.setFile<BrsFile>('source/test.bs', `
                 sub main()
                     dbg = 0
+                    print dbg ' integer
                     #if DEBUG
                         dbg = "DEBUG"
                         print dbg ' string
                     #end if
-                    print dbg ' union
+                    print dbg ' string
                 end sub
             `);
             program.validate();
             expectZeroDiagnostics(program);
             const printStmts = testFile.ast.findChildren<PrintStatement>(isPrintStatement);
             let dbgVar = printStmts[0].expressions[0];
-            expectTypeToBe(dbgVar.getType({ flags: SymbolTypeFlag.runtime }), StringType);
+            expectTypeToBe(dbgVar.getType({ flags: SymbolTypeFlag.runtime }), IntegerType);
             dbgVar = printStmts[1].expressions[0];
-            expectTypeToBe(dbgVar.getType({ flags: SymbolTypeFlag.runtime }), UnionType);
-            expect((dbgVar.getType({ flags: SymbolTypeFlag.runtime }) as UnionType).types).to.include(StringType.instance);
-            expect((dbgVar.getType({ flags: SymbolTypeFlag.runtime }) as UnionType).types).to.include(IntegerType.instance);
+            expectTypeToBe(dbgVar.getType({ flags: SymbolTypeFlag.runtime }), StringType);
+            dbgVar = printStmts[2].expressions[0];
+            expectTypeToBe(dbgVar.getType({ flags: SymbolTypeFlag.runtime }), StringType);
         });
 
         it('should understand type changes in deep if statements', () => {

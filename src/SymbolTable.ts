@@ -251,17 +251,23 @@ export class SymbolTable implements SymbolTypeGetter {
         const depth = additionalOptions.depth ?? 0;
         for (let i = 0; i < pocketTablesWeFoundSomethingIn.length; i++) {
             let tableData = pocketTablesWeFoundSomethingIn[i];
+            let pocketTable = tableData.pocketTable;
             pocketTableResults.push(...tableData.results);
+            if (pocketTable.isMandatory) {
+                // remove all results before this
+                pocketTableResults = [...tableData.results];
+                pocketTablesAreExhaustive = true;
+            }
             if (i === 0) {
                 continue;
             }
-            if (tableData.table.complementsTables?.size > 0) {
+            if (pocketTable.table.complementsTables?.size > 0) {
                 let tableSatisfied = true;
                 let allPossibleSatisfiedResults: BscSymbol[] = [];
                 // need to check if all tables this complements are satisfied
-                for (const otherTable of tableData.table.complementsTables) {
+                for (const otherTable of pocketTable.table.complementsTables) {
                     const foundTableData = pocketTablesWeFoundSomethingIn.find((ptd => {
-                        return otherTable === ptd.table;
+                        return otherTable === ptd.pocketTable.table;
                     }));
                     if (foundTableData) {
                         allPossibleSatisfiedResults.push(...foundTableData.results);
@@ -304,11 +310,11 @@ export class SymbolTable implements SymbolTypeGetter {
         return result;
     }
 
-    private getSymbolDataFromPocketTables(name: string, bitFlags: SymbolTypeFlag, additionalOptions: { precedingAssignmentIndex?: number } & GetSymbolAdditionalOptions = {}): Array<{ table: SymbolTable; results: BscSymbol[] }> {
+    private getSymbolDataFromPocketTables(name: string, bitFlags: SymbolTypeFlag, additionalOptions: { precedingAssignmentIndex?: number } & GetSymbolAdditionalOptions = {}): Array<{ pocketTable: PocketTable; results: BscSymbol[] }> {
         const possiblePocketTables = this.getPossiblePocketTables({ statementIndex: additionalOptions.maxStatementIndex }, additionalOptions.precedingAssignmentIndex);
         const depth = additionalOptions.depth ?? 0;
 
-        const pocketTablesWeFoundSomethingIn = new Array<{ table: SymbolTable; results: BscSymbol[] }>();
+        const pocketTablesWeFoundSomethingIn = new Array<{ pocketTable: PocketTable; results: BscSymbol[] }>();
         for (const pocketTable of possiblePocketTables) {
             const pocketTableTypes = pocketTable.table.getSymbol(name, bitFlags, {
                 ignoreParentsAndSiblings: true,
@@ -318,9 +324,9 @@ export class SymbolTable implements SymbolTypeGetter {
             if (pocketTableTypes?.length > 0) {
                 if (pocketTable.table.isOrdered) {
                     const lastResult = pocketTableTypes[pocketTableTypes.length - 1];
-                    pocketTablesWeFoundSomethingIn.push({ table: pocketTable.table, results: [lastResult] });
+                    pocketTablesWeFoundSomethingIn.push({ pocketTable: pocketTable, results: [lastResult] });
                 } else {
-                    pocketTablesWeFoundSomethingIn.push({ table: pocketTable.table, results: pocketTableTypes });
+                    pocketTablesWeFoundSomethingIn.push({ pocketTable: pocketTable, results: pocketTableTypes });
                 }
             }
         }
@@ -359,7 +365,10 @@ export class SymbolTable implements SymbolTypeGetter {
     }
 
     public getSymbolTypes(name: string, options: GetSymbolTypeOptions, sortByStatementIndex = false): TypeCacheEntry[] {
-        const symbolArray = this.getSymbol(name, options.flags, { ignoreParentsAndSiblings: options.ignoreParentTables, maxStatementIndex: Number.isInteger(options.statementIndex) ? options.statementIndex as number : -1 });
+        const symbolArray = this.getSymbol(name, options.flags, {
+            ignoreParentsAndSiblings: options.ignoreParentTables,
+            maxStatementIndex: Number.isInteger(options.statementIndex) ? options.statementIndex as number : -1
+        });
         if (!symbolArray) {
             return undefined;
         }
@@ -641,7 +650,7 @@ export class SymbolTable implements SymbolTypeGetter {
                 return true;
             }
             if (maxAllowedStatementIndex >= 0 && t.data?.definingNode) {
-                if (memberOfAncestor || t.data.canUseInDefinedNode) {
+                if (memberOfAncestor || t.data.canUseInDefinedAstNode) {
                     // if we've already gone up a level, it's possible to have a variable assigned and used
                     // in the same statement, eg. for loop
                     return t.data.definingNode.statementIndex <= maxAllowedStatementIndex;
@@ -701,6 +710,10 @@ export interface PocketTable {
      * The index of the statement that contains this table within its parent block
      */
     index: number;
+    /**
+     * Is it mandatory for code to flow through this pocket?
+     */
+    isMandatory?: boolean;
 }
 
 export interface GetSymbolAdditionalOptions {

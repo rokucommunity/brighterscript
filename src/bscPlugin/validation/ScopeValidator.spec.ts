@@ -4504,10 +4504,12 @@ describe('ScopeValidator', () => {
 
             program.setFile('source/main.bs', `
                 sub main()
-                     #if DEBUG
+                    #if DEBUG
                         info as DebugInfo = {name: "main.bs"}
                         printDebugInfo(info)
-                     #end if
+                    #else
+                        printDebugInfo(info)
+                    #end if
                 end sub
 
                 #if DEBUG

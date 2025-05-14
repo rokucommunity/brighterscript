@@ -162,7 +162,7 @@ export class HoverProcessor {
 
                 if (isAssignmentStatement(expression) && token === expression.tokens.name) {
                     // if this is an assignment, but we're really interested in the value AFTER the assignment
-                    exprType = expression.getSymbolTable().getSymbolType(expression.tokens.name.text, { flags: typeFlag, typeChain: typeChain, data: extraData, statementIndex: expression.statementIndex + 1 }); //expression.getSymbolTable().getSymbolType(expression.tokens.name.text, { flags: typeFlag, typeChain: typeChain, data: extraData });
+                    exprType = expression.getSymbolTable().getSymbolType(expression.tokens.name.text, { flags: typeFlag, typeChain: typeChain, data: extraData, statementIndex: expression.statementIndex + 1 });
                 } else {
                     exprType = expression.getType({ flags: typeFlag, typeChain: typeChain, data: extraData, ignoreCall: isCallfuncExpression(expression) });
                 }

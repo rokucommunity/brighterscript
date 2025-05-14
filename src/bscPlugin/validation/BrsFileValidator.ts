@@ -128,7 +128,7 @@ export class BrsFileValidator {
                 if (!loopTargetType.isResolvable()) {
                     loopVarType = new ArrayDefaultTypeReferenceType(loopTargetType);
                 }
-                node.parent.getSymbolTable()?.addSymbol(node.tokens.item.text, { definingNode: node, isInstance: true, canUseInDefinedNode: true }, loopVarType, SymbolTypeFlag.runtime);
+                node.parent.getSymbolTable()?.addSymbol(node.tokens.item.text, { definingNode: node, isInstance: true, canUseInDefinedAstNode: true }, loopVarType, SymbolTypeFlag.runtime);
             },
             NamespaceStatement: (node) => {
                 this.validateDeclarationLocations(node, 'namespace', () => util.createBoundingRange(node.tokens.namespace, node.nameExpression));
@@ -288,7 +288,6 @@ export class BrsFileValidator {
                 }
             },
             ConditionalCompileStatement: (node) => {
-                this.setUpComplementSymbolTables(node, isConditionalCompileStatement);
                 this.validateConditionalCompileConst(node.tokens.condition);
             },
             ConditionalCompileErrorStatement: (node) => {
@@ -316,7 +315,12 @@ export class BrsFileValidator {
                 }
                 if (!isFunctionExpression(node.parent)) {
                     // we're a block inside another block (or body). This block is a pocket in the bigger block
-                    node.parent.getSymbolTable().addPocketTable({ index: node.parent.statementIndex, table: node.symbolTable });
+                    node.parent.getSymbolTable().addPocketTable({
+                        index: node.parent.statementIndex,
+                        table: node.symbolTable,
+                        // code always flows through ConditionalCompiles, because we walk according to defined BSConsts
+                        isMandatory: isConditionalCompileStatement(node.parent)
+                    });
                 }
             },
             AstNode: (node) => {
