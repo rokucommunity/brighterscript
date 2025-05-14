@@ -6,7 +6,7 @@ import type { TypedFunctionType } from './types/TypedFunctionType';
 import type { ParseMode } from './parser/Parser';
 import type { Program } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
-import type { ConditionalCompileStatement, FunctionStatement, NamespaceStatement } from './parser/Statement';
+import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
 import type { AstNode, Expression } from './parser/AstNode';
 import type { TranspileState } from './parser/TranspileState';
 import type { SourceNode } from 'source-map';
