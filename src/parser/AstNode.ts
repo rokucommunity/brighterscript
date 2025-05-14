@@ -230,15 +230,10 @@ export abstract class AstNode {
         return clone;
     }
 
-    private _statementIndex: number;
-
     /**
      * The index of the statement containing this node (or in the case of a statement, itself) within the containing block.
      */
     public get statementIndex(): number {
-        if (this._statementIndex) {
-            return this._statementIndex;
-        }
         if (isBody(this)) {
             return 0;
         }
@@ -261,13 +256,11 @@ export abstract class AstNode {
         if (!(isBlock(containingStatement.parent) || isBody(containingStatement.parent))) {
             // this is a block inside an if statement, for example
             if (isIfStatement(containingStatement.parent) || isConditionalCompileStatement(containingStatement.parent)) {
-                this._statementIndex = containingStatement.parent.getBranchStatementIndex(containingStatement);
-                return this._statementIndex;
+                return containingStatement.parent.getBranchStatementIndex(containingStatement);
             }
             return 0;
         }
-        this._statementIndex = containingStatement.parent.statements.indexOf(containingStatement);
-        return this._statementIndex;
+        return containingStatement.parent.statements.indexOf(containingStatement);
     }
 }
 
