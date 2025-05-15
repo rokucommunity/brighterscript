@@ -4115,7 +4115,7 @@ describe('Scope', () => {
             const file = program.setFile<BrsFile>('source/lib.bs', `
                 function testIfStmt(id as string)
                     x = "data is not the first line"
-                    data = getData2()
+                    data = getData()
 
                     if data.type = "Movie"
                         print "movie"
@@ -4125,7 +4125,7 @@ describe('Scope', () => {
                 end function
 
 
-                function getData2() as object
+                function getData() as object
                     return invalid
                 end function
                 `);

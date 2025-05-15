@@ -11,7 +11,7 @@ import util from '../util';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import type { Token } from '../lexer/Token';
-import { isBlock, isBody, isConditionalCompileStatement, isIfStatement, isStatement } from '../astUtils/reflection';
+import { isBlock, isBody } from '../astUtils/reflection';
 
 /**
  * A BrightScript AST node
@@ -240,27 +240,14 @@ export abstract class AstNode {
         if (!this.parent) {
             return -1;
         }
-        let containingStatement: Statement;
         let currentNode: AstNode = this;
-        while (currentNode && !isStatement(currentNode)) {
+        while (currentNode && !(isBlock(currentNode?.parent) || isBody(currentNode?.parent))) {
             currentNode = currentNode.parent;
         }
-        if (isStatement(currentNode)) {
-            containingStatement = currentNode;
-        } else {
-            return -1;
+        if (isBlock(currentNode?.parent) || isBody(currentNode?.parent)) {
+            return currentNode.parent.statements.indexOf(currentNode);
         }
-        if (!containingStatement.parent) {
-            return -1;
-        }
-        if (!(isBlock(containingStatement.parent) || isBody(containingStatement.parent))) {
-            // this is a block inside an if statement, for example
-            if (isIfStatement(containingStatement.parent) || isConditionalCompileStatement(containingStatement.parent)) {
-                return containingStatement.parent.getBranchStatementIndex(containingStatement);
-            }
-            return 0;
-        }
-        return containingStatement.parent.statements.indexOf(containingStatement);
+        return -1;
     }
 }
 
