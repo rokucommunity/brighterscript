@@ -19,6 +19,7 @@ import { AssociativeArrayType } from './types/AssociativeArrayType';
 import type { Statement } from './parser/AstNode';
 import { performance } from 'perf_hooks';
 import { LogLevel } from './logging';
+import { uninitializedTypeFactory } from './types/UninitializedType';
 
 /**
  * Assign some few factories to the SymbolTable to prevent cyclical imports. This file seems like the most intuitive place to do the linking
@@ -26,7 +27,7 @@ import { LogLevel } from './logging';
  */
 SymbolTable.referenceTypeFactory = referenceTypeFactory;
 SymbolTable.unionTypeFactory = unionTypeFactory;
-
+SymbolTable.uninitializedTypeFactory = uninitializedTypeFactory;
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
  */

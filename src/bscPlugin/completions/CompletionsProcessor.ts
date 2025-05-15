@@ -312,8 +312,11 @@ export class CompletionsProcessor {
                 }
             } else {
                 currentSymbols = symbolTable?.getOwnSymbols(symbolTableLookupFlag) ?? [];
-
                 if (containingFunctionExpression) {
+                    if (symbolTable !== containingFunctionExpression.body.symbolTable) {
+                        // this is a pocket table - get all symbols defined in full function
+                        currentSymbols.push(...containingFunctionExpression.body.getSymbolTable().getOwnSymbols(symbolTableLookupFlag));
+                    }
                     currentSymbols.push(...containingFunctionExpression.getSymbolTable().getOwnSymbols(symbolTableLookupFlag));
                 }
 

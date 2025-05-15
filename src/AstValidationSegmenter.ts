@@ -12,7 +12,9 @@ import { TokenKind } from './lexer/TokenKind';
 import type { BscSymbol } from './SymbolTable';
 
 // eslint-disable-next-line no-bitwise
-export const InsideSegmentWalkMode = WalkMode.visitStatements | WalkMode.visitExpressions | WalkMode.recurseChildFunctions;
+export const InsideSegmentWalkMode = WalkMode.visitStatements |
+    WalkMode.visitExpressions |
+    WalkMode.recurseChildFunctions;
 
 export interface UnresolvedSymbol {
     typeChain: TypeChainEntry[];

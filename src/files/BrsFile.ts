@@ -1112,9 +1112,10 @@ export class BrsFile implements BscFile {
         const referenceRunTimeSymbolMap = new Map<string, ProvidedSymbol>();
         const referenceTypeTimeSymbolMap = new Map<string, ProvidedSymbol>();
 
-        const tablesToGetSymbolsFrom: Array<{ table: SymbolTable; namePrefixLower?: string }> = [{
-            table: this.parser.symbolTable
-        }];
+        const tablesToGetSymbolsFrom: Array<{ table: SymbolTable; namePrefixLower?: string }> = [
+            { table: this.parser.symbolTable },
+            ...this.parser.symbolTable.pocketTables
+        ];
 
         for (const namespaceStatement of this._cachedLookups.namespaceStatements) {
             tablesToGetSymbolsFrom.push({

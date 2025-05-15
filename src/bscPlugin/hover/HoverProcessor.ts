@@ -158,11 +158,13 @@ export class HoverProcessor {
                 const typeFlag = isInTypeExpression ? SymbolTypeFlag.typetime : SymbolTypeFlag.runtime;
                 const typeChain: TypeChainEntry[] = [];
                 const extraData = {} as ExtraSymbolData;
-                let exprType = expression.getType({ flags: typeFlag, typeChain: typeChain, data: extraData, ignoreCall: isCallfuncExpression(expression) });
+                let exprType: BscType;
 
                 if (isAssignmentStatement(expression) && token === expression.tokens.name) {
-                    // if this is an assignment, but we're really interested in the LHS, need to a symbol lookup
-                    exprType = expression.getSymbolTable().getSymbolType(expression.tokens.name.text, { flags: typeFlag, typeChain: typeChain, data: extraData });
+                    // if this is an assignment, but we're really interested in the value AFTER the assignment
+                    exprType = expression.getSymbolTable().getSymbolType(expression.tokens.name.text, { flags: typeFlag, typeChain: typeChain, data: extraData, statementIndex: expression.statementIndex + 1 });
+                } else {
+                    exprType = expression.getType({ flags: typeFlag, typeChain: typeChain, data: extraData, ignoreCall: isCallfuncExpression(expression) });
                 }
 
                 const processedTypeChain = util.processTypeChain(typeChain);
