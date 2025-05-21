@@ -319,7 +319,7 @@ export class BrsFileValidator {
                         index: node.parent.statementIndex,
                         table: node.symbolTable,
                         // code always flows through ConditionalCompiles, because we walk according to defined BSConsts
-                        isMandatory: isConditionalCompileStatement(node.parent)
+                        willAlwaysBeExecuted: isConditionalCompileStatement(node.parent)
                     });
                 }
             },

@@ -253,7 +253,7 @@ export class SymbolTable implements SymbolTypeGetter {
             let tableData = pocketTablesWeFoundSomethingIn[i];
             let pocketTable = tableData.pocketTable;
             pocketTableResults.push(...tableData.results);
-            if (pocketTable.isMandatory) {
+            if (pocketTable.willAlwaysBeExecuted) {
                 // remove all results before this
                 pocketTableResults = [...tableData.results];
                 pocketTablesAreExhaustive = true;
@@ -711,9 +711,10 @@ export interface PocketTable {
      */
     index: number;
     /**
-     * Is it mandatory for code to flow through this pocket?
+     * Will the code this pocket table represents always be executed?
+     * Eg. Conditional Compile blocks will always be executed because only valid #if blocks are validated
      */
-    isMandatory?: boolean;
+    willAlwaysBeExecuted?: boolean;
 }
 
 export interface GetSymbolAdditionalOptions {
