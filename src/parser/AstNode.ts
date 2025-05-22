@@ -11,6 +11,7 @@ import util from '../util';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import type { Token } from '../lexer/Token';
+import { isBlock, isBody } from '../astUtils/reflection';
 
 /**
  * A BrightScript AST node
@@ -227,6 +228,26 @@ export abstract class AstNode {
             clone.location = util.cloneLocation(this.location);
         }
         return clone;
+    }
+
+    /**
+     * The index of the statement containing this node (or in the case of a statement, itself) within the containing block.
+     */
+    public get statementIndex(): number {
+        if (isBody(this)) {
+            return 0;
+        }
+        if (!this.parent) {
+            return -1;
+        }
+        let currentNode: AstNode = this;
+        while (currentNode && !(isBlock(currentNode?.parent) || isBody(currentNode?.parent))) {
+            currentNode = currentNode.parent;
+        }
+        if (isBlock(currentNode?.parent) || isBody(currentNode?.parent)) {
+            return currentNode.parent.statements.indexOf(currentNode);
+        }
+        return -1;
     }
 }
 

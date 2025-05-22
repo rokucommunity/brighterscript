@@ -29,3 +29,8 @@ export class UninitializedType extends BscType {
         return isUninitializedType(targetType);
     }
 }
+
+
+export function uninitializedTypeFactory() {
+    return UninitializedType.instance;
+}
