@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.47](https://github.com/rokucommunity/brighterscript/compare/1.0.0-alpha.46...v1.0.0-alpha.47) - 2025-05-22
+### Changed
+ - Type Tracking within a Function ([#1468](https://github.com/rokucommunity/brighterscript/pull/1468))
+ - Better Support for Union of Functions and CallFuncs ([#1485](https://github.com/rokucommunity/brighterscript/pull/1485))
+ - Better diagnostic null location handling ([#1491](https://github.com/rokucommunity/brighterscript/pull/1491))
+ - bsc1 cli binary ([#1492](https://github.com/rokucommunity/brighterscript/pull/1492))
+ - Merge branch 'master' of https://github.com/rokucommunity/brighterscript into v1 ([31e93246](https://github.com/rokucommunity/brighterscript/commit/31e93246))
+ - upgrade to [@rokucommunity/logger@0.3.11](https://github.com/rokucommunity/logger/blob/master/CHANGELOG.md#0311---2025-05-05). Notable changes since 0.3.10:
+     - Merge pull request #12 from rokucommunity/migrate-to-shared-ci ([f43e5a4](https://github.com/rokucommunity/brighterscript/commit/f43e5a4))
+ - upgrade to [roku-deploy@3.12.5](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3125---2025-05-05). Notable changes since 3.12.4:
+     - Add missing template workflows for shared ci ([#189](https://github.com/rokucommunity/brighterscript/pull/189))
+     - Shared CI Support Prerelease ([#185](https://github.com/rokucommunity/brighterscript/pull/185))
+
+
+
 ## [1.0.0-alpha.46](https://github.com/rokucommunity/brighterscript/compare/1.0.0-alpha.45...v1.0.0-alpha.46) - 2025-04-24
 ### Added
  - Add missing content node fields ([#1481](https://github.com/rokucommunity/brighterscript/pull/1481))
