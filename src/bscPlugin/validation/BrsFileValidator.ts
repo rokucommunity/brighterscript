@@ -1,4 +1,4 @@
-import { isAliasStatement, isArrayType, isBlock, isBody, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypecastExpression, isTypecastStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
+import { isAliasStatement, isBlock, isBody, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypecastExpression, isTypecastStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -123,11 +123,8 @@ export class BrsFileValidator {
             ForEachStatement: (node) => {
                 //register the for loop variable
                 const loopTargetType = node.target.getType({ flags: SymbolTypeFlag.runtime });
-                let loopVarType = isArrayType(loopTargetType) ? loopTargetType.defaultType : DynamicType.instance;
+                const loopVarType = new ArrayDefaultTypeReferenceType(loopTargetType);
 
-                if (!loopTargetType.isResolvable()) {
-                    loopVarType = new ArrayDefaultTypeReferenceType(loopTargetType);
-                }
                 node.parent.getSymbolTable()?.addSymbol(node.tokens.item.text, { definingNode: node, isInstance: true }, loopVarType, SymbolTypeFlag.runtime);
             },
             NamespaceStatement: (node) => {
