@@ -487,8 +487,6 @@ export class BinaryOperatorReferenceType extends BscType {
  * Use this class for when there is a presumable array type that is a referenceType
  */
 export class ArrayDefaultTypeReferenceType extends BscType {
-    cachedType: BscType;
-
     constructor(public objType: BscType) {
         super('ArrayDefaultType');
         // eslint-disable-next-line no-constructor-return
@@ -506,9 +504,6 @@ export class ArrayDefaultTypeReferenceType extends BscType {
 
                 if (propName === 'getTarget') {
                     return () => {
-                        if (this.cachedType) {
-                            return this.cachedType;
-                        }
                         if (isReferenceType(this.objType)) {
                             (this.objType as any).getTarget();
                         }
@@ -516,26 +511,23 @@ export class ArrayDefaultTypeReferenceType extends BscType {
                     };
                 }
 
-                let resultType: BscType = this.cachedType ?? DynamicType.instance;
-                if (!this.cachedType) {
-                    if ((isAnyReferenceType(this.objType) && !this.objType.isResolvable())
-                    ) {
-                        if (propName === 'isResolvable') {
-                            return () => false;
-                        }
-                        if (propName === 'getTarget') {
-                            return () => undefined;
-                        }
-                    } else {
-                        if (isArrayType(this.objType)) {
-                            resultType = this.objType.defaultType;
-                        } else {
-                            resultType = DynamicType.instance;
-                        }
-                        this.cachedType = resultType;
+                let resultType: BscType = DynamicType.instance;
+                if ((isAnyReferenceType(this.objType) && !this.objType.isResolvable())
+                ) {
+                    if (propName === 'isResolvable') {
+                        return () => false;
                     }
-
+                    if (propName === 'getTarget') {
+                        return () => undefined;
+                    }
+                } else {
+                    if (isArrayType(this.objType)) {
+                        resultType = this.objType.defaultType;
+                    } else {
+                        resultType = DynamicType.instance;
+                    }
                 }
+
                 if (resultType) {
                     const result = Reflect.get(resultType, propName, resultType);
                     return result;
