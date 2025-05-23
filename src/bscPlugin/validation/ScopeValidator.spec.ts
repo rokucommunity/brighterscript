@@ -6,7 +6,7 @@ import { expect } from 'chai';
 import type { TypeCompatibilityData } from '../../interfaces';
 import { IntegerType } from '../../types/IntegerType';
 import { StringType } from '../../types/StringType';
-import type { BrsFile } from '../../files/BrsFile';
+import { BrsFile } from '../../files/BrsFile';
 import { FloatType, InterfaceType, TypedFunctionType, VoidType } from '../../types';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
@@ -4429,6 +4429,38 @@ describe('ScopeValidator', () => {
 
             // there should be no more errors
             expectZeroDiagnostics(program);
+        });
+
+        it.only('recognizes when the type of a for-each loop variable changes', () => {
+            program.setFile<BrsFile>('source/file1.bs', `
+                interface FooFace
+                    prop as string
+                end interface
+            `);
+
+            program.setFile<BrsFile>('source/file2.bs', `
+                function loopFooFace(input as FooFace[])
+                    out = ""
+                    for each ff in input
+                        out += ff.prop
+                    end for
+                    return out
+                end function
+            `);
+            program.validate();
+            //currently no error
+            expectZeroDiagnostics(program);
+
+            // change FooFace.prop to not work in other file
+            program.setFile<BrsFile>('source/file1.bs', `
+                interface FooFace
+                    prop as integer
+                end interface
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.operatorTypeMismatch('+=', 'string', 'integer')
+            ]);
         });
     });
 
