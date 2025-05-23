@@ -6,7 +6,7 @@ import { expect } from 'chai';
 import type { TypeCompatibilityData } from '../../interfaces';
 import { IntegerType } from '../../types/IntegerType';
 import { StringType } from '../../types/StringType';
-import { BrsFile } from '../../files/BrsFile';
+import type { BrsFile } from '../../files/BrsFile';
 import { FloatType, InterfaceType, TypedFunctionType, VoidType } from '../../types';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
@@ -4431,7 +4431,7 @@ describe('ScopeValidator', () => {
             expectZeroDiagnostics(program);
         });
 
-        it.only('recognizes when the type of a for-each loop variable changes', () => {
+        it('recognizes when the type of a for-each loop variable changes', () => {
             program.setFile<BrsFile>('source/file1.bs', `
                 interface FooFace
                     prop as string
@@ -4461,6 +4461,16 @@ describe('ScopeValidator', () => {
             expectDiagnostics(program, [
                 DiagnosticMessages.operatorTypeMismatch('+=', 'string', 'integer')
             ]);
+
+            // change FooFace.prop to back to working
+            program.setFile<BrsFile>('source/file1.bs', `
+                interface FooFace
+                    prop as string
+                end interface
+            `);
+            program.validate();
+            //currently no error
+            expectZeroDiagnostics(program);
         });
     });
 
