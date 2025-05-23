@@ -4502,6 +4502,26 @@ describe('ScopeValidator', () => {
             expectZeroDiagnostics(program);
         });
 
+        it('should find assignments in conditional compile blocks', () => {
+            fsExtra.outputFileSync(`${rootDir}/manifest`, undent`
+                bs_const=DEBUG=true
+            `);
+
+            program.setFile('source/main.bs', `
+                sub main()
+                    dbg = invalid
+                    #if DEBUG
+                        dbg = "DEBUG"
+                    #end if
+
+                    print dbg
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+
         it('should find types defined in condition compile blocks', () => {
             fsExtra.outputFileSync(`${rootDir}/manifest`, undent`
                 bs_const=DEBUG=true
@@ -4516,10 +4536,12 @@ describe('ScopeValidator', () => {
 
             program.setFile('source/main.bs', `
                 sub main()
-                     #if DEBUG
+                    #if DEBUG
                         info as DebugInfo = {name: "main.bs"}
                         printDebugInfo(info)
-                     #end if
+                    #else
+                        printDebugInfo(info)
+                    #end if
                 end sub
 
                 #if DEBUG

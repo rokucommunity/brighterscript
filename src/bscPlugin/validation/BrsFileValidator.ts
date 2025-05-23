@@ -1,4 +1,4 @@
-import { isAliasStatement, isBlock, isBody, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypecastExpression, isTypecastStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
+import { isAliasStatement, isBlock, isBody, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypecastExpression, isTypecastStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -7,7 +7,7 @@ import { TokenKind } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
 import { CallExpression, type FunctionExpression, type LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
-import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, Body, WhileStatement, TypecastStatement, Block, AliasStatement } from '../../parser/Statement';
+import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, Body, WhileStatement, TypecastStatement, Block, AliasStatement, IfStatement, ConditionalCompileStatement } from '../../parser/Statement';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { ArrayDefaultTypeReferenceType } from '../../types/ReferenceType';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
@@ -125,7 +125,7 @@ export class BrsFileValidator {
                 const loopTargetType = node.target.getType({ flags: SymbolTypeFlag.runtime });
                 const loopVarType = new ArrayDefaultTypeReferenceType(loopTargetType);
 
-                node.parent.getSymbolTable()?.addSymbol(node.tokens.item.text, { definingNode: node, isInstance: true }, loopVarType, SymbolTypeFlag.runtime);
+                node.parent.getSymbolTable()?.addSymbol(node.tokens.item.text, { definingNode: node, isInstance: true, canUseInDefinedAstNode: true }, loopVarType, SymbolTypeFlag.runtime);
             },
             NamespaceStatement: (node) => {
                 this.validateDeclarationLocations(node, 'namespace', () => util.createBoundingRange(node.tokens.namespace, node.nameExpression));
@@ -300,6 +300,25 @@ export class BrsFileValidator {
                 // eslint-disable-next-line no-bitwise
                 node.parent.getSymbolTable().addSymbol(node.tokens.name.text, { definingNode: node, doNotMerge: true, isAlias: true }, targetType, SymbolTypeFlag.runtime | SymbolTypeFlag.typetime);
 
+            },
+            IfStatement: (node) => {
+                this.setUpComplementSymbolTables(node, isIfStatement);
+            },
+            Block: (node) => {
+                const blockSymbolTable = node.symbolTable;
+                if (node.findAncestor<Block>(isFunctionExpression)) {
+                    // this block is in a function. order matters!
+                    blockSymbolTable.isOrdered = true;
+                }
+                if (!isFunctionExpression(node.parent)) {
+                    // we're a block inside another block (or body). This block is a pocket in the bigger block
+                    node.parent.getSymbolTable().addPocketTable({
+                        index: node.parent.statementIndex,
+                        table: node.symbolTable,
+                        // code always flows through ConditionalCompiles, because we walk according to defined BSConsts
+                        willAlwaysBeExecuted: isConditionalCompileStatement(node.parent)
+                    });
+                }
             },
             AstNode: (node) => {
                 //check for doc comments
@@ -685,6 +704,18 @@ export class BrsFileValidator {
                 break;
             } else {
                 nodes.push(node.parent);
+            }
+        }
+    }
+
+    private setUpComplementSymbolTables(node: IfStatement | ConditionalCompileStatement, predicate: (node: AstNode) => boolean) {
+        if (isBlock(node.elseBranch)) {
+            const elseTable = node.elseBranch.symbolTable;
+            let currentNode = node;
+            while (predicate(currentNode)) {
+                const thenBranch = (currentNode as IfStatement | ConditionalCompileStatement).thenBranch;
+                elseTable.complementOtherTable(thenBranch.symbolTable);
+                currentNode = currentNode.parent as IfStatement | ConditionalCompileStatement;
             }
         }
     }
