@@ -1,6 +1,6 @@
 import { SemanticTokenModifiers } from 'vscode-languageserver-protocol';
 import { SemanticTokenTypes } from 'vscode-languageserver-protocol';
-import { isCallableType, isClassType, isComponentType, isConstStatement, isDottedGetExpression, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionStatement, isInterfaceType, isNamespaceType, isPrimitiveType, isVariableExpression } from '../../astUtils/reflection';
+import { isCallableType, isClassType, isComponentType, isConstStatement, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionStatement, isInterfaceType, isNamespaceType, isPrimitiveType, isVariableExpression } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ExtraSymbolData, OnGetSemanticTokensEvent, SemanticToken, TypeChainEntry } from '../../interfaces';
 import type { Locatable, Token } from '../../lexer/Token';
@@ -103,19 +103,20 @@ export class BrsFileSemanticTokensProcessor {
     }
 
     private getSemanticTokenInfo(node: AstNode, type: BscType, extraData: ExtraSymbolData): { type: SemanticTokenTypes; modifiers?: SemanticTokenModifiers[] } {
+        const isInTypeExpression = util.isInTypeExpression(node);
+
         if (isConstStatement(extraData?.definingNode)) {
             return { type: SemanticTokenTypes.variable, modifiers: [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static] };
             // non-instances of classes should be colored like classes
         } else if (isClassType(type) && extraData.isInstance !== true) {
             return { type: SemanticTokenTypes.class };
             //function statements and expressions
-        } else if (isCallableType(type)) {
+        } else if (!isInTypeExpression && isCallableType(type)) {
             //if the typetime type is a class, then color this like a class
             const typetimeType = node.getType({ flags: SymbolTypeFlag.typetime });
             if (isClassType(typetimeType)) {
                 return { type: SemanticTokenTypes.class };
             }
-
             //if this is a function statement or expression, treat it as a function
             if (isFunctionExpression(node) || isFunctionStatement(node)) {
                 return { type: SemanticTokenTypes.function };
@@ -126,7 +127,9 @@ export class BrsFileSemanticTokensProcessor {
                 //if this is a dottedGet, and the LHS is a namespace, treat it as a function.
                 (isDottedGetExpression(node) && isNamespaceType(node.obj.getType({ flags: SymbolTypeFlag.typetime })))
             ) {
-                return { type: SemanticTokenTypes.function };
+                if (!isDynamicType(type)) {
+                    return { type: SemanticTokenTypes.function };
+                }
 
                 //all others should be treated as methods
             } else {
@@ -145,10 +148,10 @@ export class BrsFileSemanticTokensProcessor {
             //this is separate from the checks above because we want to resolve alias lookups before turning this variable into a const
         } else if (isConstStatement(node)) {
             return { type: SemanticTokenTypes.variable, modifiers: [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static] };
-        } else if (util.isInTypeExpression(node) && isPrimitiveType(type)) {
+        } else if (isInTypeExpression && isPrimitiveType(type)) {
             // primitive types in type expressions should be already properly colored. do not add a semantic token
             return undefined;
-        } else if (isVariableExpression(node)) {
+        } else if (!isInTypeExpression && isVariableExpression(node)) {
             if (/m/i.test(node.tokens?.name?.text)) {
                 //don't color `m` variables
             } else {
