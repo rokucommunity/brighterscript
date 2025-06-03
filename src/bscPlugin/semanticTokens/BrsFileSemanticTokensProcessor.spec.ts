@@ -575,4 +575,22 @@ describe('BrsFileSemanticTokensProcessor', () => {
             [SemanticTokenTypes.variable, 2, 30, 2, 34]
         ]);
     });
+
+    it('ignores dynamic and function in type expressions', () => {
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            sub test(data as dynamic, func as function)
+                func(data)
+            end sub
+        `);
+        expectSemanticTokens(file, [
+            // sub |test|(data as dynamic, func as function)
+            [SemanticTokenTypes.function, 1, 16, 1, 20],
+            // sub test(|data| as dynamic, func as function)
+            [SemanticTokenTypes.parameter, 1, 21, 1, 25],
+            // sub test(data as dynamic, |func| as function)
+            [SemanticTokenTypes.parameter, 1, 38, 1, 42],
+            // |func|(data)
+            [SemanticTokenTypes.function, 2, 16, 2, 20]
+        ]);
+    });
 });
