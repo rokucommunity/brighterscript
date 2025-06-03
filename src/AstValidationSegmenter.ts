@@ -1,5 +1,5 @@
 import type { DottedGetExpression, TypeExpression, VariableExpression } from './parser/Expression';
-import { isAliasStatement, isBinaryExpression, isBlock, isBody, isClassStatement, isConditionalCompileStatement, isDottedGetExpression, isInterfaceStatement, isNamespaceStatement, isTypecastStatement, isTypeExpression, isVariableExpression } from './astUtils/reflection';
+import { isAliasStatement, isArrayType, isBinaryExpression, isBlock, isBody, isClassStatement, isConditionalCompileStatement, isDottedGetExpression, isInterfaceStatement, isNamespaceStatement, isTypecastStatement, isTypeExpression, isVariableExpression } from './astUtils/reflection';
 import { ChildrenSkipper, WalkMode, createVisitor } from './astUtils/visitors';
 import type { ExtraSymbolData, GetTypeOptions, TypeChainEntry } from './interfaces';
 import type { AstNode, Expression } from './parser/AstNode';
@@ -77,8 +77,11 @@ export class AstValidationSegmenter {
                 this.checkExpressionForUnresolved(segment, expression.expression.right as VariableExpression, assignedSymbolsNames);
         }
         if (isTypeExpression(expression)) {
-            const typeIntypeExpression = expression.getType({ flags: SymbolTypeFlag.typetime });
-            if (typeIntypeExpression.isResolvable()) {
+            let typeInTypeExpression = expression.getType({ flags: SymbolTypeFlag.typetime });
+            if (isArrayType(typeInTypeExpression)) {
+                typeInTypeExpression = typeInTypeExpression.defaultType;
+            }
+            if (typeInTypeExpression.isResolvable()) {
                 return this.handleTypeCastTypeExpression(segment, expression);
             }
         }
@@ -90,7 +93,10 @@ export class AstValidationSegmenter {
         let typeChain: TypeChainEntry[] = [];
         const extraData = {} as ExtraSymbolData;
         const options: GetTypeOptions = { flags: flag, onlyCacheResolvedTypes: true, typeChain: typeChain, data: extraData };
-        const nodeType = expression.getType(options);
+        let nodeType = expression.getType(options);
+        if (isArrayType(nodeType)) {
+            nodeType = nodeType.defaultType;
+        }
         if (!nodeType?.isResolvable()) {
             let symbolsSet: Set<UnresolvedSymbol>;
             if (!assignedSymbolsNames?.has(typeChain[0].name.toLowerCase())) {

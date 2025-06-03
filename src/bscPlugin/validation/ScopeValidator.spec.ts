@@ -4430,6 +4430,48 @@ describe('ScopeValidator', () => {
             // there should be no more errors
             expectZeroDiagnostics(program);
         });
+
+        it('recognizes when the type of a for-each loop variable changes', () => {
+            program.setFile<BrsFile>('source/file1.bs', `
+                interface FooFace
+                    prop as string
+                end interface
+            `);
+
+            program.setFile<BrsFile>('source/file2.bs', `
+                function loopFooFace(input as FooFace[])
+                    out = ""
+                    for each ff in input
+                        out += ff.prop
+                    end for
+                    return out
+                end function
+            `);
+            program.validate();
+            //currently no error
+            expectZeroDiagnostics(program);
+
+            // change FooFace.prop to not work in other file
+            program.setFile<BrsFile>('source/file1.bs', `
+                interface FooFace
+                    prop as integer
+                end interface
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.operatorTypeMismatch('+=', 'string', 'integer')
+            ]);
+
+            // change FooFace.prop to back to working
+            program.setFile<BrsFile>('source/file1.bs', `
+                interface FooFace
+                    prop as string
+                end interface
+            `);
+            program.validate();
+            //currently no error
+            expectZeroDiagnostics(program);
+        });
     });
 
 
