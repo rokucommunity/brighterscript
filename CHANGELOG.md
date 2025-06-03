@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.69.10](https://github.com/rokucommunity/brighterscript/compare/0.69.9...v0.69.10) - 2025-06-03
+### Changed
+ - upgrade to [roku-deploy@3.12.6](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3126---2025-06-03). Notable changes since 3.12.5:
+     - chore: Upgrade to the undent package instead of dedent ([#196](https://github.com/rokucommunity/brighterscript/pull/196))
+     - chore: Shared CI remove merged check on publish releases ([#194](https://github.com/rokucommunity/brighterscript/pull/194))
+
+
+
 ## [0.69.9](https://github.com/rokucommunity/brighterscript/compare/0.69.8...v0.69.9) - 2025-05-09
 ### Added
  - Add `bsc0` cli binary name ([#1490](https://github.com/rokucommunity/brighterscript/pull/1490))
