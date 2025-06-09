@@ -1,5 +1,5 @@
 import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
-import { isDynamicType, isObjectType, isTypedFunctionType, isUnionType } from '../astUtils/reflection';
+import { isDynamicType, isNumberType, isObjectType, isTypedFunctionType, isUnionType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { ReferenceType } from './ReferenceType';
 import { addAssociatedTypesTableAsSiblingToMemberTable, findTypeUnion, findTypeUnionDeepCheck, getUniqueType, isEnumTypeCompatible } from './helpers';
@@ -144,7 +144,25 @@ export class UnionType extends BscType {
     toString(): string {
         return joinTypesString(this.types);
     }
+
+    /**
+     * Used for transpilation
+     */
     toTypeString(): string {
+        if (this.types.length === 0) {
+            return 'dynamic';
+        }
+        if (this.types.length === 1) {
+            return this.types[0].toTypeString();
+        }
+        const allNumbers = this.types.filter(t => isNumberType(t));
+        if (allNumbers.length === this.types.length) {
+            return util.getHighestPriorityType(this.types).toTypeString();
+        }
+        const allObjectType = this.types.filter(t => isObjectType(t));
+        if (allObjectType.length === this.types.length) {
+            return 'object';
+        }
         return 'dynamic';
     }
 

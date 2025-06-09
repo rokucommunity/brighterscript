@@ -11,6 +11,10 @@ import { isReferenceType, isTypePropertyReferenceType, isUnionType } from '../as
 import { TypedFunctionType } from './TypedFunctionType';
 import { SymbolTable } from '../SymbolTable';
 import { ReferenceType } from './ReferenceType';
+import { integer } from 'vscode-languageserver-types';
+import { DoubleType } from './DoubleType';
+import { LongIntegerType } from './LongIntegerType';
+import { ObjectType } from './ObjectType';
 
 
 describe('UnionType', () => {
@@ -188,6 +192,39 @@ describe('UnionType', () => {
             expectTypeToBe(returnType, UnionType);
             expect((returnType as UnionType).types).includes(StringType.instance);
             expect((returnType as UnionType).types).includes(IntegerType.instance);
+        });
+    });
+
+    describe('toTypeString', () => {
+        it('should reduce primitive types to the most generic if reducible', () => {
+            let ut = new UnionType([FloatType.instance, IntegerType.instance]);
+            expect(ut.toTypeString()).to.eq('float');
+            ut = new UnionType([FloatType.instance, IntegerType.instance, DoubleType.instance]);
+            expect(ut.toTypeString()).to.eq('double');
+            ut = new UnionType([LongIntegerType.instance, IntegerType.instance]);
+            expect(ut.toTypeString()).to.eq('longinteger');
+            ut = new UnionType([DoubleType.instance, LongIntegerType.instance]);
+            expect(ut.toTypeString()).to.eq('double');
+        });
+
+        it('should reduce object types to object', () => {
+            let ut = new UnionType([ObjectType.instance, ObjectType.instance]);
+            expect(ut.toTypeString()).to.eq('object');
+            ut = new UnionType([ObjectType.instance, ObjectType.instance, ObjectType.instance, ObjectType.instance]);
+            expect(ut.toTypeString()).to.eq('object');
+        });
+
+        it('should reduce to dynamic if non-reducible', () => {
+            let ut = new UnionType([FloatType.instance, StringType.instance]);
+            expect(ut.toTypeString()).to.eq('dynamic');
+            ut = new UnionType([FloatType.instance, IntegerType.instance, ObjectType.instance]);
+            expect(ut.toTypeString()).to.eq('dynamic');
+            ut = new UnionType([LongIntegerType.instance, new InterfaceType('test')]);
+            expect(ut.toTypeString()).to.eq('dynamic');
+            ut = new UnionType([ObjectType.instance, ObjectType.instance, StringType.instance, ObjectType.instance]);
+            expect(ut.toTypeString()).to.eq('dynamic');
+            ut = new UnionType([ObjectType.instance, new InterfaceType('test')]);
+            expect(ut.toTypeString()).to.eq('dynamic');
         });
     });
 });
