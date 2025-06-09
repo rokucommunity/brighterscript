@@ -11,7 +11,6 @@ import { isReferenceType, isTypePropertyReferenceType, isUnionType } from '../as
 import { TypedFunctionType } from './TypedFunctionType';
 import { SymbolTable } from '../SymbolTable';
 import { ReferenceType } from './ReferenceType';
-import { integer } from 'vscode-languageserver-types';
 import { DoubleType } from './DoubleType';
 import { LongIntegerType } from './LongIntegerType';
 import { ObjectType } from './ObjectType';

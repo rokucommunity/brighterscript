@@ -2,7 +2,7 @@ import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
 import { isDynamicType, isNumberType, isObjectType, isTypedFunctionType, isUnionType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { ReferenceType } from './ReferenceType';
-import { addAssociatedTypesTableAsSiblingToMemberTable, findTypeUnion, findTypeUnionDeepCheck, getUniqueType, isEnumTypeCompatible } from './helpers';
+import { addAssociatedTypesTableAsSiblingToMemberTable, findTypeUnion, findTypeUnionDeepCheck, getAllTypesFromUnionType, getUniqueType, isEnumTypeCompatible } from './helpers';
 import { BscTypeKind } from './BscTypeKind';
 import type { TypeCacheEntry } from '../SymbolTable';
 import { SymbolTable } from '../SymbolTable';
@@ -149,18 +149,21 @@ export class UnionType extends BscType {
      * Used for transpilation
      */
     toTypeString(): string {
-        if (this.types.length === 0) {
+        const flattenedTypes = getAllTypesFromUnionType(this);
+
+        if (flattenedTypes.length === 0) {
             return 'dynamic';
         }
-        if (this.types.length === 1) {
-            return this.types[0].toTypeString();
+        if (flattenedTypes.length === 1) {
+            return flattenedTypes[0].toTypeString();
         }
-        const allNumbers = this.types.filter(t => isNumberType(t));
-        if (allNumbers.length === this.types.length) {
-            return util.getHighestPriorityType(this.types).toTypeString();
+
+        const allNumbers = flattenedTypes.filter(t => isNumberType(t));
+        if (allNumbers.length === flattenedTypes.length) {
+            return util.getHighestPriorityType(flattenedTypes).toTypeString();
         }
-        const allObjectType = this.types.filter(t => isObjectType(t));
-        if (allObjectType.length === this.types.length) {
+        const allObjectType = flattenedTypes.filter(t => isObjectType(t));
+        if (allObjectType.length === flattenedTypes.length) {
             return 'object';
         }
         return 'dynamic';
