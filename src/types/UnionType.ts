@@ -1,8 +1,8 @@
 import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
-import { isDynamicType, isObjectType, isTypedFunctionType, isUnionType } from '../astUtils/reflection';
+import { isDynamicType, isNumberType, isObjectType, isTypedFunctionType, isUnionType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { ReferenceType } from './ReferenceType';
-import { addAssociatedTypesTableAsSiblingToMemberTable, findTypeUnion, findTypeUnionDeepCheck, getUniqueType, isEnumTypeCompatible } from './helpers';
+import { addAssociatedTypesTableAsSiblingToMemberTable, findTypeUnion, findTypeUnionDeepCheck, getAllTypesFromUnionType, getUniqueType, isEnumTypeCompatible } from './helpers';
 import { BscTypeKind } from './BscTypeKind';
 import type { TypeCacheEntry } from '../SymbolTable';
 import { SymbolTable } from '../SymbolTable';
@@ -144,7 +144,28 @@ export class UnionType extends BscType {
     toString(): string {
         return joinTypesString(this.types);
     }
+
+    /**
+     * Used for transpilation
+     */
     toTypeString(): string {
+        const flattenedTypes = getAllTypesFromUnionType(this);
+
+        if (flattenedTypes.length === 0) {
+            return 'dynamic';
+        }
+        if (flattenedTypes.length === 1) {
+            return flattenedTypes[0].toTypeString();
+        }
+
+        const allNumbers = flattenedTypes.filter(t => isNumberType(t));
+        if (allNumbers.length === flattenedTypes.length) {
+            return util.getHighestPriorityType(flattenedTypes).toTypeString();
+        }
+        const allObjectType = flattenedTypes.filter(t => isObjectType(t));
+        if (allObjectType.length === flattenedTypes.length) {
+            return 'object';
+        }
         return 'dynamic';
     }
 
