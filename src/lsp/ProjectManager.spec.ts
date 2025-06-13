@@ -152,7 +152,7 @@ describe('ProjectManager', () => {
             fsExtra.outputFileSync(`${rootDir}/subdir/bsconfig.json`, '');
             await manager.syncProjects([{
                 workspaceFolder: rootDir,
-                excludePatterns: ['subdir/**/*']
+                excludePatterns: ['**/subdir/**/*']
             }]);
             expect(
                 manager.projects.map(x => x.projectPath)
