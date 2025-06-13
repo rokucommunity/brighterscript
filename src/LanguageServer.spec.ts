@@ -1,7 +1,7 @@
 import { expect } from './chai-config.spec';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { DidChangeWatchedFilesParams, Location, PublishDiagnosticsParams, WorkspaceFolder } from 'vscode-languageserver';
+import type { ConfigurationItem, DidChangeWatchedFilesParams, Location, PublishDiagnosticsParams, WorkspaceFolder } from 'vscode-languageserver';
 import { FileChangeType } from 'vscode-languageserver';
 import { Deferred } from './deferred';
 import { CustomCommands, LanguageServer } from './LanguageServer';
@@ -402,15 +402,41 @@ describe('LanguageServer', () => {
         });
 
         it('ignores bsconfig.json files from vscode ignored paths', async () => {
-            server.run();
-            sinon.stub(server['connection'].workspace, 'getConfiguration').returns(Promise.resolve({
-                exclude: {
-                    '**/vendor': true
+            const mapItem = (item: ConfigurationItem) => {
+                if (item.section === 'files') {
+                    return {
+                        exclude: {
+                            '**/vendor': true
+                        }
+                    };
+                } else if (item.section === 'search') {
+                    return {
+                        exclude: {
+                            '**/temp': true
+                        }
+                    };
+                } else {
+                    return {};
                 }
-            }) as any);
+            };
+
+            server.run();
+            sinon.stub(server['connection'].workspace, 'getConfiguration').callsFake(
+                // @ts-expect-error Sinon incorrectly infers the type of this function
+                (items: any) => {
+                    if (typeof items === 'string') {
+                        return Promise.resolve({});
+                    }
+                    if (Array.isArray(items)) {
+                        return Promise.resolve(items.map(mapItem));
+                    }
+                    return Promise.resolve(mapItem(items));
+                }
+            );
             await server.onInitialized();
 
             fsExtra.outputJsonSync(s`${workspacePath}/vendor/someProject/bsconfig.json`, {});
+            fsExtra.outputJsonSync(s`${workspacePath}/temp/someProject/bsconfig.json`, {});
             //it always ignores node_modules
             fsExtra.outputJsonSync(s`${workspacePath}/node_modules/someProject/bsconfig.json`, {});
             await server['syncProjects']();

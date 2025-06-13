@@ -646,20 +646,22 @@ export class ProjectManager {
      * If none are found, then the workspaceFolder itself is treated as a project
      */
     private async getProjectPaths(workspaceConfig: WorkspaceConfig) {
-        //get the list of exclude patterns, and negate them (so they actually work like excludes)
-        const excludePatterns = (workspaceConfig.excludePatterns ?? []).map(x => s`!${x}`);
-        let files = await rokuDeploy.getFilePaths([
-            '**/bsconfig.json',
-            //exclude all files found in `files.exclude`
-            ...excludePatterns
-        ], workspaceConfig.workspaceFolder);
+        //get the list of exclude patterns, negate them so they actually work like excludes), and coerce to forward slashes since that's what fast-glob expects
+        const excludePatterns = (workspaceConfig.excludePatterns ?? []).map(x => s`!${x}`.replace(/[\\/]+/g, '/'));
+
+        let files = await fastGlob(['**/bsconfig.json', ...excludePatterns], {
+            cwd: workspaceConfig.workspaceFolder,
+            followSymbolicLinks: false,
+            absolute: true,
+            onlyFiles: true
+        });
 
         //filter the files to only include those that are allowed by the path filterer
-        files = this.pathFilterer.filter(files, x => x.src);
+        files = this.pathFilterer.filter(files);
 
         //if we found at least one bsconfig.json, then ALL projects must have a bsconfig.json.
         if (files.length > 0) {
-            return files.map(file => s`${path.dirname(file.src)}`);
+            return files.map(file => s`${path.dirname(file)}`);
         }
 
         //look for roku project folders

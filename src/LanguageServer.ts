@@ -653,10 +653,22 @@ export class LanguageServer {
      * Ask the client for the list of `files.exclude` patterns. Useful when determining if we should process a file
      */
     private async getWorkspaceExcludeGlobs(workspaceFolder: string): Promise<string[]> {
-        const config = await this.getClientConfiguration<{ exclude: string[] }>(workspaceFolder, 'files');
-        const result = Object
-            .keys(config?.exclude ?? {})
-            .filter(x => config?.exclude?.[x])
+        const filesConfig = await this.getClientConfiguration<{ exclude: string[] }>(workspaceFolder, 'files');
+        const fileExcludes = this.extractExcludes(filesConfig);
+
+        const searchConfig = await this.getClientConfiguration<{ exclude: string[] }>(workspaceFolder, 'search');
+        const searchExcludes = this.extractExcludes(searchConfig);
+
+        return [...fileExcludes, ...searchExcludes];
+    }
+
+    private extractExcludes(config: { exclude: string[] }): string[] {
+        if (!config?.exclude) {
+            return [];
+        }
+        return Object
+            .keys(config.exclude)
+            .filter(x => config.exclude[x])
             //vscode files.exclude patterns support ignoring folders without needing to add `**/*`. So for our purposes, we need to
             //append **/* to everything without a file extension or magic at the end
             .map(pattern => [
@@ -666,7 +678,6 @@ export class LanguageServer {
                 `${pattern}/**/*`
             ])
             .flat(1);
-        return result;
     }
 
     /**
