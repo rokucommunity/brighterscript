@@ -1821,39 +1821,39 @@ describe('AstNode', () => {
             doTest(`result = 1.ToStr()`, ast => ast.findChild(isLiteralNumber), ast => ast.findChild(isCallExpression));
         });
 
-        it.only('ArrayLiteralExpression knows its a root', () => {
+        it('ArrayLiteralExpression knows its a root', () => {
             doTest(`result = [1,2,3]`, ast => ast.findChild(isArrayLiteralExpression), ast => ast.findChild(isArrayLiteralExpression));
         });
 
-        it.only('AALiteralExpression knows its a root', () => {
+        it('AALiteralExpression knows its a root', () => {
             doTest(`result = [{}]`, ast => ast.findChild(isAALiteralExpression), ast => ast.findChild(isAALiteralExpression));
         });
 
-        it.only('AAMemberExpression knows its a root', () => {
+        it('AAMemberExpression knows its a root', () => {
             doTest(`result = [{ one: 1}]`, ast => ast.findChild(isAAMemberExpression), ast => ast.findChild(isAAMemberExpression));
         });
 
-        it.only('VariableExpression knows its a root', () => {
+        it('VariableExpression knows its a root', () => {
             doTest(`result = [one]`, 'one', 'one');
         });
 
-        it.only('NewExpression knows its a root', () => {
+        it('NewExpression knows its a root', () => {
             doTest(`result = [new Movie()]`, ast => ast.findChild(isNewExpression), ast => ast.findChild(isNewExpression));
         });
 
-        it.only('CallfuncExpression properly passes along', () => {
+        it('CallfuncExpression properly passes along', () => {
             doTest(`result = [ node@.someCallfunc() ]`, 'node', ast => ast.findChild(isCallfuncExpression));
         });
 
-        it.only('TemplateStringExpression knows its a root', () => {
+        it('TemplateStringExpression knows its a root', () => {
             doTest('result = [ `some text` ]', ast => ast.findChild(isTemplateStringExpression), ast => ast.findChild(isTemplateStringExpression));
         });
 
-        it.only('TaggedStringExpression knows its a root', () => {
+        it('TaggedStringExpression knows its a root', () => {
             doTest('result = [ someTag`some text` ]', ast => ast.findChild(isTaggedTemplateStringExpression), ast => ast.findChild(isTaggedTemplateStringExpression));
         });
 
-        it.only('AnnotationExpression knows its a root', () => {
+        it('AnnotationExpression knows its a root', () => {
             doTest(`
                 @SomeAnnotation()
                 sub SomeFunc()
@@ -1865,17 +1865,21 @@ describe('AstNode', () => {
             }).annotations[0], false);
         });
 
-        it.only('TernaryExpression knows its a root', () => {
+        it('TernaryExpression knows its a root', () => {
             doTest('result = [ true ? 1 : 2 ]', ast => ast.findChild(isTernaryExpression), ast => ast.findChild(isTernaryExpression));
         });
 
-        it.only('NullCoalescingExpression knows its a root', () => {
+        it('NullCoalescingExpression knows its a root', () => {
             doTest('result = [ 1 ?? 2 ]', ast => ast.findChild(isNullCoalescingExpression), ast => ast.findChild(isNullCoalescingExpression));
         });
 
-        it.only('regex works correctly', () => {
+        it('regex works correctly', () => {
             doTest('result = [ /one/ ]', ast => ast.findChild(isRegexLiteralExpression), ast => ast.findChild(isRegexLiteralExpression));
             doTest('result = [ /one/.exec() ]', ast => ast.findChild(isRegexLiteralExpression), ast => ast.findChild(isCallExpression));
+        });
+
+        it('NullCoalescingExpression knows its a root', () => {
+            doTest('result = [1 as string]', ast => ast.findChild(isTypeCastExpression), ast => ast.findChild(isTypeCastExpression));
         });
     });
 });

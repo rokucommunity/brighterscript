@@ -98,7 +98,7 @@ export function isNullCoalescingExpression(element: AstNode | undefined): elemen
     return element?.constructor?.name === 'NullCoalescingExpression';
 }
 export function isRegexLiteralExpression(element: AstNode | undefined): element is RegexLiteralExpression {
-    return element?.constructor?.name === 'RegexLiteralExpression ';
+    return element?.constructor?.name === 'RegexLiteralExpression';
 }
 export function isEndStatement(element: AstNode | undefined): element is EndStatement {
     return element?.constructor?.name === 'EndStatement';
