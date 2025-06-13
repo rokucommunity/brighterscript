@@ -646,8 +646,8 @@ export class ProjectManager {
      * If none are found, then the workspaceFolder itself is treated as a project
      */
     private async getProjectPaths(workspaceConfig: WorkspaceConfig) {
-        //get the list of exclude patterns, and negate them (so they actually work like excludes)
-        const excludePatterns = (workspaceConfig.excludePatterns ?? []).map(x => s`!${x}`);
+        //get the list of exclude patterns, negate them so they actually work like excludes), and coerce to forward slashes since that's what fast-glob expects
+        const excludePatterns = (workspaceConfig.excludePatterns ?? []).map(x => s`!${x}`.replace(/[\\/]+/g, '/'));
 
         let files = await fastGlob(['**/bsconfig.json', ...excludePatterns], {
             cwd: workspaceConfig.workspaceFolder,
