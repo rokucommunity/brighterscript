@@ -1,5 +1,5 @@
 import type { Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassFieldStatement, ClassMethodStatement, ClassStatement, InterfaceFieldStatement, InterfaceMethodStatement, InterfaceStatement, EnumStatement, EnumMemberStatement, TryCatchStatement, CatchStatement, ThrowStatement, MethodStatement, FieldStatement, ConstStatement, ContinueStatement, DimStatement, TypecastStatement, AliasStatement } from '../parser/Statement';
-import type { LiteralExpression, BinaryExpression, CallExpression, FunctionExpression, NamespacedVariableNameExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression, TypeCastExpression, TernaryExpression, NullCoalescingExpression } from '../parser/Expression';
+import type { LiteralExpression, BinaryExpression, CallExpression, FunctionExpression, NamespacedVariableNameExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression, TypeCastExpression, TernaryExpression, NullCoalescingExpression, RegexLiteralExpression } from '../parser/Expression';
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
 import type { BscFile, File, TypedefProvider } from '../interfaces';
@@ -96,6 +96,9 @@ export function isTernaryExpression(element: AstNode | undefined): element is Te
 }
 export function isNullCoalescingExpression(element: AstNode | undefined): element is NullCoalescingExpression {
     return element?.constructor?.name === 'NullCoalescingExpression';
+}
+export function isRegexLiteralExpression(element: AstNode | undefined): element is RegexLiteralExpression {
+    return element?.constructor?.name === 'RegexLiteralExpression ';
 }
 export function isEndStatement(element: AstNode | undefined): element is EndStatement {
     return element?.constructor?.name === 'EndStatement';

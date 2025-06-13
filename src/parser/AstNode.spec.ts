@@ -1,16 +1,18 @@
 import { util } from '../util';
 import * as fsExtra from 'fs-extra';
 import { Program } from '../Program';
-import type { BrsFile } from '../files/BrsFile';
+import { BrsFile } from '../files/BrsFile';
 import { expect } from '../chai-config.spec';
-import type { AALiteralExpression, AAMemberExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionExpression, GroupingExpression, IndexedGetExpression, NewExpression, NullCoalescingExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, TernaryExpression, TypeCastExpression, UnaryExpression, XmlAttributeGetExpression } from './Expression';
+import { AAMemberExpression, NamespacedVariableNameExpression, VariableExpression, type AALiteralExpression, type ArrayLiteralExpression, type BinaryExpression, type CallExpression, type CallfuncExpression, type DottedGetExpression, type FunctionExpression, type GroupingExpression, type IndexedGetExpression, type NewExpression, type NullCoalescingExpression, type TaggedTemplateStringExpression, type TemplateStringExpression, type TemplateStringQuasiExpression, type TernaryExpression, type TypeCastExpression, type UnaryExpression, type XmlAttributeGetExpression } from './Expression';
 import { expectZeroDiagnostics } from '../testHelpers.spec';
 import { tempDir, rootDir, stagingDir } from '../testHelpers.spec';
-import { isAALiteralExpression, isAAMemberExpression, isAnnotationExpression, isArrayLiteralExpression, isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isCallfuncExpression, isCatchStatement, isClassStatement, isCommentStatement, isConstStatement, isDimStatement, isDottedGetExpression, isDottedSetStatement, isEnumMemberStatement, isEnumStatement, isExpressionStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isGroupingExpression, isIfStatement, isIncrementStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInterfaceStatement, isLibraryStatement, isMethodStatement, isNamespaceStatement, isNewExpression, isNullCoalescingExpression, isPrintStatement, isReturnStatement, isTaggedTemplateStringExpression, isTemplateStringExpression, isTemplateStringQuasiExpression, isTernaryExpression, isThrowStatement, isTryCatchStatement, isTypeCastExpression, isUnaryExpression, isWhileStatement, isXmlAttributeGetExpression } from '../astUtils/reflection';
-import type { ClassStatement, FunctionStatement, InterfaceFieldStatement, InterfaceMethodStatement, MethodStatement, InterfaceStatement, CatchStatement, ThrowStatement, EnumStatement, EnumMemberStatement, ConstStatement, Block, CommentStatement, PrintStatement, DimStatement, ForStatement, WhileStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, TryCatchStatement, DottedSetStatement } from './Statement';
+import { isAALiteralExpression, isAAMemberExpression, isAnnotationExpression, isArrayLiteralExpression, isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isCallfuncExpression, isCatchStatement, isClassStatement, isCommentStatement, isConstStatement, isDimStatement, isDottedGetExpression, isDottedSetStatement, isEnumMemberStatement, isEnumStatement, isExpressionStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isGroupingExpression, isIfStatement, isIncrementStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInterfaceStatement, isLibraryStatement, isLiteralNumber, isMethodStatement, isNamespacedVariableNameExpression, isNamespaceStatement, isNewExpression, isNullCoalescingExpression, isPrintStatement, isRegexLiteralExpression, isReturnStatement, isSourceLiteralExpression, isTaggedTemplateStringExpression, isTemplateStringExpression, isTemplateStringQuasiExpression, isTernaryExpression, isThrowStatement, isTryCatchStatement, isTypeCastExpression, isUnaryExpression, isVariableExpression, isWhileStatement, isXmlAttributeGetExpression } from '../astUtils/reflection';
+import type { Body, ClassStatement, FunctionStatement, InterfaceFieldStatement, InterfaceMethodStatement, MethodStatement, InterfaceStatement, CatchStatement, ThrowStatement, EnumStatement, EnumMemberStatement, ConstStatement, Block, CommentStatement, PrintStatement, DimStatement, ForStatement, WhileStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, TryCatchStatement, DottedSetStatement } from './Statement';
 import { AssignmentStatement, EmptyStatement } from './Statement';
 import { ParseMode, Parser } from './Parser';
 import type { AstNode } from './AstNode';
+import { BrsTranspileState } from './BrsTranspileState';
+import { standardizePath as s } from '../util';
 
 type DeepWriteable<T> = { -readonly [P in keyof T]: DeepWriteable<T[P]> };
 
@@ -1668,6 +1670,212 @@ describe('AstNode', () => {
             `).ast;
 
             testClone(original);
+        });
+    });
+
+    describe('Expression chains', () => {
+        function findNodeByName(ast: Body, name: string) {
+            return ast.findChild(node => {
+                if (isVariableExpression(node) && node.name.text === name) {
+                    return true;
+                } else if (isDottedGetExpression(node) && node.name.text === name) {
+                    return true;
+                } else if (isSourceLiteralExpression(node) && node.token.text === name) {
+                    return true;
+                } else if (isXmlAttributeGetExpression(node) && node.name.text === name) {
+                    return true;
+                }
+            });
+        }
+
+        type FindMatcher = (ast: Body) => AstNode;
+        function doTest(code: string, startSelector: string | FindMatcher, expectedRootSelector: string | FindMatcher, insertFunctionBody = true) {
+            const file = new BrsFile(s`${rootDir}/source/main.bs`, 'pkg:/source/main.bs', program);
+
+            file.parse(
+                !insertFunctionBody ? code : `function test()\n    ${code}\nend function`
+            );
+
+            expectZeroDiagnostics(file);
+
+            const ast = file.ast;
+
+            const start = typeof startSelector === 'function' ? startSelector(ast) : findNodeByName(ast, startSelector as string);
+            const expectedRoot = typeof expectedRootSelector === 'function' ? expectedRootSelector(ast) : findNodeByName(ast, expectedRootSelector as string);
+
+            expect(start).not.to.be.undefined;
+            expect(expectedRoot).not.to.be.undefined;
+
+            const root = start.getExpressionChainRoot();
+
+            //transpile both items so we can compare the things they actually represent. (helps sanity check)
+            expect(
+                root.transpile(new BrsTranspileState(file)).toString()
+            ).to.eql(
+                expectedRoot.transpile(new BrsTranspileState(file)).toString()
+            );
+
+            //the real test. did we get the exact same instance of the root that we were expecting?
+            expect(root).to.equal(expectedRoot);
+        }
+
+        it('finds root of dotted gets', () => {
+            doTest(`func = alpha.beta.charlie.delta`, 'alpha', 'delta');
+            doTest(`func = alpha.beta.charlie.delta`, 'beta', 'delta');
+            doTest(`func = alpha.beta.charlie.delta`, 'charlie', 'delta');
+            doTest(`func = alpha.beta.charlie.delta`, 'delta', 'delta');
+        });
+
+        it('finds root of dotted get inside indexed get', () => {
+            doTest(`func = alpha.beta[charlie.delta]`, 'alpha', ast => ast.findChild(isIndexedGetExpression));
+            doTest(`func = alpha.beta[charlie.delta]`, 'beta', ast => ast.findChild(isIndexedGetExpression));
+            doTest(`func = alpha.beta[charlie.delta]`, 'charlie', 'delta');
+            doTest(`func = alpha.beta[charlie.delta]`, 'delta', 'delta');
+        });
+
+        it('finds root of variable expression', () => {
+            doTest(`func = alpha`, 'alpha', 'alpha');
+        });
+
+        it('finds root of function call', () => {
+            doTest(`func = alpha()`, 'alpha', ast => ast.findChild(isCallExpression));
+            doTest(`func = alpha.beta()`, 'alpha', ast => ast.findChild(isCallExpression));
+        });
+
+        it('finds root of call inside call', () => {
+            doTest(`func = alpha()`, 'alpha', ast => ast.findChild(isCallExpression));
+            doTest(`func = alpha(beta())`, 'beta', ast => {
+                return ast.findChild(x => isVariableExpression(x) && x.name.text === 'beta').parent;
+            });
+            doTest(`func = alpha(beta())`, 'alpha', ast => {
+                return ast.findChild(x => isVariableExpression(x) && x.name.text === 'alpha').parent;
+            });
+        });
+
+        it('finds root of literal number inside call', () => {
+            doTest(`func = alpha(1)`, ast => ast.findChild(isLiteralNumber), ast => ast.findChild(isLiteralNumber));
+        });
+
+        it('finds wrapped of literal number inside call', () => {
+            doTest(`func = alpha(1)`, ast => ast.findChild(isLiteralNumber), ast => ast.findChild(isLiteralNumber));
+        });
+
+        it('GroupExpressions cause new expression chains', () => {
+            doTest(`func = (((one).two).three)`, 'one', 'one');
+            doTest(`func = (((one).two).three)`, ast => {
+                //the grouping expression around `one`
+                return ast.findChild(x => isVariableExpression(x) && x.name.text === 'one').parent;
+            }, 'two');
+            doTest(`func = (((one).two).three)`, ast => {
+                //the grouping expression around `(one).two`
+                return ast.findChild(x => isDottedGetExpression(x) && x.name.text === 'two').parent;
+            }, 'three');
+            doTest(`func = (((one).two).three)`, ast => {
+                //the grouping expression around `((one).two).three`
+                return ast.findChild(x => isDottedGetExpression(x) && x.name.text === 'three').parent;
+            }, ast => {
+                //the grouping expression around `((one).two).three`
+                return ast.findChild(x => isDottedGetExpression(x) && x.name.text === 'three').parent;
+            });
+        });
+
+        it('UnaryExpression are not included in expressionChainRoot', () => {
+            doTest(`isAlive = [not isDead]`, 'isDead', 'isDead');
+        });
+
+        it('SourceLiteralExpression do not cause issues', () => {
+            doTest(`isAlive = [LINE_NUM.ToStr()]`, 'LINE_NUM', ast => ast.findChild(isCallExpression));
+        });
+
+        it('SourceLiteralExpression do not cause issues', () => {
+            doTest(`func = [function(p1 = alpha.beta)\nend function]`, 'alpha', 'beta');
+        });
+
+        it('BinaryExpression knows its a root', () => {
+            doTest(`func = [1 + "two"]`, ast => ast.findChild(isBinaryExpression), ast => ast.findChild(isBinaryExpression));
+        });
+
+        it('FunctionExpression knows its a root', () => {
+            doTest(`func = [sub() : end sub]`, ast => ast.findChild(isFunctionExpression), ast => ast.findChild(isFunctionExpression));
+        });
+
+        it('NamespacedVariableExpression knows its a root', () => {
+            doTest(`
+                namespace alpha.beta
+                    class charlie extends delta.echo
+                    end class
+                end namespace
+            `, ast => ast.findChild(isNamespacedVariableNameExpression), ast => ast.findChild(isNamespacedVariableNameExpression), false);
+        });
+
+        it('XmlAttributeGetExpression works', () => {
+            doTest(`result = [thing@name]`, 'thing', 'name');
+        });
+
+        it('LiteralExpression knows its a root when standalone', () => {
+            doTest(`result = [1]`, ast => ast.findChild(isLiteralNumber), ast => ast.findChild(isLiteralNumber));
+        });
+
+        //skipped because this is a bug in the parser (it's valid syntax on device)
+        it.skip('LiteralExpression is not a root when used on LHS of dotted get', () => {
+            doTest(`result = 1.ToStr()`, ast => ast.findChild(isLiteralNumber), ast => ast.findChild(isCallExpression));
+        });
+
+        it.only('ArrayLiteralExpression knows its a root', () => {
+            doTest(`result = [1,2,3]`, ast => ast.findChild(isArrayLiteralExpression), ast => ast.findChild(isArrayLiteralExpression));
+        });
+
+        it.only('AALiteralExpression knows its a root', () => {
+            doTest(`result = [{}]`, ast => ast.findChild(isAALiteralExpression), ast => ast.findChild(isAALiteralExpression));
+        });
+
+        it.only('AAMemberExpression knows its a root', () => {
+            doTest(`result = [{ one: 1}]`, ast => ast.findChild(isAAMemberExpression), ast => ast.findChild(isAAMemberExpression));
+        });
+
+        it.only('VariableExpression knows its a root', () => {
+            doTest(`result = [one]`, 'one', 'one');
+        });
+
+        it.only('NewExpression knows its a root', () => {
+            doTest(`result = [new Movie()]`, ast => ast.findChild(isNewExpression), ast => ast.findChild(isNewExpression));
+        });
+
+        it.only('CallfuncExpression properly passes along', () => {
+            doTest(`result = [ node@.someCallfunc() ]`, 'node', ast => ast.findChild(isCallfuncExpression));
+        });
+
+        it.only('TemplateStringExpression knows its a root', () => {
+            doTest('result = [ `some text` ]', ast => ast.findChild(isTemplateStringExpression), ast => ast.findChild(isTemplateStringExpression));
+        });
+
+        it.only('TaggedStringExpression knows its a root', () => {
+            doTest('result = [ someTag`some text` ]', ast => ast.findChild(isTaggedTemplateStringExpression), ast => ast.findChild(isTaggedTemplateStringExpression));
+        });
+
+        it.only('AnnotationExpression knows its a root', () => {
+            doTest(`
+                @SomeAnnotation()
+                sub SomeFunc()
+                end sub
+            `, ast => ast.findChild<FunctionStatement>(x => {
+                return isFunctionStatement(x);
+            }).annotations[0], ast => ast.findChild<FunctionStatement>(x => {
+                return isFunctionStatement(x);
+            }).annotations[0], false);
+        });
+
+        it.only('TernaryExpression knows its a root', () => {
+            doTest('result = [ true ? 1 : 2 ]', ast => ast.findChild(isTernaryExpression), ast => ast.findChild(isTernaryExpression));
+        });
+
+        it.only('NullCoalescingExpression knows its a root', () => {
+            doTest('result = [ 1 ?? 2 ]', ast => ast.findChild(isNullCoalescingExpression), ast => ast.findChild(isNullCoalescingExpression));
+        });
+
+        it.only('regex works correctly', () => {
+            doTest('result = [ /one/ ]', ast => ast.findChild(isRegexLiteralExpression), ast => ast.findChild(isRegexLiteralExpression));
+            doTest('result = [ /one/.exec() ]', ast => ast.findChild(isRegexLiteralExpression), ast => ast.findChild(isCallExpression));
         });
     });
 });

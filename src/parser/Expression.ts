@@ -62,6 +62,11 @@ export class BinaryExpression extends Expression {
             ['left', 'right']
         );
     }
+
+    public childIsInExpressionChain(child: AstNode): boolean {
+        //we can't be part of expression chains. we're our own chain.
+        return false;
+    }
 }
 
 export class CallExpression extends Expression {
@@ -143,6 +148,11 @@ export class CallExpression extends Expression {
             ),
             ['callee', 'args']
         );
+    }
+
+    public childIsInExpressionChain(child: AstNode): boolean {
+        //only the callee can be part of our expression chain
+        return child === this.callee;
     }
 }
 
@@ -407,6 +417,10 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }, { walkMode: WalkMode.visitExpressions });
         return clone;
     }
+
+    protected childIsInExpressionChain(child: AstNode): boolean {
+        return false; //these can't be part of an expression chain
+    }
 }
 
 export class FunctionParameterExpression extends Expression {
@@ -494,6 +508,11 @@ export class FunctionParameterExpression extends Expression {
             ['defaultValue']
         );
     }
+
+    protected childIsInExpressionChain(child: AstNode): boolean {
+        // this node cannot contribute child nodes to the same expression chain
+        return false;
+    }
 }
 
 export class NamespacedVariableNameExpression extends Expression {
@@ -551,6 +570,11 @@ export class NamespacedVariableNameExpression extends Expression {
             )
         );
     }
+
+    protected childIsInExpressionChain(child: AstNode): boolean {
+        // this node cannot contribute child nodes to the same expression chain
+        return false;
+    }
 }
 
 export class DottedGetExpression extends Expression {
@@ -565,7 +589,6 @@ export class DottedGetExpression extends Expression {
         super();
         this.range = util.createBoundingRange(this.obj, this.dot, this.name);
     }
-
     public readonly range: Range | undefined;
 
     transpile(state: BrsTranspileState) {
@@ -597,6 +620,12 @@ export class DottedGetExpression extends Expression {
             ['obj']
         );
     }
+
+    protected childIsInExpressionChain(child: AstNode): boolean {
+        //the `obj` is the only child node that can be part of our expression chain
+        return this.obj === child;
+    }
+
 }
 
 export class XmlAttributeGetExpression extends Expression {
@@ -637,6 +666,11 @@ export class XmlAttributeGetExpression extends Expression {
             ),
             ['obj']
         );
+    }
+
+    protected childIsInExpressionChain(child: AstNode): boolean {
+        //the `obj` is the only child node that can be part of our expression chain
+        return this.obj === child;
     }
 }
 
@@ -707,6 +741,10 @@ export class IndexedGetExpression extends Expression {
             ['obj', 'index', 'additionalIndexes']
         );
     }
+
+    protected childIsInExpressionChain(child: AstNode): boolean {
+        return this.obj === child;
+    }
 }
 
 export class GroupingExpression extends Expression {
@@ -751,6 +789,11 @@ export class GroupingExpression extends Expression {
             ),
             ['expression']
         );
+    }
+
+    protected childIsInExpressionChain(child: AstNode): boolean {
+        // this node cannot contribute child nodes to the same expression chain
+        return false;
     }
 }
 
@@ -803,6 +846,11 @@ export class LiteralExpression extends Expression {
             )
         );
     }
+
+    protected childIsInExpressionChain(child: AstNode): boolean {
+        // this node cannot contribute child nodes to the same expression chain
+        return false;
+    }
 }
 
 /**
@@ -834,6 +882,11 @@ export class EscapedCharCodeLiteralExpression extends Expression {
                 util.cloneToken(this.token)
             )
         );
+    }
+
+    protected childIsInExpressionChain(child: AstNode): boolean {
+        // this node cannot contribute child nodes to the same expression chain
+        return false;
     }
 }
 
@@ -915,6 +968,11 @@ export class ArrayLiteralExpression extends Expression {
             ['elements']
         );
     }
+
+    protected childIsInExpressionChain(child: AstNode): boolean {
+        // this node cannot contribute child nodes to the same expression chain
+        return false;
+    }
 }
 
 export class AAMemberExpression extends Expression {
@@ -951,6 +1009,10 @@ export class AAMemberExpression extends Expression {
         );
     }
 
+    protected childIsInExpressionChain(child: AstNode): boolean {
+        // this node cannot contribute child nodes to the same expression chain
+        return false;
+    }
 }
 
 export class AALiteralExpression extends Expression {
@@ -1051,6 +1113,11 @@ export class AALiteralExpression extends Expression {
             ['elements']
         );
     }
+
+    protected childIsInExpressionChain(child: AstNode): boolean {
+        // this node cannot contribute child nodes to the same expression chain
+        return false;
+    }
 }
 
 export class UnaryExpression extends Expression {
@@ -1093,6 +1160,11 @@ export class UnaryExpression extends Expression {
             ),
             ['right']
         );
+    }
+
+    protected childIsInExpressionChain(child: AstNode): boolean {
+        // this node cannot contribute child nodes to the same expression chain
+        return false;
     }
 }
 
@@ -1142,6 +1214,11 @@ export class VariableExpression extends Expression {
                 util.cloneToken(this.name)
             )
         );
+    }
+
+    protected childIsInExpressionChain(child: AstNode): boolean {
+        // this node cannot contribute child nodes to the same expression chain
+        return false;
     }
 }
 
@@ -1256,6 +1333,11 @@ export class SourceLiteralExpression extends Expression {
             )
         );
     }
+
+    protected childIsInExpressionChain(child: AstNode): boolean {
+        // this node cannot contribute child nodes to the same expression chain
+        return false;
+    }
 }
 
 /**
@@ -1308,6 +1390,11 @@ export class NewExpression extends Expression {
             ),
             ['call']
         );
+    }
+
+    protected childIsInExpressionChain(child: AstNode): boolean {
+        // this node cannot contribute child nodes to the same expression chain
+        return false;
     }
 }
 
@@ -1391,6 +1478,11 @@ export class CallfuncExpression extends Expression {
             ['callee', 'args']
         );
     }
+
+    public childIsInExpressionChain(child: AstNode): boolean {
+        //only the callee can be part of our expression chain
+        return child === this.callee;
+    }
 }
 
 /**
@@ -1439,6 +1531,11 @@ export class TemplateStringQuasiExpression extends Expression {
             ),
             ['expressions']
         );
+    }
+
+    protected childIsInExpressionChain(child: AstNode): boolean {
+        // this node cannot contribute child nodes to the same expression chain
+        return false;
     }
 }
 
@@ -1539,6 +1636,11 @@ export class TemplateStringExpression extends Expression {
             ['quasis', 'expressions']
         );
     }
+
+    protected childIsInExpressionChain(child: AstNode): boolean {
+        // this node cannot contribute child nodes to the same expression chain
+        return false;
+    }
 }
 
 export class TaggedTemplateStringExpression extends Expression {
@@ -1629,6 +1731,11 @@ export class TaggedTemplateStringExpression extends Expression {
             ['quasis', 'expressions']
         );
     }
+
+    protected childIsInExpressionChain(child: AstNode): boolean {
+        // this node cannot contribute child nodes to the same expression chain
+        return false;
+    }
 }
 
 export class AnnotationExpression extends Expression {
@@ -1685,6 +1792,11 @@ export class AnnotationExpression extends Expression {
             )
         );
         return clone;
+    }
+
+    protected childIsInExpressionChain(child: AstNode): boolean {
+        // this node cannot contribute child nodes to the same expression chain
+        return false;
     }
 }
 
@@ -1793,6 +1905,11 @@ export class TernaryExpression extends Expression {
             ['test', 'consequent', 'alternate']
         );
     }
+
+    protected childIsInExpressionChain(child: AstNode): boolean {
+        // this node cannot contribute child nodes to the same expression chain
+        return false;
+    }
 }
 
 export class NullCoalescingExpression extends Expression {
@@ -1892,6 +2009,11 @@ export class NullCoalescingExpression extends Expression {
             ['consequent', 'alternate']
         );
     }
+
+    protected childIsInExpressionChain(child: AstNode): boolean {
+        // this node cannot contribute child nodes to the same expression chain
+        return false;
+    }
 }
 
 export class RegexLiteralExpression extends Expression {
@@ -1943,8 +2065,12 @@ export class RegexLiteralExpression extends Expression {
             })
         );
     }
-}
 
+    protected childIsInExpressionChain(child: AstNode): boolean {
+        // this node cannot contribute child nodes to the same expression chain
+        return false;
+    }
+}
 
 export class TypeCastExpression extends Expression {
     constructor(
@@ -1980,6 +2106,11 @@ export class TypeCastExpression extends Expression {
             ),
             ['obj']
         );
+    }
+
+    protected childIsInExpressionChain(child: AstNode): boolean {
+        // this node cannot contribute child nodes to the same expression chain
+        return false;
     }
 }
 
