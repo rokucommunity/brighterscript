@@ -14,7 +14,7 @@ import type { FileChange, MaybePromise } from '../interfaces';
 import { BusyStatusTracker } from '../BusyStatusTracker';
 import * as fastGlob from 'fast-glob';
 import { PathCollection, PathFilterer } from './PathFilterer';
-import type { Logger } from '../logging';
+import type { Logger, LogLevel } from '../logging';
 import { createLogger } from '../logging';
 import { Cache } from '../Cache';
 import { ActionQueue } from './ActionQueue';
@@ -284,7 +284,7 @@ export class ProjectManager {
                         projectPath: s`${projectPath}`,
                         workspaceFolder: s`${workspaceConfig.workspaceFolder}`,
                         excludePatterns: workspaceConfig.excludePatterns,
-                        enableThreading: workspaceConfig.enableThreading
+                        enableThreading: workspaceConfig.languageServer.enableThreading
                     }));
                 })
             )).flat(1);
@@ -867,9 +867,22 @@ export interface WorkspaceConfig {
      */
     bsconfigPath?: string;
     /**
-     * Should the projects in this workspace be run in their own dedicated worker threads, or all run on the main thread
+     * Language server configuration options
      */
-    enableThreading?: boolean;
+    languageServer: {
+        /**
+         * Should the projects in this workspace be run in their own dedicated worker threads, or all run on the main thread
+         */
+        enableThreading: boolean;
+        /**
+         * Should the language server automatically discover projects in this workspace?
+         */
+        enableDiscovery: boolean;
+        /**
+         * The log level to use for this workspace
+         */
+        logLevel?: LogLevel | string;
+    };
 }
 
 interface StandaloneProject extends LspProject {

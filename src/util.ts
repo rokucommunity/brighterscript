@@ -905,7 +905,9 @@ export class Util {
      * If the two items both start on the same line
      */
     public sameStartLine(first: { range: Range }, second: { range: Range }) {
-        if (first && second && first.range.start.line === second.range.start.line) {
+        if (first && second && (first.range !== undefined) && (second.range !== undefined) &&
+            first.range.start.line === second.range.start.line
+        ) {
             return true;
         } else {
             return false;
