@@ -646,6 +646,27 @@ export class ProjectManager {
      * If none are found, then the workspaceFolder itself is treated as a project
      */
     private async getProjectPaths(workspaceConfig: WorkspaceConfig) {
+        //config may provide a list of project paths
+        if (workspaceConfig.projectPaths?.length > 0) {
+            this.logger.debug(`Using project paths from workspace config`, workspaceConfig.projectPaths);
+            const projectPaths = workspaceConfig.projectPaths.reduce((acc, projectPath) => {
+                //validate the path
+                if (!fsExtra.existsSync(projectPath)) {
+                    return acc;
+                }
+                if (!fsExtra.statSync(projectPath).isDirectory()) { //it can point to a config file
+                    projectPath = path.dirname(projectPath);
+                }
+                acc.push(projectPath);
+                return acc;
+            }, []);
+            if (!projectPaths.length) {
+                this.logger.warn(`No valid project paths found in workspace config`, workspaceConfig.projectPaths);
+                projectPaths.push(workspaceConfig.workspaceFolder);
+            }
+            return projectPaths;
+        }
+
         //get the list of exclude patterns, negate them so they actually work like excludes), and coerce to forward slashes since that's what fast-glob expects
         const excludePatterns = (workspaceConfig.excludePatterns ?? []).map(x => s`!${x}`.replace(/[\\/]+/g, '/'));
 
@@ -863,9 +884,9 @@ export interface WorkspaceConfig {
      */
     excludePatterns?: string[];
     /**
-     * Path to a bsconfig that should be used instead of the auto-discovery algorithm. If this is present, no bsconfig discovery should be used. and an error should be emitted if this file is missing
+     * A list of project paths that should be used to create projects in place of discovery.
      */
-    bsconfigPath?: string;
+    projectPaths?: string[];
     /**
      * Should the projects in this workspace be run in their own dedicated worker threads, or all run on the main thread
      */

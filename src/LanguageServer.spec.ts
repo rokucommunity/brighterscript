@@ -186,7 +186,6 @@ describe('LanguageServer', () => {
         it('does not reload project when: 1 project is unchanged', async () => {
             const stub = sinon.stub(server as any, 'syncProjects').callsFake(() => Promise.resolve());
             await doTest([{
-                bsconfigPath: undefined,
                 languageServer: {
                     enableThreading: true,
                     logLevel: 'info'
@@ -194,7 +193,6 @@ describe('LanguageServer', () => {
                 workspaceFolder: workspacePath,
                 excludePatterns: []
             }], [{
-                bsconfigPath: undefined,
                 languageServer: {
                     enableThreading: true,
                     logLevel: 'info'
@@ -208,7 +206,6 @@ describe('LanguageServer', () => {
         it('reloads project when adding new project', async () => {
             const stub = sinon.stub(server as any, 'syncProjects').callsFake(() => Promise.resolve());
             await doTest([], [{
-                bsconfigPath: undefined,
                 languageServer: {
                     enableThreading: true,
                     logLevel: 'info'
@@ -222,7 +219,6 @@ describe('LanguageServer', () => {
         it('reloads project when deleting a project', async () => {
             const stub = sinon.stub(server as any, 'syncProjects').callsFake(() => Promise.resolve());
             await doTest([{
-                bsconfigPath: undefined,
                 languageServer: {
                     enableThreading: true,
                     logLevel: 'info'
@@ -230,7 +226,6 @@ describe('LanguageServer', () => {
                 workspaceFolder: workspacePath,
                 excludePatterns: []
             }, {
-                bsconfigPath: undefined,
                 languageServer: {
                     enableThreading: true,
                     logLevel: 'info'
@@ -238,7 +233,6 @@ describe('LanguageServer', () => {
                 workspaceFolder: s`${tempDir}/project2`,
                 excludePatterns: []
             }], [{
-                bsconfigPath: undefined,
                 languageServer: {
                     enableThreading: true,
                     logLevel: 'info'
@@ -252,7 +246,6 @@ describe('LanguageServer', () => {
         it('reloads project when changing specific settings', async () => {
             const stub = sinon.stub(server as any, 'syncProjects').callsFake(() => Promise.resolve());
             await doTest([{
-                bsconfigPath: undefined,
                 languageServer: {
                     enableThreading: true,
                     logLevel: 'trace'
@@ -260,7 +253,6 @@ describe('LanguageServer', () => {
                 workspaceFolder: workspacePath,
                 excludePatterns: []
             }], [{
-                bsconfigPath: undefined,
                 languageServer: {
                     enableThreading: true,
                     logLevel: 'info'
@@ -493,6 +485,59 @@ describe('LanguageServer', () => {
                 s`${tempDir}/sub/dir/project2`
             ]);
         });
+
+        /*it('uses explicit projects list', async () => {
+            fsExtra.outputJsonSync(s`${tempDir}/project1/bsconfig.json`, {});
+            fsExtra.outputFileSync(s`${tempDir}/project1/source/main.brs`, '');
+
+            fsExtra.outputJsonSync(s`${tempDir}/sub/dir/project2/bsconfig.json`, {});
+            fsExtra.outputFileSync(s`${tempDir}/sub/dir/project2/source/main.bs`, '');
+
+            //not in projects list
+            fsExtra.outputJsonSync(s`${tempDir}/project3/bsconfig.json`, {});
+            fsExtra.outputFileSync(s`${tempDir}/project3/source/main.brs`, '');
+
+            workspaceFolders = [
+                s`${tempDir}/`
+            ];
+            const workspaceSettings = [
+                {
+                    languageServer: {
+                        enableThreading: false,
+                        logLevel: 'info'
+                    },
+                    projects: [
+                        // eslint-disable-next-line no-template-curly-in-string
+                        '${workspaceFolder}/project1',
+                        // eslint-disable-next-line no-template-curly-in-string
+                        '${workspaceFolder}/sub/dir/project2/bsconfig.json',
+                        // eslint-disable-next-line no-template-curly-in-string
+                        { path: '${workspaceFolder}/project3', exclude: true }
+                    ]
+                }
+            ];
+
+            server.run();
+
+            sinon.stub(server as any, 'getClientConfiguration').returns(Promise.resolve(workspaceSettings));
+
+            expect(
+                await server['getWorkspaceConfigs']()
+            ).to.eql([
+                {
+                    workspaceFolder: s`${tempDir}/`,
+                    excludePatterns: [],
+                    projectPaths: [
+                        s`${tempDir}/project1`,
+                        s`${tempDir}/sub/dir/project2`
+                    ],
+                    languageServer: {
+                        enableThreading: false,
+                        logLevel: undefined
+                    }
+                }
+            ]);
+        });*/
     });
 
     describe('onInitialize', () => {
@@ -653,7 +698,6 @@ describe('LanguageServer', () => {
         beforeEach(() => {
             workspaceConfigs = [
                 {
-                    bsconfigPath: undefined,
                     languageServer: {
                         enableThreading: true,
                         logLevel: 'info'
@@ -734,7 +778,6 @@ describe('LanguageServer', () => {
 
         it('a gitignore file from any workspace will apply to all workspaces', async () => {
             workspaceConfigs = [{
-                bsconfigPath: undefined,
                 languageServer: {
                     enableThreading: true,
                     logLevel: 'info'
@@ -742,7 +785,6 @@ describe('LanguageServer', () => {
                 workspaceFolder: s`${tempDir}/flavor1`,
                 excludePatterns: []
             }, {
-                bsconfigPath: undefined,
                 languageServer: {
                     enableThreading: true,
                     logLevel: 'info'
