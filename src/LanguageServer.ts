@@ -426,16 +426,30 @@ export class LanguageServer {
                 return {
                     workspaceFolder: workspaceFolder,
                     excludePatterns: await this.getWorkspaceExcludeGlobs(workspaceFolder),
-                    bsconfigPath: brightscriptConfig.configFile,
+                    projectPaths: this.normalizeProjectPaths(workspaceFolder, brightscriptConfig.projects),
                     languageServer: {
                         enableThreading: brightscriptConfig.languageServer?.enableThreading ?? LanguageServer.enableThreadingDefault,
                         logLevel: brightscriptConfig?.languageServer?.logLevel
                     }
-
                 } as WorkspaceConfigWithExtras;
             })
         );
         return workspaces;
+    }
+
+    /**
+     * Extract project paths from settings' projects list, expanding the workspaceFolder variable if necessary
+     */
+    private normalizeProjectPaths(workspaceFolder: string, projects: (string | BrightScriptProjectConfiguration)[]): string[] | undefined {
+        return projects?.reduce((acc, project) => {
+            if (typeof project === 'string') {
+                acc.push(project);
+            } else if (project.path && !project.disabled) {
+                acc.push(project.path);
+            }
+            return acc;
+        // eslint-disable-next-line no-template-curly-in-string
+        }, []).map(path => util.standardizePath(path.replace('${workspaceFolder}', workspaceFolder)));
     }
 
     private workspaceConfigsCache = new Map<string, WorkspaceConfigWithExtras>();
@@ -791,8 +805,14 @@ export type OnHandler<T> = {
     [K in keyof Handler<T>]: Handler<T>[K] extends (arg: infer U) => void ? U : never;
 };
 
+interface BrightScriptProjectConfiguration {
+    name?: string;
+    path: string;
+    disabled?: boolean;
+}
+
 interface BrightScriptClientConfiguration {
-    configFile: string;
+    projects?: (string | BrightScriptProjectConfiguration)[];
     languageServer: {
         enableThreading: boolean;
         logLevel: LogLevel | string;
@@ -807,7 +827,6 @@ function logAndIgnoreError(error: Error) {
 }
 
 export type WorkspaceConfigWithExtras = WorkspaceConfig & {
-    bsconfigPath: string;
     languageServer: {
         enableThreading: boolean;
         logLevel: LogLevel | string | undefined;
