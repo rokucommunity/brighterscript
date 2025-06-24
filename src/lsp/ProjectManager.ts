@@ -688,13 +688,14 @@ export class ProjectManager {
         //look for roku project folders
         let rokuLikeDirs = (await Promise.all(
             //find all folders containing a `manifest` file
-            (await rokuDeploy.getFilePaths([
-                '**/manifest',
-                ...excludePatterns
-
-                //is there at least one .bs|.brs file under the `/source` folder?
-            ], workspaceConfig.workspaceFolder)).map(async manifestEntry => {
-                const manifestDir = path.dirname(manifestEntry.src);
+            (await fastGlob(['**/manifest', ...excludePatterns], {
+                cwd: workspaceConfig.workspaceFolder,
+                followSymbolicLinks: false,
+                absolute: true,
+                onlyFiles: true
+            })).map(async manifestEntry => {
+                const manifestDir = path.dirname(manifestEntry);
+                //TODO validate that manifest is a Roku manifest
                 const files = await rokuDeploy.getFilePaths([
                     'source/**/*.{brs,bs}',
                     ...excludePatterns
