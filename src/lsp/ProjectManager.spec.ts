@@ -165,6 +165,23 @@ describe('ProjectManager', () => {
             ]);
         });
 
+        it('returns root folder when automatic discovery is disabled', async () => {
+            fsExtra.outputFileSync(`${rootDir}/project1/bsconfig.json`, '');
+            fsExtra.outputFileSync(`${rootDir}/project2/bsconfig.json`, '');
+            await manager.syncProjects([{
+                ...workspaceSettings,
+                languageServer: {
+                    ...workspaceSettings.languageServer,
+                    enableDiscovery: false
+                }
+            }]);
+            expect(
+                manager.projects.map(x => x.projectPath)
+            ).to.eql([
+                s`${rootDir}`
+            ]);
+        });
+
         it('gets diagnostics from plugins added in afterProgramValidate', async () => {
             fsExtra.outputFileSync(`${rootDir}/plugin.js`, `
                 module.exports = function () {
