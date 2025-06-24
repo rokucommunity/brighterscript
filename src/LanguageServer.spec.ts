@@ -508,11 +508,11 @@ describe('LanguageServer', () => {
                     },
                     projects: [
                         // eslint-disable-next-line no-template-curly-in-string
-                        '${workspaceFolder}/project1',
+                        'project1',
                         // eslint-disable-next-line no-template-curly-in-string
                         '${workspaceFolder}/sub/dir/project2/bsconfig.json',
                         // eslint-disable-next-line no-template-curly-in-string
-                        { path: '${workspaceFolder}/project3', exclude: true }
+                        { path: '${workspaceFolder}/project3', disabled: true }
                     ]
                 }
             ];
@@ -527,9 +527,10 @@ describe('LanguageServer', () => {
                 {
                     workspaceFolder: s`${tempDir}/`,
                     excludePatterns: [],
-                    projectPaths: [
-                        s`${tempDir}/project1`,
-                        s`${tempDir}/sub/dir/project2`
+                    projects: [
+                        { path: s`${tempDir}/project1` },
+                        { path: s`${tempDir}/sub/dir/project2` },
+                        { path: s`${tempDir}/project3`, disabled: true }
                     ],
                     languageServer: {
                         enableThreading: false,

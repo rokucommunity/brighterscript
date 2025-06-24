@@ -19,6 +19,7 @@ import { createLogger } from '../logging';
 import { Cache } from '../Cache';
 import { ActionQueue } from './ActionQueue';
 import * as fsExtra from 'fs-extra';
+import type { BrightScriptProjectConfiguration } from '../LanguageServer';
 
 const FileChangeTypeLookup = Object.entries(FileChangeType).reduce((acc, [key, value]) => {
     acc[value] = key;
@@ -647,10 +648,17 @@ export class ProjectManager {
      */
     private async getProjectPaths(workspaceConfig: WorkspaceConfig) {
         //config may provide a list of project paths
-        if (workspaceConfig.projectPaths?.length > 0) {
-            this.logger.debug(`Using project paths from workspace config`, workspaceConfig.projectPaths);
-            const projectPaths = workspaceConfig.projectPaths.reduce((acc, projectPath) => {
+        if (workspaceConfig.projects?.length > 0) {
+            this.logger.debug(`Using project paths from workspace config`, workspaceConfig.projects);
+            const projectPaths = workspaceConfig.projects.reduce((acc, project) => {
+                if (project.disabled) {
+                    return acc;
+                }
+                let projectPath = project.path;
                 //validate the path
+                if (!path.isAbsolute(projectPath)) {
+                    projectPath = path.resolve(workspaceConfig.workspaceFolder, projectPath);
+                }
                 if (!fsExtra.existsSync(projectPath)) {
                     return acc;
                 }
@@ -661,7 +669,7 @@ export class ProjectManager {
                 return acc;
             }, []);
             if (!projectPaths.length) {
-                this.logger.warn(`No valid project paths found in workspace config`, workspaceConfig.projectPaths);
+                this.logger.warn(`No valid project paths found in workspace config`, workspaceConfig.projects);
                 projectPaths.push(workspaceConfig.workspaceFolder);
             }
             return projectPaths;
@@ -887,7 +895,7 @@ export interface WorkspaceConfig {
     /**
      * A list of project paths that should be used to create projects in place of discovery.
      */
-    projectPaths?: string[];
+    projects?: BrightScriptProjectConfiguration[];
     /**
      * Should the projects in this workspace be run in their own dedicated worker threads, or all run on the main thread
      */

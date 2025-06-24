@@ -426,7 +426,7 @@ export class LanguageServer {
                 return {
                     workspaceFolder: workspaceFolder,
                     excludePatterns: await this.getWorkspaceExcludeGlobs(workspaceFolder),
-                    projectPaths: this.normalizeProjectPaths(workspaceFolder, brightscriptConfig.projects),
+                    projects: this.normalizeProjectPaths(workspaceFolder, brightscriptConfig.projects),
                     languageServer: {
                         enableThreading: brightscriptConfig.languageServer?.enableThreading ?? LanguageServer.enableThreadingDefault,
                         logLevel: brightscriptConfig?.languageServer?.logLevel
@@ -440,16 +440,19 @@ export class LanguageServer {
     /**
      * Extract project paths from settings' projects list, expanding the workspaceFolder variable if necessary
      */
-    private normalizeProjectPaths(workspaceFolder: string, projects: (string | BrightScriptProjectConfiguration)[]): string[] | undefined {
+    private normalizeProjectPaths(workspaceFolder: string, projects: (string | BrightScriptProjectConfiguration)[]): BrightScriptProjectConfiguration[] | undefined {
         return projects?.reduce((acc, project) => {
             if (typeof project === 'string') {
-                acc.push(project);
+                acc.push({ path: project });
             } else if (project.path && !project.disabled) {
-                acc.push(project.path);
+                acc.push(project);
             }
             return acc;
-        // eslint-disable-next-line no-template-curly-in-string
-        }, []).map(path => util.standardizePath(path.replace('${workspaceFolder}', workspaceFolder)));
+        }, []).map(project => ({
+            ...project,
+            // eslint-disable-next-line no-template-curly-in-string
+            path: util.standardizePath(project.path.replace('${workspaceFolder}', workspaceFolder))
+        }));
     }
 
     private workspaceConfigsCache = new Map<string, WorkspaceConfigWithExtras>();
@@ -805,7 +808,7 @@ export type OnHandler<T> = {
     [K in keyof Handler<T>]: Handler<T>[K] extends (arg: infer U) => void ? U : never;
 };
 
-interface BrightScriptProjectConfiguration {
+export interface BrightScriptProjectConfiguration {
     name?: string;
     path: string;
     disabled?: boolean;
