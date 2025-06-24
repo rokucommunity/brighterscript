@@ -17,13 +17,14 @@ import { createVisitor, WalkMode } from './astUtils/visitors';
 import { tempDir, rootDir } from './testHelpers.spec';
 import { URI } from 'vscode-uri';
 import { BusyStatusTracker } from './BusyStatusTracker';
-import type { BscFile } from '.';
+import type { BscFile } from './interfaces';
 import type { Project } from './lsp/Project';
 import { LogLevel, Logger, createLogger } from './logging';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { standardizePath } from 'roku-deploy';
 import undent from 'undent';
-import { ProjectManager, type WorkspaceConfig } from './lsp/ProjectManager';
+import { ProjectManager } from './lsp/ProjectManager';
+import type { WorkspaceConfig } from './lsp/ProjectManager';
 
 const sinon = createSandbox();
 
