@@ -17,13 +17,14 @@ import { createVisitor, WalkMode } from './astUtils/visitors';
 import { tempDir, rootDir } from './testHelpers.spec';
 import { URI } from 'vscode-uri';
 import { BusyStatusTracker } from './BusyStatusTracker';
-import type { BscFile, WorkspaceConfigWithExtras } from '.';
+import type { BscFile } from './interfaces';
 import type { Project } from './lsp/Project';
 import { LogLevel, Logger, createLogger } from './logging';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { standardizePath } from 'roku-deploy';
 import undent from 'undent';
 import { ProjectManager } from './lsp/ProjectManager';
+import type { WorkspaceConfig } from './lsp/ProjectManager';
 
 const sinon = createSandbox();
 
@@ -167,7 +168,7 @@ describe('LanguageServer', () => {
     });
 
     describe('onDidChangeConfiguration', () => {
-        async function doTest(startingConfigs: WorkspaceConfigWithExtras[], endingConfigs: WorkspaceConfigWithExtras[]) {
+        async function doTest(startingConfigs: WorkspaceConfig[], endingConfigs: WorkspaceConfig[]) {
             (server as any)['connection'] = connection;
             server['workspaceConfigsCache'] = new Map(startingConfigs.map(x => [x.workspaceFolder, x]));
 
@@ -188,7 +189,8 @@ describe('LanguageServer', () => {
             await doTest([{
                 bsconfigPath: undefined,
                 languageServer: {
-                    enableThreading: true,
+                    enableThreading: false,
+                    enableDiscovery: true,
                     logLevel: 'info'
                 },
                 workspaceFolder: workspacePath,
@@ -196,7 +198,8 @@ describe('LanguageServer', () => {
             }], [{
                 bsconfigPath: undefined,
                 languageServer: {
-                    enableThreading: true,
+                    enableThreading: false,
+                    enableDiscovery: true,
                     logLevel: 'info'
                 },
                 workspaceFolder: workspacePath,
@@ -210,7 +213,8 @@ describe('LanguageServer', () => {
             await doTest([], [{
                 bsconfigPath: undefined,
                 languageServer: {
-                    enableThreading: true,
+                    enableThreading: false,
+                    enableDiscovery: true,
                     logLevel: 'info'
                 },
                 workspaceFolder: workspacePath,
@@ -224,7 +228,8 @@ describe('LanguageServer', () => {
             await doTest([{
                 bsconfigPath: undefined,
                 languageServer: {
-                    enableThreading: true,
+                    enableThreading: false,
+                    enableDiscovery: true,
                     logLevel: 'info'
                 },
                 workspaceFolder: workspacePath,
@@ -232,7 +237,8 @@ describe('LanguageServer', () => {
             }, {
                 bsconfigPath: undefined,
                 languageServer: {
-                    enableThreading: true,
+                    enableThreading: false,
+                    enableDiscovery: true,
                     logLevel: 'info'
                 },
                 workspaceFolder: s`${tempDir}/project2`,
@@ -240,7 +246,8 @@ describe('LanguageServer', () => {
             }], [{
                 bsconfigPath: undefined,
                 languageServer: {
-                    enableThreading: true,
+                    enableThreading: false,
+                    enableDiscovery: true,
                     logLevel: 'info'
                 },
                 workspaceFolder: workspacePath,
@@ -254,7 +261,8 @@ describe('LanguageServer', () => {
             await doTest([{
                 bsconfigPath: undefined,
                 languageServer: {
-                    enableThreading: true,
+                    enableThreading: false,
+                    enableDiscovery: true,
                     logLevel: 'trace'
                 },
                 workspaceFolder: workspacePath,
@@ -262,7 +270,8 @@ describe('LanguageServer', () => {
             }], [{
                 bsconfigPath: undefined,
                 languageServer: {
-                    enableThreading: true,
+                    enableThreading: false,
+                    enableDiscovery: true,
                     logLevel: 'info'
                 },
                 workspaceFolder: workspacePath,
@@ -649,18 +658,19 @@ describe('LanguageServer', () => {
     });
 
     describe('rebuildPathFilterer', () => {
-        let workspaceConfigs: WorkspaceConfigWithExtras[] = [];
+        let workspaceConfigs: WorkspaceConfig[] = [];
         beforeEach(() => {
             workspaceConfigs = [
                 {
                     bsconfigPath: undefined,
                     languageServer: {
-                        enableThreading: true,
+                        enableThreading: false,
+                        enableDiscovery: true,
                         logLevel: 'info'
                     },
                     workspaceFolder: workspacePath,
                     excludePatterns: []
-                } as WorkspaceConfigWithExtras
+                }
             ];
             server['connection'] = connection as any;
             sinon.stub(server as any, 'getWorkspaceConfigs').callsFake(() => Promise.resolve(workspaceConfigs));
@@ -736,7 +746,8 @@ describe('LanguageServer', () => {
             workspaceConfigs = [{
                 bsconfigPath: undefined,
                 languageServer: {
-                    enableThreading: true,
+                    enableThreading: false,
+                    enableDiscovery: true,
                     logLevel: 'info'
                 },
                 workspaceFolder: s`${tempDir}/flavor1`,
@@ -744,12 +755,13 @@ describe('LanguageServer', () => {
             }, {
                 bsconfigPath: undefined,
                 languageServer: {
-                    enableThreading: true,
+                    enableThreading: false,
+                    enableDiscovery: true,
                     logLevel: 'info'
                 },
                 workspaceFolder: s`${tempDir}/flavor2`,
                 excludePatterns: []
-            }] as WorkspaceConfigWithExtras[];
+            }];
             fsExtra.outputFileSync(s`${workspaceConfigs[0].workspaceFolder}/.gitignore`, undent`
                 dist/
             `);
