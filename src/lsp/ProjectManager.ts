@@ -19,6 +19,7 @@ import { createLogger } from '../logging';
 import { Cache } from '../Cache';
 import { ActionQueue } from './ActionQueue';
 import * as fsExtra from 'fs-extra';
+import type { BrightScriptProjectConfiguration } from '../LanguageServer';
 
 const FileChangeTypeLookup = Object.entries(FileChangeType).reduce((acc, [key, value]) => {
     acc[value] = key;
@@ -646,6 +647,34 @@ export class ProjectManager {
      * If none are found, then the workspaceFolder itself is treated as a project
      */
     private async getProjectPaths(workspaceConfig: WorkspaceConfig) {
+        //config may provide a list of project paths
+        if (workspaceConfig.projects?.length > 0) {
+            this.logger.debug(`Using project paths from workspace config`, workspaceConfig.projects);
+            const projectPaths = workspaceConfig.projects.reduce((acc, project) => {
+                if (project.disabled) {
+                    return acc;
+                }
+                let projectPath = project.path;
+                //validate the path
+                if (!path.isAbsolute(projectPath)) {
+                    projectPath = path.resolve(workspaceConfig.workspaceFolder, projectPath);
+                }
+                if (!fsExtra.existsSync(projectPath)) {
+                    return acc;
+                }
+                if (!fsExtra.statSync(projectPath).isDirectory()) { //it can point to a config file
+                    projectPath = path.dirname(projectPath);
+                }
+                acc.push(projectPath);
+                return acc;
+            }, []);
+            if (!projectPaths.length) {
+                this.logger.warn(`No valid project paths found in workspace config`, workspaceConfig.projects);
+                projectPaths.push(workspaceConfig.workspaceFolder);
+            }
+            return projectPaths;
+        }
+
         //automatic discovery disabled?
         if (!workspaceConfig.languageServer.enableDiscovery) {
             return [workspaceConfig.workspaceFolder];
@@ -869,9 +898,9 @@ export interface WorkspaceConfig {
      */
     excludePatterns?: string[];
     /**
-     * Path to a bsconfig that should be used instead of the auto-discovery algorithm. If this is present, no bsconfig discovery should be used. and an error should be emitted if this file is missing
+     * A list of project paths that should be used to create projects in place of discovery.
      */
-    bsconfigPath?: string;
+    projects?: BrightScriptProjectConfiguration[];
     /**
      * Language server configuration options
      */

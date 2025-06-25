@@ -430,17 +430,34 @@ export class LanguageServer {
                 return {
                     workspaceFolder: workspaceFolder,
                     excludePatterns: await this.getWorkspaceExcludeGlobs(workspaceFolder),
-                    bsconfigPath: brightscriptConfig.configFile,
+                    projects: this.normalizeProjectPaths(workspaceFolder, brightscriptConfig.projects),
                     languageServer: {
                         enableThreading: brightscriptConfig.languageServer?.enableThreading ?? LanguageServer.enableThreadingDefault,
                         enableDiscovery: brightscriptConfig.languageServer?.enableDiscovery ?? LanguageServer.enableDiscoveryDefault,
                         logLevel: brightscriptConfig?.languageServer?.logLevel
                     }
-
                 };
             })
         );
         return workspaces;
+    }
+
+    /**
+     * Extract project paths from settings' projects list, expanding the workspaceFolder variable if necessary
+     */
+    private normalizeProjectPaths(workspaceFolder: string, projects: (string | BrightScriptProjectConfiguration)[]): BrightScriptProjectConfiguration[] | undefined {
+        return projects?.reduce((acc, project) => {
+            if (typeof project === 'string') {
+                acc.push({ path: project });
+            } else if (typeof project.path === 'string') {
+                acc.push(project);
+            }
+            return acc;
+        }, []).map(project => ({
+            ...project,
+            // eslint-disable-next-line no-template-curly-in-string
+            path: util.standardizePath(project.path.replace('${workspaceFolder}', workspaceFolder))
+        }));
     }
 
     private workspaceConfigsCache = new Map<string, WorkspaceConfig>();
@@ -796,8 +813,14 @@ export type OnHandler<T> = {
     [K in keyof Handler<T>]: Handler<T>[K] extends (arg: infer U) => void ? U : never;
 };
 
-interface BrightScriptClientConfiguration {
-    configFile: string;
+export interface BrightScriptProjectConfiguration {
+    name?: string;
+    path: string;
+    disabled?: boolean;
+}
+
+export interface BrightScriptClientConfiguration {
+    projects?: (string | BrightScriptProjectConfiguration)[];
     languageServer: {
         enableThreading: boolean;
         enableDiscovery: boolean;

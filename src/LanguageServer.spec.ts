@@ -4,6 +4,7 @@ import * as path from 'path';
 import type { ConfigurationItem, DidChangeWatchedFilesParams, Location, PublishDiagnosticsParams, WorkspaceFolder } from 'vscode-languageserver';
 import { FileChangeType } from 'vscode-languageserver';
 import { Deferred } from './deferred';
+import type { BrightScriptClientConfiguration } from './LanguageServer';
 import { CustomCommands, LanguageServer } from './LanguageServer';
 import { createSandbox } from 'sinon';
 import { standardizePath as s, util } from './util';
@@ -187,7 +188,6 @@ describe('LanguageServer', () => {
         it('does not reload project when: 1 project is unchanged', async () => {
             const stub = sinon.stub(server as any, 'syncProjects').callsFake(() => Promise.resolve());
             await doTest([{
-                bsconfigPath: undefined,
                 languageServer: {
                     enableThreading: false,
                     enableDiscovery: true,
@@ -196,7 +196,6 @@ describe('LanguageServer', () => {
                 workspaceFolder: workspacePath,
                 excludePatterns: []
             }], [{
-                bsconfigPath: undefined,
                 languageServer: {
                     enableThreading: false,
                     enableDiscovery: true,
@@ -211,7 +210,6 @@ describe('LanguageServer', () => {
         it('reloads project when adding new project', async () => {
             const stub = sinon.stub(server as any, 'syncProjects').callsFake(() => Promise.resolve());
             await doTest([], [{
-                bsconfigPath: undefined,
                 languageServer: {
                     enableThreading: false,
                     enableDiscovery: true,
@@ -226,7 +224,6 @@ describe('LanguageServer', () => {
         it('reloads project when deleting a project', async () => {
             const stub = sinon.stub(server as any, 'syncProjects').callsFake(() => Promise.resolve());
             await doTest([{
-                bsconfigPath: undefined,
                 languageServer: {
                     enableThreading: false,
                     enableDiscovery: true,
@@ -235,7 +232,6 @@ describe('LanguageServer', () => {
                 workspaceFolder: workspacePath,
                 excludePatterns: []
             }, {
-                bsconfigPath: undefined,
                 languageServer: {
                     enableThreading: false,
                     enableDiscovery: true,
@@ -244,7 +240,6 @@ describe('LanguageServer', () => {
                 workspaceFolder: s`${tempDir}/project2`,
                 excludePatterns: []
             }], [{
-                bsconfigPath: undefined,
                 languageServer: {
                     enableThreading: false,
                     enableDiscovery: true,
@@ -259,7 +254,6 @@ describe('LanguageServer', () => {
         it('reloads project when changing specific settings', async () => {
             const stub = sinon.stub(server as any, 'syncProjects').callsFake(() => Promise.resolve());
             await doTest([{
-                bsconfigPath: undefined,
                 languageServer: {
                     enableThreading: false,
                     enableDiscovery: true,
@@ -268,7 +262,6 @@ describe('LanguageServer', () => {
                 workspaceFolder: workspacePath,
                 excludePatterns: []
             }], [{
-                bsconfigPath: undefined,
                 languageServer: {
                     enableThreading: false,
                     enableDiscovery: true,
@@ -502,6 +495,60 @@ describe('LanguageServer', () => {
                 s`${tempDir}/sub/dir/project2`
             ]);
         });
+
+        it('uses explicit projects list', async () => {
+            fsExtra.outputJsonSync(s`${tempDir}/project1/bsconfig.json`, {});
+            fsExtra.outputFileSync(s`${tempDir}/project1/source/main.brs`, '');
+
+            fsExtra.outputJsonSync(s`${tempDir}/sub/dir/project2/bsconfig.json`, {});
+            fsExtra.outputFileSync(s`${tempDir}/sub/dir/project2/source/main.bs`, '');
+
+            //not in projects list
+            fsExtra.outputJsonSync(s`${tempDir}/project3/bsconfig.json`, {});
+            fsExtra.outputFileSync(s`${tempDir}/project3/source/main.brs`, '');
+
+            workspaceFolders = [
+                s`${tempDir}/`
+            ];
+            const workspaceSettings: BrightScriptClientConfiguration = {
+                languageServer: {
+                    enableThreading: false,
+                    enableDiscovery: true,
+                    logLevel: 'info'
+                },
+                projects: [
+                    // eslint-disable-next-line no-template-curly-in-string
+                    'project1',
+                    // eslint-disable-next-line no-template-curly-in-string
+                    '${workspaceFolder}/sub/dir/project2/bsconfig.json',
+                    // eslint-disable-next-line no-template-curly-in-string
+                    { name: 'p3', path: '${workspaceFolder}/project3', disabled: true }
+                ]
+            };
+
+            server.run();
+
+            sinon.stub(server as any, 'getClientConfiguration').returns(Promise.resolve(workspaceSettings));
+
+            expect(
+                await server['getWorkspaceConfigs']()
+            ).to.eql([
+                {
+                    workspaceFolder: s`${tempDir}/`,
+                    excludePatterns: [],
+                    projects: [
+                        { path: 'project1' },
+                        { path: s`${tempDir}/sub/dir/project2/bsconfig.json` },
+                        { name: 'p3', path: s`${tempDir}/project3`, disabled: true }
+                    ],
+                    languageServer: {
+                        enableThreading: false,
+                        enableDiscovery: true,
+                        logLevel: 'info'
+                    }
+                }
+            ]);
+        });
     });
 
     describe('onInitialize', () => {
@@ -662,7 +709,6 @@ describe('LanguageServer', () => {
         beforeEach(() => {
             workspaceConfigs = [
                 {
-                    bsconfigPath: undefined,
                     languageServer: {
                         enableThreading: false,
                         enableDiscovery: true,
@@ -744,7 +790,6 @@ describe('LanguageServer', () => {
 
         it('a gitignore file from any workspace will apply to all workspaces', async () => {
             workspaceConfigs = [{
-                bsconfigPath: undefined,
                 languageServer: {
                     enableThreading: false,
                     enableDiscovery: true,
@@ -753,7 +798,6 @@ describe('LanguageServer', () => {
                 workspaceFolder: s`${tempDir}/flavor1`,
                 excludePatterns: []
             }, {
-                bsconfigPath: undefined,
                 languageServer: {
                     enableThreading: false,
                     enableDiscovery: true,
