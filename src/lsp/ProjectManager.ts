@@ -14,7 +14,7 @@ import type { FileChange, MaybePromise } from '../interfaces';
 import { BusyStatusTracker } from '../BusyStatusTracker';
 import * as fastGlob from 'fast-glob';
 import { PathCollection, PathFilterer } from './PathFilterer';
-import type { Logger } from '../logging';
+import type { Logger, LogLevel } from '../logging';
 import { createLogger } from '../logging';
 import { Cache } from '../Cache';
 import { ActionQueue } from './ActionQueue';
@@ -284,7 +284,7 @@ export class ProjectManager {
                         projectPath: s`${projectPath}`,
                         workspaceFolder: s`${workspaceConfig.workspaceFolder}`,
                         excludePatterns: workspaceConfig.excludePatterns,
-                        enableThreading: workspaceConfig.enableThreading
+                        enableThreading: workspaceConfig.languageServer.enableThreading
                     }));
                 })
             )).flat(1);
@@ -646,6 +646,11 @@ export class ProjectManager {
      * If none are found, then the workspaceFolder itself is treated as a project
      */
     private async getProjectPaths(workspaceConfig: WorkspaceConfig) {
+        //automatic discovery disabled?
+        if (!workspaceConfig.languageServer.enableDiscovery) {
+            return [workspaceConfig.workspaceFolder];
+        }
+
         //get the list of exclude patterns, negate them so they actually work like excludes), and coerce to forward slashes since that's what fast-glob expects
         const excludePatterns = (workspaceConfig.excludePatterns ?? []).map(x => s`!${x}`.replace(/[\\/]+/g, '/'));
 
@@ -868,9 +873,22 @@ export interface WorkspaceConfig {
      */
     bsconfigPath?: string;
     /**
-     * Should the projects in this workspace be run in their own dedicated worker threads, or all run on the main thread
+     * Language server configuration options
      */
-    enableThreading?: boolean;
+    languageServer: {
+        /**
+         * Should the projects in this workspace be run in their own dedicated worker threads, or all run on the main thread
+         */
+        enableThreading: boolean;
+        /**
+         * Should the language server automatically discover projects in this workspace?
+         */
+        enableDiscovery: boolean;
+        /**
+         * The log level to use for this workspace
+         */
+        logLevel?: LogLevel | string;
+    };
 }
 
 interface StandaloneProject extends LspProject {
