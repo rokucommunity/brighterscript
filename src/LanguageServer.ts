@@ -444,7 +444,7 @@ export class LanguageServer {
         return projects?.reduce((acc, project) => {
             if (typeof project === 'string') {
                 acc.push({ path: project });
-            } else if (project.path && !project.disabled) {
+            } else if (typeof project.path === 'string') {
                 acc.push(project);
             }
             return acc;

@@ -486,7 +486,7 @@ describe('LanguageServer', () => {
             ]);
         });
 
-        /*it('uses explicit projects list', async () => {
+        it('uses explicit projects list', async () => {
             fsExtra.outputJsonSync(s`${tempDir}/project1/bsconfig.json`, {});
             fsExtra.outputFileSync(s`${tempDir}/project1/source/main.brs`, '');
 
@@ -500,22 +500,20 @@ describe('LanguageServer', () => {
             workspaceFolders = [
                 s`${tempDir}/`
             ];
-            const workspaceSettings = [
-                {
-                    languageServer: {
-                        enableThreading: false,
-                        logLevel: 'info'
-                    },
-                    projects: [
-                        // eslint-disable-next-line no-template-curly-in-string
-                        'project1',
-                        // eslint-disable-next-line no-template-curly-in-string
-                        '${workspaceFolder}/sub/dir/project2/bsconfig.json',
-                        // eslint-disable-next-line no-template-curly-in-string
-                        { path: '${workspaceFolder}/project3', disabled: true }
-                    ]
-                }
-            ];
+            const workspaceSettings = {
+                languageServer: {
+                    enableThreading: false,
+                    logLevel: 'info'
+                },
+                projects: [
+                    // eslint-disable-next-line no-template-curly-in-string
+                    'project1',
+                    // eslint-disable-next-line no-template-curly-in-string
+                    '${workspaceFolder}/sub/dir/project2/bsconfig.json',
+                    // eslint-disable-next-line no-template-curly-in-string
+                    { name: 'p3', path: '${workspaceFolder}/project3', disabled: true }
+                ]
+            };
 
             server.run();
 
@@ -528,17 +526,17 @@ describe('LanguageServer', () => {
                     workspaceFolder: s`${tempDir}/`,
                     excludePatterns: [],
                     projects: [
-                        { path: s`${tempDir}/project1` },
-                        { path: s`${tempDir}/sub/dir/project2` },
-                        { path: s`${tempDir}/project3`, disabled: true }
+                        { path: 'project1' },
+                        { path: s`${tempDir}/sub/dir/project2/bsconfig.json` },
+                        { name: 'p3', path: s`${tempDir}/project3`, disabled: true }
                     ],
                     languageServer: {
                         enableThreading: false,
-                        logLevel: undefined
+                        logLevel: 'info'
                     }
                 }
             ]);
-        });*/
+        });
     });
 
     describe('onInitialize', () => {
