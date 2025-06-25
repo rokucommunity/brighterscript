@@ -62,6 +62,10 @@ export class LanguageServer {
      */
     public static enableThreadingDefault = true;
     /**
+     * The default project discovery setting for the language server. Can be overridden by per-workspace settings
+     */
+    public static enableDiscoveryDefault = true;
+    /**
      * The language server protocol connection, used to send and receive all requests and responses
      */
     private connection = undefined as Connection;
@@ -417,7 +421,7 @@ export class LanguageServer {
      * Get a list of workspaces, and their configurations.
      * Get only the settings for the workspace that are relevant to the language server. We do this so we can cache this object for use in change detection in the future.
      */
-    private async getWorkspaceConfigs(): Promise<WorkspaceConfigWithExtras[]> {
+    private async getWorkspaceConfigs(): Promise<WorkspaceConfig[]> {
         //get all workspace folders (we'll use these to get settings)
         let workspaces = await Promise.all(
             (await this.connection.workspace.getWorkspaceFolders() ?? []).map(async (x) => {
@@ -429,9 +433,10 @@ export class LanguageServer {
                     projects: this.normalizeProjectPaths(workspaceFolder, brightscriptConfig.projects),
                     languageServer: {
                         enableThreading: brightscriptConfig.languageServer?.enableThreading ?? LanguageServer.enableThreadingDefault,
+                        enableDiscovery: brightscriptConfig.languageServer?.enableDiscovery ?? LanguageServer.enableDiscoveryDefault,
                         logLevel: brightscriptConfig?.languageServer?.logLevel
                     }
-                } as WorkspaceConfigWithExtras;
+                };
             })
         );
         return workspaces;
@@ -455,7 +460,7 @@ export class LanguageServer {
         }));
     }
 
-    private workspaceConfigsCache = new Map<string, WorkspaceConfigWithExtras>();
+    private workspaceConfigsCache = new Map<string, WorkspaceConfig>();
 
     @AddStackToErrorMessage
     public async onDidChangeConfiguration(args: DidChangeConfigurationParams) {
@@ -814,10 +819,11 @@ export interface BrightScriptProjectConfiguration {
     disabled?: boolean;
 }
 
-interface BrightScriptClientConfiguration {
+export interface BrightScriptClientConfiguration {
     projects?: (string | BrightScriptProjectConfiguration)[];
     languageServer: {
         enableThreading: boolean;
+        enableDiscovery: boolean;
         logLevel: LogLevel | string;
     };
 }
@@ -828,10 +834,3 @@ function logAndIgnoreError(error: Error) {
     }
     console.error(error);
 }
-
-export type WorkspaceConfigWithExtras = WorkspaceConfig & {
-    languageServer: {
-        enableThreading: boolean;
-        logLevel: LogLevel | string | undefined;
-    };
-};
