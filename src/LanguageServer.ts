@@ -129,7 +129,7 @@ export class LanguageServer {
             //resend all open document changes
             const documents = [...this.documents.all()];
             if (documents.length > 0) {
-                this.logger.log(`[${event.project?.projectIdentifier}] loaded or changed. Resending all open document changes.`, documents.map(x => x.uri));
+                this.logger.log(`[${util.getProjectLogName(event.project)}] loaded or changed. Resending all open document changes.`, documents.map(x => x.uri));
                 for (const document of this.documents.all()) {
                     this.onTextDocumentDidChangeContent({
                         document: document
@@ -608,7 +608,7 @@ export class LanguageServer {
             activeRuns: [
                 //extract only specific information from the active run so we know what's going on
                 ...this.projectManager.busyStatusTracker.activeRuns.map(x => ({
-                    scope: x.scope?.projectIdentifier,
+                    scope: util.getProjectLogName(x.scope),
                     label: x.label,
                     startTime: x.startTime.getTime()
                 }))

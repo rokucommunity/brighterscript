@@ -42,11 +42,6 @@ export interface LspProject {
     projectNumber: number;
 
     /**
-     * A unique name for this project used in logs to help keep track of everything. Unlike `projectKey`, this is not derived from the contents of the project, but rather is a unique identifier for this project within the context of the language server that can be used to identify the project in logs and other places.
-     */
-    projectIdentifier: string;
-
-    /**
      * The root directory of the project.
      * Only available after `.activate()` has completed
      */

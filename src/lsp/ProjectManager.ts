@@ -141,7 +141,7 @@ export class ProjectManager {
                 if (this.getStandaloneProject(action.srcPath, false)) {
                     this.logger.debug(
                         `flushDocumentChanges: removing standalone project because the following normal projects handled the file: '${action.srcPath}', projects:`,
-                        normalProjectsThatHandledThisFile.map(x => x.project.projectIdentifier)
+                        normalProjectsThatHandledThisFile.map(x => util.getProjectLogName(x.project))
                     );
                     this.removeStandaloneProject(action.srcPath);
                 }
@@ -834,16 +834,13 @@ export class ProjectManager {
         }
 
         config.projectNumber = this.getProjectNumber(config);
-        const projectIdentifier = `prj${config.projectNumber}`;
 
         let project: LspProject = config.enableThreading
             ? new WorkerThreadProject({
-                logger: this.logger.createLogger(),
-                projectIdentifier: projectIdentifier
+                logger: this.logger.createLogger()
             })
             : new Project({
-                logger: this.logger.createLogger(),
-                projectIdentifier: projectIdentifier
+                logger: this.logger.createLogger()
             });
 
         this.logger.log(`Created project #${config.projectNumber} for: "${config.projectKey}" (${config.enableThreading ? 'worker thread' : 'main thread'})`);
@@ -877,7 +874,7 @@ export class ProjectManager {
 
     @TrackBusyStatus
     private async activateProject(project: LspProject, config: ProjectConfig) {
-        this.logger.debug('Activating project', project.projectIdentifier, {
+        this.logger.debug('Activating project', util.getProjectLogName(project), {
             projectPath: config?.projectKey,
             bsconfigPath: config.bsconfigPath
         });
