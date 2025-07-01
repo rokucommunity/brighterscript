@@ -1765,7 +1765,7 @@ export class Util {
  */
 export function standardizePath(stringParts, ...expressions: any[]) {
     let result: string[] = [];
-    for (let i = 0; i < stringParts.length; i++) {
+    for (let i = 0; i < stringParts?.length; i++) {
         result.push(stringParts[i], expressions[i]);
     }
     return util.standardizePath(

@@ -56,9 +56,12 @@ describe('WorkerThreadProject', () => {
             `);
 
             await project.activate({
-                projectPath: rootDir,
+                projectKey: undefined,
+                projectDir2: rootDir,
+                workspaceFolder: rootDir,
+                bsconfigPath: undefined,
                 projectNumber: 1
-            } as any);
+            });
             const diagnostics = await project.getDiagnostics();
             expect(diagnostics).lengthOf(1);
             await expectDiagnosticsAsync(diagnostics, [

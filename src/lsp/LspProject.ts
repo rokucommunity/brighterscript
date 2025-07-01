@@ -25,9 +25,16 @@ export interface LspProject {
     activateOptions: ProjectConfig;
 
     /**
-     * The path to where the project resides
+     * A unique key to represent this project. The format of this key may change, but it will always be unique to this project and can be used for comparison purposes.
+     *
+     * For directory-only projects, this is the path to the dir. For bsconfig.json projects, this is the path to the config file (typically bsconfig.json).
      */
-    projectPath: string;
+    projectKey: string;
+
+    /**
+     * The directory for the root of this project (typically where the bsconfig.json or manifest is located)
+     */
+    projectDir2: string;
 
     /**
      * A unique number for this project, generated during this current language server session. Mostly used so we can identify which project is doing logging
@@ -35,7 +42,7 @@ export interface LspProject {
     projectNumber: number;
 
     /**
-     * A unique name for this project used in logs to help keep track of everything
+     * A unique name for this project used in logs to help keep track of everything. Unlike `projectKey`, this is not derived from the contents of the project, but rather is a unique identifier for this project within the context of the language server that can be used to identify the project in logs and other places.
      */
     projectIdentifier: string;
 
@@ -175,9 +182,15 @@ export interface LspProject {
 
 export interface ProjectConfig {
     /**
-     * Path to the project
+     * A unique key to represent this project. The format of this key may change, but it will always be unique to this project and can be used for comparison purposes.
+     *
+     * For directory-only projects, this is the path to the dir. For bsconfig.json projects, this is the path to the config file (typically bsconfig.json).
      */
-    projectPath: string;
+    projectKey: string;
+    /**
+     * The directory for the root of this project (typically where the bsconfig.json or manifest is located)
+     */
+    projectDir2: string;
     /**
      * Path to the workspace in which all project files reside or are referenced by
      */
@@ -193,7 +206,7 @@ export interface ProjectConfig {
     /**
      * Path to a bsconfig that should be used instead of the auto-discovery algorithm. If this is present, no bsconfig discovery should be used. and an error should be emitted if this file is missing
      */
-    bsconfigPath?: string;
+    bsconfigPath: string | undefined;
     /**
      * Should this project run in its own dedicated worker thread
      * TODO - is there a better name for this?

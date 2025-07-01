@@ -364,7 +364,7 @@ describe('LanguageServer', () => {
 
             //no child bsconfig.json files, use the workspacePath
             expect(
-                server['projectManager'].projects.map(x => x.projectPath)
+                server['projectManager'].projects.map(x => x.projectKey)
             ).to.eql([
                 workspacePath
             ]);
@@ -376,10 +376,10 @@ describe('LanguageServer', () => {
 
             //2 child bsconfig.json files. Use those folders as projects, and don't use workspacePath
             expect(
-                server['projectManager'].projects.map(x => x.projectPath).sort()
+                server['projectManager'].projects.map(x => x.projectKey).sort()
             ).to.eql([
-                s`${workspacePath}/project1`,
-                s`${workspacePath}/project2`
+                s`${workspacePath}/project1/bsconfig.json`,
+                s`${workspacePath}/project2/bsconfig.json`
             ]);
 
             fsExtra.removeSync(s`${workspacePath}/project2/bsconfig.json`);
@@ -387,9 +387,9 @@ describe('LanguageServer', () => {
 
             //1 child bsconfig.json file. Still don't use workspacePath
             expect(
-                server['projectManager'].projects.map(x => x.projectPath)
+                server['projectManager'].projects.map(x => x.projectKey)
             ).to.eql([
-                s`${workspacePath}/project1`
+                s`${workspacePath}/project1/bsconfig.json`
             ]);
 
             fsExtra.removeSync(s`${workspacePath}/project1/bsconfig.json`);
@@ -397,7 +397,7 @@ describe('LanguageServer', () => {
 
             //back to no child bsconfig.json files. use workspacePath again
             expect(
-                server['projectManager'].projects.map(x => x.projectPath)
+                server['projectManager'].projects.map(x => x.projectKey)
             ).to.eql([
                 workspacePath
             ]);
@@ -445,7 +445,7 @@ describe('LanguageServer', () => {
 
             //no child bsconfig.json files, use the workspacePath
             expect(
-                server['projectManager'].projects.map(x => x.projectPath)
+                server['projectManager'].projects.map(x => x.projectKey)
             ).to.eql([
                 workspacePath
             ]);
@@ -464,10 +464,10 @@ describe('LanguageServer', () => {
             await server['syncProjects']();
 
             expect(
-                server['projectManager'].projects.map(x => x.projectPath).sort()
+                server['projectManager'].projects.map(x => x.projectKey).sort()
             ).to.eql([
-                s`${tempDir}/root`,
-                s`${tempDir}/root/subdir`
+                s`${tempDir}/root/bsconfig.json`,
+                s`${tempDir}/root/subdir/bsconfig.json`
             ]);
         });
 
@@ -489,7 +489,7 @@ describe('LanguageServer', () => {
             await server['syncProjects']();
 
             expect(
-                server['projectManager'].projects.map(x => x.projectPath).sort()
+                server['projectManager'].projects.map(x => x.projectKey).sort()
             ).to.eql([
                 s`${tempDir}/project1`,
                 s`${tempDir}/sub/dir/project2`
