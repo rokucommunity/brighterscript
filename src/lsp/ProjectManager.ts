@@ -693,7 +693,7 @@ export class ProjectManager {
             //if we didn't find any valid project paths, log a warning. having zero projects is acceptable, it typically means the user wanted to disable discovery or
             //disabled all their projects on purpose
             if (projectConfigs.length === 0) {
-                this.logger.warn(`No valid project paths found in workspace config`, workspaceConfig.projects);
+                this.logger.warn(`No valid project paths found in workspace config`, JSON.stringify(workspaceConfig.projects, null, 4));
             }
             return projectConfigs;
         }
